@@ -294,10 +294,25 @@ public sealed class ZoneEntityResolver
 				return true;
 
 			default:
-				// Guessing here would silently gate the room on the wrong sensor, which is the kind of bug
-				// nobody ever tracks down. Make the household choose.
-				error = $"Area '{areaId}' has {candidates.Count} illuminance sensors ({string.Join(", ", candidates)}). Set LuxSensor explicitly to choose one.";
-				return false;
+				// Two rules pulling against each other, and the resolution matters.
+				//
+				// Do NOT pick one: an area often holds an illuminance reading that has nothing to do with whether
+				// the room is dark. A real house had a kitchen whose candidates included the sensor inside its
+				// fridge; gating the ceiling lights on that is the kind of bug nobody ever tracks down.
+				//
+				// But refusing the zone outright was worse. It left a room with two lux sensors strictly worse off
+				// than a room with none — the room with none gates on the sun and works — so the better-instrumented
+				// the house, the more rooms simply stopped. On one installation this disabled 8 of 17 rooms,
+				// including the living room, kitchen and hallway.
+				//
+				// So do exactly what a room with no sensor does: gate on the house-wide outdoor sensor or the sun,
+				// and say clearly which sensors were found and how to choose between them.
+				_logger.LogWarning(
+					"Area '{Area}' has {Count} illuminance sensors ({Candidates}), so none is used on its own: this zone "
+					+ "decides darkness from the outdoor lux sensor or the sun. Set LuxSensor on the zone to use one of them.",
+					areaId, candidates.Count, string.Join(", ", candidates));
+
+				return true;
 		}
 	}
 

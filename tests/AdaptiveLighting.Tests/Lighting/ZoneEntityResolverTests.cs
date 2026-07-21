@@ -322,7 +322,7 @@ public sealed class ZoneEntityResolverTests
 	}
 
 	[TestMethod]
-	public void Two_Illuminance_Sensors_Must_Be_Disambiguated_Rather_Than_Guessed_Between()
+	public void Two_Illuminance_Sensors_Leave_The_Zone_Running_Without_One()
 	{
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
@@ -332,11 +332,14 @@ public sealed class ZoneEntityResolverTests
 		ha.SetState("sensor.lux_a", "5", new() { ["device_class"] = "illuminance" });
 		ha.SetState("sensor.lux_b", "6", new() { ["device_class"] = "illuminance" });
 
-		var ok = Resolver(ha, registry).TryResolve(new ZoneConfig { AreaId = "stue" }, new ZoneSettings(), out _, out var error);
+		var ok = Resolver(ha, registry).TryResolve(new ZoneConfig { AreaId = "stue" }, new ZoneSettings(), out var ambiguous, out _);
 
-		Assert.IsFalse(ok, "guessing here would gate the room on the wrong sensor, which nobody would ever track down");
-		StringAssert.Contains(error!, "sensor.lux_a");
-		StringAssert.Contains(error!, "sensor.lux_b");
+		// Neither guess nor refuse. Picking one would gate the room on a sensor that may have nothing to do with
+		// its daylight - a real house offered the sensor inside its fridge as a candidate. But refusing left a
+		// room with two sensors worse off than a room with none, and disabled 8 of 17 rooms on that same house.
+		// So the room runs and decides darkness the way a room with no sensor does: outdoor lux, or the sun.
+		Assert.IsTrue(ok, "an ambiguous lux sensor must not disable the room");
+		Assert.IsNull(ambiguous!.LuxSensor, "and must not silently pick one either");
 
 		var disambiguated = Resolver(ha, registry).TryResolve(
 			new ZoneConfig { AreaId = "stue", LuxSensor = "sensor.lux_a" }, new ZoneSettings(), out var zone, out _);
