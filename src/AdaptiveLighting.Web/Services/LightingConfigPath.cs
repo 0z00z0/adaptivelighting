@@ -1,3 +1,5 @@
+using AdaptiveLighting.Configuration;
+
 using Microsoft.Extensions.Configuration;
 
 namespace AdaptiveLighting.Web.Services;
@@ -130,27 +132,22 @@ public static class LightingConfigPath
 		{
 			Directory.CreateDirectory(directory);
 
-			if (File.Exists(inTree))
-			{
-				// Seed rather than start empty: the shipped file is a worked example with sensible periods and
-				// defaults already in it, so adoption starts from something that reads like a configuration
-				// instead of from a blank document nobody knows the shape of.
-				File.Copy(inTree, external);
-
-				logger.LogInformation(
-					"Seeded the lighting configuration at {External} from the shipped example at {InTree}. "
-					+ "That file is now this host's configuration; the in-tree copy is only an example from here on.",
-					external, inTree);
-
-				return new ConfigLocation(external, ConfigLocationSource.SeededFromTree, null);
-			}
+			// Seed a clean default rather than copying the shipped example. The example is a teaching document
+			// full of REPLACE_ME ids, and copying it onto a real host was actively harmful: every placeholder is
+			// an entity Home Assistant does not know, so a brand-new installation started with document-level
+			// errors and refused to run. A placeholder also OVERRIDES the discovery that would have filled the
+			// same field — an empty Persons list finds every person by itself; person.REPLACE_ME finds nothing
+			// and blocks the engine. Better to name nothing and then look: the engine populates the zone list
+			// from the area registry on its first connected reload (LightingEngineHost.AutoDiscoverZonesIfNeeded).
+			File.WriteAllText(external, LightingConfigDocument.Serialize(AdaptiveLightingConfig.CreateDefault()));
 
 			logger.LogInformation(
-				"The lighting configuration at {External} does not exist yet and there is no in-tree example to seed it from. "
-				+ "The Configuration page will create it on the first save.",
+				"Created a starting lighting configuration at {External}: a circadian schedule and nothing else. "
+				+ "Zones are discovered from the Home Assistant areas that have both a light and a motion sensor, "
+				+ "and everything is editable on the Configuration page.",
 				external);
 
-			return new ConfigLocation(external, ConfigLocationSource.External, null);
+			return new ConfigLocation(external, ConfigLocationSource.SeededFromTree, null);
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{

@@ -26,12 +26,20 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void An_Empty_Document_Fails_On_Both_Periods_And_Zones()
+	public void An_Empty_Document_Fails_On_Periods_But_Only_Warns_On_Zones()
 	{
 		var result = ConfigValidator.Validate(new AdaptiveLightingConfig());
 
-		Assert.IsFalse(result.IsValid);
-		Assert.IsTrue(result.Errors.Count >= 2);
+		Assert.IsFalse(result.IsValid, "with no periods the engine could never pick a target");
+		Assert.IsTrue(result.Errors.Any(e => e.Contains("Periods", StringComparison.Ordinal)));
+
+		// Deliberately NOT an error. An empty zone list is where a new installation starts, before discovery has
+		// run - and where a household ends up after removing every room on purpose. The engine runs and commands
+		// nothing, which is a fine state to be in; refusing the document would stop the app and announce
+		// "document-level errors" to somebody whose only sin is not having configured anything yet.
+		Assert.IsFalse(result.Errors.Any(e => e.Contains("zones", StringComparison.OrdinalIgnoreCase)),
+			"an empty zone list is a warning, not a document error");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("No zones yet", StringComparison.Ordinal)));
 	}
 
 	/// <summary>

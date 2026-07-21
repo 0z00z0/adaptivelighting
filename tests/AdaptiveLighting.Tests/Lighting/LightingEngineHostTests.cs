@@ -69,15 +69,17 @@ public sealed class LightingEngineHostTests
 	}
 
 	[TestMethod]
-	public void Save_WithNoZones_IsRefused()
+	public void Save_WithNoZones_IsAccepted()
 	{
 		var config = Valid();
 		config.Zones = [];
 
 		var result = BuildHost().Save(config);
 
-		Assert.AreEqual(SaveStatus.Rejected, result.Status);
-		Assert.IsFalse(File.Exists(_path));
+		// Removing your last room is a legitimate thing to do, and a fresh install has none to begin with. The
+		// save must land so the document reflects what the owner asked for; the validator says so with a warning.
+		Assert.AreNotEqual(SaveStatus.Rejected, result.Status, "a zone-less document is valid, just idle");
+		Assert.IsTrue(File.Exists(_path), "and it reaches the disk");
 	}
 
 	/// <summary>

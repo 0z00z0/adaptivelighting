@@ -404,9 +404,14 @@ public static class ConfigValidator
 		IReadOnlyCollection<string>? knownAreaIds,
 		ValidationResult result)
 	{
+		// A warning, not an error. An empty zone list is a legitimate state, not a broken document: it is what a
+		// brand-new installation starts from before discovery has run, and what a household is left with after
+		// deliberately removing every room. The engine runs perfectly well managing nothing — it simply commands
+		// nothing — whereas refusing the document stops the whole app and greets a new owner with "the
+		// configuration has document-level errors", which is both alarming and untrue.
 		if (config.Zones.Count == 0)
 		{
-			result.AddError("Zones is empty — the engine would manage nothing. Zones are opt-in; list the areas to manage.");
+			result.AddWarning("No zones yet — the engine is running but managing nothing. Add a room on the Configuration page.");
 			return;
 		}
 

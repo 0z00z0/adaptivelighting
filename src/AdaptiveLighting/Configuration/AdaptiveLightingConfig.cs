@@ -23,6 +23,38 @@ public class AdaptiveLightingConfig
 
 	/// <summary>The zones the engine manages. Zones are opt-in: an HA area absent from this list is never touched.</summary>
 	public List<ZoneConfig> Zones { get; set; } = [];
+
+	/// <summary>
+	///     The document a fresh installation starts from: valid, runnable, and naming nothing.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Deliberately <b>empty of entities</b>. A seed full of <c>REPLACE_ME</c> placeholders looks helpful and
+	///         is not: every placeholder is an id Home Assistant does not know, so a brand-new installation starts
+	///         with a document-level error and refuses to run. Worse, a placeholder <i>overrides</i> the discovery
+	///         that would otherwise fill the same field in — an empty <see cref="GlobalConfig.Persons"/> finds every
+	///         person by itself, while <c>person.REPLACE_ME</c> finds nothing and blocks the engine.
+	///     </para>
+	///     <para>
+	///         So: no persons, no zones, no house mode, no kill switch (the built-in app switch is used). Only the
+	///         circadian table is filled in, because a sensible day/night curve is the one thing that is the same in
+	///         every house. Zones arrive on their own — see <see cref="Engine.ZoneAutoDiscovery"/>.
+	///     </para>
+	/// </remarks>
+	public static AdaptiveLightingConfig CreateDefault() => new()
+	{
+		ConfigName = "Adaptive lighting",
+		Global = new GlobalConfig(),
+		Defaults = new ZoneSettings(),
+		Periods =
+		[
+			new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
+			new() { Name = "day",     Start = "09:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
+			new() { Name = "evening", Start = "sunset-01:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Name = "night",   Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30 },
+		],
+		Zones = [],
+	};
 }
 
 /// <summary>
@@ -89,6 +121,16 @@ public class GlobalConfig
 	///     leaves today's behaviour (per-zone lux, else the sun-elevation fallback).
 	/// </summary>
 	public string? OutdoorLuxSensor { get; set; }
+
+	/// <summary>
+	///     Whether zones have already been discovered from the Home Assistant area registry once.
+	/// </summary>
+	/// <remarks>
+	///     Set the first time the engine auto-populates an empty zone list, and never reset. It is what stops a
+	///     household that has deliberately removed every zone from having them silently grow back on the next
+	///     restart: discovery is a one-time convenience on a fresh install, not a standing policy.
+	/// </remarks>
+	public bool ZonesAutoDiscovered { get; set; }
 
 	/// <summary>HA user id of the NetDaemon token. Optional; a belt-and-braces input to override detection.</summary>
 	public string? NetDaemonUserId { get; set; }
