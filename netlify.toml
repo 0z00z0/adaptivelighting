@@ -6,6 +6,12 @@
   command = "npm run build"
   publish = "dist"
 
+  # Skip the build when a push touched no documentation. Exit 0 means "nothing changed, skip";
+  # any other code builds. Root-relative pathspecs (:/) so it does not matter that this command runs
+  # from the base directory. If HEAD^ is missing (first build, shallow clone) git exits non-zero and
+  # the build runs - failing towards building is the safe direction.
+  ignore = "git diff --quiet HEAD^ HEAD -- :/website :/netlify.toml"
+
 [build.environment]
   NODE_VERSION = "22"
 
