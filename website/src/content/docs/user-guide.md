@@ -1,4 +1,7 @@
-# Adaptive lighting — user guide
+---
+title: "User guide"
+description: "Living with the system day to day: the dashboard, house modes, and why a light did not turn on."
+---
 
 A short, practical guide to living with the system: what each screen does, and how to do the
 things you'll actually want to do. For the design and internals, see the numbered documents in this

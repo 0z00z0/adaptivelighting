@@ -129,7 +129,9 @@ one YAML file, in four layers, each narrowing the last:
 Most zones are three lines, because of **discovery**: give a zone an `AreaId` and its lights, motion
 sensors and lux sensor are found from the Home Assistant area registry.
 
-See [`docs/`](docs/) for the full schema, the architecture, and a user guide.
+Full documentation — the configuration reference, a worked example, the architecture and a user
+guide — is at **[adaptivelighting.netlify.app](https://adaptivelighting.netlify.app)** (source in
+[`website/`](website/)).
 
 ## Packages
 

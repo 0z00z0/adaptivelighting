@@ -31,3 +31,8 @@ Thumbs.db
 # Local runtime config: never commit a Home Assistant token
 appsettings.Development.json
 appsettings.*.Local.json
+
+# Docs site (Astro/Starlight)
+node_modules/
+website/dist/
+website/.astro/

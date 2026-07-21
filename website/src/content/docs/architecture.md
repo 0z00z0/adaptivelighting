@@ -1,4 +1,7 @@
-# 02 — Adaptive lighting architecture
+---
+title: "Architecture"
+description: "Inside the engine: the zone state machine, the orchestrator and the seams."
+---
 
 Namespace root: `AdaptiveLighting`. All engine code lives in **`AdaptiveLighting/`**; `House` and
 `Cabin` carry only a bootstrap app + a YAML file each. Tabs for indentation in all

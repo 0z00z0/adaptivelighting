@@ -1,4 +1,7 @@
-# 03 — Configuration design
+---
+title: "Configuration"
+description: "The configuration document, layer by layer: Global, Defaults, Periods and Zones."
+---
 
 ## 1. What exists today (read and understood)
 

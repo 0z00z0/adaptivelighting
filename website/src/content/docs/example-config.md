@@ -1,4 +1,7 @@
-# Example configuration — the commented worked examples
+---
+title: "Example configuration"
+description: "A fully worked configuration, annotated."
+---
 
 The lighting web UI now owns `apps/AdaptiveLighting/AdaptiveLighting.yaml` on each host: it reads that
 file and writes it back. YamlDotNet has no way to preserve comments through a round trip, so the first
@@ -7,7 +10,7 @@ time somebody presses **Save** in the browser, every comment in that file is gon
 The comments were the documentation, so they are preserved here instead, verbatim as they stood before
 the UI gained a write path. This page is the reference; the live file is now data.
 
-Read [03-configuration.md](03-configuration.md) for the schema itself. This page is the annotated
+Read [03-configuration.md](/configuration/) for the schema itself. This page is the annotated
 example — what a real document looks like and why each knob is set the way it is.
 
 The two differ usefully. **House's still has `REPLACE_ME` placeholders**: that is the shape a host ships

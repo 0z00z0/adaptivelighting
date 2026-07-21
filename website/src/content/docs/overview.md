@@ -1,8 +1,11 @@
-# Adaptive lighting — overview
+---
+title: "Overview"
+description: "How the system thinks: zones, periods, the house, and origin."
+---
 
 Start here. The other documents in this folder are the design record; this one is the map. For
 day‑to‑day use (the dashboard, house modes, "why didn't my light turn on?"), see the
-[user guide](user-guide.md).
+[user guide](/user-guide/).
 
 ## What it does
 
@@ -32,7 +35,7 @@ colour temperature. Periods are house-wide, not per zone. Boundaries are clock t
 the kill switch is on. A zone consults it but decides for itself. The house mode is a single
 `input_select` whose options each carry one *kind* — Normal, Sleep, Away or Guest — and a period,
 a presence sensor or a clock can switch it automatically; every reset returns to Normal. Away and
-Guest apply an HA scene and pause the engine until a reset fires (see `03-configuration.md`).
+Guest apply an HA scene and pause the engine until a reset fires (see `/configuration/`).
 
 **Origin** is the interesting one. Every change to a light is classified as *ours* or *a human's*.
 That distinction is what makes override work, and it's the hardest part of the system (see below).
@@ -42,7 +45,7 @@ That distinction is what makes override work, and it's the hardest part of the s
 Every arrow names the parameter that drives it — so if you want to change a behaviour, this tells
 you which setting to reach for.
 
-![Zone state machine, annotated with the configuration parameter governing each transition](state-machine.svg)
+![Zone state machine, annotated with the configuration parameter governing each transition](/state-machine.svg)
 
 ## The zone state machine
 

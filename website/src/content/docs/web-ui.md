@@ -1,4 +1,7 @@
-# 04 — Blazor config UI plan
+---
+title: "The web UI"
+description: "How the Blazor dashboard and configuration editor are built."
+---
 
 ## 1. Verified facts
 
