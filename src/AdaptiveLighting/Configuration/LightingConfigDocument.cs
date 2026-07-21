@@ -142,7 +142,14 @@ public static class LightingConfigDocument
 
 		// Looked up case-insensitively even though the key is a .NET type name: the binder that used to own this
 		// file is case-insensitive, so a file that worked before must keep working now.
-		string? match = document.Keys.FirstOrDefault(key => string.Equals(key, RootKey, StringComparison.OrdinalIgnoreCase));
+		//
+		// The fallback matches ANY key naming AdaptiveLightingConfig, whatever namespace produced it. The key is a
+		// fully qualified type name, so renaming the namespace would otherwise orphan every file already on disk —
+		// which is exactly what happened when this library was extracted for distribution. Reading is forgiving,
+		// writing is not: Serialize always emits RootKey, so a file self-migrates the first time it is saved.
+		string? match =
+			document.Keys.FirstOrDefault(key => string.Equals(key, RootKey, StringComparison.OrdinalIgnoreCase))
+			?? document.Keys.FirstOrDefault(key => key.EndsWith("." + nameof(AdaptiveLightingConfig), StringComparison.OrdinalIgnoreCase));
 
 		if (match is null)
 			throw new LightingConfigException(

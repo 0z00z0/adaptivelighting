@@ -1,6 +1,6 @@
 using AdaptiveLighting.Configuration;
 
-namespace NetDaemon_Test.Lighting;
+namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
 ///     Round-trip tests for the YAML loader.
@@ -402,5 +402,31 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(30, config.Periods.Single().MaxBrightnessPct);
 		Assert.AreEqual("REPLACE_ME_living_room_area_id", config.Zones.Single().AreaId);
 		Assert.IsTrue(config.Zones.Single().RespectSleepMode);
+	}
+
+	/// <summary>
+	///     The top-level key is a fully qualified type name, so extracting this library for distribution renamed
+	///     it. Every document already on disk must keep loading, or an upgrade silently orphans a working house.
+	/// </summary>
+	[TestMethod]
+	public void A_Document_Written_Under_A_Previous_Namespace_Still_Loads()
+	{
+		string legacy = """
+			Laget.NetDaemon.AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  ConfigName: "Adaptive lighting [Home]"
+			  Periods:
+			    - Name: evening
+			      Start: "18:00"
+			      BrightnessPct: 70
+			      ColorTempKelvin: 2700
+			""";
+
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(legacy);
+
+		Assert.AreEqual("Adaptive lighting [Home]", config.ConfigName, "a document under the old namespace key still loads");
+		Assert.AreEqual(1, config.Periods.Count);
+
+		StringAssert.Contains(LightingConfigDocument.Serialize(config), LightingConfigDocument.RootKey,
+			"and saving rewrites it under the current key, so the file self-migrates");
 	}
 }

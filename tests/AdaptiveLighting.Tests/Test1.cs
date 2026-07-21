@@ -1,4 +1,4 @@
-﻿namespace NetDaemon_Test
+﻿namespace AdaptiveLighting.Tests
 {
 	[TestClass]
 	public sealed class Test1

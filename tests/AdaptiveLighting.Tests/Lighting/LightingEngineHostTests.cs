@@ -3,7 +3,7 @@ using AdaptiveLighting.Hosting;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace NetDaemon_Test.Lighting;
+namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
 ///     The save path: validate first, write second, and never the other way round.
