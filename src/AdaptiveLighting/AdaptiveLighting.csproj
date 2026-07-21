@@ -30,4 +30,9 @@
     <ProjectReference Include="..\AdaptiveLighting.Extensions\AdaptiveLighting.Extensions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Tests reach a couple of internals (the room-role heuristic) without widening the public API. -->
+    <InternalsVisibleTo Include="AdaptiveLighting.Tests" />
+  </ItemGroup>
+
 </Project>

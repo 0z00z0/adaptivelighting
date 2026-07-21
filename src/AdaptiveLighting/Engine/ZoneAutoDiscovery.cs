@@ -55,9 +55,84 @@ public static class ZoneAutoDiscovery
 			AreaDiscovery found = resolver.DiscoverArea(areaId);
 
 			if (found.Lights.Count > 0 && found.MotionSensors.Count > 0)
-				proposed.Add(new ZoneConfig { AreaId = areaId });
+			{
+				ZoneConfig zone = new() { AreaId = areaId };
+				ApplyRole(zone);
+				proposed.Add(zone);
+			}
 		}
 
 		return proposed;
+	}
+
+	// Room roles guessed from the area id. Area ids are slugs of the names people actually use, so "soverom",
+	// "gang" and "terrasse" carry real information about how a room should behave — and getting one wrong is
+	// cheap: a bedroom that does not dim, or a porch swept off when the house empties, is one checkbox on the
+	// Configuration page. That asymmetry is what makes guessing worthwhile here and not for the lux sensor.
+	private static readonly string[] Bedroom = ["sov", "soverom", "bedroom", "seng", "sengerom"];
+	private static readonly string[] Bathroom = ["bad", "wc", "toalett", "bathroom", "dusj"];
+	private static readonly string[] Entrance = ["gang", "inngang", "entre", "hall", "hallway", "entrance", "korridor", "trapp"];
+	private static readonly string[] Outdoor = ["ute", "uteplass", "terrasse", "veranda", "hage", "garasje", "garage", "outdoor", "garden", "porch", "carport"];
+
+	/// <summary>
+	///     Gives a proposed zone the behaviour its name implies, and returns what it decided (for logging).
+	/// </summary>
+	/// <remarks>
+	///     Only ever sets a flag <i>on</i>. Everything left alone keeps following <c>Defaults</c>, so a guess adds
+	///     behaviour rather than overriding a choice the household has made elsewhere.
+	/// </remarks>
+	internal static string? ApplyRole(ZoneConfig zone)
+	{
+		if (zone.AreaId is not { Length: > 0 } areaId)
+			return null;
+
+		List<string> roles = [];
+
+		if (Matches(areaId, Bedroom))
+		{
+			// Somewhere people sleep: hold it to night levels, and never light itself.
+			zone.RespectSleepMode = true;
+			zone.SleepBlocksAutoOn = true;
+			roles.Add("bedroom");
+		}
+		else if (Matches(areaId, Bathroom))
+		{
+			// A 03:00 trip should get a dim light, not a bright one - but it must still light.
+			zone.RespectSleepMode = true;
+			roles.Add("bathroom");
+		}
+
+		if (Matches(areaId, Entrance))
+		{
+			zone.WelcomeHome = true;
+			zone.RespectSleepMode = true;
+			roles.Add("entrance");
+		}
+
+		if (Matches(areaId, Outdoor))
+		{
+			// Porch, terrace and garage lights are wanted precisely when nobody is home.
+			zone.SkipAwaySweep = true;
+			roles.Add("outdoor");
+		}
+
+		return roles.Count > 0 ? string.Join("+", roles) : null;
+	}
+
+	/// <summary>
+	///     Whether an area id names one of <paramref name="tokens"/>.
+	/// </summary>
+	/// <remarks>
+	///     Matched per underscore-separated segment rather than as a substring, so <c>inngang_ute</c> matches
+	///     "ute" while <c>utleieleilighet</c> does not accidentally. Longer tokens may also match the end of a
+	///     compound segment, which is what catches <c>kjellergang</c>.
+	/// </remarks>
+	private static bool Matches(string areaId, string[] tokens)
+	{
+		string[] segments = areaId.ToLowerInvariant().Split('_', StringSplitOptions.RemoveEmptyEntries);
+
+		return segments.Any(segment => tokens.Any(token =>
+			string.Equals(segment, token, StringComparison.Ordinal)
+			|| (token.Length >= 4 && segment.EndsWith(token, StringComparison.Ordinal))));
 	}
 }

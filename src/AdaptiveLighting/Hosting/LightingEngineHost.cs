@@ -289,6 +289,11 @@ public sealed class LightingEngineHost : IDisposable
 			config.Zones.AddRange(proposed);
 			config.Global.ZonesAutoDiscovered = true;
 
+			// The house mode is part of the same "look before asking" idea: most houses already have the dropdown,
+			// and only its meaning needs stating. Never overwrites one the household has already chosen.
+			if (config.Global.HouseMode?.Entity is not { Length: > 0 })
+				config.Global.HouseMode = HouseModeAutoDetect.Detect(_ha, _loggerFactory.CreateLogger(typeof(HouseModeAutoDetect)));
+
 			try
 			{
 				_store.Save(config);
