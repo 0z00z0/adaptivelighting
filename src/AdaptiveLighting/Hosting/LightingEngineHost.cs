@@ -202,65 +202,112 @@ public sealed class LightingEngineHost : IDisposable
 				return new SaveResult(SaveStatus.Failed, unreadable, "The configuration file could not be read.");
 			}
 
-			AutoDiscoverZonesIfNeeded(config);
+			ScheduleZoneDiscoveryIfNeeded(config);
 
 			return ApplyCore(config);
 		}
 	}
 
+	/// <summary>How long to let Home Assistant's state cache fill before discovering zones.</summary>
+	/// <remarks>
+	///     Discovery used to run inline in <see cref="Reload"/>, and it was wrong: the reload happens immediately
+	///     after <see cref="Attach"/>, when NetDaemon has connected but its state cache is still filling. The
+	///     resolver drops any entity without a state — a registry row with no state is not a device — so an early
+	///     scan sees a partial house, proposes a partial set of rooms, and the once-only flag then locks that in.
+	///     Observed on a real installation: four rooms that plainly had lights and motion were missed because their
+	///     entities had not arrived yet. Waiting costs nothing — the zone list is empty either way — and is the
+	///     difference between discovering a house and discovering whatever happened to load first.
+	/// </remarks>
+	private static readonly TimeSpan DiscoverySettle = TimeSpan.FromSeconds(30);
+
+	private IDisposable? _discovery;
+	private bool _discoveryScheduled;
+
 	/// <summary>
-	///     On a fresh installation, proposes zones from the Home Assistant area registry and saves them.
+	///     Arms the one-time zone discovery: only when the document has no zones and has never been scanned.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         Runs at most once per document, and only when there is nothing to lose: the flag has never been set
-	///         <i>and</i> the zone list is empty. The flag is what makes it once-only — a household that deliberately
-	///         removes every zone must not find them grown back after a restart.
-	///     </para>
-	///     <para>
-	///         Silently does nothing before <see cref="Attach"/>: the registry is the whole input, so there is
-	///         nothing to discover from until Home Assistant is connected. The reload that follows Attach picks it up.
-	///     </para>
+	///     Does nothing before <see cref="Attach"/> — the registry is the whole input — so the reload that follows
+	///     Attach is what arms it. The flag makes it once-only: a household that deliberately removes every zone
+	///     must not find them grown back after a restart.
 	/// </remarks>
-	private void AutoDiscoverZonesIfNeeded(AdaptiveLightingConfig config)
+	private void ScheduleZoneDiscoveryIfNeeded(AdaptiveLightingConfig config)
 	{
-		if (config.Global.ZonesAutoDiscovered || config.Zones.Count > 0)
+		if (_discoveryScheduled || config.Global.ZonesAutoDiscovered || config.Zones.Count > 0)
 			return;
 
-		if (_ha is null || _registry is null)
+		if (_ha is null || _registry is null || _scheduler is null)
 			return;
 
-		HaAreaRegistry areas = new(_registry);
-		ZoneEntityResolver resolver = new(
-			_ha, areas, config.Global, _loggerFactory.CreateLogger<ZoneEntityResolver>());
+		_discoveryScheduled = true;
+		_logger.LogInformation(
+			"No zones configured yet — discovering from the Home Assistant area registry in {Seconds}s, once the state cache has filled.",
+			DiscoverySettle.TotalSeconds);
 
-		IReadOnlyList<ZoneConfig> proposed = ZoneAutoDiscovery.Propose(areas, resolver);
+		_discovery = _scheduler.Schedule(DiscoverySettle, RunZoneDiscovery);
+	}
 
-		// The flag is set even when nothing qualified: "we looked and found nothing" is an answer, and looking
-		// again on every restart would only re-log it.
-		config.Zones.AddRange(proposed);
-		config.Global.ZonesAutoDiscovered = true;
-
-		try
+	/// <summary>Proposes zones from the area registry, saves them, and rebuilds on the result.</summary>
+	private void RunZoneDiscovery()
+	{
+		lock (_gate)
 		{
-			_store.Save(config);
-		}
-		catch (LightingConfigException exception)
-		{
-			// Zones was empty on the way in, so clearing restores exactly what was loaded.
-			config.Zones.Clear();
-			config.Global.ZonesAutoDiscovered = false;
-			_logger.LogWarning(exception, "Could not save the discovered zones; they will be proposed again on the next start.");
-			return;
-		}
+			if (_ha is null || _registry is null)
+				return;
 
-		if (proposed.Count == 0)
+			// Re-read rather than trusting the document captured when this was armed: half a minute is plenty of
+			// time for somebody to have added a room from the UI, and discovery must not overwrite that.
+			AdaptiveLightingConfig config;
+			try
+			{
+				config = _store.Load();
+			}
+			catch (LightingConfigException exception)
+			{
+				_logger.LogWarning(exception, "Could not read the configuration for zone discovery.");
+				return;
+			}
+
+			if (config.Global.ZonesAutoDiscovered || config.Zones.Count > 0)
+				return;
+
+			HaAreaRegistry areas = new(_registry);
+			ZoneEntityResolver resolver = new(
+				_ha, areas, config.Global, _loggerFactory.CreateLogger<ZoneEntityResolver>());
+
+			IReadOnlyList<ZoneConfig> proposed = ZoneAutoDiscovery.Propose(areas, resolver);
+
+			if (proposed.Count == 0)
+			{
+				// The flag deliberately stays unset. Finding nothing is far more likely to mean "asked too early"
+				// than "this house has no lit rooms", and looking again on the next start costs nothing.
+				_logger.LogInformation(
+					"No Home Assistant area has both a light and a motion sensor yet. Add rooms on the Configuration page, or restart to look again.");
+				return;
+			}
+
+			config.Zones.AddRange(proposed);
+			config.Global.ZonesAutoDiscovered = true;
+
+			try
+			{
+				_store.Save(config);
+			}
+			catch (LightingConfigException exception)
+			{
+				// Zones was empty on the way in, so clearing restores exactly what was loaded.
+				config.Zones.Clear();
+				config.Global.ZonesAutoDiscovered = false;
+				_logger.LogWarning(exception, "Could not save the discovered zones; they will be proposed again on the next start.");
+				return;
+			}
+
 			_logger.LogInformation(
-				"No Home Assistant area has both a light and a motion sensor, so no zones were proposed. Add rooms from the configuration page.");
-		else
-			_logger.LogInformation(
-				"Discovered {Count} zones from the area registry ({Areas}). Review them on the configuration page — nothing else is touched.",
+				"Discovered {Count} zones from the area registry ({Areas}). Review them on the Configuration page — nothing else was touched.",
 				proposed.Count, string.Join(", ", proposed.Select(zone => zone.AreaId)));
+
+			ApplyCore(config);
+		}
 	}
 
 	/// <summary>
@@ -342,6 +389,11 @@ public sealed class LightingEngineHost : IDisposable
 	{
 		lock (_gate)
 		{
+			// An armed discovery holds the scheduler; letting it fire against a torn-down host would resurrect
+			// work after shutdown.
+			_discovery?.Dispose();
+			_discovery = null;
+
 			StopCore();
 			_ha = null;
 			_registry = null;
