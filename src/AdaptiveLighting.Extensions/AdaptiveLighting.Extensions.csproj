@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!--
+      Deliberately NOT named NetDaemon.Extensions.*: upstream ships packages under that prefix, and a
+      DLL of ours sitting beside them in a publish folder must never be mistakable for one of theirs.
+    -->
+    <AssemblyName>AdaptiveLighting.Extensions</AssemblyName>
+    <RootNamespace>AdaptiveLighting.Extensions</RootNamespace>
+    <PackageId>AdaptiveLighting.Extensions</PackageId>
+    <Description>Small, host-agnostic extension methods over NetDaemon's HassModel - reading entity state and attributes tolerantly, on/off and availability checks, service calls, area/registry lookups and safe observable subscriptions. Used by AdaptiveLighting, and useful on its own in any NetDaemon app. References no generated entity types.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Host-agnostic on purpose: NetDaemon.HassModel carries IHaContext, IHaRegistry, Entity,
+      EntityState, StateChange and SubscribeSafe — the entire extension surface. NetDaemon.AppModel
+      is here only for AppConfigurationLocationSetting, which Persistence/StateRepository binds.
+      NO reference to any host project and NO HomeAssistantGenerated types: helpers needing
+      generated entities stay in the host that generated them.
+      Same 26.21.0 as the rest of the graph — bump together or not at all (NU1605).
+    -->
+    <PackageReference Include="NetDaemon.AppModel" Version="26.21.0" />
+    <PackageReference Include="NetDaemon.HassModel" Version="26.21.0" />
+  </ItemGroup>
+
+</Project>

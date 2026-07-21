@@ -1,0 +1,48 @@
+@*
+	The (i) beside a control: a one-line label stays visible, and this reveals the longer "what it does and
+	why you'd change it".
+
+	A button, not a hover title: a phone has no hover, and a keyboard reaches a button. The open panel is a
+	small floating card on a desktop; under 560px it becomes a fixed sheet pinned above the bottom edge of the
+	screen, because an absolutely positioned card anchored to an icon near the screen edge is a card half off
+	the screen. Both are plain CSS — no script, so nothing a CSP could object to. Escape closes it, clicking
+	the icon again closes it, and the sheet carries its own close button for thumbs.
+*@
+
+<span class="info" @onkeydown="OnKeyDown">
+	<button type="button"
+			class="info-icon"
+			aria-expanded="@(_open ? "true" : "false")"
+			aria-label="@($"More about {Label}")"
+			title="@($"More about {Label}")"
+			@onclick="Toggle">i</button>
+
+	@if (_open)
+	{
+		<span class="info-panel" role="note">
+			<span class="info-title">@Label</span>
+			<span class="info-body">@ChildContent</span>
+			<button type="button" class="info-close" @onclick="Toggle">Close</button>
+		</span>
+	}
+</span>
+
+@code {
+	/// <summary>What the icon explains — usually the field's label. Titles the panel and names the icon for a screen reader.</summary>
+	[Parameter, EditorRequired]
+	public string Label { get; set; } = "";
+
+	/// <summary>The explanation itself: what this does, and why somebody would change it.</summary>
+	[Parameter, EditorRequired]
+	public RenderFragment? ChildContent { get; set; }
+
+	private bool _open;
+
+	private void Toggle() => _open = !_open;
+
+	private void OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
+	{
+		if (args.Key == "Escape")
+			_open = false;
+	}
+}

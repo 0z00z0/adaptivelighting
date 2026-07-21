@@ -1,0 +1,31 @@
+name: release
+
+# Tag a release to publish: git tag v0.1.0-preview.1 && git push origin v0.1.0-preview.1
+# The tag drives the package version, so the three packages always ship as a matched set.
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Version from tag
+        run: echo "PKG_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - run: dotnet restore AdaptiveLighting.slnx
+      - run: dotnet build AdaptiveLighting.slnx -c Release --no-restore -p:Version=$PKG_VERSION
+      - run: dotnet test AdaptiveLighting.slnx -c Release --no-build
+
+      - run: dotnet pack AdaptiveLighting.slnx -c Release --no-build -p:Version=$PKG_VERSION -o artifacts
+
+      # Requires a NUGET_API_KEY repository secret (nuget.org > API Keys).
+      - name: Push to nuget.org
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate

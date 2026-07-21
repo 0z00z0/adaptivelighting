@@ -1,0 +1,25 @@
+@*
+	The root component. Lives in the RCL rather than in the host so that a host's entire web payload is
+	the program.cs call to MapRazorComponents<App>() — a host adopts this by copying that call.
+*@
+@* No hard-coded theme: app.css defines a dark palette and a light override behind
+   prefers-color-scheme, so the page follows the device. *@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<base href="/" />
+	<title>Adaptive lighting</title>
+	<link rel="stylesheet" href="_content/AdaptiveLighting.Web/app.css" />
+	<link rel="icon" type="image/svg+xml" href="_content/AdaptiveLighting.Web/favicon.svg" />
+	<HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+	<Routes @rendermode="InteractiveServer" />
+	<script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>

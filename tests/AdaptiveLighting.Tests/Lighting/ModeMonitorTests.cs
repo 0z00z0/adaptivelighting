@@ -1,0 +1,637 @@
+using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Engine;
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Reactive.Testing;
+
+namespace AdaptiveLighting.Tests.Lighting;
+
+/// <summary>
+///     The mode brain (09 §3.2): reading the select, deriving kind/scene, and the set → retain → reset lifecycle —
+///     period-entry SetsMode, the three reset triggers (period, presence with grace, time), and the master-switch
+///     default. Everything runs on a virtual <see cref="TestScheduler"/> and a <see cref="FakeHaContext"/>.
+/// </summary>
+[TestClass]
+public sealed class ModeMonitorTests
+{
+	private const string Select = "input_select.husmodus";
+	private const string Gang = "binary_sensor.gang_bevegelse";
+	private const string Kjokken = "binary_sensor.kjokken_bevegelse";
+	private const string Person = "person.alex";
+	private const string Tracker = "device_tracker.alex_phone";
+	private const string ResetTime = "input_datetime.slutt";
+	private const string SleepToggle = "input_boolean.sover";
+	private const string GuestToggle = "input_boolean.gjest";
+	private static readonly DateTimeOffset Evening = new(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
+
+	private static HouseModeConfig Mode() => new()
+	{
+		Entity = Select,
+		Options =
+		[
+			new() { Value = "Hjemme", Kind = ModeKind.Normal },
+			new() { Value = "Sover", Kind = ModeKind.Sleep },
+			new() { Value = "Borte", Kind = ModeKind.Away, Scene = "scene.borte" },
+			new() { Value = "Gjester", Kind = ModeKind.Guest, Scene = "scene.gjest" }
+		]
+	};
+
+	private static List<TimePeriodConfig> Periods() =>
+	[
+		new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
+		new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
+		new() { Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsMode = "Sover" }
+	];
+
+	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor);
+
+	private static Rig Build(
+		GlobalConfig? global = null,
+		List<TimePeriodConfig>? periods = null,
+		IReadOnlyCollection<string>? motion = null,
+		DateTimeOffset? startAt = null,
+		Action<FakeHaContext>? seed = null)
+	{
+		var scheduler = new TestScheduler();
+		scheduler.AdvanceTo((startAt ?? Evening).Ticks);
+
+		var ha = new FakeHaContext();
+		global ??= new GlobalConfig { CircadianTickSeconds = 60, HouseMode = Mode() };
+		seed?.Invoke(ha);
+
+		var monitor = new ModeMonitor(
+			ha, global, NullLogger.Instance, scheduler,
+			periods ?? Periods(), () => SunTimes.Unknown, motion ?? []);
+
+		return new Rig(ha, scheduler, monitor);
+	}
+
+	private static Rig Started(
+		GlobalConfig? global = null,
+		List<TimePeriodConfig>? periods = null,
+		IReadOnlyCollection<string>? motion = null,
+		DateTimeOffset? startAt = null,
+		string initialSelect = "Hjemme",
+		Action<FakeHaContext>? seed = null)
+	{
+		var rig = Build(global, periods, motion, startAt, ha =>
+		{
+			ha.SetState(Select, initialSelect);
+			seed?.Invoke(ha);
+		});
+		rig.Monitor.Start();
+		return rig;
+	}
+
+	private static void Activate(Rig rig, string value) => rig.Ha.Trigger(Select, value);
+
+	private static void Advance(Rig rig, TimeSpan by) => rig.Scheduler.AdvanceBy(by.Ticks);
+
+	private static int SelectCalls(FakeHaContext ha, string option) =>
+		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option" && OptionOf(c) == option);
+
+	private static string? OptionOf(ServiceCall call) =>
+		call.Data?.GetType().GetProperty("option")?.GetValue(call.Data) as string;
+
+	// ---- Kind / scene derivation --------------------------------------------------------------
+
+	[TestMethod]
+	public void ActiveKindAndScene_DeriveFromOption()
+	{
+		var rig = Build();
+
+		rig.Ha.SetState(Select, "Sover");
+		Assert.AreEqual(ModeKind.Sleep, rig.Monitor.ActiveKind);
+		Assert.IsNull(rig.Monitor.ActiveScene, "a sleep option carries no scene");
+
+		rig.Ha.SetState(Select, "Borte");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind);
+		Assert.AreEqual("scene.borte", rig.Monitor.ActiveScene);
+
+		rig.Ha.SetState(Select, "Hjemme");
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind);
+		Assert.IsNull(rig.Monitor.ActiveScene);
+	}
+
+	[TestMethod]
+	public void ActiveScene_IsReturnedForAnyKind_IncludingSleep()
+	{
+		var mode = Mode();
+		mode.OptionFor("Sover")!.Scene = "scene.natt";   // a scene on a Sleep option
+		var rig = Build(new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode });
+
+		rig.Ha.SetState(Select, "Sover");
+		Assert.AreEqual(ModeKind.Sleep, rig.Monitor.ActiveKind);
+		Assert.AreEqual("scene.natt", rig.Monitor.ActiveScene, "a scene applies on entry to any kind now, sleep included");
+	}
+
+	[TestMethod]
+	public void CurrentModeValue_NullOnUnavailableUnknownUnconfigured()
+	{
+		var ha = new FakeHaContext();
+
+		using var unconfigured = new ModeMonitor(ha, new GlobalConfig(), NullLogger.Instance,
+			new TestScheduler(), [], () => SunTimes.Unknown, []);
+		Assert.IsNull(unconfigured.CurrentModeValue);
+
+		var rig = Build();
+		Assert.IsNull(rig.Monitor.CurrentModeValue, "no state reported yet");
+
+		rig.Ha.SetState(Select, "unavailable");
+		Assert.IsNull(rig.Monitor.CurrentModeValue);
+
+		rig.Ha.SetState(Select, "Sover");
+		Assert.AreEqual("Sover", rig.Monitor.CurrentModeValue);
+	}
+
+	[TestMethod]
+	public void UnrecognisedValue_WarnsOncePerValue()
+	{
+		var ha = new FakeHaContext();
+		var logger = new CountingLogger();
+		var monitor = new ModeMonitor(ha, new GlobalConfig { HouseMode = Mode() }, logger,
+			new TestScheduler(), Periods(), () => SunTimes.Unknown, []);
+
+		ha.SetState(Select, "Natt");   // a live value nothing classifies
+
+		Assert.AreEqual("Natt", monitor.CurrentModeValue);
+		Assert.AreEqual(ModeKind.Normal, monitor.ActiveKind);
+		_ = monitor.CurrentModeValue;
+		_ = monitor.ActiveKind;
+
+		Assert.AreEqual(1, logger.Warnings, "warns once per distinct unclassified value");
+	}
+
+	// ---- Retention ----------------------------------------------------------------------------
+
+	[TestMethod]
+	public void Retention_NoTrigger_StaysSet()
+	{
+		var rig = Started(startAt: Evening, initialSelect: "Hjemme");
+		Activate(rig, "Sover");    // sleep, and Mode()'s Sover has no reset trigger
+
+		Advance(rig, TimeSpan.FromHours(6));   // crosses night (SetsMode Sover, already Sover) and beyond
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "nothing resets a retained mode");
+	}
+
+	// ---- Period entry → SetsMode --------------------------------------------------------------
+
+	[TestMethod]
+	public void PeriodEntry_SetsMode_FiresOnceAtEntry()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 22, 0, 0, TimeSpan.Zero), initialSelect: "Hjemme");
+
+		Advance(rig, TimeSpan.FromMinutes(90));   // past night@23:00
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "SetsMode fires exactly once on entry");
+	}
+
+	[TestMethod]
+	public void PeriodEntry_SetsMode_NotWhenAlreadyThatMode()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 22, 0, 0, TimeSpan.Zero), initialSelect: "Sover");
+
+		Advance(rig, TimeSpan.FromMinutes(90));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "the select is already on Sover; no redundant set");
+	}
+
+	[TestMethod]
+	public void PeriodEntry_SetsMode_HumanOverrideMidPeriodStands()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 22, 0, 0, TimeSpan.Zero), initialSelect: "Hjemme");
+
+		Advance(rig, TimeSpan.FromMinutes(90));    // past night@23:00 → one Sover set
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"));
+
+		Activate(rig, "Hjemme");                   // a human overrides mid-night
+		Advance(rig, TimeSpan.FromMinutes(45));    // stays in night (to ~00:15)
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "entry is edge-triggered; the override stands");
+	}
+
+	// ---- Period-start reset -------------------------------------------------------------------
+
+	[TestMethod]
+	public void PeriodReset_EnteringNamedPeriod_ResetsToNormal()
+	{
+		var mode = Mode();
+		mode.OptionFor("Sover")!.ResetOnPeriodStart = "morning";
+		var global = new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+
+		var rig = Started(global, startAt: new DateTimeOffset(2026, 1, 16, 6, 0, 0, TimeSpan.Zero), initialSelect: "Sover");
+
+		Advance(rig, TimeSpan.FromMinutes(40));   // past morning@06:30
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "the waking period ends the night");
+	}
+
+	// ---- Presence reset -----------------------------------------------------------------------
+
+	private static GlobalConfig AwayResetsOnPresence(IReadOnlyList<string> sensors)
+	{
+		var mode = Mode();
+		var borte = mode.OptionFor("Borte")!;
+		borte.ResetOnPresence = true;
+		borte.ResetPresenceSensors = [.. sensors];
+		borte.ResetPresenceGraceMinutes = 15;
+		return new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+	}
+
+	[TestMethod]
+	public void PresenceReset_WithinGrace_Ignored_ThenAfterGrace_Resets()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(5));
+		rig.Ha.Trigger(Gang, "on");
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "presence inside the grace is ignored");
+
+		Advance(rig, TimeSpan.FromMinutes(11));    // now 16 min after activation
+		rig.Ha.Trigger(Gang, "off");
+		rig.Ha.Trigger(Gang, "on");                // a fresh turn-on after the grace
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "a fresh arrival after the grace resets");
+	}
+
+	[TestMethod]
+	public void PresenceReset_AlreadyOnAtGraceExpiry_DoesNotReset()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(5));
+		rig.Ha.Trigger(Gang, "on");                // turns on inside the grace
+		Advance(rig, TimeSpan.FromMinutes(30));    // grace expires with the sensor already on — no new edge
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "edge-triggered: an already-on sensor does not reset");
+	}
+
+	[TestMethod]
+	public void PresenceReset_PersonArrivingHome_Counts()
+	{
+		var rig = Started(AwayResetsOnPresence([Person]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Person, "not_home"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Person, "home");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "a person transitioning to home is an arrival");
+	}
+
+	[TestMethod]
+	public void PresenceReset_DeviceTrackerArrivingHome_Counts()
+	{
+		var rig = Started(AwayResetsOnPresence([Tracker]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Tracker, "not_home"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Tracker, "home");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"),
+			"a device_tracker transitioning to home is an arrival, not an on/off edge");
+	}
+
+	// ---- auto-away by inactivity ---------------------------------------------------------------
+
+	private static GlobalConfig AwayActivatesOnNoMotion(int minutes)
+	{
+		var mode = Mode();
+		mode.OptionFor("Borte")!.ActivateAfterNoMotionMinutes = minutes;
+		return new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+	}
+
+	// A single all-day period, so period entry and SetsMode never interfere with the idle-timer tests.
+	private static List<TimePeriodConfig> FlatPeriod() =>
+		[new() { Name = "all", Start = "00:00", BrightnessPct = 50, ColorTempKelvin = 3000 }];
+
+	[TestMethod]
+	public void NoMotionActivation_AfterIdleWindow_SwitchesToTheMode_Once()
+	{
+		var rig = Started(AwayActivatesOnNoMotion(360), periods: FlatPeriod(), motion: [Gang],
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+
+		Advance(rig, TimeSpan.FromHours(5));
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"), "before six quiet hours, nothing happens");
+
+		Advance(rig, TimeSpan.FromHours(2));   // now seven hours idle
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"),
+			"six hours with no motion switches the house to Borte, and the latch holds it to one call");
+	}
+
+	[TestMethod]
+	public void NoMotionActivation_MotionRestartsTheClock()
+	{
+		var rig = Started(AwayActivatesOnNoMotion(360), periods: FlatPeriod(), motion: [Gang],
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+
+		Advance(rig, TimeSpan.FromHours(5));
+		rig.Ha.Trigger(Gang, "on");            // motion restarts the six-hour clock
+		rig.Ha.Trigger(Gang, "off");
+
+		Advance(rig, TimeSpan.FromHours(5));    // only five hours since the motion
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"), "motion restarted the clock");
+
+		Advance(rig, TimeSpan.FromHours(2));    // now past six hours since the motion
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"), "a fresh six quiet hours activates");
+	}
+
+	[TestMethod]
+	public void NoMotionActivation_AlreadyOnTheMode_DoesNothing()
+	{
+		var rig = Started(AwayActivatesOnNoMotion(360), periods: FlatPeriod(), motion: [Gang],
+			startAt: Evening, initialSelect: "Borte", seed: ha => ha.SetState(Gang, "off"));
+
+		Advance(rig, TimeSpan.FromHours(7));
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"), "already standing on Borte — no redundant switch");
+	}
+
+	[TestMethod]
+	public void PresenceReset_ToggleOff_DoesNotSubscribe_EvenWithSensorsListed()
+	{
+		var mode = Mode();
+		var borte = mode.OptionFor("Borte")!;
+		borte.ResetOnPresence = false;         // the toggle is off
+		borte.ResetPresenceSensors = [Gang];   // but a sensor is listed
+		var global = new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+
+		var rig = Started(global, startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+		rig.Ha.Trigger(Gang, "on");
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"),
+			"ResetOnPresence off means no subscription — a listed sensor alone must not reset");
+	}
+
+	[TestMethod]
+	public void PresenceReset_EmptyList_UsesZoneMotionUnion()
+	{
+		var rig = Started(AwayResetsOnPresence([]), periods: Periods(), motion: [Kjokken],
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Kjokken, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Kjokken, "on");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an empty sensor list resets on any zone motion sensor");
+	}
+
+	// ---- Time reset ---------------------------------------------------------------------------
+
+	private static GlobalConfig GuestResetsAtTime()
+	{
+		var mode = Mode();
+		mode.OptionFor("Gjester")!.ResetAtTime = ResetTime;
+		return new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+	}
+
+	[TestMethod]
+	public void TimeReset_MomentAfterActivation_Resets()
+	{
+		var rig = Started(GuestResetsAtTime(), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(ResetTime, "2026-01-15 21:00:00"));
+		Activate(rig, "Gjester");
+
+		Advance(rig, TimeSpan.FromMinutes(61));   // past 21:00
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"));
+	}
+
+	[TestMethod]
+	public void TimeReset_MomentBeforeActivation_NeverResets()
+	{
+		var rig = Started(GuestResetsAtTime(), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(ResetTime, "2026-01-15 19:00:00"));   // already past at 20:00
+		Activate(rig, "Gjester");
+
+		Advance(rig, TimeSpan.FromHours(3));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "a moment before activation never fires");
+	}
+
+	[TestMethod]
+	public void TimeReset_TimeOnlyHelper_ResetsAtNextDailyOccurrence()
+	{
+		var rig = Started(GuestResetsAtTime(), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(ResetTime, "21:00:00"));   // time-only: daily at 21:00
+		Activate(rig, "Gjester");
+
+		Advance(rig, TimeSpan.FromMinutes(61));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"));
+	}
+
+	[TestMethod]
+	public void TimeReset_TimeOnly_FiresAcrossMidnight()
+	{
+		// Start just before midnight so the tick that catches the 23:59:59 reset has already rolled into the next
+		// day. Resolving the daily moment against now.Date would place it a full day ahead and silently skip it.
+		var start = new DateTimeOffset(2026, 1, 15, 23, 58, 30, TimeSpan.Zero);
+		var rig = Started(GuestResetsAtTime(), startAt: start, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(ResetTime, "23:59:59"));
+		Activate(rig, "Gjester");
+
+		Advance(rig, TimeSpan.FromMinutes(3));   // ticks cross 00:00
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"),
+			"a time-only reset just before midnight fires even as the date rolls over");
+	}
+
+	// ---- ActivateWhileOn overlay --------------------------------------------------------------
+
+	private static GlobalConfig WithActivation(string optionValue, params string[] entities)
+	{
+		var mode = Mode();
+		mode.OptionFor(optionValue)!.ActivateWhileOn = [.. entities];
+		return new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+	}
+
+	[TestMethod]
+	public void ActivateWhileOn_EntityOn_OverridesSelect()
+	{
+		var rig = Build(WithActivation("Borte", SleepToggle));
+		rig.Ha.SetState(Select, "Hjemme");
+		rig.Ha.SetState(SleepToggle, "off");
+
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind, "with the entity off the select decides");
+		Assert.IsNull(rig.Monitor.ActiveScene);
+
+		rig.Ha.SetState(SleepToggle, "on");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind, "the entity on forces Borte over the select's Hjemme");
+		Assert.AreEqual("scene.borte", rig.Monitor.ActiveScene, "the effective option's scene is applied");
+	}
+
+	[TestMethod]
+	public void ActivateWhileOn_Empty_LeavesSelectDeciding()
+	{
+		var rig = Build();   // Mode() lists no ActivateWhileOn anywhere
+		rig.Ha.SetState(Select, "Borte");
+		rig.Ha.SetState(SleepToggle, "on");   // an unrelated toggle is on
+
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind, "empty ActivateWhileOn lists leave the select in charge");
+	}
+
+	[TestMethod]
+	public void ActivateWhileOn_TwoActive_FirstOptionInListWins()
+	{
+		var mode = Mode();   // list order: Hjemme, Sover, Borte, Gjester
+		mode.OptionFor("Sover")!.ActivateWhileOn = [SleepToggle];
+		mode.OptionFor("Gjester")!.ActivateWhileOn = [GuestToggle];
+		var rig = Build(new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode });
+
+		rig.Ha.SetState(Select, "Hjemme");
+		rig.Ha.SetState(SleepToggle, "on");
+		rig.Ha.SetState(GuestToggle, "on");
+
+		Assert.AreEqual(ModeKind.Sleep, rig.Monitor.ActiveKind, "Sover precedes Gjester in the options list, so it wins");
+	}
+
+	[TestMethod]
+	public void ActivateWhileOn_DoesNotWriteSelect_ButRepublishesOnChange()
+	{
+		var rig = Started(WithActivation("Borte", SleepToggle), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(SleepToggle, "off"));
+
+		var changes = 0;
+		using var subscription = rig.Monitor.Changed.Subscribe(_ => changes++);
+
+		rig.Ha.Trigger(SleepToggle, "on");
+
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind, "the mode re-evaluates when the listed entity turns on");
+		Assert.IsTrue(changes >= 1, "a state change on a listed entity republishes house state");
+		Assert.AreEqual(0, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"),
+			"the overlay never writes the select back — no feedback loop");
+	}
+
+	// ---- Master-switch default ----------------------------------------------------------------
+
+	[TestMethod]
+	public void KillSwitch_EnabledFlagPolarity_ByDefault()
+	{
+		var rig = Build(new GlobalConfig { KillSwitchEntity = "input_boolean.enabled", HouseMode = Mode() });
+
+		rig.Ha.SetState("input_boolean.enabled", "on");
+		Assert.IsFalse(rig.Monitor.KillSwitchActive);
+
+		rig.Ha.SetState("input_boolean.enabled", "off");
+		Assert.IsTrue(rig.Monitor.KillSwitchActive, "an enabled-flag off means muzzled");
+	}
+
+	[TestMethod]
+	public void KillSwitch_TrueKillPolarity_WhenActiveWhenOffFalse()
+	{
+		var rig = Build(new GlobalConfig { KillSwitchEntity = "input_boolean.kill", KillSwitchActiveWhenOff = false, HouseMode = Mode() });
+
+		rig.Ha.SetState("input_boolean.kill", "off");
+		Assert.IsFalse(rig.Monitor.KillSwitchActive);
+
+		rig.Ha.SetState("input_boolean.kill", "on");
+		Assert.IsTrue(rig.Monitor.KillSwitchActive);
+	}
+
+	[TestMethod]
+	public void KillSwitch_Unavailable_FailsOpen()
+	{
+		var rig = Build(new GlobalConfig { KillSwitchEntity = "input_boolean.missing", HouseMode = Mode() });
+		Assert.IsFalse(rig.Monitor.KillSwitchActive, "an entity that vanished must not muzzle the house");
+	}
+
+	[TestMethod]
+	public void KillSwitch_HonoursDefaultedEntity()
+	{
+		var global = new GlobalConfig
+		{
+			KillSwitchEntity = null,
+			DefaultKillSwitchEntity = "input_boolean.enable",
+			HouseMode = Mode()
+		};
+		var rig = Build(global);
+
+		rig.Ha.SetState("input_boolean.enable", "off");
+		Assert.IsTrue(rig.Monitor.KillSwitchActive, "the defaulted enable switch off means the engine is muzzled");
+
+		rig.Ha.SetState("input_boolean.enable", "on");
+		Assert.IsFalse(rig.Monitor.KillSwitchActive);
+	}
+
+	[TestMethod]
+	public void KillSwitch_DefaultedForcesEnabledFlagPolarity_EvenWhenActiveWhenOffFalse()
+	{
+		// A blank KillSwitchEntity with a defaulted built-in switch: polarity is forced to the enabled-flag reading
+		// (off = muzzled), whatever KillSwitchActiveWhenOff says — that flag only governs an explicit entity.
+		var global = new GlobalConfig
+		{
+			KillSwitchEntity = null,
+			KillSwitchActiveWhenOff = false,
+			DefaultKillSwitchEntity = "input_boolean.enable",
+			HouseMode = Mode()
+		};
+		var rig = Build(global);
+
+		rig.Ha.SetState("input_boolean.enable", "on");
+		Assert.IsFalse(rig.Monitor.KillSwitchActive, "the defaulted enable switch on means the engine is NOT killed");
+
+		rig.Ha.SetState("input_boolean.enable", "off");
+		Assert.IsTrue(rig.Monitor.KillSwitchActive, "off means muzzled");
+	}
+
+	// ---- Reset with no Normal target ----------------------------------------------------------
+
+	[TestMethod]
+	public void Reset_NoOp_WhenNoOptionIsNormal()
+	{
+		// Every option is tagged, so nothing is Normal: a reset trigger has no target and must no-op rather than
+		// clobber the select onto a Sleep/Away option.
+		var mode = new HouseModeConfig
+		{
+			Entity = Select,
+			Options =
+			[
+				new() { Value = "Sover", Kind = ModeKind.Sleep },
+				new() { Value = "Borte", Kind = ModeKind.Away, ResetOnPresence = true, ResetPresenceSensors = [Gang], ResetPresenceGraceMinutes = 0 }
+			]
+		};
+		var global = new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+		var rig = Started(global, startAt: Evening, initialSelect: "Sover", seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(1));
+		rig.Ha.Trigger(Gang, "on");
+
+		Assert.AreEqual(0, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"),
+			"no Normal option resolves, so the reset is a no-op — no select_option is dispatched");
+	}
+
+	/// <summary>An <see cref="ILogger"/> that counts warnings, so the once-per-value tripwire can be asserted.</summary>
+	private sealed class CountingLogger : ILogger
+	{
+		public int Warnings { get; private set; }
+
+		public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+
+		public bool IsEnabled(LogLevel logLevel) => true;
+
+		public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+		{
+			if (logLevel == LogLevel.Warning)
+				Warnings++;
+		}
+
+		private sealed class NullScope : IDisposable
+		{
+			public static readonly NullScope Instance = new();
+
+			public void Dispose()
+			{
+			}
+		}
+	}
+}

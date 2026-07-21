@@ -1,0 +1,369 @@
+@*
+	A year of daylight, with the baseline period boundaries drawn over it.
+
+	Hand-built inline SVG — no chart library, no CDN, themed with the app's CSS variables. The x axis is the
+	calendar year, the y axis the hour of day (00:00 at the top). The background is three stacked bands, never a
+	flat black: a full-plot night rect, the civil-twilight window (sun within 6° of the horizon), and the daylight
+	window on top — each sampled every fourth day and each a themed surface colour. Every period boundary is a line;
+	a fixed one stays level and a sun-anchored one rides the solar curve across the seasons, resolved through the
+	engine's own PeriodStart grammar so the overlay can never drift from what the engine would do with the same
+	string. A vertical marker sits on today, labelled where it crosses the sunrise and sunset curves. When Home
+	Assistant has provided no location the region shows a note rather than a guessed chart.
+
+	The SVG is composed as a markup string in code rather than as Razor tags: Razor reserves <text> as a
+	control-flow transition, so an SVG <text> element with attributes cannot be written inline.
+*@
+
+<div class="daylight-chart">
+	@if (!_haveLocation)
+	{
+		<div class="notice warn">
+			Home Assistant hasn't shared the home's location, so the year chart can't be drawn.
+		</div>
+	}
+	else
+	{
+		@((MarkupString)_svg)
+
+		<p class="daylight-caption">
+			Night, twilight and daylight through the year. Lines are your period starts — a sun-tied start follows
+			the curve. The dashed line is today.
+		</p>
+	}
+</div>
+
+@code {
+	// One sample per day. The bands are filled polygons between a morning and an evening edge, so the smoothness of
+	// their curves is the sample spacing; daily sampling makes the solstice shoulders and the polar-day/night
+	// transitions read as smooth fills rather than faceted steps, for the price of a few hundred cheap trig calls
+	// (run once per signature, not per render).
+	private const int SampleStepDays = 1;
+
+	/// <summary>The document's period list. Every period draws over the one shared table.</summary>
+	[Parameter, EditorRequired]
+	public List<TimePeriodConfig> Periods { get; set; } = [];
+
+	/// <summary>The home's latitude/longitude, or <c>null</c> when Home Assistant provided none.</summary>
+	[Parameter]
+	public (double Latitude, double Longitude)? Location { get; set; }
+
+	private bool _haveLocation;
+	private string _svg = "";
+
+	// The last inputs the chart was drawn from. Rebuild samples the whole year twice over (official plus civil
+	// twilight) plus a boundary overlay per period, so it must not re-run on every render — only when an input it
+	// actually reads changed (location, the period set/boundaries/SetsMode, or the calendar day, which places the
+	// year and the "today" line).
+	private string? _signature;
+
+	/// <summary>A day's sample: its x, plus how the sun behaves at the official and civil-twilight angles that day.</summary>
+	private sealed record DaySample(double X, SolarDay Official, SolarDay Civil);
+
+	/// <inheritdoc/>
+	protected override void OnParametersSet()
+	{
+		string signature = BuildSignature();
+		if (string.Equals(signature, _signature, StringComparison.Ordinal))
+			return;
+
+		_signature = signature;
+		Rebuild();
+	}
+
+	private string BuildSignature()
+	{
+		string location = Location is { } l
+			? string.Create(CultureInfo.InvariantCulture, $"{l.Latitude:R},{l.Longitude:R}")
+			: "none";
+
+		string periods = string.Join("|", Periods
+			.Select(p => $"{p.Name}@{p.Start}>{p.SetsMode}"));
+
+		return $"{DateTime.Today:yyyy-MM-dd};{location};{periods}";
+	}
+
+	private void Rebuild()
+	{
+		_haveLocation = Location is not null;
+		_svg = "";
+
+		if (Location is not { } location)
+			return;
+
+		int year = DateTime.Today.Year;
+		DateOnly jan1 = new DateOnly(year, 1, 1);
+		DateOnly today = DateOnly.FromDateTime(DateTime.Today);
+
+		// Sample the daylight and civil-twilight windows, and remember each day's sun state for the boundary overlays.
+		List<DaySample> samples = new();
+		int daysInYear = DateTime.IsLeapYear(year) ? 366 : 365;
+		for (int offset = 0; offset < daysInYear; offset += SampleStepDays)
+		{
+			DateOnly day = jan1.AddDays(offset);
+			SolarDay official = SolarCalendar.On(day, location.Latitude, location.Longitude);
+			SolarDay civil = SolarCalendar.On(day, location.Latitude, location.Longitude, SolarCalendar.CivilZenithDegrees);
+			samples.Add(new DaySample(X(day.DayOfYear), official, civil));
+		}
+
+		System.Text.StringBuilder svg = new System.Text.StringBuilder();
+		svg.Append("<svg viewBox=\"0 0 730 240\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\" ");
+		svg.Append("aria-label=\"Daylight through the year, with period boundaries overlaid\" class=\"daylight-svg\">");
+
+		// Background bands, darkest first: a full-plot night rect, then civil twilight, then daylight on top. The
+		// day window sits inside the twilight window sits inside the night, so three opaque fills read as three bands.
+		// Near the solstices a band can swallow the whole night (white night / midnight sun → a full-column fill) or
+		// vanish for the day (polar night → a gap): BuildBand resolves both so the fills stay continuous.
+		svg.Append("<rect x=\"0\" y=\"0\" width=\"730\" height=\"240\" class=\"daylight-night\" />");
+
+		if (BuildBand(samples, s => s.Civil) is { Length: > 0 } twilight)
+			svg.Append($"<path d=\"{twilight}\" class=\"daylight-twilight\" />");
+
+		if (BuildBand(samples, s => s.Official) is { Length: > 0 } dayBand)
+			svg.Append($"<path d=\"{dayBand}\" class=\"daylight-day\" />");
+
+		// Hour gridlines every 6 h.
+		foreach (int hour in new[] { 6, 12, 18 })
+		{
+			int y = hour * 10;
+			svg.Append($"<line x1=\"0\" y1=\"{y}\" x2=\"730\" y2=\"{y}\" class=\"daylight-grid\" />");
+			svg.Append($"<text x=\"2\" y=\"{y - 2}\" class=\"daylight-axis\">{hour:00}:00</text>");
+		}
+
+		// Month ticks.
+		foreach (int month in Enumerable.Range(1, 12))
+		{
+			string x = Num(X(new DateOnly(year, month, 1).DayOfYear));
+			string label = new DateOnly(year, month, 1).ToString("MMM", CultureInfo.CurrentCulture);
+			svg.Append($"<line x1=\"{x}\" y1=\"0\" x2=\"{x}\" y2=\"240\" class=\"daylight-month\" />");
+			svg.Append($"<text x=\"{Num(X(new DateOnly(year, month, 1).DayOfYear) + 2)}\" y=\"236\" class=\"daylight-axis\">{Escape(label)}</text>");
+		}
+
+		// Daylight-saving transitions. The curves plot local clock time, so they step a whole hour on the changeover
+		// day — correct, but it reads as a glitch unless it is labelled. A faint dashed marker per transition (taken
+		// from the host timezone's own rules, so it is right wherever this runs, and empty where there is no DST)
+		// says the step is the clocks moving, not the chart.
+		foreach (DateOnly transition in DstTransitions(year))
+		{
+			double dstX = X(transition.DayOfYear);
+			svg.Append($"<line x1=\"{Num(dstX)}\" y1=\"0\" x2=\"{Num(dstX)}\" y2=\"240\" class=\"daylight-dst\" />");
+			double labelX = Math.Clamp(dstX, 34, 696);
+			svg.Append($"<text x=\"{Num(labelX)}\" y=\"9\" text-anchor=\"middle\" class=\"daylight-dst-label\">clocks change</text>");
+		}
+
+		// Period boundaries — every period draws now (one shared table); a SetsMode period says which mode it sets.
+		// SetsMode periods added a second family of right-edge labels, so labels that land within a line-height of
+		// each other are nudged apart before drawing — the polylines still sit on their true boundary.
+		List<PeriodLine> periodLines = BuildPeriodLines(samples);
+
+		foreach (PeriodLine line in periodLines)
+			foreach (string segment in line.Segments)
+				svg.Append($"<polyline points=\"{segment}\" class=\"daylight-period\" />");
+
+		foreach ((string label, double labelY) in SpreadLabels(periodLines))
+			svg.Append($"<text x=\"726\" y=\"{Num(labelY)}\" text-anchor=\"end\" class=\"daylight-period-label\">{Escape(label)}</text>");
+
+		// Today: the vertical marker, and the crossing times on the sunrise/sunset curves.
+		AppendTodayMarker(svg, today, location);
+
+		svg.Append("</svg>");
+		_svg = svg.ToString();
+	}
+
+	/// <summary>The vertical current-date line, plus a dot and an <c>HH:mm</c> label where it meets each sun curve.</summary>
+	private static void AppendTodayMarker(System.Text.StringBuilder svg, DateOnly today, (double Latitude, double Longitude) location)
+	{
+		double x = X(today.DayOfYear);
+		svg.Append($"<line x1=\"{Num(x)}\" y1=\"0\" x2=\"{Num(x)}\" y2=\"240\" class=\"daylight-today\" />");
+
+		SolarDay sun = SolarCalendar.On(today, location.Latitude, location.Longitude);
+
+		// Sunrise labelled below-left of its crossing, sunset above-left — so the two labels never collide, and the
+		// text sits to the left of the marker where it does not run off the right edge in late December.
+		Mark(svg, x, sun.Sunrise, below: true);
+		Mark(svg, x, sun.Sunset, below: false);
+
+		static void Mark(System.Text.StringBuilder svg, double x, TimeOnly? time, bool below)
+		{
+			if (time is not { } value)
+				return;   // polar day/night: no crossing to label.
+
+			double y = Y(value);
+			double labelY = Math.Clamp(below ? y + 12 : y - 6, 10, 232);
+			double labelX = Math.Clamp(x - 4, 26, 724);
+
+			svg.Append($"<circle cx=\"{Num(x)}\" cy=\"{Num(y)}\" r=\"2.2\" class=\"daylight-mark\" />");
+			svg.Append($"<text x=\"{Num(labelX)}\" y=\"{Num(labelY)}\" text-anchor=\"end\" class=\"daylight-mark-label\">{value:HH\\:mm}</text>");
+		}
+	}
+
+	private sealed record PeriodLine(string Label, List<string> Segments, double LabelY);
+
+	/// <summary>
+	///     The right-edge labels with any vertical collisions spread apart: sorted by their natural y, then each
+	///     pushed at least one line-height below the previous, clamped to the plot. A planning aid, so a residual
+	///     overlap at the very bottom is acceptable; the goal is that two boundaries near the same hour stay legible.
+	/// </summary>
+	private static IEnumerable<(string Label, double LabelY)> SpreadLabels(List<PeriodLine> lines)
+	{
+		const double MinGap = 11;
+
+		List<(string Label, double LabelY)> ordered = lines
+			.Select(line => (line.Label, LabelY: line.LabelY))
+			.OrderBy(line => line.LabelY)
+			.ToList();
+
+		for (int i = 1; i < ordered.Count; i++)
+			if (ordered[i].LabelY - ordered[i - 1].LabelY < MinGap)
+				ordered[i] = (ordered[i].Label, Math.Min(ordered[i - 1].LabelY + MinGap, 234));
+
+		return ordered;
+	}
+
+	private static double X(int dayOfYear) => (dayOfYear - 1) * 2.0;
+
+	private static double Y(TimeOnly time) => (time.Hour + (time.Minute / 60.0)) * 10.0;
+
+	private static string Num(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+
+	private static string Point(double x, double y) => $"{Num(x)},{Num(y)}";
+
+	/// <summary>
+	///     The filled band for one zenith angle across the year. At each day the region "brighter than the angle"
+	///     runs between an upper edge (the morning crossing) and a lower edge (the evening crossing). A day the sun
+	///     stays above the angle all round — midnight sun for the official zenith, a white night for the civil one —
+	///     fills the whole column; a day it stays below (polar night) is a gap that splits the fill. The band is one
+	///     <c>d</c> with a closed sub-path per continuous run, so it stays unbroken across the polar transitions
+	///     instead of notching where a crossing time goes missing.
+	/// </summary>
+	private static string? BuildBand(List<DaySample> samples, Func<DaySample, SolarDay> select)
+	{
+		System.Text.StringBuilder path = new();
+		List<(double X, double Upper, double Lower)> run = new();
+
+		foreach (DaySample sample in samples)
+		{
+			SolarDay solar = select(sample);
+
+			// The sun stays below the angle all day: the band has no extent here, so break the run.
+			if (solar.State == SunState.AlwaysBelow)
+			{
+				FlushRun(path, run);
+				run.Clear();
+				continue;
+			}
+
+			(double upper, double lower) = solar.State == SunState.AlwaysAbove
+				? (0.0, 240.0)                                              // above the angle all night → full column
+				: (Y(solar.Sunrise!.Value), Y(solar.Sunset!.Value));       // the ordinary morning-to-evening window
+
+			run.Add((sample.X, upper, lower));
+		}
+
+		FlushRun(path, run);
+		return path.Length > 0 ? path.ToString() : null;
+
+		static void FlushRun(System.Text.StringBuilder path, List<(double X, double Upper, double Lower)> run)
+		{
+			if (run.Count < 2)
+				return;
+
+			// Down the upper (morning) edge left→right, back up the lower (evening) edge right→left, closed.
+			path.Append("M ");
+			path.Append(string.Join(" ", run.Select(p => Point(p.X, p.Upper))));
+			path.Append(" L ");
+			path.Append(string.Join(" ", Enumerable.Reverse(run).Select(p => Point(p.X, p.Lower))));
+			path.Append(" Z ");
+		}
+	}
+
+	/// <summary>
+	///     The daylight-saving changeover days in <paramref name="year"/>, read from the host timezone's own rules by
+	///     watching where the UTC offset changes across the year. Empty for a zone without DST, and correct in the
+	///     southern hemisphere or under a historical rule, because it observes the offset rather than assuming a date.
+	/// </summary>
+	private static IEnumerable<DateOnly> DstTransitions(int year)
+	{
+		TimeZoneInfo zone = TimeZoneInfo.Local;
+		if (!zone.SupportsDaylightSavingTime)
+			yield break;
+
+		DateOnly jan1 = new(year, 1, 1);
+		int daysInYear = DateTime.IsLeapYear(year) ? 366 : 365;
+
+		// Noon is never inside a transition's skipped/repeated hour, so the offset there is unambiguous each day.
+		TimeSpan previousOffset = zone.GetUtcOffset(jan1.ToDateTime(new TimeOnly(12, 0)));
+		for (int offset = 1; offset < daysInYear; offset++)
+		{
+			DateOnly day = jan1.AddDays(offset);
+			TimeSpan currentOffset = zone.GetUtcOffset(day.ToDateTime(new TimeOnly(12, 0)));
+			if (currentOffset != previousOffset)
+				yield return day;
+
+			previousOffset = currentOffset;
+		}
+	}
+
+	private List<PeriodLine> BuildPeriodLines(List<DaySample> samples)
+	{
+		List<PeriodLine> lines = new List<PeriodLine>();
+
+		foreach (TimePeriodConfig period in Periods)
+		{
+			if (!PeriodStart.TryParse(period.Start, out PeriodStart? start) || start is null)
+				continue;
+
+			List<string> segments = new List<string>();
+			List<(double X, double Y)> current = new List<(double X, double Y)>();
+			double? lastY = null;
+			double? labelY = null;
+
+			foreach (DaySample sample in samples)
+			{
+				// A sample the sun cannot place splits the line. In polar day/night the crossing times are null, so a
+				// sun-anchored boundary genuinely has nowhere to sit that day; a fixed clock boundary still resolves.
+				SunTimes officialTimes = new(sample.Official.Sunrise, sample.Official.Sunset);
+				if (start.Resolve(officialTimes) is not { } time)
+				{
+					Flush(segments, current);
+					current = [];
+					lastY = null;
+					continue;
+				}
+
+				double y = Y(time);
+
+				// A jump over 12 h is a boundary crossing midnight — split rather than draw a vertical streak.
+				if (lastY is { } previous && Math.Abs(y - previous) > 120)
+				{
+					Flush(segments, current);
+					current = [];
+				}
+
+				current.Add((sample.X, y));
+				lastY = y;
+				labelY = y;
+			}
+
+			Flush(segments, current);
+
+			if (segments.Count > 0)
+			{
+				string label = period.SetsMode is { Length: > 0 } mode ? $"{period.Name} → {mode}" : period.Name;
+				lines.Add(new PeriodLine(label, segments, Math.Clamp(labelY ?? 0, 6, 234)));
+			}
+		}
+
+		return lines;
+
+		static void Flush(List<string> segments, List<(double X, double Y)> points)
+		{
+			if (points.Count >= 2)
+				segments.Add(string.Join(" ", points.Select(p => Point(p.X, p.Y))));
+		}
+	}
+
+	private static string Escape(string text) =>
+		text.Replace("&", "&amp;", StringComparison.Ordinal)
+			.Replace("<", "&lt;", StringComparison.Ordinal)
+			.Replace(">", "&gt;", StringComparison.Ordinal);
+}

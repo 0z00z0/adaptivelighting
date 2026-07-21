@@ -1,0 +1,2385 @@
+/* Served at _content/AdaptiveLighting.Web/app.css. Hand-written and dependency-free: a CDN link would not load
+   on a LAN with no internet, which is exactly where this UI runs. */
+
+/* The machine/human/idle triple is the state-machine diagram's own colour language (docs/adaptive-lighting/
+   state-machine.svg): blue when the engine decides, amber when a human did, grey when it watches without
+   commanding. The dashboard speaks the same language so the docs and the live page read as one system. */
+:root {
+	--bg: #14161a;
+	--panel: #1c1f26;
+	--panel-2: #232733;
+	--line: #2f3542;
+	--text: #e7eaf0;
+	--muted: #9aa3b2;
+	--accent: #f2b544;
+	--ok: #4ec9a5;
+	--warn: #e8a33d;
+	--bad: #e2686a;
+	--info: #6aa9e9;
+	--machine: #7fb3d5;
+	--machine-bg: #16242e;
+	--human: #e9a33c;
+	--human-bg: #2a2011;
+	--idle: #6f767c;
+	--idle-bg: #1d2125;
+	/* Daylight-chart bands: warm daylight → cool twilight → deep-cool night, never pure black; each a themed surface
+	   (09 §5.5). The day fill leans into the amber accent, the twilight/night into blue, so the chart reads as one
+	   system with the rest of the palette. --daylight-halo is the outline behind chart labels that keeps them legible
+	   over any band (paint-order stroke) — dark here, since the label text is light. */
+	--daylight-night: #1c2442;
+	--daylight-twilight: #3b4f8f;
+	--daylight-day: #ab8640;
+	--daylight-halo: rgba(9, 11, 18, 0.72);
+	--radius: 10px;
+	--mono: ui-monospace, "Cascadia Code", "Consolas", monospace;
+	color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		--bg: #f2f1ee;
+		--panel: #fbfaf8;
+		--panel-2: #eceae5;
+		--line: #d9d7d0;
+		--text: #22252a;
+		--muted: #636b78;
+		--accent: #b4700f;
+		--ok: #1d8a6b;
+		--warn: #a86412;
+		--bad: #b23a3d;
+		--info: #2c6e9b;
+		--machine: #2c6e9b;
+		--machine-bg: #eaf2f8;
+		--human: #b4700f;
+		--human-bg: #fbf2e3;
+		--idle: #8c8e84;
+		--idle-bg: #f0f0ee;
+		--daylight-night: #384777;
+		--daylight-twilight: #7e93c9;
+		--daylight-day: #e8d296;
+		--daylight-halo: rgba(255, 255, 255, 0.8);
+		color-scheme: light;
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html, body {
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+	font-size: 15px;
+	line-height: 1.5;
+}
+
+.shell {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+/* ---- top bar ---- */
+
+/*
+   min-height, never height. A fixed height with flex-wrap is a contradiction: on a narrow screen
+   the nav wraps to a second row, the bar stays 56px tall, and the wrapped row renders outside its
+   own box where .content paints straight over it — the tabs are visible but untappable. Reported
+   on a phone, 2026-07-17. Row-gap matters for the same reason: once it wraps, the rows need air.
+*/
+.topbar {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem 2rem;
+	padding: 0.5rem 1.5rem;
+	min-height: 56px;
+	background: var(--panel);
+	border-bottom: 1px solid var(--line);
+	flex-wrap: wrap;
+}
+
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	font-weight: 600;
+}
+
+.brand-mark {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--accent);
+	box-shadow: 0 0 10px var(--accent);
+}
+
+.nav {
+	display: flex;
+	gap: 0.35rem;
+}
+
+.nav-link {
+	color: var(--muted);
+	text-decoration: none;
+	padding: 0.35rem 0.75rem;
+	border-radius: var(--radius);
+	font-size: 0.92rem;
+}
+
+.nav-link:hover {
+	background: var(--panel-2);
+	color: var(--text);
+}
+
+.nav-link.active {
+	background: var(--panel-2);
+	color: var(--accent);
+}
+
+/*
+   Phones. This page is read leaning on a doorframe as often as at a desk, so once the bar has to
+   wrap, give the nav its own full-width row and make the three tabs equal thirds: a thumb finds a
+   third of a screen, and 0.35rem of padding is not a touch target.
+*/
+@media (max-width: 560px) {
+	.topbar {
+		gap: 0.5rem 1rem;
+		padding: 0.5rem 1rem;
+	}
+
+	.nav {
+		width: 100%;
+		gap: 0.25rem;
+	}
+
+	.nav-link {
+		flex: 1;
+		text-align: center;
+		padding: 0.6rem 0.5rem;
+	}
+
+	.content {
+		padding: 1rem;
+	}
+}
+
+/* ---- content ---- */
+
+.content {
+	flex: 1;
+	padding: 1.5rem;
+	max-width: 1100px;
+	width: 100%;
+	margin: 0 auto;
+}
+
+h1 {
+	font-size: 1.35rem;
+	margin: 0 0 0.25rem;
+}
+
+h2 {
+	font-size: 1rem;
+	margin: 1.75rem 0 0.6rem;
+	color: var(--muted);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+.lede {
+	color: var(--muted);
+	margin: 0 0 1.5rem;
+	max-width: 70ch;
+}
+
+/* ---- panels ---- */
+
+.panel {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1rem 1.15rem;
+	margin-bottom: 1rem;
+}
+
+.empty {
+	background: var(--panel);
+	border: 1px dashed var(--line);
+	border-radius: var(--radius);
+	padding: 2rem;
+	text-align: center;
+	color: var(--muted);
+}
+
+.empty strong {
+	color: var(--text);
+	display: block;
+	margin-bottom: 0.5rem;
+}
+
+.empty p {
+	max-width: 60ch;
+	margin: 0.4rem auto;
+}
+
+/* ---- zone cards ----
+   A card is a story with four beats — headline, last event, what happens next, conditions — not a table.
+   The left edge and the badge carry the machine/human/idle family; the lamp carries the light itself,
+   glowing in the commanded Kelvin at the commanded brightness (inline style, data-driven). */
+
+/*
+   grid-auto-rows: 1fr makes every row the height of the tallest card anywhere in the grid — the
+   largest box decides, and the cards read as one set instead of a ragged shelf. The cards absorb
+   the extra height gracefully because .zone-meta is pushed to the bottom edge with margin-top:auto,
+   so what stretches is the quiet space above the footer, not the text.
+*/
+.zones {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	grid-auto-rows: 1fr;
+	gap: 0.9rem;
+}
+
+.zone {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-left: 3px solid var(--line);
+	border-radius: var(--radius);
+	padding: 0.9rem 1rem;
+}
+
+.zone.family-machine { border-left-color: var(--machine); }
+.zone.family-human { border-left-color: var(--human); }
+
+.zone.family-idle {
+	border-left-color: var(--idle);
+	border-style: dashed;   /* the diagram draws not-commanding states dashed; so does the card */
+	border-left-style: solid;
+}
+
+.zone-head {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 0.1rem;
+}
+
+.zone-name {
+	font-weight: 600;
+	font-size: 1.02rem;
+}
+
+.zone-badge {
+	margin-left: auto;
+	padding: 0.12rem 0.55rem;
+	border-radius: 999px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+	cursor: default;
+}
+
+.family-machine .zone-badge { color: var(--machine); background: var(--machine-bg); }
+.family-human .zone-badge { color: var(--human); background: var(--human-bg); }
+.family-idle .zone-badge { color: var(--idle); background: var(--idle-bg); }
+
+/* The lamp. Lit: filled and glowing, colour and strength from the actual command (inline style).
+   Off: an empty ring. Human-held: filled amber, glowing gently — on, but not at the engine's levels. */
+.lamp {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	flex: 0 0 auto;
+}
+
+.lamp-off {
+	background: transparent;
+	border: 1.5px solid var(--muted);
+	opacity: 0.6;
+}
+
+.lamp-human {
+	background: var(--human);
+	box-shadow: 0 0 8px var(--human);
+}
+
+/* On, but at levels the engine did not choose: lit, and deliberately colourless. */
+.lamp-adopted {
+	background: var(--muted);
+	box-shadow: 0 0 8px var(--muted);
+}
+
+.zone-line {
+	margin: 0;
+	font-size: 0.92rem;
+	line-height: 1.45;
+}
+
+.zone-event {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+
+.event-when {
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.event-when::before {
+	content: "· ";
+}
+
+.zone-next {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.zone-next.overdue {
+	color: var(--warn);
+}
+
+/* ---- the countdown bar ----
+   A thin track under the "what happens next" line, filled to how far the armed countdown has run.
+   It ticks with the page's one-second clock, in the family's colour: blue while the engine's own
+   timer runs, amber while a human's override or suppression counts down. Elapsed fills, so a bar
+   almost full means "almost now" — the same direction the sentence above it reads in. */
+
+.zone-countdown {
+	height: 4px;
+	border-radius: 999px;
+	background: var(--panel-2);
+	overflow: hidden;
+}
+
+.zone-countdown-fill {
+	height: 100%;
+	border-radius: inherit;
+	background: var(--idle);
+	transition: width 1s linear;
+}
+
+.family-machine .zone-countdown-fill { background: var(--machine); }
+.family-human .zone-countdown-fill { background: var(--human); }
+
+/* ---- the stats row ----
+   Three numbers that reward a glance — last motion, standing command, next change — with the story
+   in the tooltips. dl/dt/dd for structure; tabular numerals so the once-a-second tick does not
+   make the row shimmer. */
+
+.zone-stats {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 0.5rem;
+	margin: 0.35rem 0 0;
+	padding: 0.5rem 0 0;
+	border-top: 1px solid var(--line);
+}
+
+.zone-stats .stat {
+	min-width: 0;
+	cursor: default;
+}
+
+.zone-stats dt {
+	font-size: 0.68rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--muted);
+}
+
+.zone-stats dd {
+	margin: 0.1rem 0 0;
+	font-size: 0.82rem;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.zone-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.3rem;
+	margin-top: auto;         /* the footer sits on the card's bottom edge; equal heights stretch the space above it */
+	padding-top: 0.55rem;
+	border-top: 1px solid var(--line);
+}
+
+.zone-meta .chip {
+	background: var(--panel-2);
+	border: none;
+	color: var(--muted);
+	font-size: 0.72rem;
+	padding: 0.12rem 0.5rem;
+	cursor: default;
+}
+
+.zone-meta .chip-alert {
+	color: var(--bad);
+	font-weight: 600;
+}
+
+.zone-meta .chip-when {
+	margin-left: auto;
+	background: none;
+	padding-right: 0;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---- badges ---- */
+
+.badge {
+	display: inline-block;
+	padding: 0.1rem 0.5rem;
+	border-radius: 999px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	background: var(--panel-2);
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.badge.ok { color: var(--ok); }
+.badge.warn { color: var(--warn); }
+.badge.bad { color: var(--bad); }
+.badge.info { color: var(--info); }
+.badge.accent { color: var(--accent); }
+
+/* The "active now" badge on the period/mode in force: accent text on an accent-tinted pill, so it reads as
+   the live one rather than just another grey tag. */
+.badge.active-now {
+	color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 16%, var(--panel-2));
+}
+
+/* ---- tables ---- */
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.88rem;
+}
+
+th, td {
+	text-align: left;
+	padding: 0.45rem 0.6rem;
+	border-bottom: 1px solid var(--line);
+	vertical-align: top;
+}
+
+th {
+	color: var(--muted);
+	font-weight: 600;
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+tr:last-child td {
+	border-bottom: none;
+}
+
+td.num {
+	font-variant-numeric: tabular-nums;
+}
+
+code {
+	font-family: var(--mono);
+	font-size: 0.85em;
+	background: var(--panel-2);
+	padding: 0.1rem 0.35rem;
+	border-radius: 4px;
+	color: var(--accent);
+	/* A file path or entity id is one unbreakable token, and on a phone one long token is the whole
+	   page scrolling sideways. Break anywhere rather than push the save bar off-screen. */
+	overflow-wrap: anywhere;
+}
+
+/* ---- dashboard master switch ----
+   The one control at the top of the dashboard that pauses or resumes the whole engine. It reflects the live
+   state of the configured kill switch and flips it through ModeService's existing config-resolved toggle. The
+   left edge carries the state colour — ok when commanding, muted when paused, warn when Home Assistant has not
+   answered and the state is unknown. */
+
+.master-switch {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-left: 3px solid var(--idle);
+	border-radius: var(--radius);
+	padding: 0.85rem 1.1rem;
+	margin-bottom: 1rem;
+}
+
+.master-switch.on {
+	border-left-color: var(--ok);
+}
+
+.master-switch.off {
+	border-left-color: var(--idle);
+}
+
+.master-switch.unknown {
+	border-left-color: var(--warn);
+}
+
+.master-switch-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	min-width: 0;
+}
+
+.master-switch-title {
+	font-weight: 600;
+	font-size: 1rem;
+}
+
+.master-switch-sub {
+	color: var(--muted);
+	font-size: 0.85rem;
+	max-width: 60ch;
+}
+
+/* ---- mode toggles ---- */
+
+.mode {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1.5rem;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1rem 1.15rem;
+	margin-bottom: 0.75rem;
+}
+
+.mode-body {
+	flex: 1;
+}
+
+.mode-label {
+	font-weight: 600;
+	margin-bottom: 0.15rem;
+}
+
+.mode-desc {
+	color: var(--muted);
+	font-size: 0.87rem;
+	margin: 0.25rem 0;
+	max-width: 65ch;
+}
+
+.mode-meaning {
+	font-size: 0.87rem;
+	margin: 0.35rem 0 0;
+}
+
+button.toggle {
+	border: 1px solid var(--line);
+	background: var(--panel-2);
+	color: var(--text);
+	border-radius: 999px;
+	padding: 0.4rem 1.1rem;
+	font-size: 0.87rem;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+	min-width: 92px;
+}
+
+button.toggle:hover:not(:disabled) {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+button.toggle.on {
+	background: rgba(78, 201, 165, 0.12);
+	border-color: var(--ok);
+	color: var(--ok);
+}
+
+button.toggle:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* ---- mode hero + cards ----
+   Read-only enrichment of the modes page: the live derived state, and a card per option that says what the
+   mode drives, what its light looks like right now, and what it does to the zones. Additive; nothing here acts. */
+
+.mode-hero {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1rem 1.15rem;
+	margin-bottom: 1rem;
+}
+
+.mode-hero.legacy {
+	background: var(--panel-2);
+}
+
+.mode-hero-main {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+}
+
+.mode-hero-label {
+	color: var(--muted);
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.mode-hero-value {
+	font-size: 1.6rem;
+	font-weight: 700;
+	color: var(--text);
+	line-height: 1.1;
+}
+
+.mode-hero-value.unknown {
+	color: var(--muted);
+	font-style: italic;
+}
+
+.mode-hero-sub {
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+.mode-pills {
+	display: flex;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+}
+
+.pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	padding: 0.2rem 0.65rem;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--muted);
+	background: var(--panel-2);
+}
+
+.pill .pill-glyph {
+	font-size: 0.9em;
+}
+
+/* An "off" pill stays quiet; an active one lights in its own colour so the wall-state reads at a glance. */
+.pill.off {
+	opacity: 0.5;
+}
+
+.pill.unknown {
+	opacity: 0.6;
+	font-style: italic;
+}
+
+.pill.sleep.on {
+	color: var(--info);
+	border-color: var(--info);
+	background: rgba(106, 169, 233, 0.12);
+}
+
+.pill.guest.on {
+	color: var(--accent);
+	border-color: var(--accent);
+	background: rgba(242, 181, 68, 0.12);
+}
+
+.pill.away.on {
+	color: var(--bad);
+	border-color: var(--bad);
+	background: rgba(226, 104, 106, 0.12);
+}
+
+.mode-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+
+/* A card is a button: fully clickable, keyboard-focusable, and disabled when Home Assistant is not ready. */
+button.mode-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	text-align: left;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 0.85rem 0.95rem;
+	cursor: pointer;
+}
+
+button.mode-card:hover:not(:disabled) {
+	border-color: var(--accent);
+}
+
+button.mode-card.current {
+	border-color: var(--accent);
+	background: rgba(242, 181, 68, 0.08);
+}
+
+button.mode-card:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.mode-card-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.mode-card-name {
+	font-weight: 700;
+	font-size: 1.05rem;
+	color: var(--text);
+}
+
+.mode-card-chips {
+	display: inline-flex;
+	gap: 0.3rem;
+	flex-wrap: wrap;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 0.05rem 0.4rem;
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: var(--muted);
+	background: var(--panel-2);
+}
+
+.chip.sleep { color: var(--info); border-color: rgba(106, 169, 233, 0.4); }
+.chip.guest { color: var(--accent); border-color: rgba(242, 181, 68, 0.4); }
+.chip.away { color: var(--bad); border-color: rgba(226, 104, 106, 0.4); }
+
+.mode-card-drives {
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+.mode-card-swatch-row {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+}
+
+/* The swatch's inline style carries the period colour and a glow scaled by brightness; the default here is the
+   dark disc an off/unresolved preview falls back to. */
+.mode-swatch {
+	flex: 0 0 auto;
+	width: 1.5rem;
+	height: 1.5rem;
+	border-radius: 50%;
+	border: 1px solid var(--line);
+	background: var(--bg);
+}
+
+.mode-swatch.off {
+	background: repeating-linear-gradient(45deg, var(--bg), var(--bg) 3px, var(--panel-2) 3px, var(--panel-2) 6px);
+}
+
+.mode-swatch-label {
+	font-size: 0.82rem;
+	color: var(--text);
+	font-variant-numeric: tabular-nums;
+}
+
+.mode-card-effect {
+	font-size: 0.82rem;
+	color: var(--muted);
+	border-top: 1px solid var(--line);
+	padding-top: 0.5rem;
+}
+
+.notice {
+	border-left: 3px solid var(--warn);
+	background: var(--panel);
+	border-radius: 0 var(--radius) var(--radius) 0;
+	padding: 0.75rem 1rem;
+	margin-bottom: 1rem;
+	font-size: 0.88rem;
+	color: var(--muted);
+}
+
+.notice.bad {
+	border-left-color: var(--bad);
+}
+
+/* ---- footer ---- */
+
+.footer {
+	border-top: 1px solid var(--line);
+	padding: 0.75rem 1.5rem;
+	color: var(--muted);
+	font-size: 0.8rem;
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.footer-warn {
+	color: var(--warn);
+}
+
+/* ============================================================================
+   Editor. Everything below exists because the configuration page stopped being
+   a viewer and started being a form. Grouped rather than scattered so the
+   read-only styles above stay recognisable as what they were.
+   ============================================================================ */
+
+/* ---- notices ---- */
+
+.notice.warn {
+	border-left-color: var(--warn);
+}
+
+.notice ul {
+	margin: 0.4rem 0 0;
+	padding-left: 1.1rem;
+}
+
+.notice li {
+	margin: 0.2rem 0;
+}
+
+.notice strong {
+	color: var(--text);
+}
+
+/* ---- status ---- */
+
+.status-row {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+	padding: 0.3rem 0;
+	font-size: 0.88rem;
+	color: var(--muted);
+}
+
+.status-label {
+	color: var(--text);
+	font-weight: 600;
+	min-width: 7rem;
+}
+
+.hint {
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+/* ---- save bar ----
+   Sticky because the form is long: a save button only at the bottom of a page
+   with six zones on it is a save button nobody finds. */
+
+.savebar {
+	position: sticky;
+	top: 0;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 0.6rem 0.9rem;
+	margin: 1rem 0;
+}
+
+.savebar-note {
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+
+.savebar-note.ok {
+	color: var(--ok);
+}
+
+.savebar-note.bad {
+	color: var(--bad);
+}
+
+/* The success confirmation is transient — it fades in, then the component removes it after a few seconds. It
+   carries a small check so a glance reads "saved" without reading the words. Only success is a toast; a refused
+   or failed save renders through the persistent .savebar-note.bad above and stays until resolved. */
+.savebar-toast {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	animation: savebar-toast-in 0.2s ease-out;
+}
+
+.savebar-toast::before {
+	content: "✓";
+	font-weight: 700;
+}
+
+@keyframes savebar-toast-in {
+	from { opacity: 0; transform: translateY(-3px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.savebar-toast {
+		animation: none;
+	}
+}
+
+/* ---- controls ---- */
+
+button {
+	background: var(--panel-2);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 0.35rem 0.7rem;
+	font: inherit;
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+	border-color: var(--accent);
+}
+
+button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+button.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: #1a1206;
+	font-weight: 600;
+	transition: transform 0.06s ease, filter 0.06s ease;
+}
+
+/* A brief press: the button sinks and darkens on click, so "Save and apply" feels like a physical action
+   rather than a link. Reduced-motion users get the darken without the movement. */
+button.primary:active:not(:disabled) {
+	transform: translateY(1px) scale(0.985);
+	filter: brightness(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	button.primary {
+		transition: filter 0.06s ease;
+	}
+
+	button.primary:active:not(:disabled) {
+		transform: none;
+	}
+}
+
+button.danger:hover:not(:disabled) {
+	border-color: var(--bad);
+	color: var(--bad);
+}
+
+input[type="text"], input[type="number"], input[type="password"], select {
+	background: var(--bg);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 0.3rem 0.45rem;
+	font: inherit;
+	font-size: 0.85rem;
+}
+
+input:focus, select:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
+input[type="checkbox"] {
+	accent-color: var(--accent);
+}
+
+.cell {
+	min-width: 6rem;
+}
+
+.cell.num {
+	width: 6rem;
+	text-align: right;
+	font-family: var(--mono);
+}
+
+.cell.wide {
+	min-width: min(22rem, 100%);
+	max-width: 100%;
+}
+
+.unit {
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+
+/* ---- fields ---- */
+
+.field {
+	padding: 0.6rem 0;
+	border-bottom: 1px solid var(--line);
+}
+
+.field:last-child {
+	border-bottom: none;
+}
+
+.field-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.field-label {
+	font-weight: 600;
+	font-size: 0.88rem;
+}
+
+.field-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	color: var(--muted);
+	font-size: 0.78rem;
+	cursor: pointer;
+}
+
+.field-control {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+	margin-top: 0.35rem;
+}
+
+.field-control.checks {
+	gap: 1rem;
+}
+
+.field-control.checks label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+.field-help {
+	color: var(--muted);
+	font-size: 0.8rem;
+	margin-top: 0.3rem;
+	max-width: 60rem;
+}
+
+.field-inherit, .inherit {
+	color: var(--muted);
+	font-size: 0.85rem;
+	font-style: italic;
+}
+
+.field-inherit strong {
+	color: var(--text);
+	font-style: normal;
+}
+
+/* ---- pickers ---- */
+
+.picker {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+/* One width for every picker, and it is a width, not a min-width: the People/Master/Sleep dropdowns
+   used to size themselves to their longest option and sat visibly ragged above one another. The
+   longest requirement decides for all of them. min(…, 100%) because 24rem is wider than a phone. */
+.picker-select, .picker-text {
+	width: min(24rem, 100%);
+	max-width: 100%;
+}
+
+/* The plain selects in Global (kill-switch polarity, illuminance class …) line up with the pickers. */
+select.cell.wide {
+	width: min(24rem, 100%);
+	min-width: 0;
+}
+
+.picker-mode {
+	font-size: 0.75rem;
+	padding: 0.2rem 0.5rem;
+}
+
+.picker-note {
+	font-size: 0.78rem;
+	color: var(--muted);
+}
+
+.picker-note.bad {
+	color: var(--bad);
+}
+
+.list-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	align-items: stretch;
+	width: 100%;
+	min-width: 0;
+}
+
+/* The add control sits on its own full-width row under the chips, with room to breathe. This control
+   has been photographed overlapping its own chips; the row-gap matters once the select and the
+   "Type an id" button wrap onto two lines. */
+.picker-addrow {
+	width: 100%;
+	row-gap: 0.5rem;
+}
+
+.picker-mode {
+	flex: 0 0 auto;
+}
+
+.list-empty {
+	color: var(--muted);
+	font-size: 0.82rem;
+	font-style: italic;
+}
+
+.chips {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;      /* a chip with a long name and a long id folds onto two lines on a phone */
+	gap: 0.15rem 0.4rem;
+	max-width: 100%;
+	min-width: 0;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	padding: 0.15rem 0.5rem;
+	font-size: 0.8rem;
+}
+
+/* Entity ids are single unbreakable tokens; unbroken they are the widest thing on a phone screen. */
+.chip-name, .chip-id {
+	overflow-wrap: anywhere;
+	min-width: 0;
+}
+
+.chip-bad {
+	border-color: var(--bad);
+}
+
+.chip-name {
+	color: var(--text);
+}
+
+.chip-id {
+	font-family: var(--mono);
+	font-size: 0.72rem;
+	color: var(--muted);
+}
+
+.chip-remove {
+	border: none;
+	background: none;
+	color: var(--muted);
+	padding: 0 0.1rem;
+	font-size: 1rem;
+	line-height: 1;
+}
+
+.chip-remove:hover {
+	color: var(--bad);
+}
+
+.nullable {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+/* ---- zone folds ----
+   A zone in the editor is a <details>: collapsed it is a header line — name, area, how far it strays
+   from the defaults — because a list of six zones is read far more often than edited. The summary is
+   a real header, not a text box; the name is edited in a field inside. */
+
+/* ---- section folds, unified ----
+   Zones, periods and house-mode options are the same object in the editor: a <details> that reads as a one-line
+   header when collapsed and opens to its editor. They share ONE visual language so the whole page reads as one
+   system — the readable, structured look the house-mode cards introduced, now applied to all three: an accent
+   left-edge that makes the stack scannable, a panel-2 header wash on hover and while open, and one chevron.
+   The per-type blocks further down keep only what is genuinely unique (a period's start time, a mode's Kind
+   badge, the orphan state) and must NOT re-declare the shared look, or source order would fork it again. */
+
+.zone-fold,
+.period-fold,
+.housemode-fold,
+.group-fold {
+	padding: 0;
+	overflow: hidden;   /* the header wash must not poke past the rounded corners */
+	/* A dimmed-green edge by default — alive but quiet — so the cards read as a healthy list rather than plain
+	   grey. The period/mode in force turns this edge accent (below); green is the resting state, orange is "now". */
+	border-left: 3px solid color-mix(in srgb, var(--ok) 42%, var(--line));
+}
+
+/* The period in force and the mode the house is in right now get a warm left edge and an "active now" badge,
+   so a glance down the list shows "where we are". Only periods and house modes have an active state — zones
+   and setting groups have none, and keep the neutral edge. */
+.period-fold.active,
+.housemode-fold.active {
+	border-left-color: var(--accent);
+}
+
+.zone-fold > *:not(summary),
+.period-fold > *:not(summary),
+.housemode-fold > *:not(summary) {
+	margin-left: 1.1rem;
+	margin-right: 1.1rem;
+}
+
+.zone-summary,
+.period-summary,
+.housemode-summary {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem 0.7rem;
+	flex-wrap: wrap;
+	padding: 0.8rem 1.1rem;
+	cursor: pointer;
+	list-style: none;
+}
+
+.zone-summary::-webkit-details-marker,
+.period-summary::-webkit-details-marker,
+.housemode-summary::-webkit-details-marker {
+	display: none;
+}
+
+.zone-summary:hover,
+.period-summary:hover,
+.housemode-summary:hover {
+	background: var(--panel-2);
+}
+
+.zone-fold[open] > .zone-summary,
+.period-fold[open] > .period-summary,
+.housemode-fold[open] > .housemode-summary {
+	background: var(--panel-2);
+	border-bottom: 1px solid var(--line);
+	margin-bottom: 0.7rem;
+}
+
+.zone-fold[open] > .zone-summary .zone-chevron,
+.period-fold[open] > .period-summary .zone-chevron,
+.housemode-fold[open] > .housemode-summary .zone-chevron {
+	transform: rotate(45deg);
+}
+
+/* Titles carry the human name of the thing — identical across all three. The house-mode value is an HA id, so
+   it keeps the mono face (below) but matches this weight and size. */
+.zone-title,
+.period-title {
+	font-weight: 600;
+	font-size: 1.02rem;
+}
+
+/* Right-aligned muted summary of the settings behind the header — identical across all three. */
+.zone-summary-hint,
+.period-summary-hint,
+.housemode-summary-hint {
+	margin-left: auto;
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.zone-area {
+	font-family: var(--mono);
+	font-size: 0.75rem;
+	color: var(--muted);
+	background: var(--panel-2);
+	padding: 0.1rem 0.4rem;
+	border-radius: 4px;
+}
+
+/* The chevron: drawn, not a glyph, so it renders identically everywhere and can rotate. Shared by all folds. */
+.zone-chevron {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-right: 2px solid var(--muted);
+	border-bottom: 2px solid var(--muted);
+	transform: rotate(-45deg);
+	transition: transform 0.15s ease;
+}
+
+.zone-actions {
+	padding: 0.6rem 0 0.9rem;
+}
+
+/* ---- discovery preview ----
+   Bordered and coloured rather than plain, because it is the answer to the
+   question the area picker asks, and it has to be findable at a glance. */
+
+.preview {
+	border: 1px solid var(--line);
+	border-left-width: 3px;
+	border-radius: 0 var(--radius) var(--radius) 0;
+	background: var(--bg);
+	padding: 0.6rem 0.9rem;
+	margin: 0.6rem 0;
+}
+
+.preview-ok {
+	border-left-color: var(--ok);
+}
+
+.preview-bad {
+	border-left-color: var(--bad);
+}
+
+.preview-head {
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted);
+	margin-bottom: 0.4rem;
+}
+
+.preview-error {
+	color: var(--bad);
+	font-size: 0.85rem;
+}
+
+.preview table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.preview th {
+	text-align: left;
+	vertical-align: top;
+	color: var(--muted);
+	font-weight: 500;
+	font-size: 0.82rem;
+	width: 6rem;
+	padding: 0.25rem 0;
+}
+
+.chips-plain .chip {
+	background: none;
+	border-radius: 6px;
+}
+
+/* ---- disclosure ---- */
+
+.advanced {
+	border-top: 1px solid var(--line);
+	margin-top: 0.6rem;
+	padding-top: 0.5rem;
+}
+
+.advanced > summary {
+	cursor: pointer;
+	color: var(--muted);
+	font-size: 0.82rem;
+	padding: 0.2rem 0;
+}
+
+.advanced > summary:hover {
+	color: var(--accent);
+}
+
+/* ---- grid tables ---- */
+
+.grid {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.grid th {
+	text-align: left;
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-weight: 500;
+	padding: 0.3rem 0.4rem;
+	border-bottom: 1px solid var(--line);
+}
+
+.grid td {
+	padding: 0.3rem 0.4rem;
+	vertical-align: top;
+}
+
+.cell-note {
+	font-size: 0.72rem;
+	color: var(--muted);
+	margin-top: 0.15rem;
+}
+
+.cell-note.bad {
+	color: var(--bad);
+}
+
+.row-actions {
+	white-space: nowrap;
+}
+
+.row-actions button {
+	padding: 0.15rem 0.4rem;
+	font-size: 0.75rem;
+}
+
+.panel-actions {
+	margin: 0.75rem 0 1.5rem;
+}
+
+/* Wide tables scroll inside their own box. The page must never scroll sideways: on a phone that
+   drags the save bar and the nav off-screen with it. */
+.table-scroll {
+	overflow-x: auto;
+}
+
+/* ---- the section rail ----
+   The configuration document has four rooms — Zones, Periods, Defaults, Global — and the page shows
+   one at a time. On a desktop the rail sits beside the content and sticks below the save bar; on a
+   phone it becomes a row of chips above the content, because a 170px column on a 375px screen is a
+   rail nobody's thumb can use. */
+
+.config-layout {
+	display: grid;
+	grid-template-columns: 170px minmax(0, 1fr);
+	gap: 1.5rem;
+	align-items: start;
+}
+
+.config-nav {
+	position: sticky;
+	top: 4.25rem;   /* clears the sticky save bar */
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.config-nav-link {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	text-align: left;
+	background: none;
+	border: none;
+	border-left: 2px solid transparent;
+	border-radius: 0 6px 6px 0;
+	color: var(--muted);
+	padding: 0.45rem 0.7rem;
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.config-nav-link:hover:not(.active) {
+	background: var(--panel-2);
+	color: var(--text);
+	border-left-color: transparent;
+}
+
+.config-nav-link.active {
+	background: var(--panel-2);
+	color: var(--accent);
+	border-left-color: var(--accent);
+}
+
+.config-nav-count {
+	font-size: 0.72rem;
+	font-variant-numeric: tabular-nums;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	padding: 0 0.45rem;
+	color: var(--muted);
+}
+
+@media (max-width: 880px) {
+	.config-layout {
+		display: block;
+	}
+
+	.config-nav {
+		position: static;
+		flex-direction: row;
+		overflow-x: auto;
+		gap: 0.4rem;
+		margin-bottom: 1.25rem;
+		padding-bottom: 0.25rem;   /* room for a scrollbar without clipping the chips */
+	}
+
+	.config-nav-link {
+		flex: 1 0 auto;
+		justify-content: center;
+		border: 1px solid var(--line);
+		border-radius: 999px;
+		padding: 0.55rem 1rem;   /* a chip a thumb can hit */
+	}
+
+	.config-nav-link:hover:not(.active) {
+		border-color: var(--line);
+	}
+
+	.config-nav-link.active {
+		border-color: var(--accent);
+	}
+}
+
+/* ---- section headers ----
+   Real headers for the section in view: title-cased, with the brand's accent tick — not the muted
+   all-caps h2 that used to blur into the field labels around it. */
+
+.section-head {
+	margin-bottom: 1rem;
+}
+
+.section-head h2 {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	margin: 0 0 0.35rem;
+	font-size: 1.15rem;
+	font-weight: 650;
+	color: var(--text);
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+.section-head h2::before {
+	content: "";
+	flex: 0 0 auto;
+	width: 4px;
+	height: 1.05em;
+	border-radius: 2px;
+	background: var(--accent);
+}
+
+.section-head .lede {
+	margin-bottom: 0;
+}
+
+/* A labelled sub-box grouping related toggles inside a settings fold — the Sleep and Away behaviours in
+   Defaults. Quiet framing (a panel-2 card with a small caps title) so related switches read as one idea
+   rather than a flat run of checkboxes. The field dividers inside are dropped: the box is the grouping. */
+.setting-box {
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--panel-2);
+	padding: 0.1rem 0.9rem 0.5rem;
+	margin: 0.7rem 0;
+}
+
+.setting-box-title {
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--muted);
+	margin: 0.7rem 0 0.1rem;
+}
+
+.setting-box .field {
+	border-bottom: none;
+	padding: 0.35rem 0;
+}
+
+/* A sub-section header inside a section (e.g. "Mode options" under House modes): quieter than the section's
+   own h2 — no accent bar, a touch smaller — but louder than a field label, and spaced off the block above it. */
+.section-head.subsection {
+	margin-top: 1.4rem;
+}
+
+.section-head h3 {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0 0 0.35rem;
+	font-size: 1.02rem;
+	font-weight: 650;
+	color: var(--text);
+}
+
+/* Group headers inside a section: quieter than the section's own, louder than a field label. */
+.group-head {
+	margin: 1.5rem 0 0.5rem;
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--muted);
+}
+
+.section-head + .group-head {
+	margin-top: 0;
+}
+
+/* ---- group folds ----
+   Defaults and Global are collapsible groups: a header that says what the group is for, a fold that
+   keeps a long page skimmable. The same <details> grammar as the zone folds. overflow stays visible
+   — an info popover hanging past the last field must not be clipped by its own group. */
+
+.group-fold {
+	padding: 0;
+}
+
+.group-summary {
+	display: flex;
+	align-items: baseline;
+	gap: 0.35rem 0.75rem;
+	flex-wrap: wrap;
+	padding: 0.75rem 1.15rem;
+	cursor: pointer;
+	list-style: none;
+	border-radius: var(--radius);
+}
+
+.group-summary::-webkit-details-marker {
+	display: none;
+}
+
+.group-summary:hover {
+	background: var(--panel-2);
+}
+
+.group-fold[open] > .group-summary {
+	background: var(--panel-2);
+	border-radius: var(--radius) var(--radius) 0 0;
+	border-bottom: 1px solid var(--line);
+}
+
+.group-title {
+	font-weight: 600;
+	font-size: 0.95rem;
+}
+
+.group-desc {
+	flex: 1 1 16rem;
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+
+.group-summary .zone-chevron {
+	align-self: center;
+	margin-left: auto;
+}
+
+.group-fold[open] > .group-summary .zone-chevron {
+	transform: rotate(45deg);
+}
+
+.group-body {
+	padding: 0.35rem 1.15rem 0.75rem;
+}
+
+/* A framing note at the top of a group's body: the legacy-switches group says once that the whole
+   group is superseded, instead of every field mumbling it. Quiet on purpose — it is context, not
+   a warning, and the fields below it still carry their own badges. */
+.group-note {
+	margin: 0.5rem 0 0.25rem;
+	color: var(--muted);
+	font-size: 0.82rem;
+	max-width: 60rem;
+}
+
+/* ---- info popovers ----
+   The (i) beside a label. A button, because a phone has no hover and a keyboard reaches a button.
+   The open panel anchors to the field (nearest positioned ancestor), not the icon: anchored to the
+   icon it would poke past the viewport whenever the icon sits near an edge, and there is no CSS that
+   flips it. Anchored to the field it can never be wider than the field, which can never be wider
+   than the page. Under 560px it becomes a fixed sheet above the bottom edge instead — guaranteed
+   on-screen, and where a thumb already is. */
+
+/* Every container that can hold an (i) must be a positioning context, or its panel falls back to the viewport
+   and lands bottom-left. .field/.pfield cover the zone, period and settings forms; the housemode-* ones cover
+   the house-mode option cards; .section-head covers a sub-section header like "Mode options". */
+.field, .pfield, .housemode-field, .housemode-resets-head, .section-head {
+	position: relative;
+}
+
+.field-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.info {
+	display: inline-flex;
+}
+
+.info-icon {
+	width: 1.15rem;
+	height: 1.15rem;
+	padding: 0;
+	border-radius: 50%;
+	border: 1px solid var(--line);
+	background: var(--panel-2);
+	color: var(--muted);
+	font-family: Georgia, "Times New Roman", serif;
+	font-style: italic;
+	font-size: 0.72rem;
+	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	flex: 0 0 auto;
+}
+
+.info-icon:hover,
+.info-icon[aria-expanded="true"] {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.info-icon:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.info-panel {
+	position: absolute;
+	z-index: 40;
+	left: 0;
+	top: calc(100% + 0.35rem);
+	width: min(26rem, 100%);
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	background: color-mix(in srgb, var(--panel) 88%, transparent);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+	padding: 0.7rem 0.85rem;
+	color: var(--text);
+	font-size: 0.82rem;
+	font-weight: 400;
+	font-style: normal;
+	line-height: 1.5;
+	text-transform: none;
+	letter-spacing: normal;
+	text-align: left;
+	cursor: auto;
+}
+
+.info-title {
+	font-weight: 600;
+	font-size: 0.78rem;
+	color: var(--accent);
+}
+
+.info-body {
+	color: var(--text);
+}
+
+.info-close {
+	align-self: flex-end;
+	font-size: 0.75rem;
+	padding: 0.2rem 0.6rem;
+}
+
+@media (max-width: 560px) {
+	/* A fixed sheet: never clipped, never off-screen, and closable with the thumb that opened it. */
+	.info-panel {
+		position: fixed;
+		left: 0.75rem;
+		right: 0.75rem;
+		top: auto;
+		bottom: 0.75rem;
+		width: auto;
+		box-shadow: 0 -6px 40px rgba(0, 0, 0, 0.45);
+	}
+}
+
+/* ---- period cards ----
+   One collapsible card per circadian period — the same <details> grammar as the zone folds. Collapsed it is a
+   header: the name, when it starts (with the wall-clock time a sun boundary resolves to today), and its level at
+   a glance. Expanded, the controls sit on their own responsive grid: a desktop reads them in a line or two, a
+   phone stacks them, and nothing ever scrolls sideways or hides behind a scrollbar — which is what the
+   seven-column table this replaces did. */
+
+/* Unique to a period header: the start time, sitting between the name and the right-aligned level hint. The
+   fold, summary, title, hint and chevron all come from the unified "section folds" block above. */
+.period-summary-start {
+	color: var(--muted);
+	font-size: 0.82rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.period-actions {
+	margin-left: auto;
+	display: flex;
+	gap: 0.3rem;
+	white-space: nowrap;
+}
+
+.period-actions button {
+	padding: 0.15rem 0.45rem;
+	font-size: 0.78rem;
+}
+
+.period-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+	gap: 0.8rem 1.25rem;
+	margin-bottom: 0.9rem;
+}
+
+.pfield {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.35rem;
+	min-width: 0;
+}
+
+.pfield-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+/* ---- preset dropdowns ---- */
+
+.preset {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.preset-select {
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 100%;
+}
+
+/* ---- the structured start control ---- */
+
+.start-editor {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.start-editor .cell {
+	min-width: 0;
+}
+
+.start-editor .start-minutes {
+	width: 4.5rem;
+}
+
+.start-editor .cell-note {
+	flex-basis: 100%;
+}
+
+/* ---- daylight chart ----
+   A year of daylight as hand-built SVG. The background is three stacked themed bands — night, civil twilight,
+   daylight — never a flat black; the period boundaries and the today marker sit over them. Additive. */
+
+.daylight-chart {
+	margin-bottom: 1rem;
+}
+
+.daylight-svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--panel);
+}
+
+.daylight-night { fill: var(--daylight-night); }
+.daylight-twilight { fill: var(--daylight-twilight); }
+.daylight-day { fill: var(--daylight-day); }
+
+.daylight-grid {
+	stroke: var(--line);
+	stroke-width: 1;
+	opacity: 0.45;
+}
+
+.daylight-month {
+	stroke: var(--line);
+	stroke-width: 1;
+	opacity: 0.3;
+}
+
+/* Every chart label carries a --daylight-halo outline (paint-order draws the stroke first, under the fill) so it
+   stays legible over the mid-tone bands in both themes — the halo is dark where the text is light and light where
+   it is dark, so it always separates the glyphs from the band behind them. */
+.daylight-axis,
+.daylight-period-label,
+.daylight-mark-label,
+.daylight-dst-label {
+	paint-order: stroke fill;
+	stroke: var(--daylight-halo);
+	stroke-width: 2.4px;
+	stroke-linejoin: round;
+	stroke-linecap: round;
+}
+
+.daylight-axis {
+	fill: var(--text);
+	opacity: 0.9;
+	font-size: 9px;
+	font-family: var(--mono);
+}
+
+.daylight-period {
+	fill: none;
+	stroke: var(--accent);
+	stroke-width: 1.5;
+	opacity: 0.95;
+}
+
+.daylight-period-label {
+	fill: var(--accent);
+	font-size: 9px;
+	font-weight: 600;
+}
+
+.daylight-today {
+	stroke: var(--text);
+	stroke-width: 1;
+	stroke-dasharray: 3 3;
+	opacity: 0.7;
+}
+
+/* Daylight-saving changeover markers: faint and dashed, so the hour-step in the curves reads as intentional. */
+.daylight-dst {
+	stroke: var(--muted);
+	stroke-width: 1;
+	stroke-dasharray: 2 4;
+	opacity: 0.5;
+}
+
+.daylight-dst-label {
+	fill: var(--muted);
+	font-size: 7px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}
+
+.daylight-mark {
+	fill: var(--text);
+}
+
+.daylight-mark-label {
+	fill: var(--text);
+	font-size: 9px;
+	font-weight: 600;
+	font-family: var(--mono);
+}
+
+.daylight-caption {
+	color: var(--muted);
+	font-size: 0.82rem;
+	margin: 0.5rem 0 0;
+}
+
+/* ---- house-mode options ----
+   One row per option: its value and a radio group for its single Kind, with the sub-fields that kind uses
+   revealed beneath. Additive. */
+
+.housemode-options {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+}
+
+.housemode-note {
+	margin-bottom: 0;
+}
+
+.housemode-option {
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--panel-2);
+	padding: 0.7rem 0.85rem;
+}
+
+.housemode-option.orphan {
+	border-color: var(--bad);
+	border-style: dashed;
+}
+
+.housemode-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.6rem 1rem;
+	flex-wrap: wrap;
+}
+
+.housemode-value {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+}
+
+.housemode-kinds {
+	display: inline-flex;
+	gap: 0.15rem 0.75rem;
+	flex-wrap: wrap;
+}
+
+.housemode-kind {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	font-size: 0.85rem;
+	color: var(--text);
+	white-space: nowrap;
+}
+
+.housemode-sub {
+	margin-top: 0.7rem;
+	padding-top: 0.7rem;
+	border-top: 1px solid var(--line);
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+}
+
+.housemode-field {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.3rem;
+	min-width: 0;
+}
+
+.housemode-field-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+.housemode-resets {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	border-left: 2px solid var(--line);
+	padding-left: 0.75rem;
+}
+
+.housemode-resets-head {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.78rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted);
+}
+
+.housemode-presence {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	width: 100%;
+}
+
+.housemode-grace {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.housemode-grace .cell.num {
+	width: 4.5rem;
+}
+
+/* ---- house-mode option folds ----
+   One collapsible card per option — the same <details> grammar as a zone or a period fold. Collapsed it is a
+   header: the option value, its Kind, and a hint of its key settings; expanded, the full editor. Additive: the
+   .housemode-kinds / .housemode-sub / .housemode-field rules above still style the body unchanged. */
+
+/* Unique to a house-mode header: the orphan state (an option the live select no longer offers), the mono option
+   value, the Kind badge, and the body spacing. Everything else — fold, summary, hover, open state, hint,
+   chevron — comes from the unified "section folds" block above. */
+.housemode-fold.orphan {
+	border-color: var(--bad);
+	border-left-color: var(--bad);
+	border-style: dashed;
+}
+
+.housemode-fold > .housemode-kinds {
+	margin-top: 0.75rem;
+}
+
+.housemode-fold > .housemode-sub {
+	margin-bottom: 0.9rem;
+}
+
+/* The option value reads as the card's name, styled exactly like a zone or period title — plain body face,
+   white, not the mono/accent that a bare <code> would give it (which is why the markup is a <span>). */
+.housemode-summary-value {
+	font-weight: 600;
+	font-size: 1.02rem;
+	color: var(--text);
+}
+
+.housemode-summary-kind {
+	text-transform: none;
+}
+
+/* ---- modes-page additions ---- */
+
+.chip.normal { color: var(--muted); }
+
+.mode-card-reset {
+	font-size: 0.8rem;
+	color: var(--muted);
+	font-style: italic;
+}
+
+/* ---- 10-web-ux: form controls — larger, normal weight, one rule catches them all ---- */
+
+/* Additive: the base rule at ~line 1018 is left untouched. The typed arms below carry a plain
+   [type=...] attribute selector so they match the base rule's specificity (0,1,1) exactly and win by
+   source order — a :where() arm would sit at (0,0,1) and lose to the base rule, leaving text inputs at
+   0.85rem while selects grew, the very inconsistency this block removes. The :not([type]) arm (kept in
+   :where(), zero-plus-element) catches the type-less name inputs as a safety net for any future
+   omission. No width is set here, so the existing width rules (.picker-select, .cell.wide,
+   select.cell.wide) keep winning on the properties they set. Every colour is a variable, so both
+   themes are covered. */
+input:where(:not([type])),
+input[type="text"], input[type="number"], input[type="password"], input[type="time"], input[type="search"],
+select {
+	background: var(--bg);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	font: inherit;            /* body font, weight 400 — never the UA's form font */
+	font-size: 0.95rem;       /* up from 0.85rem */
+	font-weight: 400;         /* explicit: names must not render bold anywhere */
+	padding: 0.4rem 0.6rem;   /* up from 0.3rem 0.45rem */
+	line-height: 1.4;
+}
+
+/* Numeric cells keep the mono face but grow with the rest. */
+.cell.num {
+	width: 7rem;              /* up from 6rem, so the larger font still fits */
+	font-size: 0.9rem;
+}
+
+/* ---- 10-web-ux: dashboard house strip ----
+   The two read cards — House mode and Who's home — sit side by side on a desktop and stack on a phone
+   with no media query: auto-fit collapses the track count when the viewport narrows. Both are .panel
+   cards, so their surface, border and radius come for free and stay theme-aware. */
+
+.house-strip {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+	gap: 0.9rem;
+	margin-bottom: 1rem;
+}
+
+.house-strip .panel {
+	margin-bottom: 0;
+}
+
+.house-panel-head {
+	color: var(--muted);
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	margin-bottom: 0.5rem;
+}
+
+.house-mode-current {
+	font-weight: 600;
+	font-size: 1.25rem;
+	line-height: 1.15;
+}
+
+.house-mode-current.unknown {
+	color: var(--muted);
+	font-style: italic;
+}
+
+.house-mode-meaning {
+	color: var(--muted);
+	font-size: 0.85rem;
+	margin: 0.3rem 0 0.75rem;
+}
+
+.house-mode-empty {
+	color: var(--muted);
+	font-size: 0.9rem;
+}
+
+/* The switch row reuses the .pill look, but these pills are buttons. The current one lights in the
+   accent; the rest are quiet until hovered. Disabled while Home Assistant has not answered. */
+.mode-pill-row {
+	display: flex;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+}
+
+button.mode-pill {
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	padding: 0.3rem 0.85rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--muted);
+	background: var(--panel-2);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+button.mode-pill:hover:not(:disabled) {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+button.mode-pill.current {
+	color: var(--accent);
+	border-color: var(--accent);
+	background: rgba(242, 181, 68, 0.12);
+}
+
+button.mode-pill:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* Who's home: one row per watched person — a state dot, the name, and the plain word home/away/unknown. */
+.person-row {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	padding: 0.25rem 0;
+}
+
+.person-row + .person-row {
+	border-top: 1px solid var(--line);
+}
+
+.person-dot {
+	flex: none;
+	width: 0.7rem;
+	height: 0.7rem;
+	border-radius: 999px;
+	border: 1px solid var(--muted);
+	background: transparent;
+}
+
+.person-dot.home {
+	background: var(--ok);
+	border-color: var(--ok);
+}
+
+.person-dot.unknown {
+	border-style: dashed;
+}
+
+.person-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.person-state {
+	color: var(--muted);
+	font-size: 0.85rem;
+}
+
+.person-state.home {
+	color: var(--ok);
+}
+
+.whos-home-empty {
+	color: var(--muted);
+	font-size: 0.9rem;
+}

@@ -1,0 +1,46 @@
+@*
+	A collapsible group of settings: a header that says what the section is for, a fold that keeps a long
+	page skimmable. The same <details> pattern as the zone folds, so the page opens and closes one way.
+
+	Collapsed by default, like the zone, period and house-mode folds: a settings page reads as a short list of
+	named groups you open the one you came for, not a wall of every knob at once. The open attribute is decided
+	once, so Blazor's diff never overrides a fold a human toggled.
+*@
+
+<details class="panel group-fold" open="@_openInitially">
+	<summary class="group-summary">
+		<span class="group-title">@Title</span>
+		@if (Description is { Length: > 0 })
+		{
+			<span class="group-desc">@Description</span>
+		}
+		<span class="zone-chevron" aria-hidden="true"></span>
+	</summary>
+
+	<div class="group-body">
+		@ChildContent
+	</div>
+</details>
+
+@code {
+	/// <summary>The group's name.</summary>
+	[Parameter, EditorRequired]
+	public string Title { get; set; } = "";
+
+	/// <summary>One line on what lives in the group, shown in the header so a skim reads it without opening.</summary>
+	[Parameter]
+	public string? Description { get; set; }
+
+	/// <summary>Whether the fold starts open. Defaults to collapsed; read once.</summary>
+	[Parameter]
+	public bool Open { get; set; }
+
+	/// <summary>The fields inside.</summary>
+	[Parameter, EditorRequired]
+	public RenderFragment? ChildContent { get; set; }
+
+	private bool _openInitially;
+
+	/// <inheritdoc/>
+	protected override void OnInitialized() => _openInitially = Open;
+}

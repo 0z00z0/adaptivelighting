@@ -1,0 +1,216 @@
+@*
+	When a period starts, without asking anybody to type "sunrise+00:45".
+
+	Three shapes, one stored string. A clock time gets a real time input; a sun boundary gets minutes,
+	before/after, and sunrise/sunset as three small controls; and the raw string stays reachable behind
+	"typed as text" for whoever thinks in the grammar. Whatever the shape, the control composes exactly the
+	string the engine's own PeriodStart.TryParse accepts — the composing lives in PeriodStartText, which is
+	unit-tested against that parser — and the note underneath says what the engine will make of it, by
+	parsing what was actually stored. For a sun-anchored start the note also shows the wall-clock time it
+	resolves to today, read from sun.sun (the engine's own truth, not an approximation), so an editable field
+	sits next to what the lights will actually do tonight. The stored format never changes; only the way of
+	writing it does.
+*@
+@inject HaCatalog Catalog
+
+<div class="start-editor">
+	<select class="cell start-mode" @bind:get="_mode" @bind:set="OnModeChanged">
+		<option value="clock">at a clock time</option>
+		<option value="sun">relative to the sun</option>
+		<option value="text">typed as text</option>
+	</select>
+
+	@if (_mode == "clock")
+	{
+		<input class="cell start-time" type="time" value="@_time" @onchange="OnTimeChanged" />
+	}
+	else if (_mode == "sun")
+	{
+		<input class="cell num start-minutes" type="number" min="0" max="720" step="5" value="@_minutes" @onchange="OnMinutesChanged" />
+		<select class="cell start-direction" @bind:get="_direction" @bind:set="OnDirectionChanged">
+			<option value="before">min before</option>
+			<option value="after">min after</option>
+		</select>
+		<select class="cell start-anchor" @bind:get="_anchor" @bind:set="OnAnchorChanged">
+			<option value="sunrise">sunrise</option>
+			<option value="sunset">sunset</option>
+		</select>
+	}
+	else
+	{
+		<input class="cell start-raw" value="@Value" @oninput="OnRawChanged" placeholder="22:30 or sunset-01:00" />
+	}
+
+	<div class="cell-note @(Description is null ? "bad" : "")">
+		@if (Description is { } description)
+		{
+			@description
+			@if (TodaySuffix is { Length: > 0 } suffix)
+			{
+				<span class="start-today"> @suffix</span>
+			}
+		}
+		else
+		{
+			@("Not a valid time. Try 22:30 or sunset-01:00.")
+		}
+	</div>
+</div>
+
+@code {
+	/// <summary>The stored Start string, exactly as the YAML carries it.</summary>
+	[Parameter]
+	public string Value { get; set; } = "";
+
+	/// <summary>Raised with the recomposed Start string on every change.</summary>
+	[Parameter]
+	public EventCallback<string> ValueChanged { get; set; }
+
+	private string _mode = "clock";
+	private string _time = "12:00";
+	private string _anchor = "sunrise";
+	private string _direction = "after";
+	private int _minutes;
+
+	// The last string this control emitted or was initialised from. Re-initialising the sub-controls on every
+	// render would fight the person using them; re-initialising only when the value changed under us (a reload,
+	// a discard) is what parameters are for.
+	private string? _seen;
+
+	private string? Description => PeriodStartText.Describe(Value);
+
+	/// <summary>
+	///     For a sun-anchored start, the wall-clock time it resolves to from <c>sun.sun</c>, as "→ next 21:22" —
+	///     "next" because <c>SunTimesToday</c> reads sun.sun's <i>next</i> rising/setting, which is often tomorrow.
+	///     Omitted for a fixed time, and when <c>sun.sun</c> is unavailable.
+	/// </summary>
+	private string? TodaySuffix
+	{
+		get
+		{
+			if (!PeriodStart.TryParse(Value, out PeriodStart? parsed) || parsed is not { SunEvent: not SunEvent.None })
+				return null;
+
+			(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
+			return parsed.Resolve(new SunTimes(sunrise, sunset)) is { } time
+				? $"→ next {time:HH\\:mm}"
+				: null;
+		}
+	}
+
+	/// <inheritdoc/>
+	protected override void OnParametersSet()
+	{
+		if (string.Equals(Value, _seen, StringComparison.Ordinal))
+			return;
+
+		_seen = Value;
+
+		if (!PeriodStart.TryParse(Value, out PeriodStart? parsed) || parsed is null)
+		{
+			// Unparseable — including a fresh empty row. The raw text mode shows the string as it is, and the
+			// note says the engine will refuse it, which is the honest state of affairs.
+			_mode = "text";
+			return;
+		}
+
+		if (parsed.FixedTime is { } time)
+		{
+			_mode = "clock";
+			_time = PeriodStartText.Clock(time);
+			return;
+		}
+
+		_mode = "sun";
+		_anchor = parsed.SunEvent == SunEvent.Sunset ? "sunset" : "sunrise";
+		_direction = parsed.Offset < TimeSpan.Zero ? "before" : "after";
+		_minutes = (int)Math.Abs(parsed.Offset.TotalMinutes);
+	}
+
+	private Task OnModeChanged(string mode)
+	{
+		_mode = mode;
+
+		// A raw-text edit commits through Commit, which sets _seen = Value and so short-circuits OnParametersSet —
+		// leaving _time/_anchor/_direction/_minutes describing whatever was last shown, not the typed string. Re-parse
+		// the current Value into them first, so switching shape after a raw edit preserves the typed value rather than
+		// emitting a stale one.
+		SyncControlsFromValue();
+
+		// Switching shape recomposes immediately from the sub-controls' current state, so the stored string
+		// and the visible controls never describe two different boundaries.
+		return mode switch
+		{
+			"clock" => EmitClock(),
+			"sun" => EmitSun(),
+			_ => Task.CompletedTask   // text mode edits the raw string directly; nothing to recompose
+		};
+	}
+
+	/// <summary>Refreshes the sub-control fields from the current <see cref="Value"/>, without touching <c>_mode</c>.</summary>
+	private void SyncControlsFromValue()
+	{
+		if (!PeriodStart.TryParse(Value, out PeriodStart? parsed) || parsed is null)
+			return;
+
+		if (parsed.FixedTime is { } time)
+		{
+			_time = PeriodStartText.Clock(time);
+			return;
+		}
+
+		_anchor = parsed.SunEvent == SunEvent.Sunset ? "sunset" : "sunrise";
+		_direction = parsed.Offset < TimeSpan.Zero ? "before" : "after";
+		_minutes = (int)Math.Abs(parsed.Offset.TotalMinutes);
+	}
+
+	private Task OnTimeChanged(ChangeEventArgs args)
+	{
+		if (args.Value is string { Length: > 0 } text)
+			_time = text;
+
+		return EmitClock();
+	}
+
+	private Task OnMinutesChanged(ChangeEventArgs args)
+	{
+		if (int.TryParse(args.Value as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out int minutes))
+			_minutes = Math.Clamp(Math.Abs(minutes), 0, 720);
+
+		return EmitSun();
+	}
+
+	private Task OnDirectionChanged(string direction)
+	{
+		_direction = direction;
+		return EmitSun();
+	}
+
+	private Task OnAnchorChanged(string anchor)
+	{
+		_anchor = anchor;
+		return EmitSun();
+	}
+
+	private Task OnRawChanged(ChangeEventArgs args) => Commit((args.Value as string) ?? "");
+
+	private Task EmitClock() =>
+		Commit(TimeOnly.TryParseExact(_time, ["HH:mm", "H:mm", "HH:mm:ss"], CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly time)
+			? PeriodStartText.Clock(time)
+			: Value);
+
+	private Task EmitSun()
+	{
+		SunEvent anchor = _anchor == "sunset" ? SunEvent.Sunset : SunEvent.Sunrise;
+		int signed = _direction == "before" ? -_minutes : _minutes;
+
+		return Commit(PeriodStartText.Sun(anchor, signed));
+	}
+
+	private Task Commit(string value)
+	{
+		Value = value;
+		_seen = value;
+		return ValueChanged.InvokeAsync(value);
+	}
+}

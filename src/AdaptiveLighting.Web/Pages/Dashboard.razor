@@ -1,0 +1,239 @@
+@page "/"
+@page "/modes"
+@implements IDisposable
+@inject ZoneSnapshotCache Cache
+@inject LightingEngineHost Engine
+@inject ModeService Service
+@inject ILogger<Dashboard> Logger
+
+@*
+	The house-state hub. Top to bottom it answers the questions a person asks in order: is the system on
+	(the master switch), who's home and what mode is the house in (the house strip), is anything wrong
+	(notices), and what is each room doing (the zone cards).
+
+	The /modes route is kept so old bookmarks and phone shortcuts to the former Modes page land here — the
+	dashboard now carries everything that page had. Every write on this page still goes through ModeService's
+	config-resolved methods (Toggle for the master switch, SelectHouseMode for the house mode); the new
+	who's-home data is read-only. No new write path lives here.
+*@
+
+<PageTitle>Dashboard &mdash; Adaptive lighting</PageTitle>
+
+@*
+	The master switch, at the top where a hand reaches for it: one control that pauses or resumes all
+	automatic lighting. It reflects the live state of the configured switch and flips the real Home Assistant
+	entity through ModeService's existing config-resolved Toggle. When Home Assistant has not answered, it
+	reads "unknown" rather than pretending everything is off.
+*@
+@if (_masterSwitch is { } master)
+{
+	<div class="master-switch @MasterClass(master)">
+		<div class="master-switch-copy">
+			<span class="master-switch-title">Adaptive lighting: @MasterStateWord(master)</span>
+			<span class="master-switch-sub">@MasterSub(master)</span>
+		</div>
+		<button type="button"
+				class="toggle @(master is { IsAvailable: true, AdaptiveLightingOn: true } ? "on" : "")"
+				disabled="@(!master.IsAvailable || !master.Toggle.CanToggle)"
+				title="@MasterTitle(master)"
+				@onclick="ToggleMaster">
+			@(master.IsAvailable ? master.AdaptiveLightingOn ? "On" : "Off" : "?")
+		</button>
+	</div>
+}
+
+@* The house strip: what mode the house is in (with the buttons to switch it) and who's home. Both are
+   read on the same ticker as the master switch; only the house mode acts, through SelectHouseMode. *@
+<div class="house-strip">
+	<HouseModePanel HouseMode="_houseMode" Message="@_modeMessage" Confirmation="@_modeConfirmation" OnSelect="SelectMode" />
+	<WhoIsHomePanel People="_people" />
+</div>
+
+@if (_snapshots.Any(zone => zone.KillSwitchActive))
+{
+	<div class="notice bad">
+		<strong>Adaptive lighting is switched off.</strong> No lights will change until you turn it back on above.
+	</div>
+}
+else if (!Engine.IsRunning && Cache.HasData)
+{
+	<div class="notice bad">
+		<strong>Automatic lighting has stopped@(Engine.Fault is { Length: > 0 } ? ":" : ".")</strong>
+		@Engine.Fault
+		The cards show what each room was doing when it stopped.
+	</div>
+}
+
+@if (!Cache.HasData)
+{
+	@if (!Engine.IsAttached)
+	{
+		<div class="empty">
+			<strong>Connecting to Home Assistant…</strong>
+			<p>This is normal for a minute after a restart. If it doesn't clear, the connection is down.</p>
+		</div>
+	}
+	else if (!Engine.IsRunning)
+	{
+		<div class="empty">
+			<strong>Connected, but automatic lighting isn't running.</strong>
+			<p>@(Engine.Fault ?? "No reason was recorded.")</p>
+			<p>See <a href="config">Configuration</a> for details.</p>
+		</div>
+	}
+	else
+	{
+		<div class="empty">
+			<strong>Starting up — waiting for the first report from your rooms.</strong>
+			<p>This normally takes a few seconds.</p>
+		</div>
+	}
+}
+else
+{
+	<h2>Rooms</h2>
+	<div class="zones">
+		@foreach (ZoneSnapshot zone in _snapshots)
+		{
+			<ZoneCard Snapshot="zone" Now="_now" />
+		}
+	</div>
+}
+
+@code {
+	private IReadOnlyList<ZoneSnapshot> _snapshots = [];
+	private MasterSwitchView? _masterSwitch;
+	private HouseModeView? _houseMode;
+	private IReadOnlyList<PersonView> _people = [];
+	private string? _modeMessage;
+	private string? _modeConfirmation;
+	private DateTimeOffset? _modeConfirmationUntil;
+	private DateTimeOffset _now = DateTimeOffset.Now;
+	private IDisposable? _subscription;
+	private IDisposable? _ticker;
+
+	/// <inheritdoc/>
+	protected override void OnInitialized()
+	{
+		_snapshots = Cache.Snapshots;
+		ReadHouseState();
+
+		// Sampled rather than raw: a house waking up can push a burst of transitions, and re-rendering the
+		// grid once per snapshot would be wasted work on a page nobody is reading that fast.
+		_subscription = Cache.Changes
+			.Sample(TimeSpan.FromMilliseconds(400))
+			.SubscribeSafe(_ => InvokeAsync(() =>
+			{
+				_snapshots = Cache.Snapshots;
+				ReadHouseState();
+				StateHasChanged();
+			}), Logger);
+
+		// The page's own clock. "2 min ago" and "in 28 min" are only honest while they move, so the page
+		// re-renders once a second whether or not the engine has said anything. The master switch, house mode
+		// and who's-home are re-read on the same tick so a change from Home Assistant is reflected without a
+		// page reload — the same pattern the master switch already used.
+		_ticker = Observable.Interval(TimeSpan.FromSeconds(1))
+			.SubscribeSafe(_ => InvokeAsync(() =>
+			{
+				_now = DateTimeOffset.Now;
+
+				// The switch confirmation is transient: it says "switching…" for a few seconds, then clears itself so
+				// the panel does not carry a stale acknowledgement once the mode has actually landed.
+				if (_modeConfirmationUntil is { } until && _now > until)
+				{
+					_modeConfirmation = null;
+					_modeConfirmationUntil = null;
+				}
+
+				ReadHouseState();
+				StateHasChanged();
+			}), Logger);
+	}
+
+	/// <summary>
+	///     Re-reads the three read-only house-state projections. Ordered house-mode first so its readiness
+	///     bookkeeping is not clobbered by the master switch's, exactly as the old Modes page ordered its reads.
+	/// </summary>
+	private void ReadHouseState()
+	{
+		_houseMode = Service.GetHouseMode();
+		_masterSwitch = Service.GetMasterSwitch();
+		_people = Service.GetPeople();
+	}
+
+	/// <summary>Flips the master switch through the existing config-resolved toggle, then re-reads the house state.</summary>
+	private void ToggleMaster()
+	{
+		if (_masterSwitch is { IsAvailable: true, Toggle.CanToggle: true } master)
+			Service.Toggle(master.Toggle);
+
+		ReadHouseState();
+	}
+
+	/// <summary>
+	///     Switches the house mode through the existing config-resolved <see cref="ModeService.SelectHouseMode"/>,
+	///     then re-reads. A service call is fire-and-forget, so the highlight must reflect what Home Assistant
+	///     actually reports, not what was asked for.
+	/// </summary>
+	private void SelectMode(string option)
+	{
+		// A service call is fire-and-forget, so this is a "requested" acknowledgement, not "done": the current-mode
+		// highlight below still comes from what Home Assistant reports on the next read, not from what was asked.
+		if (Service.SelectHouseMode(option))
+		{
+			_modeMessage = null;
+			_modeConfirmation = $"Switching to {option}…";
+			_modeConfirmationUntil = DateTimeOffset.Now.AddSeconds(6);
+		}
+		else
+		{
+			_modeConfirmation = null;
+			_modeConfirmationUntil = null;
+			_modeMessage = $"Couldn't switch to '{option}' — Home Assistant may be offline.";
+		}
+
+		ReadHouseState();
+	}
+
+	private static string MasterClass(MasterSwitchView master) =>
+		!master.IsAvailable ? "unknown" : master.AdaptiveLightingOn ? "on" : "off";
+
+	private static string MasterStateWord(MasterSwitchView master) =>
+		!master.IsAvailable ? "unknown" : master.AdaptiveLightingOn ? "On" : "Off";
+
+	private static string MasterSub(MasterSwitchView master)
+	{
+		if (!master.IsAvailable)
+		{
+			return master.IsReady
+				? "Home Assistant doesn't know the master switch, so its state can't be shown."
+				: "Waiting for Home Assistant — state unknown.";
+		}
+
+		return master.AdaptiveLightingOn
+			? "Lights adjust automatically. Turn off to pause everything."
+			: "Paused — no lights will change until you turn it back on.";
+	}
+
+	private static string MasterTitle(MasterSwitchView master)
+	{
+		if (!master.IsAvailable)
+		{
+			return master.IsReady
+				? "Home Assistant doesn't know this switch."
+				: "Waiting for Home Assistant.";
+		}
+
+		return master.Toggle.CanToggle
+			? $"Turn adaptive lighting {(master.AdaptiveLightingOn ? "off" : "on")}"
+			: "This entity can't be switched on or off.";
+	}
+
+	/// <inheritdoc/>
+	public void Dispose()
+	{
+		_subscription?.Dispose();
+		_ticker?.Dispose();
+	}
+}

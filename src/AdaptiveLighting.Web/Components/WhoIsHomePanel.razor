@@ -1,0 +1,39 @@
+@*
+	The who's-home card on the dashboard: one row per watched person, a dot for their state, and the plain word
+	home / away / unknown. Read-only — it shows the same people the engine watches for Home and Away
+	(ModeService.GetPeople mirrors PresenceMonitor). No timestamps, no entity ids, no actions.
+*@
+
+<div class="panel">
+	<div class="house-panel-head">Who's home</div>
+
+	@if (People.Count == 0)
+	{
+		<div class="whos-home-empty">
+			No people to watch. Adaptive lighting assumes someone is always home.
+		</div>
+	}
+	else
+	{
+		@foreach (PersonView person in People)
+		{
+			<div class="person-row">
+				<span class="person-dot @DotClass(person)" aria-hidden="true"></span>
+				<span class="person-name">@person.Name</span>
+				<span class="person-state @(person is { IsAvailable: true, IsHome: true } ? "home" : "")">@StateWord(person)</span>
+			</div>
+		}
+	}
+</div>
+
+@code {
+	/// <summary>The watched people and their presence, read-only, from <c>ModeService.GetPeople</c>.</summary>
+	[Parameter, EditorRequired]
+	public IReadOnlyList<PersonView> People { get; set; } = [];
+
+	private static string DotClass(PersonView person) =>
+		!person.IsAvailable ? "unknown" : person.IsHome ? "home" : "";
+
+	private static string StateWord(PersonView person) =>
+		!person.IsAvailable ? "unknown" : person.IsHome ? "home" : "away";
+}

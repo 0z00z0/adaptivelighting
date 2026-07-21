@@ -1,0 +1,97 @@
+@*
+	A number chosen from sensible presets, with typing as the escape rather than the default.
+
+	The same shape as EntityPicker on purpose: the dropdown is the primary path, the free number field is one
+	click away behind the same "Enter a value" / "Pick from list" toggle, and a stored value that is not on
+	the preset list is shown as its own selected entry rather than being snapped to a neighbour — a filter is
+	never a reason for a configured value to silently change.
+*@
+
+<span class="preset">
+	@if (_manual)
+	{
+		<input class="cell num" type="number" step="@Step" min="@Min" max="@Max" value="@Value" @onchange="OnTyped" />
+		@if (Unit is { Length: > 0 })
+		{
+			<span class="unit">@Unit</span>
+		}
+	}
+	else
+	{
+		<select class="cell preset-select" @bind:get="Key(Value)" @bind:set="OnPicked">
+			@foreach (PresetChoice option in Options)
+			{
+				<option value="@Key(option.Value)">@option.Label</option>
+			}
+			@if (IsUnlisted)
+			{
+				<option value="@Key(Value)">@Custom(Value)</option>
+			}
+		</select>
+	}
+
+	<button type="button" class="picker-mode" @onclick="ToggleMode">
+		@(_manual ? "Pick from list" : "Enter a value")
+	</button>
+</span>
+
+@code {
+	/// <summary>The current value.</summary>
+	[Parameter]
+	public double Value { get; set; }
+
+	/// <summary>Raised with the new value.</summary>
+	[Parameter]
+	public EventCallback<double> ValueChanged { get; set; }
+
+	/// <summary>The presets to offer. See <see cref="Presets"/>.</summary>
+	[Parameter, EditorRequired]
+	public IReadOnlyList<PresetChoice> Options { get; set; } = [];
+
+	/// <summary>Unit shown beside the free number field, e.g. <c>%</c> or <c>K</c>.</summary>
+	[Parameter]
+	public string? Unit { get; set; }
+
+	/// <summary>Constraints for the free number field. The validator remains the real gate.</summary>
+	[Parameter]
+	public double Min { get; set; }
+
+	/// <inheritdoc cref="Min"/>
+	[Parameter]
+	public double Max { get; set; } = 100;
+
+	/// <inheritdoc cref="Min"/>
+	[Parameter]
+	public double Step { get; set; } = 1;
+
+	private bool _manual;
+
+	private bool IsUnlisted => !Options.Any(option => Matches(option.Value, Value));
+
+	// Keys are invariant strings of the value itself, so the select round-trips without an index that would
+	// go stale when a custom entry appears.
+	private static string Key(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+	private string Custom(double value) =>
+		Unit is { Length: > 0 } ? $"{Key(value)} {Unit} — custom" : $"{Key(value)} — custom";
+
+	private static bool Matches(double left, double right) => Math.Abs(left - right) < 0.001;
+
+	private void ToggleMode() => _manual = !_manual;
+
+	private Task OnPicked(string picked) =>
+		double.TryParse(picked, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+			? Commit(value)
+			: Task.CompletedTask;
+
+	private Task OnTyped(ChangeEventArgs args) =>
+		double.TryParse(args.Value as string, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+			? Commit(value)
+			: Task.CompletedTask;
+
+	private Task Commit(double value)
+	{
+		Value = value;
+		return ValueChanged.InvokeAsync(value);
+	}
+}

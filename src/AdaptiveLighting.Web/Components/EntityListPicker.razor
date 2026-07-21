@@ -1,0 +1,151 @@
+@*
+	A list of entities, built by picking rather than by typing a YAML sequence.
+
+	Chips rather than a multi-select box: a browser multi-select needs ctrl-click to add a second item and
+	silently loses the whole list if you forget, which is a miserable way to lose an explicit Lights list.
+	Add one at a time, remove one at a time, and what you have is always visible.
+*@
+
+<div class="list-picker">
+	@if (Value.Count == 0)
+	{
+		<div class="list-empty">@EmptyLabel</div>
+	}
+	else
+	{
+		<ul class="chips">
+			@foreach (string entityId in Value)
+			{
+				<li class="chip @(Known(entityId) ? "" : "chip-bad")">
+					<span class="chip-name">@NameOf(entityId)</span>
+					<code class="chip-id">@entityId</code>
+					<button type="button" class="chip-remove" title="Remove" @onclick="() => Remove(entityId)">&times;</button>
+				</li>
+			}
+		</ul>
+	}
+
+	@* Its own row, below the chips, with its own class: the add control and the chips it feeds must never
+	   share a line or crowd each other — this exact control has been photographed overlapping its chips. *@
+	<div class="picker picker-addrow">
+		@if (_manual || !HasOptions)
+		{
+			<input type="text"
+				   class="picker-text"
+				   placeholder="@Placeholder"
+				   value="@_typed"
+				   @onchange="OnTyped" />
+			<button type="button" class="picker-add" @onclick="AddTyped" disabled="@string.IsNullOrWhiteSpace(_typed)">Add</button>
+		}
+		else
+		{
+			<select class="picker-select" @bind:get="string.Empty" @bind:set="OnPicked">
+				<option value="">@AddLabel</option>
+				@foreach (EntityOption option in Available)
+				{
+					<option value="@option.EntityId">@option.Label</option>
+				}
+			</select>
+		}
+
+		<button type="button" class="picker-mode" @onclick="ToggleMode" disabled="@(!HasOptions)">
+			@(_manual ? "Pick from list" : "Type an id")
+		</button>
+
+		@if (!HasOptions)
+		{
+			<span class="picker-note">@EmptyNote</span>
+		}
+	</div>
+</div>
+
+@code {
+	/// <summary>The configured ids, in order. Never <c>null</c>.</summary>
+	[Parameter]
+	public IReadOnlyList<string> Value { get; set; } = [];
+
+	/// <summary>Raised with the whole new list whenever it changes.</summary>
+	[Parameter]
+	public EventCallback<IReadOnlyList<string>> ValueChanged { get; set; }
+
+	/// <summary>The entities to offer, already filtered to the domains this field accepts.</summary>
+	[Parameter]
+	public IReadOnlyList<EntityOption> Options { get; set; } = [];
+
+	/// <summary>What an empty list means for this field, in words.</summary>
+	[Parameter]
+	public string EmptyLabel { get; set; } = "Nothing listed.";
+
+	/// <summary>The dropdown's prompt.</summary>
+	[Parameter]
+	public string AddLabel { get; set; } = "Add…";
+
+	/// <summary>Example id shown in the free-text fallback.</summary>
+	[Parameter]
+	public string Placeholder { get; set; } = "domain.entity_id";
+
+	/// <summary>
+	///     Why there is nothing to pick, in words the caller is in a position to be right about.
+	/// </summary>
+	/// <remarks>
+	///     Dropping to a text box with no explanation invites the reading "this house has no lights". It usually
+	///     means the list has been filtered to an area, which the caller knows and this component does not.
+	/// </remarks>
+	[Parameter]
+	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
+
+	/// <summary>Resolves an id to a friendly name for the chips. Optional.</summary>
+	[Parameter]
+	public Func<string, string>? NameResolver { get; set; }
+
+	/// <summary>Whether Home Assistant knows an id. Drives the "unknown" chip styling. Optional.</summary>
+	[Parameter]
+	public Func<string, bool>? KnownResolver { get; set; }
+
+	private string? _typed;
+	private bool _manual;
+
+	private bool HasOptions => Options.Count > 0;
+
+	// Already-chosen entities are not offered again: adding the same light twice would have the engine
+	// command it twice per tick, and there is no reading of the config where that is what somebody meant.
+	private IEnumerable<EntityOption> Available =>
+		Options.Where(option => !Value.Contains(option.EntityId, StringComparer.Ordinal));
+
+	private string NameOf(string entityId) => NameResolver?.Invoke(entityId) ?? entityId;
+
+	private bool Known(string entityId) => KnownResolver?.Invoke(entityId) ?? true;
+
+	private void ToggleMode() => _manual = !_manual;
+
+	private void OnTyped(ChangeEventArgs args) => _typed = args.Value as string;
+
+	private Task OnPicked(string picked) => string.IsNullOrWhiteSpace(picked) ? Task.CompletedTask : Add(picked);
+
+	private async Task AddTyped()
+	{
+		if (string.IsNullOrWhiteSpace(_typed))
+			return;
+
+		string value = _typed.Trim();
+		_typed = null;
+		await Add(value).ConfigureAwait(false);
+	}
+
+	private Task Add(string entityId)
+	{
+		if (Value.Contains(entityId, StringComparer.Ordinal))
+			return Task.CompletedTask;
+
+		return Commit([.. Value, entityId]);
+	}
+
+	private Task Remove(string entityId) =>
+		Commit([.. Value.Where(existing => !string.Equals(existing, entityId, StringComparison.Ordinal))]);
+
+	private Task Commit(IReadOnlyList<string> updated)
+	{
+		Value = updated;
+		return ValueChanged.InvokeAsync(updated);
+	}
+}

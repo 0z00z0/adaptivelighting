@@ -1,0 +1,116 @@
+@*
+	The area, chosen by display name and stored as the registry slug.
+
+	This is the field the old YAML got wrong most often, and predictably: AreaId is "stue" while the thing
+	Home Assistant shows everywhere is "Stue", so the obvious value is the wrong one and the failure is a
+	whole room that never lights. Choosing from the registry makes the distinction stop mattering — the
+	name is picked, the slug is stored, and nobody has to know there were two of them.
+
+	Each area is labelled with what a zone on it would actually resolve to — "Stue (stue) — 1 light, 1
+	motion, 1 lux" — because that is the question being asked here and nothing else is. It used to show the
+	registry's row count, which was three things wrong at once: it counted disabled rows Home Assistant
+	itself does not count (517 against area_entities('stue') = 164 on one live instance), it counted everything in the
+	room rather than anything to do with lighting, and it was therefore reassuringly large for an area that
+	would resolve to nothing. An area that reads "0 lights" is wrong on sight, before it is saved.
+*@
+
+<div class="picker">
+	@if (_manual || !HasOptions)
+	{
+		<input type="text"
+			   class="picker-text"
+			   placeholder="area id, e.g. stue"
+			   value="@Value"
+			   @onchange="OnTyped" />
+	}
+	else
+	{
+		<select class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
+			<option value="">@NoneLabel</option>
+			@foreach (AreaOption area in Areas)
+			{
+				<option value="@area.Id">@area.Label</option>
+			}
+			@if (IsUnlisted)
+			{
+				<option value="@Value">@Value — not a registry area id</option>
+			}
+		</select>
+	}
+
+	<button type="button" class="picker-mode" @onclick="ToggleMode" disabled="@(!HasOptions)">
+		@(_manual ? "Pick from list" : "Type an id")
+	</button>
+
+	@if (!HasOptions)
+	{
+		<span class="picker-note">@EmptyNote</span>
+	}
+	else if (IsUnlisted)
+	{
+		<span class="picker-note bad">Not a registry area id.</span>
+	}
+	else if (Selected is { HasLights: false })
+	{
+		@* The zone error would say this later anyway. Saying it here costs a save-and-read to find out. *@
+		<span class="picker-note bad">
+			No lights found in this room, so it can't run. Assign lights to the area in Home Assistant, or pick them
+			by hand below.
+		</span>
+	}
+	else if (Selected is { LuxIsAmbiguous: true })
+	{
+		<span class="picker-note">
+			@Selected.LuxCount light-level sensors here — pick which one to use below.
+		</span>
+	}
+</div>
+
+@code {
+	/// <summary>The configured area id, or <c>null</c> for none.</summary>
+	[Parameter]
+	public string? Value { get; set; }
+
+	/// <summary>Raised with the new area id, or <c>null</c>.</summary>
+	[Parameter]
+	public EventCallback<string?> ValueChanged { get; set; }
+
+	/// <summary>Every area the registry knows.</summary>
+	[Parameter]
+	public IReadOnlyList<AreaOption> Areas { get; set; } = [];
+
+	/// <summary>What the empty choice is called.</summary>
+	[Parameter]
+	public string NoneLabel { get; set; } = "(none — list the entities explicitly instead)";
+
+	/// <summary>
+	///     Why there is nothing to pick, in words the caller is in a position to be right about. The component
+	///     cannot tell a disconnected Home Assistant from a house with no areas, so the default stays neutral and
+	///     never blames the connection.
+	/// </summary>
+	[Parameter]
+	public string EmptyNote { get; set; } = "No areas to pick from yet — type an area id instead.";
+
+	private bool _manual;
+
+	private bool HasOptions => Areas.Count > 0;
+
+	private AreaOption? Selected =>
+		Value is { Length: > 0 } ? Areas.FirstOrDefault(area => string.Equals(area.Id, Value, StringComparison.Ordinal)) : null;
+
+	private bool IsUnlisted =>
+		Value is { Length: > 0 } && !Areas.Any(area => string.Equals(area.Id, Value, StringComparison.Ordinal));
+
+	private Task OnPicked(string picked) => Commit(picked);
+
+	private Task OnTyped(ChangeEventArgs args) => Commit(args.Value as string);
+
+	private void ToggleMode() => _manual = !_manual;
+
+	private Task Commit(string? raw)
+	{
+		string? value = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+		Value = value;
+		return ValueChanged.InvokeAsync(value);
+	}
+}

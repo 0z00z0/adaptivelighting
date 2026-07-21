@@ -1,0 +1,71 @@
+@*
+	One zone knob: either inherited from Defaults, or overridden here.
+
+	The schema encodes "inherit" as null on a nullable twin of the Defaults property, and that distinction is
+	the whole reason zones stay readable — a zone says what differs and nothing else. A plain input box
+	cannot express it: there is no number you can type that means "no opinion", and 0 means zero. So the
+	override switch is explicit, the inherited value is shown while it is off, and turning it on seeds the
+	control with the value being inherited so the first thing the operator does is adjust rather than invent.
+
+	The control itself is the caller's, because the type varies (int, double, bool, enum, entity id) and a
+	component that switched on typeof(T) to render one of five inputs would be harder to read than five call
+	sites that each say what they are.
+*@
+
+<div class="field">
+	<div class="field-head">
+		<label class="field-label">@Label</label>
+		<label class="field-toggle">
+			<input type="checkbox" checked="@IsOverridden" @onchange="OnToggle" />
+			<span>override</span>
+		</label>
+	</div>
+
+	<div class="field-control">
+		@if (IsOverridden)
+		{
+			@ChildContent
+		}
+		else
+		{
+			<span class="field-inherit"><strong>@InheritedText</strong> (the default)</span>
+		}
+	</div>
+
+	@if (Help is { Length: > 0 })
+	{
+		<div class="field-help">@Help</div>
+	}
+</div>
+
+@code {
+	/// <summary>The knob's name, as the operator should think of it.</summary>
+	[Parameter, EditorRequired]
+	public string Label { get; set; } = "";
+
+	/// <summary>Whether this zone currently overrides the default.</summary>
+	[Parameter]
+	public bool IsOverridden { get; set; }
+
+	/// <summary>
+	///     Raised when the override switch flips. The handler sets the zone's nullable property to a concrete
+	///     value (seeded from Defaults) or back to <c>null</c>.
+	/// </summary>
+	[Parameter]
+	public EventCallback<bool> IsOverriddenChanged { get; set; }
+
+	/// <summary>The inherited value, already formatted with its unit.</summary>
+	[Parameter]
+	public string InheritedText { get; set; } = "";
+
+	/// <summary>One sentence on what the knob actually does. Optional.</summary>
+	[Parameter]
+	public string? Help { get; set; }
+
+	/// <summary>The input to show while the override is on.</summary>
+	[Parameter]
+	public RenderFragment? ChildContent { get; set; }
+
+	private Task OnToggle(ChangeEventArgs args) =>
+		IsOverriddenChanged.InvokeAsync(args.Value is true);
+}

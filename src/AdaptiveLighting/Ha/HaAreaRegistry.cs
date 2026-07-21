@@ -1,0 +1,31 @@
+using AdaptiveLighting.Abstractions;
+
+namespace AdaptiveLighting.Ha;
+
+/// <summary>
+///     The real <see cref="IAreaRegistry"/>: a thin projection of <see cref="IHaRegistry"/> onto the four
+///     questions the engine actually asks.
+/// </summary>
+/// <remarks>
+///     Reads the registry live rather than snapshotting it. Resolution happens once at startup, so a snapshot
+///     would buy nothing and would only be one more thing that could go stale.
+/// </remarks>
+public sealed class HaAreaRegistry : IAreaRegistry
+{
+	private readonly IHaRegistry _registry;
+
+	/// <summary>Wraps the live registry.</summary>
+	public HaAreaRegistry(IHaRegistry registry) => _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+
+	/// <inheritdoc/>
+	public IReadOnlyList<string> AreaIds => _registry.AreaIds();
+
+	/// <inheritdoc/>
+	public bool AreaExists(string areaId) => _registry.AreaExists(areaId);
+
+	/// <inheritdoc/>
+	public IReadOnlyList<string> EntitiesInArea(string areaId) => _registry.EntityIdsInArea(areaId);
+
+	/// <inheritdoc/>
+	public IReadOnlyList<string> LabelsOf(string entityId) => _registry.LabelsOf(entityId);
+}

@@ -1,0 +1,61 @@
+@*
+	A number that is allowed to be absent.
+
+	A period's Floor and Cap are double? where null means "no clamp", and an ordinary number input cannot
+	say that: blank reads as 0, and 0% is a real and very different instruction. So the switch is explicit,
+	and turning it on seeds a plausible value rather than starting at zero — a cap of 0 would black out the
+	house, and it is not what anybody reaching for this control meant.
+*@
+
+<div class="nullable">
+	<input type="checkbox" checked="@Value.HasValue" @onchange="OnToggle" title="Set a value" />
+	@if (Value is { } value)
+	{
+		@if (Presets is { Count: > 0 } presets)
+		{
+			<PresetSelect Value="@value" ValueChanged="@(v => Commit(v))" Options="@presets" Unit="%" Min="0" Max="100" />
+		}
+		else
+		{
+			<input class="cell num" type="number" step="1" min="0" max="100" value="@value" @onchange="OnTyped" />
+		}
+	}
+	else
+	{
+		<span class="inherit">@Placeholder</span>
+	}
+</div>
+
+@code {
+	/// <summary>The value, or <c>null</c> when unset.</summary>
+	[Parameter]
+	public double? Value { get; set; }
+
+	/// <summary>When set, the value is picked from these presets (with a free-entry escape) instead of typed.</summary>
+	[Parameter]
+	public IReadOnlyList<PresetChoice>? Presets { get; set; }
+
+	/// <summary>Raised with the new value, or <c>null</c> when unset.</summary>
+	[Parameter]
+	public EventCallback<double?> ValueChanged { get; set; }
+
+	/// <summary>The value the switch seeds when it is turned on.</summary>
+	[Parameter]
+	public double Seed { get; set; }
+
+	/// <summary>What to show while the value is unset.</summary>
+	[Parameter]
+	public string Placeholder { get; set; } = "none";
+
+	private Task OnToggle(ChangeEventArgs args) =>
+		Commit(args.Value is true ? Seed : null);
+
+	private Task OnTyped(ChangeEventArgs args) =>
+		Commit(double.TryParse(args.Value as string, CultureInfo.InvariantCulture, out double parsed) ? parsed : Value);
+
+	private Task Commit(double? value)
+	{
+		Value = value;
+		return ValueChanged.InvokeAsync(value);
+	}
+}

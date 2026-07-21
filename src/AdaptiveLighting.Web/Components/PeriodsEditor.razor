@@ -1,0 +1,300 @@
+@*
+	The house-wide circadian table.
+
+	One card per period rather than a seven-column table: the table was wider than the page, and a settings
+	row whose last controls live behind a scrollbar is a settings row somebody never finds. The card's
+	controls wrap on their own grid, so a phone stacks them and a desktop reads them in a line — nothing
+	scrolls sideways and nothing is hidden either way.
+
+	Brightness and colour are preset dropdowns with a typed escape, the start is a structured control that
+	composes the engine's own grammar, and "min/max brightness" say what Floor and Cap never quite did. The
+	real explanations live behind each (i).
+
+	Each period is a collapsible card, like a zone: collapsed it is a header — the period's name, when it
+	starts (with the wall-clock time a sun-anchored start resolves to today), and its brightness/warmth at a
+	glance. Expanded, the full editor. Collapsed by default, because a schedule of five periods is read far
+	more often than any one of them is edited.
+*@
+@inject HaCatalog Catalog
+
+<div class="periods">
+	@for (int index = 0; index < Periods.Count; index++)
+	{
+		TimePeriodConfig period = Periods[index];
+		int position = index;
+
+		<details class="panel period-fold @(ReferenceEquals(period, _activePeriod) ? "active" : "")" @key="period">
+			@*
+				The summary is a header — the name to read, the start (with today's resolved time for a sun
+				boundary), and the level at a glance. The move/remove controls live here too, with
+				stopPropagation so a tap on them reorders or deletes rather than toggling the fold open.
+			*@
+			<summary class="period-summary">
+				<span class="period-title">@DisplayName(period)</span>
+				@if (ReferenceEquals(period, _activePeriod))
+				{
+					<span class="badge active-now" title="This period is in force right now.">active now</span>
+				}
+				<span class="period-summary-start">@StartSummary(period)</span>
+				<span class="period-summary-hint">@LevelSummary(period)</span>
+
+				<span class="period-actions">
+					<button type="button" title="Move earlier" disabled="@(position == 0)"
+							@onclick="() => Move(position, -1)" @onclick:stopPropagation="true">&uarr;</button>
+					<button type="button" title="Move later" disabled="@(position == Periods.Count - 1)"
+							@onclick="() => Move(position, 1)" @onclick:stopPropagation="true">&darr;</button>
+					<button type="button" class="danger" title="Remove this period"
+							@onclick="() => Remove(position)" @onclick:stopPropagation="true">&times;</button>
+				</span>
+
+				<span class="zone-chevron" aria-hidden="true"></span>
+			</summary>
+
+			<div class="field">
+				<div class="field-head"><label class="field-label">Period name</label></div>
+				<div class="field-control">
+					<input type="text" class="cell wide" @bind="period.Name" @bind:event="oninput" placeholder="evening" />
+				</div>
+				<div class="field-help">The period's name, shown on the dashboard.</div>
+			</div>
+
+			<div class="period-grid">
+				<div class="pfield">
+					<span class="pfield-label">
+						Starts
+						<InfoPopover Label="Starts">
+							When this period takes over — a clock time, or a moment tied to sunrise/sunset that moves
+							with the seasons. It runs until the next period starts.
+						</InfoPopover>
+					</span>
+					<PeriodStartEditor Value="@period.Start" ValueChanged="@(value => SetStart(period, value))" />
+				</div>
+
+				@if (HasHouseMode)
+				{
+					TimePeriodConfig boundPeriod = period;
+					<div class="pfield">
+						<span class="pfield-label">
+							Also switches house mode to
+							<InfoPopover Label="Also switches house mode to">
+								When this period begins, the house mode is switched too — typically the night period
+								switching to Sleep. Leave unset for a period that only changes light levels.
+							</InfoPopover>
+						</span>
+						<select class="cell wide" @bind:get="boundPeriod.SetsMode ?? string.Empty" @bind:set="@(value => SetMode(boundPeriod, value))">
+							<option value="">— leave the house mode unchanged</option>
+							@foreach (string mode in HouseModeOptions)
+							{
+								<option value="@mode">@mode</option>
+							}
+							@if (boundPeriod.SetsMode is { Length: > 0 } && !HouseModeOptions.Any(m => string.Equals(m, boundPeriod.SetsMode, StringComparison.OrdinalIgnoreCase)))
+							{
+								<option value="@boundPeriod.SetsMode">@boundPeriod.SetsMode — no such option</option>
+							}
+						</select>
+						<div class="pfield-help">@ModeHelp(boundPeriod)</div>
+					</div>
+				}
+
+				<div class="pfield">
+					<span class="pfield-label">
+						Brightness
+						<InfoPopover Label="Brightness">
+							How bright the lights are during this period, as a percent.
+													</InfoPopover>
+					</span>
+					<PresetSelect Value="@period.BrightnessPct"
+								  ValueChanged="@(value => Set(() => period.BrightnessPct = value))"
+								  Options="@Presets.BrightnessPct"
+								  Unit="%" Min="0" Max="100" />
+				</div>
+
+				<div class="pfield">
+					<span class="pfield-label">
+						Colour temperature
+						<InfoPopover Label="Colour temperature">
+							How warm the light looks — low is candle-amber, high is daylight-white. The same scale
+							bulb boxes print.
+						</InfoPopover>
+					</span>
+					<PresetSelect Value="@period.ColorTempKelvin"
+								  ValueChanged="@(value => Set(() => period.ColorTempKelvin = (int)Math.Round(value)))"
+								  Options="@Presets.ColorTempKelvin"
+								  Unit="K" Min="1000" Max="10000" Step="50" />
+				</div>
+
+				<div class="pfield">
+					<span class="pfield-label">
+						Min brightness
+						<InfoPopover Label="Min brightness">
+							Never dimmer than this during the period — so a night light can't fade to nothing. Leave
+							off for no limit.
+						</InfoPopover>
+					</span>
+					<NullableNumber Value="@period.MinBrightnessPct"
+									ValueChanged="@(value => Set(() => period.MinBrightnessPct = value))"
+									Presets="@Presets.BrightnessPct"
+									Seed="5" Placeholder="no lower limit" />
+				</div>
+
+				<div class="pfield">
+					<span class="pfield-label">
+						Max brightness
+						<InfoPopover Label="Max brightness">
+							Never brighter than this during the period — set it on the night period so nothing blinds
+							you at 03:00. Leave off for no limit.
+						</InfoPopover>
+					</span>
+					<NullableNumber Value="@period.MaxBrightnessPct"
+									ValueChanged="@(value => Set(() => period.MaxBrightnessPct = value))"
+									Presets="@Presets.BrightnessPct"
+									Seed="30" Placeholder="no upper limit" />
+				</div>
+			</div>
+		</details>
+	}
+
+	@if (Periods.Count == 0)
+	{
+		<div class="empty">
+			No periods yet. Add at least one so the lights know what to do.
+		</div>
+	}
+
+	<div class="panel-actions">
+		<button type="button" @onclick="Add">Add a period</button>
+	</div>
+
+	<p class="lede">
+		Each period runs until the next one starts. Sun-tied starts move with the seasons, so the running order
+		can differ from the list order.
+	</p>
+</div>
+
+@code {
+	/// <summary>The document's period list, edited in place.</summary>
+	[Parameter, EditorRequired]
+	public List<TimePeriodConfig> Periods { get; set; } = [];
+
+	/// <summary>Raised after any change, so the page can re-validate.</summary>
+	[Parameter]
+	public EventCallback Changed { get; set; }
+
+	/// <summary>
+	///     The house-mode option values a period may belong to (live ∪ configured). Passed from the page so this
+	///     component never talks to <c>HaCatalog</c> itself. Empty leaves the House-mode field hidden.
+	/// </summary>
+	[Parameter]
+	public IReadOnlyList<string> HouseModeOptions { get; set; } = [];
+
+	/// <summary>The house-mode config, for the dynamic help line's sleep-tag check. <c>null</c> hides the field.</summary>
+	[Parameter]
+	public HouseModeConfig? HouseMode { get; set; }
+
+	/// <summary>Whether a house-mode select is configured — a dead field teaches nothing, so it is hidden otherwise.</summary>
+	private bool HasHouseMode => HouseMode?.Entity is { Length: > 0 };
+
+	/// <summary>The period in force right now, so its card carries the "active now" badge and accent edge.</summary>
+	private TimePeriodConfig? _activePeriod;
+
+	/// <inheritdoc/>
+	protected override void OnParametersSet() => _activePeriod = ResolveActivePeriod();
+
+	/// <summary>
+	///     The period in force at the current wall-clock time: the one whose start is the most recent at or before
+	///     now. When every start is still ahead of now (the small hours, before the first boundary), the period with
+	///     the latest start is in force — it began yesterday and wrapped past midnight. Sun-anchored starts resolve
+	///     against <c>sun.sun</c> exactly as the header's <see cref="StartSummary"/> does, so the running order can
+	///     differ from the list order. Periods whose start is blank or unparseable can never be "now".
+	/// </summary>
+	private TimePeriodConfig? ResolveActivePeriod()
+	{
+		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
+		SunTimes sun = new SunTimes(sunrise, sunset);
+		TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
+
+		List<(TimePeriodConfig Period, TimeOnly Start)> resolved = [];
+		foreach (TimePeriodConfig period in Periods)
+			if (PeriodStart.TryParse(period.Start, out PeriodStart? parsed) && parsed is not null
+				&& parsed.Resolve(sun) is { } start)
+				resolved.Add((period, start));
+
+		if (resolved.Count == 0)
+			return null;
+
+		List<(TimePeriodConfig Period, TimeOnly Start)> started = [.. resolved.Where(entry => entry.Start <= now)];
+		IEnumerable<(TimePeriodConfig Period, TimeOnly Start)> pool = started.Count > 0 ? started : resolved;
+		return pool.OrderBy(entry => entry.Start).Last().Period;
+	}
+
+	/// <summary>The collapsed header's name: the period's own, or a placeholder for an unnamed row.</summary>
+	private static string DisplayName(TimePeriodConfig period) =>
+		period.Name is { Length: > 0 } name ? name : "unnamed period";
+
+	/// <summary>
+	///     The start, as the header shows it: the raw string, plus the wall-clock time a sun-anchored start
+	///     resolves to today (read from <c>sun.sun</c>, the engine's own truth). An empty or unparseable start
+	///     reads "start not set" rather than a blank.
+	/// </summary>
+	private string StartSummary(TimePeriodConfig period)
+	{
+		if (string.IsNullOrWhiteSpace(period.Start))
+			return "start not set";
+
+		if (!PeriodStart.TryParse(period.Start, out PeriodStart? parsed) || parsed is null)
+			return period.Start;
+
+		if (parsed is not { SunEvent: not SunEvent.None })
+			return period.Start;
+
+		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
+		return parsed.Resolve(new SunTimes(sunrise, sunset)) is { } time
+			? $"{period.Start} → {time:HH\\:mm}"
+			: period.Start;
+	}
+
+	/// <summary>The collapsed header's level hint: brightness and colour temperature at a glance.</summary>
+	private static string LevelSummary(TimePeriodConfig period) =>
+		string.Create(CultureInfo.InvariantCulture, $"{Math.Round(period.BrightnessPct)}% · {period.ColorTempKelvin}K");
+
+	private string ModeHelp(TimePeriodConfig period)
+	{
+		if (period.SetsMode is not { Length: > 0 } mode)
+			return "Doesn't change the house mode.";
+
+		return $"When this period begins, the house switches to '{mode}'.";
+	}
+
+	private Task Set(Action mutate)
+	{
+		mutate();
+		return Changed.InvokeAsync();
+	}
+
+	private Task SetStart(TimePeriodConfig period, string value) => Set(() => period.Start = value);
+
+	private Task SetMode(TimePeriodConfig period, string? value) =>
+		Set(() => period.SetsMode = string.IsNullOrWhiteSpace(value) ? null : value);
+
+	private async Task Add()
+	{
+		Periods.Add(new TimePeriodConfig { Name = "new period", Start = "12:00", BrightnessPct = 80, ColorTempKelvin = 3500 });
+		await Changed.InvokeAsync().ConfigureAwait(false);
+	}
+
+	private async Task Remove(int index)
+	{
+		Periods.RemoveAt(index);
+		await Changed.InvokeAsync().ConfigureAwait(false);
+	}
+
+	private async Task Move(int index, int delta)
+	{
+		int target = index + delta;
+		if (target < 0 || target >= Periods.Count)
+			return;
+
+		(Periods[index], Periods[target]) = (Periods[target], Periods[index]);
+		await Changed.InvokeAsync().ConfigureAwait(false);
+	}
+}
