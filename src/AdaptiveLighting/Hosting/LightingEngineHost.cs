@@ -293,6 +293,11 @@ public sealed class LightingEngineHost : IDisposable
 	}
 
 	/// <summary>Proposes areas from the area registry, saves them, and rebuilds on the result.</summary>
+	/// <remarks>
+	///     The rules themselves live in <see cref="AreaSetupService"/>, so that a first run and the owner pressing
+	///     "Set up rooms again" are the same code observed twice. What is left here is the once-only part: re-read,
+	///     plan, apply, seed the people, set the flag, save.
+	/// </remarks>
 	private void RunAreaDiscovery()
 	{
 		lock (_gate)
@@ -320,9 +325,11 @@ public sealed class LightingEngineHost : IDisposable
 			AreaEntityResolver resolver = new(
 				_ha, areas, config.Global, _loggerFactory.CreateLogger<AreaEntityResolver>());
 
-			IReadOnlyList<AreaConfig> proposed = AreaAutoDiscovery.Propose(areas, resolver);
+			// Nothing to rebuild: this path only runs on a document with no areas at all, so the scope is empty and
+			// the plan is entirely NewAreas. The re-run from the UI is the same call with rooms ticked.
+			SetupPlan plan = AreaSetupService.Plan(config, areas, resolver, []);
 
-			if (proposed.Count == 0)
+			if (plan.NewAreas.Count == 0)
 			{
 				// The flag deliberately stays unset. Finding nothing is far more likely to mean "asked too early"
 				// than "this house has no lit rooms", and looking again on the next start costs nothing.
@@ -331,8 +338,12 @@ public sealed class LightingEngineHost : IDisposable
 				return;
 			}
 
-			config.Areas.AddRange(proposed);
+			AreaSetupService.Apply(config, plan);
 			config.Global.AreasAutoDiscovered = true;
+
+			// Only at first setup, never on a re-run: a household that deliberately empties the list must find it
+			// still empty next start, the same one-way principle as the flag above.
+			IReadOnlyList<string> seeded = AreaSetupService.SeedPersons(config, _ha);
 
 			// The house mode is part of the same "look before asking" idea: most houses already have the dropdown,
 			// and only its meaning needs stating. Never overwrites one the household has already chosen.
@@ -345,16 +356,28 @@ public sealed class LightingEngineHost : IDisposable
 			}
 			catch (LightingConfigException exception)
 			{
-				// Areas was empty on the way in, so clearing restores exactly what was loaded.
+				// Areas was empty on the way in, so clearing restores exactly what was loaded; the people list is
+				// only cleared when this run is what filled it, or a document that already named somebody would
+				// come out of a failed write having forgotten them.
 				config.Areas.Clear();
+
+				if (seeded.Count > 0)
+					config.Global.Persons.Clear();
+
 				config.Global.AreasAutoDiscovered = false;
 				_logger.LogWarning(exception, "Could not save the discovered areas; they will be proposed again on the next start.");
 				return;
 			}
 
 			_logger.LogInformation(
-				"Discovered {Count} areas from the area registry ({Areas}). Review them on the Configuration page — nothing else was touched.",
-				proposed.Count, string.Join(", ", proposed.Select(area => area.AreaId)));
+				"Discovered {Count} areas from the area registry ({Areas}), all switched off. Choose which to switch on "
+				+ "from the Configuration page — no lights will change until you do.",
+				plan.NewAreas.Count, string.Join(", ", plan.NewAreas.Select(area => area.AreaId)));
+
+			if (seeded.Count > 0)
+				_logger.LogInformation(
+					"Home and Away will follow {Count} people ({Persons}). Change who on the Configuration page.",
+					seeded.Count, string.Join(", ", seeded));
 
 			ApplyCore(config);
 		}

@@ -28,6 +28,7 @@ namespace AdaptiveLighting.Abstractions;
 /// <param name="NextChangeFrom">When the countdown behind <paramref name="NextChangeAt"/> was armed, or <c>null</c> when nothing is scheduled. Together they are both ends of the countdown, which is what lets a reader render elapsed-versus-remaining rather than a bare deadline. Not derivable from the other timestamps: <paramref name="Timestamp"/> and <paramref name="LastMotionAt"/> both move on republishes that re-arm nothing.</param>
 /// <param name="HouseModeValue">The raw house-mode option string in effect (<c>Sover</c>, <c>Borte</c>), or <c>null</c> when no select is configured. Beside <paramref name="Mode"/> so a card can say "Sover", not just "Sleep".</param>
 /// <param name="DarknessDetail">The darkness gate's reading in words the last time it was consulted (e.g. <c>lux 86, dark below 40</c>), or <c>null</c> if it never has been. Lets a card say <i>why</i> a bright vacant area is waiting rather than just that it is. Descriptive, like <paramref name="Reason"/>: excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/> so a drifting lux reading does not republish on its own.</param>
+/// <param name="AreaId">The HA registry area id this area was built from, or <c>null</c> when it was configured with explicit entity lists and no area. This is the stable join between a snapshot and the document that produced it: <paramref name="AreaName"/> is editable mid-session and an id is not, so a reader that matched on the name alone lost the area the moment somebody renamed a room. Excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/>: it identifies the area rather than describing its state, and cannot change without the area being rebuilt anyway.</param>
 public sealed record AreaSnapshot(
 	string AreaName,
 	AreaState State,
@@ -44,7 +45,8 @@ public sealed record AreaSnapshot(
 	DateTimeOffset? NextChangeAt,
 	DateTimeOffset? NextChangeFrom,
 	string? HouseModeValue = null,
-	string? DarknessDetail = null)
+	string? DarknessDetail = null,
+	string? AreaId = null)
 {
 	/// <summary>
 	///     Whether <paramref name="other"/> says the same thing about the area as this snapshot does — the

@@ -28,6 +28,14 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("area")]
 	public string? Area { get; init; }
 
+	/// <summary>
+	///     The registry area id behind the display name, or <c>null</c> when the area was configured with explicit
+	///     entity lists and no area. Absent from events published by builds that predate it, which deserializes as
+	///     <c>null</c>: a reader then falls back to matching on <see cref="Area"/>, which is what it did before.
+	/// </summary>
+	[JsonPropertyName("area_id")]
+	public string? AreaId { get; init; }
+
 	/// <summary>The <see cref="AreaState"/> name.</summary>
 	[JsonPropertyName("state")]
 	public string? State { get; init; }
@@ -129,6 +137,7 @@ public sealed record AreaSnapshotEvent
 			NextChangeAt,
 			NextChangeFrom,
 			HouseModeValue,
-			DarknessDetail);
+			DarknessDetail,
+			AreaId);
 	}
 }

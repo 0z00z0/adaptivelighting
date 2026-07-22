@@ -44,6 +44,8 @@ public sealed class HaStatePublisher : IStatePublisher
 			_ha.SendEvent(EventType, new
 			{
 				area = snapshot.AreaName,
+				// Additive: a consumer that never learned about area_id keeps reading `area` exactly as before.
+				area_id = snapshot.AreaId,
 				state = snapshot.State.ToString(),
 				reason = snapshot.Reason.ToString(),
 				mode = snapshot.Mode.ToString(),

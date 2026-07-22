@@ -29,6 +29,7 @@ public sealed class AreaController : IDisposable
 	private readonly IHaContext _ha;
 	private readonly IScheduler _scheduler;
 	private readonly ResolvedArea _area;
+	private readonly string? _areaId;
 	private readonly GlobalConfig _global;
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
 	private readonly CircadianCalculator _circadian;
@@ -76,6 +77,12 @@ public sealed class AreaController : IDisposable
 	/// <param name="publisher">Where snapshots go.</param>
 	/// <param name="houseChanged">The house-wide state stream, owned by the orchestrator.</param>
 	/// <param name="loggerFactory">Builds the area's logger.</param>
+	/// <param name="areaId">
+	///     The registry area id the configuration named, or <c>null</c> when it named none. Published on every
+	///     snapshot so a reader can join live state to the document by identity rather than by display name.
+	///     Passed alongside <paramref name="area"/> rather than carried on it: a resolved area is what the engine
+	///     runs on, and it has no use for the id — only the observability seam does.
+	/// </param>
 	public AreaController(
 		IHaContext ha,
 		IScheduler scheduler,
@@ -86,7 +93,8 @@ public sealed class AreaController : IDisposable
 		ILightActuator actuator,
 		IStatePublisher publisher,
 		IObservable<HouseState> houseChanged,
-		ILoggerFactory loggerFactory)
+		ILoggerFactory loggerFactory,
+		string? areaId = null)
 	{
 		ArgumentNullException.ThrowIfNull(loggerFactory);
 
@@ -99,6 +107,7 @@ public sealed class AreaController : IDisposable
 		_actuator = actuator ?? throw new ArgumentNullException(nameof(actuator));
 		_publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
 		_houseChanged = houseChanged ?? throw new ArgumentNullException(nameof(houseChanged));
+		_areaId = areaId is { Length: > 0 } ? areaId : null;
 
 		_logger = loggerFactory.CreateLogger($"{typeof(AreaController).FullName}.{area.Name}");
 
@@ -789,7 +798,8 @@ public sealed class AreaController : IDisposable
 			_nextChangeAt,
 			_nextChangeFrom,
 			_house.ModeValue,
-			_lastDarknessDetail);
+			_lastDarknessDetail,
+			_areaId);
 	}
 
 	/// <summary>The period name for <paramref name="now"/>, resolving (and caching) it only if this instant is not the one already resolved.</summary>
