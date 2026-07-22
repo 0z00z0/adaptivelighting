@@ -80,12 +80,12 @@
 	private bool IsLitByEngine => Snapshot.State is AreaState.AutoActive or AreaState.PreOff
 		&& Snapshot.BrightnessPct is not null;
 
-	private string Family => Snapshot.State switch
-	{
-		AreaState.AutoActive or AreaState.AutoVacant or AreaState.PreOff => "machine",
-		AreaState.OverriddenOn or AreaState.SuppressedOff => "human",
-		_ => "idle"
-	};
+	/// <summary>
+	///     The card's colour family. Shared with the settings list through <see cref="AreaView.Family"/> so the
+	///     two pages cannot drift: a person who learns "amber means somebody touched it" here must read the same
+	///     fact in Settings.
+	/// </summary>
+	private string Family => AreaView.Family(Snapshot.State);
 
 	private string Badge => Snapshot.State switch
 	{

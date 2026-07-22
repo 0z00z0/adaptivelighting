@@ -11,24 +11,40 @@
 
 	The preview is the real AreaEntityResolver, not a lookalike. What it says is what the engine will do.
 
-	The whole area is a fold. Collapsed, it is a header — name, area id, and how far it strays from the
-	defaults — because a settings page with six areas is read far more often than it is edited, and the
-	reading case wants six lines, not six panels. An area with no area id yet starts open: it is not configured,
-	and a fold that hides the one thing demanding attention would be tidiness at the expense of the task.
+	The whole area is a fold. Collapsed, it is a header — the switch, the name, the area id, and how far it
+	strays from the all-rooms settings — because a settings page with six areas is read far more often than it
+	is edited, and the reading case wants six lines, not six panels. An area with no area id yet starts open: it
+	is not configured, and a fold that hides the one thing demanding attention would be tidiness at the expense
+	of the task.
+
+	The left edge carries the room's live state in the dashboard's own colour family, and flat grey when the
+	room is switched off — so the two pages describe one house in one language rather than two.
 *@
 
-<details class="panel area-fold" open="@_openInitially">
+<details class="panel area-fold @EdgeClass" open="@_openInitially">
 	@*
 		The area's header is a header — a name to read, not a text box to squint at. The name is edited in
-		the Name field inside; the summary just says who this is and how far it strays from the defaults,
-		which is what you want a collapsed list of six areas to answer at a glance.
+		the Name field inside; the summary just says who this is and how far it strays from the all-rooms
+		settings, which is what you want a collapsed list of six areas to answer at a glance.
+
+		The switch lives here, not four clicks down inside the override list, because turning a room off is the
+		commonest decision after set-up. It stops the click reaching the fold: a thumb aiming at the switch must
+		not also open the editor.
 	*@
 	<summary class="area-summary">
+		<button type="button"
+				class="switch @(IsEnabled ? "on" : null)"
+				role="switch"
+				aria-checked="@(IsEnabled ? "true" : "false")"
+				aria-label="@($"Automatic lighting in {DisplayName}")"
+				title="@ToggleTitle"
+				@onclick="ToggleEnabled"
+				@onclick:stopPropagation="true"
+				@onclick:preventDefault="true">
+			<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+			<span class="switch-word">@(IsEnabled ? "on" : "off")</span>
+		</button>
 		<span class="area-title">@DisplayName</span>
-		@if (Area.Enabled == false)
-		{
-			<span class="badge bad">disabled</span>
-		}
 		@if (Area.AreaId is { Length: > 0 } areaId)
 		{
 			<code class="area-slug">@areaId</code>
@@ -225,60 +241,49 @@
 	</details>
 
 	<details class="advanced" open="@HasOverrides">
-		<summary>Room-specific settings (@OverrideCount of 17 changed)</summary>
+		<summary>Room-specific settings (@OverrideCount of @AreaView.OverridableSettingCount changed)</summary>
 
-		<OverrideField Label="Enabled"
-					   IsOverridden="@(Area.Enabled is not null)"
-					   IsOverriddenChanged="@(on => Set(() => Area.Enabled = on ? Defaults.Enabled : null))"
-					   InheritedText="@YesNo(Defaults.Enabled)"
-					   Help="A disabled area is still observed and published, just never commanded.">
-			<select class="cell" @bind:get="_enabled" @bind:set="OnEnabledChanged">
-				<option value="true">yes — lights are managed</option>
-				<option value="false">no — watch only</option>
-			</select>
-		</OverrideField>
-
-		<OverrideField Label="Vacancy timeout"
+		<OverrideField Label="Lights stay on for"
 					   IsOverridden="@(Area.VacancyTimeoutSeconds is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.VacancyTimeoutSeconds = on ? Defaults.VacancyTimeoutSeconds : null))"
 					   InheritedText="@($"{Defaults.VacancyTimeoutSeconds} s")"
-					   Help="Motion-free time before the area dims to its pre-off warning.">
+					   Help="After the last movement, how long the lights stay on before the warning dim.">
 			<input class="cell num" type="number" min="1" @bind="AreaVacancyTimeout" /> <span class="unit">s</span>
 		</OverrideField>
 
-		<OverrideField Label="Pre-off warning"
+		<OverrideField Label="Warning dim lasts"
 					   IsOverridden="@(Area.PreOffSeconds is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.PreOffSeconds = on ? Defaults.PreOffSeconds : null))"
 					   InheritedText="@($"{Defaults.PreOffSeconds} s")"
-					   Help="The grace in which motion still cancels darkness. Must be shorter than the vacancy timeout.">
+					   Help="The grace in which movement still brings the lights back. Must be shorter than the time the lights stay on.">
 			<input class="cell num" type="number" min="0" @bind="AreaPreOff" /> <span class="unit">s</span>
 		</OverrideField>
 
-		<OverrideField Label="Pre-off brightness"
+		<OverrideField Label="Warning dim level"
 					   IsOverridden="@(Area.PreOffBrightnessFactor is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.PreOffBrightnessFactor = on ? Defaults.PreOffBrightnessFactor : null))"
 					   InheritedText="@($"{Defaults.PreOffBrightnessFactor:0.##} of target")"
-					   Help="Fraction of the circadian brightness used for the warning dim. Between 0 and 1.">
+					   Help="How deep the warning dim is. 0.5 means half the current brightness.">
 			<input class="cell num" type="number" step="0.05" min="0" max="1" @bind="AreaPreOffFactor" />
 		</OverrideField>
 
-		<OverrideField Label="Override holds for"
+		<OverrideField Label="Hand changes hold for"
 					   IsOverridden="@(Area.OverrideDurationMinutes is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.OverrideDurationMinutes = on ? Defaults.OverrideDurationMinutes : null))"
 					   InheritedText="@($"{Defaults.OverrideDurationMinutes} min")"
-					   Help="How long a manual change holds the area before automatic control resumes.">
+					   Help="When someone adjusts a light by hand, their choice is left alone for this long.">
 			<input class="cell num" type="number" min="0" @bind="AreaOverrideDuration" /> <span class="unit">min</span>
 		</OverrideField>
 
-		<OverrideField Label="Vacancy reset"
+		<OverrideField Label="After a manual off, wait"
 					   IsOverridden="@(Area.VacancyResetMinutes is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.VacancyResetMinutes = on ? Defaults.VacancyResetMinutes : null))"
 					   InheritedText="@($"{Defaults.VacancyResetMinutes} min")"
-					   Help="Motion-free time after a manual turn-off before the suppression is lifted.">
+					   Help="After someone turns the lights off by hand, movement won't turn them back on until the room has been empty this long.">
 			<input class="cell num" type="number" min="0" @bind="AreaVacancyReset" /> <span class="unit">min</span>
 		</OverrideField>
 
-		<OverrideField Label="Darkness source"
+		<OverrideField Label="How a room decides it's dark"
 					   IsOverridden="@(Area.Darkness is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.Darkness = on ? Defaults.Darkness : null))"
 					   InheritedText="@Defaults.Darkness.ToString()"
@@ -291,23 +296,23 @@
 			</select>
 		</OverrideField>
 
-		<OverrideField Label="Lux threshold"
+		<OverrideField Label="Dark below"
 					   IsOverridden="@(Area.LuxThreshold is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.LuxThreshold = on ? Defaults.LuxThreshold : null))"
 					   InheritedText="@($"{Defaults.LuxThreshold} lx")"
-					   Help="Lux at or below which the area counts as dark.">
+					   Help="At or below this many lux the room counts as dark.">
 			<input class="cell num" type="number" min="0" @bind="AreaLuxThreshold" /> <span class="unit">lx</span>
 		</OverrideField>
 
-		<OverrideField Label="Lux hysteresis"
+		<OverrideField Label="Bright again above"
 					   IsOverridden="@(Area.LuxHysteresis is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.LuxHysteresis = on ? Defaults.LuxHysteresis : null))"
 					   InheritedText="@($"{Defaults.LuxHysteresis} lx")"
-					   Help="Extra lux required to leave the dark state, so a sensor sitting on the threshold cannot flap.">
+					   Help="The extra light needed to count as bright again (hysteresis), so a sensor sitting on the threshold cannot flap.">
 			<input class="cell num" type="number" min="0" @bind="AreaLuxHysteresis" /> <span class="unit">lx</span>
 		</OverrideField>
 
-		<OverrideField Label="Sun elevation"
+		<OverrideField Label="Dark when the sun is below"
 					   IsOverridden="@(Area.SunElevationThreshold is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.SunElevationThreshold = on ? Defaults.SunElevationThreshold : null))"
 					   InheritedText="@($"{Defaults.SunElevationThreshold}°")"
@@ -364,11 +369,11 @@
 			</select>
 		</OverrideField>
 
-		<OverrideField Label="Skips the away sweep"
+		<OverrideField Label="Stays on when everyone leaves"
 					   IsOverridden="@(Area.SkipAwaySweep is not null)"
 					   IsOverriddenChanged="@(on => Set(() => Area.SkipAwaySweep = on ? Defaults.SkipAwaySweep : null))"
 					   InheritedText="@YesNo(Defaults.SkipAwaySweep)"
-					   Help="Outdoor and security lights set this: they stay on when the house empties.">
+					   Help="Porch and security lights are wanted precisely when nobody's home.">
 			<select class="cell" @bind:get="_skipAway" @bind:set="OnSkipAwayChanged">
 				<option value="true">yes</option>
 				<option value="false">no</option>
@@ -388,8 +393,13 @@
 	</details>
 
 	@* At the bottom, deliberately: destroying an area should take a scroll past everything it is, not sit
-	   one stray tap from its own header. *@
+	   one stray tap from its own header. Setting the room up again is destructive too — it throws away
+	   everything above it — so it keeps the same company and the same warning-before-the-click rule. *@
 	<div class="area-actions">
+		@if (Area.AreaId is { Length: > 0 })
+		{
+			<button type="button" @onclick="SetUpAgain">Set this room up again</button>
+		}
 		<button type="button" class="danger" @onclick="Remove">Remove this room</button>
 	</div>
 </details>
@@ -443,6 +453,20 @@
 	[Parameter]
 	public EventCallback Removed { get; set; }
 
+	/// <summary>Raised when the operator asks for this one room to be set up again. The page runs the flow.</summary>
+	[Parameter]
+	public EventCallback SetUpAgainRequested { get; set; }
+
+	/// <summary>
+	///     What this room is doing right now, from the snapshot cache, or <c>null</c> when nothing has been heard.
+	/// </summary>
+	/// <remarks>
+	///     Passed in rather than read here: one page-level lookup serves every room, and a component that reached
+	///     for the cache itself would re-read it once per render per room for a purely decorative edge.
+	/// </remarks>
+	[Parameter]
+	public AreaState? LiveState { get; set; }
+
 	private AreaPreview Preview { get; set; } = new(null, null);
 
 	/// <summary>
@@ -458,6 +482,16 @@
 		Area.Name is { Length: > 0 } name ? name
 		: Area.AreaId is { Length: > 0 } areaId ? areaId
 		: "New area";
+
+	/// <summary>Whether the engine may command this room, following the document's inheritance.</summary>
+	private bool IsEnabled => AreaView.IsEnabled(Area, Defaults);
+
+	/// <summary>The live-state edge colour, or flat grey while the room is switched off.</summary>
+	private string EdgeClass => AreaView.EdgeClass(IsEnabled, LiveState);
+
+	private string ToggleTitle => IsEnabled
+		? "On — the lights in this room are managed. Switch off to leave them alone."
+		: "Off — this room is watched but its lights are never changed.";
 
 	/// <summary>
 	///     One collapsed line on how far this area strays from the defaults — the question a folded list of
@@ -479,8 +513,8 @@
 			{
 				(0, false) => "all automatic",
 				(0, true) => $"{PinnedSummary} picked by hand",
-				(_, false) => $"{overrides} of 17 changed",
-				_ => $"{PinnedSummary} picked by hand · {overrides} of 17 changed"
+				(_, false) => $"{overrides} of {AreaView.OverridableSettingCount} changed",
+				_ => $"{PinnedSummary} picked by hand · {overrides} of {AreaView.OverridableSettingCount} changed"
 			};
 		}
 	}
@@ -541,6 +575,14 @@
 		Area.Lights is { Count: > 0 } || Area.MotionSensors is { Count: > 0 }
 		|| Area.LuxSensor is { Length: > 0 } || Area.IgnoreWhenOn is { Count: > 0 };
 
+	/// <summary>
+	///     How many of the sixteen per-room settings this area states for itself.
+	/// </summary>
+	/// <remarks>
+	///     <c>Enabled</c> is deliberately absent: the header switch owns it, so it is not one of the settings the
+	///     fold offers and must not be counted among them. The same sixteen are counted by the re-setup plan, so
+	///     the number here and the number in that warning are always the same number.
+	/// </remarks>
 	private int OverrideCount =>
 		(Area.VacancyTimeoutSeconds is not null ? 1 : 0) + (Area.PreOffSeconds is not null ? 1 : 0)
 		+ (Area.PreOffBrightnessFactor is not null ? 1 : 0) + (Area.OverrideDurationMinutes is not null ? 1 : 0)
@@ -549,8 +591,7 @@
 		+ (Area.SunElevationThreshold is not null ? 1 : 0) + (Area.SunEntity is not null ? 1 : 0)
 		+ (Area.DayTransitionSeconds is not null ? 1 : 0) + (Area.NightTransitionSeconds is not null ? 1 : 0)
 		+ (Area.RespectSleepMode is not null ? 1 : 0) + (Area.SleepBlocksAutoOn is not null ? 1 : 0)
-		+ (Area.SkipAwaySweep is not null ? 1 : 0) + (Area.WelcomeHome is not null ? 1 : 0)
-		+ (Area.Enabled is not null ? 1 : 0);
+		+ (Area.SkipAwaySweep is not null ? 1 : 0) + (Area.WelcomeHome is not null ? 1 : 0);
 
 	private bool HasOverrides => OverrideCount > 0;
 
@@ -570,7 +611,6 @@
 	private double AreaNightFade { get => Area.NightTransitionSeconds ?? Defaults.NightTransitionSeconds; set => Assign(() => Area.NightTransitionSeconds = value); }
 
 	private string _darkness = nameof(DarknessSource.Either);
-	private string _enabled = "true";
 	private string _respectSleep = "false";
 	private string _sleepBlocks = "false";
 	private string _skipAway = "false";
@@ -580,7 +620,6 @@
 	protected override void OnParametersSet()
 	{
 		_darkness = (Area.Darkness ?? Defaults.Darkness).ToString();
-		_enabled = Lower(Area.Enabled ?? Defaults.Enabled);
 		_respectSleep = Lower(Area.RespectSleepMode ?? Defaults.RespectSleepMode);
 		_sleepBlocks = Lower(Area.SleepBlocksAutoOn ?? Defaults.SleepBlocksAutoOn);
 		_skipAway = Lower(Area.SkipAwaySweep ?? Defaults.SkipAwaySweep);
@@ -636,6 +675,23 @@
 
 	private Task Remove() => Removed.InvokeAsync();
 
+	private Task SetUpAgain() => SetUpAgainRequested.InvokeAsync();
+
+	/// <summary>
+	///     Flips the room's power switch.
+	/// </summary>
+	/// <remarks>
+	///     Writes an explicit <c>true</c> or <c>false</c>, never <c>null</c>: inheritance stays for documents that
+	///     predate the switch, but a decision somebody just made with their thumb belongs in the file as itself.
+	///     And it is an edit like any other — it arms the save bar rather than saving, so the one write path stays
+	///     the one write path.
+	/// </remarks>
+	private Task ToggleEnabled()
+	{
+		Area.Enabled = !IsEnabled;
+		return Notify();
+	}
+
 	// Each select writes straight through to the area rather than leaving the field to be swept up later:
 	// a shadow field that is only reconciled on the next Refresh is a value that is briefly a lie, and the
 	// discovery preview reads the area.
@@ -647,8 +703,6 @@
 
 		return Notify();
 	}
-
-	private Task OnEnabledChanged(string value) { _enabled = value; Area.Enabled = IsYes(value); return Notify(); }
 
 	private Task OnRespectSleepChanged(string value) { _respectSleep = value; Area.RespectSleepMode = IsYes(value); return Notify(); }
 

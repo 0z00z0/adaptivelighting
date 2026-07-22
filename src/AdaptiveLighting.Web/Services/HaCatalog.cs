@@ -1,3 +1,4 @@
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
@@ -128,6 +129,7 @@ public sealed class HaCatalog
 	private readonly IHaRegistry _registry;
 	private readonly ILoggerFactory _loggerFactory;
 	private readonly ILogger<HaCatalog> _logger;
+	private readonly HaAreaRegistry _areas;
 
 	/// <summary>
 	///     Discovery answers for this load, by area id.
@@ -160,7 +162,18 @@ public sealed class HaCatalog
 		_registry = registry ?? throw new ArgumentNullException(nameof(registry));
 		_loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 		_logger = loggerFactory.CreateLogger<HaCatalog>();
+		_areas = new HaAreaRegistry(_registry);
 	}
+
+	/// <summary>
+	///     The area registry as the engine sees it, for the things a page needs beyond pickers — floors, chiefly.
+	/// </summary>
+	/// <remarks>
+	///     Exposed rather than re-wrapped by each page so the settings list and the dashboard group rooms through
+	///     one object. The engine's own seam is deliberately the one handed out: a UI-only floor lookup would be a
+	///     second answer to a question the engine already answers.
+	/// </remarks>
+	public IAreaRegistry AreaRegistry => _areas;
 
 	/// <summary>
 	///     Whether Home Assistant answered the last question asked of it.
@@ -418,6 +431,37 @@ public sealed class HaCatalog
 		}
 	}
 
+	/// <summary>
+	///     Works out what setting <paramref name="scope"/> up again would do, against this house as it is now.
+	/// </summary>
+	/// <remarks>
+	///     A thin pass-through to <see cref="AreaSetupService.Plan"/> — the rules stay in the engine, so the dialog
+	///     describes the same rebuild the engine performs. What is added here is the connection: the resolver is
+	///     built from the document being edited, so a plan honours the labels and device classes on screen rather
+	///     than the ones last saved. A registry that cannot answer yields an empty plan rather than a half-read one;
+	///     the page refuses the button in that state and says why.
+	/// </remarks>
+	/// <param name="config">The document being edited. Not mutated.</param>
+	/// <param name="scope">The area ids ticked for rebuild.</param>
+	/// <returns>The plan, or an empty plan when Home Assistant is not answering.</returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public SetupPlan PlanSetup(AdaptiveLightingConfig config, IReadOnlyCollection<string> scope)
+	{
+		ArgumentNullException.ThrowIfNull(config);
+		ArgumentNullException.ThrowIfNull(scope);
+
+		try
+		{
+			return AreaSetupService.Plan(config, _areas, Resolver(config.Global), scope);
+		}
+		catch (InvalidOperationException exception)
+		{
+			IsHomeAssistantReady = false;
+			_logger.LogDebug(exception, "The registry is not available, so no setup plan can be made.");
+			return new SetupPlan([], [], []);
+		}
+	}
+
 	private IReadOnlyList<EntityOption> Enumerate(Func<string, bool> predicate)
 	{
 		try
@@ -460,7 +504,7 @@ public sealed class HaCatalog
 
 	private AreaEntityResolver Resolver(GlobalConfig global) => new(
 		_ha,
-		new HaAreaRegistry(_registry),
+		_areas,
 		global,
 		_loggerFactory.CreateLogger<AreaEntityResolver>());
 

@@ -881,6 +881,12 @@ button.mode-card:disabled {
 	border-left-color: var(--warn);
 }
 
+/* A notice that reports something done rather than something wrong — the re-setup panel's "rebuilt, not yet
+   saved", the house-mode panel's confirmation. Without this they inherited the warning edge and read as faults. */
+.notice.ok {
+	border-left-color: var(--ok);
+}
+
 .notice ul {
 	margin: 0.4rem 0 0;
 	padding-left: 1.1rem;
@@ -1378,7 +1384,166 @@ select.cell.wide {
 }
 
 .area-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
 	padding: 0.6rem 0 0.9rem;
+}
+
+/* The room's live state on its left edge, in the dashboard's own family colours — settings and dashboard speak
+   one colour language, so "amber means somebody touched it" is learned once. A switched-off room is flat grey
+   whatever the engine last said: the switch beside it is the room's power state, and the edge must not argue
+   with it. These override the neutral fold edge above, so they must stay after it in source order. */
+.area-fold.family-machine { border-left-color: var(--machine); }
+.area-fold.family-human { border-left-color: var(--human); }
+.area-fold.family-idle { border-left-color: var(--idle); }
+.area-fold.family-off { border-left-color: var(--line); }
+
+/* ---- the room switch ----
+   A switch, not a checkbox: it is the room's power state, not a form field. It lives on the fold's header row
+   and stops the click there, so a thumb aiming at the switch never also opens the editor. */
+
+.switch {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	flex: 0 0 auto;
+	background: none;
+	border: none;
+	border-radius: 999px;
+	padding: 0.1rem 0.2rem;
+	color: var(--muted);
+	font-size: 0.76rem;
+	cursor: pointer;
+}
+
+.switch-track {
+	position: relative;
+	width: 34px;
+	height: 18px;
+	flex: 0 0 auto;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	background: var(--panel-2);
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.switch-knob {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--muted);
+	transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.switch.on .switch-track {
+	background: color-mix(in srgb, var(--ok) 28%, var(--panel-2));
+	border-color: var(--ok);
+}
+
+.switch.on .switch-knob {
+	background: var(--ok);
+	transform: translateX(16px);
+}
+
+.switch.on .switch-word {
+	color: var(--ok);
+}
+
+.switch:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* ---- floor headers ----
+   Written as reusable classes on purpose: the dashboard's grid groups by the same floors through the same
+   helper, and two looks for one fact would be two answers to "which floor is this". */
+
+.floor-head {
+	display: flex;
+	align-items: baseline;
+	gap: 0.75rem;
+	margin: 1.5rem 0 0.5rem;
+}
+
+.floor-name {
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--muted);
+}
+
+/* The only bulk action offered, and only per floor: with twenty rooms at most, a matrix of bulk operations
+   would be more to read than the rooms themselves. */
+.floor-bulk {
+	margin-left: auto;
+	background: none;
+	border: none;
+	padding: 0.1rem 0.2rem;
+	color: var(--accent);
+	font-size: 0.8rem;
+	cursor: pointer;
+}
+
+.floor-bulk:hover {
+	text-decoration: underline;
+}
+
+.panel-actions + .floor-head,
+.section-head + .floor-head {
+	margin-top: 0.9rem;
+}
+
+/* ---- setting rooms up again ----
+   An inline panel rather than a modal: it is a preview, and the rooms it talks about are on the page behind it.
+   Accent-edged because it is a step in a flow, not a resting part of the page. */
+
+.setup-panel {
+	border-left: 3px solid var(--accent);
+}
+
+.setup-title {
+	margin: 0 0 0.35rem;
+	font-size: 1.02rem;
+	font-weight: 650;
+}
+
+.setup-rooms {
+	list-style: none;
+	margin: 0.5rem 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+	gap: 0.25rem 1rem;
+}
+
+.setup-rooms label {
+	display: flex;
+	align-items: center;
+	gap: 0.45rem;
+	cursor: pointer;
+}
+
+.setup-room-name {
+	font-weight: 550;
+}
+
+/* What each room loses, one line each. Never generic: a room with nothing to lose says so. */
+.setup-losses {
+	margin: 0.4rem 0 0.8rem;
+	padding-left: 1.2rem;
+}
+
+.setup-losses li {
+	margin-bottom: 0.3rem;
+}
+
+.setup-losses .hint {
+	display: block;
 }
 
 /* ---- discovery preview ----

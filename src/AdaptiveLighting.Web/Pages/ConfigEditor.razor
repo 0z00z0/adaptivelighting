@@ -4,6 +4,7 @@
 @inject HaCatalog Catalog
 @inject ConfigLocation Location
 @inject HomeLocation HomeGeo
+@inject AreaSnapshotCache Cache
 
 @*
 	The configuration page. It used to be a viewer, which meant it was an ornament: the thing it displayed
@@ -11,11 +12,15 @@
 	nothing possible. It now reads and writes the document, validates before writing, and rebuilds the
 	running engine in place afterwards.
 
-	The document has four rooms — Areas, Periods, Defaults, Global — and the page shows one at a time behind
-	a section rail rather than stacking them into one endless scroll: on a phone the old page was several
-	screens of unrelated knobs before Global even began. What must stay visible whatever the section is
-	visible above the rail: the status panel, the save bar, and every validation message. A problem in a
-	section you are not looking at still stops the save, so it cannot be allowed to hide with its section.
+	The page has four sections — Areas, Schedule, House modes, House — and shows one at a time behind a section
+	rail rather than stacking them into one endless scroll: on a phone the old page was several screens of
+	unrelated knobs before the house-wide settings even began. The sections are named after things a person can
+	point at, not after where a value is stored: a setting lives under the noun it changes, and anything rarely
+	touched folds away at the bottom of that section rather than into a top-level "Advanced" drawer.
+
+	What must stay visible whatever the section is visible above the rail: the status panel, the save bar, and
+	every validation message. A problem in a section you are not looking at still stops the save, so it cannot
+	be allowed to hide with its section.
 
 	Two properties this page must never lose:
 
@@ -159,8 +164,8 @@ else
 			<button type="button" class="config-nav-link @(ActiveClass(Section.Areas))" @onclick="() => Show(Section.Areas)">
 				Areas <span class="config-nav-count">@_config.Areas.Count</span>
 			</button>
-			<button type="button" class="config-nav-link @(ActiveClass(Section.Periods))" @onclick="() => Show(Section.Periods)">
-				Periods <span class="config-nav-count">@_config.Periods.Count</span>
+			<button type="button" class="config-nav-link @(ActiveClass(Section.Schedule))" @onclick="() => Show(Section.Schedule)">
+				Schedule <span class="config-nav-count">@_config.Periods.Count</span>
 			</button>
 			<button type="button" class="config-nav-link @(ActiveClass(Section.HouseModes))" @onclick="() => Show(Section.HouseModes)">
 				House modes
@@ -169,11 +174,8 @@ else
 					<span class="config-nav-count">@_houseModeOptionValues.Count</span>
 				}
 			</button>
-			<button type="button" class="config-nav-link @(ActiveClass(Section.Defaults))" @onclick="() => Show(Section.Defaults)">
-				Defaults
-			</button>
-			<button type="button" class="config-nav-link @(ActiveClass(Section.Advanced))" @onclick="() => Show(Section.Advanced)">
-				Advanced settings
+			<button type="button" class="config-nav-link @(ActiveClass(Section.House))" @onclick="() => Show(Section.House)">
+				House
 			</button>
 		</nav>
 
@@ -183,27 +185,73 @@ else
 				<header class="section-head">
 					<h2>Areas</h2>
 					<p class="lede">
-						Each area is a room with managed lights. Rooms not listed here are never touched. Usually you just
-						pick the room &mdash; its lights and sensors are found automatically, and the preview shows what was found.
+						Rooms not listed here are never touched. Lights and sensors are found automatically from Home
+						Assistant's areas &mdash; open a room to see what was found.
 					</p>
 				</header>
 
-				@foreach (AreaConfig area in _config.Areas)
+				<div class="panel-actions">
+					<button type="button" @onclick="AddArea">Add a room</button>
+					<button type="button" @onclick="OpenSetupForEveryRoom" disabled="@(!CanSetUpAgain)">Set up rooms again</button>
+				</div>
+
+				@if (!HomeAssistantIsAnswering)
 				{
-					AreaConfig current = area;
-					<AreaEditor @key="current"
-								Area="@current"
-								Defaults="@_config.Defaults"
-								Global="@_config.Global"
-								Catalog="@Catalog"
-								Areas="@_areas"
-								Lights="@_lights"
-								MotionSensors="@_motionSensors"
-								LuxSensors="@_luxSensors"
-								Blockers="@_blockers"
-								SunEntities="@_sunEntities"
-								Changed="@Revalidate"
-								Removed="@(() => RemoveArea(current))" />
+					<p class="hint">
+						Setting rooms up again needs Home Assistant &mdash; each room is rebuilt from what the registry
+						says right now.
+					</p>
+				}
+
+				@if (_setupNote is { Length: > 0 } setupNote)
+				{
+					<div class="notice ok">@setupNote</div>
+				}
+
+				@if (_setupScope is { } scope)
+				{
+					<SetupAgainPanel Config="@_config"
+									 PreTicked="@scope"
+									 PlanFor="@PlanSetup"
+									 NameOf="@AreaName"
+									 Confirmed="@ApplySetup"
+									 Cancelled="@CloseSetup" />
+				}
+
+				@* Floors come from the registry through the shared grouping helper, so this list and the dashboard's
+				   grid can never disagree about which room is upstairs. A house with no floors gets one unnamed
+				   group and therefore no headers at all — exactly the flat list it had before floors existed. *@
+				@foreach (FloorGroup<AreaConfig> group in _areaGroups)
+				{
+					FloorGroup<AreaConfig> floor = group;
+
+					@if (AreaView.ShowsHeader(_areaGroups.Count, floor.Floor))
+					{
+						<div class="floor-head">
+							<span class="floor-name">@AreaView.FloorTitle(floor.Floor)</span>
+							<button type="button" class="floor-bulk" @onclick="() => SwitchFloor(floor)">@FloorAction(floor)</button>
+						</div>
+					}
+
+					@foreach (AreaConfig area in floor.Items)
+					{
+						AreaConfig current = area;
+						<AreaEditor @key="current"
+									Area="@current"
+									Defaults="@_config.Defaults"
+									Global="@_config.Global"
+									Catalog="@Catalog"
+									Areas="@_areas"
+									Lights="@_lights"
+									MotionSensors="@_motionSensors"
+									LuxSensors="@_luxSensors"
+									Blockers="@_blockers"
+									SunEntities="@_sunEntities"
+									LiveState="@LiveStateOf(current)"
+									Changed="@Revalidate"
+									SetUpAgainRequested="@(() => OpenSetupForRoom(current))"
+									Removed="@(() => RemoveArea(current))" />
+					}
 				}
 
 				@if (_config.Areas.Count == 0)
@@ -211,20 +259,387 @@ else
 					<div class="empty">No rooms yet. Add one to get started.</div>
 				}
 
-				<div class="panel-actions">
-					<button type="button" @onclick="AddArea">Add an area</button>
-				</div>
+				@* After the room list, not before: the rooms are what people come here for, and the shared settings
+				   are reference material they consult once. *@
+				<GroupFold Title="All rooms"
+						   Description="Settings every room starts with. A room's own settings win.">
+					<div class="setting-box">
+						<div class="setting-box-title">Movement &amp; timing</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Lights stay on for
+									<InfoPopover Label="Lights stay on for">
+										After the last movement, how long the lights stay on before the warning dim. Longer for
+										rooms where people sit still (reading, TV), shorter for hallways.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control"><input class="cell num" type="number" min="1" @bind="_config.Defaults.VacancyTimeoutSeconds" /> <span class="unit">s</span></div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Warning dim lasts
+									<InfoPopover Label="Warning dim lasts">
+										Before going out, lights dim for this long. Any movement brings them straight back.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.PreOffSeconds" /> <span class="unit">s</span></div>
+							<div class="field-help">Must be shorter than the time the lights stay on.</div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Warning dim level
+									<InfoPopover Label="Warning dim level">
+										How deep the warning dim is. 0.5 means half the current brightness.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control"><input class="cell num" type="number" step="0.05" min="0" max="1" @bind="_config.Defaults.PreOffBrightnessFactor" /></div>
+							<div class="field-help">A fraction of the current brightness, between 0 and 1.</div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Hand changes hold for
+									<InfoPopover Label="Hand changes hold for">
+										When someone adjusts a light by hand, their choice is left alone for this long. Then
+										automatic control resumes.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.OverrideDurationMinutes" /> <span class="unit">min</span></div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">After a manual off, wait
+									<InfoPopover Label="After a manual off, wait">
+										After someone turns the lights off by hand, movement won't turn them back on until the
+										room has been empty this long.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.VacancyResetMinutes" /> <span class="unit">min</span></div>
+						</div>
+					</div>
+
+					<div class="setting-box">
+						<div class="setting-box-title">Darkness</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">How a room decides it's dark
+									<InfoPopover Label="How a room decides it's dark">
+										What decides the room is dark enough to need light. A lux sensor measures the room; the
+										sun option estimates from the sun's height. "Either" lights when either says dark.
+										"Always" is for windowless rooms.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control">
+								<select class="cell wide" @bind="_config.Defaults.Darkness">
+									<option value="@DarknessSource.Lux">Lux sensor (falls back to the outdoor sensor, then the sun)</option>
+									<option value="@DarknessSource.Sun">Sun height</option>
+									<option value="@DarknessSource.Either">Either &mdash; dark when either says so</option>
+									<option value="@DarknessSource.Always">Always &mdash; no daylight check</option>
+								</select>
+							</div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Outdoor light sensor
+									<InfoPopover Label="Outdoor light sensor">
+										A house-wide outdoor light sensor. Any room without its own lux sensor uses this to decide
+										whether it is dark, instead of falling back to the sun’s height — which follows clouds, not
+										just the clock. A room with its own lux sensor keeps using that. Leave empty to use sun height.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control">
+								<EntityPicker Value="@_config.Global.OutdoorLuxSensor"
+											  ValueChanged="@(value => SetOutdoorLux(value))"
+											  Options="@_luxSensors"
+											  NoneLabel="(none — rooms without their own lux use sun height)"
+											  EmptyNote="@EmptyNote("No illuminance sensors found — type an id.")"
+											  Placeholder="sensor.ute_lux" />
+							</div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Dark below
+									<InfoPopover Label="Dark below">
+										At or below this many lux the room counts as dark. The second box is the extra light
+										needed to count as bright again (hysteresis) — it stops the verdict flickering around
+										the threshold.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control">
+								<input class="cell num" type="number" min="0" @bind="_config.Defaults.LuxThreshold" /> <span class="unit">lx</span>
+								<span class="hint">bright again above</span>
+								<input class="cell num" type="number" min="0" @bind="_config.Defaults.LuxHysteresis" /> <span class="unit">lx</span>
+							</div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Dark when the sun is below
+									<InfoPopover Label="Dark when the sun is below">
+										The room counts as dark when the sun is below this height. Raise it to light earlier in
+										the evening; lower it to wait for real dusk.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control">
+								<input class="cell num" type="number" step="0.5" min="-90" max="90" @bind="_config.Defaults.SunElevationThreshold" /> <span class="unit">°</span>
+							</div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Fades
+									<InfoPopover Label="Fades">
+										How long a light takes to fade to a new level. Slow at night (eyes are dark-adapted),
+										quick by day.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control">
+								<span class="hint">day</span>
+								<input class="cell num" type="number" step="0.5" min="0" @bind="_config.Defaults.DayTransitionSeconds" /> <span class="unit">s</span>
+								<span class="hint">night</span>
+								<input class="cell num" type="number" step="0.5" min="0" @bind="_config.Defaults.NightTransitionSeconds" /> <span class="unit">s</span>
+							</div>
+						</div>
+
+						<details class="advanced">
+							<summary>Advanced</summary>
+							<div class="field">
+								<div class="field-head">
+									<label class="field-label">Sun entity
+										<InfoPopover Label="Sun entity">
+											The Home Assistant entity that tracks the sun. There's normally exactly one (sun.sun) —
+											no reason to change this.
+										</InfoPopover>
+									</label>
+								</div>
+								<div class="field-control">
+									<EntityPicker Value="@_config.Defaults.SunEntity"
+												  ValueChanged="@(value => SetDefaultSunEntity(value))"
+												  Options="@_sunEntities"
+												  NoneLabel="(none — the engine needs one)"
+												  EmptyNote="@EmptyNote("No sun entity found — type an id (normally sun.sun).")"
+												  Placeholder="sun.sun" />
+								</div>
+							</div>
+						</details>
+					</div>
+
+					<div class="setting-box">
+						<div class="setting-box-title">Room behaviour</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Respects sleep mode
+									<InfoPopover Label="Respects sleep mode">
+										While the house sleeps, this room is held to night levels — a 03:00 glass of water gets a
+										dim light, not a bright one. For bedrooms and the rooms on the way to them.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control checks">
+								<label><input type="checkbox" @bind="_config.Defaults.RespectSleepMode" /> hold sleeping-house lights to the sleep period's limits</label>
+							</div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Sleep blocks auto-on
+									<InfoPopover Label="Sleep blocks auto-on">
+										While the house sleeps, this room never turns on by itself. For the bedroom itself. The
+										wall switch still works.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control checks">
+								<label><input type="checkbox" @bind="_config.Defaults.SleepBlocksAutoOn" /> never auto-on while the house sleeps</label>
+							</div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Stays on when everyone leaves
+									<InfoPopover Label="Stays on when everyone leaves">
+										When the last person leaves, lights are turned off everywhere. Rooms with this set are
+										left alone — porch and security lights are wanted precisely when nobody's home.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control checks">
+								<label><input type="checkbox" @bind="_config.Defaults.SkipAwaySweep" /> leave these rooms alone when everyone leaves</label>
+							</div>
+						</div>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Welcome home
+									<InfoPopover Label="Welcome home">
+										When the first person comes home to a dark house, this room lights up to meet them. For
+										the hallway.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control checks">
+								<label><input type="checkbox" @bind="_config.Defaults.WelcomeHome" /> light up when the first person arrives in the dark</label>
+							</div>
+						</div>
+					</div>
+				</GroupFold>
+
+				@* The labels and device classes are about rooms, so they live in Areas — folded, because they are
+				   read once and then forgotten, not because they are frightening. *@
+				<GroupFold Title="Finding lights &amp; sensors"
+						   Description="Which lights this app may manage, and what counts as a sensor.">
+					<div class="field">
+						<div class="field-head">
+							<label class="field-label">Only manage lights with (label)
+								<InfoPopover Label="Only manage lights with (label)">
+									When set, only lights carrying this label are managed. Leave empty to manage every light
+									that's found. Lights you list by hand in a room are managed either way.
+								</InfoPopover>
+							</label>
+						</div>
+						<div class="field-control">
+							<LabelPicker Value="@_config.Global.IncludeLabel"
+										 ValueChanged="@SetIncludeLabel"
+										 Options="@_labelOptions"
+										 NoneLabel="(none — manage every light that's found)"
+										 UnknownNote="No light carries this label yet, so no room will resolve. Label the lights in Home Assistant, or clear this."
+										 Placeholder="adaptive" />
+						</div>
+						<div class="field-help">Empty is the usual answer: every light discovery finds is managed.</div>
+					</div>
+
+					<div class="field">
+						<div class="field-head">
+							<label class="field-label">Never touch (label)
+								<InfoPopover Label="Never touch (label)">
+									Anything in Home Assistant carrying this label is invisible to this app — it is never
+									discovered, never commanded, never counted.
+								</InfoPopover>
+							</label>
+						</div>
+						<div class="field-control">
+							<LabelPicker Value="@_config.Global.ExcludeLabel"
+										 ValueChanged="@SetExcludeLabel"
+										 Options="@_labelOptions"
+										 NoneLabel="(none — nothing is excluded)"
+										 UnknownNote="Nothing carries this label, so nothing is excluded — that's fine."
+										 Placeholder="adaptive-exclude" />
+						</div>
+						<div class="field-help">This wins over every other setting, including the include label above.</div>
+					</div>
+
+					<div class="field">
+						<div class="field-head">
+							<label class="field-label">Counts as motion (label)
+								<InfoPopover Label="Counts as motion (label)">
+									A sensor with this label is treated as a motion sensor whatever its type. For the odd
+									sensor Home Assistant classifies as something else.
+								</InfoPopover>
+							</label>
+						</div>
+						<div class="field-control">
+							<LabelPicker Value="@_config.Global.MotionLabel"
+										 ValueChanged="@SetMotionLabel"
+										 Options="@_labelOptions"
+										 NoneLabel="(none — device classes decide)"
+										 UnknownNote="Nothing carries this label yet, so only the device classes below decide."
+										 Placeholder="adaptive-motion" />
+						</div>
+					</div>
+
+					<details class="advanced">
+						<summary>Advanced &mdash; what counts as a sensor</summary>
+
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">What counts as a motion sensor
+									<InfoPopover Label="What counts as a motion sensor">
+										Which kinds of binary sensor count as movement. The built-in set (motion, occupancy,
+										presence) suits nearly every house. Ticking anything replaces the whole set — include the
+										built-ins you still want.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control checks">
+								@foreach (string deviceClass in _motionDeviceClassChoices)
+								{
+									string current = deviceClass;
+									<label>
+										<input type="checkbox"
+											   checked="@_config.Global.MotionDeviceClasses.Contains(current, StringComparer.OrdinalIgnoreCase)"
+											   @onchange="args => ToggleMotionDeviceClass(current, args.Value is true)" />
+										@current
+									</label>
+								}
+							</div>
+							<div class="field-help">
+								Ticking nothing means the built-in set
+								(<code>@string.Join(", ", GlobalConfig.DefaultMotionDeviceClasses)</code>), which is usually right.
+								Ticking anything <strong>replaces</strong> that set rather than adding to it, so tick every class
+								you want &mdash; including the built-in ones you still need. Currently in effect:
+								<code>@string.Join(", ", _config.Global.EffectiveMotionDeviceClasses)</code>.
+							</div>
+						</div>
+
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">What counts as a light-level sensor
+									<InfoPopover Label="What counts as a light-level sensor">
+										What counts as a light-level sensor. "illuminance" is nearly always right.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control">
+								<select class="cell wide" @bind="_config.Global.IlluminanceDeviceClass">
+									@foreach (string deviceClass in _sensorDeviceClasses)
+									{
+										<option value="@deviceClass">@deviceClass</option>
+									}
+									@if (!_sensorDeviceClasses.Contains(_config.Global.IlluminanceDeviceClass, StringComparer.OrdinalIgnoreCase))
+									{
+										<option value="@_config.Global.IlluminanceDeviceClass">@_config.Global.IlluminanceDeviceClass — no sensor here reports this</option>
+									}
+								</select>
+							</div>
+							<div class="field-help">What qualifies a sensor as a room's lux source during discovery.</div>
+						</div>
+					</details>
+				</GroupFold>
 			}
-			else if (_section == Section.Periods)
+			else if (_section == Section.Schedule)
 			{
 				<header class="section-head">
-					<h2>Periods</h2>
+					<h2>Schedule</h2>
 					<p class="lede">
 						How bright and how warm the lights are through the day. One schedule for the whole house.
 					</p>
 				</header>
 
 				<DaylightChart Periods="@_config.Periods" Location="@_homeLocation" />
+
+				@* Blending belongs to the schedule, not to a timing grab-bag: it is entirely about what happens at
+				   the boundaries the chart above draws. *@
+				<div class="panel">
+					<div class="field">
+						<div class="field-head">
+							<label class="field-label">Blend between periods
+								<InfoPopover Label="Blend between periods">
+									With blending on, lights drift to the next period's level over this many minutes instead
+									of stepping at the boundary.
+								</InfoPopover>
+							</label>
+						</div>
+						<div class="field-control checks">
+							<label><input type="checkbox" @bind="_config.Global.SmoothTransitions" /> lights drift to the next period's level instead of stepping</label>
+							<span class="hint">blend over</span>
+							<input class="cell num" type="number" min="0" @bind="_config.Global.BlendMinutes" /> <span class="unit">min</span>
+						</div>
+					</div>
+				</div>
 
 				<PeriodsEditor Periods="@_config.Periods"
 							   Changed="@Revalidate"
@@ -297,293 +712,41 @@ else
 									  Changed="@OnHouseModeOptionsChanged" />
 				}
 			}
-			else if (_section == Section.Defaults)
-			{
-				<header class="section-head">
-					<h2>Defaults</h2>
-					<p class="lede">Settings every room starts with. A room can override any of them.</p>
-				</header>
-
-				<GroupFold Title="Presence &amp; timeouts"
-						   Description="How a room turns on, how long it lingers after the last movement, and the warning before dark.">
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Vacancy timeout
-								<InfoPopover Label="Vacancy timeout">
-									How long the lights stay on after the last movement. Longer for rooms where people sit
-									still (reading, TV), shorter for hallways.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control"><input class="cell num" type="number" min="1" @bind="_config.Defaults.VacancyTimeoutSeconds" /> <span class="unit">s</span></div>
-						<div class="field-help">Motion-free time after which an active area dims to its warning level.</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Pre-off warning
-								<InfoPopover Label="Pre-off warning">
-									Before going out, the lights dim for this long as a warning. Any movement brings them
-									straight back.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.PreOffSeconds" /> <span class="unit">s</span></div>
-						<div class="field-help">The grace in which motion still cancels darkness. Must be shorter than the vacancy timeout.</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Pre-off brightness
-								<InfoPopover Label="Pre-off brightness">
-									How deep the warning dim is. 0.5 means half the current brightness.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control"><input class="cell num" type="number" step="0.05" min="0" max="1" @bind="_config.Defaults.PreOffBrightnessFactor" /></div>
-						<div class="field-help">Fraction of the current brightness used for the warning dim, between 0 and 1.</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Override holds for
-								<InfoPopover Label="Override holds for">
-									When someone adjusts a light by hand, their choice is left alone for this long. Then
-									automatic control resumes.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.OverrideDurationMinutes" /> <span class="unit">min</span></div>
-						<div class="field-help">How long a manual change holds the area before automatic control resumes.</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Vacancy reset
-								<InfoPopover Label="Vacancy reset">
-									After someone turns the lights off by hand, motion won't turn them back on until the room
-									has been empty this long.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.VacancyResetMinutes" /> <span class="unit">min</span></div>
-						<div class="field-help">Motion-free time after a manual turn-off before motion may light the room again.</div>
-					</div>
-				</GroupFold>
-
-				<GroupFold Title="Darkness"
-						   Description="What convinces the engine a room needs light at all.">
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Darkness source
-								<InfoPopover Label="Darkness source">
-									What decides the room is dark enough to need light. A lux sensor measures the room; the
-									sun option estimates from the sun's height. "Either" lights when either says dark.
-									"Always" is for windowless rooms.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<select class="cell wide" @bind="_config.Defaults.Darkness">
-								<option value="@DarknessSource.Lux">Lux sensor (falls back to the outdoor sensor, then the sun)</option>
-								<option value="@DarknessSource.Sun">Sun height</option>
-								<option value="@DarknessSource.Either">Either — dark when either says so</option>
-								<option value="@DarknessSource.Always">Always — no daylight check</option>
-							</select>
-						</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Outdoor lux sensor
-								<InfoPopover Label="Outdoor lux sensor">
-									A house-wide outdoor light sensor. Any room without its own lux sensor uses this to decide
-									whether it is dark, instead of falling back to the sun’s height — which follows clouds, not
-									just the clock. A room with its own lux sensor keeps using that. Leave empty to use sun height.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<EntityPicker Value="@_config.Global.OutdoorLuxSensor"
-										  ValueChanged="@(value => SetOutdoorLux(value))"
-										  Options="@_luxSensors"
-										  NoneLabel="(none — rooms without their own lux use sun height)"
-										  EmptyNote="@EmptyNote("No illuminance sensors found — type an id.")"
-										  Placeholder="sensor.ute_lux" />
-						</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Lux threshold
-								<InfoPopover Label="Lux threshold">
-									At or below this many lux the room counts as dark. Hysteresis is the extra light needed
-									to count as bright again — it stops flickering around the threshold.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<input class="cell num" type="number" min="0" @bind="_config.Defaults.LuxThreshold" /> <span class="unit">lx</span>
-							<span class="hint">hysteresis</span>
-							<input class="cell num" type="number" min="0" @bind="_config.Defaults.LuxHysteresis" /> <span class="unit">lx</span>
-						</div>
-						<div class="field-help">Hysteresis is the extra lux required to count as bright again, so the verdict cannot flap.</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Sun elevation
-								<InfoPopover Label="Sun elevation">
-									The room counts as dark when the sun is below this height. Raise it to light earlier in
-									the evening; lower it to wait for real dusk.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<input class="cell num" type="number" step="0.5" min="-90" max="90" @bind="_config.Defaults.SunElevationThreshold" /> <span class="unit">°</span>
-						</div>
-						<div class="field-help">Sun height below which the area counts as dark.</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Sun entity
-								<InfoPopover Label="Sun entity">
-									The Home Assistant entity that tracks the sun. There's normally exactly one (sun.sun) —
-									no reason to change this.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<EntityPicker Value="@_config.Defaults.SunEntity"
-										  ValueChanged="@(value => SetDefaultSunEntity(value))"
-										  Options="@_sunEntities"
-										  NoneLabel="(none — the engine needs one)"
-										  EmptyNote="@EmptyNote("No sun entity found — type an id (normally sun.sun).")"
-										  Placeholder="sun.sun" />
-						</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Fades
-								<InfoPopover Label="Fades">
-									How long a light takes to fade to a new level. Slow at night (eyes are dark-adapted),
-									quick by day.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<span class="hint">day</span>
-							<input class="cell num" type="number" step="0.5" min="0" @bind="_config.Defaults.DayTransitionSeconds" /> <span class="unit">s</span>
-							<span class="hint">night</span>
-							<input class="cell num" type="number" step="0.5" min="0" @bind="_config.Defaults.NightTransitionSeconds" /> <span class="unit">s</span>
-						</div>
-						<div class="field-help">Long at night because eyes are dark-adapted; snappy by day.</div>
-					</div>
-				</GroupFold>
-
-				<GroupFold Title="Behaviour"
-						   Description="What every area does by default. Each area can override any of these individually.">
-					<div class="setting-box">
-						<div class="setting-box-title">Sleep</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Respects sleep mode
-								<InfoPopover Label="Respects sleep mode">
-									While the house sleeps, this room is held to night levels — a 03:00 glass of water gets a
-									dim light, not a bright one. For bedrooms and the rooms on the way to them.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Defaults.RespectSleepMode" /> hold sleeping-house lights to the sleep period's limits</label>
-						</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Sleep blocks auto-on
-								<InfoPopover Label="Sleep blocks auto-on">
-									While the house sleeps, this room never turns on by itself. For the bedroom itself. The
-									wall switch still works.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Defaults.SleepBlocksAutoOn" /> never auto-on while the house sleeps</label>
-						</div>
-					</div>
-					</div>
-
-					<div class="setting-box">
-						<div class="setting-box-title">Away</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Skips the away sweep
-								<InfoPopover Label="Skips the away sweep">
-									When the last person leaves, lights are turned off everywhere. Rooms with this set are
-									left alone — porch and security lights should stay on precisely when nobody's home.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Defaults.SkipAwaySweep" /> leave this area alone when everyone leaves</label>
-						</div>
-					</div>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Welcome home
-								<InfoPopover Label="Welcome home">
-									When the first person comes home to a dark house, this room lights up to meet them. For
-									the hallway.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Defaults.WelcomeHome" /> light up when the first person arrives in the dark</label>
-						</div>
-					</div>
-					</div>
-
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Enabled
-								<InfoPopover Label="Enabled">
-									A room that isn't enabled is still watched and still shows on the dashboard — its lights
-									are just never changed. Useful for trying a room out.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Defaults.Enabled" /> the engine may command these areas</label>
-						</div>
-					</div>
-				</GroupFold>
-			}
 			else
 			{
+				@* The installation itself: what it is called, whose presence drives it, the one switch that stops it,
+				   and — behind one fold at the bottom, never in a section of its own — the internals. "Advanced" as a
+				   place answered "how confident do I need to be?"; it never answered "where do I look?". *@
 				<header class="section-head">
-					<h2>Advanced settings</h2>
+					<h2>House</h2>
 					<p class="lede">
-						House-wide settings most homes set once and forget.
+						What this house is called, who lives in it, and the one switch that pauses everything.
 					</p>
 				</header>
 
-				@* Grouped so each fold answers one question: who this house is, the one switch that stops everything,
-				   how the engine tells its own actions from a human's, how discovery finds lights and sensors, and how
-				   close is close enough to leave a light alone. House modes used to sit here too; they are their own
-				   section now. *@
 				<GroupFold Title="Identity"
-						   Description="What this house is called, and whose presence drives Home and Away.">
+						   Description="What this house is called in logs and notifications.">
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Name
-								<InfoPopover Label="Name">
-									Just a label for logs and notifications, so two houses can be told apart.
+							<label class="field-label">House name
+								<InfoPopover Label="House name">
+									A label for logs and notifications, so two houses can be told apart.
 								</InfoPopover>
 							</label>
 						</div>
 						<div class="field-control"><input class="cell wide" @bind="_config.ConfigName" placeholder="Adaptive lighting" /></div>
-						<div class="field-help">A label for logs and notifications only.</div>
 					</div>
+				</GroupFold>
 
+				<GroupFold Title="People"
+						   Description="Whose presence decides Home and Away, and how long an empty house stays empty.">
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">People watched
-								<InfoPopover Label="People watched">
-									Whose presence decides Home and Away. Empty means everyone Home Assistant knows — usually
-									right. List people only to leave someone out (a car tracker, a guest entity).
+							<label class="field-label">Who lives here
+								<InfoPopover Label="Who lives here">
+									Whose presence decides Home and Away. Empty means everyone Home Assistant knows, including
+									people added later — usually right. List people only to leave someone out (a car tracker,
+									a guest entity).
 								</InfoPopover>
 							</label>
 						</div>
@@ -593,12 +756,25 @@ else
 											  Options="@_persons"
 											  NameResolver="@Name"
 											  KnownResolver="@Catalog.Knows"
-											  EmptyLabel="Empty — everyone is watched automatically. Usually right."
+											  EmptyLabel="Empty — everyone Home Assistant knows, including people added later."
 											  AddLabel="Watch someone…"
 											  EmptyNote="@EmptyNote("No people found in Home Assistant — type an id.")"
 											  Placeholder="person.example" />
 						</div>
-						<div class="field-help">Presence drives Home / Away. An empty list means "discover every person entity".</div>
+					</div>
+
+					<div class="field">
+						<div class="field-head">
+							<label class="field-label">Count the house as empty after
+								<InfoPopover Label="Count the house as empty after">
+									How long everyone must be gone before rooms react to an empty house. A short trip to the bin
+									should not sweep the lights off.
+								</InfoPopover>
+							</label>
+						</div>
+						<div class="field-control">
+							<input class="cell num" type="number" min="0" @bind="_config.Global.AwayDebounceMinutes" /> <span class="unit">min</span>
+						</div>
 					</div>
 				</GroupFold>
 
@@ -661,8 +837,8 @@ else
 					</div>
 				</GroupFold>
 
-				<GroupFold Title="Timing &amp; override detection"
-						   Description="How the engine tells its own actions from a human's, and the clocks behind everything.">
+				<GroupFold Title="Fine tuning"
+						   Description="The internals: clocks, how the engine tells its own changes from a person's, and how close is close enough.">
 					@* -----------------------------------------------------------------------------------------
 					   NetDaemonUserId is write-only here, on purpose. It is rendered as set/not-set and never as
 					   its value, in either direction — the input starts empty and only overwrites what is stored
@@ -694,55 +870,42 @@ else
 						<div class="field-control">
 							<input class="cell wide" type="password" autocomplete="off" placeholder="type a new value to replace it" @bind="_userIdInput" />
 						</div>
-						<div class="field-help">
-							The Home Assistant user id owning this host's token. Optional.
-						</div>
 					</div>
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Timing
-								<InfoPopover Label="Timing">
-									Away debounce: how long everyone must be gone before the house counts as away. Circadian
-									tick: how often each room re-checks (once a minute is plenty). Self-echo window: how long
-									the app's own commands are recognised as its own rather than as a person's.
+							<label class="field-label">Re-check the rooms every
+								<InfoPopover Label="Re-check the rooms every">
+									How often each room re-checks the time of day and the light outside. Once a minute is plenty.
 								</InfoPopover>
 							</label>
 						</div>
 						<div class="field-control">
-							<span class="hint">away debounce</span>
-							<input class="cell num" type="number" min="0" @bind="_config.Global.AwayDebounceMinutes" /> <span class="unit">min</span>
-							<span class="hint">circadian tick</span>
 							<input class="cell num" type="number" min="1" @bind="_config.Global.CircadianTickSeconds" /> <span class="unit">s</span>
-							<span class="hint">self-echo window</span>
-							<input class="cell num" type="number" min="0" @bind="_config.Global.SelfEchoWindowSeconds" /> <span class="unit">s</span>
-						</div>
-						<div class="field-help">
-							The self-echo window is how long after a command a state change on the same light is still read as
-							our own echo rather than as a human at a switch.
 						</div>
 					</div>
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Transitions
-								<InfoPopover Label="Transitions">
-									With blending on, lights drift to the next period's level over this many minutes instead
-									of stepping at the boundary.
+							<label class="field-label">Recognise own changes for
+								<InfoPopover Label="Recognise own changes for">
+									How long the app's own commands are recognised as its own rather than as a person at a switch.
 								</InfoPopover>
 							</label>
 						</div>
-						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Global.SmoothTransitions" /> blend targets across period boundaries</label>
-							<span class="hint">over</span>
-							<input class="cell num" type="number" min="0" @bind="_config.Global.BlendMinutes" /> <span class="unit">min</span>
+						<div class="field-control">
+							<input class="cell num" type="number" min="0" @bind="_config.Global.SelfEchoWindowSeconds" /> <span class="unit">s</span>
+						</div>
+						<div class="field-help">
+							A state change on a light within this window of a command is read as our own echo rather than as a
+							human at a switch.
 						</div>
 					</div>
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Other automations
-								<InfoPopover Label="Other automations">
+							<label class="field-label">Other automations count as manual
+								<InfoPopover Label="Other automations count as manual">
 									When another automation changes a light here, treat it like a manual change and back off.
 									Untick only if this app should always win.
 								</InfoPopover>
@@ -752,98 +915,11 @@ else
 							<label><input type="checkbox" @bind="_config.Global.TreatAutomationsAsManual" /> a change from another automation counts as a manual override</label>
 						</div>
 					</div>
-				</GroupFold>
-
-				<GroupFold Title="Discovery conventions"
-						   Description="How areas find their lights and sensors from the Home Assistant registry.">
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Labels
-								<InfoPopover Label="Labels">
-									Two Home Assistant labels with special meaning. The exclude label: never touch this
-									entity. The motion label: treat this as a motion sensor whatever its type.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<span class="hint">exclude</span>
-							<input type="text" class="cell" list="ha-labels" @bind="_config.Global.ExcludeLabel" />
-							<span class="hint">motion</span>
-							<input type="text" class="cell" list="ha-labels" @bind="_config.Global.MotionLabel" />
-							<datalist id="ha-labels">
-								@foreach (string label in _labels)
-								{
-									<option value="@label"></option>
-								}
-							</datalist>
-						</div>
-						<div class="field-help">
-							Label an entity in Home Assistant with the exclude label and the engine will never touch it; with
-							the motion label and discovery treats it as a motion source whatever its device class.
-						</div>
-					</div>
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Motion device classes
-								<InfoPopover Label="Motion device classes">
-									Which kinds of binary sensor count as movement. The built-in set (motion, occupancy,
-									presence) suits nearly every house. Ticking anything replaces the whole set — include the
-									built-ins you still want.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control checks">
-							@foreach (string deviceClass in _motionDeviceClassChoices)
-							{
-								string current = deviceClass;
-								<label>
-									<input type="checkbox"
-										   checked="@_config.Global.MotionDeviceClasses.Contains(current, StringComparer.OrdinalIgnoreCase)"
-										   @onchange="args => ToggleMotionDeviceClass(current, args.Value is true)" />
-									@current
-								</label>
-							}
-						</div>
-						<div class="field-help">
-							Ticking nothing means the built-in set
-							(<code>@string.Join(", ", GlobalConfig.DefaultMotionDeviceClasses)</code>), which is usually right.
-							Ticking anything <strong>replaces</strong> that set rather than adding to it, so tick every class
-							you want &mdash; including the built-in ones you still need. Currently in effect:
-							<code>@string.Join(", ", _config.Global.EffectiveMotionDeviceClasses)</code>.
-						</div>
-					</div>
-
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Illuminance device class
-								<InfoPopover Label="Illuminance device class">
-									What counts as a light-level sensor. "illuminance" is nearly always right.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<select class="cell wide" @bind="_config.Global.IlluminanceDeviceClass">
-								@foreach (string deviceClass in _sensorDeviceClasses)
-								{
-									<option value="@deviceClass">@deviceClass</option>
-								}
-								@if (!_sensorDeviceClasses.Contains(_config.Global.IlluminanceDeviceClass, StringComparer.OrdinalIgnoreCase))
-								{
-									<option value="@_config.Global.IlluminanceDeviceClass">@_config.Global.IlluminanceDeviceClass — no sensor here reports this</option>
-								}
-							</select>
-						</div>
-						<div class="field-help">What qualifies a sensor as an area's lux source during discovery.</div>
-					</div>
-				</GroupFold>
-
-				<GroupFold Title="Command tolerances"
-						   Description="When a light is close enough to its target to be left alone.">
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Tolerances
-								<InfoPopover Label="Tolerances">
+							<label class="field-label">Close enough
+								<InfoPopover Label="Close enough">
 									A light already this close to its target is left alone. Without a margin, lights would be
 									endlessly re-corrected over invisible differences.
 								</InfoPopover>
@@ -855,10 +931,6 @@ else
 							<span class="hint">colour</span>
 							<input class="cell num" type="number" step="10" min="0" @bind="_config.Global.ColorTempToleranceKelvin" /> <span class="unit">K</span>
 						</div>
-						<div class="field-help">
-							A light already within these of the target is left alone, rather than told to fade to where it
-							already is on every tick.
-						</div>
 					</div>
 				</GroupFold>
 			}
@@ -867,14 +939,21 @@ else
 }
 
 @code {
-	/// <summary>The page's rooms. One is shown at a time; the rail switches.</summary>
+	/// <summary>
+	///     The page's four sections. One is shown at a time; the rail switches.
+	/// </summary>
+	/// <remarks>
+	///     Four, not five: a setting now lives under the noun it changes, so there is no <c>Defaults</c> beside
+	///     <c>Areas</c> (the all-rooms settings <i>are</i> area settings, and are a group inside it) and no
+	///     <c>Advanced</c> at all (its contents went to the section whose noun they change, each behind that
+	///     section's own fold). "Advanced" answered "how confident must I be?"; it never answered "where do I look?".
+	/// </remarks>
 	private enum Section
 	{
 		Areas,
-		Periods,
+		Schedule,
 		HouseModes,
-		Defaults,
-		Advanced
+		House
 	}
 
 	private AdaptiveLightingConfig _config = new();
@@ -911,9 +990,24 @@ else
 	private IReadOnlyList<string> _houseModeOptionValues = [];
 	private string? _activeModeValue;
 	private (double Latitude, double Longitude)? _homeLocation;
-	private IReadOnlyList<string> _labels = [];
+	private IReadOnlyList<LabelOption> _labelOptions = [];
 	private IReadOnlyList<string> _sensorDeviceClasses = [];
 	private IReadOnlyList<string> _motionDeviceClassChoices = [];
+
+	// The room list, grouped by the floor each area sits on. Recomputed whenever the document changes rather than
+	// during render: grouping asks the registry for a floor per area, and Blazor re-renders this page on every
+	// keystroke in it.
+	private IReadOnlyList<FloorGroup<AreaConfig>> _areaGroups = [];
+
+	// What each room is doing right now, for the header edge colour, keyed by area id with a name fallback — the
+	// same join the snapshot cache itself uses. Read from the cache rather than subscribed to: this page is an
+	// editor, and a live re-render mid-edit buys a livelier edge at the cost of the thing being edited.
+	private IReadOnlyDictionary<string, AreaState> _liveStates = new Dictionary<string, AreaState>(StringComparer.Ordinal);
+
+	// The re-setup flow. Null means the panel is closed; otherwise these are the rooms it opens with ticked —
+	// every room from the section header, one from inside a room's editor.
+	private IReadOnlyCollection<string>? _setupScope;
+	private string? _setupNote;
 
 	/// <summary>
 	///     Whether Home Assistant is actually answering, as opposed to merely not throwing.
@@ -944,8 +1038,35 @@ else
 	{
 		Reload();
 
-		if (Enum.TryParse(SectionQuery, ignoreCase: true, out Section requested) && Enum.IsDefined(requested))
+		if (Resolve(SectionQuery) is { } requested)
 			_section = requested;
+	}
+
+	/// <summary>
+	///     The section a <c>?section=</c> value names, or <c>null</c> when it names none.
+	/// </summary>
+	/// <remarks>
+	///     The two sections that were renamed answer to their old names as well. A bookmark or a phone shortcut is
+	///     somebody's saved intent, and the restructure moved the contents rather than deleting them — landing on
+	///     Areas with no explanation would look like the link broke. <c>defaults</c> lands on Areas because that is
+	///     where the all-rooms settings went; <c>advanced</c> lands on House for the same reason, its remainder
+	///     having gone to the section whose noun it changes.
+	/// </remarks>
+	private static Section? Resolve(string? query)
+	{
+		if (string.IsNullOrWhiteSpace(query))
+			return null;
+
+		if (Enum.TryParse(query, ignoreCase: true, out Section requested) && Enum.IsDefined(requested))
+			return requested;
+
+		return query.Trim().ToLowerInvariant() switch
+		{
+			"periods" => Section.Schedule,
+			"defaults" => Section.Areas,
+			"advanced" => Section.House,
+			_ => null
+		};
 	}
 
 	private void Show(Section section) => _section = section;
@@ -956,6 +1077,8 @@ else
 	{
 		_result = null;
 		_userIdInput = null;
+		CloseSetup();
+		_setupNote = null;
 
 		try
 		{
@@ -989,7 +1112,7 @@ else
 		// Areas are labelled with what discovery resolves in each — lights, motion, lux — so the conventions
 		// discovery reads have to come from the document being edited rather than from a default.
 		_areas = Catalog.Areas(_config.Global);
-		_labels = Catalog.Labels();
+		_labelOptions = Catalog.LabelOptions();
 		_lights = Catalog.EntitiesInDomains("light");
 		_sunEntities = Catalog.EntitiesInDomains("sun");
 		_persons = Catalog.EntitiesInDomains("person", "device_tracker");
@@ -1025,7 +1148,140 @@ else
 		];
 	}
 
-	private void Revalidate() => _liveValidation = Engine.Validate(_config);
+	/// <summary>
+	///     Re-reads the document's own verdict on itself, and with it the two things the room list derives from
+	///     outside the document: which floor each room is on, and what each room is doing.
+	/// </summary>
+	/// <remarks>
+	///     Every edit already routes through here, so hanging the derived views off it means they can never be one
+	///     edit behind what is on screen — and it costs a dictionary of at most a few dozen rooms.
+	/// </remarks>
+	private void Revalidate()
+	{
+		_liveValidation = Engine.Validate(_config);
+		RegroupAreas();
+		RefreshLiveStates();
+	}
+
+	/// <summary>
+	///     Groups the rooms by floor through the helper the dashboard shares, so the two pages can never disagree.
+	/// </summary>
+	/// <remarks>
+	///     A registry that has not connected throws rather than answering, and a settings page that refused to
+	///     render its rooms because Home Assistant was still starting would be useless exactly when somebody is
+	///     trying to fix that. One unnamed group is the floorless degradation the design already specifies, so the
+	///     failure mode is simply today's flat list.
+	/// </remarks>
+	private void RegroupAreas()
+	{
+		try
+		{
+			_areaGroups = FloorGrouping.Group(_config.Areas, area => area.AreaId, Catalog.AreaRegistry);
+		}
+		catch (InvalidOperationException)
+		{
+			_areaGroups = _config.Areas.Count == 0 ? [] : [new FloorGroup<AreaConfig>(null, [.. _config.Areas])];
+		}
+	}
+
+	/// <summary>The live state of each room the cache has heard from, keyed by area id and falling back to its name.</summary>
+	private void RefreshLiveStates()
+	{
+		Dictionary<string, AreaState> states = new(StringComparer.Ordinal);
+
+		foreach (AreaSnapshot snapshot in Cache.Snapshots)
+			states[snapshot.AreaId is { Length: > 0 } areaId ? areaId : snapshot.AreaName] = snapshot.State;
+
+		_liveStates = states;
+	}
+
+	/// <summary>
+	///     What a room is doing right now, or <c>null</c> when nothing has been heard about it.
+	/// </summary>
+	/// <remarks>
+	///     By area id first, because ids do not change while a page is open and display names do. The name fallback
+	///     covers a room configured with explicit entities and no area id, and events from builds published before
+	///     snapshots carried an id.
+	/// </remarks>
+	private AreaState? LiveStateOf(AreaConfig area)
+	{
+		if (area.AreaId is { Length: > 0 } areaId && _liveStates.TryGetValue(areaId, out AreaState byId))
+			return byId;
+
+		return _liveStates.TryGetValue(area.DisplayName, out AreaState byName) ? byName : null;
+	}
+
+	/// <summary>What the floor's bulk action offers: switching a floor off once every room on it is already on.</summary>
+	private string FloorAction(FloorGroup<AreaConfig> floor) =>
+		AreaView.AllEnabled(floor.Items, _config.Defaults) ? "Switch off this floor" : "Switch on this floor";
+
+	/// <summary>
+	///     Switches every room on a floor, as an edit: explicit values written into the document, save bar armed,
+	///     nothing written to disk.
+	/// </summary>
+	private void SwitchFloor(FloorGroup<AreaConfig> floor)
+	{
+		AreaView.SwitchAll(floor.Items, !AreaView.AllEnabled(floor.Items, _config.Defaults));
+		Revalidate();
+	}
+
+	/// <summary>
+	///     Whether setting rooms up again can be offered: it rebuilds each room from the registry, so a registry
+	///     that is not answering means the button would produce an empty plan and a confusing dialog.
+	/// </summary>
+	private bool CanSetUpAgain => HomeAssistantIsAnswering && _setupScope is null;
+
+	private void OpenSetupForEveryRoom()
+	{
+		_setupNote = null;
+		_setupScope = [.. _config.Areas.Select(area => area.AreaId).OfType<string>().Where(areaId => areaId.Length > 0)];
+	}
+
+	private void OpenSetupForRoom(AreaConfig area)
+	{
+		_setupNote = null;
+		_setupScope = area.AreaId is { Length: > 0 } areaId ? [areaId] : [];
+	}
+
+	private void CloseSetup() => _setupScope = null;
+
+	/// <summary>Plans a setup run for the panel. Pure — nothing is changed until the plan is confirmed.</summary>
+	private SetupPlan PlanSetup(IReadOnlyCollection<string> scope) => Catalog.PlanSetup(_config, scope);
+
+	/// <summary>
+	///     Carries out a confirmed setup run.
+	/// </summary>
+	/// <remarks>
+	///     The mutation is the engine's own <see cref="AreaSetupService.Apply"/>, so a rebuild from this page and a
+	///     rebuild on first start are the same code. It touches the in-memory document only: the save bar is armed
+	///     exactly as any other edit arms it, <em>Discard changes</em> is still the undo, and the one write path
+	///     stays the one write path.
+	/// </remarks>
+	private void ApplySetup(SetupPlan plan)
+	{
+		AreaSetupService.Apply(_config, plan);
+		CloseSetup();
+
+		List<string> done = [];
+
+		if (plan.Rebuilds.Count > 0)
+			done.Add($"{Rooms(plan.Rebuilds.Count)} rebuilt");
+
+		if (plan.NewAreas.Count > 0)
+			done.Add($"{Rooms(plan.NewAreas.Count)} added, switched off");
+
+		_setupNote = done.Count == 0
+			? "Nothing changed."
+			: $"{string.Join(" · ", done)}. Nothing is written yet — press Save and apply, or Discard changes to undo.";
+
+		Revalidate();
+
+		static string Rooms(int count) => $"{count} {(count == 1 ? "room" : "rooms")}";
+	}
+
+	/// <summary>The name Home Assistant shows for an area id, for rooms the document does not have yet.</summary>
+	private string AreaName(string areaId) =>
+		_areas.FirstOrDefault(area => string.Equals(area.Id, areaId, StringComparison.Ordinal))?.Name ?? areaId;
 
 	private void Save()
 	{
@@ -1152,6 +1408,31 @@ else
 
 	private void SetOutdoorLux(string? value) =>
 		Set(() => _config.Global.OutdoorLuxSensor = string.IsNullOrWhiteSpace(value) ? null : value);
+
+	private void SetIncludeLabel(string? value) => SetLabel(() => _config.Global.IncludeLabel = value);
+
+	// Exclude and motion are non-nullable in the model — they ship with a default label — so "none" is written as
+	// an empty string rather than a null. Empty is what "no label" already meant to the resolver: no entity can
+	// carry a nameless label, so nothing matches, which is the whole meaning of switching the field off.
+	private void SetExcludeLabel(string? value) => SetLabel(() => _config.Global.ExcludeLabel = value ?? string.Empty);
+
+	private void SetMotionLabel(string? value) => SetLabel(() => _config.Global.MotionLabel = value ?? string.Empty);
+
+	/// <summary>
+	///     Writes a label field and rebuilds what depends on it.
+	/// </summary>
+	/// <remarks>
+	///     Discovery reads these labels, so an area's "2 lights, 1 motion, 1 lux" summary is only true for the
+	///     labels that were in effect when it was counted. The catalog's own discovery cache notices the change by
+	///     itself (its key includes the labels); the area list is a snapshot this page took, so it has to be retaken
+	///     — the same reason the motion device classes rebuild it.
+	/// </remarks>
+	private void SetLabel(Action mutate)
+	{
+		mutate();
+		_areas = Catalog.Areas(_config.Global);
+		Revalidate();
+	}
 
 	private void SetPersons(IReadOnlyList<string> persons) =>
 		Set(() => _config.Global.Persons = [.. persons]);
