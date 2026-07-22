@@ -105,7 +105,7 @@ public sealed class AreaControllerTests
 		var controller = new AreaController(
 			ha, scheduler, area, global, table,
 			new CircadianCalculator(table, global, () => SunTimes.Unknown),
-			actuator, publisher, house, NullLoggerFactory.Instance);
+			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area");
 
 		controller.Start();
 		return new Fixture(scheduler, ha, actuator, publisher, house, controller);
@@ -972,6 +972,20 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AreaState.AutoVacant, vacant.State);
 		Assert.IsNull(vacant.NextChangeAt);
 		Assert.IsNull(vacant.NextChangeFrom, "an area waiting on motion has no countdown to draw");
+	}
+
+	/// <summary>
+	///     Every snapshot carries the registry area id, so a reader can join live state to the document by
+	///     identity rather than by a display name somebody can edit while the page is open.
+	/// </summary>
+	[TestMethod]
+	public void Every_Snapshot_Names_The_Registry_Area_It_Came_From()
+	{
+		Fixture t = Build();
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(t.Publisher.Snapshots.All(snapshot => snapshot.AreaId == "test_area"));
 	}
 
 	/// <summary>

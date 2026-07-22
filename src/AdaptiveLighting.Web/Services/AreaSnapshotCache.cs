@@ -115,7 +115,20 @@ public sealed class AreaSnapshotCache : IHostedService, IDisposable
 		if (snapshot is null)
 			return;
 
-		_snapshots[snapshot.AreaName] = snapshot;
+		_snapshots[KeyOf(snapshot)] = snapshot;
 		_changes.OnNext(snapshot);
 	}
+
+	/// <summary>
+	///     What a snapshot is filed under: the registry area id, falling back to the display name.
+	/// </summary>
+	/// <remarks>
+	///     The id is the stable half of the pair. A room renamed while the page is open used to arrive as a second
+	///     entry under its new name, leaving the old one to sit in the list forever; keyed by id it simply replaces
+	///     itself. The fallback covers the two cases with no id to key on — an area configured with explicit entity
+	///     lists and no <c>AreaId</c>, and an event from a build published before <c>area_id</c> existed — which
+	///     between them are exactly the old behaviour, unchanged.
+	/// </remarks>
+	private static string KeyOf(AreaSnapshot snapshot) =>
+		snapshot.AreaId is { Length: > 0 } areaId ? areaId : snapshot.AreaName;
 }

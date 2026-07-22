@@ -24,9 +24,15 @@ namespace AdaptiveLighting.Engine;
 ///         from the UI, whereas an unwanted room is lights coming on in a bedroom at 03:00.
 ///     </para>
 ///     <para>
-///         Only <see cref="AreaConfig.AreaId"/> is set. Everything else — which lights, which sensors, the display
-///         name — resolves from the area at run time, so a proposal stays true across a rename and the document
-///         stays small enough to read.
+///         Only <see cref="AreaConfig.AreaId"/> and <see cref="AreaConfig.Enabled"/> are set. Everything else —
+///         which lights, which sensors, the display name — resolves from the area at run time, so a proposal stays
+///         true across a rename and the document stays small enough to read.
+///     </para>
+///     <para>
+///         <b>A proposal is switched off.</b> Software installed ten minutes ago turning on a bedroom light is the
+///         wrong first experience, so discovery does its half of the job and waits for the owner to do theirs. The
+///         flag is written here rather than in a caller so that <i>every</i> path that proposes areas — first run,
+///         and the "set up rooms again" rebuild — proposes them off.
 ///     </para>
 /// </remarks>
 public static class AreaAutoDiscovery
@@ -36,7 +42,10 @@ public static class AreaAutoDiscovery
 	/// </summary>
 	/// <param name="registry">Source of the area list.</param>
 	/// <param name="resolver">Classifies each area's entities, applying the same exclusions real discovery uses.</param>
-	/// <returns>One area per qualifying registry area, naming only its area id. Empty when nothing qualifies.</returns>
+	/// <returns>
+	///     One area per qualifying registry area, naming only its area id and switched off. Empty when nothing
+	///     qualifies.
+	/// </returns>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static IReadOnlyList<AreaConfig> Propose(IAreaRegistry registry, AreaEntityResolver resolver)
 	{
@@ -56,7 +65,10 @@ public static class AreaAutoDiscovery
 
 			if (found.Lights.Count > 0 && found.MotionSensors.Count > 0)
 			{
-				AreaConfig area = new() { AreaId = areaId };
+				// Enabled is written as an explicit false on the area, never as a flipped Defaults.Enabled: the
+				// default has to stay true, or every area in a house whose document never wrote an explicit value
+				// would be retroactively switched off by the upgrade that introduced this line.
+				AreaConfig area = new() { AreaId = areaId, Enabled = false };
 				ApplyRole(area);
 				proposed.Add(area);
 			}

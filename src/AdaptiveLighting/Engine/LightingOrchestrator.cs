@@ -118,7 +118,7 @@ public sealed class LightingOrchestrator : IDisposable
 			// The union of every area's motion sensors: an option that resets on presence with no explicit sensor
 			// list resets on any of these (09 owner refinement). Collected before the mode monitor is built.
 			_motionSensorUnion.UnionWith(resolved!.MotionSensors);
-			_areas.Add(BuildArea(resolved!));
+			_areas.Add(BuildArea(resolved!, areaConfig.AreaId));
 		}
 
 		StartHouseMonitors();
@@ -130,7 +130,7 @@ public sealed class LightingOrchestrator : IDisposable
 		ReportFailures(failures);
 	}
 
-	private AreaController BuildArea(ResolvedArea resolved)
+	private AreaController BuildArea(ResolvedArea resolved, string? areaId)
 	{
 		// One calculator per area: the periods are house-wide but the sun entity is an area setting, and a
 		// calculator that reads the wrong sun would place every boundary wrong.
@@ -150,7 +150,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 		return new AreaController(
 			_ha, _scheduler, resolved, _config.Global, _config.Periods, circadian,
-			_actuator, _publisher, _house, _loggerFactory);
+			_actuator, _publisher, _house, _loggerFactory, areaId);
 	}
 
 	private void LogDroppedPeriod(string areaName, DroppedPeriod drop)

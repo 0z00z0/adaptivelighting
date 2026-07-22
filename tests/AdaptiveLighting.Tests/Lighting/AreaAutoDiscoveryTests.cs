@@ -52,9 +52,12 @@ public sealed class AreaAutoDiscoveryTests
 			"only the room with both a light and a motion sensor is worth proposing");
 	}
 
-	/// <summary>A proposal names the area and nothing else, so it stays true across renames.</summary>
+	/// <summary>
+	///     A proposal names the area and nothing else, so it stays true across renames — and it arrives switched
+	///     off, so a fresh install changes no lights until the owner says which rooms it may have.
+	/// </summary>
 	[TestMethod]
-	public void A_Proposal_Names_Only_The_Area()
+	public void A_Proposal_Names_Only_The_Area_And_Starts_Switched_Off()
 	{
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
@@ -68,6 +71,11 @@ public sealed class AreaAutoDiscoveryTests
 		Assert.IsNull(area.Name, "the display name follows the area until somebody types one");
 		Assert.IsNull(area.Lights, "lights resolve from the area at run time, not into the document");
 		Assert.IsNull(area.MotionSensors);
+
+		Assert.IsFalse(area.Enabled, "a discovered room waits to be switched on");
+		Assert.IsNotNull(area.Enabled,
+			"and says so explicitly — a flipped Defaults.Enabled would switch off every room in a house whose "
+			+ "document never wrote a value");
 	}
 
 	/// <summary>An empty registry proposes nothing rather than failing.</summary>
