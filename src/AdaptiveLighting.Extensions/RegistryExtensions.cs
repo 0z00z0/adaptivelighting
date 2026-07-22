@@ -1,9 +1,10 @@
 using NetDaemon.HassModel;
+using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Extensions;
 
 /// <summary>
-///     The four <see cref="IHaRegistry"/> questions the engine actually asks, each in one expression — the whole
+///     The <see cref="IHaRegistry"/> questions the engine actually asks, each in one expression — the whole
 ///     of the engine's former <c>HaAreaRegistry</c> body, made available to everyone.
 /// </summary>
 public static class RegistryExtensions
@@ -20,6 +21,12 @@ public static class RegistryExtensions
 		registry.GetArea(areaId) is { } area
 			? [.. area.Entities.Select(entity => entity.EntityId).Distinct(StringComparer.Ordinal)]
 			: [];
+
+	/// <summary>
+	///     The floor <paramref name="areaId"/> sits on, or <c>null</c> when the area is unknown or the house never
+	///     put it on one. Floors are optional in Home Assistant, so <c>null</c> is an ordinary answer, not a fault.
+	/// </summary>
+	public static Floor? FloorOf(this IHaRegistry registry, string areaId) => registry.GetArea(areaId)?.Floor;
 
 	/// <summary>The labels on <paramref name="entityId"/> — both label ids and names. Empty when it has none.</summary>
 	public static IReadOnlyList<string> LabelsOf(this IHaRegistry registry, string entityId) =>

@@ -160,6 +160,14 @@ public class GlobalConfig
 	/// <summary>Registry label marking an entity the engine must never touch.</summary>
 	public string ExcludeLabel { get; set; } = "adaptive-exclude";
 
+	/// <summary>
+	///     Registry label a light must carry to be managed. Null — the default and the meaning of every
+	///     pre-existing document — manages every light discovery finds. Applied to light discovery only:
+	///     sensors are inputs, not things the engine commands, and filtering them too would make a
+	///     half-labelled house silently deaf. The exclude label always wins over this one.
+	/// </summary>
+	public string? IncludeLabel { get; set; }
+
 	/// <summary>Registry label marking an entity as a motion source regardless of its device class.</summary>
 	public string MotionLabel { get; set; } = "adaptive-motion";
 

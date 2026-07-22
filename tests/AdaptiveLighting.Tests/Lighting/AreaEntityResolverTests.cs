@@ -178,6 +178,193 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.AreEqual(new[] { "light.keep" }, area!.Lights.ToArray());
 	}
 
+	// ===================== the include label =====================
+	//
+	// "Only manage lights carrying this label" is strictly opt-in, and the whole point of these tests is that
+	// opting out is the default nobody has to write down. Every document ever written predates the setting, so
+	// anything other than "null manages everything" would change what those documents mean under their owners.
+
+	/// <summary>
+	///     Asserted on a document that has no <c>IncludeLabel</c> key at all, because that — not an explicit
+	///     null — is what every existing file looks like. A default that only held for the value nobody writes
+	///     would be no guarantee at all.
+	/// </summary>
+	[TestMethod]
+	public void A_Document_That_Never_Mentions_An_Include_Label_Manages_Every_Light()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			"""
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Global:
+			    ExcludeLabel: adaptive-exclude
+			  Periods:
+			    - Name: day
+			      Start: "07:00"
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			""");
+
+		Assert.IsNull(read.Config.Global.IncludeLabel, "saying nothing must keep meaning 'manage every light found'");
+
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.labelled", "light.plain", "binary_sensor.m"];
+		registry.Labels["light.labelled"] = ["adaptive"];
+		ha.SetState("light.labelled", "off");
+		ha.SetState("light.plain", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		Resolver(ha, registry, read.Config.Global).TryResolve(
+			read.Config.Areas[0], new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEquivalent(new[] { "light.labelled", "light.plain" }, area.Lights.ToArray(),
+			"an unlabelled light in a house with no include label is still the household's light");
+	}
+
+	[TestMethod]
+	public void An_Include_Label_Filters_Discovery_To_The_Lights_That_Carry_It()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.blessed", "light.ignored", "binary_sensor.m"];
+		registry.Labels["light.blessed"] = ["adaptive"];
+		ha.SetState("light.blessed", "off");
+		ha.SetState("light.ignored", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		GlobalConfig global = new() { IncludeLabel = "adaptive" };
+		Resolver(ha, registry, global).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
+
+		CollectionAssert.AreEqual(new[] { "light.blessed" }, area!.Lights.ToArray());
+	}
+
+	/// <summary>
+	///     "Never touch" must never lose an argument. Include selects candidates; exclude then removes, so a light
+	///     wearing both labels stays out — the setting whose whole name is a prohibition cannot be outvoted.
+	/// </summary>
+	[TestMethod]
+	public void The_Exclude_Label_Beats_The_Include_Label_On_The_Same_Light()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.both", "light.blessed", "binary_sensor.m"];
+		registry.Labels["light.both"] = ["adaptive", "adaptive-exclude"];
+		registry.Labels["light.blessed"] = ["adaptive"];
+		ha.SetState("light.both", "off");
+		ha.SetState("light.blessed", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		GlobalConfig global = new() { IncludeLabel = "adaptive" };
+		Resolver(ha, registry, global).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
+
+		CollectionAssert.AreEqual(new[] { "light.blessed" }, area!.Lights.ToArray());
+	}
+
+	/// <summary>
+	///     An explicit pick is the owner overruling the rules, exactly as it already overrules discovery. Both
+	///     labels are rules, so neither gets a veto over a list somebody wrote out by hand.
+	/// </summary>
+	[TestMethod]
+	public void An_Explicit_Lights_List_Bypasses_Both_Labels()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["binary_sensor.m"];
+		registry.Labels["light.excluded"] = ["adaptive-exclude"];
+		ha.SetState("light.unlabelled", "off");
+		ha.SetState("light.excluded", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		GlobalConfig global = new() { IncludeLabel = "adaptive" };
+		Resolver(ha, registry, global).TryResolve(
+			new AreaConfig { AreaId = "stue", Lights = ["light.unlabelled", "light.excluded"] },
+			new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "light.unlabelled", "light.excluded" }, area.Lights.ToArray(),
+			"a hand-picked light is the owner's decision, and the labels are the rules it overrules");
+	}
+
+	[TestMethod]
+	public void A_Room_Whose_Lights_Are_All_Filtered_Out_Is_Skipped_With_The_Label_Named()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.plain", "binary_sensor.m"];
+		ha.SetState("light.plain", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		GlobalConfig global = new() { IncludeLabel = "adaptive" };
+		bool ok = Resolver(ha, registry, global)
+			.TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out _, out string? error);
+
+		Assert.IsFalse(ok, "a filtered-out room is skipped, never a document error");
+		StringAssert.Contains(error!, "adaptive", "the message has to name the label, or the fix is unfindable");
+		StringAssert.Contains(error!, "stue");
+	}
+
+	/// <summary>
+	///     The other half of the message above: a room with no lights at all must not be told to go and label
+	///     them. That sends a household hunting for lights Home Assistant never put in the room.
+	/// </summary>
+	[TestMethod]
+	public void A_Room_With_No_Lights_At_All_Is_Not_Blamed_On_The_Include_Label()
+	{
+		FakeAreaRegistry registry = new();
+		registry.Areas["bod"] = [];
+
+		GlobalConfig global = new() { IncludeLabel = "adaptive" };
+		Resolver(new FakeHaContext(), registry, global)
+			.TryResolve(new AreaConfig { AreaId = "bod" }, new AreaSettings(), out _, out string? error);
+
+		StringAssert.Contains(error!, "No lights discovered");
+		Assert.IsFalse(error!.Contains("adaptive", StringComparison.Ordinal),
+			"there was nothing for the label to filter out, so the label is not the problem");
+	}
+
+	/// <summary>
+	///     Lights only. Motion and lux sensors are inputs, not things the engine commands, and filtering them too
+	///     would leave a half-labelled house silently deaf — lights it may drive, and no sensor to tell it when.
+	/// </summary>
+	[TestMethod]
+	public void The_Include_Label_Does_Not_Filter_Motion_Or_Lux_Sensors()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.blessed", "binary_sensor.m", "sensor.lux"];
+		registry.Labels["light.blessed"] = ["adaptive"];
+		ha.SetState("light.blessed", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("sensor.lux", "10", new() { ["device_class"] = "illuminance" });
+
+		GlobalConfig global = new() { IncludeLabel = "adaptive" };
+		Resolver(ha, registry, global).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "binary_sensor.m" }, area.MotionSensors.ToArray(),
+			"an unlabelled motion sensor is still how the room knows somebody is in it");
+		Assert.AreEqual("sensor.lux", area.LuxSensor);
+	}
+
+	[TestMethod]
+	public void DiscoverArea_Honours_The_Include_Label_Too()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.blessed", "light.ignored"];
+		registry.Labels["light.blessed"] = ["adaptive"];
+		ha.SetState("light.blessed", "off");
+		ha.SetState("light.ignored", "off");
+
+		GlobalConfig global = new() { IncludeLabel = "adaptive" };
+		AreaDiscovery found = Resolver(ha, registry, global).DiscoverArea("stue");
+
+		CollectionAssert.AreEqual(new[] { "light.blessed" }, found.Lights.ToArray(),
+			"the preview must show what the engine will drive, filter and all");
+	}
+
 	[TestMethod]
 	public void The_Motion_Label_Rescues_A_Sensor_With_An_Odd_Device_Class()
 	{

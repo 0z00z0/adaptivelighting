@@ -141,6 +141,46 @@ public sealed class ConfigValidatorTests
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
 
+	// ===================== the include label =====================
+
+	/// <summary>
+	///     A warning, never an error. The filter fails closed one room at a time — each skipped room already says
+	///     its lights carry no such label — so the house degrades the ordinary way and the document stays saveable.
+	///     What no per-room message can say is that one typo at the top of the file is behind all of them.
+	/// </summary>
+	[TestMethod]
+	public void An_Include_Label_Nothing_Carries_Is_A_Warning_Not_An_Error()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.IncludeLabel = "adpative";   // the typo this warning exists for
+
+		ValidationResult result = ConfigValidator.Validate(config, labelsInUse: ["adaptive", "adaptive-exclude"]);
+
+		Assert.IsTrue(result.IsValid, "an unmatched include label must never stop the document being saved");
+		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("adpative", StringComparison.Ordinal)),
+			"the warning has to quote the label, because the label is the typo");
+	}
+
+	[TestMethod]
+	public void An_Include_Label_Something_Carries_Is_Silent()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.IncludeLabel = "adaptive";
+
+		ValidationResult result = ConfigValidator.Validate(config, labelsInUse: ["adaptive"]);
+
+		Assert.AreEqual(0, result.Warnings.Count);
+	}
+
+	[TestMethod]
+	public void No_Include_Label_Is_Never_Warned_About()
+	{
+		ValidationResult result = ConfigValidator.Validate(Minimal(), labelsInUse: []);
+
+		Assert.AreEqual(0, result.Warnings.Count,
+			"saying nothing is the default, not an omission — a house with no labels must hear nothing about them");
+	}
+
 	// ===================== settings =====================
 
 	[TestMethod]

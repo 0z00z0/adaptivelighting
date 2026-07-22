@@ -3,7 +3,7 @@ using AdaptiveLighting.Abstractions;
 namespace AdaptiveLighting.Ha;
 
 /// <summary>
-///     The real <see cref="IAreaRegistry"/>: a thin projection of <see cref="IHaRegistry"/> onto the four
+///     The real <see cref="IAreaRegistry"/>: a thin projection of <see cref="IHaRegistry"/> onto the five
 ///     questions the engine actually asks.
 /// </summary>
 /// <remarks>
@@ -28,4 +28,14 @@ public sealed class HaAreaRegistry : IAreaRegistry
 
 	/// <inheritdoc/>
 	public IReadOnlyList<string> LabelsOf(string entityId) => _registry.LabelsOf(entityId);
+
+	/// <inheritdoc/>
+	/// <remarks>
+	///     A floor with no id cannot be grouped on — the group key is the id — so it is read as no floor at all
+	///     rather than as an anonymous one every floorless area would then share.
+	/// </remarks>
+	public AreaFloor? FloorOf(string areaId) =>
+		_registry.FloorOf(areaId) is { Id: { Length: > 0 } id } floor
+			? new AreaFloor(id, floor.Name is { Length: > 0 } name ? name : id, floor.Level)
+			: null;
 }

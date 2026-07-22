@@ -1,5 +1,16 @@
 namespace AdaptiveLighting.Abstractions;
 
+/// <summary>A floor as the engine and UI need it: identity, display name, and stacking order.</summary>
+/// <remarks>
+///     A record of three scalars rather than HassModel's own <c>Floor</c>, for the same reason
+///     <see cref="IAreaRegistry"/> exists at all: <c>Floor</c> cannot be constructed outside its own assembly, so
+///     a test could never build a floored house. Everything the two screens group by is here and nothing else is.
+/// </remarks>
+/// <param name="Id">The registry floor id.</param>
+/// <param name="Name">The display name ("Ground floor", "Loftet").</param>
+/// <param name="Level">HA's level number, used only for ordering. Null when the house never set one.</param>
+public sealed record AreaFloor(string Id, string Name, int? Level);
+
 /// <summary>
 ///     Everything the engine needs from the Home Assistant area registry, and nothing else.
 /// </summary>
@@ -13,7 +24,7 @@ namespace AdaptiveLighting.Abstractions;
 ///     </para>
 ///     <para>
 ///         Discovery is the feature the whole configuration design rests on, so it does not get to be the
-///         untested part. Four methods of registry navigation behind an interface buys that back, and follows
+///         untested part. Five members of registry navigation behind an interface buys that back, and follows
 ///         the same pattern as the engine's other seams.
 ///     </para>
 /// </remarks>
@@ -36,4 +47,7 @@ public interface IAreaRegistry
 	///     a label either way, and the engine should not care which they used. Empty when unlabelled or unknown.
 	/// </summary>
 	IReadOnlyList<string> LabelsOf(string entityId);
+
+	/// <summary>The floor <paramref name="areaId"/> sits on, or null — floors are optional in HA.</summary>
+	AreaFloor? FloorOf(string areaId);
 }

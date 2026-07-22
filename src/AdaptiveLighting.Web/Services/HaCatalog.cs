@@ -73,6 +73,18 @@ public sealed record EntityOption(string EntityId, string FriendlyName, string? 
 }
 
 /// <summary>
+///     One registry label, as a picker offers it.
+/// </summary>
+/// <remarks>
+///     Both halves are carried because the two are used for different things: the id is the stable identity, the
+///     name is what the household typed and what the config stores (§6.6 — <c>LabelsOf</c> matches either, names
+///     are what a person reading the YAML recognises, and the shipped <c>adaptive-exclude</c> is already a name).
+/// </remarks>
+/// <param name="Id">The registry label id.</param>
+/// <param name="Name">The display name, and the value a label field stores.</param>
+public sealed record LabelOption(string Id, string Name);
+
+/// <summary>
 ///     What discovery makes of an area right now, for the editor to show before anything is saved.
 /// </summary>
 /// <param name="Resolved">The resolved area, or <c>null</c> when discovery fails.</param>
@@ -237,6 +249,30 @@ public sealed class HaCatalog
 				.OfType<string>()
 				.Distinct(StringComparer.Ordinal)
 				.OrderBy(name => name, StringComparer.CurrentCulture)];
+		}
+		catch (InvalidOperationException)
+		{
+			IsHomeAssistantReady = false;
+			return [];
+		}
+	}
+
+	/// <summary>
+	///     Every registry label with both its id and its name, for the label pickers.
+	/// </summary>
+	/// <remarks>
+	///     Empty is a real answer, not a failure: most houses have never made a label. A picker built on this has
+	///     to render that case as instructions rather than as a dropdown with nothing in it (§5).
+	/// </remarks>
+	/// <returns>The labels, ordered by display name. Empty when the house has none or HA has not answered.</returns>
+	public IReadOnlyList<LabelOption> LabelOptions()
+	{
+		try
+		{
+			return [.. _registry.Labels
+				.Where(label => label.Id is { Length: > 0 })
+				.Select(label => new LabelOption(label.Id!, label.Name is { Length: > 0 } name ? name : label.Id!))
+				.OrderBy(option => option.Name, StringComparer.CurrentCulture)];
 		}
 		catch (InvalidOperationException)
 		{
@@ -470,6 +506,7 @@ public sealed class HaCatalog
 	private static string SignatureOf(GlobalConfig global) => string.Join(
 		'\n',
 		global.ExcludeLabel,
+		global.IncludeLabel,
 		global.MotionLabel,
 		global.IlluminanceDeviceClass,
 		string.Join(',', global.EffectiveMotionDeviceClasses));

@@ -31,17 +31,23 @@ public static class ConfigValidator
 	///     The live <c>options</c> of the configured house-mode select. When <c>null</c>, the live-option warnings
 	///     are skipped — same pattern as <paramref name="knownEntityIds"/>.
 	/// </param>
+	/// <param name="labelsInUse">
+	///     Every registry label that at least one entity carries, by id and by name — the same either-way matching
+	///     the resolver does. When <c>null</c>, the include-label warning is skipped, same pattern as
+	///     <paramref name="knownEntityIds"/>.
+	/// </param>
 	public static ValidationResult Validate(
 		AdaptiveLightingConfig config,
 		IReadOnlyCollection<string>? knownEntityIds = null,
 		IReadOnlyCollection<string>? knownAreaIds = null,
-		IReadOnlyCollection<string>? liveSelectOptions = null)
+		IReadOnlyCollection<string>? liveSelectOptions = null,
+		IReadOnlyCollection<string>? labelsInUse = null)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
 		ValidationResult result = new();
 
-		ValidateGlobal(config.Global, knownEntityIds, result);
+		ValidateGlobal(config.Global, knownEntityIds, labelsInUse, result);
 		ValidatePeriods(config.Periods, result);
 		ValidateHouseMode(config, knownEntityIds, liveSelectOptions, result);
 		ValidateSettings("Defaults", config.Defaults, result);
@@ -50,8 +56,14 @@ public static class ConfigValidator
 		return result;
 	}
 
-	private static void ValidateGlobal(GlobalConfig global, IReadOnlyCollection<string>? knownEntityIds, ValidationResult result)
+	private static void ValidateGlobal(
+		GlobalConfig global,
+		IReadOnlyCollection<string>? knownEntityIds,
+		IReadOnlyCollection<string>? labelsInUse,
+		ValidationResult result)
 	{
+		ValidateIncludeLabel(global, labelsInUse, result);
+
 		if (global.AwayDebounceMinutes < 0)
 			result.AddError($"Global.AwayDebounceMinutes must not be negative (is {global.AwayDebounceMinutes}).");
 
@@ -102,6 +114,29 @@ public static class ConfigValidator
 			else if (!knownEntityIds.Contains(outdoorLux))
 				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not known to Home Assistant; areas without their own lux sensor fall back to sun elevation until it appears.");
 		}
+	}
+
+	/// <summary>
+	///     The include label, when nothing in Home Assistant carries it.
+	/// </summary>
+	/// <remarks>
+	///     A warning and never an error, deliberately. The filter fails closed room by room — every room reports
+	///     that its lights carry no such label and is skipped — so the house degrades exactly as it does for any
+	///     other unresolvable room, and the document stays saveable. What the per-room messages cannot say is that
+	///     one typo at the top of the file is behind all of them, which is what this says once.
+	/// </remarks>
+	private static void ValidateIncludeLabel(
+		GlobalConfig global,
+		IReadOnlyCollection<string>? labelsInUse,
+		ValidationResult result)
+	{
+		if (labelsInUse is null || global.IncludeLabel is not { Length: > 0 } include)
+			return;
+
+		if (!labelsInUse.Contains(include, StringComparer.OrdinalIgnoreCase))
+			result.AddWarning(
+				$"Global.IncludeLabel is '{include}', which nothing in Home Assistant carries — with it set and unmatched, "
+				+ "no room finds a light to manage. Clear it to manage every light discovery finds, or label the lights in Home Assistant.");
 	}
 
 	private static IEnumerable<(string Label, string EntityId)> EnumerateGlobalEntities(GlobalConfig global)

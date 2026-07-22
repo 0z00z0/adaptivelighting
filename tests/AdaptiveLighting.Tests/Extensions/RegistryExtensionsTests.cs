@@ -26,5 +26,6 @@ public sealed class RegistryExtensionsTests
 		Assert.AreEqual(0, Registry.LabelsOf("light.a").Count);
 		Assert.IsFalse(Registry.HasLabel("light.a", "exclude"));
 		Assert.AreEqual(0, Registry.EntityIdsInAreaByDomain("stue", "light").Count);
+		Assert.IsNull(Registry.FloorOf("stue"));
 	}
 }

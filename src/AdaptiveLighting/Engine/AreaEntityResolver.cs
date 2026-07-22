@@ -129,15 +129,15 @@ public sealed class AreaEntityResolver
 			areaId = configuredArea;
 		}
 
+		// An explicit list bypasses both labels, exactly as it bypasses discovery: an explicit pick is the owner
+		// overruling the rules, and the rules do not get a veto.
 		List<string> lights = area.Lights is { Count: > 0 } explicitLights
 			? [.. explicitLights]
 			: DiscoverLights(areaId);
 
 		if (lights.Count == 0)
 		{
-			error = areaId is null
-				? "No lights: the area has neither an AreaId to discover from nor an explicit Lights list."
-				: $"No lights discovered in area '{areaId}'. Assign lights to the area in HA, or list them explicitly.";
+			error = NoLightsError(areaId);
 			return false;
 		}
 
@@ -174,7 +174,33 @@ public sealed class AreaEntityResolver
 		return true;
 	}
 
-	private List<string> DiscoverLights(string? areaId)
+	/// <summary>
+	///     Why an area yielded no lights, in the words that name the fix.
+	/// </summary>
+	/// <remarks>
+	///     The include-label wording is only earned when the label is what emptied the list, which is why this
+	///     re-runs discovery without it. An area that has no lights at all must not be told to go and label them:
+	///     that sends a household looking for lights Home Assistant never assigned to the room.
+	/// </remarks>
+	private string NoLightsError(string? areaId)
+	{
+		if (areaId is null)
+			return "No lights: the area has neither an AreaId to discover from nor an explicit Lights list.";
+
+		if (_global.IncludeLabel is { Length: > 0 } include && DiscoverLights(areaId, respectIncludeLabel: false).Count > 0)
+			return $"No lights in '{areaId}' carry the label '{include}'. Remove the include-label filter or label the lights in Home Assistant.";
+
+		return $"No lights discovered in area '{areaId}'. Assign lights to the area in HA, or list them explicitly.";
+	}
+
+	private List<string> DiscoverLights(string? areaId) => DiscoverLights(areaId, respectIncludeLabel: true);
+
+	/// <param name="areaId">The area to look in, or <c>null</c> for "nothing to discover from".</param>
+	/// <param name="respectIncludeLabel">
+	///     <c>false</c> only on the failure path, to tell "this room has no lights" apart from "this room's lights
+	///     are all filtered out" — the two need different advice.
+	/// </param>
+	private List<string> DiscoverLights(string? areaId, bool respectIncludeLabel)
 	{
 		if (areaId is null)
 			return [];
@@ -182,6 +208,7 @@ public sealed class AreaEntityResolver
 		List<string> candidates = _registry.EntitiesInArea(areaId)
 			.Where(id => id.HasDomain(LightDomain))
 			.Where(id => !IsExcluded(id))
+			.Where(id => !respectIncludeLabel || IsIncluded(id))
 			.Where(IsLive)
 			.Distinct(StringComparer.Ordinal)
 			.ToList();
@@ -319,6 +346,17 @@ public sealed class AreaEntityResolver
 	private string? DeviceClassOf(string entityId) => _ha.AttrString(entityId, DeviceClassAttribute);
 
 	private bool IsExcluded(string entityId) => HasLabel(entityId, _global.ExcludeLabel);
+
+	/// <summary>
+	///     Whether the include-label filter lets <paramref name="entityId"/> through.
+	/// </summary>
+	/// <remarks>
+	///     No label configured means everything passes — the filter is strictly opt-in, and saying nothing has
+	///     always meant "manage every light discovery finds". Checked after the exclusion, never instead of it:
+	///     a light carrying both labels stays out, because "never touch" must not lose an argument.
+	/// </remarks>
+	private bool IsIncluded(string entityId) =>
+		_global.IncludeLabel is not { Length: > 0 } include || HasLabel(entityId, include);
 
 	private bool HasLabel(string entityId, string label) =>
 		_registry.LabelsOf(entityId).Contains(label, StringComparer.OrdinalIgnoreCase);
