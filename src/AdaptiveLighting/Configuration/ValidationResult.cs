@@ -3,41 +3,41 @@ using System.Text;
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>
-///     A configuration problem scoped to a single zone. These degrade rather than throw: the zone is skipped
+///     A configuration problem scoped to a single area. These degrade rather than throw: the area is skipped
 ///     and the rest of the house keeps working.
 /// </summary>
-/// <param name="ZoneName">Display name of the offending zone.</param>
+/// <param name="AreaName">Display name of the offending area.</param>
 /// <param name="Message">What is wrong, phrased for someone editing the YAML.</param>
-public sealed record ZoneError(string ZoneName, string Message);
+public sealed record AreaError(string AreaName, string Message);
 
 /// <summary>
 ///     The outcome of <see cref="ConfigValidator.Validate"/>. Document-level <see cref="Errors"/> are fatal —
-///     the app must throw. <see cref="ZoneErrors"/> are not: an entity renamed in HA must not black out the
+///     the app must throw. <see cref="AreaErrors"/> are not: an entity renamed in HA must not black out the
 ///     whole house.
 /// </summary>
 public sealed class ValidationResult
 {
 	private readonly List<string> _errors = [];
-	private readonly List<ZoneError> _zoneErrors = [];
+	private readonly List<AreaError> _areaErrors = [];
 	private readonly List<string> _warnings = [];
 
 	/// <summary>Document-level errors. Non-empty means the configuration cannot be run at all.</summary>
 	public IReadOnlyList<string> Errors => _errors;
 
-	/// <summary>Zone-level errors. Each names one zone that will be skipped.</summary>
-	public IReadOnlyList<ZoneError> ZoneErrors => _zoneErrors;
+	/// <summary>Area-level errors. Each names one area that will be skipped.</summary>
+	public IReadOnlyList<AreaError> AreaErrors => _areaErrors;
 
 	/// <summary>Non-blocking warnings. Rendered and logged, but they never refuse a save or stop the engine.</summary>
 	public IReadOnlyList<string> Warnings => _warnings;
 
-	/// <summary>Whether the document can be run. Zone errors and warnings do not make a document invalid.</summary>
+	/// <summary>Whether the document can be run. Area errors and warnings do not make a document invalid.</summary>
 	public bool IsValid => _errors.Count == 0;
 
 	/// <summary>Records a fatal, document-level error.</summary>
 	public void AddError(string message) => _errors.Add(message);
 
-	/// <summary>Records a zone that must be skipped, and why.</summary>
-	public void AddZoneError(string zoneName, string message) => _zoneErrors.Add(new ZoneError(zoneName, message));
+	/// <summary>Records an area that must be skipped, and why.</summary>
+	public void AddAreaError(string areaName, string message) => _areaErrors.Add(new AreaError(areaName, message));
 
 	/// <summary>Records a non-blocking warning — worth surfacing, but not worth refusing the document over.</summary>
 	public void AddWarning(string message) => _warnings.Add(message);
@@ -50,8 +50,8 @@ public sealed class ValidationResult
 		foreach (string error in _errors)
 			text.Append("- ").AppendLine(error);
 
-		foreach (ZoneError zoneError in _zoneErrors)
-			text.Append("- [").Append(zoneError.ZoneName).Append("] ").AppendLine(zoneError.Message);
+		foreach (AreaError areaError in _areaErrors)
+			text.Append("- [").Append(areaError.AreaName).Append("] ").AppendLine(areaError.Message);
 
 		if (_warnings.Count > 0)
 		{
@@ -71,8 +71,8 @@ public sealed class ValidationResult
 		foreach (string error in _errors)
 			text.Append("<li>").Append(Escape(error)).Append("</li>");
 
-		foreach (ZoneError zoneError in _zoneErrors)
-			text.Append("<li><b>").Append(Escape(zoneError.ZoneName)).Append("</b>: ").Append(Escape(zoneError.Message)).Append("</li>");
+		foreach (AreaError areaError in _areaErrors)
+			text.Append("<li><b>").Append(Escape(areaError.AreaName)).Append("</b>: ").Append(Escape(areaError.Message)).Append("</li>");
 
 		text.Append("</ul>");
 

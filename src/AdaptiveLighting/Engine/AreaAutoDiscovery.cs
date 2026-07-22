@@ -4,7 +4,7 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Engine;
 
 /// <summary>
-///     Proposes a starting set of zones by asking the Home Assistant area registry which rooms could plausibly be
+///     Proposes a starting set of areas by asking the Home Assistant area registry which rooms could plausibly be
 ///     lit automatically.
 /// </summary>
 /// <remarks>
@@ -24,41 +24,41 @@ namespace AdaptiveLighting.Engine;
 ///         from the UI, whereas an unwanted room is lights coming on in a bedroom at 03:00.
 ///     </para>
 ///     <para>
-///         Only <see cref="ZoneConfig.AreaId"/> is set. Everything else — which lights, which sensors, the display
+///         Only <see cref="AreaConfig.AreaId"/> is set. Everything else — which lights, which sensors, the display
 ///         name — resolves from the area at run time, so a proposal stays true across a rename and the document
 ///         stays small enough to read.
 ///     </para>
 /// </remarks>
-public static class ZoneAutoDiscovery
+public static class AreaAutoDiscovery
 {
 	/// <summary>
-	///     The zones worth proposing for this instance, in registry order.
+	///     The areas worth proposing for this instance, in registry order.
 	/// </summary>
 	/// <param name="registry">Source of the area list.</param>
 	/// <param name="resolver">Classifies each area's entities, applying the same exclusions real discovery uses.</param>
-	/// <returns>A zone per qualifying area, naming only its area id. Empty when nothing qualifies.</returns>
+	/// <returns>One area per qualifying registry area, naming only its area id. Empty when nothing qualifies.</returns>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	public static IReadOnlyList<ZoneConfig> Propose(IAreaRegistry registry, ZoneEntityResolver resolver)
+	public static IReadOnlyList<AreaConfig> Propose(IAreaRegistry registry, AreaEntityResolver resolver)
 	{
 		ArgumentNullException.ThrowIfNull(registry);
 		ArgumentNullException.ThrowIfNull(resolver);
 
-		List<ZoneConfig> proposed = [];
+		List<AreaConfig> proposed = [];
 
 		foreach (string areaId in registry.AreaIds)
 		{
 			if (string.IsNullOrWhiteSpace(areaId))
 				continue;
 
-			// The same resolver the engine uses at run time, so a proposed zone is one that will actually resolve —
+			// The same resolver the engine uses at run time, so a proposed area is one that will actually resolve —
 			// group members and excluded entities are already filtered out of these counts.
 			AreaDiscovery found = resolver.DiscoverArea(areaId);
 
 			if (found.Lights.Count > 0 && found.MotionSensors.Count > 0)
 			{
-				ZoneConfig zone = new() { AreaId = areaId };
-				ApplyRole(zone);
-				proposed.Add(zone);
+				AreaConfig area = new() { AreaId = areaId };
+				ApplyRole(area);
+				proposed.Add(area);
 			}
 		}
 
@@ -75,15 +75,15 @@ public static class ZoneAutoDiscovery
 	private static readonly string[] Outdoor = ["ute", "uteplass", "terrasse", "veranda", "hage", "garasje", "garage", "outdoor", "garden", "porch", "carport"];
 
 	/// <summary>
-	///     Gives a proposed zone the behaviour its name implies, and returns what it decided (for logging).
+	///     Gives a proposed area the behaviour its name implies, and returns what it decided (for logging).
 	/// </summary>
 	/// <remarks>
 	///     Only ever sets a flag <i>on</i>. Everything left alone keeps following <c>Defaults</c>, so a guess adds
 	///     behaviour rather than overriding a choice the household has made elsewhere.
 	/// </remarks>
-	internal static string? ApplyRole(ZoneConfig zone)
+	internal static string? ApplyRole(AreaConfig area)
 	{
-		if (zone.AreaId is not { Length: > 0 } areaId)
+		if (area.AreaId is not { Length: > 0 } areaId)
 			return null;
 
 		List<string> roles = [];
@@ -91,28 +91,28 @@ public static class ZoneAutoDiscovery
 		if (Matches(areaId, Bedroom))
 		{
 			// Somewhere people sleep: hold it to night levels, and never light itself.
-			zone.RespectSleepMode = true;
-			zone.SleepBlocksAutoOn = true;
+			area.RespectSleepMode = true;
+			area.SleepBlocksAutoOn = true;
 			roles.Add("bedroom");
 		}
 		else if (Matches(areaId, Bathroom))
 		{
 			// A 03:00 trip should get a dim light, not a bright one - but it must still light.
-			zone.RespectSleepMode = true;
+			area.RespectSleepMode = true;
 			roles.Add("bathroom");
 		}
 
 		if (Matches(areaId, Entrance))
 		{
-			zone.WelcomeHome = true;
-			zone.RespectSleepMode = true;
+			area.WelcomeHome = true;
+			area.RespectSleepMode = true;
 			roles.Add("entrance");
 		}
 
 		if (Matches(areaId, Outdoor))
 		{
 			// Porch, terrace and garage lights are wanted precisely when nobody is home.
-			zone.SkipAwaySweep = true;
+			area.SkipAwaySweep = true;
 			roles.Add("outdoor");
 		}
 

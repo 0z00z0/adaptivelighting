@@ -46,12 +46,12 @@ public sealed class LightingEngineHostTests
 	private LightingEngineHost BuildHost() =>
 		new(new LightingConfigStore(_path, NullLogger<LightingConfigStore>.Instance), NullLoggerFactory.Instance);
 
-	/// <summary>A document the validator accepts: a circadian table and one zone that names an area.</summary>
+	/// <summary>A document the validator accepts: a circadian table and one area naming a registry area id.</summary>
 	private static AdaptiveLightingConfig Valid() => new()
 	{
 		ConfigName = "Adaptive lighting [test]",
 		Periods = [new TimePeriodConfig { Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
-		Zones = [new ZoneConfig { Name = "Stue", AreaId = "stue" }]
+		Areas = [new AreaConfig { Name = "Stue", AreaId = "stue" }]
 	};
 
 	[TestMethod]
@@ -69,16 +69,16 @@ public sealed class LightingEngineHostTests
 	}
 
 	[TestMethod]
-	public void Save_WithNoZones_IsAccepted()
+	public void Save_WithNoAreas_IsAccepted()
 	{
 		var config = Valid();
-		config.Zones = [];
+		config.Areas = [];
 
 		var result = BuildHost().Save(config);
 
 		// Removing your last room is a legitimate thing to do, and a fresh install has none to begin with. The
 		// save must land so the document reflects what the owner asked for; the validator says so with a warning.
-		Assert.AreNotEqual(SaveStatus.Rejected, result.Status, "a zone-less document is valid, just idle");
+		Assert.AreNotEqual(SaveStatus.Rejected, result.Status, "an area-less document is valid, just idle");
 		Assert.IsTrue(File.Exists(_path), "and it reaches the disk");
 	}
 
@@ -131,7 +131,7 @@ public sealed class LightingEngineHostTests
 		var reloaded = host.Store.Load();
 
 		Assert.AreEqual("Adaptive lighting [test]", reloaded.ConfigName);
-		Assert.AreEqual("stue", reloaded.Zones.Single().AreaId);
+		Assert.AreEqual("stue", reloaded.Areas.Single().AreaId);
 	}
 
 	/// <summary>
@@ -149,7 +149,7 @@ public sealed class LightingEngineHostTests
 		Assert.AreEqual(SaveStatus.Saved, result.Status);
 		Assert.IsFalse(host.IsRunning);
 		Assert.IsFalse(host.IsAttached);
-		Assert.AreEqual(0, host.RunningZoneCount);
+		Assert.AreEqual(0, host.RunningAreaCount);
 	}
 
 	[TestMethod]
@@ -202,20 +202,20 @@ public sealed class LightingEngineHostTests
 	}
 
 	/// <summary>
-	///     Zone-level errors cost a zone, not the save. A household whose entity got renamed in Home Assistant
+	///     Area-level errors cost an area, not the save. A household whose entity got renamed in Home Assistant
 	///     must still be able to fix the rest of the document from the browser.
 	/// </summary>
 	[TestMethod]
-	public void Save_WithAZoneThatCannotResolve_StillSaves()
+	public void Save_WithAnAreaThatCannotResolve_StillSaves()
 	{
 		var config = Valid();
-		config.Zones.Add(new ZoneConfig { Name = "Broken" });
+		config.Areas.Add(new AreaConfig { Name = "Broken" });
 
 		var result = BuildHost().Save(config);
 
 		Assert.AreEqual(SaveStatus.Saved, result.Status);
-		Assert.IsTrue(result.Validation.IsValid, "A zone error is not a document error.");
-		Assert.AreEqual("Broken", result.Validation.ZoneErrors.Single().ZoneName);
+		Assert.IsTrue(result.Validation.IsValid, "An area error is not a document error.");
+		Assert.AreEqual("Broken", result.Validation.AreaErrors.Single().AreaName);
 		Assert.IsTrue(File.Exists(_path));
 	}
 
@@ -225,5 +225,79 @@ public sealed class LightingEngineHostTests
 		BuildHost().Validate(Valid());
 
 		Assert.IsFalse(File.Exists(_path));
+	}
+
+	// ===================== the pre-2.0 schema, migrated on first load =====================
+
+	/// <summary>A document as it sits on disk in a house that has not been upgraded yet.</summary>
+	private const string LegacySchema =
+		"""
+		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+		  ConfigName: "Adaptive lighting [test]"
+		  Global:
+		    ZonesAutoDiscovered: true
+		  Periods:
+		    - Name: day
+		      Start: "06:00"
+		      BrightnessPct: 80
+		      ColorTempKelvin: 3500
+		  Zones:
+		    - Name: Stue
+		      AreaId: stue
+		""";
+
+	/// <summary>
+	///     The migration is a write, and every write in this host goes through the store — which is the whole
+	///     point: the store already keeps one previous version, so the document as it was before the upgrade
+	///     survives at the path the Configuration page already shows, with no second backup mechanism invented
+	///     for the occasion.
+	/// </summary>
+	[TestMethod]
+	public void Reload_OfALegacyDocument_RewritesItOnceAndLeavesThePreviousFileAtTheBackupPath()
+	{
+		File.WriteAllText(_path, LegacySchema);
+		string original = File.ReadAllText(_path);
+
+		LightingEngineHost host = BuildHost();
+
+		SaveResult first = host.Reload();
+
+		Assert.AreEqual(SaveStatus.Saved, first.Status, "the document is runnable; only its key names were old");
+		Assert.AreEqual("stue", host.Store.Load().Areas.Single().AreaId, "and it loaded with its rooms");
+
+		string migrated = File.ReadAllText(_path);
+
+		StringAssert.Contains(migrated, "Areas:");
+		StringAssert.Contains(migrated, "AreasAutoDiscovered:");
+		StringAssert.DoesNotMatch(migrated, new System.Text.RegularExpressions.Regex("Zones"));
+
+		Assert.IsTrue(host.Store.HasBackup);
+		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath),
+			"the backup is the pre-migration file, byte for byte");
+
+		// Once, not on every start. A second rewrite would push the only pre-migration copy out of the backup
+		// slot and replace it with a copy of the migrated file — the safety net quietly emptying itself.
+		host.Reload();
+
+		Assert.AreEqual(migrated, File.ReadAllText(_path));
+		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath));
+	}
+
+	/// <summary>A start that had nothing to migrate must be a start that wrote nothing.</summary>
+	[TestMethod]
+	public void Reload_OfACurrentSchemaDocument_WritesNothing()
+	{
+		LightingEngineHost host = BuildHost();
+		host.Save(Valid());
+
+		string before = File.ReadAllText(_path);
+		DateTime writtenAtUtc = File.GetLastWriteTimeUtc(_path);
+		bool hadBackup = host.Store.HasBackup;
+
+		host.Reload();
+
+		Assert.AreEqual(before, File.ReadAllText(_path));
+		Assert.AreEqual(writtenAtUtc, File.GetLastWriteTimeUtc(_path), "no write means no new timestamp");
+		Assert.AreEqual(hadBackup, host.Store.HasBackup, "and nothing new lands in the backup slot");
 	}
 }

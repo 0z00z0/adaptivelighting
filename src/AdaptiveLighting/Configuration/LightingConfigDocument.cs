@@ -1,7 +1,21 @@
 using YamlDotNet.Core;
+using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
 namespace AdaptiveLighting.Configuration;
+
+/// <summary>
+///     What reading a document produced: the bound configuration, and whether the file had to be translated
+///     out of the pre-2.0 schema to produce it.
+/// </summary>
+/// <remarks>
+///     An explicit return rather than an out-parameter because the flag is not a diagnostic — it is the trigger
+///     for the migrating write in <see cref="Hosting.LightingEngineHost.Reload"/>, and a caller that never sees
+///     it leaves a house permanently dependent on the translation table.
+/// </remarks>
+/// <param name="Config">The bound document. Never <c>null</c>.</param>
+/// <param name="UsedLegacyKeys">Whether <see cref="LightingConfigDocument.Deserialize"/> renamed any pre-2.0 key.</param>
+public sealed record DocumentReadResult(AdaptiveLightingConfig Config, bool UsedLegacyKeys);
 
 /// <summary>
 ///     Raised when an <c>AdaptiveLighting.yaml</c> document cannot be read or written. The message is written
@@ -59,6 +73,24 @@ public static class LightingConfigDocument
 	/// </remarks>
 	public const string RootKey = "AdaptiveLighting.Configuration.AdaptiveLightingConfig";
 
+	/// <summary>
+	///     The pre-2.0 key names, mapped to what the schema calls them now. The only place in the codebase where
+	///     the word "Zone" still exists.
+	/// </summary>
+	/// <remarks>
+	///     <b>Deleting this is silent data loss, not a cleanup.</b> <see cref="Deserialize"/> binds with
+	///     <c>IgnoreUnmatchedProperties</c> — deliberately, so a stale key cannot brick the UI that exists to
+	///     remove it — which means a document still saying <c>Zones:</c> would bind against a model that has only
+	///     <c>Areas</c> and load as <i>zero areas</i>: no parse error, no warning, no lights, nothing in the log
+	///     to look at. Every document written before 2.0 says <c>Zones:</c>, and there is no way to prove nobody
+	///     is still running one, so there is no version at which this becomes safe to remove.
+	/// </remarks>
+	private static readonly Dictionary<string, string> LegacyKeys = new(StringComparer.OrdinalIgnoreCase)
+	{
+		["Zones"] = nameof(AdaptiveLightingConfig.Areas),
+		["ZonesAutoDiscovered"] = nameof(GlobalConfig.AreasAutoDiscovered)
+	};
+
 	private const string Header =
 		"""
 		# ============================================================================
@@ -93,8 +125,8 @@ public static class LightingConfigDocument
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
-		// OmitNull, not OmitDefaults: on a ZoneConfig every settings property is a nullable twin where null
-		// means "inherit Defaults", so a null must not be written. But a zone that deliberately sets
+		// OmitNull, not OmitDefaults: on an AreaConfig every settings property is a nullable twin where null
+		// means "inherit Defaults", so a null must not be written. But an area that deliberately sets
 		// Enabled: false or LuxThreshold: 0 has said something, and OmitDefaults would delete it.
 		ISerializer serializer = new SerializerBuilder()
 			.ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
@@ -106,21 +138,28 @@ public static class LightingConfigDocument
 	}
 
 	/// <summary>
-	///     Parses the text of a configuration document.
+	///     Parses the text of a configuration document, translating any pre-2.0 key names on the way in.
 	/// </summary>
 	/// <param name="yaml">The file's contents.</param>
-	/// <returns>The bound document. Never <c>null</c>.</returns>
+	/// <param name="logger">
+	///     Where the both-keys warning goes, or <c>null</c> when nobody is listening. Optional because the
+	///     translation must work identically whether or not a caller happens to have a logger.
+	/// </param>
+	/// <returns>The bound document, and whether it had to be translated to bind at all.</returns>
 	/// <exception cref="ArgumentNullException"><paramref name="yaml"/> is <c>null</c>.</exception>
 	/// <exception cref="LightingConfigException">
 	///     The text is not YAML, or carries no <see cref="RootKey"/> section.
 	/// </exception>
-	public static AdaptiveLightingConfig Deserialize(string yaml)
+	public static DocumentReadResult Deserialize(string yaml, ILogger? logger = null)
 	{
 		ArgumentNullException.ThrowIfNull(yaml);
 
+		(string current, bool usedLegacyKeys) = TranslateLegacyKeys(yaml, logger);
+
 		// IgnoreUnmatchedProperties mirrors the .NET configuration binder, which also ignores keys it does not
 		// know. Being stricter here would mean a stale key left in a hand-edited file bricks the UI that exists
-		// to fix exactly that kind of thing.
+		// to fix exactly that kind of thing. It is also why TranslateLegacyKeys has to run first: an unmatched
+		// Zones: would be ignored just as quietly as a stale key, and the house would load with no rooms.
 		IDeserializer deserializer = new DeserializerBuilder()
 			.IgnoreUnmatchedProperties()
 			.Build();
@@ -129,7 +168,7 @@ public static class LightingConfigDocument
 
 		try
 		{
-			document = deserializer.Deserialize<Dictionary<string, AdaptiveLightingConfig?>>(yaml);
+			document = deserializer.Deserialize<Dictionary<string, AdaptiveLightingConfig?>>(current);
 		}
 		catch (YamlException exception)
 		{
@@ -156,8 +195,101 @@ public static class LightingConfigDocument
 				$"The configuration file has no '{RootKey}' section. It has: {string.Join(", ", document.Keys)}.");
 
 		// A present-but-empty section parses to null. That is a legitimate starting point — an operator who
-		// deleted everything below the key — and it means "all defaults, no zones", which the validator will
+		// deleted everything below the key — and it means "all defaults, no areas", which the validator will
 		// then reject with a message that says so.
-		return document[match] ?? new AdaptiveLightingConfig();
+		return new DocumentReadResult(document[match] ?? new AdaptiveLightingConfig(), usedLegacyKeys);
 	}
+
+	/// <summary>
+	///     Rewrites every <see cref="LegacyKeys"/> name in <paramref name="yaml"/> to its current name, and
+	///     returns the text the binder should see.
+	/// </summary>
+	/// <remarks>
+	///     Works on the generic node tree rather than on the text: a regex over the file would rename the word
+	///     inside a room's name or an entity id just as happily as it renamed a key. The tree is walked to any
+	///     depth because the two legacy keys sit at two different levels (<c>Zones</c> under the root section,
+	///     <c>ZonesAutoDiscovered</c> under <c>Global</c>), and a rule that knows where to look is a rule that
+	///     breaks the day the schema moves something.
+	/// </remarks>
+	/// <returns>The translated text — the original instance when nothing matched — and whether anything did.</returns>
+	private static (string Yaml, bool UsedLegacyKeys) TranslateLegacyKeys(string yaml, ILogger? logger)
+	{
+		YamlStream stream = new();
+
+		try
+		{
+			stream.Load(new StringReader(yaml));
+		}
+		catch (YamlException exception)
+		{
+			throw new LightingConfigException(
+				$"The configuration file is not valid YAML: {exception.Message}", exception);
+		}
+
+		bool used = false;
+
+		foreach (YamlDocument document in stream.Documents)
+			used |= Translate(document.RootNode, logger);
+
+		if (!used)
+			return (yaml, false);
+
+		StringWriter writer = new();
+		stream.Save(writer, assignAnchors: false);
+
+		return (writer.ToString(), true);
+	}
+
+	/// <summary>Renames the legacy keys of one node and everything under it, in place.</summary>
+	/// <returns><c>true</c> when anything was renamed or dropped.</returns>
+	private static bool Translate(YamlNode node, ILogger? logger)
+	{
+		bool used = false;
+
+		switch (node)
+		{
+			case YamlMappingNode mapping:
+				// Materialised first: the renames below add to and remove from the very collection being walked.
+				foreach (KeyValuePair<YamlNode, YamlNode> child in mapping.Children.ToList())
+				{
+					used |= Translate(child.Value, logger);
+
+					if (child.Key is not YamlScalarNode { Value: { Length: > 0 } name }
+						|| !LegacyKeys.TryGetValue(name, out string? currentName))
+						continue;
+
+					mapping.Children.Remove(child.Key);
+					used = true;
+
+					// Both names present: the file said two things and the reader has to pick one. The current
+					// schema's name is the one a current editor wrote, so it wins and the legacy key is dropped.
+					if (HasKey(mapping, currentName))
+					{
+						logger?.LogWarning(
+							"The configuration document carries both the legacy key '{LegacyKey}' and '{CurrentKey}'. "
+							+ "The current key is used, the legacy one is dropped, and the next save writes only the current one.",
+							name, currentName);
+
+						continue;
+					}
+
+					mapping.Children.Add(new YamlScalarNode(currentName), child.Value);
+				}
+
+				break;
+
+			case YamlSequenceNode sequence:
+				foreach (YamlNode item in sequence.Children)
+					used |= Translate(item, logger);
+
+				break;
+		}
+
+		return used;
+	}
+
+	/// <summary>Whether <paramref name="mapping"/> already carries <paramref name="key"/>, matched as the binder matches.</summary>
+	private static bool HasKey(YamlMappingNode mapping, string key) =>
+		mapping.Children.Keys.OfType<YamlScalarNode>()
+			.Any(scalar => string.Equals(scalar.Value, key, StringComparison.OrdinalIgnoreCase));
 }

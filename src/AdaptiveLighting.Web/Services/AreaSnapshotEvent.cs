@@ -6,7 +6,7 @@ using AdaptiveLighting.Engine;
 namespace AdaptiveLighting.Web.Services;
 
 /// <summary>
-///     The wire shape of a <c>laget_lighting_zone</c> event, as
+///     The wire shape of an <c>adaptive_lighting_area</c> event, as
 ///     <see cref="AdaptiveLighting.Ha.HaStatePublisher"/> writes it.
 /// </summary>
 /// <remarks>
@@ -19,16 +19,16 @@ namespace AdaptiveLighting.Web.Services;
 ///     </para>
 ///     <para>
 ///         This is a deliberately lossy read of an HA event rather than a direct hand-off from the engine.
-///         See <see cref="ZoneSnapshotCache"/> for why.
+///         See <see cref="AreaSnapshotCache"/> for why.
 ///     </para>
 /// </remarks>
-public sealed record ZoneSnapshotEvent
+public sealed record AreaSnapshotEvent
 {
-	/// <summary>The zone's display name.</summary>
-	[JsonPropertyName("zone")]
-	public string? Zone { get; init; }
+	/// <summary>The area's display name.</summary>
+	[JsonPropertyName("area")]
+	public string? Area { get; init; }
 
-	/// <summary>The <see cref="ZoneState"/> name.</summary>
+	/// <summary>The <see cref="AreaState"/> name.</summary>
 	[JsonPropertyName("state")]
 	public string? State { get; init; }
 
@@ -64,7 +64,7 @@ public sealed record ZoneSnapshotEvent
 	[JsonPropertyName("timestamp")]
 	public DateTimeOffset Timestamp { get; init; }
 
-	/// <summary>When the engine last commanded this zone's lights, or <c>null</c> if it has not since start-up.</summary>
+	/// <summary>When the engine last commanded this area's lights, or <c>null</c> if it has not since start-up.</summary>
 	[JsonPropertyName("last_command_at")]
 	public DateTimeOffset? LastCommandAt { get; init; }
 
@@ -72,7 +72,7 @@ public sealed record ZoneSnapshotEvent
 	[JsonPropertyName("last_motion_at")]
 	public DateTimeOffset? LastMotionAt { get; init; }
 
-	/// <summary>When the zone's armed timer will act, or <c>null</c> when nothing is scheduled.</summary>
+	/// <summary>When the area's armed timer will act, or <c>null</c> when nothing is scheduled.</summary>
 	[JsonPropertyName("next_change_at")]
 	public DateTimeOffset? NextChangeAt { get; init; }
 
@@ -99,8 +99,8 @@ public sealed record ZoneSnapshotEvent
 	public string? DarknessDetail { get; init; }
 
 	/// <summary>
-	///     Rebuilds a <see cref="ZoneSnapshot"/> from the wire shape, or returns <c>null</c> when the payload
-	///     does not name a zone.
+	///     Rebuilds an <see cref="AreaSnapshot"/> from the wire shape, or returns <c>null</c> when the payload
+	///     does not name an area.
 	/// </summary>
 	/// <remarks>
 	///     Unparseable enum names degrade to their zero value rather than throwing: a UI that goes blank
@@ -108,14 +108,14 @@ public sealed record ZoneSnapshotEvent
 	///     <c>Disabled</c> for a moment.
 	/// </remarks>
 	/// <returns>The reconstructed snapshot, or <c>null</c>.</returns>
-	public ZoneSnapshot? ToSnapshot()
+	public AreaSnapshot? ToSnapshot()
 	{
-		if (string.IsNullOrWhiteSpace(Zone))
+		if (string.IsNullOrWhiteSpace(Area))
 			return null;
 
-		return new ZoneSnapshot(
-			Zone,
-			Enum.TryParse<ZoneState>(State, out ZoneState state) ? state : default,
+		return new AreaSnapshot(
+			Area,
+			Enum.TryParse<AreaState>(State, out AreaState state) ? state : default,
 			Enum.TryParse<TransitionReason>(Reason, out TransitionReason reason) ? reason : default,
 			Enum.TryParse<HouseMode>(Mode, out HouseMode mode) ? mode : default,
 			KillSwitchActive,

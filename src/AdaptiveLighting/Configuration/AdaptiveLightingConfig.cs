@@ -12,17 +12,17 @@ public class AdaptiveLightingConfig
 	/// <summary>Free-form label for this document; used in log and notification text only.</summary>
 	public string? ConfigName { get; set; }
 
-	/// <summary>House-wide settings shared by every zone.</summary>
+	/// <summary>House-wide settings shared by every area.</summary>
 	public GlobalConfig Global { get; set; } = new();
 
-	/// <summary>Baseline for every per-zone knob. A <see cref="ZoneConfig"/> overrides only what differs.</summary>
-	public ZoneSettings Defaults { get; set; } = new();
+	/// <summary>Baseline for every per-area knob. A <see cref="AreaConfig"/> overrides only what differs.</summary>
+	public AreaSettings Defaults { get; set; } = new();
 
 	/// <summary>The house-wide circadian table. Ordered by <see cref="TimePeriodConfig.Start"/> at resolution time, not here.</summary>
 	public List<TimePeriodConfig> Periods { get; set; } = [];
 
-	/// <summary>The zones the engine manages. Zones are opt-in: an HA area absent from this list is never touched.</summary>
-	public List<ZoneConfig> Zones { get; set; } = [];
+	/// <summary>The areas the engine manages. Areas are opt-in: an HA area absent from this list is never touched.</summary>
+	public List<AreaConfig> Areas { get; set; } = [];
 
 	/// <summary>
 	///     The document a fresh installation starts from: valid, runnable, and naming nothing.
@@ -36,16 +36,16 @@ public class AdaptiveLightingConfig
 	///         person by itself, while <c>person.REPLACE_ME</c> finds nothing and blocks the engine.
 	///     </para>
 	///     <para>
-	///         So: no persons, no zones, no house mode, no kill switch (the built-in app switch is used). Only the
+	///         So: no persons, no areas, no house mode, no kill switch (the built-in app switch is used). Only the
 	///         circadian table is filled in, because a sensible day/night curve is the one thing that is the same in
-	///         every house. Zones arrive on their own — see <see cref="Engine.ZoneAutoDiscovery"/>.
+	///         every house. Areas arrive on their own — see <see cref="Engine.AreaAutoDiscovery"/>.
 	///     </para>
 	/// </remarks>
 	public static AdaptiveLightingConfig CreateDefault() => new()
 	{
 		ConfigName = "Adaptive lighting",
 		Global = new GlobalConfig(),
-		Defaults = new ZoneSettings(),
+		Defaults = new AreaSettings(),
 		Periods =
 		[
 			new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
@@ -53,12 +53,12 @@ public class AdaptiveLightingConfig
 			new() { Name = "evening", Start = "sunset-01:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
 			new() { Name = "night",   Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30 },
 		],
-		Zones = [],
+		Areas = [],
 	};
 }
 
 /// <summary>
-///     Settings that apply to the whole house rather than to a single zone.
+///     Settings that apply to the whole house rather than to a single area.
 /// </summary>
 public class GlobalConfig
 {
@@ -114,23 +114,23 @@ public class GlobalConfig
 	public HouseModeConfig? HouseMode { get; set; }
 
 	/// <summary>
-	///     A house-wide outdoor lux sensor, used as the default darkness reading for any zone that resolves no lux
-	///     sensor of its own. One outdoor sensor can then drive "is it dark" across every room, instead of each zone
-	///     needing its own or falling back to sun elevation. A zone with its own lux sensor keeps using that; a zone
-	///     whose <see cref="ZoneSettings.Darkness"/> is <c>Sun</c> or <c>Always</c> ignores lux entirely. <c>null</c>
-	///     leaves today's behaviour (per-zone lux, else the sun-elevation fallback).
+	///     A house-wide outdoor lux sensor, used as the default darkness reading for any area that resolves no lux
+	///     sensor of its own. One outdoor sensor can then drive "is it dark" across every room, instead of each area
+	///     needing its own or falling back to sun elevation. An area with its own lux sensor keeps using that; an area
+	///     whose <see cref="AreaSettings.Darkness"/> is <c>Sun</c> or <c>Always</c> ignores lux entirely. <c>null</c>
+	///     leaves today's behaviour (per-area lux, else the sun-elevation fallback).
 	/// </summary>
 	public string? OutdoorLuxSensor { get; set; }
 
 	/// <summary>
-	///     Whether zones have already been discovered from the Home Assistant area registry once.
+	///     Whether areas have already been discovered from the Home Assistant area registry once.
 	/// </summary>
 	/// <remarks>
-	///     Set the first time the engine auto-populates an empty zone list, and never reset. It is what stops a
-	///     household that has deliberately removed every zone from having them silently grow back on the next
+	///     Set the first time the engine auto-populates an empty area list, and never reset. It is what stops a
+	///     household that has deliberately removed every area from having them silently grow back on the next
 	///     restart: discovery is a one-time convenience on a fresh install, not a standing policy.
 	/// </remarks>
-	public bool ZonesAutoDiscovered { get; set; }
+	public bool AreasAutoDiscovered { get; set; }
 
 	/// <summary>HA user id of the NetDaemon token. Optional; a belt-and-braces input to override detection.</summary>
 	public string? NetDaemonUserId { get; set; }
@@ -139,7 +139,7 @@ public class GlobalConfig
 	public int AwayDebounceMinutes { get; set; } = 5;
 
 	/// <summary>
-	///     How often a zone re-evaluates the world: an active zone's circadian target, and — for every zone,
+	///     How often an area re-evaluates the world: an active area's circadian target, and — for every area,
 	///     whatever its state — darkness, period and house mode, so a snapshot that has stopped being true is
 	///     replaced rather than left standing. A tick that finds nothing changed publishes nothing.
 	/// </summary>
@@ -194,7 +194,7 @@ public class GlobalConfig
 	public IReadOnlyList<string> EffectiveMotionDeviceClasses =>
 		MotionDeviceClasses.Count > 0 ? MotionDeviceClasses : DefaultMotionDeviceClasses;
 
-	/// <summary>Device class that qualifies a <c>sensor</c> as the zone's lux source during discovery.</summary>
+	/// <summary>Device class that qualifies a <c>sensor</c> as the area's lux source during discovery.</summary>
 	public string IlluminanceDeviceClass { get; set; } = "illuminance";
 
 	/// <summary>Brightness difference below which a light is considered already at target, and no command is sent.</summary>
@@ -205,12 +205,12 @@ public class GlobalConfig
 }
 
 /// <summary>
-///     Every knob a zone can carry. <see cref="AdaptiveLightingConfig.Defaults"/> supplies the baseline;
-///     <see cref="ZoneConfig"/> holds a nullable twin of each property and merges via <see cref="ZoneConfig.Effective"/>.
+///     Every knob an area can carry. <see cref="AdaptiveLightingConfig.Defaults"/> supplies the baseline;
+///     <see cref="AreaConfig"/> holds a nullable twin of each property and merges via <see cref="AreaConfig.Effective"/>.
 /// </summary>
-public class ZoneSettings
+public class AreaSettings
 {
-	/// <summary>Motion-free time after which an active zone dims to its pre-off warning level.</summary>
+	/// <summary>Motion-free time after which an active area dims to its pre-off warning level.</summary>
 	public int VacancyTimeoutSeconds { get; set; } = 600;
 
 	/// <summary>Length of the pre-off warning: the grace in which motion still cancels darkness.</summary>
@@ -219,50 +219,50 @@ public class ZoneSettings
 	/// <summary>Fraction of the circadian brightness used for the pre-off warning level.</summary>
 	public double PreOffBrightnessFactor { get; set; } = 0.5;
 
-	/// <summary>How long a manual change holds the zone before automatic control resumes.</summary>
+	/// <summary>How long a manual change holds the area before automatic control resumes.</summary>
 	public int OverrideDurationMinutes { get; set; } = 120;
 
 	/// <summary>Motion-free time after a manual turn-off before the suppression is lifted.</summary>
 	public int VacancyResetMinutes { get; set; } = 10;
 
-	/// <summary>Which signal decides whether the zone is dark enough to light.</summary>
+	/// <summary>Which signal decides whether the area is dark enough to light.</summary>
 	public DarknessSource Darkness { get; set; } = DarknessSource.Either;
 
-	/// <summary>Lux at or below which the zone counts as dark.</summary>
+	/// <summary>Lux at or below which the area counts as dark.</summary>
 	public double LuxThreshold { get; set; } = 40;
 
 	/// <summary>Extra lux required to leave the dark state, so a sensor sitting on the threshold cannot flap.</summary>
 	public double LuxHysteresis { get; set; } = 10;
 
-	/// <summary>Sun elevation in degrees below which the zone counts as dark.</summary>
+	/// <summary>Sun elevation in degrees below which the area counts as dark.</summary>
 	public double SunElevationThreshold { get; set; } = 3.0;
 
-	/// <summary>The sun entity supplying elevation and the sunrise/sunset boundaries for this zone.</summary>
+	/// <summary>The sun entity supplying elevation and the sunrise/sunset boundaries for this area.</summary>
 	public string SunEntity { get; set; } = "sun.sun";
 
-	/// <summary>Fade length used while the zone is not dark.</summary>
+	/// <summary>Fade length used while the area is not dark.</summary>
 	public double DayTransitionSeconds { get; set; } = 1;
 
-	/// <summary>Fade length used while the zone is dark — gentler, because eyes are dark-adapted.</summary>
+	/// <summary>Fade length used while the area is dark — gentler, because eyes are dark-adapted.</summary>
 	public double NightTransitionSeconds { get; set; } = 15;
 
-	/// <summary>Whether the zone clamps to the night period's caps while sleep mode is on.</summary>
+	/// <summary>Whether the area clamps to the night period's caps while sleep mode is on.</summary>
 	public bool RespectSleepMode { get; set; }
 
-	/// <summary>Whether the zone refuses to auto-on at all while sleep mode is on.</summary>
+	/// <summary>Whether the area refuses to auto-on at all while sleep mode is on.</summary>
 	public bool SleepBlocksAutoOn { get; set; }
 
-	/// <summary>Whether the zone opts out of the leaving sweep. Outdoor and security lights set this.</summary>
+	/// <summary>Whether the area opts out of the leaving sweep. Outdoor and security lights set this.</summary>
 	public bool SkipAwaySweep { get; set; }
 
-	/// <summary>Whether the zone lights up on first arrival when it is dark.</summary>
+	/// <summary>Whether the area lights up on first arrival when it is dark.</summary>
 	public bool WelcomeHome { get; set; }
 
-	/// <summary>Whether the engine commands this zone at all. A disabled zone is still observed and published.</summary>
+	/// <summary>Whether the engine commands this area at all. A disabled area is still observed and published.</summary>
 	public bool Enabled { get; set; } = true;
 }
 
-/// <summary>Which signal a zone consults to decide it is dark enough to light.</summary>
+/// <summary>Which signal an area consults to decide it is dark enough to light.</summary>
 public enum DarknessSource
 {
 	/// <summary>Lux sensor only. Falls back to the sun when no lux sensor resolves.</summary>

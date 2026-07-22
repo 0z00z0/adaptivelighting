@@ -6,11 +6,11 @@
 	whole room that never lights. Choosing from the registry makes the distinction stop mattering — the
 	name is picked, the slug is stored, and nobody has to know there were two of them.
 
-	Each area is labelled with what a zone on it would actually resolve to — "Stue (stue) — 1 light, 1
+	Each area is labelled with what a room there would actually resolve to — "Stue (stue) — 1 light, 1
 	motion, 1 lux" — because that is the question being asked here and nothing else is. It used to show the
 	registry's row count, which was three things wrong at once: it counted disabled rows Home Assistant
 	itself does not count (517 against area_entities('stue') = 164 on one live instance), it counted everything in the
-	room rather than anything to do with lighting, and it was therefore reassuringly large for an area that
+	room rather than anything to do with lighting, and it was therefore reassuringly large for a room that
 	would resolve to nothing. An area that reads "0 lights" is wrong on sight, before it is saved.
 *@
 
@@ -52,7 +52,7 @@
 	}
 	else if (Selected is { HasLights: false })
 	{
-		@* The zone error would say this later anyway. Saying it here costs a save-and-read to find out. *@
+		@* The area error would say this later anyway. Saying it here costs a save-and-read to find out. *@
 		<span class="picker-note bad">
 			No lights found in this room, so it can't run. Assign lights to the area in Home Assistant, or pick them
 			by hand below.

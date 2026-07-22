@@ -64,11 +64,24 @@ public sealed class LightingConfigStore
 	public DateTimeOffset? LastWrittenUtc => Exists ? File.GetLastWriteTimeUtc(FilePath) : null;
 
 	/// <summary>
-	///     Reads the document from disk.
+	///     Reads the document from disk, for callers that do not care how it was written.
 	/// </summary>
 	/// <returns>The parsed document.</returns>
 	/// <exception cref="LightingConfigException">The file is missing, unreadable, or not a valid document.</exception>
-	public AdaptiveLightingConfig Load()
+	public AdaptiveLightingConfig Load() => Read().Config;
+
+	/// <summary>
+	///     Reads the document from disk and reports whether it had to be translated out of the pre-2.0 schema
+	///     to be read at all.
+	/// </summary>
+	/// <remarks>
+	///     Separate from <see cref="Load"/> because exactly one caller acts on the flag —
+	///     <see cref="LightingEngineHost.Reload"/>, which rewrites such a file in the current schema — and every
+	///     other read would only have to say <c>.Config</c> to ignore it.
+	/// </remarks>
+	/// <returns>The parsed document and the translation flag.</returns>
+	/// <exception cref="LightingConfigException">The file is missing, unreadable, or not a valid document.</exception>
+	public DocumentReadResult Read()
 	{
 		lock (_gate)
 		{
@@ -98,7 +111,7 @@ public sealed class LightingConfigStore
 				throw new LightingConfigException($"Not allowed to read '{FilePath}': {exception.Message}", exception);
 			}
 
-			return LightingConfigDocument.Deserialize(text);
+			return LightingConfigDocument.Deserialize(text, _logger);
 		}
 	}
 
@@ -142,8 +155,8 @@ public sealed class LightingConfigStore
 					File.Move(temporary, FilePath);
 
 				_logger.LogInformation(
-					"Wrote lighting configuration to {Path} ({Zones} zones, {Periods} periods). Previous version kept at {Backup}.",
-					FilePath, config.Zones.Count, config.Periods.Count, BackupPath);
+					"Wrote lighting configuration to {Path} ({Areas} areas, {Periods} periods). Previous version kept at {Backup}.",
+					FilePath, config.Areas.Count, config.Periods.Count, BackupPath);
 			}
 			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 			{

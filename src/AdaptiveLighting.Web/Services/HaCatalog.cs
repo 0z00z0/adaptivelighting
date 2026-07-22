@@ -7,7 +7,7 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Web.Services;
 
 /// <summary>
-///     One area, as a picker offers it, labelled with what a zone on it would actually get.
+///     One area, as a picker offers it, labelled with what a room there would actually get.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -29,10 +29,10 @@ public sealed record AreaOption(string Id, string Name, int LightCount, int Moti
 	/// <summary>What the picker shows: the name a human knows, the slug they must never have to remember, and what they would get.</summary>
 	public string Label => $"{NameAndId} — {Counts}";
 
-	/// <summary>What a zone on this area resolves to, in words — the whole reason the label is worth reading.</summary>
+	/// <summary>What a room here resolves to, in words — the whole reason the label is worth reading.</summary>
 	public string Counts => $"{Pluralise(LightCount, "light")}, {MotionCount} motion, {LuxCount} lux";
 
-	/// <summary>Whether a zone on this area could run at all. An area with no lights is the common, silent mistake.</summary>
+	/// <summary>Whether a room here could run at all. An area with no lights is the common, silent mistake.</summary>
 	public bool HasLights => LightCount > 0;
 
 	/// <summary>Whether discovery would refuse this area for having more than one lux sensor to choose between.</summary>
@@ -73,11 +73,11 @@ public sealed record EntityOption(string EntityId, string FriendlyName, string? 
 }
 
 /// <summary>
-///     What discovery makes of a zone right now, for the editor to show before anything is saved.
+///     What discovery makes of an area right now, for the editor to show before anything is saved.
 /// </summary>
-/// <param name="Resolved">The resolved zone, or <c>null</c> when discovery fails.</param>
+/// <param name="Resolved">The resolved area, or <c>null</c> when discovery fails.</param>
 /// <param name="Error">Why discovery fails, in the resolver's own words.</param>
-public sealed record ZonePreview(ResolvedZone? Resolved, string? Error);
+public sealed record AreaPreview(ResolvedArea? Resolved, string? Error);
 
 /// <summary>
 ///     Turns the Home Assistant registry into things a person can pick from, and answers "what would discovery
@@ -91,9 +91,9 @@ public sealed record ZonePreview(ResolvedZone? Resolved, string? Error);
 ///         shows and store the ids the engine needs, without a human ever transcribing one.
 ///     </para>
 ///     <para>
-///         <b>Discovery preview is the real resolver, not a lookalike.</b> <see cref="PreviewZone"/> runs
-///         <see cref="ZoneEntityResolver"/> — the same class the engine runs at start-up — against the
-///         half-finished zone in the browser. If it says a zone resolves to three lights and a lux sensor, that
+///         <b>Discovery preview is the real resolver, not a lookalike.</b> <see cref="PreviewArea"/> runs
+///         <see cref="AreaEntityResolver"/> — the same class the engine runs at start-up — against the
+///         half-finished area in the browser. If it says an area resolves to three lights and a lux sensor, that
 ///         is what the engine will do with it, because it is the same code. A second implementation that
 ///         "showed roughly what discovery does" would drift, and would be believed while it drifted.
 ///     </para>
@@ -140,7 +140,7 @@ public sealed class HaCatalog
 	/// <summary>Creates the catalog.</summary>
 	/// <param name="ha">Reads entity state and attributes.</param>
 	/// <param name="registry">Reads areas, labels and entity registrations.</param>
-	/// <param name="loggerFactory">Builds the resolver's logger for <see cref="PreviewZone"/>.</param>
+	/// <param name="loggerFactory">Builds the resolver's logger for <see cref="PreviewArea"/>.</param>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public HaCatalog(IHaContext ha, IHaRegistry registry, ILoggerFactory loggerFactory)
 	{
@@ -162,7 +162,7 @@ public sealed class HaCatalog
 	public bool IsHomeAssistantReady { get; private set; } = true;
 
 	/// <summary>
-	///     Every area the registry knows, by display name, each labelled with what a zone on it would resolve to.
+	///     Every area the registry knows, by display name, each labelled with what a room there would resolve to.
 	/// </summary>
 	/// <param name="global">The discovery conventions — labels and device classes — the counts must honour.</param>
 	/// <returns>The areas, ordered by display name. Empty when Home Assistant has not answered.</returns>
@@ -188,7 +188,7 @@ public sealed class HaCatalog
 
 	/// <summary>
 	///     The lights, motion sensors and illuminance sensors <paramref name="areaId"/> yields, for scoping the
-	///     pickers to the area the zone is actually about.
+	///     pickers to the area the room is actually about.
 	/// </summary>
 	/// <remarks>
 	///     These are discovery's own answers, so a ghost the engine excludes is not offered here either. That
@@ -356,29 +356,29 @@ public sealed class HaCatalog
 		!string.IsNullOrWhiteSpace(entityId) && TryGetState(entityId) is not null;
 
 	/// <summary>
-	///     Runs the engine's own zone resolver against <paramref name="zone"/> as it stands in the editor.
+	///     Runs the engine's own area resolver against <paramref name="area"/> as it stands in the editor.
 	/// </summary>
-	/// <param name="zone">The zone being edited. Not mutated.</param>
+	/// <param name="area">The area being edited. Not mutated.</param>
 	/// <param name="defaults">The document's defaults, for the settings merge.</param>
 	/// <param name="global">The document's globals, which supply the discovery conventions.</param>
 	/// <returns>What discovery finds, or why it cannot.</returns>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	public ZonePreview PreviewZone(ZoneConfig zone, ZoneSettings defaults, GlobalConfig global)
+	public AreaPreview PreviewArea(AreaConfig area, AreaSettings defaults, GlobalConfig global)
 	{
-		ArgumentNullException.ThrowIfNull(zone);
+		ArgumentNullException.ThrowIfNull(area);
 		ArgumentNullException.ThrowIfNull(defaults);
 		ArgumentNullException.ThrowIfNull(global);
 
 		try
 		{
-			return Resolver(global).TryResolve(zone, defaults, out ResolvedZone? resolved, out var error)
-				? new ZonePreview(resolved, null)
-				: new ZonePreview(null, error);
+			return Resolver(global).TryResolve(area, defaults, out ResolvedArea? resolved, out var error)
+				? new AreaPreview(resolved, null)
+				: new AreaPreview(null, error);
 		}
 		catch (InvalidOperationException)
 		{
 			IsHomeAssistantReady = false;
-			return new ZonePreview(null, "Home Assistant is not connected yet, so discovery cannot be previewed.");
+			return new AreaPreview(null, "Home Assistant is not connected yet, so discovery cannot be previewed.");
 		}
 	}
 
@@ -422,11 +422,11 @@ public sealed class HaCatalog
 		}
 	}
 
-	private ZoneEntityResolver Resolver(GlobalConfig global) => new(
+	private AreaEntityResolver Resolver(GlobalConfig global) => new(
 		_ha,
 		new HaAreaRegistry(_registry),
 		global,
-		_loggerFactory.CreateLogger<ZoneEntityResolver>());
+		_loggerFactory.CreateLogger<AreaEntityResolver>());
 
 	private AreaOption Option(string areaId, string name, GlobalConfig global)
 	{

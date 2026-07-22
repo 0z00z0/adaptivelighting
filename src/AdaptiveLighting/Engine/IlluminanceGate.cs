@@ -5,7 +5,7 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Engine;
 
 /// <summary>
-///     Answers the one question that gates auto-on: is this zone dark enough to be worth lighting?
+///     Answers the one question that gates auto-on: is this area dark enough to be worth lighting?
 /// </summary>
 /// <remarks>
 ///     Deliberately open-loop. A closed loop — raise the lights until the lux sensor is satisfied — oscillates,
@@ -18,7 +18,7 @@ public sealed class IlluminanceGate
 
 	private readonly IHaContext _ha;
 	private readonly string? _luxEntityId;
-	private readonly ZoneSettings _settings;
+	private readonly AreaSettings _settings;
 	private readonly ILogger _logger;
 	private readonly object _gate = new();
 
@@ -31,13 +31,13 @@ public sealed class IlluminanceGate
 	private double? _lastElevation;
 
 	/// <summary>
-	///     Creates a gate for one zone.
+	///     Creates a gate for one area.
 	/// </summary>
 	/// <param name="ha">Used only to read state; the gate never commands anything.</param>
-	/// <param name="luxEntityId">The zone's lux sensor, or <c>null</c> when none resolved.</param>
+	/// <param name="luxEntityId">The area's lux sensor, or <c>null</c> when none resolved.</param>
 	/// <param name="settings">Supplies the thresholds, the hysteresis and the choice of source.</param>
 	/// <param name="logger">Where the fallback warning goes.</param>
-	public IlluminanceGate(IHaContext ha, string? luxEntityId, ZoneSettings settings, ILogger logger)
+	public IlluminanceGate(IHaContext ha, string? luxEntityId, AreaSettings settings, ILogger logger)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_luxEntityId = luxEntityId;
@@ -46,7 +46,7 @@ public sealed class IlluminanceGate
 	}
 
 	/// <summary>
-	///     Whether the zone currently counts as dark. Polled at decision time rather than driven by a
+	///     Whether the area currently counts as dark. Polled at decision time rather than driven by a
 	///     subscription: nothing in the state machine turns lights <i>off</i> because it got bright, so a
 	///     fresh reading is only ever needed when a decision is being made.
 	/// </summary>
@@ -94,7 +94,7 @@ public sealed class IlluminanceGate
 	/// <remarks>
 	///     Hysteresis is applied about the configured threshold: it takes <c>LuxThreshold</c> to become dark but
 	///     <c>LuxThreshold + LuxHysteresis</c> to stop being dark. Without it a sensor resting on the threshold
-	///     makes the zone strobe.
+	///     makes the area strobe.
 	/// </remarks>
 	private bool? EvaluateLux()
 	{

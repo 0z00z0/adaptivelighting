@@ -7,8 +7,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     A do-nothing <see cref="IHaRegistry"/>: every collection is empty and every lookup is <c>null</c>.
 /// </summary>
 /// <remarks>
-///     The orchestrator only touches the registry while resolving zones from an area. Tests that use explicit
-///     light/motion lists — or no zones at all — never reach it, so an empty registry is enough to construct the
+///     The orchestrator only touches the registry while resolving an area to its entities. Tests that use explicit
+///     light/motion lists — or no areas at all — never reach it, so an empty registry is enough to construct the
 ///     orchestrator without pulling in HassModel's <c>Area</c>/<c>EntityRegistration</c> types, whose constructors
 ///     are not public and cannot be built in a test.
 /// </remarks>

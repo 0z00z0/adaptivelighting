@@ -12,12 +12,12 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Engine;
 
 /// <summary>
-///     The engine's composition root: resolves the configured zones, builds a controller for each, and owns the
-///     house-wide state every zone reads.
+///     The engine's composition root: resolves the configured areas, builds a controller for each, and owns the
+///     house-wide state every area reads.
 /// </summary>
 /// <remarks>
 ///     <para>
-///         One orchestrator per host, fanning out to one controller per zone. The app model creates exactly one
+///         One orchestrator per host, fanning out to one controller per area. The app model creates exactly one
 ///         instance per <c>[NetDaemonApp]</c> class, so "one app per room" is not on the table — and would be the
 ///         worse design anyway, since presence, mode and the registry snapshot are all shared.
 ///     </para>
@@ -43,7 +43,7 @@ public sealed class LightingOrchestrator : IDisposable
 	private readonly ILogger _logger;
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
-	private readonly List<ZoneController> _zones = [];
+	private readonly List<AreaController> _areas = [];
 	private readonly HashSet<string> _motionSensorUnion = new(StringComparer.OrdinalIgnoreCase);
 	private readonly CompositeDisposable _subscriptions = [];
 
@@ -52,13 +52,13 @@ public sealed class LightingOrchestrator : IDisposable
 	private bool _started;
 
 	/// <summary>Creates an orchestrator. Nothing is wired until <see cref="Start"/>.</summary>
-	/// <param name="ha">The HA context every zone reads from.</param>
+	/// <param name="ha">The HA context every area reads from.</param>
 	/// <param name="registry">Source of areas and labels for discovery.</param>
 	/// <param name="scheduler">The engine's only clock.</param>
 	/// <param name="config">The validated configuration document.</param>
 	/// <param name="actuator">Where light commands go.</param>
-	/// <param name="publisher">Where zone snapshots go.</param>
-	/// <param name="notifier">How zone failures reach a human.</param>
+	/// <param name="publisher">Where area snapshots go.</param>
+	/// <param name="notifier">How area failures reach a human.</param>
 	/// <param name="loggerFactory">Builds the loggers for every part of the engine.</param>
 	public LightingOrchestrator(
 		IHaContext ha,
@@ -82,11 +82,11 @@ public sealed class LightingOrchestrator : IDisposable
 		_logger = loggerFactory.CreateLogger<LightingOrchestrator>();
 	}
 
-	/// <summary>The zones that resolved and are running. Zones that failed resolution are absent.</summary>
-	public IReadOnlyList<ZoneController> Zones => _zones;
+	/// <summary>The areas that resolved and are running. Areas that failed resolution are absent.</summary>
+	public IReadOnlyList<AreaController> Areas => _areas;
 
 	/// <summary>
-	///     Resolves the zones and starts the engine. Zones that fail to resolve are skipped and reported in one
+	///     Resolves the areas and starts the engine. Areas that fail to resolve are skipped and reported in one
 	///     notification: an entity renamed in HA costs that room, not the house.
 	/// </summary>
 	public void Start()
@@ -96,43 +96,43 @@ public sealed class LightingOrchestrator : IDisposable
 
 		_started = true;
 
-		_logger.LogInformation("Starting adaptive lighting: {ConfigName}, {ZoneCount} zones configured.",
-			_config.ConfigName ?? "(unnamed)", _config.Zones.Count);
+		_logger.LogInformation("Starting adaptive lighting: {ConfigName}, {AreaCount} areas configured.",
+			_config.ConfigName ?? "(unnamed)", _config.Areas.Count);
 
-		ZoneEntityResolver resolver = new(
+		AreaEntityResolver resolver = new(
 			_ha,
 			new HaAreaRegistry(_registry),
 			_config.Global,
-			_loggerFactory.CreateLogger<ZoneEntityResolver>());
+			_loggerFactory.CreateLogger<AreaEntityResolver>());
 		List<string> failures = new();
 
-		foreach (ZoneConfig zoneConfig in _config.Zones)
+		foreach (AreaConfig areaConfig in _config.Areas)
 		{
-			if (!resolver.TryResolve(zoneConfig, _config.Defaults, out ResolvedZone? resolved, out string? error))
+			if (!resolver.TryResolve(areaConfig, _config.Defaults, out ResolvedArea? resolved, out string? error))
 			{
-				_logger.LogError("Zone {Zone} disabled: {Error}", zoneConfig.DisplayName, error);
-				failures.Add($"{zoneConfig.DisplayName}: {error}");
+				_logger.LogError("Area {Area} disabled: {Error}", areaConfig.DisplayName, error);
+				failures.Add($"{areaConfig.DisplayName}: {error}");
 				continue;
 			}
 
-			// The union of every zone's motion sensors: an option that resets on presence with no explicit sensor
+			// The union of every area's motion sensors: an option that resets on presence with no explicit sensor
 			// list resets on any of these (09 owner refinement). Collected before the mode monitor is built.
 			_motionSensorUnion.UnionWith(resolved!.MotionSensors);
-			_zones.Add(BuildZone(resolved!));
+			_areas.Add(BuildArea(resolved!));
 		}
 
 		StartHouseMonitors();
 
-		foreach (ZoneController zone in _zones)
-			zone.Start();
+		foreach (AreaController area in _areas)
+			area.Start();
 
 		PublishHouseState();
 		ReportFailures(failures);
 	}
 
-	private ZoneController BuildZone(ResolvedZone resolved)
+	private AreaController BuildArea(ResolvedArea resolved)
 	{
-		// One calculator per zone: the periods are house-wide but the sun entity is a zone setting, and a
+		// One calculator per area: the periods are house-wide but the sun entity is an area setting, and a
 		// calculator that reads the wrong sun would place every boundary wrong.
 		CircadianCalculator circadian = new(
 			_config.Periods,
@@ -140,7 +140,7 @@ public sealed class LightingOrchestrator : IDisposable
 			() => ReadSunTimes(resolved.Settings.SunEntity));
 
 		// Surface any period the calculator cannot use, so a dropped boundary is a logged warning rather than a
-		// silent hole the table wraps over — the failure behind a zone "showing night at 04:16" when its
+		// silent hole the table wraps over — the failure behind an area "showing night at 04:16" when its
 		// sun-anchored morning could not be placed. The calculator stays pure and does the logging here, once
 		// each: parse failures are known now (read from DroppedPeriods); sun-anchor failures surface per day, on
 		// the event, deduplicated so a persistently-unresolvable period logs once rather than every tick.
@@ -148,12 +148,12 @@ public sealed class LightingOrchestrator : IDisposable
 		foreach (DroppedPeriod drop in circadian.DroppedPeriods)
 			LogDroppedPeriod(resolved.Name, drop);
 
-		return new ZoneController(
+		return new AreaController(
 			_ha, _scheduler, resolved, _config.Global, _config.Periods, circadian,
 			_actuator, _publisher, _house, _loggerFactory);
 	}
 
-	private void LogDroppedPeriod(string zoneName, DroppedPeriod drop)
+	private void LogDroppedPeriod(string areaName, DroppedPeriod drop)
 	{
 		string why = drop.Reason switch
 		{
@@ -163,10 +163,10 @@ public sealed class LightingOrchestrator : IDisposable
 		};
 
 		_logger.LogWarning(
-			"Zone {Zone}: circadian period '{Period}' (Start '{Start}') is dropped from the table because {Why}. "
+			"Area {Area}: circadian period '{Period}' (Start '{Start}') is dropped from the table because {Why}. "
 			+ "The remaining periods still cover the day by wrapping, so a boundary that should exist may be missing — "
-			+ "check this period's Start if a zone lands in the wrong period.",
-			zoneName, drop.PeriodName, drop.Start, why);
+			+ "check this period's Start if an area lands in the wrong period.",
+			areaName, drop.PeriodName, drop.Start, why);
 	}
 
 	private void StartHouseMonitors()
@@ -203,7 +203,7 @@ public sealed class LightingOrchestrator : IDisposable
 		if (state == previous)
 			return;
 
-		// Scene apply on entry (09 §3.3): once per entry, never re-asserted. The zones' pause is their own doing —
+		// Scene apply on entry (09 §3.3): once per entry, never re-asserted. The areas' pause is their own doing —
 		// GoAway skips the sweep and Guest enters SceneHold — this only applies the scene the mode names.
 		if (!string.Equals(previous.ActiveScene, state.ActiveScene, StringComparison.Ordinal)
 			&& state.ActiveScene is { Length: > 0 } scene)
@@ -222,8 +222,8 @@ public sealed class LightingOrchestrator : IDisposable
 
 		string body = string.Join("", failures.Select(failure => $"<li>{failure}</li>"));
 		_notifier.Notify(
-			"Adaptive lighting: zones disabled",
-			$"{failures.Count} of {_config.Zones.Count} zones could not be resolved and are not being managed:<ul>{body}</ul>");
+			"Adaptive lighting: areas disabled",
+			$"{failures.Count} of {_config.Areas.Count} areas could not be resolved and are not being managed:<ul>{body}</ul>");
 	}
 
 	/// <summary>
@@ -259,10 +259,10 @@ public sealed class LightingOrchestrator : IDisposable
 	{
 		_subscriptions.Dispose();
 
-		foreach (ZoneController zone in _zones)
-			zone.Dispose();
+		foreach (AreaController area in _areas)
+			area.Dispose();
 
-		_zones.Clear();
+		_areas.Clear();
 		_presence?.Dispose();
 		_modes?.Dispose();
 		_house.Dispose();

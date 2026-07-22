@@ -37,7 +37,7 @@ public enum PeriodDropReason
 
 /// <summary>
 ///     A period the calculator had to leave out of the table, and why. Surfaced so a vanished period is a logged
-///     warning rather than a silent hole the table wraps over — the failure mode behind "the zone shows night at
+///     warning rather than a silent hole the table wraps over — the failure mode behind "the area shows night at
 ///     04:16" when a sun-anchored morning boundary could not be placed.
 /// </summary>
 /// <param name="PeriodName">The dropped period's name.</param>

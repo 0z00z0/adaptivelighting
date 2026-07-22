@@ -1,42 +1,42 @@
 @*
-	One zone, told as a story rather than dumped as fields: what the lights are doing, what happened
+	One area, told as a story rather than dumped as fields: what the lights are doing, what happened
 	last, what happens next, and the conditions the engine saw — each dated, so nothing stale can pass
 	itself off as current. The colour language is the state-machine diagram's: blue when the engine
-	decides, amber when a human did, grey when the engine is watching but not commanding. A lit zone
+	decides, amber when a human did, grey when the engine is watching but not commanding. A lit area
 	glows in the warmth it was actually commanded to, straight off the Kelvin value. The countdown bar
 	draws the span the engine published — both ends — and ticks on the page's own clock; when an event
 	predates NextChangeFrom the bar is simply absent rather than drawn from an invented start.
 *@
 
-<article class="zone family-@Family" aria-label="@Snapshot.ZoneName">
-	<header class="zone-head">
+<article class="area family-@Family" aria-label="@Snapshot.AreaName">
+	<header class="area-head">
 		<span class="lamp @LampClass" style="@LampStyle" aria-hidden="true"></span>
-		<span class="zone-name">@Snapshot.ZoneName</span>
-		<span class="zone-badge" title="State: @Snapshot.State">@Badge</span>
+		<span class="area-name">@Snapshot.AreaName</span>
+		<span class="area-badge" title="State: @Snapshot.State">@Badge</span>
 	</header>
 
-	<p class="zone-line">@Headline</p>
+	<p class="area-line">@Headline</p>
 
-	<p class="zone-event">
+	<p class="area-event">
 		<span class="event-text">@EventText</span>
 		<span class="event-when" title="@Local(Snapshot.Timestamp)">@Ago(Snapshot.Timestamp)</span>
 	</p>
 
 	@if (NextLine is { Length: > 0 } next)
 	{
-		<p class="zone-next @(IsOverdue ? "overdue" : null)">@next</p>
+		<p class="area-next @(IsOverdue ? "overdue" : null)">@next</p>
 	}
 
 	@if (CountdownRemaining is { } remaining)
 	{
-		<div class="zone-countdown" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+		<div class="area-countdown" role="progressbar" aria-valuemin="0" aria-valuemax="100"
 			 aria-valuenow="@((int)(remaining * 100))" aria-label="Time until the next change"
 			 title="@CountdownTitle">
-			<div class="zone-countdown-fill" style="width: @((remaining * 100).ToString("0.0", CultureInfo.InvariantCulture))%"></div>
+			<div class="area-countdown-fill" style="width: @((remaining * 100).ToString("0.0", CultureInfo.InvariantCulture))%"></div>
 		</div>
 	}
 
-	<dl class="zone-stats">
+	<dl class="area-stats">
 		<div class="stat" title="@MotionTitle">
 			<dt>motion</dt>
 			<dd>@MotionStat</dd>
@@ -51,7 +51,7 @@
 		</div>
 	</dl>
 
-	<footer class="zone-meta">
+	<footer class="area-meta">
 		@if (Snapshot.KillSwitchActive)
 		{
 			<span class="chip chip-alert" title="Adaptive lighting is switched off for the whole house.">kill switch on</span>
@@ -66,9 +66,9 @@
 </article>
 
 @code {
-	/// <summary>The zone's most recent report. Everything on the card derives from it.</summary>
+	/// <summary>The area's most recent report. Everything on the card derives from it.</summary>
 	[Parameter, EditorRequired]
-	public ZoneSnapshot Snapshot { get; set; } = default!;
+	public AreaSnapshot Snapshot { get; set; } = default!;
 
 	/// <summary>
 	///     The page's "now", passed in rather than read here so every card on a render agrees on it and the
@@ -77,33 +77,33 @@
 	[Parameter]
 	public DateTimeOffset Now { get; set; }
 
-	private bool IsLitByEngine => Snapshot.State is ZoneState.AutoActive or ZoneState.PreOff
+	private bool IsLitByEngine => Snapshot.State is AreaState.AutoActive or AreaState.PreOff
 		&& Snapshot.BrightnessPct is not null;
 
 	private string Family => Snapshot.State switch
 	{
-		ZoneState.AutoActive or ZoneState.AutoVacant or ZoneState.PreOff => "machine",
-		ZoneState.OverriddenOn or ZoneState.SuppressedOff => "human",
+		AreaState.AutoActive or AreaState.AutoVacant or AreaState.PreOff => "machine",
+		AreaState.OverriddenOn or AreaState.SuppressedOff => "human",
 		_ => "idle"
 	};
 
 	private string Badge => Snapshot.State switch
 	{
-		ZoneState.AutoActive => "auto · on",
-		ZoneState.AutoVacant => "auto · standing by",
-		ZoneState.PreOff => "auto · dimming",
-		ZoneState.OverriddenOn => "set by hand",
-		ZoneState.SuppressedOff => "off by hand",
-		ZoneState.Away => "away",
-		ZoneState.Disabled => "stopped",
+		AreaState.AutoActive => "auto · on",
+		AreaState.AutoVacant => "auto · standing by",
+		AreaState.PreOff => "auto · dimming",
+		AreaState.OverriddenOn => "set by hand",
+		AreaState.SuppressedOff => "off by hand",
+		AreaState.Away => "away",
+		AreaState.Disabled => "stopped",
 		_ => Snapshot.State.ToString()
 	};
 
-	// An adopted zone's lights are on, but at levels the engine never chose and cannot read back — so the lamp
+	// An adopted area's lights are on, but at levels the engine never chose and cannot read back — so the lamp
 	// is lit and colourless rather than either dark (a lie) or warm (a level it would be inventing).
 	private string LampClass => IsLitByEngine ? "lamp-lit"
 		: IsAdopted ? "lamp-adopted"
-		: Snapshot.State == ZoneState.OverriddenOn ? "lamp-human"
+		: Snapshot.State == AreaState.OverriddenOn ? "lamp-human"
 		: "lamp-off";
 
 	/// <summary>
@@ -125,30 +125,30 @@
 	}
 
 	/// <summary>
-	///     Whether the engine is running this zone on lights it never turned on — adopted at start-up and held
+	///     Whether the engine is running this area on lights it never turned on — adopted at start-up and held
 	///     since, with no command of its own. The card must not describe those levels as the engine's doing.
 	/// </summary>
-	private bool IsAdopted => Snapshot.State is ZoneState.AutoActive && Snapshot.LastCommandAt is null;
+	private bool IsAdopted => Snapshot.State is AreaState.AutoActive && Snapshot.LastCommandAt is null;
 
 	private string Headline => Snapshot.State switch
 	{
-		ZoneState.AutoActive when IsAdopted =>
+		AreaState.AutoActive when IsAdopted =>
 			"These lights were already on at startup. They're managed now — their levels weren't touched.",
-		ZoneState.AutoActive => Levels("Lit at"),
-		ZoneState.PreOff => Levels("Dimmed to", " as a warning"),
-		ZoneState.AutoVacant when Snapshot.LastCommandAt is null =>
+		AreaState.AutoActive => Levels("Lit at"),
+		AreaState.PreOff => Levels("Dimmed to", " as a warning"),
+		AreaState.AutoVacant when Snapshot.LastCommandAt is null =>
 			"Watching for movement. The lights haven't been touched yet.",
-		ZoneState.AutoVacant when Snapshot.BrightnessPct is null =>
+		AreaState.AutoVacant when Snapshot.BrightnessPct is null =>
 			"Lights off, watching for movement.",
-		ZoneState.AutoVacant => "Watching for movement.",
-		ZoneState.OverriddenOn => "Someone set these lights by hand — they're being left alone.",
-		ZoneState.SuppressedOff => "Someone switched these lights off. Movement is ignored for now.",
-		ZoneState.Away when Snapshot.BrightnessPct is not null => "Nobody home. This zone keeps its lights on.",
-		ZoneState.Away when Snapshot.LastCommandAt is not null => "Nobody home. The lights were swept off.",
-		ZoneState.Away => "Nobody home.",
-		ZoneState.Disabled when Snapshot.KillSwitchActive =>
+		AreaState.AutoVacant => "Watching for movement.",
+		AreaState.OverriddenOn => "Someone set these lights by hand — they're being left alone.",
+		AreaState.SuppressedOff => "Someone switched these lights off. Movement is ignored for now.",
+		AreaState.Away when Snapshot.BrightnessPct is not null => "Nobody home. This area keeps its lights on.",
+		AreaState.Away when Snapshot.LastCommandAt is not null => "Nobody home. The lights were swept off.",
+		AreaState.Away => "Nobody home.",
+		AreaState.Disabled when Snapshot.KillSwitchActive =>
 			"Paused by the master switch.",
-		ZoneState.Disabled => "Automatic lighting is switched off for this room.",
+		AreaState.Disabled => "Automatic lighting is switched off for this room.",
 		_ => string.Empty
 	};
 
@@ -175,7 +175,7 @@
 		TransitionReason.Startup => "Started up and took the room as it was",
 		TransitionReason.AdoptedAtStartup => "Started up and found these lights already on",
 		TransitionReason.Motion => "Movement",
-		TransitionReason.VacancyTimeout => "No movement for the zone's timeout",
+		TransitionReason.VacancyTimeout => "No movement for the area's timeout",
 		TransitionReason.PreOffElapsed => "Nobody answered the dim warning, so the lights went off",
 		TransitionReason.ManualOn => "Someone set the lights by hand",
 		TransitionReason.ManualOff => "Someone switched the lights off by hand",
@@ -208,21 +208,21 @@
 
 			return Snapshot.State switch
 			{
-				ZoneState.AutoActive when countdown is not null =>
+				AreaState.AutoActive when countdown is not null =>
 					$"Starts dimming {countdown} unless someone moves.",
-				ZoneState.PreOff when countdown is not null =>
+				AreaState.PreOff when countdown is not null =>
 					$"Lights out {countdown} — any movement keeps them on.",
-				ZoneState.OverriddenOn when countdown is not null =>
+				AreaState.OverriddenOn when countdown is not null =>
 					$"Back under automatic control {countdown}; movement in the meantime keeps the room counted as occupied.",
-				ZoneState.SuppressedOff when countdown is not null =>
+				AreaState.SuppressedOff when countdown is not null =>
 					$"Starts answering movement again {countdown}, sooner if the room stays quiet.",
-				ZoneState.AutoVacant when Snapshot is { IsDark: false, DarknessDetail: { Length: > 0 } detail } =>
+				AreaState.AutoVacant when Snapshot is { IsDark: false, DarknessDetail: { Length: > 0 } detail } =>
 					$"Too bright to turn on right now ({detail}). Movement will light it once it's dark.",
-				ZoneState.AutoVacant when Snapshot.IsDark is false =>
+				AreaState.AutoVacant when Snapshot.IsDark is false =>
 					"Too bright to turn on right now. Movement will light it once it's dark.",
-				ZoneState.AutoVacant => "Movement in the dark turns the lights on.",
-				ZoneState.Away => "Wakes when the first person comes home.",
-				ZoneState.Disabled => "Nothing will be commanded until it is switched back on.",
+				AreaState.AutoVacant => "Movement in the dark turns the lights on.",
+				AreaState.Away => "Wakes when the first person comes home.",
+				AreaState.Disabled => "Nothing will be commanded until it is switched back on.",
 				_ => null
 			};
 		}
@@ -255,7 +255,7 @@
 	/// <summary>
 	///     How much of the armed countdown is left, 1 down to 0 — the bar drains toward the deadline rather
 	///     than filling, which reads as time running out. <c>null</c> when there is no honest bar to draw:
-	///     no deadline, no armed instant (events from builds that predate <see cref="ZoneSnapshot.NextChangeFrom"/>),
+	///     no deadline, no armed instant (events from builds that predate <see cref="AreaSnapshot.NextChangeFrom"/>),
 	///     a degenerate span, or an overdue deadline that the overdue line already explains. A missing start is
 	///     a missing bar, never an invented one.
 	/// </summary>

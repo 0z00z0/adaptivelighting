@@ -11,7 +11,7 @@
 	nothing possible. It now reads and writes the document, validates before writing, and rebuilds the
 	running engine in place afterwards.
 
-	The document has four rooms — Zones, Periods, Defaults, Global — and the page shows one at a time behind
+	The document has four rooms — Areas, Periods, Defaults, Global — and the page shows one at a time behind
 	a section rail rather than stacking them into one endless scroll: on a phone the old page was several
 	screens of unrelated knobs before Global even began. What must stay visible whatever the section is
 	visible above the rail: the status panel, the save bar, and every validation message. A problem in a
@@ -68,7 +68,7 @@ else
 			@if (Engine.IsRunning)
 			{
 				<span class="badge ok">running</span>
-				<span>@Engine.RunningZoneCount @(Engine.RunningZoneCount == 1 ? "room" : "rooms") managed.</span>
+				<span>@Engine.RunningAreaCount @(Engine.RunningAreaCount == 1 ? "room" : "rooms") managed.</span>
 			}
 			else
 			{
@@ -126,7 +126,7 @@ else
 	   here would mean two descriptions of one rule, and the one on this page would be the one that rots.
 	   They also sit above the section rail on purpose — an error in a section you are not looking at
 	   still refuses the save, so it must not be able to hide with its section. *@
-	@if (_liveValidation is { } validation && (validation.Errors.Count > 0 || validation.ZoneErrors.Count > 0))
+	@if (_liveValidation is { } validation && (validation.Errors.Count > 0 || validation.AreaErrors.Count > 0))
 	{
 		<div class="notice @(validation.IsValid ? "warn" : "bad")">
 			@if (validation.Errors.Count > 0)
@@ -139,13 +139,13 @@ else
 					}
 				</ul>
 			}
-			@if (validation.ZoneErrors.Count > 0)
+			@if (validation.AreaErrors.Count > 0)
 			{
 				<strong>These rooms will be skipped &mdash; everything else still works, and you can still save:</strong>
 				<ul>
-					@foreach (ZoneError zoneError in validation.ZoneErrors)
+					@foreach (AreaError areaError in validation.AreaErrors)
 					{
-						<li><b>@zoneError.ZoneName</b>: @zoneError.Message</li>
+						<li><b>@areaError.AreaName</b>: @areaError.Message</li>
 					}
 				</ul>
 			}
@@ -156,8 +156,8 @@ else
 		@* On a desktop this is a rail beside the content; on a phone it collapses to a row of chips
 		   above it — a thumb finds a chip, not a cramped sidebar. *@
 		<nav class="config-nav" aria-label="Configuration sections">
-			<button type="button" class="config-nav-link @(ActiveClass(Section.Zones))" @onclick="() => Show(Section.Zones)">
-				Zones <span class="config-nav-count">@_config.Zones.Count</span>
+			<button type="button" class="config-nav-link @(ActiveClass(Section.Areas))" @onclick="() => Show(Section.Areas)">
+				Areas <span class="config-nav-count">@_config.Areas.Count</span>
 			</button>
 			<button type="button" class="config-nav-link @(ActiveClass(Section.Periods))" @onclick="() => Show(Section.Periods)">
 				Periods <span class="config-nav-count">@_config.Periods.Count</span>
@@ -178,21 +178,21 @@ else
 		</nav>
 
 		<div class="config-body">
-			@if (_section == Section.Zones)
+			@if (_section == Section.Areas)
 			{
 				<header class="section-head">
-					<h2>Zones</h2>
+					<h2>Areas</h2>
 					<p class="lede">
-						Each zone is a room with managed lights. Rooms not listed here are never touched. Usually you just
+						Each area is a room with managed lights. Rooms not listed here are never touched. Usually you just
 						pick the room &mdash; its lights and sensors are found automatically, and the preview shows what was found.
 					</p>
 				</header>
 
-				@foreach (ZoneConfig zone in _config.Zones)
+				@foreach (AreaConfig area in _config.Areas)
 				{
-					ZoneConfig current = zone;
-					<ZoneEditor @key="current"
-								Zone="@current"
+					AreaConfig current = area;
+					<AreaEditor @key="current"
+								Area="@current"
 								Defaults="@_config.Defaults"
 								Global="@_config.Global"
 								Catalog="@Catalog"
@@ -203,16 +203,16 @@ else
 								Blockers="@_blockers"
 								SunEntities="@_sunEntities"
 								Changed="@Revalidate"
-								Removed="@(() => RemoveZone(current))" />
+								Removed="@(() => RemoveArea(current))" />
 				}
 
-				@if (_config.Zones.Count == 0)
+				@if (_config.Areas.Count == 0)
 				{
 					<div class="empty">No rooms yet. Add one to get started.</div>
 				}
 
 				<div class="panel-actions">
-					<button type="button" @onclick="AddZone">Add a zone</button>
+					<button type="button" @onclick="AddArea">Add an area</button>
 				</div>
 			}
 			else if (_section == Section.Periods)
@@ -271,7 +271,7 @@ else
 				</div>
 
 				@* The option cards render at section level, not inside a form .field-control, so they stretch to the
-				   full width the zone and period cards use rather than shrinking to their content. *@
+				   full width the area and period cards use rather than shrinking to their content. *@
 				@if (_config.Global.HouseMode?.Entity is { Length: > 0 })
 				{
 					<header class="section-head subsection">
@@ -316,7 +316,7 @@ else
 							</label>
 						</div>
 						<div class="field-control"><input class="cell num" type="number" min="1" @bind="_config.Defaults.VacancyTimeoutSeconds" /> <span class="unit">s</span></div>
-						<div class="field-help">Motion-free time after which an active zone dims to its warning level.</div>
+						<div class="field-help">Motion-free time after which an active area dims to its warning level.</div>
 					</div>
 					<div class="field">
 						<div class="field-head">
@@ -351,7 +351,7 @@ else
 							</label>
 						</div>
 						<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.OverrideDurationMinutes" /> <span class="unit">min</span></div>
-						<div class="field-help">How long a manual change holds the zone before automatic control resumes.</div>
+						<div class="field-help">How long a manual change holds the area before automatic control resumes.</div>
 					</div>
 					<div class="field">
 						<div class="field-head">
@@ -435,7 +435,7 @@ else
 						<div class="field-control">
 							<input class="cell num" type="number" step="0.5" min="-90" max="90" @bind="_config.Defaults.SunElevationThreshold" /> <span class="unit">°</span>
 						</div>
-						<div class="field-help">Sun height below which the zone counts as dark.</div>
+						<div class="field-help">Sun height below which the area counts as dark.</div>
 					</div>
 					<div class="field">
 						<div class="field-head">
@@ -475,7 +475,7 @@ else
 				</GroupFold>
 
 				<GroupFold Title="Behaviour"
-						   Description="What every zone does by default. Each zone can override any of these individually.">
+						   Description="What every area does by default. Each area can override any of these individually.">
 					<div class="setting-box">
 						<div class="setting-box-title">Sleep</div>
 					<div class="field">
@@ -518,7 +518,7 @@ else
 							</label>
 						</div>
 						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Defaults.SkipAwaySweep" /> leave this zone alone when everyone leaves</label>
+							<label><input type="checkbox" @bind="_config.Defaults.SkipAwaySweep" /> leave this area alone when everyone leaves</label>
 						</div>
 					</div>
 					<div class="field">
@@ -546,7 +546,7 @@ else
 							</label>
 						</div>
 						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Defaults.Enabled" /> the engine may command these zones</label>
+							<label><input type="checkbox" @bind="_config.Defaults.Enabled" /> the engine may command these areas</label>
 						</div>
 					</div>
 				</GroupFold>
@@ -755,7 +755,7 @@ else
 				</GroupFold>
 
 				<GroupFold Title="Discovery conventions"
-						   Description="How zones find their lights and sensors from the Home Assistant registry.">
+						   Description="How areas find their lights and sensors from the Home Assistant registry.">
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">Labels
@@ -834,7 +834,7 @@ else
 								}
 							</select>
 						</div>
-						<div class="field-help">What qualifies a sensor as a zone's lux source during discovery.</div>
+						<div class="field-help">What qualifies a sensor as an area's lux source during discovery.</div>
 					</div>
 				</GroupFold>
 
@@ -870,7 +870,7 @@ else
 	/// <summary>The page's rooms. One is shown at a time; the rail switches.</summary>
 	private enum Section
 	{
-		Zones,
+		Areas,
 		Periods,
 		HouseModes,
 		Defaults,
@@ -883,7 +883,7 @@ else
 	private string? _loadError;
 	private string? _userIdInput;
 	private bool _busy;
-	private Section _section = Section.Zones;
+	private Section _section = Section.Areas;
 
 	// A successful save is confirmed transiently: the message shows, then clears itself after a few seconds, so
 	// the save bar does not carry a stale "Engine rebuilt" indefinitely. Validation errors and failed saves are
@@ -891,8 +891,8 @@ else
 	private string? _saveConfirmation;
 	private CancellationTokenSource? _confirmationCts;
 
-	// The registry is read once per page load rather than once per zone: the lists are identical for every
-	// zone, and asking Home Assistant for every light once per zone per render is how a page with six zones
+	// The registry is read once per page load rather than once per area: the lists are identical for every
+	// area, and asking Home Assistant for every light once per area per render is how a page with six areas
 	// becomes slow for no reason.
 	private IReadOnlyList<AreaOption> _areas = [];
 	private IReadOnlyList<EntityOption> _lights = [];
@@ -932,7 +932,7 @@ else
 	/// <summary>
 	///     Which section to open on load, taken from the URL (<c>?section=housemodes</c>). Lets another page
 	///     deep-link straight to a room: the dashboard's "set up a house mode" link lands on House modes rather
-	///     than the default Zones. An absent or unrecognised value leaves the default. Read once on load — after
+	///     than the default Areas. An absent or unrecognised value leaves the default. Read once on load — after
 	///     that the section rail owns which room is showing.
 	/// </summary>
 	[Parameter]
@@ -1122,16 +1122,16 @@ else
 		_confirmationCts?.Dispose();
 	}
 
-	private void AddZone()
+	private void AddArea()
 	{
-		_config.Zones.Add(new ZoneConfig());
-		_section = Section.Zones;
+		_config.Areas.Add(new AreaConfig());
+		_section = Section.Areas;
 		Revalidate();
 	}
 
-	private void RemoveZone(ZoneConfig zone)
+	private void RemoveArea(AreaConfig area)
 	{
-		_config.Zones.Remove(zone);
+		_config.Areas.Remove(area);
 		Revalidate();
 	}
 

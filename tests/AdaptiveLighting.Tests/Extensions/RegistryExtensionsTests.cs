@@ -9,7 +9,7 @@ namespace AdaptiveLighting.Tests.Extensions;
 ///     Verified against <see cref="FakeHaRegistry"/>, whose collections are all empty: HassModel's <c>Area</c>,
 ///     <c>EntityRegistration</c> and <c>Label</c> have no public constructors, so a populated <c>IHaRegistry</c>
 ///     cannot be built in a test — the populated path is exercised through the engine's own
-///     <c>ZoneEntityResolver</c> tests, which run against the <c>IAreaRegistry</c> seam. What is tested here is the
+///     <c>AreaEntityResolver</c> tests, which run against the <c>IAreaRegistry</c> seam. What is tested here is the
 ///     null-safe empty-registry behaviour: every one of these must answer without throwing.
 /// </remarks>
 [TestClass]

@@ -1,8 +1,8 @@
 @*
-	One zone knob: either inherited from Defaults, or overridden here.
+	One area knob: either inherited from Defaults, or overridden here.
 
 	The schema encodes "inherit" as null on a nullable twin of the Defaults property, and that distinction is
-	the whole reason zones stay readable — a zone says what differs and nothing else. A plain input box
+	the whole reason areas stay readable — an area says what differs and nothing else. A plain input box
 	cannot express it: there is no number you can type that means "no opinion", and 0 means zero. So the
 	override switch is explicit, the inherited value is shown while it is off, and turning it on seeds the
 	control with the value being inherited so the first thing the operator does is adjust rather than invent.
@@ -43,12 +43,12 @@
 	[Parameter, EditorRequired]
 	public string Label { get; set; } = "";
 
-	/// <summary>Whether this zone currently overrides the default.</summary>
+	/// <summary>Whether this area currently overrides the default.</summary>
 	[Parameter]
 	public bool IsOverridden { get; set; }
 
 	/// <summary>
-	///     Raised when the override switch flips. The handler sets the zone's nullable property to a concrete
+	///     Raised when the override switch flips. The handler sets the area's nullable property to a concrete
 	///     value (seeded from Defaults) or back to <c>null</c>.
 	/// </summary>
 	[Parameter]

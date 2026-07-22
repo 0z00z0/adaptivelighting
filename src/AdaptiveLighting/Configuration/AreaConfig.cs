@@ -3,11 +3,11 @@ using YamlDotNet.Serialization;
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>
-///     One managed zone. In the common case a zone declares nothing but an <see cref="AreaId"/> and lets
+///     One managed area. In the common case an area declares nothing but an <see cref="AreaId"/> and lets
 ///     discovery find its entities; the explicit lists exist for when HA's area assignments are wrong.
-///     Every settings property is a nullable twin of <see cref="ZoneSettings"/>: <c>null</c> means "inherit".
+///     Every settings property is a nullable twin of <see cref="AreaSettings"/>: <c>null</c> means "inherit".
 /// </summary>
-public class ZoneConfig
+public class AreaConfig
 {
 	/// <summary>Display name. Defaults to <see cref="AreaId"/> when omitted.</summary>
 	public string? Name { get; set; }
@@ -27,74 +27,74 @@ public class ZoneConfig
 	/// <summary>Entities that block auto-on while they are on — a projector, a "do not disturb" flag.</summary>
 	public List<string>? IgnoreWhenOn { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.VacancyTimeoutSeconds"/>
+	/// <inheritdoc cref="AreaSettings.VacancyTimeoutSeconds"/>
 	public int? VacancyTimeoutSeconds { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.PreOffSeconds"/>
+	/// <inheritdoc cref="AreaSettings.PreOffSeconds"/>
 	public int? PreOffSeconds { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.PreOffBrightnessFactor"/>
+	/// <inheritdoc cref="AreaSettings.PreOffBrightnessFactor"/>
 	public double? PreOffBrightnessFactor { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.OverrideDurationMinutes"/>
+	/// <inheritdoc cref="AreaSettings.OverrideDurationMinutes"/>
 	public int? OverrideDurationMinutes { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.VacancyResetMinutes"/>
+	/// <inheritdoc cref="AreaSettings.VacancyResetMinutes"/>
 	public int? VacancyResetMinutes { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.Darkness"/>
+	/// <inheritdoc cref="AreaSettings.Darkness"/>
 	public DarknessSource? Darkness { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.LuxThreshold"/>
+	/// <inheritdoc cref="AreaSettings.LuxThreshold"/>
 	public double? LuxThreshold { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.LuxHysteresis"/>
+	/// <inheritdoc cref="AreaSettings.LuxHysteresis"/>
 	public double? LuxHysteresis { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.SunElevationThreshold"/>
+	/// <inheritdoc cref="AreaSettings.SunElevationThreshold"/>
 	public double? SunElevationThreshold { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.SunEntity"/>
+	/// <inheritdoc cref="AreaSettings.SunEntity"/>
 	public string? SunEntity { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.DayTransitionSeconds"/>
+	/// <inheritdoc cref="AreaSettings.DayTransitionSeconds"/>
 	public double? DayTransitionSeconds { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.NightTransitionSeconds"/>
+	/// <inheritdoc cref="AreaSettings.NightTransitionSeconds"/>
 	public double? NightTransitionSeconds { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.RespectSleepMode"/>
+	/// <inheritdoc cref="AreaSettings.RespectSleepMode"/>
 	public bool? RespectSleepMode { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.SleepBlocksAutoOn"/>
+	/// <inheritdoc cref="AreaSettings.SleepBlocksAutoOn"/>
 	public bool? SleepBlocksAutoOn { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.SkipAwaySweep"/>
+	/// <inheritdoc cref="AreaSettings.SkipAwaySweep"/>
 	public bool? SkipAwaySweep { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.WelcomeHome"/>
+	/// <inheritdoc cref="AreaSettings.WelcomeHome"/>
 	public bool? WelcomeHome { get; set; }
 
-	/// <inheritdoc cref="ZoneSettings.Enabled"/>
+	/// <inheritdoc cref="AreaSettings.Enabled"/>
 	public bool? Enabled { get; set; }
 
-	/// <summary>The zone's display name, falling back to the area id and then to a fixed placeholder.</summary>
+	/// <summary>The area's display name, falling back to the area id and then to a fixed placeholder.</summary>
 	/// <remarks>
 	///     <see cref="YamlIgnoreAttribute"/>: computed from <see cref="Name"/> and <see cref="AreaId"/>, and
 	///     get-only. Serialised it would silently promote the fallback into a real <c>Name</c> on the first save.
 	/// </remarks>
 	[YamlIgnore]
-	public string DisplayName => Name ?? AreaId ?? "(unnamed zone)";
+	public string DisplayName => Name ?? AreaId ?? "(unnamed area)";
 
 	/// <summary>
-	///     Merges this zone's overrides onto <paramref name="defaults"/>, producing the settings the engine
+	///     Merges this area's overrides onto <paramref name="defaults"/>, producing the settings the engine
 	///     actually uses. Pure: neither argument is mutated.
 	/// </summary>
-	public ZoneSettings Effective(ZoneSettings defaults)
+	public AreaSettings Effective(AreaSettings defaults)
 	{
 		ArgumentNullException.ThrowIfNull(defaults);
 
-		return new ZoneSettings
+		return new AreaSettings
 		{
 			VacancyTimeoutSeconds = VacancyTimeoutSeconds ?? defaults.VacancyTimeoutSeconds,
 			PreOffSeconds = PreOffSeconds ?? defaults.PreOffSeconds,

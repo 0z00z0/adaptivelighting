@@ -3,7 +3,7 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The area picker's label: what a zone on this area would actually get.
+///     The area picker's label: what a room there would actually get.
 /// </summary>
 /// <remarks>
 ///     This label used to be the registry's entity count, and it was worse than nothing. On a live instance it read
@@ -16,7 +16,7 @@ namespace AdaptiveLighting.Tests.Lighting;
 public sealed class AreaOptionTests
 {
 	[TestMethod]
-	public void The_Label_Names_The_Area_And_What_A_Zone_On_It_Would_Get()
+	public void The_Label_Names_The_Area_And_What_A_Room_There_Would_Get()
 	{
 		var option = new AreaOption("stue", "Stue", LightCount: 1, MotionCount: 1, LuxCount: 1);
 
@@ -34,7 +34,7 @@ public sealed class AreaOptionTests
 
 	/// <summary>
 	///     The whole point of counting resolved entities rather than registry rows: an area that cannot run a
-	///     zone has to say so on sight. The old label would have said "517 entities" here.
+	///     area has to say so on sight. The old label would have said "517 entities" here.
 	/// </summary>
 	[TestMethod]
 	public void An_Area_That_Resolves_No_Lights_Says_So_And_Is_Flagged()
@@ -42,7 +42,7 @@ public sealed class AreaOptionTests
 		var option = new AreaOption("bod", "Bod", LightCount: 0, MotionCount: 3, LuxCount: 1);
 
 		StringAssert.Contains(option.Label, "0 lights");
-		Assert.IsFalse(option.HasLights, "a zone here would fail, and the picker must be able to show that before a save");
+		Assert.IsFalse(option.HasLights, "an area here would fail, and the picker must be able to show that before a save");
 	}
 
 	[TestMethod]
@@ -56,8 +56,8 @@ public sealed class AreaOptionTests
 	public void More_Than_One_Lux_Sensor_Is_Flagged_As_Ambiguous()
 	{
 		Assert.IsTrue(new AreaOption("stue", "Stue", 1, 1, 2).LuxIsAmbiguous,
-			"discovery refuses to guess between two lux sensors, so the picker can say so before the zone is refused");
+			"discovery refuses to guess between two lux sensors, so the picker can say so before the area is refused");
 		Assert.IsFalse(new AreaOption("stue", "Stue", 1, 1, 1).LuxIsAmbiguous);
-		Assert.IsFalse(new AreaOption("stue", "Stue", 1, 1, 0).LuxIsAmbiguous, "no lux sensor is a legitimate zone, not an ambiguity");
+		Assert.IsFalse(new AreaOption("stue", "Stue", 1, 1, 0).LuxIsAmbiguous, "no lux sensor is a legitimate area, not an ambiguity");
 	}
 }

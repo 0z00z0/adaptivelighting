@@ -32,7 +32,7 @@ public sealed class LightingOrchestratorTests
 		var config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { Persons = [Person], AwayDebounceMinutes = 5, HouseMode = houseMode },
-			// A baseline period so the document is otherwise ordinary; no zones, so the registry is never touched.
+			// A baseline period so the document is otherwise ordinary; no areas, so the registry is never touched.
 			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }]
 		};
 

@@ -229,7 +229,7 @@ h2 {
 	margin: 0.4rem auto;
 }
 
-/* ---- zone cards ----
+/* ---- area cards ----
    A card is a story with four beats — headline, last event, what happens next, conditions — not a table.
    The left edge and the badge carry the machine/human/idle family; the lamp carries the light itself,
    glowing in the commanded Kelvin at the commanded brightness (inline style, data-driven). */
@@ -237,17 +237,17 @@ h2 {
 /*
    grid-auto-rows: 1fr makes every row the height of the tallest card anywhere in the grid — the
    largest box decides, and the cards read as one set instead of a ragged shelf. The cards absorb
-   the extra height gracefully because .zone-meta is pushed to the bottom edge with margin-top:auto,
+   the extra height gracefully because .area-meta is pushed to the bottom edge with margin-top:auto,
    so what stretches is the quiet space above the footer, not the text.
 */
-.zones {
+.areas {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 	grid-auto-rows: 1fr;
 	gap: 0.9rem;
 }
 
-.zone {
+.area {
 	display: flex;
 	flex-direction: column;
 	gap: 0.45rem;
@@ -258,28 +258,28 @@ h2 {
 	padding: 0.9rem 1rem;
 }
 
-.zone.family-machine { border-left-color: var(--machine); }
-.zone.family-human { border-left-color: var(--human); }
+.area.family-machine { border-left-color: var(--machine); }
+.area.family-human { border-left-color: var(--human); }
 
-.zone.family-idle {
+.area.family-idle {
 	border-left-color: var(--idle);
 	border-style: dashed;   /* the diagram draws not-commanding states dashed; so does the card */
 	border-left-style: solid;
 }
 
-.zone-head {
+.area-head {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 	margin-bottom: 0.1rem;
 }
 
-.zone-name {
+.area-name {
 	font-weight: 600;
 	font-size: 1.02rem;
 }
 
-.zone-badge {
+.area-badge {
 	margin-left: auto;
 	padding: 0.12rem 0.55rem;
 	border-radius: 999px;
@@ -290,9 +290,9 @@ h2 {
 	cursor: default;
 }
 
-.family-machine .zone-badge { color: var(--machine); background: var(--machine-bg); }
-.family-human .zone-badge { color: var(--human); background: var(--human-bg); }
-.family-idle .zone-badge { color: var(--idle); background: var(--idle-bg); }
+.family-machine .area-badge { color: var(--machine); background: var(--machine-bg); }
+.family-human .area-badge { color: var(--human); background: var(--human-bg); }
+.family-idle .area-badge { color: var(--idle); background: var(--idle-bg); }
 
 /* The lamp. Lit: filled and glowing, colour and strength from the actual command (inline style).
    Off: an empty ring. Human-held: filled amber, glowing gently — on, but not at the engine's levels. */
@@ -320,13 +320,13 @@ h2 {
 	box-shadow: 0 0 8px var(--muted);
 }
 
-.zone-line {
+.area-line {
 	margin: 0;
 	font-size: 0.92rem;
 	line-height: 1.45;
 }
 
-.zone-event {
+.area-event {
 	margin: 0;
 	font-size: 0.85rem;
 	color: var(--muted);
@@ -341,14 +341,14 @@ h2 {
 	content: "· ";
 }
 
-.zone-next {
+.area-next {
 	margin: 0;
 	font-size: 0.85rem;
 	color: var(--muted);
 	font-variant-numeric: tabular-nums;
 }
 
-.zone-next.overdue {
+.area-next.overdue {
 	color: var(--warn);
 }
 
@@ -358,29 +358,29 @@ h2 {
    timer runs, amber while a human's override or suppression counts down. Elapsed fills, so a bar
    almost full means "almost now" — the same direction the sentence above it reads in. */
 
-.zone-countdown {
+.area-countdown {
 	height: 4px;
 	border-radius: 999px;
 	background: var(--panel-2);
 	overflow: hidden;
 }
 
-.zone-countdown-fill {
+.area-countdown-fill {
 	height: 100%;
 	border-radius: inherit;
 	background: var(--idle);
 	transition: width 1s linear;
 }
 
-.family-machine .zone-countdown-fill { background: var(--machine); }
-.family-human .zone-countdown-fill { background: var(--human); }
+.family-machine .area-countdown-fill { background: var(--machine); }
+.family-human .area-countdown-fill { background: var(--human); }
 
 /* ---- the stats row ----
    Three numbers that reward a glance — last motion, standing command, next change — with the story
    in the tooltips. dl/dt/dd for structure; tabular numerals so the once-a-second tick does not
    make the row shimmer. */
 
-.zone-stats {
+.area-stats {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
 	gap: 0.5rem;
@@ -389,12 +389,12 @@ h2 {
 	border-top: 1px solid var(--line);
 }
 
-.zone-stats .stat {
+.area-stats .stat {
 	min-width: 0;
 	cursor: default;
 }
 
-.zone-stats dt {
+.area-stats dt {
 	font-size: 0.68rem;
 	font-weight: 600;
 	text-transform: uppercase;
@@ -402,7 +402,7 @@ h2 {
 	color: var(--muted);
 }
 
-.zone-stats dd {
+.area-stats dd {
 	margin: 0.1rem 0 0;
 	font-size: 0.82rem;
 	font-variant-numeric: tabular-nums;
@@ -411,7 +411,7 @@ h2 {
 	text-overflow: ellipsis;
 }
 
-.zone-meta {
+.area-meta {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -421,7 +421,7 @@ h2 {
 	border-top: 1px solid var(--line);
 }
 
-.zone-meta .chip {
+.area-meta .chip {
 	background: var(--panel-2);
 	border: none;
 	color: var(--muted);
@@ -430,12 +430,12 @@ h2 {
 	cursor: default;
 }
 
-.zone-meta .chip-alert {
+.area-meta .chip-alert {
 	color: var(--bad);
 	font-weight: 600;
 }
 
-.zone-meta .chip-when {
+.area-meta .chip-when {
 	margin-left: auto;
 	background: none;
 	padding-right: 0;
@@ -627,7 +627,7 @@ button.toggle:disabled {
 
 /* ---- mode hero + cards ----
    Read-only enrichment of the modes page: the live derived state, and a card per option that says what the
-   mode drives, what its light looks like right now, and what it does to the zones. Additive; nothing here acts. */
+   mode drives, what its light looks like right now, and what it does to the areas. Additive; nothing here acts. */
 
 .mode-hero {
 	display: flex;
@@ -919,7 +919,7 @@ button.mode-card:disabled {
 
 /* ---- save bar ----
    Sticky because the form is long: a save button only at the bottom of a page
-   with six zones on it is a save button nobody finds. */
+   with six areas on it is a save button nobody finds. */
 
 .savebar {
 	position: sticky;
@@ -1262,20 +1262,20 @@ select.cell.wide {
 	gap: 0.35rem;
 }
 
-/* ---- zone folds ----
-   A zone in the editor is a <details>: collapsed it is a header line — name, area, how far it strays
-   from the defaults — because a list of six zones is read far more often than edited. The summary is
+/* ---- area folds ----
+   An area in the editor is a <details>: collapsed it is a header line — name, area id, how far it strays
+   from the defaults — because a list of six areas is read far more often than edited. The summary is
    a real header, not a text box; the name is edited in a field inside. */
 
 /* ---- section folds, unified ----
-   Zones, periods and house-mode options are the same object in the editor: a <details> that reads as a one-line
+   Areas, periods and house-mode options are the same object in the editor: a <details> that reads as a one-line
    header when collapsed and opens to its editor. They share ONE visual language so the whole page reads as one
    system — the readable, structured look the house-mode cards introduced, now applied to all three: an accent
    left-edge that makes the stack scannable, a panel-2 header wash on hover and while open, and one chevron.
    The per-type blocks further down keep only what is genuinely unique (a period's start time, a mode's Kind
    badge, the orphan state) and must NOT re-declare the shared look, or source order would fork it again. */
 
-.zone-fold,
+.area-fold,
 .period-fold,
 .housemode-fold,
 .group-fold {
@@ -1287,21 +1287,21 @@ select.cell.wide {
 }
 
 /* The period in force and the mode the house is in right now get a warm left edge and an "active now" badge,
-   so a glance down the list shows "where we are". Only periods and house modes have an active state — zones
+   so a glance down the list shows "where we are". Only periods and house modes have an active state — areas
    and setting groups have none, and keep the neutral edge. */
 .period-fold.active,
 .housemode-fold.active {
 	border-left-color: var(--accent);
 }
 
-.zone-fold > *:not(summary),
+.area-fold > *:not(summary),
 .period-fold > *:not(summary),
 .housemode-fold > *:not(summary) {
 	margin-left: 1.1rem;
 	margin-right: 1.1rem;
 }
 
-.zone-summary,
+.area-summary,
 .period-summary,
 .housemode-summary {
 	display: flex;
@@ -1313,19 +1313,19 @@ select.cell.wide {
 	list-style: none;
 }
 
-.zone-summary::-webkit-details-marker,
+.area-summary::-webkit-details-marker,
 .period-summary::-webkit-details-marker,
 .housemode-summary::-webkit-details-marker {
 	display: none;
 }
 
-.zone-summary:hover,
+.area-summary:hover,
 .period-summary:hover,
 .housemode-summary:hover {
 	background: var(--panel-2);
 }
 
-.zone-fold[open] > .zone-summary,
+.area-fold[open] > .area-summary,
 .period-fold[open] > .period-summary,
 .housemode-fold[open] > .housemode-summary {
 	background: var(--panel-2);
@@ -1333,22 +1333,22 @@ select.cell.wide {
 	margin-bottom: 0.7rem;
 }
 
-.zone-fold[open] > .zone-summary .zone-chevron,
-.period-fold[open] > .period-summary .zone-chevron,
-.housemode-fold[open] > .housemode-summary .zone-chevron {
+.area-fold[open] > .area-summary .area-chevron,
+.period-fold[open] > .period-summary .area-chevron,
+.housemode-fold[open] > .housemode-summary .area-chevron {
 	transform: rotate(45deg);
 }
 
 /* Titles carry the human name of the thing — identical across all three. The house-mode value is an HA id, so
    it keeps the mono face (below) but matches this weight and size. */
-.zone-title,
+.area-title,
 .period-title {
 	font-weight: 600;
 	font-size: 1.02rem;
 }
 
 /* Right-aligned muted summary of the settings behind the header — identical across all three. */
-.zone-summary-hint,
+.area-summary-hint,
 .period-summary-hint,
 .housemode-summary-hint {
 	margin-left: auto;
@@ -1357,7 +1357,7 @@ select.cell.wide {
 	font-variant-numeric: tabular-nums;
 }
 
-.zone-area {
+.area-slug {
 	font-family: var(--mono);
 	font-size: 0.75rem;
 	color: var(--muted);
@@ -1367,7 +1367,7 @@ select.cell.wide {
 }
 
 /* The chevron: drawn, not a glyph, so it renders identically everywhere and can rotate. Shared by all folds. */
-.zone-chevron {
+.area-chevron {
 	flex: 0 0 auto;
 	width: 8px;
 	height: 8px;
@@ -1377,7 +1377,7 @@ select.cell.wide {
 	transition: transform 0.15s ease;
 }
 
-.zone-actions {
+.area-actions {
 	padding: 0.6rem 0 0.9rem;
 }
 
@@ -1505,7 +1505,7 @@ select.cell.wide {
 }
 
 /* ---- the section rail ----
-   The configuration document has four rooms — Zones, Periods, Defaults, Global — and the page shows
+   The configuration document has four rooms — Areas, Periods, Defaults, Global — and the page shows
    one at a time. On a desktop the rail sits beside the content and sticks below the save bar; on a
    phone it becomes a row of chips above the content, because a 170px column on a 375px screen is a
    rail nobody's thumb can use. */
@@ -1684,7 +1684,7 @@ select.cell.wide {
 
 /* ---- group folds ----
    Defaults and Global are collapsible groups: a header that says what the group is for, a fold that
-   keeps a long page skimmable. The same <details> grammar as the zone folds. overflow stays visible
+   keeps a long page skimmable. The same <details> grammar as the area folds. overflow stays visible
    — an info popover hanging past the last field must not be clipped by its own group. */
 
 .group-fold {
@@ -1727,12 +1727,12 @@ select.cell.wide {
 	font-size: 0.8rem;
 }
 
-.group-summary .zone-chevron {
+.group-summary .area-chevron {
 	align-self: center;
 	margin-left: auto;
 }
 
-.group-fold[open] > .group-summary .zone-chevron {
+.group-fold[open] > .group-summary .area-chevron {
 	transform: rotate(45deg);
 }
 
@@ -1759,7 +1759,7 @@ select.cell.wide {
    on-screen, and where a thumb already is. */
 
 /* Every container that can hold an (i) must be a positioning context, or its panel falls back to the viewport
-   and lands bottom-left. .field/.pfield cover the zone, period and settings forms; the housemode-* ones cover
+   and lands bottom-left. .field/.pfield cover the area, period and settings forms; the housemode-* ones cover
    the house-mode option cards; .section-head covers a sub-section header like "Mode options". */
 .field, .pfield, .housemode-field, .housemode-resets-head, .section-head {
 	position: relative;
@@ -1862,7 +1862,7 @@ select.cell.wide {
 }
 
 /* ---- period cards ----
-   One collapsible card per circadian period — the same <details> grammar as the zone folds. Collapsed it is a
+   One collapsible card per circadian period — the same <details> grammar as the area folds. Collapsed it is a
    header: the name, when it starts (with the wall-clock time a sun boundary resolves to today), and its level at
    a glance. Expanded, the controls sit on their own responsive grid: a desktop reads them in a line or two, a
    phone stacks them, and nothing ever scrolls sideways or hides behind a scrollbar — which is what the
@@ -2177,7 +2177,7 @@ select.cell.wide {
 }
 
 /* ---- house-mode option folds ----
-   One collapsible card per option — the same <details> grammar as a zone or a period fold. Collapsed it is a
+   One collapsible card per option — the same <details> grammar as an area or a period fold. Collapsed it is a
    header: the option value, its Kind, and a hint of its key settings; expanded, the full editor. Additive: the
    .housemode-kinds / .housemode-sub / .housemode-field rules above still style the body unchanged. */
 
@@ -2198,7 +2198,7 @@ select.cell.wide {
 	margin-bottom: 0.9rem;
 }
 
-/* The option value reads as the card's name, styled exactly like a zone or period title — plain body face,
+/* The option value reads as the card's name, styled exactly like an area or period title — plain body face,
    white, not the mono/accent that a bare <code> would give it (which is why the markup is a <span>). */
 .housemode-summary-value {
 	font-weight: 600;

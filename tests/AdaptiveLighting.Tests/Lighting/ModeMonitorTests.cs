@@ -372,7 +372,7 @@ public sealed class ModeMonitorTests
 	}
 
 	[TestMethod]
-	public void PresenceReset_EmptyList_UsesZoneMotionUnion()
+	public void PresenceReset_EmptyList_UsesAreaMotionUnion()
 	{
 		var rig = Started(AwayResetsOnPresence([]), periods: Periods(), motion: [Kjokken],
 			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Kjokken, "off"));
@@ -381,7 +381,7 @@ public sealed class ModeMonitorTests
 		Advance(rig, TimeSpan.FromMinutes(20));
 		rig.Ha.Trigger(Kjokken, "on");
 
-		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an empty sensor list resets on any zone motion sensor");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an empty sensor list resets on any area motion sensor");
 	}
 
 	// ---- Time reset ---------------------------------------------------------------------------

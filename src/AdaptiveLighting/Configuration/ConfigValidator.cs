@@ -6,8 +6,8 @@ namespace AdaptiveLighting.Configuration;
 /// </summary>
 /// <remarks>
 ///     The split is deliberate. Document-level problems mean nobody can have thought about this config, so the
-///     app throws and shows up dead in HA. Referential problems are one zone's business — an entity renamed in
-///     HA must cost that zone, not the house.
+///     app throws and shows up dead in HA. Referential problems are one area's business — an entity renamed in
+///     HA must cost that area, not the house.
 /// </remarks>
 public static class ConfigValidator
 {
@@ -45,7 +45,7 @@ public static class ConfigValidator
 		ValidatePeriods(config.Periods, result);
 		ValidateHouseMode(config, knownEntityIds, liveSelectOptions, result);
 		ValidateSettings("Defaults", config.Defaults, result);
-		ValidateZones(config, knownEntityIds, knownAreaIds, result);
+		ValidateAreas(config, knownEntityIds, knownAreaIds, result);
 
 		return result;
 	}
@@ -94,13 +94,13 @@ public static class ConfigValidator
 		}
 
 		// Outdoor lux sensor: the house-wide default lux source. It fails open — an unknown or non-sensor id just
-		// leaves zones without their own lux falling back to sun elevation — so both are warnings, not errors.
+		// leaves areas without their own lux falling back to sun elevation — so both are warnings, not errors.
 		if (global.OutdoorLuxSensor is { Length: > 0 } outdoorLux)
 		{
 			if (outdoorLux.Domain() is not "sensor")
-				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not a sensor entity; zones without their own lux sensor will fall back to sun elevation.");
+				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not a sensor entity; areas without their own lux sensor will fall back to sun elevation.");
 			else if (!knownEntityIds.Contains(outdoorLux))
-				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not known to Home Assistant; zones without their own lux sensor fall back to sun elevation until it appears.");
+				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not known to Home Assistant; areas without their own lux sensor fall back to sun elevation until it appears.");
 		}
 	}
 
@@ -360,14 +360,14 @@ public static class ConfigValidator
 		}
 	}
 
-	/// <summary>When any option is Sleep and any zone respects sleep mode, the §4.1 clamp chain must resolve to an existing period.</summary>
+	/// <summary>When any option is Sleep and any area respects sleep mode, the §4.1 clamp chain must resolve to an existing period.</summary>
 	private static void ValidateSleepPath(AdaptiveLightingConfig config, HouseModeConfig? houseMode, ValidationResult result)
 	{
 		List<HouseModeOptionConfig> sleepOptions = houseMode?.Options.Where(o => o.Kind == ModeKind.Sleep).ToList() ?? [];
 		if (sleepOptions.Count == 0)
 			return;
 
-		if (!config.Zones.Any(z => z.Effective(config.Defaults).RespectSleepMode))
+		if (!config.Areas.Any(z => z.Effective(config.Defaults).RespectSleepMode))
 			return;   // sleep is not load-bearing
 
 		foreach (HouseModeOptionConfig? option in sleepOptions)
@@ -378,7 +378,7 @@ public static class ConfigValidator
 
 			if (!resolves)
 				result.AddError(
-					$"Sleep option '{option.Value}' is load-bearing (a zone respects sleep) but no clamp period resolves: " +
+					$"Sleep option '{option.Value}' is load-bearing (an area respects sleep) but no clamp period resolves: " +
 					"set its ClampPeriod, have a period SetsMode this option, or add a period named 'night'.");
 		}
 	}
@@ -398,80 +398,80 @@ public static class ConfigValidator
 				result.AddWarning($"The select offers option '{live}', which nothing has classified — it behaves as Normal.");
 	}
 
-	private static void ValidateZones(
+	private static void ValidateAreas(
 		AdaptiveLightingConfig config,
 		IReadOnlyCollection<string>? knownEntityIds,
 		IReadOnlyCollection<string>? knownAreaIds,
 		ValidationResult result)
 	{
-		// A warning, not an error. An empty zone list is a legitimate state, not a broken document: it is what a
+		// A warning, not an error. An empty area list is a legitimate state, not a broken document: it is what a
 		// brand-new installation starts from before discovery has run, and what a household is left with after
 		// deliberately removing every room. The engine runs perfectly well managing nothing — it simply commands
 		// nothing — whereas refusing the document stops the whole app and greets a new owner with "the
 		// configuration has document-level errors", which is both alarming and untrue.
-		if (config.Zones.Count == 0)
+		if (config.Areas.Count == 0)
 		{
-			result.AddWarning("No zones yet — the engine is running but managing nothing. Add a room on the Configuration page.");
+			result.AddWarning("No areas yet — the engine is running but managing nothing. Add a room on the Configuration page.");
 			return;
 		}
 
-		IEnumerable<string> duplicateZones = config.Zones
+		IEnumerable<string> duplicateAreas = config.Areas
 			.GroupBy(z => z.DisplayName, StringComparer.OrdinalIgnoreCase)
 			.Where(g => g.Count() > 1)
 			.Select(g => g.Key);
 
-		foreach (string? name in duplicateZones)
-			result.AddError($"Duplicate zone name '{name}'.");
+		foreach (string? name in duplicateAreas)
+			result.AddError($"Duplicate area name '{name}'.");
 
-		foreach (ZoneConfig zone in config.Zones)
+		foreach (AreaConfig area in config.Areas)
 		{
-			ValidateSettings(zone.DisplayName, zone.Effective(config.Defaults), result);
-			ValidateZoneReferences(zone, knownEntityIds, knownAreaIds, result);
+			ValidateSettings(area.DisplayName, area.Effective(config.Defaults), result);
+			ValidateAreaReferences(area, knownEntityIds, knownAreaIds, result);
 		}
 	}
 
-	private static void ValidateZoneReferences(
-		ZoneConfig zone,
+	private static void ValidateAreaReferences(
+		AreaConfig area,
 		IReadOnlyCollection<string>? knownEntityIds,
 		IReadOnlyCollection<string>? knownAreaIds,
 		ValidationResult result)
 	{
-		bool hasExplicitLights = zone.Lights is { Count: > 0 };
+		bool hasExplicitLights = area.Lights is { Count: > 0 };
 
-		if (string.IsNullOrWhiteSpace(zone.AreaId) && !hasExplicitLights)
+		if (string.IsNullOrWhiteSpace(area.AreaId) && !hasExplicitLights)
 		{
-			result.AddZoneError(zone.DisplayName, "Neither AreaId nor an explicit Lights list — nothing to resolve.");
+			result.AddAreaError(area.DisplayName, "Neither AreaId nor an explicit Lights list — nothing to resolve.");
 			return;
 		}
 
-		if (knownAreaIds is not null && zone.AreaId is { Length: > 0 } areaId && !knownAreaIds.Contains(areaId))
-			result.AddZoneError(zone.DisplayName,
+		if (knownAreaIds is not null && area.AreaId is { Length: > 0 } areaId && !knownAreaIds.Contains(areaId))
+			result.AddAreaError(area.DisplayName,
 				$"AreaId '{areaId}' is not a registry area id. AreaId is the slug, not the display name. Known area ids: {string.Join(", ", knownAreaIds.Order(StringComparer.Ordinal))}.");
 
 		if (knownEntityIds is null)
 			return;
 
-		foreach (string entityId in EnumerateZoneEntities(zone))
+		foreach (string entityId in EnumerateAreaEntities(area))
 			if (!knownEntityIds.Contains(entityId))
-				result.AddZoneError(zone.DisplayName, $"Refers to '{entityId}', which Home Assistant does not know.");
+				result.AddAreaError(area.DisplayName, $"Refers to '{entityId}', which Home Assistant does not know.");
 	}
 
-	private static IEnumerable<string> EnumerateZoneEntities(ZoneConfig zone)
+	private static IEnumerable<string> EnumerateAreaEntities(AreaConfig area)
 	{
-		foreach (string light in zone.Lights ?? [])
+		foreach (string light in area.Lights ?? [])
 			yield return light;
 
-		foreach (string sensor in zone.MotionSensors ?? [])
+		foreach (string sensor in area.MotionSensors ?? [])
 			yield return sensor;
 
-		foreach (string blocker in zone.IgnoreWhenOn ?? [])
+		foreach (string blocker in area.IgnoreWhenOn ?? [])
 			yield return blocker;
 
-		if (zone.LuxSensor is { Length: > 0 } lux)
+		if (area.LuxSensor is { Length: > 0 } lux)
 			yield return lux;
 	}
 
-	private static void ValidateSettings(string scope, ZoneSettings settings, ValidationResult result)
+	private static void ValidateSettings(string scope, AreaSettings settings, ValidationResult result)
 	{
 		if (settings.VacancyTimeoutSeconds <= 0)
 			result.AddError($"[{scope}] VacancyTimeoutSeconds must be positive (is {settings.VacancyTimeoutSeconds}).");

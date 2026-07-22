@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     First-run zone discovery: what a brand-new installation proposes, and what it refuses to.
+///     First-run area discovery: what a brand-new installation proposes, and what it refuses to.
 /// </summary>
 /// <remarks>
 ///     The rule under test is deliberately strict — a room needs both a light and a motion sensor — because the
@@ -15,9 +15,9 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     distrust the whole system.
 /// </remarks>
 [TestClass]
-public sealed class ZoneAutoDiscoveryTests
+public sealed class AreaAutoDiscoveryTests
 {
-	private static ZoneEntityResolver Resolver(FakeHaContext ha, FakeAreaRegistry registry) =>
+	private static AreaEntityResolver Resolver(FakeHaContext ha, FakeAreaRegistry registry) =>
 		new(ha, registry, new GlobalConfig(), NullLogger.Instance);
 
 	/// <summary>An area qualifies only with both a light and a motion sensor; everything else is left alone.</summary>
@@ -44,11 +44,11 @@ public sealed class ZoneAutoDiscoveryTests
 		ha.SetState("sensor.teknisk_temp", "21", new() { ["device_class"] = "temperature" });
 		registry.Areas["teknisk"] = ["sensor.teknisk_temp"];
 
-		var proposed = ZoneAutoDiscovery.Propose(registry, Resolver(ha, registry));
+		var proposed = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry));
 
 		CollectionAssert.AreEquivalent(
 			new[] { "gang" },
-			proposed.Select(zone => zone.AreaId).ToArray(),
+			proposed.Select(area => area.AreaId).ToArray(),
 			"only the room with both a light and a motion sensor is worth proposing");
 	}
 
@@ -62,12 +62,12 @@ public sealed class ZoneAutoDiscoveryTests
 		ha.SetState("binary_sensor.bad_motion", "off", new() { ["device_class"] = "motion" });
 		registry.Areas["bad"] = ["light.bad_tak", "binary_sensor.bad_motion"];
 
-		var zone = ZoneAutoDiscovery.Propose(registry, Resolver(ha, registry)).Single();
+		var area = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry)).Single();
 
-		Assert.AreEqual("bad", zone.AreaId);
-		Assert.IsNull(zone.Name, "the display name follows the area until somebody types one");
-		Assert.IsNull(zone.Lights, "lights resolve from the area at run time, not into the document");
-		Assert.IsNull(zone.MotionSensors);
+		Assert.AreEqual("bad", area.AreaId);
+		Assert.IsNull(area.Name, "the display name follows the area until somebody types one");
+		Assert.IsNull(area.Lights, "lights resolve from the area at run time, not into the document");
+		Assert.IsNull(area.MotionSensors);
 	}
 
 	/// <summary>An empty registry proposes nothing rather than failing.</summary>
@@ -77,7 +77,7 @@ public sealed class ZoneAutoDiscoveryTests
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 
-		Assert.AreEqual(0, ZoneAutoDiscovery.Propose(registry, Resolver(ha, registry)).Count);
+		Assert.AreEqual(0, AreaAutoDiscovery.Propose(registry, Resolver(ha, registry)).Count);
 	}
 
 	/// <summary>
@@ -93,10 +93,10 @@ public sealed class ZoneAutoDiscoveryTests
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,
 			"a brand-new installation must start from a document the engine will actually run");
 
-		Assert.AreEqual(0, config.Zones.Count, "zones are discovered, not invented");
+		Assert.AreEqual(0, config.Areas.Count, "areas are discovered, not invented");
 		Assert.AreEqual(0, config.Global.Persons.Count,
 			"an empty Persons list discovers every person; a placeholder would override that and block the engine");
-		Assert.IsFalse(config.Global.ZonesAutoDiscovered, "so the first connected reload still looks");
+		Assert.IsFalse(config.Global.AreasAutoDiscovered, "so the first connected reload still looks");
 		Assert.IsTrue(config.Periods.Count > 0, "the circadian curve is the one thing every house shares");
 
 		string yaml = LightingConfigDocument.Serialize(config);

@@ -39,7 +39,7 @@ public enum ChangeOrigin
 ///         a change on that light consistent with the declaration and arriving inside the echo window is ours. The
 ///         secondary one reads <see cref="EntityState.Context"/>. Neither is sufficient alone; together they are
 ///         wrong mostly in the safe direction, where a human's change within a few seconds of ours is mistaken for
-///         our own echo and the zone simply keeps automating.
+///         our own echo and the area simply keeps automating.
 ///     </para>
 /// </remarks>
 public sealed class OverrideDetector
@@ -104,7 +104,7 @@ public sealed class OverrideDetector
 		return context.UserId is null ? ChangeOrigin.PhysicalDevice : ChangeOrigin.HaUser;
 	}
 
-	/// <summary>Whether <paramref name="origin"/> is one the zone must yield to.</summary>
+	/// <summary>Whether <paramref name="origin"/> is one the area must yield to.</summary>
 	public bool IsManual(ChangeOrigin origin) => origin switch
 	{
 		ChangeOrigin.PhysicalDevice or ChangeOrigin.HaUser => true,

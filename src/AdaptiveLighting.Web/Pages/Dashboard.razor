@@ -1,7 +1,7 @@
 @page "/"
 @page "/modes"
 @implements IDisposable
-@inject ZoneSnapshotCache Cache
+@inject AreaSnapshotCache Cache
 @inject LightingEngineHost Engine
 @inject ModeService Service
 @inject ILogger<Dashboard> Logger
@@ -9,7 +9,7 @@
 @*
 	The house-state hub. Top to bottom it answers the questions a person asks in order: is the system on
 	(the master switch), who's home and what mode is the house in (the house strip), is anything wrong
-	(notices), and what is each room doing (the zone cards).
+	(notices), and what is each room doing (the area cards).
 
 	The /modes route is kept so old bookmarks and phone shortcuts to the former Modes page land here — the
 	dashboard now carries everything that page had. Every write on this page still goes through ModeService's
@@ -49,7 +49,7 @@
 	<WhoIsHomePanel People="_people" />
 </div>
 
-@if (_snapshots.Any(zone => zone.KillSwitchActive))
+@if (_snapshots.Any(area => area.KillSwitchActive))
 {
 	<div class="notice bad">
 		<strong>Adaptive lighting is switched off.</strong> No lights will change until you turn it back on above.
@@ -92,16 +92,16 @@ else if (!Engine.IsRunning && Cache.HasData)
 else
 {
 	<h2>Rooms</h2>
-	<div class="zones">
-		@foreach (ZoneSnapshot zone in _snapshots)
+	<div class="areas">
+		@foreach (AreaSnapshot area in _snapshots)
 		{
-			<ZoneCard Snapshot="zone" Now="_now" />
+			<AreaCard Snapshot="area" Now="_now" />
 		}
 	</div>
 }
 
 @code {
-	private IReadOnlyList<ZoneSnapshot> _snapshots = [];
+	private IReadOnlyList<AreaSnapshot> _snapshots = [];
 	private MasterSwitchView? _masterSwitch;
 	private HouseModeView? _houseMode;
 	private IReadOnlyList<PersonView> _people = [];

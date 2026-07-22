@@ -13,7 +13,7 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     Every arrow in the zone state machine of 02-architecture.md §5, driven through fakes and a
+///     Every arrow in the area state machine of 02-architecture.md §5, driven through fakes and a
 ///     <see cref="TestScheduler"/>.
 /// </summary>
 /// <remarks>
@@ -22,21 +22,21 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     every hour. The literal entity ids are fixtures — the engine itself never names an entity.
 /// </remarks>
 [TestClass]
-public sealed class ZoneControllerTests
+public sealed class AreaControllerTests
 {
-	private const string Motion = "binary_sensor.zone_motion";
-	private const string Light = "light.zone";
-	private const string Lux = "sensor.zone_lux";
+	private const string Motion = "binary_sensor.area_motion";
+	private const string Light = "light.area";
+	private const string Lux = "sensor.area_lux";
 	private const string Blocker = "binary_sensor.projector";
 
-	/// <summary>Everything a test needs to drive one zone and read what it did.</summary>
+	/// <summary>Everything a test needs to drive one area and read what it did.</summary>
 	private sealed record Fixture(
 		TestScheduler Scheduler,
 		FakeHaContext Ha,
 		FakeLightActuator Actuator,
 		FakeStatePublisher Publisher,
 		BehaviorSubject<HouseState> House,
-		ZoneController Zone);
+		AreaController Area);
 
 	/// <summary>A house-state snapshot, spelled out so the call sites read as English rather than raw fields.</summary>
 	private static HouseState House(bool home = true, ModeKind kind = ModeKind.Normal, bool killed = false, string? modeValue = null, string? scene = null) =>
@@ -55,11 +55,11 @@ public sealed class ZoneControllerTests
 	};
 
 	/// <summary>
-	///     Builds a started zone at 20:00 — inside "evening", so the zone is dark and its target is stable
+	///     Builds a started area at 20:00 — inside "evening", so the area is dark and its target is stable
 	///     across the whole test rather than drifting under it.
 	/// </summary>
 	private static Fixture Build(
-		Action<ZoneSettings>? tweak = null,
+		Action<AreaSettings>? tweak = null,
 		Action<GlobalConfig>? tweakGlobal = null,
 		IReadOnlyList<string>? ignoreWhenOn = null,
 		Action<FakeHaContext>? seed = null,
@@ -77,7 +77,7 @@ public sealed class ZoneControllerTests
 		// point of start-up adoption.
 		seed?.Invoke(ha);
 
-		var settings = new ZoneSettings
+		var settings = new AreaSettings
 		{
 			VacancyTimeoutSeconds = 600,
 			PreOffSeconds = 30,
@@ -97,13 +97,13 @@ public sealed class ZoneControllerTests
 			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30 }
 		};
 
-		var zone = new ResolvedZone("Test", settings, [Light], [Motion], Lux, ignoreWhenOn ?? []);
+		var area = new ResolvedArea("Test", settings, [Light], [Motion], Lux, ignoreWhenOn ?? []);
 		var actuator = new FakeLightActuator();
 		var publisher = new FakeStatePublisher();
 		var house = new BehaviorSubject<HouseState>(HouseState.Initial);
 
-		var controller = new ZoneController(
-			ha, scheduler, zone, global, table,
+		var controller = new AreaController(
+			ha, scheduler, area, global, table,
 			new CircadianCalculator(table, global, () => SunTimes.Unknown),
 			actuator, publisher, house, NullLoggerFactory.Instance);
 
@@ -114,10 +114,10 @@ public sealed class ZoneControllerTests
 	private static void Advance(Fixture fixture, TimeSpan by) => fixture.Scheduler.AdvanceBy(by.Ticks);
 
 	/// <summary>
-	///     Builds a zone whose light is already on before the engine starts — the state of the world after any
+	///     Builds an area whose light is already on before the engine starts — the state of the world after any
 	///     restart of a host that had lit a room.
 	/// </summary>
-	private static Fixture BuildAlreadyLit(Action<ZoneSettings>? tweak = null, string lux = "5") =>
+	private static Fixture BuildAlreadyLit(Action<AreaSettings>? tweak = null, string lux = "5") =>
 		Build(tweak, seed: ha =>
 		{
 			ha.SetState(Light, "on", new() { ["brightness"] = 178.5 });
@@ -130,13 +130,13 @@ public sealed class ZoneControllerTests
 	// ===================== AutoVacant -> AutoActive =====================
 
 	[TestMethod]
-	public void Motion_When_Dark_Turns_The_Zone_On_At_The_Periods_Levels()
+	public void Motion_When_Dark_Turns_The_Area_On_At_The_Periods_Levels()
 	{
 		var t = Build();
 
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70, ColorTempKelvin: 2700 });
 	}
 
@@ -148,7 +148,7 @@ public sealed class ZoneControllerTests
 
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 
@@ -160,14 +160,14 @@ public sealed class ZoneControllerTests
 
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 
 		t.Ha.SetState(Blocker, "off");
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
 
 	// ===================== AutoActive -> PreOff -> AutoVacant =====================
@@ -180,20 +180,20 @@ public sealed class ZoneControllerTests
 		t.Actuator.Clear();
 
 		Advance(t, TimeSpan.FromMinutes(9));
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "the vacancy timeout must not fire early");
 
 		Advance(t, TimeSpan.FromMinutes(1));
-		Assert.AreEqual(ZoneState.PreOff, t.Zone.State);
+		Assert.AreEqual(AreaState.PreOff, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 35 }, "PreOff dims to half the period's brightness");
 
 		Advance(t, TimeSpan.FromSeconds(30));
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: false });
 	}
 
 	[TestMethod]
-	public void Motion_During_The_PreOff_Grace_Restores_The_Zone()
+	public void Motion_During_The_PreOff_Grace_Restores_The_Area()
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
@@ -203,11 +203,11 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70 }, "the full levels come back, not the dim");
 
 		Advance(t, TimeSpan.FromSeconds(60));
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State, "the grace timer must have been cancelled, not merely outrun");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "the grace timer must have been cancelled, not merely outrun");
 	}
 
 	[TestMethod]
@@ -220,10 +220,10 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromMinutes(9));
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 
 		Advance(t, TimeSpan.FromMinutes(1));
-		Assert.AreEqual(ZoneState.PreOff, t.Zone.State, "restarting is not cancelling: the timer still fires eventually");
+		Assert.AreEqual(AreaState.PreOff, t.Area.State, "restarting is not cancelling: the timer still fires eventually");
 	}
 
 	// ===================== -> OverriddenOn =====================
@@ -237,14 +237,14 @@ public sealed class ZoneControllerTests
 		Advance(t, TimeSpan.FromSeconds(30));
 
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
-		Assert.AreEqual(ZoneState.OverriddenOn, t.Zone.State);
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 
 		Advance(t, TimeSpan.FromMinutes(30));
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "the human's levels are sacred until the override expires");
 	}
 
 	[TestMethod]
-	public void Override_Expiring_While_Vacant_Turns_The_Zone_Off()
+	public void Override_Expiring_While_Vacant_Turns_The_Area_Off()
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
@@ -254,7 +254,7 @@ public sealed class ZoneControllerTests
 
 		Advance(t, TimeSpan.FromMinutes(121));
 
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: false });
 	}
 
@@ -265,7 +265,7 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
-		Assert.AreEqual(ZoneState.OverriddenOn, t.Zone.State);
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 		t.Actuator.Clear();
 
 		Advance(t, TimeSpan.FromMinutes(2));
@@ -273,7 +273,7 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromMinutes(4));
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70 });
 	}
 
@@ -289,11 +289,11 @@ public sealed class ZoneControllerTests
 		Advance(t, TimeSpan.FromMinutes(4));
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
-		Assert.AreEqual(ZoneState.OverriddenOn, t.Zone.State);
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "motion must not push the manual levels around");
 
 		Advance(t, TimeSpan.FromMinutes(1));
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State, "motion did not extend the override past its five minutes");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "motion did not extend the override past its five minutes");
 	}
 
 	[TestMethod]
@@ -303,25 +303,25 @@ public sealed class ZoneControllerTests
 
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
 
-		Assert.AreEqual(ZoneState.OverriddenOn, t.Zone.State);
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 	}
 
 	// ===================== -> SuppressedOff =====================
 
 	[TestMethod]
-	public void Manual_Off_Suppresses_The_Zone_And_Motion_Respects_It()
+	public void Manual_Off_Suppresses_The_Area_And_Motion_Respects_It()
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
 
 		t.Ha.Trigger(Light, "off", null, PhysicalDevice());
-		Assert.AreEqual(ZoneState.SuppressedOff, t.Zone.State);
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State);
 
 		t.Actuator.Clear();
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.AreEqual(ZoneState.SuppressedOff, t.Zone.State, "the human turned these lights off; motion does not undo that");
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State, "the human turned these lights off; motion does not undo that");
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 
@@ -331,16 +331,16 @@ public sealed class ZoneControllerTests
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromMinutes(10));
-		Assert.AreEqual(ZoneState.PreOff, t.Zone.State);
+		Assert.AreEqual(AreaState.PreOff, t.Area.State);
 
 		Advance(t, TimeSpan.FromSeconds(20));
 		t.Ha.Trigger(Light, "off", null, PhysicalDevice());
 
-		Assert.AreEqual(ZoneState.SuppressedOff, t.Zone.State);
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State);
 
 		t.Actuator.Clear();
 		Advance(t, TimeSpan.FromSeconds(30));
-		Assert.AreEqual(ZoneState.SuppressedOff, t.Zone.State, "the pre-off timer must not fire into a suppressed zone");
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State, "the pre-off timer must not fire into a suppressed area");
 	}
 
 	/// <summary>
@@ -356,10 +356,10 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Light, "off", null, PhysicalDevice());
 
 		Advance(t, TimeSpan.FromMinutes(9));
-		Assert.AreEqual(ZoneState.SuppressedOff, t.Zone.State);
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State);
 
 		Advance(t, TimeSpan.FromMinutes(1));
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State,
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State,
 			"ten vacant minutes is ten vacant minutes — not ten plus the vacancy timeout");
 	}
 
@@ -374,10 +374,10 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromMinutes(9));
-		Assert.AreEqual(ZoneState.SuppressedOff, t.Zone.State);
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State);
 
 		Advance(t, TimeSpan.FromMinutes(2));
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 	}
 
 	// ===================== self-echo =====================
@@ -391,7 +391,7 @@ public sealed class ZoneControllerTests
 		Advance(t, TimeSpan.FromSeconds(1));
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 178 }, new Context { Id = "echo", UserId = "nd-user" });
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
 
 	/// <summary>
@@ -413,7 +413,7 @@ public sealed class ZoneControllerTests
 		Advance(t, TimeSpan.FromSeconds(20));
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 150 }, new Context { Id = "echo", UserId = "nd-user" });
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State, "the engine must not override itself mid-fade");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "the engine must not override itself mid-fade");
 	}
 
 	[TestMethod]
@@ -429,7 +429,7 @@ public sealed class ZoneControllerTests
 		Advance(t, TimeSpan.FromSeconds(45));
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 150 }, PhysicalDevice());
 
-		Assert.AreEqual(ZoneState.OverriddenOn, t.Zone.State, "the window must close eventually, or nothing is ever an override");
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State, "the window must close eventually, or nothing is ever an override");
 	}
 
 	// ===================== automations =====================
@@ -442,7 +442,7 @@ public sealed class ZoneControllerTests
 
 		t.Ha.Trigger(Light, "off", null, new Context { Id = "x", UserId = "u", ParentId = "automation" });
 
-		Assert.AreEqual(ZoneState.SuppressedOff, t.Zone.State);
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State);
 	}
 
 	[TestMethod]
@@ -454,7 +454,7 @@ public sealed class ZoneControllerTests
 
 		t.Ha.Trigger(Light, "off", null, new Context { Id = "x", UserId = "u", ParentId = "automation" });
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State, "the knob must actually do something");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "the knob must actually do something");
 	}
 
 	// ===================== kill switch =====================
@@ -467,18 +467,18 @@ public sealed class ZoneControllerTests
 		t.Actuator.Clear();
 
 		t.House.OnNext(House(killed: true));
-		Assert.AreEqual(ZoneState.Disabled, t.Zone.State);
+		Assert.AreEqual(AreaState.Disabled, t.Area.State);
 
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "a disabled engine sends nothing");
 
 		t.House.OnNext(House());
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
 
 	[TestMethod]
@@ -488,24 +488,24 @@ public sealed class ZoneControllerTests
 		overridden.Ha.Trigger(Motion, "on");
 		Advance(overridden, TimeSpan.FromSeconds(30));   // clear the echo window of our own turn_on first
 		overridden.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
-		Assert.AreEqual(ZoneState.OverriddenOn, overridden.Zone.State);
+		Assert.AreEqual(AreaState.OverriddenOn, overridden.Area.State);
 		overridden.House.OnNext(House(killed: true));
-		Assert.AreEqual(ZoneState.Disabled, overridden.Zone.State);
+		Assert.AreEqual(AreaState.Disabled, overridden.Area.State);
 
 		var suppressed = Build();
 		suppressed.Ha.Trigger(Motion, "on");
 		suppressed.Ha.Trigger(Light, "off", null, PhysicalDevice());
-		Assert.AreEqual(ZoneState.SuppressedOff, suppressed.Zone.State);
+		Assert.AreEqual(AreaState.SuppressedOff, suppressed.Area.State);
 		suppressed.House.OnNext(House(killed: true));
-		Assert.AreEqual(ZoneState.Disabled, suppressed.Zone.State);
+		Assert.AreEqual(AreaState.Disabled, suppressed.Area.State);
 
 		var preOff = Build();
 		preOff.Ha.Trigger(Motion, "on");
 		Advance(preOff, TimeSpan.FromMinutes(10));
-		Assert.AreEqual(ZoneState.PreOff, preOff.Zone.State);
+		Assert.AreEqual(AreaState.PreOff, preOff.Area.State);
 		preOff.Actuator.Clear();
 		preOff.House.OnNext(House(killed: true));
-		Assert.AreEqual(ZoneState.Disabled, preOff.Zone.State);
+		Assert.AreEqual(AreaState.Disabled, preOff.Area.State);
 
 		// The pre-off grace had 30 s left. A disabled engine must not spend them turning the lights off.
 		Advance(preOff, TimeSpan.FromMinutes(1));
@@ -513,7 +513,7 @@ public sealed class ZoneControllerTests
 	}
 
 	[TestMethod]
-	public void A_Disabled_Zone_Never_Commands_Anything()
+	public void A_Disabled_Area_Never_Commands_Anything()
 	{
 		var t = Build(s => s.Enabled = false);
 
@@ -527,17 +527,17 @@ public sealed class ZoneControllerTests
 	{
 		var t = Build();
 		t.House.OnNext(House(killed: true));
-		Assert.AreEqual(ZoneState.Disabled, t.Zone.State);
+		Assert.AreEqual(AreaState.Disabled, t.Area.State);
 
 		t.House.OnNext(House(home: false));
 
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
+		Assert.AreEqual(AreaState.Away, t.Area.State);
 	}
 
 	// ===================== away =====================
 
 	[TestMethod]
-	public void Everyone_Leaving_Sweeps_The_Zone_Off_And_Motion_Then_Does_Nothing()
+	public void Everyone_Leaving_Sweeps_The_Area_Off_And_Motion_Then_Does_Nothing()
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
@@ -545,16 +545,16 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House(home: false));
 
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
+		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: false });
 
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
+		Assert.AreEqual(AreaState.Away, t.Area.State);
 	}
 
 	[TestMethod]
-	public void A_Zone_With_SkipAwaySweep_Goes_Away_Without_Being_Swept()
+	public void An_Area_With_SkipAwaySweep_Goes_Away_Without_Being_Swept()
 	{
 		var t = Build(s => s.SkipAwaySweep = true);
 		t.Ha.Trigger(Motion, "on");
@@ -562,7 +562,7 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House(home: false));
 
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
+		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "outdoor and security lights opt out of the sweep");
 	}
 
@@ -573,17 +573,17 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));   // clear the echo window of our own turn_on first
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
-		Assert.AreEqual(ZoneState.OverriddenOn, t.Zone.State);
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 		t.Actuator.Clear();
 
 		t.House.OnNext(House(home: false));
 
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
+		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: false }, "nobody is in the house to enjoy those levels");
 	}
 
 	[TestMethod]
-	public void The_Sweep_Reaches_A_Suppressed_Zone_Too()
+	public void The_Sweep_Reaches_A_Suppressed_Area_Too()
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
@@ -591,13 +591,13 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House(home: false));
 
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
+		Assert.AreEqual(AreaState.Away, t.Area.State);
 	}
 
 	// ===================== welcome home =====================
 
 	[TestMethod]
-	public void First_Arrival_Lights_A_WelcomeHome_Zone_When_It_Is_Dark()
+	public void First_Arrival_Lights_A_WelcomeHome_Area_When_It_Is_Dark()
 	{
 		var t = Build(s => s.WelcomeHome = true);
 		t.House.OnNext(House(home: false));
@@ -605,12 +605,12 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House());
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70 });
 	}
 
 	[TestMethod]
-	public void First_Arrival_Leaves_An_Ordinary_Zone_Dark()
+	public void First_Arrival_Leaves_An_Ordinary_Area_Dark()
 	{
 		var t = Build();
 		t.House.OnNext(House(home: false));
@@ -618,12 +618,12 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House());
 
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 
 	[TestMethod]
-	public void A_WelcomeHome_Zone_Stays_Dark_When_It_Is_Not_Dark()
+	public void A_WelcomeHome_Area_Stays_Dark_When_It_Is_Not_Dark()
 	{
 		var t = Build(s => s.WelcomeHome = true);
 		t.Ha.SetState(Lux, "500");
@@ -632,21 +632,21 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House());
 
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 
 	// ===================== sleep mode =====================
 
 	[TestMethod]
-	public void SleepBlocksAutoOn_Stops_The_Zone_Lighting_At_All()
+	public void SleepBlocksAutoOn_Stops_The_Area_Lighting_At_All()
 	{
 		var t = Build(s => s.SleepBlocksAutoOn = true);
 		t.House.OnNext(House(kind: ModeKind.Sleep));
 
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 
@@ -664,7 +664,7 @@ public sealed class ZoneControllerTests
 	}
 
 	[TestMethod]
-	public void Sleep_Mode_Turning_On_Retargets_An_Active_Zone()
+	public void Sleep_Mode_Turning_On_Retargets_An_Active_Area()
 	{
 		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode());
 		t.Ha.Trigger(Motion, "on");
@@ -679,9 +679,9 @@ public sealed class ZoneControllerTests
 	// ===================== circadian tick =====================
 
 	[TestMethod]
-	public void The_Tick_Retargets_An_Active_Zone_When_The_Period_Changes()
+	public void The_Tick_Retargets_An_Active_Area_When_The_Period_Changes()
 	{
-		// A vacancy timeout long enough that the zone is still AutoActive when the night boundary passes.
+		// A vacancy timeout long enough that the area is still AutoActive when the night boundary passes.
 		var t = Build(s => s.VacancyTimeoutSeconds = 60 * 60 * 5);
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
@@ -705,7 +705,7 @@ public sealed class ZoneControllerTests
 	}
 
 	[TestMethod]
-	public void The_Tick_Never_Retargets_An_Overridden_Zone()
+	public void The_Tick_Never_Retargets_An_Overridden_Area()
 	{
 		var t = Build(s =>
 		{
@@ -735,9 +735,9 @@ public sealed class ZoneControllerTests
 		var states = t.Publisher.Snapshots.Select(s => s.State).ToList();
 
 		Assert.IsTrue(t.Publisher.Snapshots.Any(s => s.Reason == TransitionReason.Startup));
-		CollectionAssert.Contains(states, ZoneState.AutoActive);
-		CollectionAssert.Contains(states, ZoneState.PreOff);
-		CollectionAssert.Contains(states, ZoneState.AutoVacant);
+		CollectionAssert.Contains(states, AreaState.AutoActive);
+		CollectionAssert.Contains(states, AreaState.PreOff);
+		CollectionAssert.Contains(states, AreaState.AutoVacant);
 		Assert.IsTrue(t.Publisher.Snapshots.Any(s => s.PeriodName == "evening"), "a snapshot names the period it acted under");
 		Assert.AreEqual(2026, t.Publisher.Snapshots[^1].Timestamp.Year, "the snapshot clock is the scheduler, not the wall");
 	}
@@ -773,7 +773,7 @@ public sealed class ZoneControllerTests
 		ha.SetState(Light, "off");
 		ha.SetState(Lux, "500");
 
-		var settings = new ZoneSettings { Darkness = DarknessSource.Lux };
+		var settings = new AreaSettings { Darkness = DarknessSource.Lux };
 		var global = new GlobalConfig { SmoothTransitions = false, CircadianTickSeconds = 60 };
 		var periods = new List<TimePeriodConfig>
 		{
@@ -781,8 +781,8 @@ public sealed class ZoneControllerTests
 		};
 
 		var publisher = new FakeStatePublisher();
-		var controller = new ZoneController(
-			ha, scheduler, new ResolvedZone("Test", settings, [Light], [Motion], Lux, []), global, periods,
+		var controller = new AreaController(
+			ha, scheduler, new ResolvedArea("Test", settings, [Light], [Motion], Lux, []), global, periods,
 			new CircadianCalculator(periods, global, () => SunTimes.Unknown),
 			new FakeLightActuator(), publisher, new BehaviorSubject<HouseState>(HouseState.Initial),
 			NullLoggerFactory.Instance);
@@ -794,7 +794,7 @@ public sealed class ZoneControllerTests
 	}
 
 	[TestMethod]
-	public void A_Zone_With_No_Lux_Sensor_Reads_The_House_Wide_Outdoor_Lux()
+	public void An_Area_With_No_Lux_Sensor_Reads_The_House_Wide_Outdoor_Lux()
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -805,7 +805,7 @@ public sealed class ZoneControllerTests
 		ha.SetState(Light, "off");
 		ha.SetState(Outdoor, "5");   // dark outside
 
-		var settings = new ZoneSettings { Darkness = DarknessSource.Lux, LuxThreshold = 40 };
+		var settings = new AreaSettings { Darkness = DarknessSource.Lux, LuxThreshold = 40 };
 		var global = new GlobalConfig { SmoothTransitions = false, CircadianTickSeconds = 60, OutdoorLuxSensor = Outdoor };
 		var periods = new List<TimePeriodConfig>
 		{
@@ -813,8 +813,8 @@ public sealed class ZoneControllerTests
 		};
 
 		var publisher = new FakeStatePublisher();
-		var controller = new ZoneController(
-			ha, scheduler, new ResolvedZone("Test", settings, [Light], [Motion], null, []), global, periods,
+		var controller = new AreaController(
+			ha, scheduler, new ResolvedArea("Test", settings, [Light], [Motion], null, []), global, periods,
 			new CircadianCalculator(periods, global, () => SunTimes.Unknown),
 			new FakeLightActuator(), publisher, new BehaviorSubject<HouseState>(HouseState.Initial),
 			NullLoggerFactory.Instance);
@@ -822,7 +822,7 @@ public sealed class ZoneControllerTests
 		controller.Start();
 
 		Assert.AreEqual(true, publisher.Snapshots.Single().IsDark,
-			"the zone has no lux sensor, so it reads the house-wide outdoor sensor: 5 lux is dark");
+			"the area has no lux sensor, so it reads the house-wide outdoor sensor: 5 lux is dark");
 	}
 
 	// ===================== deadlines and republishing =====================
@@ -835,24 +835,24 @@ public sealed class ZoneControllerTests
 
 		t.Ha.Trigger(Motion, "on");
 		Assert.AreEqual(start + TimeSpan.FromSeconds(600), t.Publisher.Snapshots[^1].NextChangeAt,
-			"an active zone knows when it will start dimming");
+			"an active area knows when it will start dimming");
 
 		Advance(t, TimeSpan.FromMinutes(10));
 		var preOff = t.Publisher.Snapshots[^1];
-		Assert.AreEqual(ZoneState.PreOff, preOff.State);
+		Assert.AreEqual(AreaState.PreOff, preOff.State);
 		Assert.AreEqual(start + TimeSpan.FromMinutes(10) + TimeSpan.FromSeconds(30), preOff.NextChangeAt,
 			"the dim warning names the moment the lights go out");
 
 		Advance(t, TimeSpan.FromSeconds(30));
 		var vacant = t.Publisher.Snapshots[^1];
-		Assert.AreEqual(ZoneState.AutoVacant, vacant.State);
-		Assert.IsNull(vacant.NextChangeAt, "a resting zone is waiting on motion, not on a clock");
+		Assert.AreEqual(AreaState.AutoVacant, vacant.State);
+		Assert.IsNull(vacant.NextChangeAt, "a resting area is waiting on motion, not on a clock");
 		Assert.IsNull(vacant.BrightnessPct, "the standing command is now 'off'");
 		Assert.IsNotNull(vacant.LastCommandAt, "…but it is a dated command, not an absence of one");
 	}
 
 	/// <summary>
-	///     Motion in an active zone moves the vacancy deadline without a state change. A snapshot that
+	///     Motion in an active area moves the vacancy deadline without a state change. A snapshot that
 	///     carries a deadline must be re-issued when the deadline moves, or every consumer holds a stale
 	///     countdown — this was the dashboard bug where a card could sit frozen for half an hour.
 	/// </summary>
@@ -868,7 +868,7 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "on");
 
 		var republished = t.Publisher.Snapshots[^1];
-		Assert.AreEqual(ZoneState.AutoActive, republished.State);
+		Assert.AreEqual(AreaState.AutoActive, republished.State);
 		Assert.AreEqual(TransitionReason.Motion, republished.Reason);
 		Assert.AreEqual(start + TimeSpan.FromMinutes(5), republished.LastMotionAt);
 		Assert.AreEqual(start + TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(600), republished.NextChangeAt);
@@ -906,12 +906,12 @@ public sealed class ZoneControllerTests
 		suppressed.Ha.Trigger(Motion, "on");
 
 		var moved = suppressed.Publisher.Snapshots[^1];
-		Assert.AreEqual(ZoneState.SuppressedOff, moved.State);
+		Assert.AreEqual(AreaState.SuppressedOff, moved.State);
 		Assert.AreEqual(start + TimeSpan.FromMinutes(9) + TimeSpan.FromMinutes(10), moved.NextChangeAt);
 	}
 
 	[TestMethod]
-	public void Disabling_The_Zone_Clears_The_Published_Deadline()
+	public void Disabling_The_Area_Clears_The_Published_Deadline()
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
@@ -919,15 +919,15 @@ public sealed class ZoneControllerTests
 		t.House.OnNext(House(killed: true));
 
 		var disabled = t.Publisher.Snapshots[^1];
-		Assert.AreEqual(ZoneState.Disabled, disabled.State);
+		Assert.AreEqual(AreaState.Disabled, disabled.State);
 		Assert.IsNull(disabled.NextChangeAt, "a muzzled engine has no scheduled next move to promise");
 		Assert.IsNull(disabled.NextChangeFrom, "…and no countdown span either — the pair lives and dies together");
 	}
 
 	/// <summary>
-	///     A countdown has two ends. <see cref="ZoneSnapshot.NextChangeAt"/> alone renders a deadline; a
+	///     A countdown has two ends. <see cref="AreaSnapshot.NextChangeAt"/> alone renders a deadline; a
 	///     progress bar also needs the instant the timer was armed, and deriving that client-side from any
-	///     other timestamp would be a guess — <see cref="ZoneSnapshot.Timestamp"/> moves on republishes that
+	///     other timestamp would be a guess — <see cref="AreaSnapshot.Timestamp"/> moves on republishes that
 	///     re-arm nothing.
 	/// </summary>
 	[TestMethod]
@@ -952,7 +952,7 @@ public sealed class ZoneControllerTests
 		// The pre-off warning is a new, shorter countdown, not the tail of the old one.
 		Advance(t, TimeSpan.FromMinutes(10));
 		var preOff = t.Publisher.Snapshots[^1];
-		Assert.AreEqual(ZoneState.PreOff, preOff.State);
+		Assert.AreEqual(AreaState.PreOff, preOff.State);
 		Assert.AreEqual(start + TimeSpan.FromMinutes(15), preOff.NextChangeFrom);
 		Assert.AreEqual(start + TimeSpan.FromMinutes(15) + TimeSpan.FromSeconds(30), preOff.NextChangeAt);
 	}
@@ -963,27 +963,27 @@ public sealed class ZoneControllerTests
 		var t = Build();
 
 		Assert.IsNull(t.Publisher.Snapshots.Single().NextChangeFrom,
-			"a dark, unlit zone starts with nothing armed, so there is no span to claim");
+			"a dark, unlit area starts with nothing armed, so there is no span to claim");
 
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(600 + 30));
 
 		var vacant = t.Publisher.Snapshots[^1];
-		Assert.AreEqual(ZoneState.AutoVacant, vacant.State);
+		Assert.AreEqual(AreaState.AutoVacant, vacant.State);
 		Assert.IsNull(vacant.NextChangeAt);
-		Assert.IsNull(vacant.NextChangeFrom, "a zone waiting on motion has no countdown to draw");
+		Assert.IsNull(vacant.NextChangeFrom, "an area waiting on motion has no countdown to draw");
 	}
 
 	/// <summary>
-	///     The armed instant is part of what the zone is waiting on, not a date on the report — so it counts
-	///     in <see cref="ZoneSnapshot.HasSameMeaningAs"/>, where the as-of fields deliberately do not.
+	///     The armed instant is part of what the area is waiting on, not a date on the report — so it counts
+	///     in <see cref="AreaSnapshot.HasSameMeaningAs"/>, where the as-of fields deliberately do not.
 	/// </summary>
 	[TestMethod]
 	public void A_Moved_Countdown_Start_Is_News_And_A_Moved_Timestamp_Is_Not()
 	{
 		var when = new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
-		var snapshot = new ZoneSnapshot(
-			"Stue", ZoneState.AutoActive, TransitionReason.Motion, HouseMode.Home,
+		var snapshot = new AreaSnapshot(
+			"Stue", AreaState.AutoActive, TransitionReason.Motion, HouseMode.Home,
 			false, true, "evening", 70, 2700, when,
 			when, when, when + TimeSpan.FromMinutes(10), when);
 
@@ -994,23 +994,23 @@ public sealed class ZoneControllerTests
 	// ===================== start-up adoption =====================
 
 	/// <summary>
-	///     The forever-on bug. A zone the engine lit and then forgot across a restart used to start
-	///     <see cref="ZoneState.AutoVacant"/>, which arms no vacancy timer — so the light burned until somebody
+	///     The forever-on bug. An area the engine lit and then forgot across a restart used to start
+	///     <see cref="AreaState.AutoVacant"/>, which arms no vacancy timer — so the light burned until somebody
 	///     walked back into the room, which in a room nobody enters means forever.
 	/// </summary>
 	[TestMethod]
-	public void A_Zone_Found_Lit_Is_Adopted_And_Eventually_Turned_Off()
+	public void An_Area_Found_Lit_Is_Adopted_And_Eventually_Turned_Off()
 	{
 		var t = BuildAlreadyLit();
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State, "a lit room is the engine's problem, not nobody's");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "a lit room is the engine's problem, not nobody's");
 
 		// The vacancy timeout is now running against a light the engine never commanded.
 		Advance(t, TimeSpan.FromMinutes(10));
-		Assert.AreEqual(ZoneState.PreOff, t.Zone.State);
+		Assert.AreEqual(AreaState.PreOff, t.Area.State);
 
 		Advance(t, TimeSpan.FromSeconds(30));
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: false }, "the light the restart orphaned is finally out");
 	}
 
@@ -1034,11 +1034,11 @@ public sealed class ZoneControllerTests
 	///     through a bright afternoon, which is the same bug in daylight.
 	/// </summary>
 	[TestMethod]
-	public void A_Lit_Zone_Is_Adopted_Even_When_It_Is_Too_Bright_To_Have_Been_Lit()
+	public void A_Lit_Area_Is_Adopted_Even_When_It_Is_Too_Bright_To_Have_Been_Lit()
 	{
 		var t = BuildAlreadyLit(lux: "500");
 
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.AreEqual(false, t.Publisher.Snapshots[^1].IsDark, "it is not dark, and the snapshot says so");
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 
@@ -1048,24 +1048,24 @@ public sealed class ZoneControllerTests
 	}
 
 	[TestMethod]
-	public void An_Adopted_Zone_Says_It_Was_Adopted_And_Claims_No_Levels()
+	public void An_Adopted_Area_Says_It_Was_Adopted_And_Claims_No_Levels()
 	{
 		var t = BuildAlreadyLit();
 		var opening = t.Publisher.Snapshots.Single();
 
 		Assert.AreEqual(TransitionReason.AdoptedAtStartup, opening.Reason);
-		Assert.AreEqual(ZoneState.AutoActive, opening.State);
+		Assert.AreEqual(AreaState.AutoActive, opening.State);
 		Assert.IsNull(opening.BrightnessPct, "the engine did not choose these levels and must not claim them");
-		Assert.IsNull(opening.LastCommandAt, "…and it has not commanded this zone at all");
+		Assert.IsNull(opening.LastCommandAt, "…and it has not commanded this area at all");
 		Assert.IsNotNull(opening.NextChangeAt, "but it has armed the timeout that ends the burning");
 	}
 
 	[TestMethod]
-	public void A_Zone_Found_Dark_Is_Not_Adopted()
+	public void An_Area_Found_Dark_Is_Not_Adopted()
 	{
 		var t = Build();
 
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.AreEqual(TransitionReason.Startup, t.Publisher.Snapshots.Single().Reason);
 		Assert.IsNull(t.Publisher.Snapshots.Single().NextChangeAt, "nothing to wait for: nothing is on");
 	}
@@ -1075,9 +1075,9 @@ public sealed class ZoneControllerTests
 	{
 		var t = BuildAlreadyLit(s => s.Enabled = false);
 
-		// Start() declines to adopt, and the house subscription then lands the zone in Disabled — where a lit
+		// Start() declines to adopt, and the house subscription then lands the area in Disabled — where a lit
 		// room is somebody else's business, which is exactly what a kill switch is for.
-		Assert.AreEqual(ZoneState.Disabled, t.Zone.State);
+		Assert.AreEqual(AreaState.Disabled, t.Area.State);
 
 		Advance(t, TimeSpan.FromMinutes(15));
 		Assert.AreEqual(0, t.Actuator.Applied.Count,
@@ -1087,11 +1087,11 @@ public sealed class ZoneControllerTests
 	// ===================== periodic evaluation =====================
 
 	/// <summary>
-	///     Dusk. Lux crossing the threshold is the moment a vacant zone becomes eligible to light, and it is
+	///     Dusk. Lux crossing the threshold is the moment a vacant area becomes eligible to light, and it is
 	///     exactly a moment with no transition and no deadline — so nothing but the tick can notice it.
 	/// </summary>
 	[TestMethod]
-	public void A_Vacant_Zone_Publishes_Once_When_Darkness_Changes_Under_It()
+	public void A_Vacant_Area_Publishes_Once_When_Darkness_Changes_Under_It()
 	{
 		var t = Build(s => s.Darkness = DarknessSource.Lux);
 		t.Ha.SetState(Lux, "500");
@@ -1102,7 +1102,7 @@ public sealed class ZoneControllerTests
 
 		var afterBright = t.Publisher.Snapshots.Count;
 		Advance(t, TimeSpan.FromMinutes(20));
-		Assert.AreEqual(afterBright, t.Publisher.Snapshots.Count, "a zone whose world is not moving stays quiet");
+		Assert.AreEqual(afterBright, t.Publisher.Snapshots.Count, "an area whose world is not moving stays quiet");
 
 		// Dusk: the sensor falls below the threshold with nobody in the room.
 		t.Ha.SetState(Lux, "5");
@@ -1111,13 +1111,13 @@ public sealed class ZoneControllerTests
 		Assert.AreEqual(afterBright + 1, t.Publisher.Snapshots.Count,
 			"dusk in an empty room is news, and it is published exactly once");
 		Assert.AreEqual(true, t.Publisher.Snapshots[^1].IsDark);
-		Assert.AreEqual(ZoneState.AutoVacant, t.Publisher.Snapshots[^1].State);
+		Assert.AreEqual(AreaState.AutoVacant, t.Publisher.Snapshots[^1].State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "noticing dusk is not a reason to light an empty room");
 	}
 
 	/// <summary>
 	///     One real transition is announced once. A republish that carries no new news — motion in an overridden
-	///     zone records occupancy but moves neither the state, the levels, nor the override deadline — resolves to
+	///     area records occupancy but moves neither the state, the levels, nor the override deadline — resolves to
 	///     a snapshot identical to the last one published, and the identical-consecutive guard must swallow it.
 	///     This is the regression test for the owner seeing a single transition log its line twice.
 	/// </summary>
@@ -1128,7 +1128,7 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));   // past the echo window, so the manual touch is read as a human
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
-		Assert.AreEqual(ZoneState.OverriddenOn, t.Zone.State);
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 
 		t.Publisher.Snapshots.Clear();
 
@@ -1146,7 +1146,7 @@ public sealed class ZoneControllerTests
 	///     differ and the suppression would suppress nothing — a fixed-rate heartbeat wearing a diff's clothes.
 	/// </summary>
 	[TestMethod]
-	public void A_Quiet_Zone_Publishes_Nothing_However_Long_It_Ticks()
+	public void A_Quiet_Area_Publishes_Nothing_However_Long_It_Ticks()
 	{
 		var t = Build();
 		var afterStartup = t.Publisher.Snapshots.Count;
@@ -1154,16 +1154,16 @@ public sealed class ZoneControllerTests
 		Advance(t, TimeSpan.FromHours(2));
 
 		Assert.AreEqual(afterStartup, t.Publisher.Snapshots.Count,
-			"two hours of ticks over an unchanging zone is two hours of silence");
+			"two hours of ticks over an unchanging area is two hours of silence");
 	}
 
 	[TestMethod]
-	public void A_Tick_Publishes_When_The_House_Mode_Changes_Under_A_Resting_Zone()
+	public void A_Tick_Publishes_When_The_House_Mode_Changes_Under_A_Resting_Area()
 	{
 		var t = Build();
 		t.Publisher.Snapshots.Clear();
 
-		// Sleep mode does not transition an AutoVacant zone, so only the tick's diff can carry the news.
+		// Sleep mode does not transition an AutoVacant area, so only the tick's diff can carry the news.
 		t.House.OnNext(House(kind: ModeKind.Sleep));
 		Advance(t, TimeSpan.FromMinutes(1));
 
@@ -1177,7 +1177,7 @@ public sealed class ZoneControllerTests
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
 
-		t.Zone.Dispose();
+		t.Area.Dispose();
 		t.Actuator.Clear();
 		Advance(t, TimeSpan.FromMinutes(30));
 
@@ -1187,20 +1187,20 @@ public sealed class ZoneControllerTests
 	// ===================== house-mode sleep (09 §3.4) =====================
 
 	[TestMethod]
-	public void Sleep_NonRespectingZone_FollowsThePlainTable()
+	public void Sleep_NonRespectingArea_FollowsThePlainTable()
 	{
-		// A sleeping house, but this zone does not respect sleep: it follows the one shared table, unclamped.
+		// A sleeping house, but this area does not respect sleep: it follows the one shared table, unclamped.
 		var t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
 		t.Ha.Trigger(Motion, "on");
 
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70 },
-			"a zone that does not respect sleep follows the shared evening period, unclamped");
+			"an area that does not respect sleep follows the shared evening period, unclamped");
 	}
 
 	[TestMethod]
-	public void Sleep_RespectingZone_ClampsViaAnExplicitClampPeriod()
+	public void Sleep_RespectingArea_ClampsViaAnExplicitClampPeriod()
 	{
 		// The Sover option names its own clamp period explicitly, which beats the 'night' fallback.
 		var mode = SoverMode();
@@ -1221,7 +1221,7 @@ public sealed class ZoneControllerTests
 	}
 
 	[TestMethod]
-	public void Sleep_RespectingZone_WithNoResolvableClamp_LeavesTheTargetAlone()
+	public void Sleep_RespectingArea_WithNoResolvableClamp_LeavesTheTargetAlone()
 	{
 		// Sover has no ClampPeriod, and there is no 'night' period nor one that SetsMode Sover — nothing resolves.
 		var periods = new List<TimePeriodConfig>
@@ -1235,13 +1235,13 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "on");
 
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70 },
-			"with no clamp period resolving, the respecting zone is left on the plain evening target");
+			"with no clamp period resolving, the respecting area is left on the plain evening target");
 	}
 
 	// ===================== away-kind mode =====================
 
 	[TestMethod]
-	public void AwayKind_SweepsImmediately_UnlessTheZoneOptsOut()
+	public void AwayKind_SweepsImmediately_UnlessTheAreaOptsOut()
 	{
 		var swept = Build(tweakGlobal: g => g.HouseMode = SoverMode());
 		swept.Ha.Trigger(Motion, "on");
@@ -1249,7 +1249,7 @@ public sealed class ZoneControllerTests
 
 		swept.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte"));
 
-		Assert.AreEqual(ZoneState.Away, swept.Zone.State);
+		Assert.AreEqual(AreaState.Away, swept.Area.State);
 		Assert.IsTrue(swept.Actuator.Last is { On: false }, "an away-kind Borte sweeps a full house at once");
 
 		var optedOut = Build(s => s.SkipAwaySweep = true, g => g.HouseMode = SoverMode());
@@ -1258,8 +1258,8 @@ public sealed class ZoneControllerTests
 
 		optedOut.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte"));
 
-		Assert.AreEqual(ZoneState.Away, optedOut.Zone.State);
-		Assert.AreEqual(0, optedOut.Actuator.Applied.Count, "a SkipAwaySweep zone is left alone");
+		Assert.AreEqual(AreaState.Away, optedOut.Area.State);
+		Assert.AreEqual(0, optedOut.Actuator.Applied.Count, "a SkipAwaySweep area is left alone");
 	}
 
 	[TestMethod]
@@ -1272,7 +1272,7 @@ public sealed class ZoneControllerTests
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
+		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "motion is ignored while the house is away");
 	}
 
@@ -1287,8 +1287,8 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte", scene: "scene.borte"));
 
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
-		Assert.AreEqual(0, t.Actuator.Applied.Count, "an away scene is the look; the zone publishes but sweeps nothing");
+		Assert.AreEqual(AreaState.Away, t.Area.State);
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "an away scene is the look; the area publishes but sweeps nothing");
 	}
 
 	[TestMethod]
@@ -1301,7 +1301,7 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House(home: false));
 
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
+		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: false });
 	}
 
@@ -1328,7 +1328,7 @@ public sealed class ZoneControllerTests
 	}
 
 	[TestMethod]
-	public void Guest_WithAScene_HoldsTheZone_AndIgnoresMotionForCommanding()
+	public void Guest_WithAScene_HoldsTheArea_AndIgnoresMotionForCommanding()
 	{
 		var t = Build(tweakGlobal: g => g.HouseMode = GuestSceneMode());
 		t.Ha.Trigger(Motion, "on");
@@ -1336,12 +1336,12 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
 
-		Assert.AreEqual(ZoneState.SceneHold, t.Zone.State, "a guest scene holds the zone");
-		Assert.AreEqual(0, t.Actuator.Applied.Count, "the scene is the look; the zone commands nothing");
+		Assert.AreEqual(AreaState.SceneHold, t.Area.State, "a guest scene holds the area");
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "the scene is the look; the area commands nothing");
 
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
-		Assert.AreEqual(ZoneState.SceneHold, t.Zone.State, "motion is recorded but does not command out of the hold");
+		Assert.AreEqual(AreaState.SceneHold, t.Area.State, "motion is recorded but does not command out of the hold");
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 
@@ -1350,11 +1350,11 @@ public sealed class ZoneControllerTests
 	{
 		var t = Build(tweakGlobal: g => g.HouseMode = GuestSceneMode());
 		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
-		Assert.AreEqual(ZoneState.SceneHold, t.Zone.State);
+		Assert.AreEqual(AreaState.SceneHold, t.Area.State);
 
 		t.House.OnNext(House());   // back to Normal / Home, no scene
 
-		Assert.AreEqual(ZoneState.AutoVacant, t.Zone.State, "resetting to Normal releases the hold");
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State, "resetting to Normal releases the hold");
 	}
 
 	[TestMethod]
@@ -1362,16 +1362,16 @@ public sealed class ZoneControllerTests
 	{
 		var t = Build(tweak: s => s.WelcomeHome = true, tweakGlobal: g => g.HouseMode = GuestSceneMode());
 
-		// Everyone leaves: the zone goes Away.
+		// Everyone leaves: the area goes Away.
 		t.House.OnNext(House(home: false));
-		Assert.AreEqual(ZoneState.Away, t.Zone.State);
+		Assert.AreEqual(AreaState.Away, t.Area.State);
 		t.Actuator.Clear();
 
-		// A guest scene is selected while the zone is still Away. The scene-hold check runs before the was-Away
+		// A guest scene is selected while the area is still Away. The scene-hold check runs before the was-Away
 		// recovery, so this must land in SceneHold rather than fire the welcome-home ApplyTarget that would clobber it.
 		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
 
-		Assert.AreEqual(ZoneState.SceneHold, t.Zone.State, "a scene mode entered from Away lands in SceneHold");
+		Assert.AreEqual(AreaState.SceneHold, t.Area.State, "a scene mode entered from Away lands in SceneHold");
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "and commands nothing — the scene is the look");
 	}
 
@@ -1385,7 +1385,7 @@ public sealed class ZoneControllerTests
 
 		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester"));
 
-		Assert.AreNotEqual(ZoneState.SceneHold, t.Zone.State, "a guest mode with no scene does not hold the zone");
-		Assert.AreEqual(ZoneState.AutoActive, t.Zone.State, "it stays on the baseline instead");
+		Assert.AreNotEqual(AreaState.SceneHold, t.Area.State, "a guest mode with no scene does not hold the area");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "it stays on the baseline instead");
 	}
 }

@@ -9,7 +9,7 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Engine;
 
 /// <summary>
-///     One zone's state machine. See 02-architecture.md §5 for the diagram this implements.
+///     One area's state machine. See 02-architecture.md §5 for the diagram this implements.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -24,11 +24,11 @@ namespace AdaptiveLighting.Engine;
 ///         not be decided from one state and sent after another has replaced it.
 ///     </para>
 /// </remarks>
-public sealed class ZoneController : IDisposable
+public sealed class AreaController : IDisposable
 {
 	private readonly IHaContext _ha;
 	private readonly IScheduler _scheduler;
-	private readonly ResolvedZone _zone;
+	private readonly ResolvedArea _area;
 	private readonly GlobalConfig _global;
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
 	private readonly CircadianCalculator _circadian;
@@ -46,7 +46,7 @@ public sealed class ZoneController : IDisposable
 	private readonly SerialDisposable _overrideTimer = new();
 	private readonly SerialDisposable _suppressionTimer = new();
 
-	private ZoneState _state = ZoneState.AutoVacant;
+	private AreaState _state = AreaState.AutoVacant;
 	private HouseState _house = HouseState.Initial;
 	private LightTarget? _lastTarget;
 
@@ -62,24 +62,24 @@ public sealed class ZoneController : IDisposable
 	private DateTimeOffset? _nextChangeFrom;
 	private bool? _lastDarkVerdict;
 	private string? _lastDarknessDetail;
-	private ZoneSnapshot? _lastPublished;
+	private AreaSnapshot? _lastPublished;
 	private bool _disposed;
 
-	/// <summary>Creates a controller for one resolved zone.</summary>
-	/// <param name="ha">Source of the zone's state streams.</param>
-	/// <param name="scheduler">The zone's only clock.</param>
-	/// <param name="zone">The zone, already resolved to concrete entity ids.</param>
+	/// <summary>Creates a controller for one resolved area.</summary>
+	/// <param name="ha">Source of the area's state streams.</param>
+	/// <param name="scheduler">The area's only clock.</param>
+	/// <param name="area">The area, already resolved to concrete entity ids.</param>
 	/// <param name="global">House-wide knobs: tick rate, echo window, override policy.</param>
 	/// <param name="periods">The house-wide circadian table, for resolving the sleep-clamp period (09 §4.1).</param>
 	/// <param name="circadian">Supplies the target for an instant.</param>
 	/// <param name="actuator">Where commands go.</param>
 	/// <param name="publisher">Where snapshots go.</param>
 	/// <param name="houseChanged">The house-wide state stream, owned by the orchestrator.</param>
-	/// <param name="loggerFactory">Builds the zone's logger.</param>
-	public ZoneController(
+	/// <param name="loggerFactory">Builds the area's logger.</param>
+	public AreaController(
 		IHaContext ha,
 		IScheduler scheduler,
-		ResolvedZone zone,
+		ResolvedArea area,
 		GlobalConfig global,
 		IReadOnlyList<TimePeriodConfig> periods,
 		CircadianCalculator circadian,
@@ -92,7 +92,7 @@ public sealed class ZoneController : IDisposable
 
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
-		_zone = zone ?? throw new ArgumentNullException(nameof(zone));
+		_area = area ?? throw new ArgumentNullException(nameof(area));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
 		_circadian = circadian ?? throw new ArgumentNullException(nameof(circadian));
@@ -100,38 +100,38 @@ public sealed class ZoneController : IDisposable
 		_publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
 		_houseChanged = houseChanged ?? throw new ArgumentNullException(nameof(houseChanged));
 
-		_logger = loggerFactory.CreateLogger($"{typeof(ZoneController).FullName}.{zone.Name}");
+		_logger = loggerFactory.CreateLogger($"{typeof(AreaController).FullName}.{area.Name}");
 
-		// A zone with its own lux sensor uses it; otherwise it falls back to the house-wide outdoor lux sensor,
+		// An area with its own lux sensor uses it; otherwise it falls back to the house-wide outdoor lux sensor,
 		// and only when neither resolves does the gate fall back to sun elevation. Empty strings normalise to null
 		// so the gate reads them as "no sensor" rather than trying to read the state of an empty id.
-		string? luxSensor = zone.LuxSensor is { Length: > 0 } own ? own
+		string? luxSensor = area.LuxSensor is { Length: > 0 } own ? own
 			: global.OutdoorLuxSensor is { Length: > 0 } outdoor ? outdoor
 			: null;
-		_gateSensor = new IlluminanceGate(ha, luxSensor, zone.Settings, _logger);
+		_gateSensor = new IlluminanceGate(ha, luxSensor, area.Settings, _logger);
 		_detector = new OverrideDetector(global, scheduler);
 	}
 
-	/// <summary>The zone's display name.</summary>
-	public string Name => _zone.Name;
+	/// <summary>The area's display name.</summary>
+	public string Name => _area.Name;
 
 	/// <summary>The current state. For tests and diagnostics; the engine drives itself.</summary>
-	public ZoneState State
+	public AreaState State
 	{
 		get { lock (_gate) return _state; }
 	}
 
 	/// <summary>
 	///     Subscribes and publishes the opening snapshot. The lights are left exactly as found — turning the
-	///     house off at startup to reach a known state would be its own kind of rude — but a zone found lit
+	///     house off at startup to reach a known state would be its own kind of rude — but an area found lit
 	///     adopts them rather than ignoring them. See <see cref="AdoptIfLit"/>.
 	/// </summary>
 	public void Start()
 	{
-		foreach (string sensor in _zone.MotionSensors)
+		foreach (string sensor in _area.MotionSensors)
 			_subscriptions.Add(_ha.Entity(sensor).WhenTurnsOn(_ => OnMotion(), _logger));
 
-		foreach (string light in _zone.Lights)
+		foreach (string light in _area.Lights)
 			_subscriptions.Add(_ha.Entity(light)
 				.StateAllChanges()
 				.SubscribeSafe(OnLightChanged, _logger));
@@ -152,12 +152,12 @@ public sealed class ZoneController : IDisposable
 	}
 
 	/// <summary>
-	///     Takes charge of lights that are already on when the zone starts, without commanding anything.
+	///     Takes charge of lights that are already on when the area starts, without commanding anything.
 	/// </summary>
 	/// <remarks>
 	///     <para>
-	///         <b>The bug this fixes.</b> Every zone used to start <see cref="ZoneState.AutoVacant"/>, which arms
-	///         no vacancy timer. A zone the engine itself had lit and then forgot across a restart would burn
+	///         <b>The bug this fixes.</b> Every area used to start <see cref="AreaState.AutoVacant"/>, which arms
+	///         no vacancy timer. An area the engine itself had lit and then forgot across a restart would burn
 	///         until somebody happened to walk back into the room — indefinitely, in a room nobody enters.
 	///         Restarts are frequent; that is not an edge case, it is the common one.
 	///     </para>
@@ -166,37 +166,37 @@ public sealed class ZoneController : IDisposable
 	///         the engine turn these lights on?", and the answer in daylight is rightly no. That is a different
 	///         question from "these lights are on — whose problem are they?", and answering the second with the
 	///         first is what would leave a lamp burning through a bright afternoon: the exact bug, merely
-	///         daylit. Any lit zone is adopted. No light is left burning because the engine forgot it.
+	///         daylit. Any lit area is adopted. No light is left burning because the engine forgot it.
 	///     </para>
 	///     <para>
 	///         <b>It observes; it never commands.</b> No service call is sent — not to correct brightness to the
 	///         period's target, not to sweep anything off. Somebody walking past a restart notices nothing. The
-	///         zone's target is seeded from the period so the first tick sees a target it already matches and
+	///         area's target is seeded from the period so the first tick sees a target it already matches and
 	///         does not retarget a light the engine never chose; the levels a human (or a previous incarnation of
 	///         the engine) set stand until the day genuinely drifts, which is what would have happened anyway.
 	///     </para>
 	///     <para>
-	///         A muzzled or disabled zone adopts nothing: arming a timer that ends in a command is a command
+	///         A muzzled or disabled area adopts nothing: arming a timer that ends in a command is a command
 	///         deferred, and a disabled engine has no business making one.
 	///     </para>
 	/// </remarks>
-	/// <returns><c>true</c> when the zone adopted lit lights and is now <see cref="ZoneState.AutoActive"/>.</returns>
+	/// <returns><c>true</c> when the area adopted lit lights and is now <see cref="AreaState.AutoActive"/>.</returns>
 	private bool AdoptIfLit()
 	{
 		if (!IsEngineAllowed())
 			return false;
 
-		if (!_zone.Lights.Any(_ha.IsOn))
+		if (!_area.Lights.Any(_ha.IsOn))
 			return false;
 
 		_logger.LogInformation(
-			"{Zone}: found lights already on at start-up; adopting them without commanding, and arming the vacancy timeout.",
+			"{Area}: found lights already on at start-up; adopting them without commanding, and arming the vacancy timeout.",
 			Name);
 
 		// Seeded, not commanded: this is what stops the first tick from "correcting" levels nobody asked it to.
 		_lastTarget = ResolveTarget();
 
-		Enter(ZoneState.AutoActive, TransitionReason.AdoptedAtStartup);
+		Enter(AreaState.AutoActive, TransitionReason.AdoptedAtStartup);
 		RestartVacancyTimer();
 		return true;
 	}
@@ -209,11 +209,11 @@ public sealed class ZoneController : IDisposable
 
 			switch (_state)
 			{
-				case ZoneState.Disabled or ZoneState.Away or ZoneState.SceneHold:
+				case AreaState.Disabled or AreaState.Away or AreaState.SceneHold:
 					// SceneHold records occupancy (above) but commands nothing: the scene is the look.
 					return;
 
-				case ZoneState.SuppressedOff:
+				case AreaState.SuppressedOff:
 					// The human turned these lights off. Motion restarts the vacancy clock that will eventually
 					// lift the suppression, and does nothing else: overriding them now is exactly the behaviour
 					// that makes people rip an automation out. Republished because the reset deadline moved —
@@ -222,32 +222,32 @@ public sealed class ZoneController : IDisposable
 					Publish(TransitionReason.Motion);
 					return;
 
-				case ZoneState.OverriddenOn:
+				case AreaState.OverriddenOn:
 					// Manual levels stand until the override expires. Motion only records occupancy, which
-					// decides where the zone lands at expiry — republished so that record is visible.
+					// decides where the area lands at expiry — republished so that record is visible.
 					Publish(TransitionReason.Motion);
 					return;
 
-				case ZoneState.AutoActive:
+				case AreaState.AutoActive:
 					RestartVacancyTimer();
 					Publish(TransitionReason.Motion);
 					return;
 
-				case ZoneState.PreOff:
+				case AreaState.PreOff:
 					_preOffTimer.Disposable = Disposable.Empty;
-					Enter(ZoneState.AutoActive, TransitionReason.Motion);
+					Enter(AreaState.AutoActive, TransitionReason.Motion);
 					RestartVacancyTimer();
 					ApplyTarget(TransitionReason.Motion);
 					return;
 
-				case ZoneState.AutoVacant:
+				case AreaState.AutoVacant:
 					if (!CanAutoOn(out string? blockedBy))
 					{
-						_logger.LogDebug("Motion in {Zone} but auto-on is blocked: {Reason}.", Name, blockedBy);
+						_logger.LogDebug("Motion in {Area} but auto-on is blocked: {Reason}.", Name, blockedBy);
 						return;
 					}
 
-					Enter(ZoneState.AutoActive, TransitionReason.Motion);
+					Enter(AreaState.AutoActive, TransitionReason.Motion);
 					RestartVacancyTimer();
 					ApplyTarget(TransitionReason.Motion);
 					return;
@@ -267,29 +267,29 @@ public sealed class ZoneController : IDisposable
 				return;
 
 			// While disabled, away or holding a scene the engine observes but does not react: there is nothing to override.
-			if (_state is ZoneState.Disabled or ZoneState.Away or ZoneState.SceneHold)
+			if (_state is AreaState.Disabled or AreaState.Away or AreaState.SceneHold)
 				return;
 
 			bool turnedOn = change.TurnedOn();
 
-			_logger.LogInformation("{Zone}: manual change on {EntityId} attributed to {Origin}; light is now {State}.",
+			_logger.LogInformation("{Area}: manual change on {EntityId} attributed to {Origin}; light is now {State}.",
 				Name, change.New?.EntityId, origin, turnedOn ? "on" : "off");
 
 			if (turnedOn)
 			{
 				CancelAutoTimers();
-				Enter(ZoneState.OverriddenOn, TransitionReason.ManualOn);
+				Enter(AreaState.OverriddenOn, TransitionReason.ManualOn);
 
 				// Restarted on every manual touch: the override should outlast the last thing the human did,
 				// not the first.
-				ArmCountdown(_overrideTimer, TimeSpan.FromMinutes(_zone.Settings.OverrideDurationMinutes), OnOverrideExpired);
+				ArmCountdown(_overrideTimer, TimeSpan.FromMinutes(_area.Settings.OverrideDurationMinutes), OnOverrideExpired);
 
 				Publish(TransitionReason.ManualOn);
 				return;
 			}
 
 			CancelAutoTimers();
-			Enter(ZoneState.SuppressedOff, TransitionReason.ManualOff);
+			Enter(AreaState.SuppressedOff, TransitionReason.ManualOff);
 			RestartSuppressionTimer();
 			Publish(TransitionReason.ManualOff);
 		}
@@ -304,21 +304,21 @@ public sealed class ZoneController : IDisposable
 
 			if (!IsEngineAllowed())
 			{
-				if (_state != ZoneState.Disabled)
+				if (_state != AreaState.Disabled)
 				{
 					CancelAllTimers();
-					Enter(ZoneState.Disabled, TransitionReason.EnablementChanged);
+					Enter(AreaState.Disabled, TransitionReason.EnablementChanged);
 					Publish(TransitionReason.EnablementChanged);
 				}
 
 				return;
 			}
 
-			if (_state == ZoneState.Disabled)
+			if (_state == AreaState.Disabled)
 			{
 				// Resume from the resting state rather than trying to reconstruct what was lost while muzzled,
 				// then fall through: re-enabling into an empty house should land in Away, not AutoVacant.
-				Enter(ZoneState.AutoVacant, TransitionReason.EnablementChanged);
+				Enter(AreaState.AutoVacant, TransitionReason.EnablementChanged);
 				Publish(TransitionReason.EnablementChanged);
 			}
 
@@ -326,40 +326,40 @@ public sealed class ZoneController : IDisposable
 			// itself holds an away scene rather than sweeping, so an Away-with-scene mode is handled here.
 			if (house.Mode == HouseMode.Away)
 			{
-				if (_state != ZoneState.Away)
+				if (_state != AreaState.Away)
 					GoAway();
 
 				return;
 			}
 
-			// A scene-hold mode (Guest carrying a scene) holds the zone indefinitely: the scene is the look, so
+			// A scene-hold mode (Guest carrying a scene) holds the area indefinitely: the scene is the look, so
 			// command nothing. This is checked BEFORE the was-Away recovery: entering a scene mode straight from
 			// Away must land in SceneHold, not run the welcome-home ApplyTarget that would clobber the scene.
 			if (house.Mode == HouseMode.Guest && house.ActiveScene is { Length: > 0 })
 			{
-				if (_state != ZoneState.SceneHold)
+				if (_state != AreaState.SceneHold)
 					EnterSceneHold();
 
 				return;
 			}
 
-			if (_state == ZoneState.Away)
+			if (_state == AreaState.Away)
 			{
 				ComeHome();
 				return;
 			}
 
-			if (_state == ZoneState.SceneHold)
+			if (_state == AreaState.SceneHold)
 			{
 				// The Guest scene ended (reset to Normal, or the scene was cleared). Exit to the resting state and
 				// let the normal machinery re-evaluate — no welcome-home flourish.
-				Enter(ZoneState.AutoVacant, TransitionReason.SceneHold);
+				Enter(AreaState.AutoVacant, TransitionReason.SceneHold);
 				Publish(TransitionReason.SceneHold);
 				return;
 			}
 
-			// A mode switch is a command: retarget an active zone whenever the kind or the mode value moved.
-			if (_state == ZoneState.AutoActive
+			// A mode switch is a command: retarget an active area whenever the kind or the mode value moved.
+			if (_state == AreaState.AutoActive
 				&& (previous.ActiveKind != house.ActiveKind
 					|| !string.Equals(previous.ModeValue, house.ModeValue, StringComparison.OrdinalIgnoreCase)))
 				ApplyTarget(TransitionReason.HouseModeChanged);
@@ -369,26 +369,26 @@ public sealed class ZoneController : IDisposable
 	private void EnterSceneHold()
 	{
 		CancelAllTimers();
-		Enter(ZoneState.SceneHold, TransitionReason.SceneHold);
+		Enter(AreaState.SceneHold, TransitionReason.SceneHold);
 		Publish(TransitionReason.SceneHold);
 	}
 
 	/// <summary>
-	///     The zone's re-evaluation of the world, at <c>CircadianTickSeconds</c>.
+	///     The area's re-evaluation of the world, at <c>CircadianTickSeconds</c>.
 	/// </summary>
 	/// <remarks>
 	///     <para>
-	///         This used to return immediately unless the zone was <see cref="ZoneState.AutoActive"/>, which
-	///         meant a resting zone published nothing between transitions — and a zone can rest all day. Its
+	///         This used to return immediately unless the area was <see cref="AreaState.AutoActive"/>, which
+	///         meant a resting area published nothing between transitions — and an area can rest all day. Its
 	///         card would then show the darkness verdict, period and house mode from whenever it last moved,
-	///         hours stale. Dusk was the worst of it: lux crossing the threshold is the moment a vacant zone
+	///         hours stale. Dusk was the worst of it: lux crossing the threshold is the moment a vacant area
 	///         becomes eligible to light, and it is precisely a moment with no transition and no deadline, so
 	///         nothing announced it.
 	///     </para>
 	///     <para>
-	///         So every zone now re-reads darkness and the period on every tick, whatever its state, and
-	///         publishes — but only if the result actually differs from what it last published. A quiet zone
-	///         still costs nothing; a zone whose world moved says so. That keeps the property that made
+	///         So every area now re-reads darkness and the period on every tick, whatever its state, and
+	///         publishes — but only if the result actually differs from what it last published. A quiet area
+	///         still costs nothing; an area whose world moved says so. That keeps the property that made
 	///         event-on-transition attractive without the lie that came with it.
 	///     </para>
 	/// </remarks>
@@ -397,10 +397,10 @@ public sealed class ZoneController : IDisposable
 		lock (_gate)
 		{
 			// Reading darkness is a state read, not a subscription, so the tick is the only thing that can
-			// notice dusk in a zone that is not otherwise doing anything.
+			// notice dusk in an area that is not otherwise doing anything.
 			RefreshDarkness();
 
-			if (_state == ZoneState.AutoActive)
+			if (_state == AreaState.AutoActive)
 			{
 				LightTarget? target = ResolveTarget();
 
@@ -412,7 +412,7 @@ public sealed class ZoneController : IDisposable
 				}
 			}
 
-			// The guard inside Publish suppresses a tick that says nothing new, so a quiet zone stays quiet.
+			// The guard inside Publish suppresses a tick that says nothing new, so a quiet area stays quiet.
 			Publish(TransitionReason.CircadianTick);
 		}
 	}
@@ -421,20 +421,20 @@ public sealed class ZoneController : IDisposable
 	{
 		lock (_gate)
 		{
-			if (_state != ZoneState.AutoActive)
+			if (_state != AreaState.AutoActive)
 				return;
 
-			Enter(ZoneState.PreOff, TransitionReason.VacancyTimeout);
+			Enter(AreaState.PreOff, TransitionReason.VacancyTimeout);
 
 			// Armed before the dim is applied so the snapshot that announces PreOff already carries its own
 			// deadline — a warning without a "when" is just a dimmer room.
-			ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_zone.Settings.PreOffSeconds), OnPreOffElapsed);
+			ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_area.Settings.PreOffSeconds), OnPreOffElapsed);
 
-			// The pre-off dim is the zone's way of saying "speak now": a wave of the hand in the grace window
+			// The pre-off dim is the area's way of saying "speak now": a wave of the hand in the grace window
 			// costs nothing, whereas being dropped into darkness mid-thought costs trust. The dim keeps the
-			// period's floor, so a zone whose night floor is its target simply gets no visible warning rather
+			// period's floor, so an area whose night floor is its target simply gets no visible warning rather
 			// than an illegal level.
-			ApplyTarget(TransitionReason.VacancyTimeout, _zone.Settings.PreOffBrightnessFactor);
+			ApplyTarget(TransitionReason.VacancyTimeout, _area.Settings.PreOffBrightnessFactor);
 		}
 	}
 
@@ -442,12 +442,12 @@ public sealed class ZoneController : IDisposable
 	{
 		lock (_gate)
 		{
-			if (_state != ZoneState.PreOff)
+			if (_state != AreaState.PreOff)
 				return;
 
 			_nextChangeAt = null;
 			_nextChangeFrom = null;
-			Enter(ZoneState.AutoVacant, TransitionReason.PreOffElapsed);
+			Enter(AreaState.AutoVacant, TransitionReason.PreOffElapsed);
 			TurnOff(TransitionReason.PreOffElapsed);
 		}
 	}
@@ -456,7 +456,7 @@ public sealed class ZoneController : IDisposable
 	{
 		lock (_gate)
 		{
-			if (_state != ZoneState.OverriddenOn)
+			if (_state != AreaState.OverriddenOn)
 				return;
 
 			_nextChangeAt = null;
@@ -464,30 +464,30 @@ public sealed class ZoneController : IDisposable
 
 			if (IsOccupied())
 			{
-				Enter(ZoneState.AutoActive, TransitionReason.OverrideExpired);
+				Enter(AreaState.AutoActive, TransitionReason.OverrideExpired);
 				RestartVacancyTimer();
 				ApplyTarget(TransitionReason.OverrideExpired);
 				return;
 			}
 
-			Enter(ZoneState.AutoVacant, TransitionReason.OverrideExpired);
+			Enter(AreaState.AutoVacant, TransitionReason.OverrideExpired);
 			TurnOff(TransitionReason.OverrideExpired);
 		}
 	}
 
 	// Reaching here means VacancyResetMinutes passed without motion: the timer is restarted by every motion
-	// event, so its firing is itself the proof that the zone is vacant. An extra occupancy check on top would
+	// event, so its firing is itself the proof that the area is vacant. An extra occupancy check on top would
 	// silently stretch the reset out to the vacancy timeout instead.
 	private void OnSuppressionLifted()
 	{
 		lock (_gate)
 		{
-			if (_state != ZoneState.SuppressedOff)
+			if (_state != AreaState.SuppressedOff)
 				return;
 
 			_nextChangeAt = null;
 			_nextChangeFrom = null;
-			Enter(ZoneState.AutoVacant, TransitionReason.SuppressionLifted);
+			Enter(AreaState.AutoVacant, TransitionReason.SuppressionLifted);
 			Publish(TransitionReason.SuppressionLifted);
 		}
 	}
@@ -495,20 +495,20 @@ public sealed class ZoneController : IDisposable
 	private void GoAway()
 	{
 		CancelAllTimers();
-		Enter(ZoneState.Away, TransitionReason.EveryoneLeft);
+		Enter(AreaState.Away, TransitionReason.EveryoneLeft);
 
 		// An away scene IS the away look, so skip the sweep and let the scene stand — same stand-down as SkipAwaySweep.
 		if (_house.ActiveScene is { Length: > 0 })
 		{
-			_logger.LogDebug("{Zone}: away scene {Scene} is holding; skipping the leaving sweep.", Name, _house.ActiveScene);
+			_logger.LogDebug("{Area}: away scene {Scene} is holding; skipping the leaving sweep.", Name, _house.ActiveScene);
 			Publish(TransitionReason.EveryoneLeft);
 			return;
 		}
 
 		// The sweep beats an override: whoever set those levels is not in the house to enjoy them.
-		if (_zone.Settings.SkipAwaySweep)
+		if (_area.Settings.SkipAwaySweep)
 		{
-			_logger.LogDebug("{Zone} opted out of the leaving sweep.", Name);
+			_logger.LogDebug("{Area} opted out of the leaving sweep.", Name);
 			Publish(TransitionReason.EveryoneLeft);
 			return;
 		}
@@ -518,21 +518,21 @@ public sealed class ZoneController : IDisposable
 
 	private void ComeHome()
 	{
-		Enter(ZoneState.AutoVacant, TransitionReason.FirstPersonArrived);
+		Enter(AreaState.AutoVacant, TransitionReason.FirstPersonArrived);
 
-		if (!_zone.Settings.WelcomeHome || !CanAutoOn(out _))
+		if (!_area.Settings.WelcomeHome || !CanAutoOn(out _))
 		{
 			Publish(TransitionReason.FirstPersonArrived);
 			return;
 		}
 
-		Enter(ZoneState.AutoActive, TransitionReason.FirstPersonArrived);
+		Enter(AreaState.AutoActive, TransitionReason.FirstPersonArrived);
 		RestartVacancyTimer();
 		ApplyTarget(TransitionReason.FirstPersonArrived);
 	}
 
-	/// <summary>Whether the engine may command this zone at all, ignoring presence and darkness.</summary>
-	private bool IsEngineAllowed() => _zone.Settings.Enabled && !_house.KillSwitchActive;
+	/// <summary>Whether the engine may command this area at all, ignoring presence and darkness.</summary>
+	private bool IsEngineAllowed() => _area.Settings.Enabled && !_house.KillSwitchActive;
 
 	private bool CanAutoOn(out string blockedBy)
 	{
@@ -540,7 +540,7 @@ public sealed class ZoneController : IDisposable
 
 		if (!IsEngineAllowed())
 		{
-			blockedBy = _house.KillSwitchActive ? "kill switch is active" : "zone is disabled";
+			blockedBy = _house.KillSwitchActive ? "kill switch is active" : "area is disabled";
 			return false;
 		}
 
@@ -550,13 +550,13 @@ public sealed class ZoneController : IDisposable
 			return false;
 		}
 
-		if (_zone.Settings.SleepBlocksAutoOn && _house.Mode == HouseMode.Sleep)
+		if (_area.Settings.SleepBlocksAutoOn && _house.Mode == HouseMode.Sleep)
 		{
-			blockedBy = "sleep mode blocks auto-on for this zone";
+			blockedBy = "sleep mode blocks auto-on for this area";
 			return false;
 		}
 
-		if (_zone.IgnoreWhenOn.FirstOrDefault(_ha.IsOn) is { } blocker)
+		if (_area.IgnoreWhenOn.FirstOrDefault(_ha.IsOn) is { } blocker)
 		{
 			blockedBy = $"{blocker} is on";
 			return false;
@@ -581,15 +581,15 @@ public sealed class ZoneController : IDisposable
 	}
 
 	/// <summary>
-	///     Whether the zone counts as occupied, for the questions the vacancy timer cannot answer — where an
+	///     Whether the area counts as occupied, for the questions the vacancy timer cannot answer — where an
 	///     expiring override should land, and whether a suppression may lift.
 	/// </summary>
 	private bool IsOccupied() =>
 		_lastMotionAt is { } lastMotion &&
-		_scheduler.Now - lastMotion < TimeSpan.FromSeconds(_zone.Settings.VacancyTimeoutSeconds);
+		_scheduler.Now - lastMotion < TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds);
 
 	/// <summary>
-	///     The zone's target now (09 §3.4): the one shared table, then — only for a sleep-respecting zone while the
+	///     The area's target now (09 §3.4): the one shared table, then — only for a sleep-respecting area while the
 	///     house is asleep — clamped to the sleep-clamp period's caps.
 	/// </summary>
 	private LightTarget? ResolveTarget()
@@ -598,11 +598,11 @@ public sealed class ZoneController : IDisposable
 		CachePeriodName(_scheduler.Now, target?.PeriodName);
 		if (target is null)
 		{
-			_logger.LogWarning("{Zone}: no circadian period resolves at {Now}; commanding nothing.", Name, _scheduler.Now);
+			_logger.LogWarning("{Area}: no circadian period resolves at {Now}; commanding nothing.", Name, _scheduler.Now);
 			return null;
 		}
 
-		if (_house.Mode == HouseMode.Sleep && _zone.Settings.RespectSleepMode)
+		if (_house.Mode == HouseMode.Sleep && _area.Settings.RespectSleepMode)
 			return ClampToSleepCaps(target);
 
 		return target;
@@ -621,7 +621,7 @@ public sealed class ZoneController : IDisposable
 		LightTarget? sleepPeriod = sleepPeriodName is { Length: > 0 } ? _circadian.GetPeriodTarget(sleepPeriodName) : null;
 		if (sleepPeriod is null)
 		{
-			_logger.LogWarning("{Zone} respects sleep mode but no clamp period resolves ('{Period}'); leaving the target alone.",
+			_logger.LogWarning("{Area} respects sleep mode but no clamp period resolves ('{Period}'); leaving the target alone.",
 				Name, sleepPeriodName ?? "(none)");
 			return target;
 		}
@@ -665,7 +665,7 @@ public sealed class ZoneController : IDisposable
 
 	private void Send(LightCommand command)
 	{
-		foreach (string light in _zone.Lights)
+		foreach (string light in _area.Lights)
 		{
 			// Declared before sending, always: the detector's primary heuristic is worthless if a command can
 			// reach HA before the expectation that explains it.
@@ -685,13 +685,13 @@ public sealed class ZoneController : IDisposable
 	///     receiving the change are dark-adapted, and that is exactly what the gate already measured.
 	/// </summary>
 	private double TransitionSeconds() =>
-		_lastDarkVerdict == true ? _zone.Settings.NightTransitionSeconds : _zone.Settings.DayTransitionSeconds;
+		_lastDarkVerdict == true ? _area.Settings.NightTransitionSeconds : _area.Settings.DayTransitionSeconds;
 
 	private void RestartVacancyTimer() =>
-		ArmCountdown(_vacancyTimer, TimeSpan.FromSeconds(_zone.Settings.VacancyTimeoutSeconds), OnVacancyTimeout);
+		ArmCountdown(_vacancyTimer, TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds), OnVacancyTimeout);
 
 	private void RestartSuppressionTimer() =>
-		ArmCountdown(_suppressionTimer, TimeSpan.FromMinutes(_zone.Settings.VacancyResetMinutes), OnSuppressionLifted);
+		ArmCountdown(_suppressionTimer, TimeSpan.FromMinutes(_area.Settings.VacancyResetMinutes), OnSuppressionLifted);
 
 	// Arms one countdown: records both ends of its window (_nextChangeFrom/_nextChangeAt) so the snapshot can
 	// render elapsed-versus-remaining, then schedules its expiry on the given timer. The single place the four
@@ -724,16 +724,16 @@ public sealed class ZoneController : IDisposable
 		Math.Abs(left.BrightnessPct - right.BrightnessPct) < _global.BrightnessTolerancePct &&
 		Math.Abs(left.ColorTempKelvin - right.ColorTempKelvin) < _global.ColorTempToleranceKelvin;
 
-	private void Enter(ZoneState state, TransitionReason reason)
+	private void Enter(AreaState state, TransitionReason reason)
 	{
 		if (_state != state)
-			_logger.LogInformation("{Zone}: {From} -> {To} ({Reason}).", Name, _state, state, reason);
+			_logger.LogInformation("{Area}: {From} -> {To} ({Reason}).", Name, _state, state, reason);
 
 		_state = state;
 	}
 
 	/// <summary>
-	///     Publishes this snapshot, unless it would repeat — verbatim — the news the zone last published.
+	///     Publishes this snapshot, unless it would repeat — verbatim — the news the area last published.
 	/// </summary>
 	/// <remarks>
 	///     <para>
@@ -742,20 +742,20 @@ public sealed class ZoneController : IDisposable
 	///         true: two triggers can land on the same instant and resolve to the identical snapshot — a periodic
 	///         tick arriving with a motion event, or a house-state re-emit behind a mode change — and each would
 	///         then log and fire once, announcing one real change twice. The owner saw exactly this: a single
-	///         transition logging its "Zone X is AutoActive …" line twice.
+	///         transition logging its "Area X is AutoActive …" line twice.
 	///     </para>
 	///     <para>
 	///         So every publish now passes through the one identical-consecutive guard. It suppresses only a
 	///         snapshot that says the very same thing as the last one sent; every genuinely-distinct publish still
 	///         goes out, including a same-state republish whose deadline moved (motion re-arming the vacancy
 	///         timer), because the deadline is part of the compared meaning. The "as of" fields
-	///         <see cref="ZoneSnapshot.HasSameMeaningAs"/> excludes — the timestamp, the last-motion instant — are
+	///         <see cref="AreaSnapshot.HasSameMeaningAs"/> excludes — the timestamp, the last-motion instant — are
 	///         exactly the ones that must not, on their own, force a duplicate.
 	///     </para>
 	/// </remarks>
 	private void Publish(TransitionReason reason)
 	{
-		ZoneSnapshot snapshot = Snapshot(reason);
+		AreaSnapshot snapshot = Snapshot(reason);
 
 		// _lastPublished is the last snapshot actually sent, so a suppressed publish leaves it untouched and the
 		// next genuine change still diffs against real news rather than against something nobody heard.
@@ -766,14 +766,14 @@ public sealed class ZoneController : IDisposable
 		_publisher.Publish(snapshot);
 	}
 
-	private ZoneSnapshot Snapshot(TransitionReason reason)
+	private AreaSnapshot Snapshot(TransitionReason reason)
 	{
 		// The standing command's levels, or null when the last command was "off" — or when there has never
 		// been one, which LastCommandAt disambiguates. The period is resolved at the snapshot's own instant
-		// rather than copied from the last command, so an idle zone still names the period it is sitting in.
+		// rather than copied from the last command, so an idle area still names the period it is sitting in.
 		LightCommand? standing = _lastCommand is { On: true } ? _lastCommand : null;
 
-		return new ZoneSnapshot(
+		return new AreaSnapshot(
 			Name,
 			_state,
 			reason,

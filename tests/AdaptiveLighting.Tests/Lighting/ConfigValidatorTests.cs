@@ -3,12 +3,12 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     What the validator refuses outright, what it merely reports against one zone, and the difference.
+///     What the validator refuses outright, what it merely reports against one area, and the difference.
 /// </summary>
 /// <remarks>
 ///     The split is the whole design: a document-level problem means nobody thought about this config and the
 ///     app should show up dead in HA; a referential problem — an entity renamed under us — must cost that one
-///     zone rather than the house.
+///     area rather than the house.
 /// </remarks>
 [TestClass]
 public sealed class ConfigValidatorTests
@@ -16,7 +16,7 @@ public sealed class ConfigValidatorTests
 	private static AdaptiveLightingConfig Minimal() => new()
 	{
 		Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "night", Start = "22:30" }],
-		Zones = [new() { Name = "Stue", AreaId = "stue" }]
+		Areas = [new() { Name = "Stue", AreaId = "stue" }]
 	};
 
 	[TestMethod]
@@ -26,20 +26,20 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void An_Empty_Document_Fails_On_Periods_But_Only_Warns_On_Zones()
+	public void An_Empty_Document_Fails_On_Periods_But_Only_Warns_On_Areas()
 	{
 		var result = ConfigValidator.Validate(new AdaptiveLightingConfig());
 
 		Assert.IsFalse(result.IsValid, "with no periods the engine could never pick a target");
 		Assert.IsTrue(result.Errors.Any(e => e.Contains("Periods", StringComparison.Ordinal)));
 
-		// Deliberately NOT an error. An empty zone list is where a new installation starts, before discovery has
+		// Deliberately NOT an error. An empty area list is where a new installation starts, before discovery has
 		// run - and where a household ends up after removing every room on purpose. The engine runs and commands
 		// nothing, which is a fine state to be in; refusing the document would stop the app and announce
 		// "document-level errors" to somebody whose only sin is not having configured anything yet.
-		Assert.IsFalse(result.Errors.Any(e => e.Contains("zones", StringComparison.OrdinalIgnoreCase)),
-			"an empty zone list is a warning, not a document error");
-		Assert.IsTrue(result.Warnings.Any(w => w.Contains("No zones yet", StringComparison.Ordinal)));
+		Assert.IsFalse(result.Errors.Any(e => e.Contains("areas", StringComparison.OrdinalIgnoreCase)),
+			"an empty area list is a warning, not a document error");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("No areas yet", StringComparison.Ordinal)));
 	}
 
 	/// <summary>
@@ -147,7 +147,7 @@ public sealed class ConfigValidatorTests
 	public void A_PreOff_Longer_Than_The_Vacancy_Timeout_Is_Rejected()
 	{
 		var config = Minimal();
-		config.Defaults = new ZoneSettings { VacancyTimeoutSeconds = 20, PreOffSeconds = 30 };
+		config.Defaults = new AreaSettings { VacancyTimeoutSeconds = 20, PreOffSeconds = 30 };
 
 		var result = ConfigValidator.Validate(config);
 
@@ -165,10 +165,10 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void A_Zones_Own_Bad_Override_Is_Caught_Under_The_Zones_Name()
+	public void An_Areas_Own_Bad_Override_Is_Caught_Under_The_Areas_Name()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Stue", AreaId = "stue", PreOffBrightnessFactor = 4 }];
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", PreOffBrightnessFactor = 4 }];
 
 		var result = ConfigValidator.Validate(config);
 
@@ -176,13 +176,13 @@ public sealed class ConfigValidatorTests
 		StringAssert.Contains(result.ToString(), "Stue", "the household needs to know which room to go and fix");
 	}
 
-	// ===================== zones =====================
+	// ===================== areas =====================
 
 	[TestMethod]
-	public void Duplicate_Zone_Names_Are_Rejected()
+	public void Duplicate_Area_Names_Are_Rejected()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Z", AreaId = "a" }, new() { Name = "Z", AreaId = "b" }];
+		config.Areas = [new() { Name = "Z", AreaId = "a" }, new() { Name = "Z", AreaId = "b" }];
 
 		var result = ConfigValidator.Validate(config);
 
@@ -191,40 +191,40 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void A_Zone_With_Nothing_To_Resolve_Is_A_Zone_Error_Not_A_Document_Error()
+	public void An_Area_With_Nothing_To_Resolve_Is_An_Area_Error_Not_A_Document_Error()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Nowhere" }];
+		config.Areas = [new() { Name = "Nowhere" }];
 
 		var result = ConfigValidator.Validate(config);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(1, result.ZoneErrors.Count);
+		Assert.AreEqual(1, result.AreaErrors.Count);
 	}
 
 	[TestMethod]
-	public void An_Unknown_Area_Costs_The_Zone_And_Not_The_House()
+	public void An_Unknown_Area_Id_Costs_The_Area_And_Not_The_House()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Z", AreaId = "nope" }];
+		config.Areas = [new() { Name = "Z", AreaId = "nope" }];
 
 		var result = ConfigValidator.Validate(config, knownEntityIds: [], knownAreaIds: ["stue"]);
 
 		Assert.IsTrue(result.IsValid, "one renamed area must not take the whole house's lighting down");
-		Assert.AreEqual(1, result.ZoneErrors.Count);
-		StringAssert.Contains(result.ZoneErrors[0].Message, "stue", "and the message should name the ids that do exist");
+		Assert.AreEqual(1, result.AreaErrors.Count);
+		StringAssert.Contains(result.AreaErrors[0].Message, "stue", "and the message should name the ids that do exist");
 	}
 
 	[TestMethod]
-	public void An_Unknown_Entity_Costs_The_Zone_And_Not_The_House()
+	public void An_Unknown_Entity_Costs_The_Area_And_Not_The_House()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Z", AreaId = "stue", Lights = ["light.ghost"] }];
+		config.Areas = [new() { Name = "Z", AreaId = "stue", Lights = ["light.ghost"] }];
 
 		var result = ConfigValidator.Validate(config, knownEntityIds: ["light.real"], knownAreaIds: ["stue"]);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(1, result.ZoneErrors.Count);
+		Assert.AreEqual(1, result.AreaErrors.Count);
 	}
 
 	[TestMethod]
@@ -237,14 +237,14 @@ public sealed class ConfigValidatorTests
 
 		var result = ConfigValidator.Validate(config, knownEntityIds: ["input_boolean.real"], knownAreaIds: ["stue"]);
 
-		Assert.IsFalse(result.IsValid, "a watched person entity that does not exist is the house's problem, not one zone's");
+		Assert.IsFalse(result.IsValid, "a watched person entity that does not exist is the house's problem, not one area's");
 	}
 
 	[TestMethod]
 	public void Referential_Checks_Are_Skipped_When_Nothing_Is_Known()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Z", AreaId = "anything", Lights = ["light.whatever"] }];
+		config.Areas = [new() { Name = "Z", AreaId = "anything", Lights = ["light.whatever"] }];
 
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,
 			"a caller with no IHaContext gets the document checks and nothing it cannot answer");
@@ -501,25 +501,25 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void SleepClamp_MustResolveWhenLoadBearing()
 	{
-		// Load-bearing (a zone respects sleep), resolvable via the "night" period Minimal() carries → valid.
+		// Load-bearing (an area respects sleep), resolvable via the "night" period Minimal() carries → valid.
 		var resolvable = WithHouseMode();
-		resolvable.Zones[0].RespectSleepMode = true;
+		resolvable.Areas[0].RespectSleepMode = true;
 		Assert.IsTrue(ConfigValidator.Validate(resolvable).IsValid, "the 'night' period resolves the clamp");
 
 		// Load-bearing, but nothing resolves the clamp (no ClampPeriod, no SetsMode period, no 'night') → error.
 		var unresolvable = WithHouseMode();
-		unresolvable.Zones[0].RespectSleepMode = true;
+		unresolvable.Areas[0].RespectSleepMode = true;
 		unresolvable.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" }];
 		Assert.IsFalse(ConfigValidator.Validate(unresolvable).IsValid, "nothing resolves the clamp for a load-bearing sleep path");
 
-		// Not load-bearing (no zone respects sleep) → valid even though nothing resolves.
+		// Not load-bearing (no area respects sleep) → valid even though nothing resolves.
 		var notBearing = WithHouseMode();
 		notBearing.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" }];
 		Assert.IsTrue(ConfigValidator.Validate(notBearing).IsValid, "sleep is not load-bearing, so the missing clamp is inert");
 
 		// Load-bearing, resolvable via an explicit ClampPeriod → valid.
 		var viaClamp = WithHouseMode();
-		viaClamp.Zones[0].RespectSleepMode = true;
+		viaClamp.Areas[0].RespectSleepMode = true;
 		viaClamp.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "dim", Start = "22:00" }];
 		viaClamp.Global.HouseMode!.OptionFor("Sover")!.ClampPeriod = "dim";
 		Assert.IsTrue(ConfigValidator.Validate(viaClamp).IsValid, "an explicit ClampPeriod resolves the clamp");
@@ -588,11 +588,11 @@ public sealed class ConfigValidatorTests
 			    - Name: night
 			      Start: "22:30"
 			      MaxBrightnessPct: 30
-			  Zones:
+			  Areas:
 			    - Name: Stue
 			      AreaId: stue
 			      RespectSleepMode: true
-			""");
+			""").Config;
 
 		Assert.IsNull(config.Global.HouseMode, "no HouseMode block → property null");
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,

@@ -37,7 +37,7 @@ public sealed class ModeMonitor : IDisposable
 	private readonly IScheduler _scheduler;
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
 	private readonly CircadianCalculator _circadian;
-	private readonly IReadOnlyCollection<string> _zoneMotionSensors;
+	private readonly IReadOnlyCollection<string> _areaMotionSensors;
 
 	private readonly Subject<Unit> _changed = new();
 	private readonly CompositeDisposable _subscriptions = [];
@@ -64,8 +64,8 @@ public sealed class ModeMonitor : IDisposable
 	/// <param name="scheduler">The monitor's only clock: the evaluation tick and every grace/reset comparison.</param>
 	/// <param name="periods">The house-wide circadian table, for period-entry detection.</param>
 	/// <param name="sunTimes">Supplies the day's sun times on demand, for placing sun-anchored boundaries.</param>
-	/// <param name="zoneMotionSensors">
-	///     The union of every motion sensor configured across all zones. An option whose
+	/// <param name="areaMotionSensors">
+	///     The union of every motion sensor configured across all areas. An option whose
 	///     <see cref="HouseModeOptionConfig.ResetPresenceSensors"/> is empty resets on any of these (09 owner refinement).
 	/// </param>
 	public ModeMonitor(
@@ -75,7 +75,7 @@ public sealed class ModeMonitor : IDisposable
 		IScheduler scheduler,
 		IReadOnlyList<TimePeriodConfig> periods,
 		Func<SunTimes> sunTimes,
-		IReadOnlyCollection<string> zoneMotionSensors)
+		IReadOnlyCollection<string> areaMotionSensors)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
@@ -83,7 +83,7 @@ public sealed class ModeMonitor : IDisposable
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
 		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
 		ArgumentNullException.ThrowIfNull(sunTimes);
-		_zoneMotionSensors = zoneMotionSensors ?? throw new ArgumentNullException(nameof(zoneMotionSensors));
+		_areaMotionSensors = areaMotionSensors ?? throw new ArgumentNullException(nameof(areaMotionSensors));
 
 		_circadian = new CircadianCalculator(periods, global, sunTimes);
 	}
@@ -165,8 +165,8 @@ public sealed class ModeMonitor : IDisposable
 	/// <summary>
 	///     The effective option's <c>scene.*</c> when it names one, whatever its kind. Applied once on entry by the
 	///     orchestrator. On Away/Guest the scene stands (they pause the engine); on Normal/Sleep the engine keeps
-	///     adjusting, so it is a one-shot the ordinary commands may soon override — the zone-pause logic that reads
-	///     this stays gated on <c>Mode == Away/Guest</c>, so a Normal/Sleep scene never pauses a zone.
+	///     adjusting, so it is a one-shot the ordinary commands may soon override — the area-pause logic that reads
+	///     this stays gated on <c>Mode == Away/Guest</c>, so a Normal/Sleep scene never pauses an area.
 	/// </summary>
 	public string? ActiveScene =>
 		EffectiveOption is { Scene: { Length: > 0 } scene } ? scene : null;
@@ -235,12 +235,12 @@ public sealed class ModeMonitor : IDisposable
 		{
 			List<string> sensors = option.ResetPresenceSensors.Count > 0
 				? option.ResetPresenceSensors
-				: [.. _zoneMotionSensors];
+				: [.. _areaMotionSensors];
 
 			if (sensors.Count == 0)
 			{
 				_logger.LogWarning(
-					"Option '{Option}' resets on presence but no sensors resolve (empty list and no zone motion sensors); it will never reset on presence.",
+					"Option '{Option}' resets on presence but no sensors resolve (empty list and no area motion sensors); it will never reset on presence.",
 					option.Value);
 				continue;
 			}
@@ -298,13 +298,13 @@ public sealed class ModeMonitor : IDisposable
 		if (!houseMode.Options.Any(option => option.Kind != ModeKind.Normal && option.ActivateAfterNoMotionMinutes is > 0))
 			return;
 
-		if (_zoneMotionSensors.Count == 0)
+		if (_areaMotionSensors.Count == 0)
 		{
-			_logger.LogWarning("An option activates on no motion, but no zone motion sensors resolve; it can never fire.");
+			_logger.LogWarning("An option activates on no motion, but no area motion sensors resolve; it can never fire.");
 			return;
 		}
 
-		foreach (string sensor in _zoneMotionSensors)
+		foreach (string sensor in _areaMotionSensors)
 		{
 			_logger.LogInformation("Watching motion sensor {EntityId} for auto-away.", sensor);
 			_subscriptions.Add(_ha.Entity(sensor).WhenTurnsOn(_ => MarkMotion(), _logger));
@@ -322,7 +322,7 @@ public sealed class ModeMonitor : IDisposable
 	}
 
 	// Whether any watched motion sensor currently reads on — motion in progress, so the house is not idle.
-	private bool AnyMotionOn() => _zoneMotionSensors.Any(IsOn);
+	private bool AnyMotionOn() => _areaMotionSensors.Any(IsOn);
 
 	/// <summary>
 	///     Poll-based, on the tick: when the whole house has been motion-free for an option's configured span, switch

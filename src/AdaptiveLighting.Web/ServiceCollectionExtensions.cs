@@ -13,7 +13,7 @@ namespace AdaptiveLighting.Web;
 public static class ServiceCollectionExtensions
 {
 	/// <summary>
-	///     Adds the configuration store, the engine host, the zone snapshot cache and the per-circuit services.
+	///     Adds the configuration store, the engine host, the area snapshot cache and the per-circuit services.
 	/// </summary>
 	/// <remarks>
 	///     <para>
@@ -55,10 +55,10 @@ public static class ServiceCollectionExtensions
 		// single load of the configuration document.
 		services.AddSingleton<LightingEngineHost>();
 
-		// Singleton: the cache must accumulate zone snapshots from process start, not from the moment a
+		// Singleton: the cache must accumulate area snapshots from process start, not from the moment a
 		// browser connected. Also registered as a hosted service so it subscribes exactly once.
-		services.AddSingleton<ZoneSnapshotCache>();
-		services.AddHostedService(provider => provider.GetRequiredService<ZoneSnapshotCache>());
+		services.AddSingleton<AreaSnapshotCache>();
+		services.AddHostedService(provider => provider.GetRequiredService<AreaSnapshotCache>());
 
 		// Scoped: these depend on IHaContext, which NetDaemon scopes. One per Blazor circuit is correct.
 		services.AddScoped<ModeService>();

@@ -9,7 +9,7 @@ using NetDaemon.AppModel;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The read-only enrichment of the modes page: the per-mode period/target preview and its zone-effect counts
+///     The read-only enrichment of the modes page: the per-mode period/target preview and its area-effect counts
 ///     (<see cref="ModeService.ComputePreview"/>), and the derived <see cref="ModeKind"/> the hero shows, taken from
 ///     the current option (<see cref="ModeService.GetHouseState"/>).
 /// </summary>
@@ -40,8 +40,8 @@ public sealed class ModeServicePreviewTests
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
 			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30 }
 		],
-		Defaults = new ZoneSettings(),
-		Zones =
+		Defaults = new AreaSettings(),
+		Areas =
 		[
 			// living room: swept away, respects sleep
 			new() { Name = "stue", AreaId = "stue", RespectSleepMode = true },
@@ -49,7 +49,7 @@ public sealed class ModeServicePreviewTests
 			new() { Name = "gang", AreaId = "gang", SkipAwaySweep = true, RespectSleepMode = true, SleepBlocksAutoOn = true },
 			// outdoor: opts out of the sweep
 			new() { Name = "ute", AreaId = "ute", SkipAwaySweep = true },
-			// a disabled zone must be counted by neither the sweep nor the clamp
+			// a disabled area must be counted by neither the sweep nor the clamp
 			new() { Name = "loft", AreaId = "loft", RespectSleepMode = true, Enabled = false }
 		]
 	};
@@ -93,7 +93,7 @@ public sealed class ModeServicePreviewTests
 	{
 		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Away, At(20), NoSun);
 
-		Assert.IsTrue(preview.IsOffPreview, "an away mode pauses/sweeps the zones, so the swatch is dark");
+		Assert.IsTrue(preview.IsOffPreview, "an away mode pauses/sweeps the areas, so the swatch is dark");
 		Assert.IsNull(preview.ActivePeriodName);
 		Assert.IsNull(preview.PreviewBrightness);
 		Assert.IsNull(preview.PreviewKelvin);
@@ -111,23 +111,23 @@ public sealed class ModeServicePreviewTests
 		Assert.IsFalse(preview.IsOffPreview);
 	}
 
-	// ===================== zone-effect counts =====================
+	// ===================== area-effect counts =====================
 
 	[TestMethod]
-	public void The_Away_Effect_Counts_Swept_And_Kept_Zones_Ignoring_Disabled_Ones()
+	public void The_Away_Effect_Counts_Swept_And_Kept_Areas_Ignoring_Disabled_Ones()
 	{
 		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Away, At(20), NoSun);
 
-		// Three enabled zones: stue is swept; gang and ute opt out. The disabled loft is counted by neither.
+		// Three enabled areas: stue is swept; gang and ute opt out. The disabled loft is counted by neither.
 		Assert.AreEqual("turns 1 of 3 rooms off, keeps 2 on", preview.EffectSummary);
 	}
 
 	[TestMethod]
-	public void The_Away_Effect_Reads_Cleanly_When_No_Zone_Opts_Out()
+	public void The_Away_Effect_Reads_Cleanly_When_No_Area_Opts_Out()
 	{
 		var config = new AdaptiveLightingConfig
 		{
-			Zones = [new() { Name = "a", AreaId = "a" }, new() { Name = "b", AreaId = "b" }]
+			Areas = [new() { Name = "a", AreaId = "a" }, new() { Name = "b", AreaId = "b" }]
 		};
 
 		var preview = ModeService.ComputePreview(config, ModeKind.Away, At(20), NoSun);
@@ -136,7 +136,7 @@ public sealed class ModeServicePreviewTests
 	}
 
 	[TestMethod]
-	public void The_Sleep_Effect_Counts_Clamped_And_Blocked_Zones_Ignoring_Disabled_Ones()
+	public void The_Sleep_Effect_Counts_Clamped_And_Blocked_Areas_Ignoring_Disabled_Ones()
 	{
 		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Sleep, At(2), NoSun);
 

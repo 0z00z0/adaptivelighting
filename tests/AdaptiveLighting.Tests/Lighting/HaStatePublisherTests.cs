@@ -10,8 +10,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The wire contract between <see cref="HaStatePublisher"/> and <see cref="ZoneSnapshotEvent"/>: the raw
-///     house-mode string must survive serialise → HA event → <see cref="ZoneSnapshotEvent.ToSnapshot"/> so the
+///     The wire contract between <see cref="HaStatePublisher"/> and <see cref="AreaSnapshotEvent"/>: the raw
+///     house-mode string must survive serialise → HA event → <see cref="AreaSnapshotEvent.ToSnapshot"/> so the
 ///     dashboard can show "Sover" rather than only the coarse <see cref="HouseMode"/> enum label.
 /// </summary>
 [TestClass]
@@ -23,8 +23,8 @@ public sealed class HaStatePublisherTests
 		var ha = new FakeHaContext();
 		var publisher = new HaStatePublisher(ha, NullLogger.Instance);
 
-		var snapshot = new ZoneSnapshot(
-			"Stue", ZoneState.AutoActive, TransitionReason.Motion, HouseMode.Sleep,
+		var snapshot = new AreaSnapshot(
+			"Stue", AreaState.AutoActive, TransitionReason.Motion, HouseMode.Sleep,
 			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: 70, ColorTempKelvin: 2700,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null, HouseModeValue: "Sover");
@@ -37,7 +37,7 @@ public sealed class HaStatePublisherTests
 		// Round-trip through JSON exactly as NetDaemon's Event<T>.Data would: serialize the published payload,
 		// then bind it into the web-side event record and rebuild the snapshot.
 		var json = JsonSerializer.Serialize(data);
-		var wire = JsonSerializer.Deserialize<ZoneSnapshotEvent>(json);
+		var wire = JsonSerializer.Deserialize<AreaSnapshotEvent>(json);
 		Assert.IsNotNull(wire);
 		Assert.AreEqual("Sover", wire!.HouseModeValue, "house_mode_value survives serialisation into the event");
 
@@ -52,8 +52,8 @@ public sealed class HaStatePublisherTests
 		var ha = new FakeHaContext();
 		var publisher = new HaStatePublisher(ha, NullLogger.Instance);
 
-		var snapshot = new ZoneSnapshot(
-			"Stue", ZoneState.AutoVacant, TransitionReason.Startup, HouseMode.Home,
+		var snapshot = new AreaSnapshot(
+			"Stue", AreaState.AutoVacant, TransitionReason.Startup, HouseMode.Home,
 			KillSwitchActive: false, IsDark: false, PeriodName: "day", BrightnessPct: null, ColorTempKelvin: null,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null, HouseModeValue: null);
@@ -61,7 +61,7 @@ public sealed class HaStatePublisherTests
 		publisher.Publish(snapshot);
 
 		var json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
-		var rebuilt = JsonSerializer.Deserialize<ZoneSnapshotEvent>(json)!.ToSnapshot();
+		var rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(json)!.ToSnapshot();
 
 		Assert.IsNotNull(rebuilt);
 		Assert.IsNull(rebuilt!.HouseModeValue, "no select configured → the raw value stays null through the round trip");

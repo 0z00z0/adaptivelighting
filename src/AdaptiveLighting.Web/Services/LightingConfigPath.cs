@@ -137,13 +137,13 @@ public static class LightingConfigPath
 			// an entity Home Assistant does not know, so a brand-new installation started with document-level
 			// errors and refused to run. A placeholder also OVERRIDES the discovery that would have filled the
 			// same field — an empty Persons list finds every person by itself; person.REPLACE_ME finds nothing
-			// and blocks the engine. Better to name nothing and then look: the engine populates the zone list
-			// from the area registry on its first connected reload (LightingEngineHost.AutoDiscoverZonesIfNeeded).
+			// and blocks the engine. Better to name nothing and then look: the engine populates the area list
+			// from the area registry on its first connected reload (LightingEngineHost.AutoDiscoverAreasIfNeeded).
 			File.WriteAllText(external, LightingConfigDocument.Serialize(AdaptiveLightingConfig.CreateDefault()));
 
 			logger.LogInformation(
 				"Created a starting lighting configuration at {External}: a circadian schedule and nothing else. "
-				+ "Zones are discovered from the Home Assistant areas that have both a light and a motion sensor, "
+				+ "Areas are discovered from the Home Assistant areas that have both a light and a motion sensor, "
 				+ "and everything is editable on the Configuration page.",
 				external);
 

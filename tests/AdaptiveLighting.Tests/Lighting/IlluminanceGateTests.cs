@@ -6,17 +6,17 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The one question that gates auto-on: is this zone dark enough to be worth lighting?
+///     The one question that gates auto-on: is this area dark enough to be worth lighting?
 /// </summary>
 [TestClass]
 public sealed class IlluminanceGateTests
 {
-	private const string Lux = "sensor.zone_lux";
+	private const string Lux = "sensor.area_lux";
 	private const string Sun = "sun.sun";
 
-	private static IlluminanceGate Build(FakeHaContext ha, DarknessSource source, string? luxSensor = Lux, Action<ZoneSettings>? tweak = null)
+	private static IlluminanceGate Build(FakeHaContext ha, DarknessSource source, string? luxSensor = Lux, Action<AreaSettings>? tweak = null)
 	{
-		var settings = new ZoneSettings { Darkness = source, LuxThreshold = 40, LuxHysteresis = 10, SunElevationThreshold = 3 };
+		var settings = new AreaSettings { Darkness = source, LuxThreshold = 40, LuxHysteresis = 10, SunElevationThreshold = 3 };
 		tweak?.Invoke(settings);
 		return new IlluminanceGate(ha, luxSensor, settings, NullLogger.Instance);
 	}

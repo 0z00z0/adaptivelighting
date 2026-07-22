@@ -1,8 +1,8 @@
 @*
 	A collapsible group of settings: a header that says what the section is for, a fold that keeps a long
-	page skimmable. The same <details> pattern as the zone folds, so the page opens and closes one way.
+	page skimmable. The same <details> pattern as the area folds, so the page opens and closes one way.
 
-	Collapsed by default, like the zone, period and house-mode folds: a settings page reads as a short list of
+	Collapsed by default, like the area, period and house-mode folds: a settings page reads as a short list of
 	named groups you open the one you came for, not a wall of every knob at once. The open attribute is decided
 	once, so Blazor's diff never overrides a fold a human toggled.
 *@
@@ -14,7 +14,7 @@
 		{
 			<span class="group-desc">@Description</span>
 		}
-		<span class="zone-chevron" aria-hidden="true"></span>
+		<span class="area-chevron" aria-hidden="true"></span>
 	</summary>
 
 	<div class="group-body">

@@ -9,7 +9,7 @@ namespace AdaptiveLighting.Abstractions;
 ///         constructed outside its own assembly. Its constructors are non-public and take an internal registry
 ///         navigator, and <c>Area.Entities</c> has no setter — it is computed by navigating that navigator. So a
 ///         test can implement <c>IHaRegistry</c> but can never return an <c>Area</c> with entities in it, which
-///         would leave every discovery rule in <see cref="Engine.ZoneEntityResolver"/> unverifiable.
+///         would leave every discovery rule in <see cref="Engine.AreaEntityResolver"/> unverifiable.
 ///     </para>
 ///     <para>
 ///         Discovery is the feature the whole configuration design rests on, so it does not get to be the

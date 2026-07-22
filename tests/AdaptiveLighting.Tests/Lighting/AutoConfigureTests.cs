@@ -12,31 +12,31 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class AutoConfigureTests
 {
-	private static ZoneConfig Role(string areaId)
+	private static AreaConfig Role(string areaId)
 	{
-		var zone = new ZoneConfig { AreaId = areaId };
-		ZoneAutoDiscovery.ApplyRole(zone);
-		return zone;
+		var area = new AreaConfig { AreaId = areaId };
+		AreaAutoDiscovery.ApplyRole(area);
+		return area;
 	}
 
 	[TestMethod]
 	public void A_Bedroom_Is_Held_To_Night_Levels_And_Never_Lights_Itself()
 	{
-		foreach (string area in new[] { "soverom", "sov_1", "soverom_samuel", "bedroom" })
+		foreach (string areaId in new[] { "soverom", "sov_1", "soverom_samuel", "bedroom" })
 		{
-			var zone = Role(area);
-			Assert.IsTrue(zone.RespectSleepMode, $"{area} should follow sleep mode");
-			Assert.IsTrue(zone.SleepBlocksAutoOn, $"{area} should not light itself while the house sleeps");
+			AreaConfig area = Role(areaId);
+			Assert.IsTrue(area.RespectSleepMode, $"{areaId} should follow sleep mode");
+			Assert.IsTrue(area.SleepBlocksAutoOn, $"{areaId} should not light itself while the house sleeps");
 		}
 	}
 
 	[TestMethod]
 	public void A_Bathroom_Dims_At_Night_But_Still_Lights()
 	{
-		var zone = Role("kjeller_bad");
+		var area = Role("kjeller_bad");
 
-		Assert.IsTrue(zone.RespectSleepMode);
-		Assert.IsNull(zone.SleepBlocksAutoOn, "a 03:00 trip must still get a light, just a dim one");
+		Assert.IsTrue(area.RespectSleepMode);
+		Assert.IsNull(area.SleepBlocksAutoOn, "a 03:00 trip must still get a light, just a dim one");
 	}
 
 	[TestMethod]
@@ -58,12 +58,12 @@ public sealed class AutoConfigureTests
 	[TestMethod]
 	public void An_Unrecognised_Room_Is_Left_Entirely_On_The_Defaults()
 	{
-		foreach (string area in new[] { "stue", "kontor", "lab", "utleieleilighet" })
+		foreach (string areaId in new[] { "stue", "kontor", "lab", "utleieleilighet" })
 		{
-			var zone = Role(area);
-			Assert.IsNull(zone.RespectSleepMode, $"{area} should keep following Defaults");
-			Assert.IsNull(zone.SkipAwaySweep, $"{area} should keep following Defaults");
-			Assert.IsNull(zone.WelcomeHome);
+			AreaConfig area = Role(areaId);
+			Assert.IsNull(area.RespectSleepMode, $"{areaId} should keep following Defaults");
+			Assert.IsNull(area.SkipAwaySweep, $"{areaId} should keep following Defaults");
+			Assert.IsNull(area.WelcomeHome);
 		}
 	}
 

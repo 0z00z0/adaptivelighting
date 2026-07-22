@@ -113,7 +113,7 @@ public static class EntityStateExtensions
 	///     not <c>unavailable</c>.
 	/// </summary>
 	/// <remarks>
-	///     Matches the engine's <c>ZoneEntityResolver.IsLive</c> exactly — a <c>null</c> state (a registry row with
+	///     Matches the engine's <c>AreaEntityResolver.IsLive</c> exactly — a <c>null</c> state (a registry row with
 	///     no device) and <c>unavailable</c> are both dropped; <c>unknown</c> is deliberately <b>not</b> checked,
 	///     so a sensor reporting <c>unknown</c> still counts as available.
 	/// </remarks>

@@ -1,12 +1,12 @@
 namespace AdaptiveLighting.Engine;
 
 /// <summary>
-///     The states of the per-zone machine. See 02-architecture.md §5 for the transition diagram; the states
+///     The states of the per-area machine. See 02-architecture.md §5 for the transition diagram; the states
 ///     here and the arrows there are meant to stay in step.
 /// </summary>
-public enum ZoneState
+public enum AreaState
 {
-	/// <summary>Kill switch on, or the zone is configured off. The engine observes and publishes but commands nothing.</summary>
+	/// <summary>Kill switch on, or the area is configured off. The engine observes and publishes but commands nothing.</summary>
 	Disabled,
 
 	/// <summary>Nobody home. Motion does nothing.</summary>
@@ -18,33 +18,33 @@ public enum ZoneState
 	/// <summary>Under automatic control, occupied, lights held at the circadian target.</summary>
 	AutoActive,
 
-	/// <summary>Vacancy timed out; dimmed as a warning. Motion still rescues the zone.</summary>
+	/// <summary>Vacancy timed out; dimmed as a warning. Motion still rescues the area.</summary>
 	PreOff,
 
 	/// <summary>A human set the lights and they stay set. Circadian retargeting is suspended.</summary>
 	OverriddenOn,
 
-	/// <summary>A human turned the lights off. Motion is deliberately ignored until the zone goes vacant.</summary>
+	/// <summary>A human turned the lights off. Motion is deliberately ignored until the area goes vacant.</summary>
 	SuppressedOff,
 
 	/// <summary>
-	///     A Guest-kind mode with a scene holds the zone (09 §3.4): the scene is the look, so the engine commands
+	///     A Guest-kind mode with a scene holds the area (09 §3.4): the scene is the look, so the engine commands
 	///     nothing and ignores motion for commanding until the mode resets to Normal.
 	/// </summary>
 	SceneHold
 }
 
 /// <summary>
-///     Why a zone changed state. Carried in <see cref="AdaptiveLighting.Abstractions.ZoneSnapshot"/>,
+///     Why an area changed state. Carried in <see cref="AdaptiveLighting.Abstractions.AreaSnapshot"/>,
 ///     because a state machine you cannot see the reasoning of is a state machine you cannot debug.
 /// </summary>
 public enum TransitionReason
 {
-	/// <summary>The zone was just created, and its lights were off.</summary>
+	/// <summary>The area was just created, and its lights were off.</summary>
 	Startup,
 
 	/// <summary>
-	///     The zone was just created and found its lights already on, so it took charge of them without
+	///     The area was just created and found its lights already on, so it took charge of them without
 	///     touching them. The engine did not light this room — it inherited it, most often from itself
 	///     across a restart.
 	/// </summary>
@@ -68,7 +68,7 @@ public enum TransitionReason
 	/// <summary>The manual override ran its course.</summary>
 	OverrideExpired,
 
-	/// <summary>The zone stayed vacant long enough to lift a manual turn-off.</summary>
+	/// <summary>The area stayed vacant long enough to lift a manual turn-off.</summary>
 	SuppressionLifted,
 
 	/// <summary>Presence reported the house empty.</summary>
@@ -77,7 +77,7 @@ public enum TransitionReason
 	/// <summary>Presence reported the first arrival.</summary>
 	FirstPersonArrived,
 
-	/// <summary>The kill switch, or the zone's Enabled flag, changed.</summary>
+	/// <summary>The kill switch, or the area's Enabled flag, changed.</summary>
 	EnablementChanged,
 
 	/// <summary>The circadian target moved.</summary>
@@ -86,6 +86,6 @@ public enum TransitionReason
 	/// <summary>The house mode kind or value changed.</summary>
 	HouseModeChanged,
 
-	/// <summary>A Guest scene took the zone into, or released it from, an indefinite hold.</summary>
+	/// <summary>A Guest scene took the area into, or released it from, an indefinite hold.</summary>
 	SceneHold
 }
