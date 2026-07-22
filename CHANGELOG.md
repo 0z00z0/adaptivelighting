@@ -9,6 +9,24 @@ under one version, because they are compiled against each other.
 
 ## [Unreleased]
 
+### Added
+
+- **An activity page**, at *Activity* in the top bar: the engine's recent decisions as a timeline,
+  newest first, grouped by day, with the room and the time down the left. Each row says what happened
+  and — where the engine declined to act — why, in the darkness gate's own words: *Too bright to switch
+  the lights on · lux 86, dark below 40*. That is the measured reading beside the configured threshold,
+  which is the answer to "why didn't that light come on".
+  - Fed by the same `adaptive_lighting_area` events the dashboard already receives. No new subscription,
+    no log file is read, and the engine is unchanged. The timeline therefore starts when adaptive
+    lighting starts, and shows only what Home Assistant delivered.
+  - Bounded to the most recent 500 reports, so a process that runs for months cannot grow without limit.
+    The page says when it is holding the cap and that older reports have been dropped.
+  - A room filter, and an honest empty state: a house that has just been set up has every room switched
+    off by design and can legitimately sit quiet, so the page explains the quiet rather than showing a
+    blank panel.
+  - New reports are counted as they arrive but not inserted. A button adds them, so the timeline never
+    moves under somebody who is reading it.
+
 ## [2.0.0]
 
 **Zone became area.** Home Assistant calls a room an *area*; a *zone* is a GPS region like "Home" or

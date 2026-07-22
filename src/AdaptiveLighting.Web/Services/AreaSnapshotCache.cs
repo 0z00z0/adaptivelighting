@@ -32,11 +32,17 @@ namespace AdaptiveLighting.Web.Services;
 ///         This is a singleton with its own DI scope rather than a per-circuit subscription: the cache must
 ///         accumulate from process start, not from the moment somebody opened a browser tab.
 ///     </para>
+///     <para>
+///         The one subscription feeds two readers. This class keeps the newest report per area, which is what the
+///         dashboard's cards are; <see cref="ActivityLog"/> keeps the last few hundred reports in order, which is
+///         what the activity page's timeline is. Neither costs the engine anything more than the other did.
+///     </para>
 /// </remarks>
 public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 {
 	private readonly IServiceScopeFactory _scopeFactory;
 	private readonly ILogger<AreaSnapshotCache> _logger;
+	private readonly ActivityLog _activity;
 	private readonly ConcurrentDictionary<string, AreaSnapshot> _snapshots = new(StringComparer.Ordinal);
 	private readonly Subject<AreaSnapshot> _changes = new();
 
@@ -56,10 +62,17 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 	/// <summary>Creates the cache. Nothing is subscribed until <see cref="StartAsync"/>.</summary>
 	/// <param name="scopeFactory">Used to hold one long-lived scope for the cache's own <see cref="IHaContext"/>.</param>
 	/// <param name="logger">Where subscription failures go.</param>
-	public AreaSnapshotCache(IServiceScopeFactory scopeFactory, ILogger<AreaSnapshotCache> logger)
+	/// <param name="activity">
+	///     The history the activity page reads. Fed from here rather than from a second subscriber of
+	///     <see cref="Changes"/> so that both views are built from the one subscription, and so the history starts
+	///     at process start for certain — a hosted service that subscribed later would silently miss whatever
+	///     arrived in the gap.
+	/// </param>
+	public AreaSnapshotCache(IServiceScopeFactory scopeFactory, ILogger<AreaSnapshotCache> logger, ActivityLog activity)
 	{
 		_scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
+		_activity = activity ?? throw new ArgumentNullException(nameof(activity));
 	}
 
 	/// <summary>Every area the cache has heard from, newest state per area, ordered by name.</summary>
@@ -129,6 +142,11 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 			return;
 
 		_snapshots[KeyOf(snapshot)] = snapshot;
+
+		// Filed before the change is pushed: a subscriber that re-reads on this notification — the activity page
+		// does exactly that — must not be told there is news and then find the history without it.
+		_activity.Record(snapshot);
+
 		_changes.OnNext(snapshot);
 	}
 

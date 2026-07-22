@@ -55,6 +55,10 @@ public static class ServiceCollectionExtensions
 		// single load of the configuration document.
 		services.AddSingleton<LightingEngineHost>();
 
+		// Singleton, and registered before the cache that fills it: the activity page's history is the same
+		// stream the cards come from, kept in order and bounded, and it must survive every browser circuit.
+		services.AddSingleton<ActivityLog>();
+
 		// Singleton: the cache must accumulate area snapshots from process start, not from the moment a
 		// browser connected. Also registered as a hosted service so it subscribes exactly once.
 		services.AddSingleton<AreaSnapshotCache>();

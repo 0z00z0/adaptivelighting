@@ -2626,3 +2626,140 @@ button.mode-pill:disabled {
 	color: var(--muted);
 	font-size: 0.9rem;
 }
+
+/* ---- the activity timeline ----
+   A log, not a grid of cards: one row per report, room and time down the left where an eye scans, the words
+   to the right. It borrows the dashboard's left-edge colour families through AreaView.Family, so a row reads
+   the same way a card does — blue when the engine decided, amber when a person did, grey when neither. Rows
+   sit flush against one another with hairline rules rather than in separate boxes, because a hundred boxes
+   is a hundred things to look at and this page is read by scanning. */
+
+.log {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.log-row {
+	display: grid;
+	grid-template-columns: 12rem 1fr;
+	gap: 0 1rem;
+	padding: 0.55rem 1rem;
+	border-left: 3px solid var(--line);
+}
+
+.log-row + .log-row {
+	border-top: 1px solid var(--line);
+}
+
+.log-row.family-machine { border-left-color: var(--machine); }
+.log-row.family-human { border-left-color: var(--human); }
+.log-row.family-idle { border-left-color: var(--idle); }
+
+/* The left column: the two facts a reader is scanning for. Tabular numerals so the times line up into a
+   column instead of drifting by a pixel per digit. */
+.log-when {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.log-time {
+	color: var(--muted);
+	font-family: var(--mono);
+	font-size: 0.82rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.log-room {
+	font-weight: 550;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.log-body {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.log-what {
+	line-height: 1.35;
+}
+
+/* The reading behind the decision — "lux 86, dark below 40". Quieter than the event above it, but never
+   hidden behind a tooltip: it is the answer somebody came to this page for. */
+.log-why {
+	color: var(--muted);
+	font-size: 0.85rem;
+	line-height: 1.35;
+}
+
+/* The filter and the new-reports button, on one line above the timeline. */
+.log-bar {
+	display: flex;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: 0.75rem 1rem;
+	margin-bottom: 0.4rem;
+}
+
+.log-filter {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.log-filter-label {
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--muted);
+}
+
+.log-filter .cell.wide {
+	width: min(18rem, 100%);
+}
+
+/* Deliberately a button and not a live insert: the list must not move under someone who is reading it. */
+.log-new {
+	margin-left: auto;
+	background: var(--panel-2);
+	border: 1px solid var(--accent);
+	border-radius: 6px;
+	padding: 0.35rem 0.7rem;
+	color: var(--accent);
+	font-size: 0.82rem;
+	cursor: pointer;
+}
+
+.log-new:hover {
+	background: rgba(242, 181, 68, 0.12);
+}
+
+.log-foot {
+	margin: 0.9rem 0 0;
+	color: var(--muted);
+	font-size: 0.85rem;
+}
+
+/* On a phone the two columns become two lines: 12rem of room name beside the text would leave the text a
+   strip too narrow to read a sentence in. */
+@media (max-width: 560px) {
+	.log-row {
+		grid-template-columns: 1fr;
+		gap: 0.15rem;
+	}
+
+	.log-when {
+		flex-direction: row;
+		align-items: baseline;
+		gap: 0.5rem;
+	}
+}

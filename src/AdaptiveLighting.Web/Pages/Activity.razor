@@ -1,0 +1,211 @@
+@page "/activity"
+@implements IDisposable
+@inject ActivityLog Log
+@inject AreaSnapshotCache Cache
+@inject LightingEngineHost Engine
+@inject ILogger<Activity> Logger
+
+@*
+	The engine's recent decisions, newest first: what each room did, when, and — the reason this page exists —
+	why it declined to do anything. The owner's question was "why didn't that light come on", and the answer is
+	a lux reading beside the threshold it was compared against; that line is the point of the timeline, so
+	ActivityView.Describe builds it and a test asserts it.
+
+	The source is the same adaptive_lighting_area event stream the dashboard already receives. Nothing new is
+	subscribed and no log file is read: AreaSnapshotCache keeps the newest report per room for the cards and
+	ActivityLog keeps the last few hundred, in order, for this page. What that inherits is worth stating —
+	the timeline begins when the add-on started, not when the house did, and it holds only what Home Assistant
+	delivered.
+
+	Unlike the dashboard, this page does not hide rooms the owner switched off. The cards answer "what is my
+	house doing", where a switched-off room is not part of the answer; this answers "what happened", and a
+	report quietly dropped would be indistinguishable from a room that never reported.
+*@
+
+<PageTitle>Activity &mdash; Adaptive lighting</PageTitle>
+
+<h1>Activity</h1>
+<p class="lede">
+	What each room decided, newest first. Times come from the machine running adaptive lighting, which is
+	not always the one you are reading this on.
+</p>
+
+@if (_entries.Count > 0)
+{
+	<div class="log-bar">
+		<label class="log-filter">
+			<span class="log-filter-label">Room</span>
+			<select class="cell wide" @bind="_room" @bind:after="ApplyFilter">
+				<option value="@ActivityView.AllRooms">All rooms</option>
+				@foreach (string room in ActivityView.Rooms(_entries))
+				{
+					<option value="@room">@room</option>
+				}
+			</select>
+		</label>
+
+		@*
+			The one live control on the page. New reports are counted as they arrive but are not inserted:
+			a timeline that grows under the person reading it moves the line they were on, and this page is
+			read exactly when something has gone wrong and somebody is trying to hold two facts at once.
+			So the count updates by itself and the list only ever changes when a hand asks it to.
+		*@
+		@if (Pending > 0)
+		{
+			<button type="button" class="log-new" @onclick="ShowNew">@PendingWord</button>
+		}
+	</div>
+}
+
+@if (_entries.Count == 0)
+{
+	@*
+		Nothing recorded — which is a normal state, not a fault, and has to say which normal state it is. A
+		house that has just been set up has every room switched off by design, and a quiet house genuinely can
+		go a long time without a single transition. Left as a blank panel, all three of those read as broken
+		software.
+	*@
+	<div class="empty">
+		@if (!Engine.IsAttached)
+		{
+			<strong>Waiting for Home Assistant.</strong>
+			<p>Reports reach this page through Home Assistant, so nothing can be recorded until the connection is up.</p>
+			<p>This is normal for a minute after a restart.</p>
+		}
+		else if (!Engine.IsRunning)
+		{
+			<strong>Connected, but automatic lighting isn't running.</strong>
+			<p>@(Engine.Fault ?? "No reason was recorded.")</p>
+			<p>See <a href="config">Configuration</a> for details.</p>
+		}
+		else
+		{
+			<strong>Nothing has happened yet.</strong>
+			<p>
+				The timeline starts when adaptive lighting starts, and a room appears here the first time it
+				decides something &mdash; movement, a change of house mode, or the light outside crossing the
+				level it counts as dark.
+			</p>
+			<p>
+				A quiet house can sit here for a long time. Rooms also start switched off after set-up, so if
+				you have not turned any on yet there is nothing for the engine to decide &mdash;
+				<a href="config?section=areas">choose the rooms it should look after</a>.
+			</p>
+		}
+	</div>
+}
+else if (_visible.Count == 0)
+{
+	<div class="empty">
+		<strong>No reports from @_room in what the timeline is holding.</strong>
+		<p>Its older reports may have been dropped to make room. Choose <em>All rooms</em> to see the rest.</p>
+	</div>
+}
+else
+{
+	@* "Today" is read against the clock at render time, not at page load: a page left open past midnight
+	   must not go on heading yesterday's entries Today. *@
+	@foreach (ActivityDay day in ActivityView.GroupByDay(_visible, DateTimeOffset.Now))
+	{
+		<div class="floor-head">
+			<span class="floor-name">@day.Heading</span>
+		</div>
+
+		<ol class="log">
+			@foreach (ActivityEntry entry in day.Entries)
+			{
+				ActivityLine line = ActivityView.Describe(entry.Snapshot);
+
+				<li class="log-row family-@AreaView.Family(entry.Snapshot.State)" @key="entry.Sequence">
+					<div class="log-when">
+						<time class="log-time" datetime="@entry.At.ToString("o", CultureInfo.InvariantCulture)"
+							  title="@Full(entry.At)">@Clock(entry.At)</time>
+						<span class="log-room">@entry.AreaName</span>
+					</div>
+					<div class="log-body">
+						<span class="log-what">@line.What</span>
+						@if (line.Why is { Length: > 0 } why)
+						{
+							<span class="log-why">@why</span>
+						}
+					</div>
+				</li>
+			}
+		</ol>
+	}
+
+	<p class="log-foot">@FootLine</p>
+}
+
+@code {
+	private IReadOnlyList<ActivityEntry> _entries = [];
+	private IReadOnlyList<ActivityEntry> _visible = [];
+	private string _room = ActivityView.AllRooms;
+	private long _shownThrough;
+	private IDisposable? _subscription;
+
+	/// <inheritdoc/>
+	protected override void OnInitialized()
+	{
+		ShowNew();
+
+		// Sampled, and deliberately not used to re-read the log: a burst of transitions must not cost a burst
+		// of renders, and the render it does cause only moves the "new reports" count. Blazor's diff leaves
+		// every row already on the page untouched, so nothing shifts while somebody is reading it.
+		_subscription = Cache.Changes
+			.Sample(TimeSpan.FromSeconds(1))
+			.SubscribeSafe(_ => InvokeAsync(StateHasChanged), Logger);
+	}
+
+	/// <summary>How many reports have arrived since the timeline was last drawn.</summary>
+	/// <remarks>
+	///     A subtraction of sequence numbers rather than a count of entries, so it stays right once the oldest
+	///     entries have been evicted: the buffer forgets, the counter does not.
+	/// </remarks>
+	private long Pending => Log.Newest - _shownThrough;
+
+	private string PendingWord => Pending == 1 ? "1 new report — show it" : $"{Pending} new reports — show them";
+
+	/// <summary>
+	///     Draws everything the log is holding and moves the read mark to the newest report.
+	/// </summary>
+	private void ShowNew()
+	{
+		_entries = Log.Entries;
+		_shownThrough = Log.Newest;
+
+		ApplyFilter();
+	}
+
+	/// <summary>
+	///     The room filter, applied to what is already drawn rather than by re-reading the log, so choosing a
+	///     room shows that room's history and not a silently refreshed timeline.
+	/// </summary>
+	private void ApplyFilter() => _visible = ActivityView.InRoom(_entries, _room);
+
+	/// <summary>
+	///     What the page is holding, and the cap it is held to. Said out loud because the alternative is a reader
+	///     concluding that nothing happened before the oldest line, when in fact the oldest lines were dropped.
+	/// </summary>
+	private string FootLine
+	{
+		get
+		{
+			string held = _entries.Count == 1 ? "1 report" : $"{_entries.Count} reports";
+			string shown = string.IsNullOrEmpty(_room) ? held : $"{_visible.Count} of {held}";
+
+			return _entries.Count < ActivityLog.Capacity
+				? $"Showing {shown} since adaptive lighting started."
+				: $"Showing {shown}. The timeline keeps the most recent {ActivityLog.Capacity}; older ones have been dropped.";
+		}
+	}
+
+	private static string Clock(DateTimeOffset at) =>
+		at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+
+	private static string Full(DateTimeOffset at) =>
+		at.ToLocalTime().ToString("dddd d MMMM yyyy, HH:mm:ss", CultureInfo.CurrentCulture);
+
+	/// <inheritdoc/>
+	public void Dispose() => _subscription?.Dispose();
+}
