@@ -1,0 +1,127 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
+adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The three packages —
+`AdaptiveLighting`, `AdaptiveLighting.Web` and `AdaptiveLighting.Extensions` — ship as a matched set
+under one version, because they are compiled against each other.
+
+## [Unreleased]
+
+## [2.0.0]
+
+**Zone became area.** Home Assistant calls a room an *area*; a *zone* is a GPS region like "Home" or
+"Work". The one word this project had chosen was the one word HA users already use for something else.
+Types, YAML keys and every label now say *area*, and the word in prose is *room*.
+
+Read the first item before upgrading. It is the only change that can break something outside this
+repository, and it needs you to do something by hand.
+
+### Changed — action required
+
+- **The published Home Assistant event is renamed, with no dual publishing.** `laget_lighting_zone` is
+  now **`adaptive_lighting_area`**, and its `zone` field is now **`area`**. Nothing publishes the old
+  name any more: it is a clean break, not a deprecation. **Any HA automation, script, template or
+  dashboard card listening for `laget_lighting_zone` or reading its `zone` field stops working until
+  you update it by hand.** The engine and the bundled web UI ship together, so the dashboard itself
+  never sees a mismatch — only your own automations do.
+
+  ```yaml
+  # before
+  trigger:
+    - platform: event
+      event_type: laget_lighting_zone
+  condition: "{{ trigger.event.data.zone == 'Stue' }}"
+
+  # after
+  trigger:
+    - platform: event
+      event_type: adaptive_lighting_area
+  condition: "{{ trigger.event.data.area == 'Stue' }}"
+  ```
+
+  The event gained an **`area_id`** field at the same time. It is additive, and it is the better thing
+  to match on: display names are editable mid-session, registry ids are not.
+
+### Changed — no action required
+
+- **Configuration files migrate themselves, silently.** A document written before 2.0 says `Zones:`
+  and `ZonesAutoDiscovered:`. It still loads: the deserialiser renames those keys before binding, and
+  the engine writes the file back in the new schema on the first start after the upgrade, keeping the
+  previous file at the store's backup path — the one the Configuration page already shows. There is no
+  prompt, no migration command and nothing to run. A file hand-edited back to the old names keeps
+  working and is re-migrated on the next start. Writing is strict in one direction only: the serialiser
+  emits `Areas:`, always.
+
+  If a hand-edited document somehow carries both an old and a new key, the new key wins, the old is
+  dropped, and the load logs a warning naming both.
+
+- **The C# API renamed with the schema**, which is what makes this a major version. `ZoneConfig` →
+  `AreaConfig`, `ZoneSettings` → `AreaSettings`, `AdaptiveLightingConfig.Zones` → `.Areas`,
+  `GlobalConfig.ZonesAutoDiscovered` → `.AreasAutoDiscovered`, `ZoneController` → `AreaController`,
+  `ZoneState` → `AreaState`, `ZoneEntityResolver` → `AreaEntityResolver`, `ResolvedZone` →
+  `ResolvedArea`, `ZoneAutoDiscovery` → `AreaAutoDiscovery`, `ZoneSnapshot` / `ZoneSnapshotCache` →
+  `AreaSnapshot` / `AreaSnapshotCache`, `ZoneError` → `AreaError`. Shipped clean: no `[Obsolete]`
+  twins, no aliases, no old names anywhere in the public API. Code consumers recompile against the new
+  names; data files migrate themselves. The namespace root stays `AdaptiveLighting.*`, and the YAML
+  document's top-level key is unchanged.
+
+### Changed — new installations only
+
+- **Discovered rooms now start switched off.** On a fresh install, set-up runs about thirty seconds
+  after the connection settles: it finds every Home Assistant area holding both a light and a motion
+  sensor, guesses each room's role from its name, adopts an obvious house-mode `input_select` if it
+  finds one, and seeds the list of people. It switches **nothing** on. No light changes until the owner
+  opens the UI and chooses which rooms to hand over. Previously a fresh install began commanding lights
+  in every discovered room.
+
+  Existing installations are unaffected: the flip is on *newly proposed* rooms, which carry an explicit
+  `Enabled: false`. The default in `Defaults` stays `true`, so a document that never wrote an explicit
+  value keeps every room it already had.
+
+- The list of people is seeded from Home Assistant at first set-up only, and only when it is empty. An
+  explicit list freezes membership, which is the trade: leaving the field empty still means everyone
+  Home Assistant knows, including people added later. A deliberately emptied list is never re-seeded.
+
+### Changed — the settings pages
+
+- **Five sections became four: Areas · Schedule · House modes · House.** A setting now lives under the
+  noun it changes. `Defaults` became the **All rooms** group inside Areas. `Advanced` is gone as a
+  section; its contents moved to the section whose noun they change, behind that section's own fold
+  where they are rarely touched. `Periods` is now **Schedule**, and carries the blend-between-periods
+  settings, which are a property of the schedule rather than of override detection.
+- **A room is switched on or off from a switch on its header row**, rather than from row 1 of 17 inside
+  a collapsed override fold. The switch writes an explicit value; the override list is now "n of 16".
+- **Copy rewritten away from jargon**: "Vacancy timeout" is **Lights stay on for**, "Pre-off warning"
+  is **Warning dim lasts**, "Override holds for" is **Hand changes hold for**, "Darkness source" is
+  **How a room decides it's dark**, "Lux threshold" is **Dark below**, "Circadian tick" is
+  **Re-check the rooms every**, "Discovery conventions" is **Finding lights & sensors**.
+
+### Added
+
+- **Rooms group by floor** on both the dashboard and the Areas list, using Home Assistant's floor
+  registry, with a per-floor *Switch on this floor*. A house that has set no floors sees no floor
+  headers at all — exactly the flat grid it had before.
+- **An include label.** *Only manage lights with (label)* limits management to lights carrying a chosen
+  Home Assistant label. Empty — the default, and what every existing document means by saying nothing —
+  manages every light discovery finds. It filters lights only: motion and lux sensors are inputs, not
+  things the engine commands. The exclude label always wins over it, and an explicit `Lights` list
+  bypasses both. A room whose lights are all filtered out is skipped with a message naming the label.
+- **Set up rooms again**, from the Areas section header (any set of rooms) or a single room's editor.
+  It rebuilds the chosen rooms from what Home Assistant knows right now, and warns first with a dialog
+  that is concrete per room about what will be lost — hand-picked entities, changed settings, a custom
+  name — counted, not generic. A room with nothing to lose says so. Exactly two things survive a
+  rebuild: which area the room is, and whether it is switched on. Nothing is written until you save.
+- **The three label fields are dropdowns** fed by the Home Assistant label registry, instead of free
+  text where a typo silently disabled the feature. A house with no labels gets an explanation of where
+  to create one rather than an empty dropdown; a stored value that matches no live label is kept and
+  flagged, never dropped.
+- **The dashboard shows only the rooms you switched on**, with a line under the grid naming how many
+  are hidden and where to turn them on, and a designed first-run state for "rooms found, none enabled
+  yet". Disabled rooms are still observed and still published — only their rendering changed.
+- `AreaSnapshot` and the published event carry **`AreaId`**, so config and live state join on an id
+  rather than on an editable display name.
+
+[Unreleased]: https://github.com/0z00z0/adaptivelighting/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/0z00z0/adaptivelighting/releases/tag/v2.0.0

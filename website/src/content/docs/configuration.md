@@ -1,6 +1,6 @@
 ---
 title: "Configuration"
-description: "The configuration document, layer by layer: Global, Defaults, Periods and Zones."
+description: "The configuration document, layer by layer: Global, Defaults, Periods and Areas."
 ---
 
 ## 1. What exists today (read and understood)
@@ -28,32 +28,34 @@ break — different class names, different YAML file.
 `AppModelContext.cs`; the instancing docs page shows only `IAppConfig` injection). "One app
 instance per area" via YAML blocks is **not a supported mechanism** — the prompt's assumption and
 the `netdaemon` skill are both wrong on this point. Design consequence: **one
-`AdaptiveLightingConfig` document per host containing a list of zones**; the single orchestrator
-fans out to per-zone controllers internally. This keeps per-zone isolation (a bad zone is skipped,
+`AdaptiveLightingConfig` document per host containing a list of areas**; the single orchestrator
+fans out to per-area controllers internally. This keeps per-room isolation (a bad room is skipped,
 see §5) while sharing presence/mode/registry state.
 
-## 3. New schema (namespace `AdaptiveLighting.Configuration`)
+## 3. The schema (namespace `AdaptiveLighting.Configuration`)
 
-Defaults-plus-overrides: `Defaults` holds every per-zone knob; each `ZoneConfig` overrides only
-what differs (nullable properties; `ZoneConfig.Effective(defaults)` merges — a pure, unit-tested
-function).
+Defaults-plus-overrides: `Defaults` holds every per-room knob; each `AreaConfig` overrides only
+what differs (nullable properties; `AreaConfig.Effective(defaults)` merges — a pure, unit-tested
+function). The settings page calls the `Defaults` group **All rooms**, which is what it is.
 
 ```csharp
 public class AdaptiveLightingConfig
 {
 	public string? ConfigName { get; set; }
 	public GlobalConfig Global { get; set; } = new();
-	public ZoneSettings Defaults { get; set; } = new();
+	public AreaSettings Defaults { get; set; } = new();
 	public List<TimePeriodConfig> Periods { get; set; } = [];   // house-wide circadian table
-	public List<ZoneConfig> Zones { get; set; } = [];
+	public List<AreaConfig> Areas { get; set; } = [];
 }
 
 public class GlobalConfig
 {
 	public List<string> Persons { get; set; } = [];             // person.* / device_tracker.*; empty => discover all person.*
-	public string? KillSwitchEntity { get; set; }               // input_boolean/switch; null => feature off
-	public string? SleepModeEntity { get; set; }
-	public string? GuestModeEntity { get; set; }                // reserved (v2 behavior), parsed now
+	public string? KillSwitchEntity { get; set; }               // input_boolean/switch; null => this app's own enable switch
+	public bool KillSwitchActiveWhenOff { get; set; } = true;   // true: state "off" muzzles the engine
+	public HouseModeConfig? HouseMode { get; set; }             // the mode select and its option kinds; null => no modes
+	public string? OutdoorLuxSensor { get; set; }               // house-wide fallback for rooms with no lux sensor
+	public bool AreasAutoDiscovered { get; set; }               // set once by first-run set-up; never reset
 	public string? NetDaemonUserId { get; set; }                // optional: HA user id of the ND token, for override detection
 	public int AwayDebounceMinutes { get; set; } = 5;
 	public int CircadianTickSeconds { get; set; } = 60;
@@ -61,9 +63,16 @@ public class GlobalConfig
 	public bool TreatAutomationsAsManual { get; set; } = true;
 	public bool SmoothTransitions { get; set; } = true;
 	public int BlendMinutes { get; set; } = 30;
+	public string ExcludeLabel { get; set; } = "adaptive-exclude";
+	public string? IncludeLabel { get; set; }                   // null => manage every light discovery finds
+	public string MotionLabel { get; set; } = "adaptive-motion";
+	public List<string> MotionDeviceClasses { get; set; } = []; // empty => motion, occupancy, presence
+	public string IlluminanceDeviceClass { get; set; } = "illuminance";
+	public double BrightnessTolerancePct { get; set; } = 2;
+	public int ColorTempToleranceKelvin { get; set; } = 50;
 }
 
-public class ZoneSettings                                       // every knob a zone can override
+public class AreaSettings                                       // every knob a room can override
 {
 	public int VacancyTimeoutSeconds { get; set; } = 600;
 	public int PreOffSeconds { get; set; } = 30;
@@ -84,7 +93,7 @@ public class ZoneSettings                                       // every knob a 
 	public bool Enabled { get; set; } = true;
 }
 
-public class ZoneConfig                                          // ZoneSettings overrides: all nullable
+public class AreaConfig                                          // AreaSettings overrides: all nullable
 {
 	public string? Name { get; set; }                            // display; defaults to AreaId
 	public string? AreaId { get; set; }                          // HA area id => registry discovery
@@ -92,11 +101,11 @@ public class ZoneConfig                                          // ZoneSettings
 	public List<string>? MotionSensors { get; set; }             // explicit override; wins over discovery
 	public string? LuxSensor { get; set; }                       // explicit override
 	public List<string>? IgnoreWhenOn { get; set; }              // e.g. binary_sensor.projektor_er_pa: block auto-on while on
-	// nullable twins of every ZoneSettings property:
+	// nullable twins of every AreaSettings property:
 	public int? VacancyTimeoutSeconds { get; set; }
 	public int? PreOffSeconds { get; set; }
-	/* … one nullable property per ZoneSettings knob … */
-	public bool? Enabled { get; set; }
+	/* … one nullable property per AreaSettings knob … */
+	public bool? Enabled { get; set; }                           // the room's power switch, written explicitly
 }
 
 public class TimePeriodConfig
@@ -110,9 +119,19 @@ public class TimePeriodConfig
 }
 ```
 
-Binding stays on **`IAppConfig<AdaptiveLightingConfig>`** (established repo pattern; free typed
-binding; zero new packages) for v1. The Blazor read/write story (04) introduces a store that
-*also* reads this same file — see 04 §4 for how the two coexist and the v2 migration path.
+Binding was originally to be **`IAppConfig<AdaptiveLightingConfig>`** (established repo pattern; free
+typed binding; zero new packages). It is not, any more: `LightingConfigDocument` reads and writes the
+document and is the only loader, because the UI has to serialise and two parsers disagreeing about one
+file is the bug you find at 03:00. See [the web UI](/web-ui/) §7. The top-level key stays the fully
+qualified class name regardless.
+
+### Reading a pre-2.0 document
+
+Files written before 2.0 say `Zones:` and `ZonesAutoDiscovered:`. They still load: the deserialiser
+renames those two keys before binding, and the engine writes the file back in the new schema on the
+first start after the upgrade, keeping the previous file at the store's backup path. Nothing needs
+doing by hand, and a file that is hand-edited back to the old names keeps working. Writing is strict
+in one direction only: the serialiser emits `Areas:`, always.
 
 ## 4. Registry vs hand-written YAML — evaluation and recommendation
 
@@ -124,49 +143,56 @@ temperature) is **not** in the registry — it lives in state attributes
 
 **Recommendation: hybrid, discovery-first — this matches the user's own flagged direction.**
 
-- A zone declares `AreaId` and nothing else in the common case. `ZoneEntityResolver` then:
+- An area declares `AreaId` and nothing else in the common case. `AreaEntityResolver` then:
   - lights = `area.Entities` where domain `light`, minus group members (attribute `entity_id`
-    present ⇒ group; drop its members), minus entities labelled `adaptive-exclude`;
+    present ⇒ group; drop its members), minus entities labelled `adaptive-exclude` — and, when
+    `IncludeLabel` is set, minus every light that does *not* carry it;
   - motion = `binary_sensor` in area with `device_class ∈ {motion, occupancy, presence}`,
     plus any entity labelled `adaptive-motion` (covers mmWave sensors with odd device classes);
   - lux = single `sensor` in area with `device_class == illuminance` (two candidates ⇒
     validation error naming both — explicit `LuxSensor` required to disambiguate).
 - Explicit YAML lists (`Lights`, `MotionSensors`, `LuxSensor`) fully replace discovery for that
-  slot when present — the escape hatch when HA's area assignments are wrong.
-- **Zones are opt-in** (only areas listed under `Zones:` are managed). Auto-managing every HA
-  area is rejected for v1: surprise coverage of `Garasje` at 02:00 is how trust in the system
-  dies. (Flip to opt-out later by generating the zone list from `registry.Areas` — the resolver
-  already supports it; see 05 #2.)
+  slot when present — the escape hatch when HA's area assignments are wrong. An explicit list
+  bypasses both labels: an explicit pick is the owner overruling the rules, and the rules do not
+  get a veto.
+- **Rooms are opt-in** (only areas listed under `Areas:` are managed, and only those switched on
+  are commanded). Auto-managing every HA area is rejected: surprise coverage of `Garasje` at 02:00
+  is how trust in the system dies. First-run set-up proposes rooms, switched off, and the owner
+  chooses.
 - Labels used: `adaptive-exclude` (never touch this entity), `adaptive-motion` (treat as motion
-  source). Labels are read at startup (registry snapshot); a restart or config reload picks up
-  changes.
+  source), and an optional include label (manage only lights carrying it — empty means every light
+  found). Exclude always wins over include: a light carrying both is not managed. Labels are read
+  at startup (registry snapshot); a restart or config reload picks up changes.
 
 Why not pure-registry (no YAML at all): thresholds, timeouts, periods and mode entities have no
 home in the registry; and area membership in HA is one shared taxonomy that other automations
-also depend on — bending it to encode lighting policy (e.g. splitting areas to get two zones)
+also depend on — bending it to encode lighting policy (e.g. splitting areas to get two rooms)
 would be the tail wagging the dog. Why not pure-YAML: hand-listing every light re-creates today's
 drift problem (`IngoreEntity`…) and breaks silently when entities are renamed — discovery keeps
 the config document small enough for humans to keep truthful.
 
-## 5. Validation — fail loudly, degrade per zone
+## 5. Validation — fail loudly, degrade per room
 
-Verified behavior: an app-constructor throw is caught by `Application.InstanceApplication`,
-logged, app marked `Error`; the host and all other apps keep running. Policy:
+Policy:
 
-- **Document-level errors ⇒ throw** (app visibly dead, HA persistent notification posted first,
-  the migration notes (not published)'s bootstrap shape): empty `Zones`, empty `Periods`, unparseable `Start`,
-  overlapping/duplicate period names, duplicate zone names, negative timeouts, thresholds out of
-  range, `PreOffSeconds >= VacancyTimeoutSeconds`, unknown darkness source.
-- **Zone-level referential errors ⇒ degrade**: `AreaId` not in registry, explicit entity id not
+- **Document-level errors**: empty `Periods`, unparseable `Start`, overlapping/duplicate period
+  names, duplicate room names, negative timeouts, thresholds out of range,
+  `PreOffSeconds >= VacancyTimeoutSeconds`, unknown darkness source. An HA persistent notification
+  is posted listing every problem, and the engine does not start commanding. It deliberately does
+  *not* throw: a throw would dispose the app's DI scope and take the web UI's connection with it, and
+  the UI is the one thing that can fix the file. See [the web UI](/web-ui/) §7.
+- **Room-level referential errors ⇒ degrade**: `AreaId` not in registry, explicit entity id not
   in `GetAllEntities()`, no lights resolved, no motion sensors resolved, ambiguous lux sensor —
-  skip that zone, log Error, aggregate all skipped zones into ONE persistent notification
-  ("Adaptive lighting: 2 of 9 zones disabled — …"). Rationale: an entity renamed in HA must not
+  skip that room, log Error, aggregate all skipped rooms into ONE persistent notification
+  ("Adaptive lighting: 2 of 9 rooms disabled — …"). Rationale: an entity renamed in HA must not
   black out the whole house's automation.
-- `ConfigValidator.Validate(config)` returns `ValidationResult { Errors[], ZoneErrors[] }`; it is
+- **Warnings** sit between the two: an include label no entity carries, for instance, is reported at
+  document level and fails open, because the rooms it affects already say why they resolved nothing.
+- `ConfigValidator.Validate(config)` returns `ValidationResult { Errors[], AreaErrors[] }`; it is
   pure (registry/entity checks take an `IReadOnlyCollection<string> knownEntityIds` + area-id
   list, so tests need no fakes).
 
-## 6. Complete example YAML — `House/apps/AdaptiveLighting/AdaptiveLighting.yaml`
+## 6. Complete example YAML — `apps/AdaptiveLighting/AdaptiveLighting.yaml`
 
 ```yaml
 AdaptiveLighting.Configuration.AdaptiveLightingConfig:
@@ -176,7 +202,6 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     Persons:
       - person.espen
     KillSwitchEntity: input_boolean.adaptive_lighting_enabled   # note: engine treats OFF as kill
-    SleepModeEntity: input_boolean.sover
     NetDaemonUserId: ""            # optional; fill with the ND token's HA user id if known
     AwayDebounceMinutes: 5
     TreatAutomationsAsManual: true
@@ -213,39 +238,41 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       ColorTempKelvin: 2200
       MaxBrightnessPct: 30        # the 03:00 rule
 
-  Zones:
+  Areas:
     - Name: Stue
       AreaId: stue
+      Enabled: true               # the room's power switch, written explicitly by the UI
       RespectSleepMode: true
     - Name: Kjeller multimedia
       AreaId: kjeller_multimedia
+      Enabled: true
       IgnoreWhenOn:
         - binary_sensor.projektor_er_pa
       VacancyTimeoutSeconds: 1800
       Darkness: Always            # basement: no daylight gate
     - Name: Gang
       AreaId: gang
+      Enabled: true
       WelcomeHome: true
       VacancyTimeoutSeconds: 120
     - Name: Soverom
       AreaId: soverom
+      Enabled: true
       RespectSleepMode: true
       SleepBlocksAutoOn: true
       MotionSensors:              # explicit override example (mmWave not in area)
         - binary_sensor.soverom_mmwave_presence
     - Name: Ute
       AreaId: ute
+      Enabled: false              # found by set-up, not switched on yet
       SkipAwaySweep: true
       Darkness: Sun
 ```
 
-Notes for implementers: `AreaId` is the HA registry **area id** (slug), not the display name —
-today's code matched on `Entity.Area` (friendly name, e.g. `"Kjeller - multimedia"`); the new
-resolver uses `IHaRegistry.GetArea(id)` and must say so in the validation message when an id
-misses ("did you mean area 'Stue' (id 'stue')?" — cheap Levenshtein-free hint: list all ids).
-Entity ids above are illustrative; the real ones must be filled in by the user (05 #5) —
-implementers must NOT invent entity ids, ship the file with placeholders clearly marked and the
-zone list empty-but-commented if the real ids are unknown, so validation fails loudly rather than
-silently controlling wrong devices.
-Cabin gets its own file, same shape (`person.*` and areas differ; cabin probably wants
-`GuestModeEntity` earliest).
+Notes: `AreaId` is the HA registry **area id** (slug), not the display name; the resolver uses
+`IHaRegistry.GetArea(id)` and says so in the validation message when an id misses, listing every
+known area id.
+
+The entity ids above are illustrative. Nobody has to type them: a fresh installation writes no ids at
+all and lets first-run set-up find the rooms, and the configuration UI's pickers offer the real
+entities by name. Hand-editing this file is the escape hatch, not the route in.

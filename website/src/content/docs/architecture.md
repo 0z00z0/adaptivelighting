@@ -1,6 +1,6 @@
 ---
 title: "Architecture"
-description: "Inside the engine: the zone state machine, the orchestrator and the seams."
+description: "Inside the engine: the area state machine, the orchestrator and the seams."
 ---
 
 Namespace root: `AdaptiveLighting`. All engine code lives in **`AdaptiveLighting/`**; `House` and
@@ -18,7 +18,7 @@ commenting out `[NetDaemonApp]` (established idiom, see `House/apps/LightAutomat
    contradicts the task prompt ("one app instance per area") and the `netdaemon` skill ("Each
    YAML block instancing the config yields a separate app instance") — both are wrong.**
    Consequence: one orchestrator app per host, fanning out internally to one controller object
-   per zone. (This is also simply better: shared presence/mode state, one registry snapshot, one
+   per area. (This is also simply better: shared presence/mode state, one registry snapshot, one
    config document.)
 2. **`AddAppsFromAssembly(Assembly.GetExecutingAssembly())`** in both `program.cs` files scans
    only the host assembly. Classes in `AdaptiveLighting` marked `[NetDaemonApp]` are **never instantiated**
@@ -50,7 +50,7 @@ full `IHaContext` fake for the interesting logic:
 
 ```
 ILightActuator      void Apply(string entityId, LightCommand cmd)         // wraps light.turn_on/off
-IStatePublisher     void Publish(ZoneSnapshot snapshot)                    // observability, no-op-able
+IStatePublisher     void Publish(AreaSnapshot snapshot)                    // observability, no-op-able
 INotifier           void Notify(string title, string message)              // persistent_notification
 ```
 
@@ -70,7 +70,7 @@ classDiagram
         +ctor(IHaContext, IHaRegistry, IScheduler, IAppConfig~AdaptiveLightingConfig~, ILogger, ILoggerFactory)
     }
     class LightingOrchestrator {
-        -List~ZoneController~ zones
+        -List~AreaController~ areas
         -HouseState house
         +Start()
         +Dispose()
@@ -87,15 +87,15 @@ classDiagram
     class ModeMonitor {
         +watches kill-switch / sleep / guest entities
     }
-    class ZoneController {
-        -ZoneState state
+    class AreaController {
+        -AreaState state
         -IDisposable[] subscriptions
         +OnMotion() +OnVacancyTimeout()
         +OnManualChange(ManualAction)
         +OnHouseChanged() +OnTick()
     }
-    class ZoneEntityResolver {
-        +Resolve(ZoneConfig, IHaRegistry) ResolvedZone
+    class AreaEntityResolver {
+        +Resolve(AreaConfig, IHaRegistry) ResolvedArea
     }
     class CircadianCalculator {
         +GetTarget(DateTimeOffset now) LightTarget
@@ -117,16 +117,16 @@ classDiagram
 
     AdaptiveLightingApp_House --> ConfigValidator : validate at startup
     AdaptiveLightingApp_House --> LightingOrchestrator : creates
-    LightingOrchestrator --> ZoneEntityResolver
+    LightingOrchestrator --> AreaEntityResolver
     LightingOrchestrator --> PresenceMonitor
     LightingOrchestrator --> ModeMonitor
     LightingOrchestrator --> HouseState
-    LightingOrchestrator "1" --> "*" ZoneController
-    ZoneController --> CircadianCalculator
-    ZoneController --> IlluminanceGate
-    ZoneController --> OverrideDetector
-    ZoneController --> ILightActuator
-    ZoneController --> IStatePublisher
+    LightingOrchestrator "1" --> "*" AreaController
+    AreaController --> CircadianCalculator
+    AreaController --> IlluminanceGate
+    AreaController --> OverrideDetector
+    AreaController --> ILightActuator
+    AreaController --> IStatePublisher
     ILightActuator <|.. HaLightActuator
     IStatePublisher <|.. HaStatePublisher
     INotifier <|.. HaNotifier
@@ -142,24 +142,24 @@ All in `AdaptiveLighting/`, namespace shown per class. Every subscription in the
 
 | Class | Responsibility |
 |---|---|
-| `LightingOrchestrator` | Composition root of the engine (plain class, `IDisposable`). Builds `HouseState`, `PresenceMonitor`, `ModeMonitor`, resolves each configured zone via `ZoneEntityResolver`, creates one `ZoneController` per resolved zone, wires the house-changed stream to all zones. On dispose, disposes everything (needed for config hot-reload, Part 4). Skips (with `INotifier` + log) zones that fail resolution — one bad zone must not kill the engine. |
-| `ZoneController` | The per-zone state machine (see §5). Subscribes to: motion sensors (`StateChanges` on each sensor entity id via `IHaContext.Entity(id)`), light entity `StateAllChanges` (feeding `OverrideDetector`), lux sensor changes, a periodic circadian tick (`IScheduler`, default every 60 s), and `HouseState.Changed`. All state mutation happens inside `lock (_gate)` — Rx callbacks and scheduler callbacks may interleave. Vacancy timeout is implemented with `IScheduler.Schedule` returning a disposable that is replaced on every motion event (do **not** use `WhenStateIsFor` here: multiple sensors per zone must merge, and the timeout must also restart on manual interaction). |
+| `LightingOrchestrator` | Composition root of the engine (plain class, `IDisposable`). Builds `HouseState`, `PresenceMonitor`, `ModeMonitor`, resolves each configured area via `AreaEntityResolver`, creates one `AreaController` per resolved area, wires the house-changed stream to all areas. On dispose, disposes everything (needed for config hot-reload, Part 4). Skips (with `INotifier` + log) areas that fail resolution — one bad area must not kill the engine. |
+| `AreaController` | The per-area state machine (see §5). Subscribes to: motion sensors (`StateChanges` on each sensor entity id via `IHaContext.Entity(id)`), light entity `StateAllChanges` (feeding `OverrideDetector`), lux sensor changes, a periodic circadian tick (`IScheduler`, default every 60 s), and `HouseState.Changed`. All state mutation happens inside `lock (_gate)` — Rx callbacks and scheduler callbacks may interleave. Vacancy timeout is implemented with `IScheduler.Schedule` returning a disposable that is replaced on every motion event (do **not** use `WhenStateIsFor` here: multiple sensors per area must merge, and the timeout must also restart on manual interaction). |
 | `HouseState` | Immutable snapshot record (`Mode`, `KillSwitchActive`, `IsAnyoneHome`) + a `BehaviorSubject`-backed `Changed` observable owned by the orchestrator. |
 | `PresenceMonitor` | Watches configured `person.*`/`device_tracker.*` entities (`state == "home"`). Emits `EveryoneLeft` (debounced by `AwayDebounceMinutes` via `IScheduler`) and `FirstPersonArrived`. |
 | `ModeMonitor` | Watches the configured kill-switch / sleep / guest entities (any on/off-ish domain: `input_boolean`, `switch`, `binary_sensor`). Missing config → that mode is permanently inactive (no error). |
 | `OverrideDetector` | Two mechanisms, combined: **(1) command-expectation correlation** — before every `ILightActuator.Apply`, the controller calls `ExpectCommand(entityId, cmd)`; any state change on that entity arriving within `SelfEchoWindowSeconds` (default 8) that is consistent with the expectation is classified `Self`. **(2) context inspection** — `Context.UserId == cfg.NetDaemonUserId` → `Self`; `UserId == null && ParentId == null` → `PhysicalDevice` (wall switch, dimmer, Zigbee remote acting directly); `UserId` = anything else → `HaUser` (app/UI); `ParentId != null` → `Automation`. `PhysicalDevice` and `HaUser` are manual; `Automation` counts as manual when `TreatAutomationsAsManual: true` (default). Honest limitation, stated: `CallService` is fire-and-forget and does not return the created context id [verified `IHaContext`], so exact context matching is impossible — that is *why* both heuristics exist; expectation-correlation is primary, `NetDaemonUserId` is an optional belt-and-braces config value. |
-| `IlluminanceGate` | `IsDarkEnough()` = lux sensor below `LuxThreshold` (with `LuxHysteresis` so 249↔251 flapping doesn't strobe) **OR**, when no lux sensor resolved, sun elevation below `SunElevationThreshold` (read from `sun.sun` attribute `elevation` via `GetState`). Config chooses `Lux`, `Sun`, `Either`, `Always` per zone. |
+| `IlluminanceGate` | `IsDarkEnough()` = lux sensor below `LuxThreshold` (with `LuxHysteresis` so 249↔251 flapping doesn't strobe) **OR**, when no lux sensor resolved, sun elevation below `SunElevationThreshold` (read from `sun.sun` attribute `elevation` via `GetState`). Config chooses `Lux`, `Sun`, `Either`, `Always` per area. |
 | `CircadianCalculator` | Pure function of (config periods, now). Resolves the active `TimePeriod` (fixed `HH:mm` or sun-event ± offset boundaries), returns `LightTarget` (brightness %, color-temp K). If `SmoothTransitions: true`, linearly interpolates between adjacent period targets over `BlendMinutes` around each boundary. Zero I/O — trivially unit-testable. |
-| `ZoneEntityResolver` | Turns a `ZoneConfig` + `IHaRegistry` + `IHaContext` into a `ResolvedZone` (concrete entity-id lists). Discovery rules in 03-configuration.md §4. Group de-duplication: a light whose state attributes contain `entity_id` (a group) causes its members to be dropped from the individual list — same trick `LightAutomationTest` used, now centralised. |
+| `AreaEntityResolver` | Turns an `AreaConfig` + `IHaRegistry` + `IHaContext` into a `ResolvedArea` (concrete entity-id lists). Discovery rules in 03-configuration.md §4. Group de-duplication: a light whose state attributes contain `entity_id` (a group) causes its members to be dropped from the individual list — same trick `LightAutomationTest` used, now centralised. |
 | `LightCommand` | Record: `bool On`, `double? BrightnessPct`, `int? ColorTempKelvin`, `double? TransitionSeconds`. |
-| `ManualAction` / `ChangeOrigin` / `ZoneState` / `HouseMode` | Enums + small records for the state machine. |
+| `ManualAction` / `ChangeOrigin` / `AreaState` / `HouseMode` | Enums + small records for the state machine. |
 
 ### `AdaptiveLighting.Ha` (the only classes that talk to HA for output)
 
 | Class | Responsibility |
 |---|---|
 | `HaLightActuator : ILightActuator` | `CallService("light", "turn_on"/"turn_off", ServiceTarget.EntityIds, { brightness_pct, color_temp_kelvin, transition })`. Sends `turn_on` only when the command differs from current state beyond tolerances (re-read via `GetState`) to avoid spamming. |
-| `HaStatePublisher : IStatePublisher` | v1: maintains one HA event per change (`SendEvent("laget_lighting_zone", …)`) **and** logs at Information. v2 (deferred): MQTT sensor entity per zone via `IMqttEntityManager`. Kept behind the interface precisely so this can change. |
+| `HaStatePublisher : IStatePublisher` | v1: maintains one HA event per change (`SendEvent("adaptive_lighting_area", …)`) **and** logs at Information. v2 (deferred): MQTT sensor entity per area via `IMqttEntityManager`. Kept behind the interface precisely so this can change. |
 | `HaNotifier : INotifier` | `persistent_notification.create` (same call the existing `Notifications` helper makes — new class, we do not reuse the old one per ground rules). |
 
 ### `AdaptiveLighting.Configuration`
@@ -179,7 +179,7 @@ Schema classes + `ConfigValidator` — full detail in 03-configuration.md.
 
 Everything else — engine, config schema, validator, actuator, detector, calculator — is `AdaptiveLighting`.
 
-## 5. Zone state machine
+## 5. Area state machine
 
 States: `Disabled`, `Away`, `AutoVacant`, `AutoActive`, `PreOff`, `OverriddenOn`, `SuppressedOff`.
 
@@ -196,32 +196,32 @@ stateDiagram-v2
     AutoVacant --> OverriddenOn : ManualChange on (human turned lights on)
     AutoActive --> SuppressedOff : ManualChange off (human turned lights off)
     PreOff --> SuppressedOff : ManualChange off
-    OverriddenOn --> AutoVacant : OverrideDuration elapsed && zone vacant (lights off)
-    OverriddenOn --> AutoActive : OverrideDuration elapsed && zone occupied (resume control, smooth)
+    OverriddenOn --> AutoVacant : OverrideDuration elapsed && area vacant (lights off)
+    OverriddenOn --> AutoActive : OverrideDuration elapsed && area occupied (resume control, smooth)
     OverriddenOn --> OverriddenOn : Motion (extend nothing; manual levels win)
-    SuppressedOff --> AutoVacant : zone vacant for VacancyResetMinutes (suppression lifted)
+    SuppressedOff --> AutoVacant : area vacant for VacancyResetMinutes (suppression lifted)
     SuppressedOff --> SuppressedOff : Motion (respect the human: stay dark)
-    AutoVacant --> Away : EveryoneLeft (leaving sweep turns lights off unless zone opts out)
+    AutoVacant --> Away : EveryoneLeft (leaving sweep turns lights off unless area opts out)
     AutoActive --> Away : EveryoneLeft
     PreOff --> Away : EveryoneLeft
     OverriddenOn --> Away : EveryoneLeft (sweep wins over override — house is empty)
     SuppressedOff --> Away : EveryoneLeft
-    Away --> AutoVacant : FirstPersonArrived (welcome-home: entry zones -> AutoActive if dark)
-    Disabled --> AutoVacant : kill switch off / zone re-enabled
-    note right of Disabled : Kill switch or per-zone Enabled=false.\nEntered from ANY state; engine stops\ncommanding but keeps observing.
+    Away --> AutoVacant : FirstPersonArrived (welcome-home: entrance areas -> AutoActive if dark)
+    Disabled --> AutoVacant : kill switch off / area re-enabled
+    note right of Disabled : Kill switch or per-area Enabled=false.\nEntered from ANY state; engine stops\ncommanding but keeps observing.
 ```
 
 Interaction rules (binding for implementers):
 
 - **Override detection wins over everything**: any `ChangeOrigin ∈ {PhysicalDevice, HaUser}`
-  (or `Automation` if configured) on a zone light transitions as drawn above. `Self` and
+  (or `Automation` if configured) on an area light transitions as drawn above. `Self` and
   attribute-echo changes never transition.
-- **Sleep mode**: zones with `RespectSleepMode: true` clamp their target to the `night` period's
-  night-light floor while sleep is on, regardless of clock period; zones with
+- **Sleep mode**: areas with `RespectSleepMode: true` clamp their target to the `night` period's
+  night-light floor while sleep is on, regardless of clock period; areas with
   `SleepBlocksAutoOn: true` do not auto-on at all during sleep.
-- **Away**: entered only via presence. On entry: one `turn_off` sweep over zones without
+- **Away**: entered only via presence. On entry: one `turn_off` sweep over areas without
   `SkipAwaySweep: true` (outdoor/security lights opt out). While `Away`, motion does nothing
-  (v1; vacation simulation is v2). `FirstPersonArrived` → zones flagged `WelcomeHome: true`
+  (v1; vacation simulation is v2). `FirstPersonArrived` → areas flagged `WelcomeHome: true`
   auto-on if dark.
 - **Kill switch** (`Disabled`): engine sends nothing, subscriptions stay alive, state resumes
   cleanly on re-enable. Publishes its state via `IStatePublisher` so the Blazor UI shows why
@@ -239,20 +239,20 @@ In scope v1 (each one line):
 1. **Pre-off dim warning** (`PreOff` state) — humans get a 30 s "speak now" grace before darkness; costs one state.
 2. **Adaptive fade** — transition length scales by period (gentle at night); one field on `LightCommand`.
 3. **Night-light floor** — brightness cap/floor per period; prevents the 03:00 blinding; pure config.
-4. **Sleep mode** — one watched entity gates bedroom-adjacent zones; cheap, high value.
-5. **Away leaving-sweep with per-zone opt-out** — presence already watched; one loop.
-6. **Welcome-home** — first arrival + dark → entry zones on; special case of existing signals.
-7. **Global kill switch + per-zone enable** — non-negotiable escape hatch for a house that fights you.
-8. **Zone-state observability** (`IStatePublisher`) — debugging an invisible state machine without this is misery.
+4. **Sleep mode** — one watched entity gates bedroom-adjacent areas; cheap, high value.
+5. **Away leaving-sweep with per-area opt-out** — presence already watched; one loop.
+6. **Welcome-home** — first arrival + dark → entrance areas on; special case of existing signals.
+7. **Global kill switch + per-area enable** — non-negotiable escape hatch for a house that fights you.
+8. **Area-state observability** (`IStatePublisher`) — debugging an invisible state machine without this is misery.
 
 Deferred to v2+ (and why not now):
 
 - **Guest mode** (longer timeouts) — trivial but needs a mode entity + UX decision; config knob reserved.
-- **Occupancy-prediction warm-up / cross-area transit** — needs a zone-adjacency graph and tuning; high complexity, medium value.
+- **Occupancy-prediction warm-up / cross-area transit** — needs an area-adjacency graph and tuning; high complexity, medium value.
 - **Closed-loop lux targeting** — feedback loop risks oscillation (light raises lux raises gate…); needs hysteresis/PI design and per-sensor calibration. v1 stays open-loop.
 - **Vacation presence simulation** — needs a history/recording store; entirely separable feature.
 - **Energy/peak awareness** — LED lighting is watts, not kilowatts; poor value here (rejected outright, not just deferred).
-- **MQTT-published per-zone entities** — nice for HA dashboards; v1's event+log publisher is enough to start.
+- **MQTT-published per-area entities** — nice for HA dashboards; v1's event+log publisher is enough to start.
 
 ## 7. File-by-file plan
 
@@ -260,24 +260,24 @@ New files (tabs, `AdaptiveLighting.*` namespaces):
 
 ```
 AdaptiveLighting/Engine/LightingOrchestrator.cs
-AdaptiveLighting/Engine/ZoneController.cs
-AdaptiveLighting/Engine/ZoneState.cs                  (enum + transition-reason enum)
+AdaptiveLighting/Engine/AreaController.cs
+AdaptiveLighting/Engine/AreaState.cs                  (enum + transition-reason enum)
 AdaptiveLighting/Engine/HouseState.cs                 (record + HouseMode enum)
 AdaptiveLighting/Engine/PresenceMonitor.cs
 AdaptiveLighting/Engine/ModeMonitor.cs
 AdaptiveLighting/Engine/OverrideDetector.cs           (+ ChangeOrigin enum)
 AdaptiveLighting/Engine/IlluminanceGate.cs
 AdaptiveLighting/Engine/CircadianCalculator.cs        (+ LightTarget record)
-AdaptiveLighting/Engine/ZoneEntityResolver.cs         (+ ResolvedZone record)
+AdaptiveLighting/Engine/AreaEntityResolver.cs         (+ ResolvedArea record)
 AdaptiveLighting/Engine/LightCommand.cs
 AdaptiveLighting/Abstractions/ILightActuator.cs
-AdaptiveLighting/Abstractions/IStatePublisher.cs      (+ ZoneSnapshot record)
+AdaptiveLighting/Abstractions/IStatePublisher.cs      (+ AreaSnapshot record)
 AdaptiveLighting/Abstractions/INotifier.cs
 AdaptiveLighting/Ha/HaLightActuator.cs
 AdaptiveLighting/Ha/HaStatePublisher.cs
 AdaptiveLighting/Ha/HaNotifier.cs
 AdaptiveLighting/Configuration/AdaptiveLightingConfig.cs   (all schema records, one file per top-level class is fine too)
-AdaptiveLighting/Configuration/ZoneConfig.cs
+AdaptiveLighting/Configuration/AreaConfig.cs
 AdaptiveLighting/Configuration/TimePeriodConfig.cs
 AdaptiveLighting/Configuration/ConfigValidator.cs
 AdaptiveLighting/Configuration/ValidationResult.cs
@@ -290,7 +290,7 @@ Cabin/apps/AdaptiveLighting/AdaptiveLighting.yaml
 NetDaemon Test/Lighting/FakeHaContext.cs
 NetDaemon Test/Lighting/FakeLightActuator.cs
 NetDaemon Test/Lighting/FakeRegistry.cs              (only if resolver tests need it; else config-only resolution tests)
-NetDaemon Test/Lighting/ZoneControllerTests.cs
+NetDaemon Test/Lighting/AreaControllerTests.cs
 NetDaemon Test/Lighting/CircadianCalculatorTests.cs
 NetDaemon Test/Lighting/OverrideDetectorTests.cs
 NetDaemon Test/Lighting/IlluminanceGateTests.cs
@@ -385,7 +385,7 @@ Old config model files (`House/apps/Configuration/Model/*.cs`, `LightConfigurato
 
 - `CircadianCalculator`, `ConfigValidator`, `OverrideDetector.Classify`, discovery filtering —
   pure or near-pure: plain MSTest, no fakes needed beyond tiny records.
-- `ZoneController` / `PresenceMonitor` / `IlluminanceGate` — need time + state streams:
+- `AreaController` / `PresenceMonitor` / `IlluminanceGate` — need time + state streams:
   - **`FakeHaContext : IHaContext`** (hand-written in `NetDaemon Test`, ~80 lines): a
     `Subject<StateChange>` backs `StateAllChanges()`; a `Dictionary<string, EntityState>` backs
     `GetState`/`GetAllEntities`; `CallService` appends to a public `List<ServiceCall>` record for
@@ -397,7 +397,7 @@ Old config model files (`House/apps/Configuration/Model/*.cs`, `LightConfigurato
     deterministically. This is exactly why nothing in the engine may touch wall-clock time or
     `Task.Delay` — the scheduler *is* the clock (`scheduler.Now` for circadian input).
   - `ILightActuator`/`IStatePublisher`/`INotifier` — trivial recording fakes.
-- Canonical test shape: build a `ZoneController` with fakes → `TriggerStateChange` motion on →
+- Canonical test shape: build an `AreaController` with fakes → `TriggerStateChange` motion on →
   assert actuator got `turn_on` with the period's levels → `AdvanceBy(timeout)` → assert `PreOff`
   dim → `AdvanceBy(grace)` → assert off. Override test: push a light change with a foreign
   `Context.UserId` → assert no further commands until `AdvanceBy(OverrideDuration)`.

@@ -1,6 +1,6 @@
 ---
 title: "Overview"
-description: "How the system thinks: zones, periods, the house, and origin."
+description: "How the system thinks: areas, periods, the house, and origin."
 ---
 
 Start here. The other documents in this folder are the design record; this one is the map. For
@@ -23,19 +23,19 @@ watching so you can see what it *would* have done.
 
 Four ideas carry the whole system.
 
-**A zone** is a room the engine manages — usually one Home Assistant area. It owns its lights, its
-motion sensors, and optionally a lux sensor. Zones are **opt-in**: an area you don't list is never
-touched. Each zone runs its own independent state machine.
+**An area** is a room the engine manages — one Home Assistant area. It owns its lights, its
+motion sensors, and optionally a lux sensor. Rooms are **opt-in**: an area you don't list, or have
+switched off, is never touched. Each runs its own independent state machine.
 
 **A period** is a slice of the day (morning / day / evening / night) with a target brightness and
-colour temperature. Periods are house-wide, not per zone. Boundaries are clock times or sun events
+colour temperature. Periods are house-wide, not per room. Boundaries are clock times or sun events
 (`sunset-01:00`), and targets blend across a boundary rather than stepping.
 
-**The house** has state that all zones share: who's home, which **house mode** is active, and whether
-the kill switch is on. A zone consults it but decides for itself. The house mode is a single
+**The house** has state that every room shares: who's home, which **house mode** is active, and whether
+the kill switch is on. A room consults it but decides for itself. The house mode is a single
 `input_select` whose options each carry one *kind* — Normal, Sleep, Away or Guest — and a period,
 a presence sensor or a clock can switch it automatically; every reset returns to Normal. Away and
-Guest apply an HA scene and pause the engine until a reset fires (see `/configuration/`).
+Guest apply an HA scene and pause the engine until a reset fires (see [Configuration](/configuration/)).
 
 **Origin** is the interesting one. Every change to a light is classified as *ours* or *a human's*.
 That distinction is what makes override work, and it's the hardest part of the system (see below).
@@ -45,11 +45,11 @@ That distinction is what makes override work, and it's the hardest part of the s
 Every arrow names the parameter that drives it — so if you want to change a behaviour, this tells
 you which setting to reach for.
 
-![Zone state machine, annotated with the configuration parameter governing each transition](/state-machine.svg)
+![Area state machine, annotated with the configuration parameter governing each transition](/state-machine.svg)
 
-## The zone state machine
+## The area state machine
 
-Each zone is always in exactly one state:
+Each room is always in exactly one state:
 
 | State | Meaning |
 |---|---|
@@ -59,7 +59,8 @@ Each zone is always in exactly one state:
 | `OverriddenOn` | A human set a level. Their setting is sacred until the override expires. |
 | `SuppressedOff` | A human turned it off. Motion is deliberately ignored — they wanted dark. |
 | `Away` | House is empty. |
-| `Disabled` | Kill switch or per-zone `Enabled: false`. Still observing, never commanding. |
+| `SceneHold` | A Guest-kind house mode with a scene owns the look. The engine commands nothing until the mode resets. |
+| `Disabled` | Kill switch, or the room is switched off. Still observing, never commanding. |
 
 The two that make it feel considered rather than robotic are `PreOff` (a grace period instead of
 sudden darkness) and `SuppressedOff` (turning the lights off actually *means* something — the room
@@ -90,12 +91,12 @@ The schema is four layers, each narrowing the last:
 
 | Layer | What it sets |
 |---|---|
-| `Global` | House-wide: persons, kill switch, house modes, override tuning, discovery labels. |
-| `Defaults` | The baseline for every zone — every per-zone knob has a default here. |
+| `Global` | House-wide: people, kill switch, house modes, override tuning, discovery labels. |
+| `Defaults` | The baseline every room starts with — every per-room knob has a default here. The settings page calls this group **All rooms**. |
 | `Periods` | The circadian table: when each period starts, its brightness/colour, its caps. |
-| `Zones` | Per room. Overrides *only* what differs from `Defaults`. |
+| `Areas` | Per room. Overrides *only* what differs from `Defaults`. |
 
-Most zones are three lines, because of **discovery**. Give a zone an `AreaId` and the engine finds
+Most rooms are three lines, because of **discovery**. Give an area an `AreaId` and the engine finds
 its lights, motion sensors and lux sensor from the Home Assistant area registry — dropping group
 members and anything labelled `adaptive-exclude`. Explicit lists (`Lights`, `MotionSensors`,
 `LuxSensor`) are the escape hatch when HA's area assignments are wrong; each replaces discovery for
@@ -110,7 +111,7 @@ The knobs worth knowing:
 - **`IgnoreWhenOn`** — block auto-on while something is on (a projector, a do-not-disturb flag).
 - **`RespectSleepMode` / `SleepBlocksAutoOn`** — bedroom-adjacent behaviour.
 - **`SkipAwaySweep`** — outdoor and security lights stay on when the house empties.
-- **`WelcomeHome`** — entry zones light on first arrival if it's dark.
+- **`WelcomeHome`** — entrance rooms light on first arrival if it's dark.
 - **`MaxBrightnessPct` on the night period** — the 03:00 rule; caps *every* command, including
   welcome-home.
 
@@ -121,53 +122,60 @@ Deliberately split, because these deserve different answers:
 - **Bad global config** (a person or kill switch HA doesn't know) → the app **throws**, lands in
   `ApplicationState.Error`, and posts a persistent notification listing every problem. The host and
   all your other apps keep running.
-- **Bad zone config** (an area id that doesn't exist) → that **zone is skipped**, the rest run. One
+- **Bad room config** (an area id that doesn't exist) → that **room is skipped**, the rest run. One
   aggregated notification, and it lists every real area id on your instance — which is the fastest
   way to fix the file. A renamed entity must not black out the whole house.
 
 ## Where it lives
 
 The engine is entirely in `AdaptiveLighting/` and never references a generated entity type. That's
-deliberate and it's why `House` and `Cabin` are each a ~40-line bootstrap plus a YAML file —
-generated types are per-project and can never move to `AdaptiveLighting`, so the engine is written against
+deliberate and it's why each host is a ~40-line bootstrap plus a YAML file — generated types are
+per-project and can never move to `AdaptiveLighting`, so the engine is written against
 `IHaContext` / `IHaRegistry` / `IScheduler` and three small interfaces of its own instead.
 
 A **Blazor UI** served by each host (LAN-only, no auth) does three things. The **dashboard** is the
 house-state hub: the master enable switch (clickable), who's home, which house mode is active, and
-the live per-zone stories — what the lights are doing, what happened last, a countdown to the next
-change — with "unknown" a first-class value distinct from "not connected". The **config editor**
-actually configures the system from the browser: pick an area from a dropdown and watch its lights,
-motion sensors and lux sensor resolve live; edit zones, periods, and house modes in collapsible
-cards; save validates, writes atomically, and rebuilds the running engine in place — no YAML, no
-restart. The config file lives *outside* the publish tree, so a redeploy can't wipe your edits.
+the live per-room stories — what the lights are doing, what happened last, a countdown to the next
+change — with "unknown" a first-class value distinct from "not connected". Rooms are grouped by
+Home Assistant floor, and only the rooms you have switched on get a card. The **config editor**
+actually configures the system from the browser, in four sections — **Areas**, **Schedule**,
+**House modes**, **House**: pick an area from a dropdown and watch its lights, motion sensors and lux
+sensor resolve live; switch a room on or off from its header; edit rooms, periods and house modes in
+collapsible cards; save validates, writes atomically, and rebuilds the running engine in place — no
+YAML, no restart. The config file lives *outside* the publish tree, so a redeploy can't wipe your edits.
 
 ## To make it actually work
 
-1. **Fill in the ids.** A fresh YAML ships `REPLACE_ME` placeholders on purpose: nobody writing the
-   file can see your registry, and an id that merely *looks* plausible would quietly command the
-   wrong device. Once a host runs once, the config editor's pickers offer your real entities by name.
-2. Start the host once. Bad global ids fail loudly (the app posts a notification listing every
-   problem and lands in `Error`, host still up); bad zone ids just skip that zone, and the
-   notification lists your real area ids.
-3. Fill them in — from the UI once it's running, or by editing the YAML — and the engine rebuilds.
+1. **Start the host and wait half a minute.** A fresh installation writes no entity ids and asks for
+   none. Thirty seconds after the connection settles, set-up reads the area registry and writes down
+   every room that has both a light and a motion sensor, guessing each room's role from its name — a
+   `soverom` respects sleep, a `gang` lights on arrival, an `ute` stays on when the house empties. It
+   adopts an obvious house-mode dropdown if it finds one, and seeds the list of people from Home
+   Assistant.
+2. **Every discovered room is written switched off.** Nothing changes about your lighting until you
+   say so. This is the point: software installed ten minutes ago should not be turning on a bedroom
+   light.
+3. **Open the UI and choose.** Settings → **Areas** lists the rooms by floor with a switch on each.
+   Turn on the ones you want, save, and the dashboard fills with exactly those rooms. Everything else
+   — timeouts, darkness sources, the day's schedule — has a working default and can wait.
 4. Deploying needs the **V6 add-on** (`netdaemon6`), and its port mapped in the add-on's Network
    panel to reach the UI.
 
+If a room stops resolving later — a renamed entity, an area that lost its motion sensor — that room is
+skipped and the rest run, and the notification names the real ids.
+
 ## Status — what's proven, and what isn't
 
-**It's live.** The engine runs on **a live instance** and controls real lights across three zones
-(Stue, Tilbygg, Kjokken). The things this document once flagged as unproven have now happened in the
-house: motion → darkness gate → circadian target → `light.turn_on` → vacancy timeout → dim → off,
-the whole cycle, unprompted; the dashboard carries real snapshots; discovery resolves real entities;
-and override detection positively identifies the engine's own commands by user id. House modes,
-scenes and their reset triggers are configured from the dashboard and confirmed switching real modes.
-**367 tests** cover the engine and its web services (plus 120 for the separate ClaudeDesk component on
-the same branch).
+**It's live.** The engine runs a real house and a real cabin and controls real lights. The things this
+document once flagged as unproven have now happened in the house: motion → darkness gate → circadian
+target → `light.turn_on` → vacancy timeout → dim → off, the whole cycle, unprompted; the dashboard
+carries real snapshots; discovery resolves real entities; and override detection positively identifies
+the engine's own commands by user id. House modes, scenes and their reset triggers are configured from
+the dashboard and confirmed switching real modes. **466 tests** cover the engine and its web services.
 
-Still open, and honest: **the house host is built and tested but not deployed** — only the
-cabin is proven. Sleep is now a **mode kind**, not a helper the engine creates: a `Sleep` option on
-the husmodus select clamps sleeping zones to a named period, so the old MQTT-helper plan is retired.
-`MinBrightnessPct: 5` on the night period is an invented default worth reviewing. Concurrency is
-asserted by inspection — `TestScheduler` is single-threaded.
+Still open, and honest: Sleep is a **mode kind**, not a helper the engine creates — a `Sleep` option on
+the house-mode select clamps sleep-respecting rooms to a named period, so the old MQTT-helper plan is
+retired. `MinBrightnessPct: 5` on the night period is an invented default worth reviewing. Concurrency
+is asserted by inspection — `TestScheduler` is single-threaded.
 
 Known gaps and design questions are tracked in the repository's issues.

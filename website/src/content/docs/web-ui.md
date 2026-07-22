@@ -33,7 +33,7 @@ description: "How the Blazor dashboard and configuration editor are built."
   the same ~40-line `program.cs` shape (05 #8).
 - **UI content: `AdaptiveLighting.Web`, a new Razor Class Library** (`Microsoft.NET.Sdk.Razor`, net10.0)
   so both hosts get the same UI. It references `AdaptiveLighting` (for the config schema +
-  `ILightingConfigStore` + `ZoneSnapshot`) and **never** a generated type. New project → new
+  `ILightingConfigStore` + `AreaSnapshot`) and **never** a generated type. New project → new
   csproj + solution entry (allowed: it's a *new* file; the only *edits* to existing csproj files
   are House's SDK attribute + the migration pins).
 - House additions: `House/Pages/_Host.cshtml`, `House/App.razor`, `House/wwwroot/*` (minimal), or the RCL
@@ -90,9 +90,9 @@ ILightingConfigStore
 - **v1 (tonight/this week): read-mostly UI.** The store *reads* the same
   `apps/AdaptiveLighting/AdaptiveLighting.yaml` the app model binds (YamlDotNet — already in the
   dependency graph via NetDaemon.AppModel, add an explicit `PackageReference` to `AdaptiveLighting`;
-  deserialize the single top-level document key). UI pages: **Dashboard** (live `ZoneSnapshot`
-  per zone: state, why, current target, override remaining — fed by subscribing to
-  `IStatePublisher` through a shared in-memory `ZoneSnapshotCache`), **Config viewer** (rendered
+  deserialize the single top-level document key). UI pages: **Dashboard** (live `AreaSnapshot`
+  per area: state, why, current target, override remaining — fed by subscribing to
+  `IStatePublisher` through a shared in-memory `AreaSnapshotCache`), **Config viewer** (rendered
   read-only), **Modes** (kill/sleep/guest toggles — these are HA entities, so the page just calls
   `IHaContext.CallService("input_boolean", "turn_on"/"turn_off", …)`; state changes flow back via
   the normal engine path, no persistence problem at all).
@@ -111,7 +111,7 @@ ILightingConfigStore
   folder — a later redeploy would clobber UI edits. v2 must therefore move the *editable* file
   outside the publish tree (e.g. `/config/adaptive-lighting/<host>.yaml`, path in
   `appsettings.json`), falling back to the bundled YAML on first run. Decision needed (05 #4).
-- **HA `input_*` helpers as the store — evaluated, rejected** for structured config (a zones
+- **HA `input_*` helpers as the store — evaluated, rejected** for structured config (an areas
   tree does not fit flat helpers; one instance's helpers are UI/.storage-based, unversioned) but
   **adopted** for the live mode toggles, where HA entities are exactly right.
 
@@ -124,7 +124,7 @@ ILightingConfigStore
   (from `appsettings.Development.json` / add-on env) — no page, API response, or diagnostic dump
   may echo configuration objects that contain it. Concretely: never bind/return
   `IConfiguration`/`HomeAssistantSettings` in a component; the UI touches only
-  `AdaptiveLightingConfig`, `ZoneSnapshot`, and `IHaContext` calls. No cookies, no login form
+  `AdaptiveLightingConfig`, `AreaSnapshot`, and `IHaContext` calls. No cookies, no login form
   (creating credentials would be worse than none here).
 - If exposure beyond LAN is ever wanted: put it behind HA ingress or a reverse proxy with auth —
   out of scope, explicitly deferred.
@@ -136,12 +136,12 @@ hard parts are (a) config write round-trip + live orchestrator rebuild, and (b) 
 work destabilise the engine. Hence:
 
 - **v1 (in scope for this build):** SDK/program.cs swap on House, `AdaptiveLighting.Web` RCL, Dashboard
-  (read-only live zone states), Config viewer (read-only), Modes page (toggles via HA entities).
+  (read-only live area states), Config viewer (read-only), Modes page (toggles via HA entities).
   Effort: modest; risk: low; the engine does not change at all for it. If the overnight window
   gets tight, **v1 can be cut entirely without touching Parts 1–3** — the engine has no
   dependency on the web host. Cut line in priority order: Modes page → Config viewer → Dashboard
   → whole web host.
-- **v2 (explicitly out of scope tonight):** `SaveAsync` + hot-reload rebuild, zone editor with
+- **v2 (explicitly out of scope tonight):** `SaveAsync` + hot-reload rebuild, area editor with
   entity pickers fed by `IHaRegistry`, editable-file relocation, Cabin rollout.
 
 ## 7. What v2 actually shipped
@@ -166,8 +166,30 @@ v2 is built. Where it diverged from the plan above, this is what is true now:
   the browser could save a corrected file and still not start anything, which is the one thing the
   UI exists to do. The persistent notification and the error logs are unchanged; only the throw
   went. This is the deliberate cost of making the engine fixable from a browser.
-- **Discovery preview** in the zone editor runs the real `ZoneEntityResolver`, not a lookalike, so
+- **Discovery preview** in the area editor runs the real `AreaEntityResolver`, not a lookalike, so
   what the page shows for an area is what the engine will do with it.
 - **Auth is still none, and the risk changed.** The UI could previously toggle lights and modes; it
   can now rewrite the lighting configuration and restart the engine. Same LAN-only position, larger
   blast radius — see the exposure comment in each `program.cs`.
+
+## 8. What 2.0 changed about the pages
+
+The information architecture was reworked around one rule: **a setting lives under the noun it
+changes.** Sections named after mechanisms — where a value is stored, how it inherits — answered "how
+confident do I need to be?" rather than "where do I look?".
+
+- **The settings rail went from five sections to four**: **Areas · Schedule · House modes · House**.
+  `Defaults` became the **All rooms** group inside Areas, because "settings for every room that a room
+  can override" *are* the area-general settings. `Advanced` is gone as a section; its contents moved to
+  the section whose noun they change, behind that section's own fold where they are rarely touched.
+- **Enablement is a switch on the room's header row**, not row 1 of 17 inside a collapsed override fold
+  inside a collapsed room fold. The switch always writes an explicit value; inheritance stays only for
+  documents written before it.
+- **Both screens group rooms by floor**, through one shared `FloorGrouping` helper so the dashboard and
+  the Areas list can never disagree. A house whose areas have no floor gets one unnamed group and
+  therefore no headers at all — exactly the flat list it had before.
+- **The dashboard shows only rooms that are switched on**, with a footer naming how many are hidden, and
+  a designed first-run state for "rooms exist, none enabled yet" — the page a fresh install lands on.
+- **Set up rooms again** re-runs discovery for chosen rooms. It warns rather than merges: the dialog is
+  computed per room and concrete about losses, and the rebuild keeps exactly the area id and the room's
+  switch. It mutates the in-memory document and arms the ordinary save bar; there is no new write path.
