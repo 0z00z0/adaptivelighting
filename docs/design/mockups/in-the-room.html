@@ -1,0 +1,595 @@
+<title>In the Room — adaptive lighting concept</title>
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --bg:#F2EFEA; --card:#FFFFFF; --card2:#F8F5EF; --ink:#26221B; --muted:#77705F; --line:#E3DDD1;
+  --accent:#B4690E; --accent-ink:#fff; --human:#6A58C7; --danger:#A8402F;
+  --glow-track:#E8E2D6; --chip:#EDE8DE; --shadow:0 1px 2px rgba(38,34,27,.06),0 6px 20px rgba(38,34,27,.07);
+  --ok:#3E7A46;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#171510; --card:#201D15; --card2:#26221A; --ink:#EDE7DA; --muted:#9A9280; --line:#332E23;
+  --accent:#E8A13C; --accent-ink:#221A08; --human:#A99AF2; --danger:#E07A5F;
+  --glow-track:#2E2A1F; --chip:#2B271D; --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 24px rgba(0,0,0,.35);
+  --ok:#8FBF7A;
+}}
+:root[data-theme="dark"]{
+  --bg:#171510; --card:#201D15; --card2:#26221A; --ink:#EDE7DA; --muted:#9A9280; --line:#332E23;
+  --accent:#E8A13C; --accent-ink:#221A08; --human:#A99AF2; --danger:#E07A5F;
+  --glow-track:#2E2A1F; --chip:#2B271D; --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 24px rgba(0,0,0,.35);
+  --ok:#8FBF7A;
+}
+:root[data-theme="light"]{
+  --bg:#F2EFEA; --card:#FFFFFF; --card2:#F8F5EF; --ink:#26221B; --muted:#77705F; --line:#E3DDD1;
+  --accent:#B4690E; --accent-ink:#fff; --human:#6A58C7; --danger:#A8402F;
+  --glow-track:#E8E2D6; --chip:#EDE8DE; --shadow:0 1px 2px rgba(38,34,27,.06),0 6px 20px rgba(38,34,27,.07);
+  --ok:#3E7A46;
+}
+/* ---------- base ---------- */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:ui-rounded,"Hiragino Maru Gothic ProN","Segoe UI",system-ui,-apple-system,sans-serif;
+  font-size:16px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:640px;margin:0 auto;padding:0 16px 96px}
+h1,h2,h3{margin:0;text-wrap:balance}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+a{color:var(--accent)}
+.num{font-variant-numeric:tabular-nums}
+.hidden{display:none!important}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:center;gap:12px;padding:18px 0 4px}
+.top .house{font-size:22px;font-weight:700;letter-spacing:.2px;flex:1}
+.top .sub{font-size:13px;color:var(--muted)}
+.pausebtn{
+  border:1.5px solid var(--line);border-radius:999px;padding:7px 14px;font-size:14px;font-weight:600;
+  background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;gap:8px;
+}
+.pausebtn .dot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
+.pausebtn.paused{border-color:var(--danger);color:var(--danger)}
+.pausebtn.paused .dot{background:var(--danger)}
+.paused-banner{background:var(--danger);color:#fff;border-radius:12px;padding:10px 14px;font-size:14px;margin:10px 0 0}
+
+/* ---------- mode segmented ---------- */
+.modes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:var(--card2);border:1px solid var(--line);
+  padding:5px;border-radius:14px;margin:14px 0 4px}
+.modes button{padding:9px 4px;border-radius:10px;font-size:14px;font-weight:600;color:var(--muted)}
+.modes button.cur{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.modeline{font-size:13px;color:var(--muted);margin:8px 2px 0}
+.modeline b{color:var(--ink);font-weight:600}
+
+/* ---------- tonight strip ---------- */
+.tonight{display:flex;align-items:center;gap:10px;margin:16px 2px 4px;font-size:13.5px;color:var(--muted)}
+.tonight .swatch{width:26px;height:14px;border-radius:4px;flex:none}
+
+/* ---------- room list ---------- */
+.floor{font-size:12.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:22px 4px 8px}
+.roomrow{
+  display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--line);border-radius:16px;padding:13px 14px;margin:8px 0;
+  box-shadow:var(--shadow);
+}
+.roomrow:active{transform:scale(.995)}
+.roomrow .name{font-weight:650;font-size:16.5px;flex:1}
+.roomrow .status{font-size:13.5px;color:var(--muted);text-align:right}
+.roomrow .status b{color:var(--ink);font-weight:600}
+.roomrow .status .hand{color:var(--human);font-weight:650}
+.roomrow .status .warn{color:var(--accent);font-weight:650}
+.roomrow .chev{color:var(--muted);font-size:18px;margin-left:2px}
+.glow{width:22px;height:22px;border-radius:50%;flex:none;background:var(--glow-track);position:relative}
+.glow.on{box-shadow:0 0 12px 2px var(--g,#FFB46B)}
+.glow.hand{outline:2px solid var(--human);outline-offset:2px}
+.glow.pulse{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
+@media (prefers-reduced-motion:reduce){.glow.pulse{animation:none}}
+
+/* ---------- room detail ---------- */
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;margin:16px 0 6px;font-weight:600}
+.roomhead{display:flex;align-items:center;gap:18px;margin:8px 0 6px}
+.bigglow{width:84px;height:84px;border-radius:50%;flex:none;display:grid;place-items:center;position:relative}
+.bigglow .ring{position:absolute;inset:0;border-radius:50%}
+.bigglow .core{width:62px;height:62px;border-radius:50%;background:var(--glow-track)}
+.bigglow.on .core{box-shadow:0 0 26px 6px var(--g,#FFB46B)}
+.roomhead h1{font-size:26px}
+.statesub{font-size:14.5px;color:var(--muted);margin:2px 0 0}
+.statesub .hand{color:var(--human);font-weight:650}
+.sentence{font-size:16px;margin:14px 2px 4px}
+.sentence b{font-weight:650}
+.quick{display:flex;gap:10px;margin:14px 0 2px;flex-wrap:wrap}
+.quick button{border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:9px 16px;
+  font-size:14px;font-weight:650;box-shadow:var(--shadow)}
+.quick button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+/* ---------- cards & settings ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);margin:16px 0;overflow:hidden}
+.card .chead{padding:13px 16px 4px;font-size:12.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.crow{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line)}
+.crow:first-of-type{border-top:0}
+.crow .lab{flex:1;min-width:0}
+.crow .lab .t{font-size:15px;font-weight:600}
+.crow .lab .d{font-size:12.5px;color:var(--muted);margin-top:1px}
+.ovr{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:2px}
+.reset{font-size:12px;color:var(--accent);font-weight:650;margin-top:3px;display:inline-block}
+.stepper{display:flex;align-items:center;gap:0;border:1.5px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card2)}
+.stepper button{width:36px;height:36px;font-size:19px;font-weight:700;color:var(--accent)}
+.stepper .val{min-width:74px;text-align:center;font-weight:650;font-size:14.5px;padding:0 2px}
+.stepper .val.inh{color:var(--muted);font-weight:500}
+.seg{display:flex;gap:4px;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{padding:6px 10px;border-radius:7px;font-size:13px;font-weight:600;color:var(--muted)}
+.seg button.cur{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.tog{width:50px;height:30px;border-radius:999px;background:var(--glow-track);position:relative;flex:none;transition:background .15s}
+.tog::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--card);
+  box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
+.tog.on{background:var(--accent)}
+.tog.on::after{left:23px}
+@media (prefers-reduced-motion:reduce){.tog,.tog::after{transition:none}}
+.gear{display:flex;flex-wrap:wrap;gap:8px;padding:10px 16px 14px}
+.gchip{background:var(--chip);border-radius:999px;padding:6px 12px;font-size:13px;display:flex;gap:8px;align-items:center}
+.gchip code{font-size:11.5px;color:var(--muted);font-family:ui-monospace,Consolas,monospace}
+.gnote{padding:0 16px 14px;font-size:12.5px;color:var(--muted)}
+
+/* ---------- snackbar ---------- */
+.snack{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;background:var(--ink);color:var(--bg);
+  border-radius:12px;padding:11px 16px;font-size:14px;display:flex;gap:16px;align-items:center;box-shadow:var(--shadow);
+  max-width:min(92vw,560px);z-index:40}
+.snack button{color:var(--accent);font-weight:700}
+:root[data-theme="dark"] .snack button,
+:root:not([data-theme="light"]) .snack button{color:#E8A13C}
+
+/* ---------- house page ---------- */
+.arc{width:100%;height:auto;display:block}
+.periodrow{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line)}
+.periodrow .sw{width:16px;height:16px;border-radius:5px;flex:none}
+.periodrow .pn{font-weight:650;width:76px}
+.periodrow .pt{color:var(--muted);font-size:13.5px;width:120px}
+.periodrow .pv{font-size:13.5px;flex:1;text-align:right;color:var(--muted)}
+.periodrow .pv b{color:var(--ink)}
+.modecard{padding:13px 16px;border-top:1px solid var(--line)}
+.modecard .mn{font-weight:650;display:flex;gap:8px;align-items:center}
+.modecard .kind{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--chip);
+  border-radius:6px;padding:2px 7px;color:var(--muted)}
+.modecard .md{font-size:13.5px;color:var(--muted);margin-top:3px}
+.people{display:flex;gap:10px;padding:12px 16px;flex-wrap:wrap}
+.person{display:flex;align-items:center;gap:8px;background:var(--chip);border-radius:999px;padding:7px 14px 7px 8px;font-size:14px;font-weight:600}
+.person .av{width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+  display:grid;place-items:center;font-size:12px;font-weight:700}
+.person.gone{opacity:.55}
+.person.gone .av{background:var(--glow-track);color:var(--muted)}
+.person .st{font-size:12px;color:var(--muted);font-weight:500}
+
+/* ---------- setup ---------- */
+.setup-lead{font-size:17px;margin:16px 2px 4px}
+.setup-sub{font-size:14px;color:var(--muted);margin:4px 2px 12px}
+.setuprow{display:flex;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--line)}
+.setuprow:first-of-type{border-top:0}
+.setuprow .sn{font-weight:650;flex:1}
+.setuprow .sd{font-size:12.5px;color:var(--muted)}
+.setuprow .warn{color:var(--accent);font-weight:600}
+.bigbtn{display:block;width:100%;background:var(--accent);color:var(--accent-ink);border-radius:14px;
+  padding:15px;font-size:16px;font-weight:700;text-align:center;margin:16px 0;box-shadow:var(--shadow)}
+.bigbtn:disabled{opacity:.4}
+
+/* ---------- bottom nav ---------- */
+.nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);z-index:30}
+.nav .in{max-width:640px;margin:0 auto;display:flex}
+.nav a{flex:1;text-align:center;padding:10px 0 max(10px,env(safe-area-inset-bottom));text-decoration:none;
+  color:var(--muted);font-size:12px;font-weight:650}
+.nav a .ic{display:block;font-size:20px;line-height:1.2}
+.nav a.cur{color:var(--accent)}
+.nav a .demo{font-size:9px;letter-spacing:.08em;text-transform:uppercase;opacity:.7}
+@media (min-width:860px){
+  .wrap{padding-top:8px}
+  .nav{position:sticky;top:0;bottom:auto;border-top:0;border-bottom:1px solid var(--line)}
+}
+</style>
+
+<nav class="nav" aria-label="Sections"><div class="in">
+  <a href="#/" id="nav-home"><span class="ic" aria-hidden="true">🏠</span>Rooms</a>
+  <a href="#/house" id="nav-house"><span class="ic" aria-hidden="true">🌗</span>House</a>
+  <a href="#/setup" id="nav-setup"><span class="ic" aria-hidden="true">✨</span>First run <span class="demo">demo</span></a>
+</div></nav>
+
+<div class="wrap">
+
+<!-- ============================ HOME ============================ -->
+<section id="route-home">
+  <div class="top">
+    <div>
+      <div class="house">Petterhaugen</div>
+      <div class="sub num" id="clockline">21:37 · Evening — Night starts 22:30</div>
+    </div>
+    <button class="pausebtn" id="masterbtn" aria-pressed="false" title="Pause or resume all automatic lighting">
+      <span class="dot"></span><span id="masterword">Auto on</span>
+    </button>
+  </div>
+  <div class="paused-banner hidden" id="pausedbanner">
+    Everything is paused — no lights will change until you resume. Nothing was turned off.
+  </div>
+
+  <div class="modes" role="group" aria-label="House mode" id="modeseg"></div>
+  <div class="modeline" id="modeline"></div>
+
+  <div class="tonight">
+    <span class="swatch" style="background:linear-gradient(90deg,#FFB46B,#FF9E4A)"></span>
+    <span>Now: <b class="num" style="color:var(--ink)">70 % · warm white</b> &nbsp;·&nbsp; at 22:30 lights ease down to <b class="num" style="color:var(--ink)">15 % · candlelight</b></span>
+  </div>
+
+  <div id="roomlist"></div>
+</section>
+
+<!-- ============================ ROOM ============================ -->
+<section id="route-room" class="hidden">
+  <a class="back" href="#/">‹ All rooms</a>
+  <div class="roomhead">
+    <div class="bigglow" id="bigglow"><div class="ring" id="ring"></div><div class="core"></div></div>
+    <div>
+      <h1 id="r-name">Stue</h1>
+      <p class="statesub" id="r-statesub"></p>
+    </div>
+  </div>
+  <p class="sentence" id="r-sentence"></p>
+  <div class="quick" id="r-quick"></div>
+
+  <div class="card" id="r-settings"></div>
+
+  <div class="card">
+    <div class="chead">In this room</div>
+    <div class="gear" id="r-gear"></div>
+    <div class="gnote">Found automatically from Home Assistant’s room. Renamed or re-assigned gear follows along. <a href="#/room" onclick="return false">Not right? Pick by hand…</a></div>
+  </div>
+</section>
+
+<!-- ============================ HOUSE ============================ -->
+<section id="route-house" class="hidden">
+  <div class="top"><div><div class="house">The house</div>
+    <div class="sub">Rhythm, modes and people — everything that isn’t one room.</div></div></div>
+
+  <div class="card">
+    <div class="chead">Daily rhythm</div>
+    <div style="padding:12px 16px 4px">
+      <svg class="arc" viewBox="0 0 720 150" role="img" aria-label="Brightness and warmth through the day">
+        <defs>
+          <linearGradient id="kelv" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0" stop-color="#FF9E4A"/><stop offset=".26" stop-color="#FF9E4A"/>
+            <stop offset=".30" stop-color="#FFBE7E"/><stop offset=".375" stop-color="#FFBE7E"/>
+            <stop offset=".41" stop-color="#FFE1CE"/><stop offset=".85" stop-color="#FFE1CE"/>
+            <stop offset=".88" stop-color="#FFB46B"/><stop offset=".935" stop-color="#FFB46B"/>
+            <stop offset=".95" stop-color="#FF9E4A"/><stop offset="1" stop-color="#FF9E4A"/>
+          </linearGradient>
+        </defs>
+        <g stroke="var(--line)" stroke-width="1">
+          <line x1="0" y1="122" x2="720" y2="122"/>
+          <line x1="195" y1="10" x2="195" y2="122" stroke-dasharray="3 4"/>
+          <line x1="270" y1="10" x2="270" y2="122" stroke-dasharray="3 4"/>
+          <line x1="622" y1="10" x2="622" y2="122" stroke-dasharray="3 4"/>
+          <line x1="675" y1="10" x2="675" y2="122" stroke-dasharray="3 4"/>
+        </g>
+        <path d="M0,104 L180,104 L210,50 L255,50 L285,14 L607,14 L637,38 L660,38 L690,104 L720,104"
+              fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>
+        <rect x="0" y="128" width="720" height="10" rx="5" fill="url(#kelv)"/>
+        <line x1="648" y1="6" x2="648" y2="140" stroke="var(--ink)" stroke-width="1.5"/>
+        <circle cx="648" cy="14" r="3.5" fill="var(--ink)"/>
+        <g fill="var(--muted)" font-size="11" font-family="inherit">
+          <text x="4" y="118">Night</text><text x="200" y="118">Morning</text>
+          <text x="300" y="118">Day</text><text x="580" y="118">Evening</text><text x="680" y="118">Night</text>
+          <text x="620" y="10" class="num">21:37</text>
+        </g>
+      </svg>
+    </div>
+    <div id="periods"></div>
+    <div class="crow">
+      <div class="lab"><div class="t">Ease between periods</div>
+        <div class="d">Lights drift to the next level over 30 min instead of stepping.</div></div>
+      <button class="tog on" role="switch" aria-checked="true" aria-label="Ease between periods" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chead">House modes</div>
+    <div class="modecard"><div class="mn">Hjemme <span class="kind">normal</span><span style="flex:1"></span><span style="font-size:12px;color:var(--ok);font-weight:700">active now</span></div>
+      <div class="md">Everyday automatic lighting. The house returns here when other modes end.</div></div>
+    <div class="modecard"><div class="mn">Natt <span class="kind">sleep</span></div>
+      <div class="md">Bedrooms won’t light by themselves; hallways and bathroom cap at Night levels (max 30 %). Ends on its own at 06:30.</div></div>
+    <div class="modecard"><div class="mn">Borte <span class="kind">away</span></div>
+      <div class="md">Sweeps the lights off — Uteplass stays as it is. Switches on by itself after the house is empty 6 h; ends when someone comes home (15 min grace).</div></div>
+    <div class="modecard"><div class="mn">Gjester <span class="kind">guest</span></div>
+      <div class="md">Applies the “Selskap” scene and leaves every room alone until you switch back.</div></div>
+    <div class="gnote" style="padding-top:10px">The mode lives in a Home Assistant dropdown (<code style="font-family:ui-monospace,Consolas,monospace">input_select.husmodus</code>), so wall panels and voice can switch it too.</div>
+  </div>
+
+  <div class="card">
+    <div class="chead">People</div>
+    <div class="people">
+      <span class="person"><span class="av">E</span>Espen <span class="st">home</span></span>
+      <span class="person"><span class="av">M</span>Marte <span class="st">home</span></span>
+      <span class="person gone"><span class="av">J</span>Jonas <span class="st">away since 16:12</span></span>
+    </div>
+    <div class="crow"><div class="lab"><div class="t">Count the house as empty after</div>
+      <div class="d">A trip to the bin shouldn’t sweep the lights off.</div></div>
+      <div class="stepper"><button aria-label="Less">−</button><span class="val num">5 min</span><button aria-label="More">+</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chead">Rarely needed</div>
+    <div class="crow"><div class="lab"><div class="t">Rooms that are switched off</div>
+      <div class="d">Garasje is off — it never changes by itself.</div></div><a href="#/room/garasje" style="font-weight:650;font-size:14px;text-decoration:none">Show ›</a></div>
+    <div class="crow"><div class="lab"><div class="t">Engine internals</div>
+      <div class="d">Echo window, tolerances, re-check interval, labels. The defaults suit nearly every house.</div></div>
+      <span style="color:var(--muted);font-size:14px">›</span></div>
+  </div>
+</section>
+
+<!-- ============================ SETUP ============================ -->
+<section id="route-setup" class="hidden">
+  <div class="top"><div><div class="house">Welcome 👋</div></div></div>
+  <p class="setup-lead"><b>Found 8 rooms</b> in your Home Assistant — with their lights and sensors already matched up.</p>
+  <p class="setup-sub">Nothing changes until you turn a room on. Start with a hallway — it’s the easiest room to trust.</p>
+  <div class="card" id="setuplist"></div>
+  <button class="bigbtn" id="setupbtn">Turn on 0 rooms</button>
+  <p class="setup-sub">You can change your mind any time — each room has its own switch.</p>
+</section>
+
+</div>
+
+<div class="snack hidden" id="snack"><span id="snacktext"></span><button id="snackundo">Undo</button></div>
+
+<script>
+/* ------------------------------ data ------------------------------ */
+const DEFAULTS = {
+  stayOn:{v:10, unit:'min'}, dimWarn:{v:30, unit:'s'}, handHold:{v:120, unit:'min'},
+  handOffWait:{v:10, unit:'min'}, decides:{v:'either'}, luxBelow:{v:40, unit:'lx'},
+  respectsSleep:{v:false}, sleepBlocks:{v:false}, keepAway:{v:false}, welcome:{v:false}
+};
+const SETTING_DEFS = [
+  {group:'Timing', items:[
+    {k:'stayOn', t:'Lights stay on', d:'After the last movement, before the warning dim.', type:'step', step:5, min:1},
+    {k:'dimWarn', t:'Warning dim', d:'Dims first — any movement brings them straight back.', type:'step', step:5, min:0},
+    {k:'handHold', t:'Hand changes hold', d:'Adjust a light yourself and it’s left alone this long.', type:'step', step:30, min:0},
+    {k:'handOffWait', t:'After a hand-off, wait', d:'Switched off by hand? Movement is ignored until the room has been empty this long.', type:'step', step:5, min:0},
+  ]},
+  {group:'Darkness', items:[
+    {k:'decides', t:'Lights only when dark, judged by', d:'', type:'seg', opts:[['lux','Sensor'],['sun','Sun'],['either','Either'],['always','No daylight']]},
+    {k:'luxBelow', t:'Dark below', d:'At or under this reading the room counts as dark.', type:'step', step:5, min:0},
+  ]},
+  {group:'Behaviour', items:[
+    {k:'respectsSleep', t:'Gentle while the house sleeps', d:'Held to Night levels — a 03:00 glass of water gets a dim light.', type:'tog'},
+    {k:'sleepBlocks', t:'Never auto-on while the house sleeps', d:'For the bedroom itself. The wall switch still works.', type:'tog'},
+    {k:'keepAway', t:'Stays on when everyone leaves', d:'Skipped by the leaving sweep — for porch and security lights.', type:'tog'},
+    {k:'welcome', t:'Welcome home', d:'Lights up when the first person arrives in the dark.', type:'tog'},
+  ]},
+];
+const ROOMS = [
+ {id:'stue', name:'Stue', floor:'Main floor', kind:'on', pct:70, k:2700, next:372, total:600,
+  status:()=>`<b>On 70 %</b> · dims ${inMin(R.stue.next)}`,
+  sub:'Under automatic control', ring:true,
+  sentence:()=>`Lit at <b>70 % — warm white</b> (2 700 K). Starts dimming <b>${inMin(R.stue.next)}</b> unless someone moves.`,
+  ovr:{stayOn:20},
+  gear:[['Taklampe','light.stue_taklampe'],['Gulvlampe','light.stue_gulvlampe'],['Bevegelse','binary_sensor.stue_bevegelse'],['Lysnivå · 12 lx','sensor.stue_lux']]},
+ {id:'kjokken', name:'Kjøkken', floor:'Main floor', kind:'hand', pct:100, k:4000, next:2580, total:7200,
+  status:()=>`<span class="hand">Set by hand</span> · auto at 22:20`,
+  sub:'Being left alone — someone set these lights', ring:true,
+  sentence:()=>`Someone turned these up by hand — they’re <b>left alone</b>. Automatic control returns at <b>22:20</b>, or the moment you tap “Resume”.`,
+  ovr:{},
+  gear:[['Benkelys','light.kjokken_benk'],['Taklys','light.kjokken_tak'],['Bevegelse','binary_sensor.kjokken_bevegelse']]},
+ {id:'gang', name:'Gang', floor:'Main floor', kind:'watch', pct:0,
+  status:()=>`Watching`, sub:'Off — watching for movement',
+  sentence:()=>`Off, watching. Movement in the dark lights it at <b>70 % warm white</b> — tonight’s level.`,
+  ovr:{welcome:true, stayOn:3},
+  gear:[['Taklys gang','light.gang_tak'],['Bevegelse','binary_sensor.gang_bevegelse']]},
+ {id:'bad', name:'Bad', floor:'Main floor', kind:'dim', pct:32, k:2700, next:18, total:30,
+  status:()=>`<span class="warn">Dimming</span> · off ${inSec(R.bad.next)}`,
+  sub:'Warning dim — about to switch off', ring:true,
+  sentence:()=>`Dimmed to <b>32 %</b> as a warning. Lights out <b>${inSec(R.bad.next)}</b> — any movement keeps them on.`,
+  ovr:{respectsSleep:true},
+  gear:[['Speillys','light.bad_speil'],['Taklys','light.bad_tak'],['Bevegelse','binary_sensor.bad_bevegelse']]},
+ {id:'soverom', name:'Soverom', floor:'Main floor', kind:'handoff', pct:0,
+  status:()=>`Off by hand`, sub:'Movement is being ignored',
+  sentence:()=>`Someone switched the lights off. Movement is <b>ignored</b> until the room has been empty <b>10 min</b> — so nobody is plunged back into light.`,
+  ovr:{sleepBlocks:true, respectsSleep:true},
+  gear:[['Nattbordlamper','light.soverom_nattbord'],['Taklys','light.soverom_tak'],['Bevegelse','binary_sensor.soverom_bevegelse']]},
+ {id:'barnerom', name:'Barnerom', floor:'Main floor', kind:'watch', pct:0,
+  status:()=>`Watching`, sub:'Off — watching for movement',
+  sentence:()=>`Off, watching. Movement in the dark lights it at tonight’s level.`,
+  ovr:{respectsSleep:true},
+  gear:[['Taklys','light.barnerom_tak'],['Bevegelse','binary_sensor.barnerom_bevegelse']]},
+ {id:'kjellergang', name:'Kjellergang', floor:'Basement', kind:'watch', pct:0,
+  status:()=>`Watching`, sub:'Off — watching for movement',
+  sentence:()=>`Off, watching. No windows here, so it lights on movement <b>whatever the daylight</b>.`,
+  ovr:{decides:'always', stayOn:3},
+  gear:[['Taklys','light.kjellergang_tak'],['Bevegelse','binary_sensor.kjellergang_bevegelse']]},
+ {id:'vaskerom', name:'Vaskerom', floor:'Basement', kind:'watch', pct:0,
+  status:()=>`Watching`, sub:'Off — watching for movement',
+  sentence:()=>`Off, watching for movement.`,
+  ovr:{decides:'always'},
+  gear:[['Taklys','light.vaskerom_tak'],['Bevegelse','binary_sensor.vaskerom_bevegelse']]},
+ {id:'garasje', name:'Garasje', floor:'Basement', kind:'paused', pct:0,
+  status:()=>`Paused`, sub:'This room never changes by itself',
+  sentence:()=>`Paused — nothing here changes automatically. The wall switch works as always.`,
+  ovr:{},
+  gear:[['Taklys','light.garasje_tak']]},
+ {id:'uteplass', name:'Uteplass', floor:'Outdoors', kind:'bright', pct:0,
+  status:()=>`Waiting for dark · <b class="num">180 lx</b>`, sub:'Too bright to light right now',
+  sentence:()=>`Still <b>too bright</b> outside (180 lx, lights below 40). Movement will light it once dusk settles — around <b>22:05</b>.`,
+  ovr:{keepAway:true, stayOn:5},
+  gear:[['Utelys terrasse','light.uteplass_terrasse'],['Lyktestolpe','light.uteplass_stolpe'],['Bevegelse','binary_sensor.uteplass_bevegelse'],['Lysnivå ute · 180 lx','sensor.ute_lux']]},
+];
+const R = Object.fromEntries(ROOMS.map(r=>[r.id,r]));
+const kelvinCss = k => {k=Math.min(6600,Math.max(1500,k))/100;
+  const g=Math.min(255,Math.max(0,Math.round(99.47*Math.log(k)-161.12)));
+  const b=Math.min(255,Math.max(0,Math.round(138.52*Math.log(k-10)-305.04)));
+  return `rgb(255,${g},${b})`};
+const inMin = s => s<=0?'any moment now':(s<120?`in ${s|0} s`:`in ${Math.round(s/60)} min`);
+const inSec = s => s<=0?'any moment now':`in ${s|0} s`;
+
+/* ------------------------------ home ------------------------------ */
+const MODES=['Hjemme','Borte','Natt','Gjester']; let curMode='Hjemme';
+const MODEHELP={Hjemme:'Everyday lighting — rooms follow movement and the daily rhythm.',
+ Borte:'Lights swept off (Uteplass keeps its own rules). Ends when someone comes home.',
+ Natt:'Bedrooms stay dark unless you use the switch; the rest cap at gentle Night levels. Ends 06:30.',
+ Gjester:'The “Selskap” scene is on and rooms are left alone until you switch back.'};
+function renderModes(){
+  document.getElementById('modeseg').innerHTML = MODES.map(m=>
+    `<button class="${m===curMode?'cur':''}" onclick="setMode('${m}')" aria-pressed="${m===curMode}">${m}</button>`).join('');
+  document.getElementById('modeline').innerHTML = `<b>${curMode}</b> — ${MODEHELP[curMode]}`;
+}
+function setMode(m){curMode=m;renderModes();toast(`House mode → ${m}`, null);}
+let masterOn=true;
+document.getElementById('masterbtn').onclick=()=>{
+  masterOn=!masterOn;
+  document.getElementById('masterbtn').classList.toggle('paused',!masterOn);
+  document.getElementById('masterbtn').setAttribute('aria-pressed',String(!masterOn));
+  document.getElementById('masterword').textContent = masterOn?'Auto on':'Paused';
+  document.getElementById('pausedbanner').classList.toggle('hidden',masterOn);
+};
+function renderList(){
+  let html='', lastFloor='';
+  for(const r of ROOMS){
+    if(r.floor!==lastFloor){html+=`<div class="floor">${r.floor}</div>`;lastFloor=r.floor;}
+    const lit = r.kind==='on'||r.kind==='hand'||r.kind==='dim';
+    const g = lit?`style="--g:${kelvinCss(r.k||2700)};background:${kelvinCss(r.k||2700)}"`:'';
+    html+=`<button class="roomrow" onclick="location.hash='#/room/${r.id}'">
+      <span class="glow ${lit?'on':''} ${r.kind==='hand'?'hand':''} ${r.kind==='dim'?'pulse':''}" ${g}></span>
+      <span class="name">${r.name}</span>
+      <span class="status num">${r.status()}</span><span class="chev">›</span></button>`;
+  }
+  document.getElementById('roomlist').innerHTML=html;
+}
+
+/* ------------------------------ room ------------------------------ */
+let curRoom='stue';
+function fmtVal(k,v){
+  if(k==='handHold') return v>=60? (v%60?`${(v/60)|0} h ${v%60} m`:`${v/60|0} h`) : `${v} min`;
+  if(k==='decides') return {lux:'Sensor',sun:'Sun',either:'Either',always:'No daylight'}[v];
+  const u=DEFAULTS[k].unit||''; return `${v}${u?' '+u:''}`;
+}
+function val(r,k){ return (k in r.ovr) ? r.ovr[k] : DEFAULTS[k].v; }
+function renderRoom(){
+  const r=R[curRoom]; if(!r) return;
+  document.getElementById('r-name').textContent=r.name;
+  document.getElementById('r-statesub').innerHTML=r.kind==='hand'?`<span class="hand">${r.sub}</span>`:r.sub;
+  document.getElementById('r-sentence').innerHTML=r.sentence();
+  const big=document.getElementById('bigglow');
+  const lit=r.kind==='on'||r.kind==='hand'||r.kind==='dim';
+  big.className='bigglow'+(lit?' on':'');
+  big.querySelector('.core').style.background = lit?kelvinCss(r.k||2700):'';
+  const ring=document.getElementById('ring');
+  if(r.ring && r.next!=null){const frac=Math.max(0,Math.min(1,r.next/r.total));
+    ring.style.background=`conic-gradient(var(--accent) ${frac*360}deg, var(--glow-track) 0)`; ring.style.display='';}
+  else ring.style.display='none';
+  const q=document.getElementById('r-quick');
+  if(r.kind==='hand') q.innerHTML=`<button class="primary" onclick="toast('Kjøkken back under automatic control',null)">Resume auto now</button><button onclick="toast('Held until tomorrow morning',null)">Keep until morning</button>`;
+  else if(r.kind==='paused') q.innerHTML=`<button class="primary" onclick="toast('Garasje switched on — it joins the house rhythm',null)">Turn this room on</button>`;
+  else q.innerHTML=`<button onclick="toast('${r.name} paused for 1 h — resumes 22:37',null)">Pause this room 1 h</button>`;
+  /* settings */
+  let html='';
+  for(const grp of SETTING_DEFS){
+    html+=`<div class="chead">${grp.group}</div>`;
+    for(const it of grp.items){
+      const overridden = it.k in r.ovr, v=val(r,it.k);
+      const mark = overridden?`<span class="ovr" title="Set for this room"></span>`:'';
+      const inh = overridden
+        ? `<button class="reset" onclick="resetSet('${it.k}')">Use house default (${fmtVal(it.k,DEFAULTS[it.k].v)})</button>`
+        : `<span style="font-size:12px;color:var(--muted)">house default</span>`;
+      let ctrl='';
+      if(it.type==='step') ctrl=`<div class="stepper">
+          <button aria-label="Less" onclick="bump('${it.k}',-${it.step},${it.min})">−</button>
+          <span class="val num ${overridden?'':'inh'}">${fmtVal(it.k,v)}</span>
+          <button aria-label="More" onclick="bump('${it.k}',${it.step},${it.min})">+</button></div>`;
+      else if(it.type==='seg') ctrl=`<div class="seg">`+it.opts.map(([ov,ol])=>
+          `<button class="${v===ov?'cur':''}" onclick="setSeg('${it.k}','${ov}')">${ol}</button>`).join('')+`</div>`;
+      else ctrl=`<button class="tog ${v?'on':''}" role="switch" aria-checked="${v}" aria-label="${it.t}" onclick="setTog('${it.k}')"></button>`;
+      html+=`<div class="crow"><div class="lab"><div class="t">${it.t}${mark}</div>
+        ${it.d?`<div class="d">${it.d}</div>`:''}<div>${inh}</div></div>${ctrl}</div>`;
+    }
+  }
+  document.getElementById('r-settings').innerHTML=html;
+  document.getElementById('r-gear').innerHTML=r.gear.map(([n,id])=>
+    `<span class="gchip">${n}<code>${id}</code></span>`).join('');
+}
+let undoState=null;
+function applyChange(k,newV){
+  const r=R[curRoom];
+  undoState={room:curRoom,k,had:(k in r.ovr),old:r.ovr[k]};
+  r.ovr[k]=newV; renderRoom();
+  toast(`${r.name} · ${labelOf(k)}: ${fmtVal(k,newV)} — applied`, undo);
+}
+function labelOf(k){for(const g of SETTING_DEFS)for(const it of g.items)if(it.k===k)return it.t;return k}
+function bump(k,d,min){const r=R[curRoom];const nv=Math.max(min,val(r,k)+d);applyChange(k,nv)}
+function setSeg(k,v){applyChange(k,v)}
+function setTog(k){const r=R[curRoom];applyChange(k,!val(r,k))}
+function resetSet(k){const r=R[curRoom];undoState={room:curRoom,k,had:true,old:r.ovr[k]};delete r.ovr[k];renderRoom();
+  toast(`${r.name} · ${labelOf(k)} follows the house again`, undo)}
+function undo(){if(!undoState)return;const r=R[undoState.room];
+  if(undoState.had)r.ovr[undoState.k]=undoState.old;else delete r.ovr[undoState.k];
+  undoState=null;renderRoom();hideSnack()}
+
+/* ------------------------------ snackbar ------------------------------ */
+let snackT=null;
+function toast(text,onUndo){
+  const s=document.getElementById('snack');
+  document.getElementById('snacktext').textContent=text;
+  document.getElementById('snackundo').style.display=onUndo?'':'none';
+  document.getElementById('snackundo').onclick=onUndo||null;
+  s.classList.remove('hidden');
+  clearTimeout(snackT);snackT=setTimeout(hideSnack,4000);
+}
+function hideSnack(){document.getElementById('snack').classList.add('hidden')}
+
+/* ------------------------------ house ------------------------------ */
+const PERIODS=[['Morning','06:30','60 %','3000 K','#FFBE7E'],['Day','09:00','90 %','4500 K','#FFE1CE'],
+ ['Evening','sunset − 1 h · 20:45','70 %','2700 K','#FFB46B'],['Night','22:30','15 %, max 30','2200 K','#FF9E4A']];
+document.getElementById('periods').innerHTML=PERIODS.map(([n,t,b,k,c])=>
+ `<div class="periodrow"><span class="sw" style="background:${c}"></span><span class="pn">${n}</span>
+  <span class="pt num">${t}</span><span class="pv num"><b>${b}</b> · ${k}</span></div>`).join('');
+
+/* ------------------------------ setup ------------------------------ */
+const SETUP=[['Stue','2 lights · motion · light sensor',true],['Kjøkken','2 lights · motion',true],
+ ['Gang','1 light · motion',true],['Bad','2 lights · motion',true],['Soverom','2 lights · motion',true],
+ ['Kjellergang','1 light · motion',true],['Uteplass','2 lights · motion · light sensor',true],
+ ['Garasje','1 light · <span class="warn">no motion sensor — can’t auto-on</span>',false]];
+let picked=new Set();
+function renderSetup(){
+  document.getElementById('setuplist').innerHTML=SETUP.map(([n,d],i)=>
+   `<div class="setuprow"><div style="flex:1"><div class="sn">${n}</div><div class="sd">${d}</div></div>
+    <button class="tog ${picked.has(i)?'on':''}" role="switch" aria-checked="${picked.has(i)}" aria-label="Turn on ${n}" onclick="togSetup(${i})"></button></div>`).join('');
+  const b=document.getElementById('setupbtn');
+  b.textContent=picked.size?`Turn on ${picked.size} room${picked.size>1?'s':''}`:'Turn on the rooms you pick';
+  b.disabled=!picked.size;
+}
+function togSetup(i){picked.has(i)?picked.delete(i):picked.add(i);renderSetup()}
+document.getElementById('setupbtn').onclick=()=>toast(`${picked.size} rooms switched on — they’re live now`,null);
+
+/* ------------------------------ router & clock ------------------------------ */
+function route(){
+  const h=location.hash||'#/';
+  const m=h.match(/^#\/room\/(\w+)/);
+  document.getElementById('route-home').classList.toggle('hidden',!(h==='#/'||h==='#'));
+  document.getElementById('route-room').classList.toggle('hidden',!m);
+  document.getElementById('route-house').classList.toggle('hidden',h!=='#/house');
+  document.getElementById('route-setup').classList.toggle('hidden',h!=='#/setup');
+  document.getElementById('nav-home').classList.toggle('cur',h==='#/'||h==='#'||!!m);
+  document.getElementById('nav-house').classList.toggle('cur',h==='#/house');
+  document.getElementById('nav-setup').classList.toggle('cur',h==='#/setup');
+  if(m){curRoom=m[1];renderRoom();}
+  window.scrollTo(0,0);
+}
+addEventListener('hashchange',route);
+setInterval(()=>{ /* live countdowns */
+  for(const r of ROOMS) if(r.next!=null&&r.next>0) r.next--;
+  if(!document.getElementById('route-home').classList.contains('hidden')) renderList();
+  else if(!document.getElementById('route-room').classList.contains('hidden')) {
+    const r=R[curRoom];
+    if(r&&r.ring){document.getElementById('r-sentence').innerHTML=r.sentence();
+      const frac=Math.max(0,Math.min(1,r.next/r.total));
+      document.getElementById('ring').style.background=`conic-gradient(var(--accent) ${frac*360}deg, var(--glow-track) 0)`;}
+  }
+},1000);
+renderModes();renderList();renderSetup();route();
+</script>
