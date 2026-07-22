@@ -33,14 +33,24 @@ namespace AdaptiveLighting.Web.Services;
 ///         accumulate from process start, not from the moment somebody opened a browser tab.
 ///     </para>
 /// </remarks>
-public sealed class AreaSnapshotCache : IHostedService, IDisposable
+public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 {
 	private readonly IServiceScopeFactory _scopeFactory;
 	private readonly ILogger<AreaSnapshotCache> _logger;
 	private readonly ConcurrentDictionary<string, AreaSnapshot> _snapshots = new(StringComparer.Ordinal);
 	private readonly Subject<AreaSnapshot> _changes = new();
 
-	private IServiceScope? _scope;
+	/// <summary>
+	///     The cache's own scope, held for the life of the process.
+	/// </summary>
+	/// <remarks>
+	///     An <i>async</i> scope, and disposed only through <see cref="DisposeAsync"/>, because NetDaemon's
+	///     scoped <c>IHaContext</c> implements <see cref="IAsyncDisposable"/> alone. Disposing this scope
+	///     synchronously throws — and because <c>StopAsync</c> runs while the host is starting up its other
+	///     services, that throw surfaced as "Failed to start host" and killed the process on restart. The class
+	///     therefore does not implement <see cref="IDisposable"/> at all: there must be no sync path to get here.
+	/// </remarks>
+	private AsyncServiceScope? _scope;
 	private IDisposable? _subscription;
 
 	/// <summary>Creates the cache. Nothing is subscribed until <see cref="StartAsync"/>.</summary>
@@ -71,8 +81,9 @@ public sealed class AreaSnapshotCache : IHostedService, IDisposable
 		// process must keep running whatever happens here.
 		try
 		{
-			_scope = _scopeFactory.CreateScope();
-			IHaContext ha = _scope.ServiceProvider.GetRequiredService<IHaContext>();
+			AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+			_scope = scope;
+			IHaContext ha = scope.ServiceProvider.GetRequiredService<IHaContext>();
 
 			_subscription = ha.Events
 				.Filter<AreaSnapshotEvent>(HaStatePublisher.EventType)
@@ -92,20 +103,22 @@ public sealed class AreaSnapshotCache : IHostedService, IDisposable
 
 	/// <summary>Stops watching.</summary>
 	/// <param name="cancellationToken">Unused.</param>
-	/// <returns>A completed task.</returns>
-	public Task StopAsync(CancellationToken cancellationToken)
-	{
-		Dispose();
-		return Task.CompletedTask;
-	}
+	/// <returns>A task that completes once the subscription and its scope are gone.</returns>
+	public async Task StopAsync(CancellationToken cancellationToken) => await DisposeAsync().ConfigureAwait(false);
 
-	/// <summary>Drops the subscription and its scope.</summary>
-	public void Dispose()
+	/// <summary>Drops the subscription and its scope. Safe to call more than once.</summary>
+	/// <returns>A task that completes once the scope has been disposed.</returns>
+	public async ValueTask DisposeAsync()
 	{
 		_subscription?.Dispose();
 		_subscription = null;
-		_scope?.Dispose();
-		_scope = null;
+
+		if (_scope is { } scope)
+		{
+			_scope = null;
+			await scope.DisposeAsync().ConfigureAwait(false);
+		}
+
 		_changes.Dispose();
 	}
 
