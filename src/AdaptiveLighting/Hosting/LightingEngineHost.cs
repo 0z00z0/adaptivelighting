@@ -454,7 +454,7 @@ public sealed class LightingEngineHost : IDisposable
 		// leaves KillSwitchEntity unset. Never written back to the document.
 		config.Global.DefaultKillSwitchEntity = _defaultKillSwitchEntity;
 
-		return ConfigValidator.Validate(config, KnownEntityIds(), KnownAreaIds(), LiveSelectOptions(config.Global.HouseMode?.Entity));
+		return ConfigValidator.Validate(config, KnownEntityIds(), KnownAreaIds(), LiveSelectOptions(config.Global.HouseMode?.Entity), LabelsInUse());
 	}
 
 	/// <summary>Stops the engine and drops the Home Assistant connection.</summary>
@@ -604,6 +604,39 @@ public sealed class LightingEngineHost : IDisposable
 		}
 		catch (InvalidOperationException)
 		{
+			return null;
+		}
+	}
+
+	/// <summary>
+	///     Every label at least one entity carries, listed by id <i>and</i> by name, or <c>null</c> when the
+	///     registry cannot be read — which the validator reads as "skip the include-label check".
+	/// </summary>
+	/// <remarks>
+	///     Both forms, because <see cref="AdaptiveLighting.Extensions.RegistryExtensions.LabelsOf"/> matches either
+	///     way and the validator must not warn about a label the resolver would happily have found. Labels nobody
+	///     carries are left out on purpose: a label that exists in Home Assistant but is on no entity filters every
+	///     light out just as thoroughly as a typo, and that is precisely the case worth warning about.
+	/// </remarks>
+	private IReadOnlyCollection<string>? LabelsInUse()
+	{
+		if (_registry is null)
+			return null;
+
+		try
+		{
+			return
+			[
+				.. _registry.Labels
+					.Where(label => label.Entities.Any())
+					.SelectMany(label => new[] { label.Id, label.Name })
+					.OfType<string>()
+					.Where(value => value.Length > 0)
+			];
+		}
+		catch (InvalidOperationException)
+		{
+			// NetDaemon's registry throws until its first connection to HA completes.
 			return null;
 		}
 	}

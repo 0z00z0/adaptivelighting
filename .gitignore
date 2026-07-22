@@ -36,3 +36,6 @@ appsettings.*.Local.json
 node_modules/
 website/dist/
 website/.astro/
+
+# Agent worktrees are scratch, never content
+.claude/worktrees/
