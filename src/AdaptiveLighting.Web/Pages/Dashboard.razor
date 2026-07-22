@@ -4,6 +4,7 @@
 @inject AreaSnapshotCache Cache
 @inject LightingEngineHost Engine
 @inject ModeService Service
+@inject HaCatalog Catalog
 @inject ILogger<Dashboard> Logger
 
 @*
@@ -11,10 +12,20 @@
 	(the master switch), who's home and what mode is the house in (the house strip), is anything wrong
 	(notices), and what is each room doing (the area cards).
 
+	The cards are the rooms the owner switched on, grouped by the floor Home Assistant puts them on. Two
+	rules run the grid, and both live outside this markup so the settings list cannot disagree with it:
+	FloorGrouping decides the groups (and collapses a house with no floors to today's flat grid, which is
+	why a floorless house never learns the feature exists), and AreaView decides which reports earn a card,
+	how many rooms are hidden, and whether the house is still waiting for its first choice of rooms.
+
+	The engine keeps observing and publishing switched-off rooms — that is deliberate and unchanged. Only
+	the rendering declines them, and the footer under the grid carries the count with a way back, because a
+	room that vanished after a mis-tap needs a thread to pull.
+
 	The /modes route is kept so old bookmarks and phone shortcuts to the former Modes page land here — the
 	dashboard now carries everything that page had. Every write on this page still goes through ModeService's
-	config-resolved methods (Toggle for the master switch, SelectHouseMode for the house mode); the new
-	who's-home data is read-only. No new write path lives here.
+	config-resolved methods (Toggle for the master switch, SelectHouseMode for the house mode); the rooms and
+	the who's-home data are read-only. No new write path lives here.
 *@
 
 <PageTitle>Dashboard &mdash; Adaptive lighting</PageTitle>
@@ -64,44 +75,118 @@ else if (!Engine.IsRunning && Cache.HasData)
 	</div>
 }
 
-@if (!Cache.HasData)
+@*
+	The empty states, in the order they take precedence. A broken connection and a stopped engine keep the
+	conditions and the words they always had and are answered first: neither may be dressed up as onboarding,
+	because "choose which rooms to switch on" would send somebody to the settings page to fix a problem that
+	is not there.
+*@
+@if (!Cache.HasData && !Engine.IsAttached)
 {
-	@if (!Engine.IsAttached)
-	{
-		<div class="empty">
-			<strong>Connecting to Home Assistant…</strong>
-			<p>This is normal for a minute after a restart. If it doesn't clear, the connection is down.</p>
-		</div>
-	}
-	else if (!Engine.IsRunning)
-	{
-		<div class="empty">
-			<strong>Connected, but automatic lighting isn't running.</strong>
-			<p>@(Engine.Fault ?? "No reason was recorded.")</p>
-			<p>See <a href="config">Configuration</a> for details.</p>
-		</div>
-	}
-	else
-	{
-		<div class="empty">
-			<strong>Starting up — waiting for the first report from your rooms.</strong>
-			<p>This normally takes a few seconds.</p>
-		</div>
-	}
+	<div class="empty">
+		<strong>Connecting to Home Assistant…</strong>
+		<p>This is normal for a minute after a restart. If it doesn't clear, the connection is down.</p>
+	</div>
+}
+else if (!Cache.HasData && !Engine.IsRunning)
+{
+	<div class="empty">
+		<strong>Connected, but automatic lighting isn't running.</strong>
+		<p>@(Engine.Fault ?? "No reason was recorded.")</p>
+		<p>See <a href="config">Configuration</a> for details.</p>
+	</div>
+}
+else if (AreaView.IsAwaitingRoomChoice(_rooms, Engine.IsAttached))
+{
+	@*
+		The first-run state, and the one page a new install lands on: set-up has found the rooms and written
+		them all switched off, so the system is finished with its half and waiting for the owner's. It is not
+		an error and is deliberately not styled as one — no warning edge, no fault colour, one thing to do.
+
+		It also covers a house whose owner switched every room off later, which is the same sentence and the
+		same next step.
+	*@
+	<div class="onboarding">
+		<p class="onboarding-lead">@FoundLine</p>
+		<ul class="room-chips">
+			@foreach (RoomView room in _rooms)
+			{
+				<li class="room-chip">
+					<span class="room-chip-name">@room.Name</span>
+					@* No count when discovery has not answered: "(0 lights)" would read as a fault in a room that has none. *@
+					@if (room.LightCount > 0)
+					{
+						<span class="room-chip-count">@LightsWord(room.LightCount)</span>
+					}
+				</li>
+			}
+		</ul>
+		<a class="onboarding-action" href="config?section=areas">Choose which rooms to switch on</a>
+	</div>
+}
+else if (!Cache.HasData)
+{
+	<div class="empty">
+		<strong>Starting up — waiting for the first report from your rooms.</strong>
+		<p>This normally takes a few seconds.</p>
+	</div>
 }
 else
 {
-	<h2>Rooms</h2>
-	<div class="areas">
-		@foreach (AreaSnapshot area in _snapshots)
+	@*
+		"Rooms" only when the floors do not head the grid themselves. A floored house gets FIRST FLOOR above
+		its cards and a second heading of the same weight over it would say nothing; a floorless house is
+		exactly the page it was before floors existed, heading included.
+	*@
+	@if (!_hasFloorHeaders)
+	{
+		<h2>Rooms</h2>
+	}
+
+	@foreach (FloorGroup<AreaSnapshot> group in _groups)
+	{
+		@if (AreaView.ShowsHeader(_groups.Count, group.Floor))
 		{
-			<AreaCard Snapshot="area" Now="_now" />
+			<div class="floor-head">
+				<span class="floor-name">@AreaView.FloorTitle(group.Floor)</span>
+			</div>
 		}
-	</div>
+
+		<div class="areas">
+			@foreach (AreaSnapshot area in group.Items)
+			{
+				<AreaCard Snapshot="area" Now="_now" />
+			}
+		</div>
+	}
+
+	@*
+		Reports have arrived, but none from a room that is switched on — a state filtering makes possible and the
+		unfiltered grid never could. Said plainly rather than left as a blank space under a heading, and paired
+		with the footer below it, which names how many rooms are switched off.
+	*@
+	@if (_groups.Count == 0)
+	{
+		<div class="empty">
+			<strong>None of the rooms you switched on has reported yet.</strong>
+			<p>Each one appears here as it checks in.</p>
+		</div>
+	}
+
+	@if (AreaView.HiddenNote(AreaView.SwitchedOffCount(_rooms)) is { } hidden)
+	{
+		<p class="rooms-off">
+			@hidden.Lead
+			<a href="config?section=areas">@hidden.LinkText</a>.
+		</p>
+	}
 }
 
 @code {
 	private IReadOnlyList<AreaSnapshot> _snapshots = [];
+	private IReadOnlyList<RoomView> _rooms = [];
+	private IReadOnlyList<FloorGroup<AreaSnapshot>> _groups = [];
+	private bool _hasFloorHeaders;
 	private MasterSwitchView? _masterSwitch;
 	private HouseModeView? _houseMode;
 	private IReadOnlyList<PersonView> _people = [];
@@ -117,6 +202,7 @@ else
 	{
 		_snapshots = Cache.Snapshots;
 		ReadHouseState();
+		ReadRooms();
 
 		// Sampled rather than raw: a house waking up can push a burst of transitions, and re-rendering the
 		// grid once per snapshot would be wasted work on a page nobody is reading that fast.
@@ -126,6 +212,7 @@ else
 			{
 				_snapshots = Cache.Snapshots;
 				ReadHouseState();
+				ReadRooms();
 				StateHasChanged();
 			}), Logger);
 
@@ -147,6 +234,7 @@ else
 				}
 
 				ReadHouseState();
+				ReadRooms();
 				StateHasChanged();
 			}), Logger);
 	}
@@ -161,6 +249,51 @@ else
 		_masterSwitch = Service.GetMasterSwitch();
 		_people = Service.GetPeople();
 	}
+
+	/// <summary>
+	///     Re-reads which rooms the owner has switched on and regroups the visible cards by floor.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Read on the same tick as the house state rather than once at initialisation: the document can be
+	///         saved from the settings page in another tab, and a dashboard still hiding a room somebody just
+	///         switched on would be wrong in the most confusing possible way. Both reads are cheap — the document
+	///         is re-parsed only when the file changes, and discovery counts come from the catalog's cache.
+	///     </para>
+	///     <para>
+	///         A registry that has not connected throws rather than answering. One unnamed group is the floorless
+	///         degradation the design already specifies, so the failure mode is simply today's flat grid — the
+	///         cards are what somebody came here for, and refusing to draw them because floors were unavailable
+	///         would trade the whole page for a decoration.
+	///     </para>
+	/// </remarks>
+	private void ReadRooms()
+	{
+		_rooms = Service.GetRooms();
+
+		IReadOnlyList<AreaSnapshot> visible = AreaView.VisibleCards(_snapshots, _rooms);
+
+		try
+		{
+			_groups = FloorGrouping.Group(visible, snapshot => snapshot.AreaId, Catalog.AreaRegistry);
+		}
+		catch (InvalidOperationException)
+		{
+			_groups = visible.Count == 0 ? [] : [new FloorGroup<AreaSnapshot>(null, visible)];
+		}
+
+		_hasFloorHeaders = _groups.Any(group => AreaView.ShowsHeader(_groups.Count, group.Floor));
+	}
+
+	/// <summary>
+	///     The first-run state's opening line. Says what set-up did and what follows from it, in that order: the
+	///     rooms were found (the system's half is done) and nothing will change (so nothing is broken).
+	/// </summary>
+	private string FoundLine => _rooms.Count == 1
+		? "Set-up found one room. It isn't switched on yet, so no lights will change."
+		: $"Set-up found {_rooms.Count} rooms. None are switched on yet, so no lights will change.";
+
+	private static string LightsWord(int lights) => lights == 1 ? "1 light" : $"{lights} lights";
 
 	/// <summary>Flips the master switch through the existing config-resolved toggle, then re-reads the house state.</summary>
 	private void ToggleMaster()

@@ -5,6 +5,19 @@ using AdaptiveLighting.Engine;
 namespace AdaptiveLighting.Web.Services;
 
 /// <summary>
+///     The dashboard's footer line about switched-off rooms, split where its link goes.
+/// </summary>
+/// <remarks>
+///     Split rather than handed over as one sentence because the second half is a link into the Areas section: a
+///     person who switched the kitchen off by accident needs a thread to pull, and a footer that only stated the
+///     count would leave them looking for one. Two strings keep the wording — including its plurals — testable in
+///     one place instead of half in a helper and half in markup.
+/// </remarks>
+/// <param name="Lead">The sentence up to the link, ending in the dash the link follows.</param>
+/// <param name="LinkText">The link's own words, which have to read as an instruction on their own.</param>
+public sealed record HiddenRoomsNote(string Lead, string LinkText);
+
+/// <summary>
 ///     The decisions the two area screens make about how a room is shown, in one testable place.
 /// </summary>
 /// <remarks>
@@ -138,4 +151,116 @@ public static class AreaView
 
 	/// <summary>What a floor group is headed: its name, or the floorless group's fixed title.</summary>
 	public static string FloorTitle(AreaFloor? floor) => floor?.Name ?? FloorlessTitle;
+
+	// ===================== the dashboard =====================
+
+	/// <summary>
+	///     The live reports the dashboard gives a card to: the ones from rooms the owner has switched on.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The engine keeps observing and publishing switched-off rooms, deliberately — only the rendering
+	///         changes here. So the filter is a question about the document, not about the report: a room's
+	///         <c>Disabled</c> snapshots keep arriving and keep being cached, and this decides they get no card.
+	///     </para>
+	///     <para>
+	///         Matched by area id first and display name second, the same join the snapshot cache and the settings
+	///         list use, so all three agree about which report belongs to which room. <b>A report that matches no
+	///         room at all is shown, never hidden</b> — the dashboard's job is to say what the engine is doing, and
+	///         a card silently dropped because the document was edited underneath it would be indistinguishable
+	///         from a fault.
+	///     </para>
+	/// </remarks>
+	/// <param name="snapshots">Everything the cache has heard, in the order it should render.</param>
+	/// <param name="rooms">The document's rooms, as <c>ModeService.GetRooms</c> projects them.</param>
+	/// <returns>The reports that earn a card, in the order they were given.</returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public static IReadOnlyList<AreaSnapshot> VisibleCards(IEnumerable<AreaSnapshot> snapshots, IEnumerable<RoomView> rooms)
+	{
+		ArgumentNullException.ThrowIfNull(snapshots);
+		ArgumentNullException.ThrowIfNull(rooms);
+
+		Dictionary<string, bool> byId = new(StringComparer.Ordinal);
+		Dictionary<string, bool> byName = new(StringComparer.OrdinalIgnoreCase);
+
+		foreach (RoomView room in rooms)
+		{
+			if (room.AreaId is { Length: > 0 } areaId)
+				byId[areaId] = room.IsEnabled;
+
+			byName[room.Name] = room.IsEnabled;
+		}
+
+		return [.. snapshots.Where(snapshot => IsShown(snapshot, byId, byName))];
+	}
+
+	/// <summary>
+	///     How many rooms the owner has switched off — the number the footer under the grid carries.
+	/// </summary>
+	/// <remarks>
+	///     Counted from the document rather than from the cards that did not render, because those are different
+	///     numbers exactly when the difference matters: a room switched off before the engine ever reported it has
+	///     no snapshot to be missing, and a footer counting absences would say "0 rooms are switched off" to
+	///     somebody staring at a house that is doing nothing.
+	/// </remarks>
+	/// <param name="rooms">The document's rooms.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="rooms"/> is <c>null</c>.</exception>
+	public static int SwitchedOffCount(IEnumerable<RoomView> rooms)
+	{
+		ArgumentNullException.ThrowIfNull(rooms);
+
+		return rooms.Count(room => !room.IsEnabled);
+	}
+
+	/// <summary>
+	///     The footer line for <paramref name="switchedOff"/> hidden rooms, or <c>null</c> when nothing is hidden.
+	/// </summary>
+	/// <remarks>
+	///     <c>null</c> for nothing hidden is the whole "no footer when nothing is hidden" rule, decided once here
+	///     rather than by a condition in the markup that could disagree with the wording beside it.
+	/// </remarks>
+	/// <param name="switchedOff">How many rooms are switched off.</param>
+	public static HiddenRoomsNote? HiddenNote(int switchedOff) => switchedOff switch
+	{
+		<= 0 => null,
+		1 => new HiddenRoomsNote("1 room is switched off —", "turn it on in Settings"),
+		_ => new HiddenRoomsNote($"{switchedOff} rooms are switched off —", "turn them on in Settings")
+	};
+
+	/// <summary>
+	///     Whether the dashboard should show the first-run state instead of a grid: rooms exist, none is switched
+	///     on, and Home Assistant is answering.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         This is the state a fresh install lands in on purpose — auto-setup writes every discovered room
+	///         switched off, so the house is fully configured and deliberately doing nothing. Undesigned, that page
+	///         reads as broken software; it is not an error, and the page must not dress it as one.
+	///     </para>
+	///     <para>
+	///         <paramref name="engineIsAttached"/> is what keeps it honest. A disconnected host also shows no lit
+	///         rooms, and offering "choose which rooms to switch on" to somebody whose connection is down would
+	///         hide the real problem behind onboarding. With no rooms at all there is nothing to choose from
+	///         either, which is the empty-document case the settings page already speaks to.
+	///     </para>
+	/// </remarks>
+	/// <param name="rooms">The document's rooms.</param>
+	/// <param name="engineIsAttached">Whether the engine has a Home Assistant connection.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="rooms"/> is <c>null</c>.</exception>
+	public static bool IsAwaitingRoomChoice(IEnumerable<RoomView> rooms, bool engineIsAttached)
+	{
+		ArgumentNullException.ThrowIfNull(rooms);
+
+		List<RoomView> configured = [.. rooms];
+
+		return engineIsAttached && configured.Count > 0 && configured.TrueForAll(room => !room.IsEnabled);
+	}
+
+	private static bool IsShown(AreaSnapshot snapshot, Dictionary<string, bool> byId, Dictionary<string, bool> byName)
+	{
+		if (snapshot.AreaId is { Length: > 0 } areaId && byId.TryGetValue(areaId, out bool enabledById))
+			return enabledById;
+
+		return !byName.TryGetValue(snapshot.AreaName, out bool enabledByName) || enabledByName;
+	}
 }

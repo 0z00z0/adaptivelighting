@@ -240,6 +240,26 @@ public sealed class HaCatalog
 	}
 
 	/// <summary>
+	///     How many lights discovery finds in <paramref name="areaId"/>, without naming them.
+	/// </summary>
+	/// <remarks>
+	///     The dashboard's first-run state names every room with its light count, and it re-renders on the page's
+	///     one-second tick. <see cref="EntitiesInArea"/> answers the same question, but reads a friendly name and an
+	///     area for every entity to do it — per-second work for text nobody is reading. This is the cached count
+	///     and nothing else.
+	/// </remarks>
+	/// <param name="areaId">The area to count in. Blank or <c>null</c> yields 0 — there is nothing to discover in.</param>
+	/// <param name="global">The discovery conventions the count must honour.</param>
+	/// <returns>The number of lights, or 0 when Home Assistant has not answered.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="global"/> is <c>null</c>.</exception>
+	public int LightCountIn(string? areaId, GlobalConfig global)
+	{
+		ArgumentNullException.ThrowIfNull(global);
+
+		return string.IsNullOrWhiteSpace(areaId) ? 0 : Discover(areaId, global).Lights.Count;
+	}
+
+	/// <summary>
 	///     Drops the cached discovery answers, so the next question is put to Home Assistant afresh.
 	/// </summary>
 	/// <remarks>

@@ -229,6 +229,84 @@ h2 {
 	margin: 0.4rem auto;
 }
 
+/* ---- waiting for the first choice of rooms ----
+   The state a fresh install lands on: every discovered room is written switched off, so the house is fully
+   set up and deliberately doing nothing. Styled as a calm panel with one thing to do — no dashed "nothing
+   here" border, no warning edge, no fault colour. It is not an error, and dressing it as one would tell a
+   new owner their ten-minute-old install is broken. */
+
+.onboarding {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1.4rem 1.5rem;
+}
+
+.onboarding-lead {
+	margin: 0 0 0.9rem;
+	font-size: 1.02rem;
+	color: var(--text);
+	max-width: 60ch;
+}
+
+.room-chips {
+	list-style: none;
+	margin: 0 0 1.2rem;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+/* Grey, and grey for a reason: these rooms are switched off, and the dashboard's colours mean the engine is
+   acting or a person has. A chip in a live colour would promise something none of them is doing yet. */
+.room-chip {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.35rem;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 0.15rem 0.55rem;
+	background: var(--idle-bg);
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+.room-chip-name {
+	color: var(--text);
+	font-weight: 550;
+}
+
+.room-chip-count {
+	font-variant-numeric: tabular-nums;
+}
+
+/* The one action on the page, so it looks like the primary button it would be if it were not a link. */
+.onboarding-action {
+	display: inline-block;
+	background: var(--accent);
+	border: 1px solid var(--accent);
+	border-radius: 6px;
+	padding: 0.4rem 0.85rem;
+	color: #1a1206;
+	font-size: 0.9rem;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.onboarding-action:hover {
+	filter: brightness(1.06);
+}
+
+/* ---- the rooms that are switched off ----
+   Quiet, under the grid, and always a way back: a room switched off by a mis-tap simply stops appearing, and
+   without this line there is nothing to pull on. */
+.rooms-off {
+	margin: 1.2rem 0 0;
+	color: var(--muted);
+	font-size: 0.85rem;
+}
+
 /* ---- area cards ----
    A card is a story with four beats — headline, last event, what happens next, conditions — not a table.
    The left edge and the badge carry the machine/human/idle family; the lamp carries the light itself,

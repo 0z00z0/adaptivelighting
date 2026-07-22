@@ -118,6 +118,28 @@ public sealed record MasterSwitchView(
 public sealed record PersonView(string EntityId, string Name, bool IsHome, bool IsAvailable);
 
 /// <summary>
+///     One room as the dashboard reads it: how to recognise its live reports, whether the owner switched it on,
+///     and how many lights it would drive.
+/// </summary>
+/// <remarks>
+///     A projection rather than the <see cref="AreaConfig"/> itself. The document behind it is the cached copy
+///     every read on the page shares, and handing a page a mutable room would invite an edit outside the save
+///     pipeline that is deliberately the only write path. The dashboard only ever looks.
+/// </remarks>
+/// <param name="AreaId">
+///     The registry area id, or <c>null</c> for a room configured with explicit entities. This is how a live
+///     report is matched back to the room that produced it — ids survive a rename mid-session, names do not.
+/// </param>
+/// <param name="Name">The room's display name, which is also the fallback match for a report with no id.</param>
+/// <param name="IsEnabled">Its effective enablement, following the document's inheritance.</param>
+/// <param name="LightCount">
+///     How many lights the room would drive — the length of its own pinned list when it has one, discovery's
+///     answer otherwise. 0 when Home Assistant has not answered yet, which is why the first-run chips show a
+///     count only when there is one to show.
+/// </param>
+public sealed record RoomView(string? AreaId, string Name, bool IsEnabled, int LightCount);
+
+/// <summary>
 ///     Reads and flips the house mode entities named in the configuration document.
 /// </summary>
 /// <remarks>
@@ -497,6 +519,46 @@ public sealed class ModeService
 
 		return people;
 	}
+
+	/// <summary>
+	///     The rooms the document names, in document order — read-only, for the dashboard.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Three questions on the dashboard need the document rather than the live reports: which cards to show
+	///         (only rooms the owner switched on), how many rooms are hidden (the footer's count), and whether the
+	///         house is waiting for its first choice (the first-run state). All three are about what the owner
+	///         decided, and a switched-off room a disconnected Home Assistant has never reported still counts.
+	///     </para>
+	///     <para>
+	///         Adds no write path and no second source of truth: the document is the same cached copy the rest of
+	///         this service reads, re-read only when the file changes on disk.
+	///     </para>
+	/// </remarks>
+	/// <returns>One entry per configured room, in the order the document lists them.</returns>
+	public IReadOnlyList<RoomView> GetRooms()
+	{
+		AdaptiveLightingConfig config = Config;
+
+		return
+		[
+			.. config.Areas.Select(area => new RoomView(
+				area.AreaId,
+				area.DisplayName,
+				AreaView.IsEnabled(area, config.Defaults),
+				LightCountOf(area, config.Global)))
+		];
+	}
+
+	/// <summary>
+	///     How many lights a room drives: its own list when it pins one, discovery's count otherwise.
+	/// </summary>
+	/// <remarks>
+	///     A pinned list replaces discovery for that room entirely (<c>AreaEntityResolver.TryResolve</c>), so
+	///     counting discovery's lights for a hand-picked room would name a number the engine will never use.
+	/// </remarks>
+	private int LightCountOf(AreaConfig area, GlobalConfig global) =>
+		area.Lights is { Count: > 0 } pinned ? pinned.Count : _catalog.LightCountIn(area.AreaId, global);
 
 	/// <summary>
 	///     What a mode would drive right now: the period active at <paramref name="now"/> on the one shared table,
