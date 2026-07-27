@@ -292,13 +292,40 @@ public sealed class LightingEngineHost : IDisposable
 		_discovery = _scheduler.Schedule(DiscoverySettle, RunAreaDiscovery);
 	}
 
+	/// <summary>
+	///     The scheduled callback. Exists only to make sure nothing thrown by discovery reaches the scheduler.
+	/// </summary>
+	/// <remarks>
+	///     This runs on a timer thread half a minute after start-up, with no caller to catch anything: an exception
+	///     out of here is unobserved, and on a thread-pool scheduler an unobserved exception ends the process — the
+	///     whole Home Assistant host, not just the lighting engine. And it is not hypothetical. The settle delay is
+	///     a guess at how long Home Assistant needs; a house on a slow link can still be filling its registry when
+	///     the timer fires, and NetDaemon's registry throws <see cref="InvalidOperationException"/> until its first
+	///     connection completes — which <see cref="KnownAreaIds"/> and <see cref="LabelsInUse"/> in this same class
+	///     already catch for exactly that reason. Discovery finding nothing is a thing to log and try again next
+	///     start; it is never a reason to take the house down.
+	/// </remarks>
+	private void RunAreaDiscovery()
+	{
+		try
+		{
+			RunAreaDiscoveryCore();
+		}
+		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
+		{
+			_logger.LogWarning(
+				exception,
+				"Area discovery failed and was abandoned; the configuration is unchanged and the rooms will be proposed again on the next start.");
+		}
+	}
+
 	/// <summary>Proposes areas from the area registry, saves them, and rebuilds on the result.</summary>
 	/// <remarks>
 	///     The rules themselves live in <see cref="AreaSetupService"/>, so that a first run and the owner pressing
 	///     "Set up rooms again" are the same code observed twice. What is left here is the once-only part: re-read,
 	///     plan, apply, seed the people, set the flag, save.
 	/// </remarks>
-	private void RunAreaDiscovery()
+	private void RunAreaDiscoveryCore()
 	{
 		lock (_gate)
 		{

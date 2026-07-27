@@ -611,6 +611,180 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsTrue(read.Config.Global.AreasAutoDiscovered);
 	}
 
+	/// <summary>
+	///     The two migrations compound: a house that has not been upgraded since before the library was extracted
+	///     has a document under the <i>old namespace key</i> carrying the <i>old schema</i>. Both have to be
+	///     recognised on the same read, or the section is never found, its <c>Zones:</c> is never translated, and
+	///     the house loads with no rooms — which is the failure this whole translation exists to prevent.
+	/// </summary>
+	[TestMethod]
+	public void A_Document_Under_A_Previous_Namespace_Still_Has_Its_Pre_2_0_Keys_Translated()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			"""
+			Laget.NetDaemon.AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  ConfigName: "Adaptive lighting [Hytta]"
+			  Global:
+			    ZonesAutoDiscovered: true
+			  Zones:
+			    - Name: Kjøkken
+			      AreaId: kjokken
+			    - Name: Kjeller bad
+			      AreaId: kjeller_bad
+			""");
+
+		Assert.IsTrue(read.UsedLegacyKeys);
+		Assert.AreEqual(2, read.Config.Areas.Count, "the rooms arrive even though the section key is the old one");
+		Assert.AreEqual("kjokken", read.Config.Areas[0].AreaId);
+		Assert.AreEqual("Kjøkken", read.Config.Areas[0].Name, "and non-ASCII names survive the node-tree round trip");
+		Assert.AreEqual("kjeller_bad", read.Config.Areas[1].AreaId);
+		Assert.IsTrue(read.Config.Global.AreasAutoDiscovered);
+	}
+
+	/// <summary>
+	///     A hand-edit that empties a section leaves the key behind, and <c>Areas:</c> with nothing under it is
+	///     valid YAML for "this key is null". YamlDotNet honours that literally and assigns null straight over the
+	///     property's initialiser, so a type that says it is never null comes back null anyway — and the first
+	///     thing to read it throws. The document must load as if the emptied section had simply been absent.
+	/// </summary>
+	[TestMethod]
+	public void A_Section_Emptied_By_Hand_Loads_As_Absent_Rather_Than_As_Null()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  ConfigName: "Adaptive lighting [Hjemme]"
+			  Global:
+			  Defaults:
+			  Periods:
+			  Areas:
+			""").Config;
+
+		Assert.AreEqual("Adaptive lighting [Hjemme]", config.ConfigName, "the rest of the document still loads");
+
+		Assert.IsNotNull(config.Global, "an emptied Global: must not come back as null");
+		Assert.IsNotNull(config.Defaults, "an emptied Defaults: must not come back as null");
+		Assert.IsNotNull(config.Periods, "an emptied Periods: must not come back as null");
+		Assert.IsNotNull(config.Areas, "an emptied Areas: must not come back as null");
+
+		Assert.AreEqual(0, config.Periods.Count);
+		Assert.AreEqual(0, config.Areas.Count);
+		Assert.AreEqual(0, config.Global.Persons.Count);
+		Assert.AreEqual(0, config.Global.MotionDeviceClasses.Count);
+
+		// The view over MotionDeviceClasses reads the list, so a null list is a null reference every reader hits.
+		Assert.AreEqual(
+			GlobalConfig.DefaultMotionDeviceClasses.Count, config.Global.EffectiveMotionDeviceClasses.Count);
+	}
+
+	/// <summary>
+	///     The same failure one level down: an emptied <c>Options:</c> under a configured house mode. Worth its own
+	///     test because the house-mode list is read by the normaliser on every save, not only by the engine.
+	/// </summary>
+	[TestMethod]
+	public void An_Emptied_House_Mode_Option_List_Loads_As_No_Options()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Global:
+			    HouseMode:
+			      Entity: input_select.husmodus
+			      Options:
+			""").Config;
+
+		Assert.IsNotNull(config.Global.HouseMode!.Options);
+		Assert.AreEqual(0, config.Global.HouseMode.Options.Count);
+	}
+
+	/// <summary>
+	///     A bare <c>-</c> left behind by a half-finished edit is a list entry holding nothing at all. It has to be
+	///     read as absent: substituting an empty room or period would invent one the file never named, and the
+	///     validator would then stop the whole document over a stray dash.
+	/// </summary>
+	[TestMethod]
+	public void A_Blank_List_Entry_Is_Read_As_Absent_Rather_Than_As_A_Nameless_Room()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Global:
+			    Persons:
+			      -
+			      - person.alex
+			  Periods:
+			    -
+			    - Name: day
+			      Start: "06:00"
+			      BrightnessPct: 80
+			      ColorTempKelvin: 3500
+			  Areas:
+			    -
+			    - Name: Stue
+			      AreaId: stue
+			      Lights:
+			        -
+			        - light.stue
+			""").Config;
+
+		Assert.AreEqual("day", config.Periods.Single().Name, "the real period survives and the blank one is gone");
+		Assert.AreEqual("stue", config.Areas.Single().AreaId);
+		Assert.AreEqual("person.alex", config.Global.Persons.Single());
+		Assert.AreEqual("light.stue", config.Areas.Single().Lights!.Single());
+	}
+
+	/// <summary>
+	///     The both-keys rule is "the current key wins" — but only a key the binder can actually read is a key that
+	///     can win. YamlDotNet matches property names exactly, so a hand-edited <c>areas:</c> in lower case binds to
+	///     nothing. Treating it as the current key dropped <c>Zones:</c>, the one name of the two that still carried
+	///     the household's rooms, and the house loaded with none.
+	/// </summary>
+	[TestMethod]
+	public void A_Legacy_Key_Is_Never_Dropped_For_A_Current_Key_The_Binder_Cannot_Read()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Zones:
+			    - Name: Stue
+			      AreaId: stue
+			  areas:
+			    - Name: Never bound
+			      AreaId: never_bound
+			""");
+
+		Assert.IsTrue(read.UsedLegacyKeys);
+		Assert.AreEqual("stue", read.Config.Areas.Single().AreaId,
+			"the legacy key still binds, because the lower-case one never could");
+	}
+
+	/// <summary>
+	///     The translation belongs to this document's section and stops there. A YAML file may hold another
+	///     NetDaemon app's configuration beside this one, and <c>Zones:</c> is a perfectly good key for an app that
+	///     manages Home Assistant's GPS zones. Renaming it made that section bind against this schema's area list
+	///     and fail, so a file that loaded fine stopped loading at all — and it raised the migration flag, which
+	///     rewrites the file with only this document's section in it.
+	/// </summary>
+	[TestMethod]
+	public void A_Legacy_Key_In_Another_Apps_Section_Is_Neither_Renamed_Nor_Treated_As_A_Migration()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			$"""
+			SomeGpsZoneApp.Configuration.Config:
+			  Zones:
+			    - home
+			    - work
+			{LightingConfigDocument.RootKey}:
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			""");
+
+		Assert.AreEqual("stue", read.Config.Areas.Single().AreaId, "this document still loads");
+		Assert.IsFalse(read.UsedLegacyKeys,
+			"and nothing here needs migrating: the only Zones: in the file belongs to somebody else");
+	}
+
 	/// <summary>Captures what was logged, because "and it warns" is half of the both-keys contract.</summary>
 	private sealed class RecordingLogger : ILogger
 	{
