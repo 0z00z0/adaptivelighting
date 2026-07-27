@@ -320,12 +320,19 @@ public static class BoardView
 	///         <see cref="AreaState.AutoVacant"/>.
 	///     </para>
 	///     <para>
-	///         <b>Deliberately not implemented here yet.</b> The field it needs (<c>AutoOnBlockedBy</c>, with its
-	///         <c>EntityOn</c> / <c>Sleep</c> cases) landed on the integration branch after this one was cut, so
-	///         referring to it here would not compile. When the two are reconciled, the test belongs in this one
-	///         method and in <see cref="ExceptionLine"/>'s switch, and both the tray and
-	///         <see cref="BoardLane.IsQuiet"/> pick it up without another edit. A <c>null</c> field means an older
-	///         report that never carried one, and must not be read as "nothing was blocking".
+	///         So a blocked room is hoisted too, on top of the states. Only the two blocks that can surprise
+	///         somebody qualify: the engine refuses in that order — kill switch, disabled, away, sleep, entity —
+	///         so <see cref="AutoOnBlock.Sleep"/> and <see cref="AutoOnBlock.EntityOn"/> arise <i>only</i> where
+	///         the room would otherwise have lit, which is exactly what makes them worth saying. The earlier
+	///         refusals are already announced house-wide by the master switch and the mode, and a tray repeating
+	///         them once per room would bury the rooms that need reading.
+	///     </para>
+	///     <para>
+	///         Gated on <see cref="AreaSnapshot.IsDark"/> because the block is only news when light was wanted:
+	///         those two are judged before the darkness gate, so a sleeping house reports
+	///         <see cref="AutoOnBlock.Sleep"/> at noon as readily as at midnight. A <c>null</c> field is an older
+	///         report that never carried one and must not be read as "nothing was blocking" — it simply fails the
+	///         test, leaving the room to be judged on its state as before.
 	///     </para>
 	/// </remarks>
 	/// <param name="snapshot">The room's newest report.</param>
@@ -334,8 +341,17 @@ public static class BoardView
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 
-		return IsException(snapshot.State);
+		return IsException(snapshot.State) || IsBlockedFromLighting(snapshot);
 	}
+
+	/// <summary>
+	///     Whether the room is dark and waiting, and would light on movement but for a block worth naming.
+	/// </summary>
+	/// <param name="snapshot">The room's newest report.</param>
+	internal static bool IsBlockedFromLighting(AreaSnapshot snapshot) =>
+		snapshot.State is AreaState.AutoVacant
+		&& snapshot.IsDark is true
+		&& snapshot.AutoOnBlockedBy is AutoOnBlock.Sleep or AutoOnBlock.EntityOn;
 
 	/// <summary>
 	///     The rooms the tray carries, most urgent first.
@@ -373,6 +389,18 @@ public static class BoardView
 	public static string ExceptionLine(AreaSnapshot snapshot, DateTimeOffset now)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
+
+		// Ahead of the switch: a blocked room is a nominal AutoVacant, so the states cannot express it. Worded to
+		// match the activity page's line for the same condition — two surfaces answering one question in two
+		// vocabularies is how a reader ends up believing they are two different conditions.
+		if (IsBlockedFromLighting(snapshot))
+		{
+			return snapshot.AutoOnBlockedBy is AutoOnBlock.Sleep
+				? "dark enough, but the house is asleep — movement will not switch the lights on"
+				: snapshot.AutoOnBlockingEntity is { Length: > 0 } blocking
+					? $"dark enough, but {blocking} is on — movement will not switch the lights on"
+					: "dark enough, but something here is on — movement will not switch the lights on";
+		}
 
 		return snapshot.State switch
 		{

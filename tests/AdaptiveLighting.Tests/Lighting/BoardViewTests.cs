@@ -350,6 +350,65 @@ public sealed class BoardViewTests
 	}
 
 	/// <summary>
+	///     A dark room that is waiting but blocked would sit in the board looking like any other quiet room, and
+	///     it is the one the reader came for. It is hoisted despite its nominal state.
+	/// </summary>
+	[TestMethod]
+	public void A_Dark_Room_That_Will_Not_Light_Is_An_Exception_Despite_Its_Nominal_State()
+	{
+		AreaSnapshot asleep = Blocked(AutoOnBlock.Sleep);
+		AreaSnapshot television = Blocked(AutoOnBlock.EntityOn, "media_player.stue_tv");
+
+		Assert.IsTrue(BoardView.IsException(asleep));
+		Assert.IsTrue(BoardView.IsException(television));
+
+		StringAssert.Contains(BoardView.ExceptionLine(asleep, Now), "the house is asleep");
+		StringAssert.Contains(BoardView.ExceptionLine(television, Now), "media_player.stue_tv is on");
+	}
+
+	/// <summary>
+	///     The refusals that are already announced house-wide, and the ones that are not news, stay out of the
+	///     tray — repeating them once per room would bury the rooms worth reading.
+	/// </summary>
+	[TestMethod]
+	public void A_Block_Is_Only_Hoisted_When_It_Is_News_For_That_Room()
+	{
+		Assert.IsFalse(BoardView.IsException(Blocked(AutoOnBlock.KillSwitch)), "the master switch says this once");
+		Assert.IsFalse(BoardView.IsException(Blocked(AutoOnBlock.Away)), "the house mode says this once");
+		Assert.IsFalse(BoardView.IsException(Blocked(AutoOnBlock.NotDark)), "daylight is not an exception");
+		Assert.IsFalse(BoardView.IsException(Blocked(AutoOnBlock.None)));
+
+		Assert.IsFalse(
+			BoardView.IsException(Blocked(AutoOnBlock.Sleep) with { IsDark = false }),
+			"the block is only news where light was wanted");
+
+		Assert.IsFalse(
+			BoardView.IsException(Blocked(AutoOnBlock.Sleep) with { State = AreaState.AutoActive }),
+			"a lit room is not waiting on anything");
+
+		Assert.IsFalse(
+			BoardView.IsException(Blocked(AutoOnBlock.Sleep) with { AutoOnBlockedBy = null }),
+			"an older report that never carried the field is not a claim that nothing was blocking");
+	}
+
+	/// <summary>A blocking entity the wire did not name still says something true.</summary>
+	[TestMethod]
+	public void A_Blocker_With_No_Entity_Id_Is_Still_Named_Honestly()
+	{
+		string line = BoardView.ExceptionLine(Blocked(AutoOnBlock.EntityOn), Now);
+
+		StringAssert.Contains(line, "something here is on");
+	}
+
+	private static AreaSnapshot Blocked(AutoOnBlock block, string? entity = null) =>
+		Report(AreaState.AutoVacant) with
+		{
+			IsDark = true,
+			AutoOnBlockedBy = block,
+			AutoOnBlockingEntity = entity
+		};
+
+	/// <summary>
 	///     The warning dim leads: it is the only exception with a deadline measured in seconds. The rest are
 	///     standing conditions, named alphabetically so the tray does not reshuffle on every tick.
 	/// </summary>
