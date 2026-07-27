@@ -846,6 +846,71 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
+	///     <b>The chip promised a reason the row did not give.</b> A room dark, waiting and held off by a sleeping
+	///     house or a blocking entity is filed under <i>Nothing happened</i> whatever the engine's reason for
+	///     publishing — the block is a standing condition, not an event. But the block was only ever written on the
+	///     row when the reason happened to be the quiet re-check, because that is the one branch
+	///     <c>Describe</c> hands to the dark-enough wording. On the other fourteen the row said "Someone switched
+	///     the lights off by hand" and nothing else, under a chip that says "the engine could have lit the room and
+	///     did not — with the reason".
+	/// </summary>
+	[TestMethod]
+	public void A_Blocked_Room_Names_Its_Block_Whatever_The_Engines_Reason_Was()
+	{
+		foreach (TransitionReason reason in Enum.GetValues<TransitionReason>())
+		{
+			AreaSnapshot asleep = Report(
+				"Soverom", AreaState.AutoVacant, reason,
+				isDark: true, darknessDetail: "lux 12, dark below 40",
+				mode: HouseMode.Sleep, autoOnBlockedBy: AutoOnBlock.Sleep);
+
+			Assert.IsTrue(Has(ActivityCategory.Declined, asleep), $"{reason}: the block is a refusal in every report");
+
+			ActivityLine line = ActivityView.Describe(asleep);
+
+			StringAssert.Contains(
+				$"{line.What} {line.Why}",
+				"the house is asleep",
+				$"{reason}: filed under 'nothing happened' with no word about what was in the way");
+		}
+
+		AreaSnapshot television = Report(
+			"Stue", AreaState.AutoVacant, TransitionReason.ManualOff,
+			isDark: true, autoOnBlockedBy: AutoOnBlock.EntityOn, autoOnBlockingEntity: "media_player.stue_tv");
+
+		Assert.AreEqual(
+			"Dark enough now, but media_player.stue_tv is on — movement will not switch the lights on.",
+			ActivityView.Describe(television).Why,
+			"named rather than alluded to, in the same words the dusk row and the board's tray use");
+	}
+
+	/// <summary>
+	///     A room nothing is holding back keeps saying exactly what it always said. The block line is an addition
+	///     to the rows that have one, never a hedge printed over the rows that do not.
+	/// </summary>
+	[TestMethod]
+	public void An_Unblocked_Dark_Room_Gains_No_Condition_Line()
+	{
+		Assert.IsNull(
+			ActivityView.Describe(Report("Stue", AreaState.AutoVacant, TransitionReason.SuppressionLifted, isDark: true)).Why,
+			"an older report that never carried the verdict must not grow one");
+
+		Assert.IsNull(
+			ActivityView.Describe(Report(
+				"Stue", AreaState.AutoVacant, TransitionReason.SuppressionLifted,
+				isDark: true, autoOnBlockedBy: AutoOnBlock.None)).Why,
+			"nothing in the way is nothing to say");
+
+		Assert.AreEqual(
+			"Too bright to switch on — lux 86, dark below 40",
+			ActivityView.Describe(Report(
+				"Stue", AreaState.AutoVacant, TransitionReason.SuppressionLifted,
+				isDark: false, darknessDetail: "lux 86, dark below 40",
+				autoOnBlockedBy: AutoOnBlock.Sleep)).Why,
+			"a room that is not dark enough is answered by the darkness gate, which is the earlier refusal");
+	}
+
+	/// <summary>
 	///     The house-level events, and the master switch — which replaces a row's words outright, so it replaces
 	///     its categories too rather than leaving a row filed under a sentence it does not say.
 	/// </summary>

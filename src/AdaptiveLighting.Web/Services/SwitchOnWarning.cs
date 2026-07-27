@@ -86,30 +86,50 @@ public static class SwitchOnWarning
 	/// <summary>
 	///     The note for a room that was just switched on, or <c>null</c> when there is nothing worth saying.
 	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Judged through <c>LightAudit.ReasonFor</c> rather than <c>LightAudit.Review</c>, because the two
+	///         halves of <see cref="RoomLights"/> answer two different questions and <c>Review</c> can only be
+	///         given one list for both. Only <see cref="RoomLights.Commanded"/> is judged, counted and named — so a
+	///         flagged light is still one the engine really would drive — while
+	///         <see cref="RoomLights.InTheRoom"/> is the sibling context the colour-channel rule needs, which is
+	///         what <c>ReasonFor</c>'s own parameter documents.
+	///     </para>
+	///     <para>
+	///         <b>What that fixed.</b> A room reaching a lamp through a light group had the lamp removed from the
+	///         resolved list by group preference, so its colour channels — real WiZ entities in the living room this
+	///         audit was written for — matched nothing and the note said nothing about a room fighting its own lamp.
+	///     </para>
+	/// </remarks>
 	/// <param name="roomName">The room, as every other surface calls it.</param>
-	/// <param name="lights">Every light the room would command, as the resolver settled it.</param>
+	/// <param name="lights">The room's lights: what it commands, and what it holds.</param>
 	/// <param name="includeLabel">
 	///     <see cref="GlobalConfig.IncludeLabel"/> as it stands. Set, the household has already told the app which
 	///     lights it may manage, so the advice is dropped rather than repeated at them.
 	/// </param>
 	/// <returns>The note, or <c>null</c> for one light with nothing wrong with it.</returns>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	public static SwitchOnNote? For(string roomName, IReadOnlyList<LightUnderReview> lights, string? includeLabel)
+	public static SwitchOnNote? For(string roomName, RoomLights lights, string? includeLabel)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(roomName);
 		ArgumentNullException.ThrowIfNull(lights);
 
-		IReadOnlyList<SuspectLight> suspicious = LightAudit.Review(lights);
+		IReadOnlyList<LightUnderReview> commanded = lights.Commanded;
+		List<SuspectLight> suspicious = [];
 
-		if (lights.Count <= 1 && suspicious.Count == 0)
+		foreach (LightUnderReview light in commanded)
+			if (LightAudit.ReasonFor(light, lights.InTheRoom) is { Length: > 0 } reason)
+				suspicious.Add(new SuspectLight(light.EntityId, light.Name, reason));
+
+		if (commanded.Count <= 1 && suspicious.Count == 0)
 			return null;
 
 		HashSet<string> flagged = new(suspicious.Select(suspect => suspect.EntityId), StringComparer.Ordinal);
 
 		return new SwitchOnNote(
-			Lead(roomName, lights.Count, suspicious.Count),
+			Lead(roomName, commanded.Count, suspicious.Count),
 			suspicious,
-			[.. lights.Where(light => !flagged.Contains(light.EntityId)).Select(light => light.Name)],
+			[.. commanded.Where(light => !flagged.Contains(light.EntityId)).Select(light => light.Name)],
 			suspicious.Count > 0 ? Advice(roomName, includeLabel) : null);
 	}
 

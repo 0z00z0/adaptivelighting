@@ -93,6 +93,38 @@ public sealed record LabelOption(string Id, string Name);
 public sealed record AreaPreview(ResolvedArea? Resolved, string? Error);
 
 /// <summary>
+///     A room's lights as the switch-on note needs them: the ones the engine will drive, and the ones the room
+///     holds at all.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Two sets, because the audit asks two different questions of them.</b> <see cref="Commanded"/> is
+///         what is judged, counted and named — the resolver's own answer, groups already preferred over their
+///         members, so nothing the engine will not touch is ever named. <see cref="InTheRoom"/> is only ever the
+///         sibling check's context, which <c>LightAudit.ReasonFor</c> documents as "every entity id in the same
+///         room" and which is a strictly wider thing.
+///     </para>
+///     <para>
+///         <b>The miss that made this a pair rather than a list.</b> The colour-channel rule flags
+///         <c>light.stue_vegglys_r</c> only when <c>light.stue_vegglys</c> is present, and the room reaches that
+///         lamp through the group <c>light.stue_alle</c> — so group preference had already removed the parent from
+///         the only list the audit was given, and a living room driving one lamp through a group while three
+///         channel entities fought it raised nothing at all. Those channels are real entities in the house this
+///         audit was commissioned for.
+///     </para>
+/// </remarks>
+/// <param name="Commanded">The lights the engine will drive, in the resolver's order.</param>
+/// <param name="InTheRoom">
+///     Every <c>light.*</c> entity Home Assistant lists in the room, plus the commanded ids — never narrower than
+///     <see cref="Commanded"/>, so a room with hand-picked lights and no area id is judged exactly as before.
+/// </param>
+public sealed record RoomLights(IReadOnlyList<LightUnderReview> Commanded, IReadOnlySet<string> InTheRoom)
+{
+	/// <summary>A room that resolves to nothing, and the answer when discovery cannot run at all.</summary>
+	public static RoomLights None { get; } = new([], new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+}
+
+/// <summary>
 ///     Turns the Home Assistant registry into things a person can pick from, and answers "what would discovery
 ///     do with this area?" live.
 /// </summary>
@@ -144,6 +176,13 @@ public sealed class HaCatalog
 	///         scoped, so this is per circuit, and <see cref="Invalidate"/> drops it whenever the page re-reads
 	///         the document. A light assigned to an area in Home Assistant shows up on a page refresh, which is
 	///         the freshness this class already promised.
+	///     </para>
+	///     <para>
+	///         <b>Only answers go in here.</b> A discovery that threw is Home Assistant declining to answer, not an
+	///         answer of "nothing here", and it used to be cached as though it were one. Kestrel serves the moment
+	///         the process is up while NetDaemon connects afterwards — see <see cref="IsHomeAssistantReady"/> — so
+	///         any page opened during start-up asked at least once too early, and every area then read
+	///         "0 lights, 0 motion, 0 lux" for the whole circuit however long Home Assistant had since been up.
 	///     </para>
 	/// </remarks>
 	private readonly Dictionary<string, AreaDiscovery> _discoveries = new(StringComparer.Ordinal);
@@ -260,30 +299,50 @@ public sealed class HaCatalog
 	}
 
 	/// <summary>
-	///     The lights <paramref name="area"/> would actually command, named the way Home Assistant names them.
+	///     The lights <paramref name="area"/> would actually command, named the way Home Assistant names them, and
+	///     the wider set of lights the room holds for the audit's sibling check.
 	/// </summary>
 	/// <remarks>
-	///     The resolver's own answer through <see cref="PreviewArea"/>, not a discovery count: a room that pins its
-	///     own light list bypasses discovery entirely, groups have already won over their members, and the room's
-	///     per-room exclusions have already been applied. A warning built on anything looser would name lights the
-	///     engine is not going to touch, which is a worse fault in a warning than in a label. A room that cannot
-	///     resolve — no motion sensor, say — yields nothing, because it will command nothing.
+	///     <para>
+	///         The commanded half is the resolver's own answer through <see cref="PreviewArea"/>, not a discovery
+	///         count: a room that pins its own light list bypasses discovery entirely, groups have already won over
+	///         their members, and the room's per-room exclusions have already been applied. A warning built on
+	///         anything looser would name lights the engine is not going to touch, which is a worse fault in a
+	///         warning than in a label. A room that cannot resolve — no motion sensor, say — yields nothing, because
+	///         it will command nothing.
+	///     </para>
+	///     <para>
+	///         <b>Which is exactly why the sibling set is carried beside it rather than folded into it.</b> Group
+	///         preference removes a lamp the room still drives <i>through</i> its group, and the colour-channel rule
+	///         needs to know the lamp is there — see <see cref="RoomLights"/>. Widening the commanded list to suit
+	///         the rule would have made the note's count and its list of names wrong, which is the fault this method
+	///         already refuses to commit.
+	///     </para>
 	/// </remarks>
 	/// <param name="area">The room, as it stands in the editor. Not mutated.</param>
 	/// <param name="defaults">The document's defaults, for the settings merge the resolver performs.</param>
 	/// <param name="global">The document's globals, which supply the discovery conventions.</param>
-	/// <returns>The lights, in the resolver's order. Empty when the room resolves to none.</returns>
+	/// <returns>The room's lights. <see cref="RoomLights.None"/> when the room resolves to none.</returns>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	public IReadOnlyList<LightUnderReview> LightsIn(AreaConfig area, AreaSettings defaults, GlobalConfig global)
+	public RoomLights LightsIn(AreaConfig area, AreaSettings defaults, GlobalConfig global)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 		ArgumentNullException.ThrowIfNull(defaults);
 		ArgumentNullException.ThrowIfNull(global);
 
 		if (PreviewArea(area, defaults, global).Resolved is not { } resolved)
-			return [];
+			return RoomLights.None;
 
-		return [.. resolved.Lights.Select(entityId => new LightUnderReview(entityId, FriendlyNameOf(entityId) ?? entityId))];
+		IReadOnlyList<LightUnderReview> commanded =
+			[.. resolved.Lights.Select(entityId => new LightUnderReview(entityId, FriendlyNameOf(entityId) ?? entityId))];
+
+		// Unioned rather than replaced, so the set is never narrower than the commanded list: a room configured
+		// with explicit lights and no area id has no registry listing to read, and must go on being judged against
+		// its own lights exactly as it was.
+		HashSet<string> inTheRoom = new(commanded.Select(light => light.EntityId), StringComparer.OrdinalIgnoreCase);
+		inTheRoom.UnionWith(LightEntitiesIn(area.AreaId));
+
+		return new RoomLights(commanded, inTheRoom);
 	}
 
 	/// <summary>
@@ -555,6 +614,33 @@ public sealed class HaCatalog
 		global,
 		_loggerFactory.CreateLogger<AreaEntityResolver>());
 
+	/// <summary>
+	///     Every <c>light.*</c> entity Home Assistant lists in an area, unfiltered.
+	/// </summary>
+	/// <remarks>
+	///     The registry's own listing rather than discovery's, and that is the point: discovery has already
+	///     preferred groups over their members, which is what hid a colour channel's parent from the audit. This is
+	///     read only as the sibling check's context — nothing is ever named or counted from it — so a ghost row the
+	///     resolver would drop costs nothing here.
+	/// </remarks>
+	/// <param name="areaId">The area, or <c>null</c> for a room with no area to list.</param>
+	private IReadOnlyList<string> LightEntitiesIn(string? areaId)
+	{
+		if (string.IsNullOrWhiteSpace(areaId))
+			return [];
+
+		try
+		{
+			return [.. _areas.EntitiesInArea(areaId).Where(entityId => string.Equals(entityId.Domain(), "light", StringComparison.Ordinal))];
+		}
+		catch (InvalidOperationException exception)
+		{
+			IsHomeAssistantReady = false;
+			_logger.LogDebug(exception, "The registry cannot list area {Area} yet, so the light audit judges the room alone.", areaId);
+			return [];
+		}
+	}
+
 	private AreaOption Option(string areaId, string name, GlobalConfig global)
 	{
 		AreaDiscovery discovered = Discover(areaId, global);
@@ -586,7 +672,11 @@ public sealed class HaCatalog
 		{
 			IsHomeAssistantReady = false;
 			_logger.LogDebug(exception, "Discovery for area {Area} is not available yet.", areaId);
-			discovered = new AreaDiscovery([], [], []);
+
+			// Returned but never filed. Caching this would turn "Home Assistant has not answered yet" into a
+			// standing answer of "this area yields nothing", which is what the pickers and the first-run chips
+			// would then read for the rest of the circuit — see the field's own remarks.
+			return new AreaDiscovery([], [], []);
 		}
 
 		_discoveries[areaId] = discovered;

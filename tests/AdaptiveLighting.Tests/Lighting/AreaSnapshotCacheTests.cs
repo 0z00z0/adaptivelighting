@@ -2,6 +2,7 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Text.Json;
 
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Web.Services;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -141,6 +142,33 @@ public sealed class AreaSnapshotCacheTests
 		await cache.DisposeAsync();
 
 		Assert.IsTrue(ha.Disposed);
+	}
+
+	/// <summary>
+	///     <b>The page that met an error screen instead of a shutdown.</b> The host stops hosted services in reverse
+	///     registration order and <c>GenericWebHostService</c> is registered by <c>WebApplication.CreateBuilder</c>,
+	///     before <c>AddLightingWeb</c> — so this cache stops first and Kestrel keeps serving pages afterwards. All
+	///     three live pages subscribe to <see cref="AreaSnapshotCache.Changes"/> in <c>OnInitialized</c>, and
+	///     <c>Subject&lt;T&gt;.Subscribe</c> on a disposed subject throws <see cref="ObjectDisposedException"/> —
+	///     which <c>SubscribeSafe</c> does not catch, because it guards the handler and not the subscription. The
+	///     chain here is the pages' own, sampling included, because the sample operator subscribes to the source.
+	/// </summary>
+	[TestMethod]
+	public async Task A_Page_Opened_While_The_Host_Stops_Can_Still_Subscribe()
+	{
+		AsyncOnlyHaContext ha = new();
+		using ServiceProvider provider = Provider(ha);
+
+		AreaSnapshotCache cache = Cache(provider);
+
+		await cache.StartAsync(CancellationToken.None);
+		await cache.StopAsync(CancellationToken.None);
+
+		using IDisposable subscription = cache.Changes
+			.Sample(TimeSpan.FromMilliseconds(400))
+			.SubscribeSafe((AreaSnapshot _) => { }, NullLogger.Instance);
+
+		Assert.IsNotNull(subscription, "a circuit that starts during shutdown reads a quiet stream, not an exception");
 	}
 
 	/// <summary>
