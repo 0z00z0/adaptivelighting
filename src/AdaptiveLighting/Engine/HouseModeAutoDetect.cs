@@ -14,16 +14,27 @@ namespace AdaptiveLighting.Engine;
 ///         already know.
 ///     </para>
 ///     <para>
-///         <b>Adopting the wrong dropdown must be harmless, and it is.</b> A detected mode carries kinds and
-///         nothing else: no scene, no reset trigger, and no period is given a <c>SetsMode</c>. The engine
-///         therefore only ever <i>reads</i> the select — the writing paths (a period entering, a reset firing,
-///         auto-away) all require configuration this never adds. Adopt a thermostat's mode dropdown by mistake and
-///         the worst case is that its values classify as Normal and nothing happens.
+///         <b>Adoption cannot make the engine write.</b> A detected mode carries kinds and nothing else: no
+///         scene, no reset trigger, and no period is given a <c>SetsMode</c>. The engine therefore only ever
+///         <i>reads</i> the select — the writing paths (a period entering, a reset firing, auto-away) all require
+///         configuration this never adds, so nothing adopted here can switch the household's dropdown or apply a
+///         look to a room.
 ///     </para>
 ///     <para>
-///         Detection is still deliberately narrow: a select qualifies only when its options name at least two
+///         <b>Reading the wrong dropdown is not harmless, which is what the narrowness below is for.</b>
+///         Qualifying takes two different kinds, so an adopted select always carries at least one Sleep, Away or
+///         Guest option — "everything classifies as Normal and nothing happens" is the one outcome adoption rules
+///         out, not its worst case. While the select stands on an Away option <see cref="HouseState.Mode"/>
+///         reports the whole house away whatever presence says, and every area goes to
+///         <see cref="AreaState.Away"/>; a Sleep option holds sleep-respecting areas to the night caps. A drying
+///         cupboard's <c>Inne / Ute</c> would qualify — <c>Ute</c> is Away vocabulary and <c>Inne</c> matches
+///         nothing, so it falls to Normal.
+///     </para>
+///     <para>
+///         Detection is therefore deliberately narrow: a select qualifies only when its options name at least two
 ///         different kinds <i>and</i> one of them is the everyday one, and adoption only happens when exactly one
-///         select in the house qualifies. Two candidates is a house whose owner should choose.
+///         select in the house qualifies. Two candidates is a house whose owner should choose. Loosening either
+///         rule trades a house's lighting for a guess, and the log line below is the only notice anyone gets.
 ///     </para>
 /// </remarks>
 public static class HouseModeAutoDetect

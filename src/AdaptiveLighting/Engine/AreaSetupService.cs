@@ -138,6 +138,16 @@ public static class AreaSetupService
 	///         Nothing is written and nothing is removed. Areas outside the plan keep their exact instance, so a
 	///         document that had no rebuilds serialises byte for byte as it was.
 	///     </para>
+	///     <para>
+	///         <b>A room the document already has is never added again.</b> A plan is a value somebody holds
+	///         across an edit — the Areas page keeps the setup panel open beside its own "Add a room" and "Discard
+	///         changes" buttons, and a confirmation can be delivered twice — so the document being mutated is not
+	///         always the one <see cref="Plan"/> read. Two rows for one Home Assistant area is not a cosmetic
+	///         duplicate: it either refuses every save (the validator rejects a duplicate area name) or, once one
+	///         row carries a name of its own, runs two state machines against the same lights. So the check
+	///         <see cref="Plan"/> already makes is made again here, against the document actually in hand, which
+	///         also makes applying the same plan twice the same document as applying it once.
+	///     </para>
 	/// </remarks>
 	/// <param name="config">The document to mutate.</param>
 	/// <param name="plan">The plan, from <see cref="Plan"/> against this same document.</param>
@@ -164,7 +174,12 @@ public static class AreaSetupService
 			config.Areas[index] = fresh;
 		}
 
-		config.Areas.AddRange(plan.NewAreas);
+		// Grown as it goes, so a registry that named an area twice cannot slip two rows past it either.
+		HashSet<string> present = new(AreaIdsOf(config), StringComparer.Ordinal);
+
+		foreach (AreaConfig added in plan.NewAreas)
+			if (added.AreaId is not { Length: > 0 } areaId || present.Add(areaId))
+				config.Areas.Add(added);
 	}
 
 	/// <summary>
