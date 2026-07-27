@@ -10,7 +10,8 @@
 <span class="preset">
 	@if (_manual)
 	{
-		<input class="cell num" type="number" step="@Step" min="@Min" max="@Max" value="@Value" @onchange="OnTyped" />
+		@* Invariant, always — see Invariant below. A number written into an HTML attribute is not prose. *@
+		<input class="cell num" type="number" step="@Invariant(Step)" min="@Invariant(Min)" max="@Invariant(Max)" value="@Invariant(Value)" @onchange="OnTyped" />
 		@if (Unit is { Length: > 0 })
 		{
 			<span class="unit">@Unit</span>
@@ -76,6 +77,17 @@
 		Unit is { Length: > 0 } ? $"{Key(value)} {Unit} — custom" : $"{Key(value)} — custom";
 
 	private static bool Matches(double left, double right) => Math.Abs(left - right) < 0.001;
+
+	/// <summary>
+	///     A number bound for an HTML attribute.
+	/// </summary>
+	/// <remarks>
+	///     Razor renders a bare <c>@double</c> attribute through <c>object.ToString()</c>, which is the current
+	///     culture's. A Norwegian host writes 62.5 as <c>value="62,5"</c>, which is not a number to any browser: the
+	///     field renders empty over a value that exists, and a <c>step</c> or <c>min</c> in the same shape silently
+	///     drops the constraint. The same reason <c>Stepper</c> formats its own, and the board its percentages.
+	/// </remarks>
+	private static string Invariant(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
 
 	private void ToggleMode() => _manual = !_manual;
 

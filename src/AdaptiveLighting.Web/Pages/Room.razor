@@ -1083,10 +1083,22 @@ else
 	///     route names the area id, so it saves at once and follows the room to its new URL.
 	/// </summary>
 	/// <remarks>
-	///     The new area's name is deliberately not copied into the document. It used to be, back when a nameless
-	///     room rendered as its slug; now that the name is resolved from the registry at the point of use, writing
-	///     it would only freeze this room at whatever the area was called today and stop a rename in Home Assistant
-	///     ever reaching it.
+	///     <para>
+	///         The new area's name is deliberately not copied into the document. It used to be, back when a nameless
+	///         room rendered as its slug; now that the name is resolved from the registry at the point of use, writing
+	///         it would only freeze this room at whatever the area was called today and stop a rename in Home Assistant
+	///         ever reaching it.
+	///     </para>
+	///     <para>
+	///         The move only follows a save that actually landed. This used to navigate unconditionally, and a refused
+	///         save then destroyed its own error message: the new URL names a different room, so
+	///         <see cref="OnParametersSet"/> reloads the page from disk and clears <see cref="_failure"/> and
+	///         <see cref="_dirty"/> with it. Re-pointing one room at an area another room already uses is refused —
+	///         two rows with one <see cref="AreaConfig.DisplayName"/> is a document-level error — so the reader got no
+	///         message, lost the edit, and landed on whichever room does own that area id. A refusal now stays on
+	///         screen with the edit still in memory, which is what <em>Try again</em> and <em>Discard my changes</em>
+	///         are for.
+	///     </para>
 	/// </remarks>
 	private void OnAreaChanged(string? areaId)
 	{
@@ -1096,6 +1108,14 @@ else
 		room.AreaId = areaId;
 		_dirty = true;
 		Commit();
+
+		if (_failure is not null || _loadError is { Length: > 0 })
+		{
+			// Everything derived from the document is now describing the old area. Every other edit path re-derives
+			// through MarkDirty; this one saves at once, so it has to do it itself before the failure is rendered.
+			Refresh();
+			return;
+		}
 
 		Nav.NavigateTo($"room/{Uri.EscapeDataString(areaId)}");
 	}
@@ -1394,19 +1414,34 @@ else
 
 	/// <inheritdoc/>
 	/// <remarks>
-	///     An edit still inside its quiet window is written on the way out rather than dropped. Leaving the page
-	///     is not a decision to discard, and a change that vanished because somebody navigated a second too early
-	///     would be the worst kind of surprise from a page that promises to save by itself.
+	///     <para>
+	///         An edit still inside its quiet window is written on the way out rather than dropped. Leaving the page
+	///         is not a decision to discard, and a change that vanished because somebody navigated a second too early
+	///         would be the worst kind of surprise from a page that promises to save by itself.
+	///     </para>
+	///     <para>
+	///         The flush is in a <c>try</c> because it is the one thing here that can throw. <see cref="Commit"/>
+	///         catches what the save pipeline documents and nothing else, and a component's <c>Dispose</c> that
+	///         throws part way through is not retried — the renderer records the exception and moves on. Left
+	///         unguarded, one such throw would strand a one-second ticker and a snapshot subscription for the life
+	///         of the process, per browser tab, silently. Releasing them in <c>finally</c> costs nothing when the
+	///         flush succeeds, which is every ordinary visit.
+	///     </para>
 	/// </remarks>
 	public void Dispose()
 	{
-		_saveCts?.Cancel();
+		try
+		{
+			_saveCts?.Cancel();
 
-		if (_dirty)
-			Commit();
-
-		_saveCts?.Dispose();
-		_subscription?.Dispose();
-		_ticker?.Dispose();
+			if (_dirty)
+				Commit();
+		}
+		finally
+		{
+			_saveCts?.Dispose();
+			_subscription?.Dispose();
+			_ticker?.Dispose();
+		}
 	}
 }

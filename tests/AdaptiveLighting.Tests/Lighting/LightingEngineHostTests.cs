@@ -223,6 +223,49 @@ public sealed class LightingEngineHostTests
 		Assert.IsTrue(File.Exists(_path));
 	}
 
+	/// <summary>
+	///     Pointing one room at an area another room already uses is a document-level refusal, not an area-level one.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         This is the room page's "Home Assistant area" picker in one call. A room that states no
+	///         <c>Name</c> is identified by its area id, so re-pointing it at a taken area gives two rows the same
+	///         <see cref="AreaConfig.DisplayName"/> — which <c>ConfigValidator</c> refuses, and refusal means
+	///         nothing is written and the running engine is untouched.
+	///     </para>
+	///     <para>
+	///         Asserted here because the page's own behaviour depends on it and cannot be tested: <c>Room.razor</c>
+	///         used to navigate to the new area's URL whether or not the save landed, which reloaded the page from
+	///         disk and wiped both the failure and the edit, dropping the reader on whichever room really does own
+	///         that area id. The page now only follows a save that reported <see cref="SaveResult.Written"/>. If
+	///         this refusal is ever downgraded to a warning, that guard is dead code and this test is where it says so.
+	///     </para>
+	/// </remarks>
+	[TestMethod]
+	public void Save_WhenTwoRoomsWouldShareAnAreaId_IsRefusedAndNothingIsWritten()
+	{
+		AdaptiveLightingConfig config = Valid();
+		config.Areas = [new AreaConfig { AreaId = "stue" }, new AreaConfig { AreaId = "kjokken" }];
+
+		LightingEngineHost host = BuildHost();
+		Assert.AreEqual(SaveStatus.Saved, host.Save(config).Status, "two distinct rooms save perfectly well");
+
+		string before = File.ReadAllText(_path);
+
+		// The edit the picker makes: the kitchen is told it is the living room.
+		config.Areas[1].AreaId = "stue";
+
+		SaveResult result = host.Save(config);
+
+		Assert.AreEqual(SaveStatus.Rejected, result.Status);
+		Assert.IsFalse(result.Written);
+		Assert.IsFalse(result.Validation.IsValid);
+		Assert.IsTrue(
+			result.Validation.Errors.Any(error => error.Contains("Duplicate area name", StringComparison.Ordinal)),
+			$"Expected the validator's duplicate-name message, got: {result.Validation}");
+		Assert.AreEqual(before, File.ReadAllText(_path), "a refused save leaves the document exactly as it was");
+	}
+
 	[TestMethod]
 	public void Validate_DoesNotTouchTheDisk()
 	{

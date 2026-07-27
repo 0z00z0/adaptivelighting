@@ -1,4 +1,5 @@
 @inject IJSRuntime Js
+@inject ILogger<ThemePicker> Logger
 
 @*
 	Which palette this browser paints in.
@@ -30,6 +31,30 @@
 	// round trip below is worth its one interop call and a cookie is not worth the request weight.
 	private string _selected = AppThemes.System.Id;
 
+	/// <summary>
+	///     Whether an interop failure is one to survive rather than one to crash on.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         All three are ordinary in a long-lived Blazor Server process, and none of them is worth a page for.
+	///         <see cref="JSDisconnectedException"/> is the circuit going away between the render and the reply — a
+	///         closed tab, a dropped link. <see cref="OperationCanceledException"/> is the interop call timing out
+	///         (a minute, by default) because the browser never answered. <see cref="JSException"/> is the script
+	///         itself missing: <c>theme.js</c> is a separate file, and a request that 404s or is blocked leaves
+	///         <c>window.adaptiveLightingTheme</c> undefined.
+	///     </para>
+	///     <para>
+	///         <b>Why this matters more than it looks.</b> An exception out of <c>OnAfterRenderAsync</c> or an event
+	///         handler is an unhandled circuit exception, and Blazor tears the circuit down for it — the reader gets
+	///         the reload page instead of the app. This component sits in the layout, so that would be every page.
+	///         <c>theme.js</c> already refuses to take the page down over storage it cannot read; the C# half must
+	///         hold to the same bargain, or the script's care is undone from the other side. The cost of degrading
+	///         is one select showing the default while the page itself is painted correctly by the head script.
+	///     </para>
+	/// </remarks>
+	private static bool IsSurvivable(Exception exception) =>
+		exception is JSDisconnectedException or JSException or OperationCanceledException;
+
 	protected override async Task OnAfterRenderAsync(bool firstRender)
 	{
 		if (!firstRender)
@@ -37,7 +62,18 @@
 			return;
 		}
 
-		string? stored = await Js.InvokeAsync<string?>("adaptiveLightingTheme.stored");
+		string? stored;
+
+		try
+		{
+			stored = await Js.InvokeAsync<string?>("adaptiveLightingTheme.stored");
+		}
+		catch (Exception exception) when (IsSurvivable(exception))
+		{
+			Logger.LogDebug(exception, "Could not read the stored theme; the picker keeps its default selection.");
+			return;
+		}
+
 		AppTheme theme = AppThemes.Resolve(stored);
 
 		if (theme.Id == _selected)
@@ -56,6 +92,15 @@
 		AppTheme theme = AppThemes.Resolve(picked);
 		_selected = theme.Id;
 
-		await Js.InvokeVoidAsync("adaptiveLightingTheme.apply", theme.Id);
+		try
+		{
+			await Js.InvokeVoidAsync("adaptiveLightingTheme.apply", theme.Id);
+		}
+		catch (Exception exception) when (IsSurvivable(exception))
+		{
+			// The pick is lost, not the page. Saying so is the honest thing, but there is no surface here to say
+			// it on that would not cost the top bar a row on every page for a failure nobody will ever see.
+			Logger.LogWarning(exception, "Could not apply the theme '{Theme}' in the browser.", theme.Id);
+		}
 	}
 }
