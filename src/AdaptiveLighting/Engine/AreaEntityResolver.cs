@@ -287,7 +287,16 @@ public sealed class AreaEntityResolver
 			// Overlapping siblings. The bulbs only this group holds still have to be lit, so they are managed
 			// individually — the group they came in through already passed every filter, so they are not
 			// strangers to the room; only the exclude label and liveness get to stop them here.
-			List<string> alone = [.. unclaimed.Where(bulb => !IsExcluded(bulb)).Where(IsLive)];
+			//
+			// The domain is checked as well, and it is not a formality: a group's membership is whatever Home
+			// Assistant put in the attribute, and a member outside the light domain would arrive here as an id
+			// the area then hands to ILightActuator — which calls light.turn_on unconditionally, so a switch
+			// promoted out of a group produces a service call HA rejects, on every command, for ever. Discovery
+			// filters the domain for exactly this reason; a bulb entering by the back door gets the same filter.
+			List<string> alone = [.. unclaimed
+				.Where(bulb => bulb.HasDomain(LightDomain))
+				.Where(bulb => !IsExcluded(bulb))
+				.Where(IsLive)];
 
 			_logger.LogWarning(
 				"Area '{Area}': light group '{Group}' shares {Shared} of its bulbs with {Rivals} while containing neither, "

@@ -432,6 +432,74 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State, "the window must close eventually, or nothing is ever an override");
 	}
 
+	// ===================== a radio is not a hand =====================
+	//
+	// Home Assistant writes 'unavailable' with a context carrying neither a user nor a parent, which is exactly
+	// how a wall switch reports itself, and 'unavailable' does not read as on — so a bulb dropping off the mesh
+	// looked from here like somebody switching it off, and the recovery looked like somebody switching it on.
+
+	/// <summary>
+	///     A Zigbee hiccup used to suppress the room for <c>VacancyResetMinutes</c>, refusing to light it for the
+	///     person standing in it. The area must simply keep automating: the bulb never went anywhere on purpose.
+	/// </summary>
+	[TestMethod]
+	public void A_Light_Dropping_Off_The_Network_Is_Not_A_Human_Switching_It_Off()
+	{
+		var t = Build();
+		t.Ha.Trigger(Motion, "on");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
+
+		// Past the echo window, so nothing here is mistaken for the tail of our own command.
+		Advance(t, TimeSpan.FromSeconds(30));
+		t.Ha.Trigger(Light, "unavailable", null, PhysicalDevice());
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State,
+			"a bulb losing its radio is not a person at the switch, and must not suppress the room");
+	}
+
+	/// <summary>
+	///     The other half, and the more expensive one: coming back read as a manual switch-on and pinned the area
+	///     in <see cref="AreaState.OverriddenOn"/> for <c>OverrideDurationMinutes</c> — two hours by default.
+	/// </summary>
+	[TestMethod]
+	public void A_Light_Coming_Back_From_Unavailable_Is_Not_A_Human_Switching_It_On()
+	{
+		var t = Build();
+		Advance(t, TimeSpan.FromSeconds(30));
+
+		t.Ha.Trigger(Light, "unavailable", null, PhysicalDevice());
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
+
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State,
+			"a device reconnecting is indistinguishable from a hand at the switch, and the safe reading is neither");
+	}
+
+	/// <summary>An entity that has never reported is not a person either — there is no change to attribute.</summary>
+	[TestMethod]
+	public void A_Lights_Very_First_Report_Is_Not_An_Override()
+	{
+		var t = Build();
+		t.Ha.Trigger(Motion, "on");
+		Advance(t, TimeSpan.FromSeconds(30));
+
+		t.Ha.Trigger(Light, "unknown", null, PhysicalDevice());
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
+	}
+
+	/// <summary>The guard must not swallow the thing it sits in front of: on-to-off is still a person.</summary>
+	[TestMethod]
+	public void A_Real_Off_Is_Still_Read_As_A_Human()
+	{
+		var t = Build();
+		t.Ha.Trigger(Motion, "on");
+		Advance(t, TimeSpan.FromSeconds(30));
+
+		t.Ha.Trigger(Light, "off", null, PhysicalDevice());
+
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State);
+	}
+
 	// ===================== automations =====================
 
 	[TestMethod]
@@ -519,6 +587,51 @@ public sealed class AreaControllerTests
 
 		t.Ha.Trigger(Motion, "on");
 
+		Assert.AreEqual(0, t.Actuator.Applied.Count);
+	}
+
+	/// <summary>
+	///     The start-up adoption bug, reached by the other door. Releasing the kill switch resumed the area at
+	///     <see cref="AreaState.AutoVacant"/>, which arms no vacancy timeout, so a room left lit under the muzzle
+	///     burned until somebody happened to walk into it — indefinitely, in a room nobody enters. Muzzle-then-
+	///     release must leave the house where stop-then-start does.
+	/// </summary>
+	[TestMethod]
+	public void Releasing_The_Kill_Switch_Adopts_A_Room_Left_Lit()
+	{
+		var t = Build();
+		t.Ha.Trigger(Motion, "on");
+		t.Ha.SetState(Light, "on", new() { ["brightness"] = 178 });
+
+		t.House.OnNext(House(killed: true));
+		Assert.AreEqual(AreaState.Disabled, t.Area.State);
+
+		t.Actuator.Clear();
+		t.House.OnNext(House());
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "a lit room is the engine's again the moment it is allowed to act");
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "adoption observes; it does not command");
+		Assert.IsNotNull(t.Publisher.Snapshots[^1].NextChangeAt, "and it arms the timeout that ends the burning");
+
+		// The vacancy timeout, then the pre-off grace: the lights the engine had forgotten are finally swept.
+		Advance(t, TimeSpan.FromSeconds(601));
+		Advance(t, TimeSpan.FromSeconds(31));
+
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
+		Assert.IsFalse(t.Actuator.Last!.On, "the room does not burn on for ever because the engine was muzzled once");
+	}
+
+	/// <summary>Nothing to adopt is still nothing to adopt: an unlit room resumes at rest, as it always did.</summary>
+	[TestMethod]
+	public void Releasing_The_Kill_Switch_Over_A_Dark_Room_Changes_Nothing()
+	{
+		var t = Build();
+		t.House.OnNext(House(killed: true));
+		t.Actuator.Clear();
+
+		t.House.OnNext(House());
+
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 

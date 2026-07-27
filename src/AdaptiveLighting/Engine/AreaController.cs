@@ -194,9 +194,20 @@ public sealed class AreaController : IDisposable
 	///         A muzzled or disabled area adopts nothing: arming a timer that ends in a command is a command
 	///         deferred, and a disabled engine has no business making one.
 	///     </para>
+	///     <para>
+	///         <b>Start-up is not the only way the engine forgets a lit room.</b> Releasing the kill switch resumes
+	///         an area at <see cref="AreaState.AutoVacant"/>, which arms nothing, so a room left lit while the
+	///         engine was muzzled burned exactly as it did across a restart — the same bug, reached by the other
+	///         door. <see cref="OnHouseChanged"/> therefore adopts on that recovery too, which is also what makes
+	///         muzzle-then-release and stop-then-start leave the house in the same place.
+	///     </para>
 	/// </remarks>
+	/// <param name="reason">
+	///     What is doing the adopting, for the log line and the state it publishes: start-up, or the kill switch
+	///     being released.
+	/// </param>
 	/// <returns><c>true</c> when the area adopted lit lights and is now <see cref="AreaState.AutoActive"/>.</returns>
-	private bool AdoptIfLit()
+	private bool AdoptIfLit(TransitionReason reason = TransitionReason.AdoptedAtStartup)
 	{
 		if (!IsEngineAllowed())
 			return false;
@@ -205,13 +216,13 @@ public sealed class AreaController : IDisposable
 			return false;
 
 		_logger.LogInformation(
-			"{Area}: found lights already on at start-up; adopting them without commanding, and arming the vacancy timeout.",
-			Name);
+			"{Area}: found lights already on ({Reason}); adopting them without commanding, and arming the vacancy timeout.",
+			Name, reason);
 
 		// Seeded, not commanded: this is what stops the first tick from "correcting" levels nobody asked it to.
 		_lastTarget = ResolveTarget();
 
-		Enter(AreaState.AutoActive, TransitionReason.AdoptedAtStartup);
+		Enter(AreaState.AutoActive, reason);
 		RestartVacancyTimer();
 		return true;
 	}
@@ -277,6 +288,10 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
+			// A radio, not a hand. See IsHandAtTheSwitch.
+			if (!IsHandAtTheSwitch(change))
+				return;
+
 			ChangeOrigin origin = _detector.Classify(change);
 			if (!_detector.IsManual(origin))
 				return;
@@ -310,6 +325,35 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	/// <summary>
+	///     Whether <paramref name="change"/> could have been a person at a switch at all, before anyone asks who
+	///     caused it.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         A bulb dropping off the radio is not a human turning it off, but it looks exactly like one from here.
+	///         Home Assistant writes <c>unavailable</c> with a context carrying neither a user nor a parent, which
+	///         is precisely <see cref="OverrideDetector"/>'s definition of <see cref="ChangeOrigin.PhysicalDevice"/>
+	///         — and <see cref="StateChangeExtensions.TurnedOn"/> reads "unavailable" as not-on. So without this the
+	///         area treated a Zigbee hiccup as a manual switch-off and sat in <see cref="AreaState.SuppressedOff"/>
+	///         for <c>VacancyResetMinutes</c>, refusing to light the room somebody was standing in; and when the
+	///         bulb came back the recovery read as a manual switch-<i>on</i> and pinned the area in
+	///         <see cref="AreaState.OverriddenOn"/> for <c>OverrideDurationMinutes</c> — two hours by default. On a
+	///         house of 164 lights that is not a rare event.
+	///     </para>
+	///     <para>
+	///         So both ends of the change have to be a state the engine could itself have commanded. The cost is
+	///         that a person who really does flip a wall switch on a bulb that was unavailable is not noticed, and
+	///         the area keeps automating — which is the direction the detector is deliberately wrong in everywhere
+	///         else, and is anyway indistinguishable from the far commoner case of the device simply reconnecting.
+	///     </para>
+	/// </remarks>
+	private static bool IsHandAtTheSwitch(StateChange change) =>
+		IsOnOrOff(change.Old) && IsOnOrOff(change.New);
+
+	/// <summary>Whether the state reads on or off, rather than unavailable, unknown or absent altogether.</summary>
+	private static bool IsOnOrOff(EntityState? state) => state is not null && (state.IsOn() || state.IsOff());
+
 	private void OnHouseChanged(HouseState house)
 	{
 		lock (_gate)
@@ -334,6 +378,11 @@ public sealed class AreaController : IDisposable
 				// Resume from the resting state rather than trying to reconstruct what was lost while muzzled,
 				// then fall through: re-enabling into an empty house should land in Away, not AutoVacant.
 				Enter(AreaState.AutoVacant, TransitionReason.EnablementChanged);
+
+				// AutoVacant arms no vacancy timeout, so a room left lit under the muzzle would burn until somebody
+				// walked into it. That is the start-up bug AdoptIfLit exists for, reached by the other door.
+				AdoptIfLit(TransitionReason.EnablementChanged);
+
 				Publish(TransitionReason.EnablementChanged);
 			}
 
