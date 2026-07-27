@@ -16,6 +16,14 @@ public static class RegistryExtensions
 	/// <summary>Whether an area with id <paramref name="areaId"/> exists.</summary>
 	public static bool AreaExists(this IHaRegistry registry, string areaId) => registry.GetArea(areaId) is not null;
 
+	/// <summary>
+	///     The display name Home Assistant shows for <paramref name="areaId"/>, or <c>null</c> when the area is
+	///     unknown or unnamed. An area id is a slug, so this is the only thing that turns <c>kjeller_bad</c> back
+	///     into "Kjeller - Bad".
+	/// </summary>
+	public static string? AreaNameOf(this IHaRegistry registry, string areaId) =>
+		registry.GetArea(areaId)?.Name is { Length: > 0 } name ? name : null;
+
 	/// <summary>The entity ids assigned to <paramref name="areaId"/>, distinct and ordinal. Empty when the area is unknown.</summary>
 	public static IReadOnlyList<string> EntityIdsInArea(this IHaRegistry registry, string areaId) =>
 		registry.GetArea(areaId) is { } area

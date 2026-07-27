@@ -4942,3 +4942,115 @@ h1[tabindex="-1"]:focus {
 		top: calc(50% - 5px);
 	}
 }
+
+/* ============================================================================
+   WHAT SWITCHING A ROOM ON WILL COMMAND  —  Components/SwitchOnNoteView.razor
+
+   A Home Assistant area holds whatever Home Assistant put in it, and one live
+   living room resolves to 34 light entities: access-point status LEDs, relay
+   indicators, five colour channels of a lamp already managed under its own
+   name, and the fridge. The note that says so is raised by the room's switch on
+   both surfaces that carry one — the House tab's room row and the room page's
+   header — so it is one block of rules, not two.
+
+   Almost nothing here is new. It is a .notice holding .gchip chips, because a
+   list of entities is already what the room page's "In this room" card draws
+   and a second chip would be a second vocabulary. What this adds is the amber
+   edge on a suspect, the reason beside its name, and the neutral edge for the
+   quiet tier — a room of ordinary lamps is a remark, not a warning, and must
+   not be painted as one.
+   ============================================================================ */
+
+/* The quiet tier. .notice defaults to the warning edge, which is right for the
+   flagged case and wrong for "here is what this room now commands". */
+.notice.info {
+	border-left-color: var(--info);
+}
+
+.switch-note {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+/* The lead is the sentence the switch just earned, so it is the one thing here
+   in ink rather than muted. */
+.switch-note-lead {
+	display: block;
+}
+
+/* A grid of one column rather than a wrapping row: each suspect is two lines —
+   a name and a reason — so they never fit side by side, and left to wrap they
+   come out as a ragged stack of thirteen different widths. One column makes it
+   a list, which is what it is. */
+.switch-note-suspects {
+	display: grid;
+	gap: var(--space-1);
+}
+
+/* A suspect wears the warning edge the notice does, so a chip carries its own
+   verdict when the eye lands on it rather than on the sentence above. */
+.gchip-suspect {
+	border-left-color: var(--warn);
+	align-items: baseline;
+	gap: 0.15rem 0.4rem;
+	flex-wrap: wrap;
+}
+
+/* The reason, which is the whole of what makes this advice rather than an
+   accusation: it is what somebody weighs before they act on it. */
+.chip-why {
+	flex-basis: 100%;
+	color: var(--muted);
+	font-size: var(--text-xs);
+}
+
+.switch-note-rest,
+.switch-note-advice {
+	margin: 0;
+}
+
+.switch-note-advice a {
+	margin-left: var(--space-2);
+	white-space: nowrap;
+}
+
+.switch-note .panel-actions {
+	margin: 0;
+	padding: 0;
+	border-top: 0;
+}
+
+/* Inside the House tab's room list the note is a sibling of the row it belongs
+   to, and that list already spaces its children. */
+.room-rows > .switch-note {
+	margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+	.switch-note-advice a {
+		display: block;
+		margin-left: 0;
+		white-space: normal;
+	}
+}
+/* ---- a thread out of a section ----
+   Two groups moved from Areas to House, and the room page's own settings are
+   read against the house's baseline. Both are a sentence pointing somewhere
+   else, so both are a link — but one of them switches a section on this same
+   page rather than navigating, which has to be a button to work. It is given
+   the anchor's own look so a reader meets one kind of thread, not two. */
+.thread {
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	color: var(--accent);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.thread:hover,
+.thread:focus-visible {
+	text-decoration: none;
+}

@@ -24,7 +24,7 @@ public sealed record AreaFloor(string Id, string Name, int? Level);
 ///     </para>
 ///     <para>
 ///         Discovery is the feature the whole configuration design rests on, so it does not get to be the
-///         untested part. Five members of registry navigation behind an interface buys that back, and follows
+///         untested part. Six members of registry navigation behind an interface buys that back, and follows
 ///         the same pattern as the engine's other seams.
 ///     </para>
 /// </remarks>
@@ -35,6 +35,17 @@ public interface IAreaRegistry
 
 	/// <summary>Whether <paramref name="areaId"/> names a real area.</summary>
 	bool AreaExists(string areaId);
+
+	/// <summary>
+	///     Home Assistant's display name for <paramref name="areaId"/> — "Kjeller - Bad" for <c>kjeller_bad</c> —
+	///     or <c>null</c> when the area is unknown or was never given one.
+	/// </summary>
+	/// <remarks>
+	///     The seam had no name accessor at all, so every surface fell back to the slug for rooms discovery had
+	///     proposed. Read rather than stored: see <see cref="Engine.AreaNaming"/>, which is the only place the
+	///     fallback order is written down.
+	/// </remarks>
+	string? NameOf(string areaId);
 
 	/// <summary>
 	///     The entity ids assigned to <paramref name="areaId"/>, directly or through a device. Empty when the

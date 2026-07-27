@@ -3,7 +3,7 @@ using AdaptiveLighting.Abstractions;
 namespace AdaptiveLighting.Ha;
 
 /// <summary>
-///     The real <see cref="IAreaRegistry"/>: a thin projection of <see cref="IHaRegistry"/> onto the five
+///     The real <see cref="IAreaRegistry"/>: a thin projection of <see cref="IHaRegistry"/> onto the six
 ///     questions the engine actually asks.
 /// </summary>
 /// <remarks>
@@ -22,6 +22,9 @@ public sealed class HaAreaRegistry : IAreaRegistry
 
 	/// <inheritdoc/>
 	public bool AreaExists(string areaId) => _registry.AreaExists(areaId);
+
+	/// <inheritdoc/>
+	public string? NameOf(string areaId) => _registry.AreaNameOf(areaId);
 
 	/// <inheritdoc/>
 	public IReadOnlyList<string> EntitiesInArea(string areaId) => _registry.EntityIdsInArea(areaId);

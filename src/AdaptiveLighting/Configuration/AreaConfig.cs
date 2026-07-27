@@ -9,7 +9,11 @@ namespace AdaptiveLighting.Configuration;
 /// </summary>
 public class AreaConfig
 {
-	/// <summary>Display name. Defaults to <see cref="AreaId"/> when omitted.</summary>
+	/// <summary>
+	///     Display name, stated only when the household wants one of its own. Left <c>null</c>, the room is called
+	///     whatever Home Assistant calls its area — see <see cref="Engine.AreaNaming"/> — which is what keeps a
+	///     rename in Home Assistant arriving here instead of freezing the name at set-up time.
+	/// </summary>
 	public string? Name { get; set; }
 
 	/// <summary>HA registry area <i>id</i> (the slug), not the display name. Drives discovery.</summary>
@@ -110,10 +114,19 @@ public class AreaConfig
 	/// <inheritdoc cref="AreaSettings.Enabled"/>
 	public bool? Enabled { get; set; }
 
-	/// <summary>The area's display name, falling back to the area id and then to a fixed placeholder.</summary>
+	/// <summary>The area's display name as the <i>document alone</i> knows it: the area id, then a fixed placeholder.</summary>
 	/// <remarks>
-	///     <see cref="YamlIgnoreAttribute"/>: computed from <see cref="Name"/> and <see cref="AreaId"/>, and
-	///     get-only. Serialised it would silently promote the fallback into a real <c>Name</c> on the first save.
+	///     <para>
+	///         <see cref="YamlIgnoreAttribute"/>: computed from <see cref="Name"/> and <see cref="AreaId"/>, and
+	///         get-only. Serialised it would silently promote the fallback into a real <c>Name</c> on the first save.
+	///     </para>
+	///     <para>
+	///         <b>This is not what a surface should show.</b> It cannot consult Home Assistant, so a room proposed
+	///         with only an area id reads as its slug. Anything with a registry to hand asks
+	///         <see cref="Engine.AreaNaming"/>, which puts the registry's name between the two steps below and ends
+	///         here. What this stays good for is a key into the document — the validator's per-area errors — where
+	///         the point is to name a row rather than to be read aloud.
+	///     </para>
 	/// </remarks>
 	[YamlIgnore]
 	public string DisplayName => Name ?? AreaId ?? "(unnamed area)";

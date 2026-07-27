@@ -35,7 +35,7 @@
 							<input type="checkbox"
 								   checked="@_ticked.Contains(areaId)"
 								   @onchange="args => Tick(areaId, args.Value is true)" />
-							<span class="setup-room-name">@area.DisplayName</span>
+							<span class="setup-room-name">@AreaNaming.DisplayName(area, NameOf)</span>
 							<code class="area-slug">@areaId</code>
 						</label>
 					</li>
@@ -139,7 +139,14 @@
 	[Parameter, EditorRequired]
 	public Func<IReadOnlyCollection<string>, SetupPlan> PlanFor { get; set; } = _ => new SetupPlan([], [], []);
 
-	/// <summary>Resolves an area id to the name Home Assistant shows, for rooms the document doesn't have yet.</summary>
+	/// <summary>
+	///     Resolves an area id to the name Home Assistant shows.
+	/// </summary>
+	/// <remarks>
+	///     Needed for two lists, not one: the rooms this run would add, which the document does not have yet, and
+	///     the rooms it would rebuild, most of which name no <see cref="AreaConfig.Name"/> of their own and would
+	///     otherwise be ticked by their slug. Supplied by the page, which owns the registry connection.
+	/// </remarks>
 	[Parameter]
 	public Func<string, string>? NameOf { get; set; }
 

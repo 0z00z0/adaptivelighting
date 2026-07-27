@@ -137,8 +137,13 @@ public sealed class AreaEntityResolverTests
 		Assert.AreEqual("sensor.annex_illuminance", area!.LuxSensor);
 	}
 
+	/// <summary>
+	///     With nothing else to go on the name is the area id, which is the only fact left. It used to be the
+	///     <i>first</i> fallback, so every auto-discovered room reported itself to the board and the log as its
+	///     slug; the registry now gets asked first, and this is what a registry with no name for the area leaves.
+	/// </summary>
 	[TestMethod]
-	public void The_Area_Name_Falls_Back_To_The_Area_Id()
+	public void An_Unnamed_Area_Falls_Back_To_The_Area_Id()
 	{
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
@@ -149,6 +154,43 @@ public sealed class AreaEntityResolverTests
 		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
 
 		Assert.AreEqual("stue", area!.Name);
+	}
+
+	/// <summary>
+	///     The name the engine puts in every snapshot, and through it the board's lanes, the activity log's room
+	///     column and the room page. Discovery writes only an area id, so this is the whole reason a room that was
+	///     never named by hand can still be called Kjeller - Bad rather than <c>kjeller_bad</c>.
+	/// </summary>
+	[TestMethod]
+	public void An_Area_Is_Named_As_Home_Assistant_Names_It()
+	{
+		var ha = new FakeHaContext();
+		var registry = new FakeAreaRegistry();
+		registry.Areas["kjeller_bad"] = ["light.l", "binary_sensor.m"];
+		registry.Names["kjeller_bad"] = "Kjeller - Bad";
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "kjeller_bad" }, new AreaSettings(), out var area, out _);
+
+		Assert.AreEqual("Kjeller - Bad", area!.Name);
+	}
+
+	/// <summary>A name in the document is the owner overruling Home Assistant, and the registry does not override it.</summary>
+	[TestMethod]
+	public void A_Configured_Name_Outranks_The_Registrys()
+	{
+		var ha = new FakeHaContext();
+		var registry = new FakeAreaRegistry();
+		registry.Areas["kjeller_bad"] = ["light.l", "binary_sensor.m"];
+		registry.Names["kjeller_bad"] = "Kjeller - Bad";
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		Resolver(ha, registry)
+			.TryResolve(new AreaConfig { AreaId = "kjeller_bad", Name = "Kjellerbadet" }, new AreaSettings(), out var area, out _);
+
+		Assert.AreEqual("Kjellerbadet", area!.Name);
 	}
 
 	[TestMethod]

@@ -23,11 +23,20 @@ public sealed class FakeAreaRegistry : IAreaRegistry
 	/// <summary>Area id to the floor it sits on. An area absent from here is floorless, as most houses' are.</summary>
 	public Dictionary<string, AreaFloor> Floors { get; } = new(StringComparer.Ordinal);
 
+	/// <summary>
+	///     Area id to the display name Home Assistant shows for it. An area absent from here is unnamed, which is
+	///     what a registry that cannot answer looks like from the outside.
+	/// </summary>
+	public Dictionary<string, string> Names { get; } = new(StringComparer.Ordinal);
+
 	/// <inheritdoc/>
 	public IReadOnlyList<string> AreaIds => [.. Areas.Keys];
 
 	/// <inheritdoc/>
 	public bool AreaExists(string areaId) => Areas.ContainsKey(areaId);
+
+	/// <inheritdoc/>
+	public string? NameOf(string areaId) => Names.GetValueOrDefault(areaId);
 
 	/// <inheritdoc/>
 	public IReadOnlyList<string> EntitiesInArea(string areaId) => Areas.GetValueOrDefault(areaId) ?? [];

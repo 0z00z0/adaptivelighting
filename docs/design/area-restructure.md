@@ -54,9 +54,11 @@ Concrete, from the actual screens:
 > section** — never into a separate top-level dumping ground.
 
 The last clause is what kills `Advanced` as a page. "Advanced" answered *"how confident do I need to
-be?"*; it never answered *"where do I look?"*. A person who wants the motion device classes is
-thinking about *how rooms find their sensors*, so that setting belongs in Areas — merely folded,
-because it is rarely touched.
+be?"*; it never answered *"where do I look?"*.
+
+> **Amended, 2026-07-27, by the owner.** The principle above is kept for everything except the two
+> groups it placed in Areas — the all-rooms defaults and *Finding lights & sensors*. Both moved to
+> **House**. See [the amendment](#the-amendment-house-holds-the-settings-there-is-exactly-one-of).
 
 ### The settings sections
 
@@ -65,10 +67,35 @@ sections, two of them grab-bags) to **four**:
 
 | Section | Contents |
 |---|---|
-| **Areas** | The floor-grouped list of rooms (each with enable toggle, edge colour, editor); the *Set up rooms again* action; the **All rooms** group (today's `Defaults`, plus `Global.OutdoorLuxSensor`); the **Finding lights & sensors** group (labels include/exclude/motion; device classes behind its Advanced fold). |
+| **Areas** | The floor-grouped list of rooms (each with enable toggle, edge colour, editor); the *Set up rooms again* action; the per-floor bulk switch; the switched-off line. **Nothing else** — see the amendment. |
 | **Schedule** | Today's Periods (daylight chart + period editor), plus `SmoothTransitions`/`BlendMinutes` — blending across period boundaries is a property of the schedule and has no business under "Timing & override detection". |
 | **House modes** | Unchanged. This section already moved out of Global and is the model to copy, not a problem to fix. |
-| **House** | Name, people watched, away debounce, master switch; then one *Fine tuning* fold: NetDaemon user id, circadian tick, self-echo window, other-automations-count-as-manual, command tolerances. |
+| **House** | **Every room starts with these** (today's `Defaults`, plus `Global.OutdoorLuxSensor`) and **Finding lights & sensors** (labels include/exclude/motion; device classes behind its Advanced fold), in that order and first; then name, people watched, away debounce, master switch; then one *Fine tuning* fold: NetDaemon user id, circadian tick, self-echo window, other-automations-count-as-manual, command tolerances. |
+
+### The amendment: House holds the settings there is exactly one of
+
+**Shipped as designed, then changed on the owner's instruction (2026-07-27).** The two groups above
+were built into Areas, and the owner could not find them: in a house of seventeen rooms across six
+floor groups, both sat far below the fold of a list nobody scrolls to the bottom of.
+
+The design's own rule was argued in their defence — a setting lives under the noun it changes, and
+these change how rooms behave. **The owner was right and the rule was wrong here**, because it does
+not discriminate: the schedule changes how rooms behave, so do the house modes, and both have
+sections of their own. Their test does:
+
+> These are house-wide settings and not area specific.
+
+There is exactly one `Defaults` block in the document, and exactly one of each label and device-class
+setting. A per-room exclude label does not exist. **Areas is a list of rooms; these two are
+singular.** That is the line, and it gives House a membership rule worth stating: *House holds the
+settings there is exactly one of* — the defaults every room starts with, how lights and sensors are
+found, the house's name, its people, the master switch, the fine tuning. Schedule and House modes keep
+their own sections because they are big and distinct, not because the rule excludes them.
+
+What the move costs, and what pays for it: a room's settings are read *against* the defaults — the
+room page says "3 of 21 settings are this room's own" — so shifting the baseline is now a page away.
+That is paid for with a link under the room's own settings reveal, and with one line in the Areas lede
+saying where the two groups went. The `?section=defaults` deep link follows its contents to House.
 
 **Verdict on the owner's "General section within Areas" (requirement 4):** right instinct, one
 refinement. Don't add a *General* group *next to* Defaults — **replace Defaults with it**. The
@@ -77,9 +104,12 @@ area-general settings; keeping a separate Defaults section alongside an Areas-Ge
 recreate today's two-grab-bags problem with new names. The group is called **"All rooms"** (not
 "General" — "General" says nothing; "All rooms" says exactly which noun it changes and telegraphs the
 override relationship: a room's own settings beat *All rooms*). Settings that are *not* per-room
-overridables but are still about rooms (the labels, the device classes, the outdoor lux sensor) join
-the Areas section in their own named groups, so the answer to "where are room things?" is always
-"Areas".
+overridables but are still about rooms — the labels, the device classes, the outdoor lux sensor — get
+their own named group.
+
+Both groups shipped under Areas and now sit under House (see the amendment above); the group itself
+shipped titled **"Every room starts with these"** rather than "All rooms", which says the same thing
+as a sentence.
 
 ### The dashboard
 
@@ -124,18 +154,18 @@ copy users have learned is a cost, not a cleanup.
 | `SmoothTransitions` | Schedule | **Blend between periods** | "Lights drift to the next period's level instead of stepping at the boundary." |
 | `BlendMinutes` | Schedule | **Blend over** | (same row) |
 | `HouseMode` | House modes | — | already moved; unchanged |
-| `OutdoorLuxSensor` | Areas › All rooms › Darkness | **Outdoor light sensor** | current copy is good |
-| `ExcludeLabel` | Areas › Finding lights & sensors | **Never touch (label)** | "Anything in Home Assistant carrying this label is invisible to this app." Becomes a label dropdown — §5. |
-| **new** `IncludeLabel` | Areas › Finding lights & sensors | **Only manage lights with (label)** | "When set, only lights carrying this label are managed. Leave empty to manage every light that's found." §3.4. |
-| `MotionLabel` | Areas › Finding lights & sensors | **Counts as motion (label)** | "A sensor with this label is treated as a motion sensor whatever its type." Label dropdown. |
-| `MotionDeviceClasses` | Areas › Finding lights & sensors › fold | **What counts as a motion sensor** | unchanged (incl. the replaces-not-adds warning) |
-| `IlluminanceDeviceClass` | Areas › Finding lights & sensors › fold | **What counts as a light-level sensor** | unchanged |
+| `OutdoorLuxSensor` | House › Every room starts with these › Darkness | **Outdoor light sensor** | current copy is good |
+| `ExcludeLabel` | House › Finding lights & sensors | **Never touch (label)** | "Anything in Home Assistant carrying this label is invisible to this app." Becomes a label dropdown — §5. |
+| **new** `IncludeLabel` | House › Finding lights & sensors | **Only manage lights with (label)** | "When set, only lights carrying this label are managed. Leave empty to manage every light that's found." §3.4. |
+| `MotionLabel` | House › Finding lights & sensors | **Counts as motion (label)** | "A sensor with this label is treated as a motion sensor whatever its type." Label dropdown. |
+| `MotionDeviceClasses` | House › Finding lights & sensors › fold | **What counts as a motion sensor** | unchanged (incl. the replaces-not-adds warning) |
+| `IlluminanceDeviceClass` | House › Finding lights & sensors › fold | **What counts as a light-level sensor** | unchanged |
 | `ZonesAutoDiscovered` → `AreasAutoDiscovered` | *(hidden, as today)* | — | never rendered |
 | `KillSwitchIsDefaulted`, `EffectiveKillSwitchEntity`, `DefaultKillSwitchEntity`, `EffectiveMotionDeviceClasses` | *(computed, `[YamlIgnore]`)* | — | unchanged |
 
 ### 3.2 `ZoneSettings` → `AreaSettings` (today: the Defaults section)
 
-All land in **Areas › All rooms**, in three groups mirroring today's folds. Per-room overrides mirror
+All land in **House › Every room starts with these**, in three groups mirroring today's folds. Per-room overrides mirror
 the same labels, so the two places a setting appears use identical words.
 
 | Setting | Group | New label | Help |
@@ -259,13 +289,11 @@ Areas
   │ ▌ [○off] Soverom    soverom   respects sleep       ▸  │
   OTHER ROOMS
   │ ▌ [●on] Uteplass    uteplass  stays on when away   ▸  │
-
-  ▸ All rooms — settings every room starts with
-      (Movement & timing · Darkness · Room behaviour)
-  ▸ Finding lights & sensors
-      (Only manage lights with · Never touch · Counts as motion
-       · Advanced: device classes)
 ```
+
+The two groups the sketch once ended with — *All rooms* and *Finding lights & sensors* — are no
+longer here; they are under House (see the amendment in §2). Areas ends with the switched-off line,
+and its lede carries a thread to where they went.
 
 - **Header row per area** (requirement 1): the enable **toggle** (a switch, not a checkbox — it is
   the room's power state, not a form field), the name, the area slug, the existing stray-from-default
@@ -286,10 +314,10 @@ Areas
 - **Inside the fold**: unchanged from today's `ZoneEditor` — name, area picker, discovery preview,
   hand-picked entities, overrides — minus the Enabled override row.
 - **Set up rooms again** (requirement 8): a button opening a **preview panel**, §4.4.
-- **All rooms / Finding lights & sensors**: `GroupFold`s after the room list. After, not before —
-  the room list is what people come for; the shared settings are reference material. Each fold's
-  one-line description carries the override rule: *"Every room starts with these. A room's own
-  settings win."*
+- **All rooms / Finding lights & sensors**: built here as `GroupFold`s after the room list, and
+  **moved to House** (§2's amendment) when it turned out that "after the room list" means "off the
+  bottom of the screen" in a seventeen-room house. The override rule they carry is unchanged
+  wherever they sit: *"Every room starts with these. A room's own settings win."*
 
 ### 4.3 Settings › area editor changes
 
@@ -404,9 +432,9 @@ In `RunZoneDiscovery` (moving to `AreaSetupService`, §6.4):
 | "Self-echo window" | **Recognise own changes for** | House fold |
 | "Skips the away sweep" | **Stays on when everyone leaves** | room behaviour |
 | "Periods" | **Schedule** | rail; "period" survives inside the section — the schedule is made of periods |
-| "Defaults" | **All rooms** | Areas group |
+| "Defaults" | **Every room starts with these** | House group |
 | "Advanced settings" | *(section removed; contents redistributed)* | — |
-| "Discovery conventions" | **Finding lights & sensors** | Areas group |
+| "Discovery conventions" | **Finding lights & sensors** | House group |
 
 **The empty label dropdown** (requirements 6–7, no-labels house): the three label fields become a
 shared `LabelPicker` (§6.6). When `IHaRegistry.Labels` is empty the picker renders not as a bare

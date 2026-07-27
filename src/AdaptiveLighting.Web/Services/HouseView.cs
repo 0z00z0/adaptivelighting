@@ -1,3 +1,4 @@
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
@@ -103,8 +104,9 @@ public static class HouseView
 	///     spend a minute on these sentences deserves to know that before they start rather than after.
 	/// </remarks>
 	/// <param name="areas">The document's rooms.</param>
+	/// <param name="registry">The area registry, for the names it lists, or <c>null</c> when there is none to ask.</param>
 	/// <exception cref="ArgumentNullException"><paramref name="areas"/> is <c>null</c>.</exception>
-	public static string StrayLine(IEnumerable<AreaConfig> areas)
+	public static string StrayLine(IEnumerable<AreaConfig> areas, IAreaRegistry? registry)
 	{
 		ArgumentNullException.ThrowIfNull(areas);
 
@@ -115,7 +117,7 @@ public static class HouseView
 
 		List<string> straying =
 		[
-			.. rooms.Where(room => RoomSettings.OwnCount(room) > 0).Select(DisplayName)
+			.. rooms.Where(room => RoomSettings.OwnCount(room) > 0).Select(room => DisplayName(room, registry))
 		];
 
 		if (straying.Count == 0)
@@ -178,16 +180,24 @@ public static class HouseView
 		return [.. areas.Where(area => !taken.Contains(area.Id))];
 	}
 
-	/// <summary>What a room is called on this page: its own name, else its area id, else that it is new.</summary>
+	/// <summary>
+	///     What a room is called on this page: its own name, else Home Assistant's name for its area, else the
+	///     area id, else that it is new.
+	/// </summary>
+	/// <remarks>
+	///     The order is <see cref="AreaNaming"/>'s, not a second copy of it — the room rows, the board's lanes and
+	///     the room page's heading have to name one room one way. Only the last step is this page's own: a row that
+	///     names nothing at all is a room somebody has just added, and "New room" says that where the engine's
+	///     "(unnamed area)" would read as a fault.
+	/// </remarks>
 	/// <param name="area">The room.</param>
+	/// <param name="registry">The area registry, or <c>null</c> when Home Assistant has not answered.</param>
 	/// <exception cref="ArgumentNullException"><paramref name="area"/> is <c>null</c>.</exception>
-	public static string DisplayName(AreaConfig area)
+	public static string DisplayName(AreaConfig area, IAreaRegistry? registry)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 
-		return area.Name is { Length: > 0 } name ? name
-			: area.AreaId is { Length: > 0 } areaId ? areaId
-			: "New room";
+		return AreaNaming.Resolve(area, registry) ?? "New room";
 	}
 
 	/// <summary>

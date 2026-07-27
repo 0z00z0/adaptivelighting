@@ -544,7 +544,7 @@ public sealed class ModeService
 		[
 			.. config.Areas.Select(area => new RoomView(
 				area.AreaId,
-				area.DisplayName,
+				AreaNaming.DisplayName(area, _catalog.AreaRegistry),
 				AreaView.IsEnabled(area, config.Defaults),
 				LightCountOf(area, config.Global)))
 		];

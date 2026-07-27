@@ -43,6 +43,44 @@ under one version, because they are compiled against each other.
   - The reading comes from the room's own lux sensor when it has one, and otherwise from
     `Global.OutdoorLuxSensor` — the same sensor the darkness gate reads, resolved once.
 
+- **A note when a room is switched on**, on both the House tab's room row and the room page. It says
+  how many lights the room will now command and **names every one of them**, because a count alone
+  leaves somebody hunting through the room.
+  - The lights that look like something other than room lighting are marked, each with a reason:
+    status LEDs and indicators, a trailing `_led` on an id, a colour channel of a lamp the room
+    already commands whole, and a light inside an appliance. On one live house that is 13 of the
+    living room's 19 lights — three access-point LEDs, four board indicators, five WiZ channels and
+    the fridge.
+  - **Advisory, never a filter.** Home Assistant's `entity_category` is not exposed by HassModel, so
+    every rule is a heuristic on a name, and a heuristic may point but must never quietly drop a
+    light. The rules are asymmetric on purpose: accusing needs a whole word, excusing needs only a
+    substring, so an LED strip and a *taklys* are not mistaken for indicators.
+  - It recommends making a *Room light* label in Home Assistant and naming it under *House › Finding
+    lights & sensors › Only manage lights with*, and says plainly that the setting reaches every room.
+    A house that already names an include label is not told to do it again.
+  - The switch works either way and the note is dismissible; a room already read is not raised again.
+    Switching a whole floor on raises nothing — six notes at once is a wall rather than a warning.
+
+### Changed
+
+- **Rooms are called what Home Assistant calls them.** An auto-discovered room writes only its area
+  id, and nothing asked the registry for the area's name, so the room page's heading, the board's
+  lanes and the activity log's room column all read the slug — `kjeller_bad` for a room Home
+  Assistant knows as *Kjeller - Bad*. The name is now resolved wherever a room is named, in one
+  place: a `Name` in the document still wins, then the registry's name, then the area id.
+  - Resolved on read and **never written to the document**, so renaming an area in Home Assistant
+    renames the room here. Adding a room, adopting an area and changing a room's area have all
+    stopped copying the name in for the same reason.
+- **Picking lights and sensors by hand offers the room's own entities**, with a tick-box that widens
+  to the whole house — the scoping that was lost when the room page replaced the old area editor. On
+  one house that is 3 candidates instead of 164. Anything already picked stays listed and removable
+  even when it falls outside the scope. *Blocked while on* is deliberately still house-wide: a
+  do-not-disturb flag belongs to no area at all.
+- **The all-rooms defaults and *Finding lights & sensors* moved from Areas to House.** Below a
+  seventeen-room list they were effectively invisible. House now has a rule worth stating: it holds
+  the settings there is exactly one of. `?section=defaults` follows them, the Areas lede says where
+  they went, and the room page's settings reveal links to the baseline it is measured against.
+
 ## [2.0.0]
 
 **Zone became area.** Home Assistant calls a room an *area*; a *zone* is a GPS region like "Home" or

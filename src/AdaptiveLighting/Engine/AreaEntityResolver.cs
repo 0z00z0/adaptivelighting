@@ -116,7 +116,10 @@ public sealed class AreaEntityResolver
 		resolved = null;
 		error = null;
 
-		string name = area.DisplayName;
+		// The one place a name enters the engine. Everything downstream — the snapshot's AreaName, and through it
+		// the board's lanes, the activity log and the room page — takes what is decided here, so a room proposed
+		// with nothing but an area id is called what Home Assistant calls it rather than by its slug.
+		string name = AreaNaming.DisplayName(area, _registry);
 		string? areaId = null;
 
 		if (area.AreaId is { Length: > 0 } configuredArea)

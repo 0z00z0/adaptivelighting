@@ -260,6 +260,33 @@ public sealed class HaCatalog
 	}
 
 	/// <summary>
+	///     The lights <paramref name="area"/> would actually command, named the way Home Assistant names them.
+	/// </summary>
+	/// <remarks>
+	///     The resolver's own answer through <see cref="PreviewArea"/>, not a discovery count: a room that pins its
+	///     own light list bypasses discovery entirely, groups have already won over their members, and the room's
+	///     per-room exclusions have already been applied. A warning built on anything looser would name lights the
+	///     engine is not going to touch, which is a worse fault in a warning than in a label. A room that cannot
+	///     resolve — no motion sensor, say — yields nothing, because it will command nothing.
+	/// </remarks>
+	/// <param name="area">The room, as it stands in the editor. Not mutated.</param>
+	/// <param name="defaults">The document's defaults, for the settings merge the resolver performs.</param>
+	/// <param name="global">The document's globals, which supply the discovery conventions.</param>
+	/// <returns>The lights, in the resolver's order. Empty when the room resolves to none.</returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public IReadOnlyList<LightUnderReview> LightsIn(AreaConfig area, AreaSettings defaults, GlobalConfig global)
+	{
+		ArgumentNullException.ThrowIfNull(area);
+		ArgumentNullException.ThrowIfNull(defaults);
+		ArgumentNullException.ThrowIfNull(global);
+
+		if (PreviewArea(area, defaults, global).Resolved is not { } resolved)
+			return [];
+
+		return [.. resolved.Lights.Select(entityId => new LightUnderReview(entityId, FriendlyNameOf(entityId) ?? entityId))];
+	}
+
+	/// <summary>
 	///     Drops the cached discovery answers, so the next question is put to Home Assistant afresh.
 	/// </summary>
 	/// <remarks>

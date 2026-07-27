@@ -74,7 +74,7 @@ else
 					<span class="room-core"></span>
 				</span>
 
-				<h1 class="room-name">@room.DisplayName</h1>
+				<h1 class="room-name">@RoomName</h1>
 
 				@if (_snapshot is { } live)
 				{
@@ -94,7 +94,7 @@ else
 						class="switch @(IsEnabled ? "on" : null)"
 						role="switch"
 						aria-checked="@(IsEnabled ? "true" : "false")"
-						aria-label="@($"Automatic lighting in {room.DisplayName}")"
+						aria-label="@($"Automatic lighting in {RoomName}")"
 						title="@SwitchTitle"
 						@onclick="ToggleEnabled">
 					<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
@@ -122,6 +122,13 @@ else
 					<strong>Switched off.</strong> Nothing below is commanded while the switch is off &mdash; the
 					settings are kept, and take effect the moment you switch the room on.
 				</div>
+			}
+
+			@* Raised by the switch above, dismissed by the reader, and not raised again for this room while the
+			   page is open. The switch itself has already taken effect. *@
+			@if (_switchOnNote is { } switchOn)
+			{
+				<SwitchOnNoteView Note="@switchOn" AdviceHref="config?section=house" Dismissed="@DismissSwitchOnNote" />
 			}
 		</div>
 
@@ -211,7 +218,13 @@ else
 					@onclick="() => _showAll = !_showAll">
 				All settings @(_showAll ? "▴" : "▾")
 			</button>
-			<span class="room-more-note">@OwnLine</span>
+			@* Every number above is read against the house's own, and the house's own are on another page. A
+			   room that says "3 of 21 settings are this room's own" has just raised the question of what the
+			   other eighteen are, so the way to them is here rather than left as a hunt. *@
+			<span class="room-more-note">
+				@OwnLine &mdash;
+				<a href="config?section=house">change the baseline under House</a>
+			</span>
 		</div>
 
 		@if (_showAll)
@@ -323,11 +336,11 @@ else
 					@if (_identityOpen)
 					{
 						<div class="sgroup-body">
-							<SettingRow Label="Name" Help="The room's name everywhere in this app. Follows the area's own name until you type one.">
+							<SettingRow Label="Name" Help="The room's name everywhere in this app. Left empty it follows the area's name in Home Assistant, so renaming it there renames it here.">
 								<input type="text"
 									   class="cell wide"
 									   value="@room.Name"
-									   placeholder="@(room.AreaId ?? "Room name")"
+									   placeholder="@RoomName"
 									   aria-label="Name"
 									   @onchange="OnNameChanged" />
 							</SettingRow>
@@ -427,37 +440,66 @@ else
 							usually better.
 						</p>
 
+						@* --------------------------------------------------------------------------------------
+						   The lists offer this room's own entities, because a picker holding all 164 lights in the
+						   house buries the three real answers among status LEDs and colour channels — the same 34
+						   entities the switch-on note warns about, offered as things to pin by hand.
+
+						   A default, not a wall: this whole fold exists for the case where Home Assistant's area
+						   assignment is the thing that is wrong, so widening it is one tick away, and anything
+						   already chosen stays listed either way.
+						   -------------------------------------------------------------------------------------- *@
+						@if (room.AreaId is { Length: > 0 })
+						{
+							<div class="field">
+								<div class="field-control checks">
+									<label>
+										<input type="checkbox" @bind:get="_showAllEntities" @bind:set="OnShowAllChanged" />
+										offer entities from the whole house
+									</label>
+								</div>
+								<div class="field-help">@ScopeNote</div>
+							</div>
+						}
+
 						<SettingRow Label="Lights" Help="Leave empty to use whatever discovery finds in this area.">
 							<EntityListPicker Value="@(room.Lights ?? [])"
 											  ValueChanged="@(value => SetList(value, list => room.Lights = list))"
-											  Options="@_lights"
+											  Options="@_lightChoices"
 											  NameResolver="@Name"
 											  KnownResolver="@Catalog.Knows"
 											  EmptyLabel="Discovered from the area."
 											  AddLabel="Add a light…"
+											  EmptyNote="@EmptyNote("lights")"
 											  Placeholder="light.example" />
 						</SettingRow>
 
 						<SettingRow Label="Motion sensors" Help="Sensors that report motion, occupancy or presence.">
 							<EntityListPicker Value="@(room.MotionSensors ?? [])"
 											  ValueChanged="@(value => SetList(value, list => room.MotionSensors = list))"
-											  Options="@_motionSensors"
+											  Options="@_motionChoices"
 											  NameResolver="@Name"
 											  KnownResolver="@Catalog.Knows"
 											  EmptyLabel="Discovered from the area."
 											  AddLabel="Add a motion sensor…"
+											  EmptyNote="@EmptyNote("motion sensors")"
 											  Placeholder="binary_sensor.example" />
 						</SettingRow>
 
 						<SettingRow Label="Light-level sensor" Help="Only needed when the room has more than one.">
 							<EntityPicker Value="@room.LuxSensor"
 										  ValueChanged="@(value => Set(() => room.LuxSensor = value))"
-										  Options="@_luxSensors"
+										  Options="@_luxChoices"
 										  NoneLabel="(discovered from the area)"
+										  EmptyNote="@EmptyNote("light-level sensors")"
 										  Placeholder="sensor.example_illuminance" />
 						</SettingRow>
 
-						<SettingRow Label="Blocked while on" Help="While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch.">
+						@* The one list that is not scoped, and it is a difference in kind rather than an oversight:
+						   a television is in this room, but a "do not disturb" flag is an input_boolean that belongs
+						   to no area at all, and a projector may sit in the room next door. Scoping this would hide
+						   the commonest blockers rather than the noisy ones. *@
+						<SettingRow Label="Blocked while on" Help="While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Offered from the whole house, since a blocker often belongs to no room.">
 							<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
 											  ValueChanged="@(value => SetList(value, list => room.IgnoreWhenOn = list))"
 											  Options="@_blockers"
@@ -486,7 +528,7 @@ else
 			else if (_removing)
 			{
 				<div class="notice warn">
-					<strong>Remove @room.DisplayName?</strong>
+					<strong>Remove @RoomName?</strong>
 					<p>
 						The room stops being managed and its settings are gone. Its lights and sensors stay exactly as
 						they are in Home Assistant &mdash; this app simply stops touching them. Setting the room up
@@ -585,6 +627,11 @@ else
 	private DateTimeOffset? _savedAt;
 	private CancellationTokenSource? _saveCts;
 
+	// What the room's switch had to say for itself when it was last turned on, and whether that has been read.
+	// Both are per-visit: the note is advice about this house right now, not a preference worth persisting.
+	private SwitchOnNote? _switchOnNote;
+	private bool _switchOnDismissed;
+
 	private bool _showAll;
 	private bool _identityOpen;
 	private bool _pickersOpen;
@@ -593,12 +640,22 @@ else
 	private readonly HashSet<string> _closedGroups = new(StringComparer.Ordinal);
 	private readonly HashSet<string> _openedGroups = new(StringComparer.Ordinal);
 
+	// Everything Home Assistant has, read once per document load. These are the pickers' fallback, not what they
+	// offer: the three scoped lists below are what a picker actually shows.
 	private IReadOnlyList<AreaOption> _areas = [];
 	private IReadOnlyList<EntityOption> _lights = [];
 	private IReadOnlyList<EntityOption> _motionSensors = [];
 	private IReadOnlyList<EntityOption> _luxSensors = [];
 	private IReadOnlyList<EntityOption> _blockers = [];
 	private IReadOnlyList<EntityOption> _sunEntities = [];
+
+	// What the pick-by-hand lists offer: this room's own entities unless the reader has widened them. Rebuilt
+	// whenever the room changes rather than read in a getter — this page redraws once a second, and each of these
+	// reads a friendly name per entity.
+	private IReadOnlyList<EntityOption> _lightChoices = [];
+	private IReadOnlyList<EntityOption> _motionChoices = [];
+	private IReadOnlyList<EntityOption> _luxChoices = [];
+	private bool _showAllEntities;
 
 	private IDisposable? _subscription;
 	private IDisposable? _ticker;
@@ -649,6 +706,8 @@ else
 		_savedAt = null;
 		_setupOpen = false;
 		_removing = false;
+		_switchOnNote = null;
+		_switchOnDismissed = false;
 
 		try
 		{
@@ -700,8 +759,80 @@ else
 		_validation = Engine.Validate(_document);
 		_preview = Catalog.PreviewArea(room, _document.Defaults, _document.Global);
 
+		AreaEntities inArea = Catalog.EntitiesInArea(room.AreaId, _document.Global);
+
+		_lightChoices = Scope(inArea.Lights, _lights, room.Lights);
+		_motionChoices = Scope(inArea.MotionSensors, _motionSensors, room.MotionSensors);
+		_luxChoices = Scope(inArea.LuxSensors, _luxSensors, room.LuxSensor is { Length: > 0 } lux ? [lux] : null);
+
 		ReadLiveState();
 	}
+
+	/// <summary>
+	///     Whether the pick-by-hand lists are filtered to this room's own entities.
+	/// </summary>
+	/// <remarks>
+	///     A room that names no Home Assistant area has nothing to filter to, so it always sees the whole house —
+	///     an empty picker beside a tick-box that cannot help is worse than a long one.
+	/// </remarks>
+	private bool ScopeToArea => !_showAllEntities && _room?.AreaId is { Length: > 0 };
+
+	/// <summary>
+	///     What one picker offers: this room's entities, unless the reader has widened them.
+	/// </summary>
+	/// <remarks>
+	///     <paramref name="inArea"/> is discovery's own answer, from the same resolver the card above runs, so the
+	///     scoped list cannot disagree with what the room would actually resolve — a ghost the engine drops is not
+	///     offered here either.
+	/// </remarks>
+	/// <param name="inArea">What the room's area yields, by discovery's rules.</param>
+	/// <param name="everywhere">The same kind of entity, everywhere in the house.</param>
+	/// <param name="configured">What this room has already been given by hand, which must survive the filter.</param>
+	private IReadOnlyList<EntityOption> Scope(
+		IReadOnlyList<EntityOption> inArea,
+		IReadOnlyList<EntityOption> everywhere,
+		IReadOnlyList<string>? configured)
+	{
+		if (!ScopeToArea)
+			return everywhere;
+
+		// An entity already picked from outside the area stays listed and stays selected. A filter is a default; it
+		// is never a reason to drop a value somebody chose on purpose — and "the area assignment is wrong" is
+		// precisely why this list exists at all.
+		IEnumerable<EntityOption> outsiders = configured is null
+			? []
+			: everywhere.Where(option =>
+				configured.Contains(option.EntityId, StringComparer.Ordinal)
+				&& !inArea.Any(local => string.Equals(local.EntityId, option.EntityId, StringComparison.Ordinal)));
+
+		return [.. inArea.Concat(outsiders).OrderBy(option => option.FriendlyName, StringComparer.CurrentCulture)];
+	}
+
+	/// <summary>
+	///     Widens or narrows the pickers. Changes what is offered, never what is configured, so nothing is saved.
+	/// </summary>
+	private void OnShowAllChanged(bool showAll)
+	{
+		_showAllEntities = showAll;
+		Refresh();
+	}
+
+	/// <summary>The line under the tick-box: what the lists are showing right now.</summary>
+	private string ScopeNote => ScopeToArea
+		? "Showing what Home Assistant puts in this room. Anything you have already picked stays listed even if it is elsewhere."
+		: "Showing every one in the house.";
+
+	/// <summary>
+	///     Why a picker has nothing to offer.
+	/// </summary>
+	/// <remarks>
+	///     Scoping makes an empty list ordinary rather than alarming — most rooms have no light-level sensor — so
+	///     it must not read as a broken connection, and it has to name the tick-box that widens it.
+	/// </remarks>
+	private string EmptyNote(string what) =>
+		!HomeAssistantIsAnswering ? "Waiting for Home Assistant — type an id for now."
+		: ScopeToArea ? $"No {what} in this room. Tick “offer entities from the whole house” to pick from anywhere."
+		: $"No {what} anywhere in Home Assistant — type an id if one is coming.";
 
 	/// <summary>
 	///     This room's newest report, by area id first and display name second — the same join the snapshot cache
@@ -715,10 +846,21 @@ else
 		_snapshot = Cache.Snapshots.FirstOrDefault(snapshot =>
 				snapshot.AreaId is { Length: > 0 } areaId && string.Equals(areaId, room.AreaId, StringComparison.Ordinal))
 			?? Cache.Snapshots.FirstOrDefault(snapshot =>
-				string.Equals(snapshot.AreaName, room.DisplayName, StringComparison.OrdinalIgnoreCase));
+				string.Equals(snapshot.AreaName, RoomName, StringComparison.OrdinalIgnoreCase));
 	}
 
-	private string PageName => _room?.DisplayName ?? AreaId;
+	/// <summary>
+	///     What this room is called, everywhere on this page.
+	/// </summary>
+	/// <remarks>
+	///     Resolved through <see cref="AreaNaming"/> rather than read off the document, so a room that states no
+	///     name of its own is called what Home Assistant calls its area instead of by its slug. It is also the name
+	///     the engine now puts in every snapshot, which is what keeps the two name-based joins on this page — the
+	///     live report and the room's own log — matching the same room.
+	/// </remarks>
+	private string RoomName => _room is { } room ? AreaNaming.DisplayName(room, Catalog.AreaRegistry) : AreaId;
+
+	private string PageName => _room is null ? AreaId : RoomName;
 
 	private bool IsEnabled => _room is { } room && AreaView.IsEnabled(room, _document.Defaults);
 
@@ -771,6 +913,11 @@ else
 	private static string StateTitle(AreaSnapshot snapshot) => $"State: {snapshot.State}";
 
 	/// <summary>The validator's complaint about this room, when it has one.</summary>
+	/// <remarks>
+	///     Matched on <see cref="AreaConfig.DisplayName"/>, not on <see cref="RoomName"/>: the validator is pure and
+	///     cannot consult Home Assistant, so the key it files an error under is the document's own name for the row.
+	///     Joining on the resolved name would silently stop finding this room's errors.
+	/// </remarks>
 	private AreaError? AreaErrorFor(ValidationResult validation) =>
 		_room is { } room
 			? validation.AreaErrors.FirstOrDefault(error =>
@@ -935,32 +1082,56 @@ else
 	///     Moves the room to a different Home Assistant area, which is also a change of address: the page's own
 	///     route names the area id, so it saves at once and follows the room to its new URL.
 	/// </summary>
+	/// <remarks>
+	///     The new area's name is deliberately not copied into the document. It used to be, back when a nameless
+	///     room rendered as its slug; now that the name is resolved from the registry at the point of use, writing
+	///     it would only freeze this room at whatever the area was called today and stop a rename in Home Assistant
+	///     ever reaching it.
+	/// </remarks>
 	private void OnAreaChanged(string? areaId)
 	{
 		if (_room is not { } room || areaId is not { Length: > 0 })
 			return;
 
 		room.AreaId = areaId;
-
-		if (string.IsNullOrWhiteSpace(room.Name))
-			room.Name = _areas.FirstOrDefault(area => string.Equals(area.Id, areaId, StringComparison.Ordinal))?.Name ?? areaId;
-
 		_dirty = true;
 		Commit();
 
 		Nav.NavigateTo($"room/{Uri.EscapeDataString(areaId)}");
 	}
 
-	private Task ToggleEnabled()
+	private async Task ToggleEnabled()
 	{
 		if (_room is not { } room)
-			return Task.CompletedTask;
+			return;
 
 		// An explicit true or false, never null: inheritance stays for documents that predate the switch, but a
 		// decision somebody just made with their thumb belongs in the file as itself.
-		room.Enabled = !IsEnabled;
+		bool switchingOn = !IsEnabled;
+		room.Enabled = switchingOn;
 
-		return MarkDirty();
+		// After the switch, never in front of it — see SwitchOnNoteView. MarkDirty re-runs discovery, so the note
+		// is built from the same preview the card below is showing rather than from the one before the change.
+		await MarkDirty();
+
+		_switchOnNote = switchingOn && !_switchOnDismissed
+			? SwitchOnWarning.For(RoomName, Catalog.LightsIn(room, _document.Defaults, _document.Global), _document.Global.IncludeLabel)
+			: null;
+	}
+
+	/// <summary>
+	///     Puts the switch-on note away, and keeps it away.
+	/// </summary>
+	/// <remarks>
+	///     For the rest of this visit: somebody who has read what this room commands and switched it off and on
+	///     again has not asked the question a second time, and a note that came back would be the nagging the
+	///     design refused. A fresh visit raises it again, which is the right side of that trade — the house may
+	///     have changed since.
+	/// </remarks>
+	private void DismissSwitchOnNote()
+	{
+		_switchOnNote = null;
+		_switchOnDismissed = true;
 	}
 
 	/// <summary>
@@ -1207,13 +1378,13 @@ else
 	}
 
 	private IReadOnlyList<ActivityEntry> RoomLog =>
-		_room is { } room ? [.. ActivityView.InRoom(Log.Entries, room.DisplayName).Take(LogRows)] : [];
+		_room is null ? [] : [.. ActivityView.InRoom(Log.Entries, RoomName).Take(LogRows)];
 
 	private string LogFoot
 	{
 		get
 		{
-			int total = _room is { } room ? ActivityView.InRoom(Log.Entries, room.DisplayName).Count : 0;
+			int total = _room is null ? 0 : ActivityView.InRoom(Log.Entries, RoomName).Count;
 
 			return total > LogRows
 				? $"The last {LogRows} of {total} reports from this room. The rest are on the Activity page."

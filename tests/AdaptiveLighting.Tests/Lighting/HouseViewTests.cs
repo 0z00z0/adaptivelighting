@@ -83,15 +83,15 @@ public sealed class HouseViewTests
 	[TestMethod]
 	public void With_No_Rooms_The_Line_Says_What_The_Defaults_Are_For()
 	{
-		StringAssert.Contains(HouseView.StrayLine([]), "no rooms yet");
+		StringAssert.Contains(HouseView.StrayLine([], null), "no rooms yet");
 	}
 
 	/// <summary>A house where nothing has been tuned says so in one clause, with the count in it.</summary>
 	[TestMethod]
 	public void A_House_That_Follows_The_Defaults_Says_So()
 	{
-		Assert.AreEqual("all 3 rooms follow these exactly", HouseView.StrayLine([Room("A"), Room("B"), Room("C")]));
-		Assert.AreEqual("the one room follows these exactly", HouseView.StrayLine([Room("A")]));
+		Assert.AreEqual("all 3 rooms follow these exactly", HouseView.StrayLine([Room("A"), Room("B"), Room("C")], null));
+		Assert.AreEqual("the one room follows these exactly", HouseView.StrayLine([Room("A")], null));
 	}
 
 	/// <summary>
@@ -112,12 +112,12 @@ public sealed class HouseViewTests
 		rooms.Add(stue);
 		rooms.Add(kontor);
 
-		Assert.AreEqual("14 rooms follow these exactly; Stue and Kontor carry their own values", HouseView.StrayLine(rooms));
+		Assert.AreEqual("14 rooms follow these exactly; Stue and Kontor carry their own values", HouseView.StrayLine(rooms, null));
 
 		for (int index = 0; index < 6; index++)
 			rooms[index].WelcomeHome = true;
 
-		StringAssert.Contains(HouseView.StrayLine(rooms), "and 6 others carry their own values");
+		StringAssert.Contains(HouseView.StrayLine(rooms, null), "and 6 others carry their own values");
 	}
 
 	/// <summary>Plurals on both halves: one follower follows, one stray carries.</summary>
@@ -129,7 +129,7 @@ public sealed class HouseViewTests
 
 		Assert.AreEqual(
 			"1 room follows these exactly; Stue carries their own values",
-			HouseView.StrayLine([Room("Gang"), stue]));
+			HouseView.StrayLine([Room("Gang"), stue], null));
 	}
 
 	/// <summary>A house where every room has been tuned is a different sentence, not a "0 rooms follow" one.</summary>
@@ -139,7 +139,7 @@ public sealed class HouseViewTests
 		AreaConfig stue = Room("Stue");
 		stue.VacancyTimeoutSeconds = 1800;
 
-		StringAssert.StartsWith(HouseView.StrayLine([stue]), "every room carries values of its own");
+		StringAssert.StartsWith(HouseView.StrayLine([stue], null), "every room carries values of its own");
 	}
 
 	// ===================== the switched-off line =====================
@@ -194,13 +194,44 @@ public sealed class HouseViewTests
 
 	// ===================== the small print =====================
 
-	/// <summary>The name falls back the same way the room page's own header does.</summary>
+	/// <summary>
+	///     The name falls back the same way the room page's own header does — and with no registry to ask, the
+	///     area id is as far as it gets, which is what a house whose Home Assistant is still connecting sees.
+	/// </summary>
 	[TestMethod]
 	public void A_Room_Is_Named_By_Name_Then_Area_Then_Nothing()
 	{
-		Assert.AreEqual("Stue", HouseView.DisplayName(new AreaConfig { Name = "Stue", AreaId = "stue" }));
-		Assert.AreEqual("stue", HouseView.DisplayName(new AreaConfig { AreaId = "stue" }));
-		Assert.AreEqual("New room", HouseView.DisplayName(new AreaConfig()));
+		Assert.AreEqual("Stue", HouseView.DisplayName(new AreaConfig { Name = "Stue", AreaId = "stue" }, null));
+		Assert.AreEqual("stue", HouseView.DisplayName(new AreaConfig { AreaId = "stue" }, null));
+		Assert.AreEqual("New room", HouseView.DisplayName(new AreaConfig(), null));
+	}
+
+	/// <summary>
+	///     The row reads the registry's name for the area, so a room proposed with nothing but an area id is
+	///     called what Home Assistant calls it. A name in the document still outranks it.
+	/// </summary>
+	[TestMethod]
+	public void A_Room_With_No_Name_Takes_The_Registrys()
+	{
+		FakeAreaRegistry registry = new();
+		registry.Names["kjeller_bad"] = "Kjeller - Bad";
+
+		Assert.AreEqual("Kjeller - Bad", HouseView.DisplayName(new AreaConfig { AreaId = "kjeller_bad" }, registry));
+		Assert.AreEqual("Kjellerbadet", HouseView.DisplayName(new AreaConfig { AreaId = "kjeller_bad", Name = "Kjellerbadet" }, registry));
+		Assert.AreEqual("sykkelbod", HouseView.DisplayName(new AreaConfig { AreaId = "sykkelbod" }, registry));
+	}
+
+	/// <summary>The stray line names rooms the same way the rows do, rather than listing slugs beside names.</summary>
+	[TestMethod]
+	public void The_Stray_Line_Names_Rooms_As_Home_Assistant_Does()
+	{
+		FakeAreaRegistry registry = new();
+		registry.Names["kjokken"] = "Kjøkken";
+
+		AreaConfig kitchen = new() { AreaId = "kjokken" };
+		kitchen.VacancyTimeoutSeconds = 1800;
+
+		StringAssert.Contains(HouseView.StrayLine([kitchen], registry), "Kjøkken");
 	}
 
 	/// <summary>An area id reaches a URL, so it is escaped; a room without one has no address at all.</summary>
