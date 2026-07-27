@@ -90,9 +90,21 @@
 			<p>@added</p>
 		}
 
+		@* What happens after the confirmation is the host page's business, not this component's: the settings page
+		   arms its save bar, the room page applies and saves by itself. A promise about saving is the worst kind
+		   of thing to be wrong about, so the page that knows says it. *@
 		<p class="hint">
-			Rooms stay switched on or off as they are now. Rooms you didn't tick are untouched. Nothing is written
-			until you press <em>Save and apply</em> &mdash; <em>Discard changes</em> undoes this.
+			Rooms stay switched on or off as they are now. Rooms you didn't tick are untouched.
+			@if (CommitNote is { Length: > 0 } commitNote)
+			{
+				@commitNote
+			}
+			else
+			{
+				<text>
+					Nothing is written until you press <em>Save and apply</em> &mdash; <em>Discard changes</em> undoes this.
+				</text>
+			}
 		</p>
 
 		<div class="panel-actions">
@@ -138,6 +150,18 @@
 	/// <summary>Raised when the operator backs out. Nothing has changed at that point.</summary>
 	[Parameter]
 	public EventCallback Cancelled { get; set; }
+
+	/// <summary>
+	///     What the host page does with the rebuild once it is confirmed. Left unset, the warning keeps the save
+	///     bar's wording, which is what the settings page needs.
+	/// </summary>
+	/// <remarks>
+	///     Only the page knows whether confirming arms a save bar or writes at once, and this sentence is a
+	///     promise about somebody's configuration file. A default that was wrong on one of the two pages would be
+	///     worse than no sentence at all.
+	/// </remarks>
+	[Parameter]
+	public string? CommitNote { get; set; }
 
 	private readonly HashSet<string> _ticked = new(StringComparer.Ordinal);
 
