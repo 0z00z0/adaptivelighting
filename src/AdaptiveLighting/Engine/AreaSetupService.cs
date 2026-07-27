@@ -253,11 +253,22 @@ public static class AreaSetupService
 	///     How many of the twenty-one per-room settings the area overrides.
 	/// </summary>
 	/// <remarks>
-	///     Spelled out rather than reflected over, matching the same count in the editor: the two are read
-	///     side by side and a discrepancy between them would be a dialog that under-warns. <c>Enabled</c> is
-	///     deliberately absent — it survives the rebuild.
+	///     <para>
+	///         Spelled out rather than reflected over, so that a setting has to be named to be counted and the
+	///         list can be read against the model. <c>Enabled</c> is deliberately absent — it survives the rebuild.
+	///     </para>
+	///     <para>
+	///         <b>Public, and the only copy, because the previous arrangement drifted.</b> The editor kept its own
+	///         spelled-out twin on the theory that two lists read side by side would be kept in step; when the five
+	///         daylight-brightness settings arrived only this one was updated, so a room tuned solely through them
+	///         reported "all automatic" while the re-setup dialog correctly counted five. Both surfaces now ask
+	///         here. A test pins this count against the model by reflection, so a setting added without being
+	///         named fails loudly rather than going quietly uncounted.
+	///     </para>
 	/// </remarks>
-	private static int OverrideCount(AreaConfig area) =>
+	/// <param name="area">The room to count.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="area"/> is <c>null</c>.</exception>
+	public static int OverrideCount(AreaConfig area) =>
 		(area.VacancyTimeoutSeconds is not null ? 1 : 0) + (area.PreOffSeconds is not null ? 1 : 0)
 		+ (area.PreOffBrightnessFactor is not null ? 1 : 0) + (area.OverrideDurationMinutes is not null ? 1 : 0)
 		+ (area.VacancyResetMinutes is not null ? 1 : 0) + (area.Darkness is not null ? 1 : 0)

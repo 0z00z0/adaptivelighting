@@ -582,22 +582,16 @@
 		|| Area.LuxSensor is { Length: > 0 } || Area.IgnoreWhenOn is { Count: > 0 };
 
 	/// <summary>
-	///     How many of the sixteen per-room settings this area states for itself.
+	///     How many of the per-room settings this area states for itself.
 	/// </summary>
 	/// <remarks>
-	///     <c>Enabled</c> is deliberately absent: the header switch owns it, so it is not one of the settings the
-	///     fold offers and must not be counted among them. The same sixteen are counted by the re-setup plan, so
-	///     the number here and the number in that warning are always the same number.
+	///     Asks <see cref="AreaSetupService.OverrideCount"/> rather than keeping a twin of it. This used to be a
+	///     spelled-out list of its own, on the theory that two lists read side by side stay in step; they did not.
+	///     The five daylight-brightness settings were added to the re-setup plan's copy and not to this one, so a
+	///     room tuned solely through them summarised itself as "all automatic" while the warning correctly counted
+	///     five. <c>Enabled</c> stays out of the count either way: the header switch owns it.
 	/// </remarks>
-	private int OverrideCount =>
-		(Area.VacancyTimeoutSeconds is not null ? 1 : 0) + (Area.PreOffSeconds is not null ? 1 : 0)
-		+ (Area.PreOffBrightnessFactor is not null ? 1 : 0) + (Area.OverrideDurationMinutes is not null ? 1 : 0)
-		+ (Area.VacancyResetMinutes is not null ? 1 : 0) + (Area.Darkness is not null ? 1 : 0)
-		+ (Area.LuxThreshold is not null ? 1 : 0) + (Area.LuxHysteresis is not null ? 1 : 0)
-		+ (Area.SunElevationThreshold is not null ? 1 : 0) + (Area.SunEntity is not null ? 1 : 0)
-		+ (Area.DayTransitionSeconds is not null ? 1 : 0) + (Area.NightTransitionSeconds is not null ? 1 : 0)
-		+ (Area.RespectSleepMode is not null ? 1 : 0) + (Area.SleepBlocksAutoOn is not null ? 1 : 0)
-		+ (Area.SkipAwaySweep is not null ? 1 : 0) + (Area.WelcomeHome is not null ? 1 : 0);
+	private int OverrideCount => AreaSetupService.OverrideCount(Area);
 
 	private bool HasOverrides => OverrideCount > 0;
 

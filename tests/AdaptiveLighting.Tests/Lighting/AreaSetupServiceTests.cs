@@ -414,6 +414,31 @@ public sealed class AreaSetupServiceTests
 		Assert.AreEqual(0, Plan(config, house, "stue").Rebuilds.Single().OverrideCount);
 	}
 
+	/// <summary>
+	///     A room tuned only through the newest settings still reports itself as tuned.
+	/// </summary>
+	/// <remarks>
+	///     The editor used to keep a spelled-out twin of this count and was not updated when the five
+	///     daylight-brightness settings arrived, so such a room summarised itself as "all automatic" while the
+	///     re-setup warning correctly counted five. Both surfaces now ask the same method; this pins the case that
+	///     drifted, in the units a reader sees.
+	/// </remarks>
+	[TestMethod]
+	public void A_Room_Tuned_Only_By_Daylight_Brightness_Does_Not_Read_As_Untouched()
+	{
+		AreaConfig area = new()
+		{
+			AreaId = "gang",
+			LuxBrightnessEnabled = true,
+			LuxBrightnessStartLux = 250,
+			LuxBrightnessFullLux = 8000,
+			LuxBrightnessMaxPct = 80,
+			LuxBrightnessGamma = 1.4
+		};
+
+		Assert.AreEqual(5, AreaSetupService.OverrideCount(area));
+	}
+
 	// ===================== what a run leaves alone =====================
 
 	/// <summary>
