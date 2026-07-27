@@ -258,14 +258,20 @@ public static class BoardView
 	/// </remarks>
 	/// <param name="snapshot">The room's newest report.</param>
 	/// <param name="window">The board's window; a deadline beyond its right edge is not drawn.</param>
+	/// <param name="now">
+	///     The reader's present. A deadline already behind it is not drawn: the window reaches four hours back, so
+	///     without this a stale snapshot — every snapshot round-trips through Home Assistant, so a connection blip
+	///     is enough — put a confident "20:57 auto resumes" to the <i>left</i> of the now-line, which is the one
+	///     thing the remark above says this must never do.
+	/// </param>
 	/// <returns>The mark, or <c>null</c>.</returns>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	public static LaneMark? NextMark(AreaSnapshot snapshot, BoardWindow window)
+	public static LaneMark? NextMark(AreaSnapshot snapshot, BoardWindow window, DateTimeOffset now)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 		ArgumentNullException.ThrowIfNull(window);
 
-		if (snapshot.NextChangeAt is not { } at || !window.Contains(at))
+		if (snapshot.NextChangeAt is not { } at || at < now || !window.Contains(at))
 			return null;
 
 		return NextWord(snapshot.State) is { } word

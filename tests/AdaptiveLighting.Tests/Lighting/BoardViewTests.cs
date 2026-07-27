@@ -291,7 +291,7 @@ public sealed class BoardViewTests
 		BoardWindow window = Window();
 		DateTimeOffset resumes = At(22, 20);
 
-		LaneMark? mark = BoardView.NextMark(Report(AreaState.OverriddenOn, nextChangeAt: resumes), window);
+		LaneMark? mark = BoardView.NextMark(Report(AreaState.OverriddenOn, nextChangeAt: resumes), window, Now);
 
 		Assert.IsNotNull(mark);
 		Assert.AreEqual($"{BoardView.Clock(resumes)} auto resumes", mark.Label);
@@ -304,9 +304,9 @@ public sealed class BoardViewTests
 	{
 		BoardWindow window = Window();
 
-		Assert.IsTrue(BoardView.NextMark(Report(AreaState.AutoActive, nextChangeAt: At(22)), window)!.Label.EndsWith("dim", StringComparison.Ordinal));
-		Assert.IsTrue(BoardView.NextMark(Report(AreaState.PreOff, nextChangeAt: At(22)), window)!.Label.EndsWith("off", StringComparison.Ordinal));
-		Assert.IsTrue(BoardView.NextMark(Report(AreaState.SuppressedOff, nextChangeAt: At(22)), window)!.Label.EndsWith("listens again", StringComparison.Ordinal));
+		Assert.IsTrue(BoardView.NextMark(Report(AreaState.AutoActive, nextChangeAt: At(22)), window, Now)!.Label.EndsWith("dim", StringComparison.Ordinal));
+		Assert.IsTrue(BoardView.NextMark(Report(AreaState.PreOff, nextChangeAt: At(22)), window, Now)!.Label.EndsWith("off", StringComparison.Ordinal));
+		Assert.IsTrue(BoardView.NextMark(Report(AreaState.SuppressedOff, nextChangeAt: At(22)), window, Now)!.Label.EndsWith("listens again", StringComparison.Ordinal));
 	}
 
 	/// <summary>A deadline past the board's right edge is not drawn — the board would be claiming to show it.</summary>
@@ -315,8 +315,26 @@ public sealed class BoardViewTests
 	{
 		BoardWindow window = Window();
 
-		Assert.IsNull(BoardView.NextMark(Report(AreaState.OverriddenOn, nextChangeAt: At(23).AddHours(2)), window));
-		Assert.IsNull(BoardView.NextMark(Report(AreaState.OverriddenOn, nextChangeAt: At(16)), window));
+		Assert.IsNull(BoardView.NextMark(Report(AreaState.OverriddenOn, nextChangeAt: At(23).AddHours(2)), window, Now));
+		Assert.IsNull(BoardView.NextMark(Report(AreaState.OverriddenOn, nextChangeAt: At(16)), window, Now));
+	}
+
+	/// <summary>
+	///     A deadline that has already passed gets no mark, even though the board still shows that hour.
+	/// </summary>
+	/// <remarks>
+	///     The window reaches four hours back, so a stale snapshot — every snapshot round-trips through Home
+	///     Assistant, and a connection blip is enough — otherwise drew a confident "auto resumes" to the left of
+	///     the now-line: a prediction the board can be seen to have got wrong.
+	/// </remarks>
+	[TestMethod]
+	public void A_Deadline_Already_Behind_The_Now_Line_Gets_No_Mark()
+	{
+		BoardWindow window = Window();
+		AreaSnapshot stale = Report(AreaState.OverriddenOn, nextChangeAt: At(20, 57));
+
+		Assert.IsTrue(window.Contains(At(20, 57)), "the board still covers that hour, which is what made this drawable");
+		Assert.IsNull(BoardView.NextMark(stale, window, Now));
 	}
 
 	/// <summary>A state with nothing armed gets no mark. So does a state whose timer means nothing to a reader.</summary>
@@ -325,8 +343,8 @@ public sealed class BoardViewTests
 	{
 		BoardWindow window = Window();
 
-		Assert.IsNull(BoardView.NextMark(Report(AreaState.AutoActive), window), "nothing armed");
-		Assert.IsNull(BoardView.NextMark(Report(AreaState.AutoVacant, nextChangeAt: At(22)), window), "a watching room promises nothing");
+		Assert.IsNull(BoardView.NextMark(Report(AreaState.AutoActive), window, Now), "nothing armed");
+		Assert.IsNull(BoardView.NextMark(Report(AreaState.AutoVacant, nextChangeAt: At(22)), window, Now), "a watching room promises nothing");
 	}
 
 	// ===================== the tray =====================
