@@ -2,6 +2,10 @@ using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Hosting;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Reactive.Testing;
+
+using NetDaemon.HassModel;
+using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -281,6 +285,135 @@ public sealed class LightingEngineHostTests
 
 		Assert.AreEqual(migrated, File.ReadAllText(_path));
 		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath));
+	}
+
+	// ===================== a half-finished hand-edit must not kill the host =====================
+
+	/// <summary>
+	///     <see cref="LightingEngineHost.Reload"/> says it never throws, and that is not a nicety: the caller is
+	///     the per-host <c>[NetDaemonApp]</c> bootstrap, and an app that throws goes to
+	///     <c>ApplicationState.Error</c>, taking its DI scope and its <c>IHaContext</c> with it. The browser can
+	///     then save a corrected file and still not start the engine — the one thing this host exists to make
+	///     possible. A line reading <c>Areas:</c> with nothing under it used to be enough to do that.
+	/// </summary>
+	[TestMethod]
+	public void Reload_OfADocumentWithASectionEmptiedByHand_LoadsItRatherThanThrowing()
+	{
+		File.WriteAllText(_path,
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  ConfigName: "Adaptive lighting [test]"
+			  Global:
+			  Defaults:
+			  Areas:
+			  Periods:
+			    - Name: day
+			      Start: "06:00"
+			      BrightnessPct: 80
+			      ColorTempKelvin: 3500
+			""");
+
+		LightingEngineHost host = BuildHost();
+
+		SaveResult result = host.Reload();
+
+		Assert.AreEqual(SaveStatus.Saved, result.Status, "an emptied section is a document with nothing in it, not a broken one");
+		Assert.AreEqual(0, host.Store.Load().Areas.Count);
+		Assert.AreEqual("day", host.Store.Load().Periods.Single().Name, "and what the file does say is still read");
+	}
+
+	/// <summary>
+	///     The same guarantee for a stray <c>-</c>, which is what a half-deleted room leaves behind. Kept separate
+	///     from the emptied-section test because it is a null <i>inside</i> a list the model believes is full of
+	///     rooms, which is the shape every consumer iterates.
+	/// </summary>
+	[TestMethod]
+	public void Reload_OfADocumentWithABlankListEntry_LoadsItRatherThanThrowing()
+	{
+		File.WriteAllText(_path,
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Periods:
+			    - Name: day
+			      Start: "06:00"
+			      BrightnessPct: 80
+			      ColorTempKelvin: 3500
+			  Areas:
+			    -
+			    - Name: Stue
+			      AreaId: stue
+			""");
+
+		LightingEngineHost host = BuildHost();
+
+		SaveResult result = host.Reload();
+
+		Assert.AreEqual(SaveStatus.Saved, result.Status);
+		Assert.AreEqual("stue", host.Store.Load().Areas.Single().AreaId, "the room that is really there survives");
+	}
+
+	/// <summary>
+	///     Area discovery runs on a timer half an hour into the future as far as the caller is concerned: nobody is
+	///     left to catch anything it throws, and on a thread-pool scheduler an unobserved exception ends the
+	///     process — the whole Home Assistant host, not just the lighting engine.
+	/// </summary>
+	/// <remarks>
+	///     The trigger is ordinary. The settle delay is a guess at how long Home Assistant needs before its
+	///     registry is readable; a house on a slow link can still be filling it when the timer fires, and
+	///     NetDaemon's registry throws until its first connection completes. Discovery finding nothing then is a
+	///     thing to log and retry on the next start — never a reason to take the house down.
+	/// </remarks>
+	[TestMethod]
+	public void AreaDiscovery_WhenTheRegistryIsStillUnreadable_IsAbandonedRatherThanThrownOntoTheScheduler()
+	{
+		File.WriteAllText(_path,
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Periods:
+			    - Name: day
+			      Start: "06:00"
+			      BrightnessPct: 80
+			      ColorTempKelvin: 3500
+			  Areas: []
+			""");
+
+		TestScheduler scheduler = new();
+		LightingEngineHost host = BuildHost();
+
+		host.Attach(new FakeHaContext(), new UnreadableRegistry(), scheduler);
+		host.Reload();
+
+		// Fires the armed discovery. Before this was guarded, the registry's exception came straight back out.
+		scheduler.AdvanceBy(TimeSpan.FromMinutes(1).Ticks);
+
+		Assert.IsFalse(host.Store.Load().Global.AreasAutoDiscovered,
+			"and the once-only flag stays clear, so the rooms are proposed again on the next start");
+
+		host.Dispose();
+	}
+
+	/// <summary>An <see cref="IHaRegistry"/> behaving as NetDaemon's does before its first connection completes.</summary>
+	private sealed class UnreadableRegistry : IHaRegistry
+	{
+		public IReadOnlyCollection<EntityRegistration> Entities => throw new InvalidOperationException("not connected");
+
+		public IReadOnlyCollection<Device> Devices => throw new InvalidOperationException("not connected");
+
+		public IReadOnlyCollection<Area> Areas => throw new InvalidOperationException("not connected");
+
+		public IReadOnlyCollection<Floor> Floors => throw new InvalidOperationException("not connected");
+
+		public IReadOnlyCollection<Label> Labels => throw new InvalidOperationException("not connected");
+
+		public EntityRegistration? GetEntityRegistration(string entityId) => throw new InvalidOperationException("not connected");
+
+		public Device? GetDevice(string deviceId) => throw new InvalidOperationException("not connected");
+
+		public Area? GetArea(string areaId) => throw new InvalidOperationException("not connected");
+
+		public Floor? GetFloor(string floorId) => throw new InvalidOperationException("not connected");
+
+		public Label? GetLabel(string labelId) => throw new InvalidOperationException("not connected");
 	}
 
 	/// <summary>A start that had nothing to migrate must be a start that wrote nothing.</summary>
