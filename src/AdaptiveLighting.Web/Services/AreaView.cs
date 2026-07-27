@@ -36,14 +36,15 @@ public sealed record HiddenRoomsNote(string Lead, string LinkText);
 public static class AreaView
 {
 	/// <summary>
-	///     How many settings a room can override — the denominator in "n of 16 changed".
+	///     How many settings a room can override — the denominator in "n of 21 changed".
 	/// </summary>
 	/// <remarks>
-	///     Sixteen, not seventeen: <see cref="AreaConfig.Enabled"/> left the override list when the header toggle
-	///     took it over. The same sixteen are counted by <c>AreaSetupService</c>'s rebuild plan, so the editor's
-	///     summary and the re-setup warning can never disagree about how much a room has changed.
+	///     Twenty-one, not twenty-two: <see cref="AreaConfig.Enabled"/> left the override list when the header
+	///     toggle took it over. The same twenty-one are counted by <c>AreaSetupService</c>'s rebuild plan, so the
+	///     editor's summary and the re-setup warning can never disagree about how much a room has changed. It grew
+	///     from sixteen when the five daylight-brightness settings arrived.
 	/// </remarks>
-	public const int OverridableSettingCount = 16;
+	public const int OverridableSettingCount = 21;
 
 	/// <summary>What a floorless group is called, once, so both screens head it the same way.</summary>
 	public const string FloorlessTitle = "Other rooms";

@@ -89,6 +89,25 @@ public sealed class IlluminanceGate
 		: $"no sun elevation from {_settings.SunEntity}";
 
 	/// <summary>
+	///     The area's current illuminance, or <c>null</c> when it resolved no sensor or the sensor's state is not a
+	///     number (<c>unavailable</c>, <c>unknown</c>, a text value).
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The one place the area's lux is read, exposed so that anything else needing the number — the
+	///         daylight brightness adjustment, <see cref="LuxBrightnessCurve"/> — consults the same sensor the
+	///         darkness verdict does. The alternative, a second resolution path, is how a room ends up gating on
+	///         one sensor and dimming to another.
+	///     </para>
+	///     <para>
+	///         Deliberately free of side effects, unlike <see cref="EvaluateLux"/>: it records nothing, so a caller
+	///         asking only for the number cannot disturb what <see cref="DarknessDetail"/> reports about the last
+	///         actual verdict.
+	///     </para>
+	/// </remarks>
+	public double? ReadLux() => _luxEntityId is null ? null : _ha.GetState(_luxEntityId).StateAsDouble();
+
+	/// <summary>
 	///     The lux verdict, or <c>null</c> when there is no sensor or its reading is not a number.
 	/// </summary>
 	/// <remarks>
@@ -98,13 +117,7 @@ public sealed class IlluminanceGate
 	/// </remarks>
 	private bool? EvaluateLux()
 	{
-		if (_luxEntityId is null)
-		{
-			_lastLux = null;
-			return null;
-		}
-
-		if (_ha.GetState(_luxEntityId).StateAsDouble() is not { } lux)
+		if (ReadLux() is not { } lux)
 		{
 			_lastLux = null;
 			return null;

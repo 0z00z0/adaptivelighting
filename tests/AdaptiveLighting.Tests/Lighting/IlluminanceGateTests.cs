@@ -157,4 +157,50 @@ public sealed class IlluminanceGateTests
 		Assert.IsTrue(Build(Ha(lux: "5000", sunElevation: 60), DarknessSource.Always).IsDarkEnough(),
 			"a room without daylight does not care what the sun is doing");
 	}
+
+	// ===================== the reading itself =====================
+
+	/// <summary>
+	///     The gate is the one place the area's lux is read, so that anything else needing the number — the
+	///     daylight brightness adjustment — is guaranteed to be looking at the same sensor as the darkness verdict.
+	/// </summary>
+	[TestMethod]
+	public void ReadLux_Hands_Back_The_Sensors_Number()
+	{
+		Assert.AreEqual(1234.5, Build(Ha(lux: "1234.5"), DarknessSource.Lux).ReadLux());
+	}
+
+	[TestMethod]
+	public void ReadLux_Is_Null_When_There_Is_No_Sensor_Or_No_Number()
+	{
+		Assert.IsNull(Build(Ha(), DarknessSource.Lux, luxSensor: null).ReadLux());
+		Assert.IsNull(Build(Ha(lux: "unavailable"), DarknessSource.Lux).ReadLux());
+	}
+
+	/// <summary>
+	///     It takes a reading; it does not record one. The adjustment reads lux on every tick, and if that counted
+	///     as a verdict it would rewrite what the auto-on block log says the gate last decided and why.
+	/// </summary>
+	[TestMethod]
+	public void ReadLux_Does_Not_Disturb_What_The_Gate_Reports()
+	{
+		IlluminanceGate gate = Build(Ha(lux: "39"), DarknessSource.Lux);
+		gate.IsDarkEnough();
+
+		string before = gate.DarknessDetail();
+		gate.ReadLux();
+
+		Assert.AreEqual(before, gate.DarknessDetail());
+	}
+
+	/// <summary>
+	///     Reading lux is not the same question as gating on it. A hallway may well decide darkness from the sun
+	///     while still following an outdoor lux sensor for its level, so the reading is available in every mode.
+	/// </summary>
+	[TestMethod]
+	public void ReadLux_Works_Whatever_The_Darkness_Source_Is()
+	{
+		Assert.AreEqual(800d, Build(Ha(lux: "800", sunElevation: 30), DarknessSource.Sun).ReadLux());
+		Assert.AreEqual(800d, Build(Ha(lux: "800"), DarknessSource.Always).ReadLux());
+	}
 }

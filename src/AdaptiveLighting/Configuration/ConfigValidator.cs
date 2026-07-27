@@ -52,8 +52,44 @@ public static class ConfigValidator
 		ValidateHouseMode(config, knownEntityIds, liveSelectOptions, result);
 		ValidateSettings("Defaults", config.Defaults, result);
 		ValidateAreas(config, knownEntityIds, knownAreaIds, result);
+		ValidateLuxBrightnessSource(config, result);
 
 		return result;
+	}
+
+	/// <summary>
+	///     The daylight brightness adjustment is switched on somewhere, but the document names no lux sensor at all.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         A warning, and only one, at document level. It degrades rather than breaks: a room with no reading
+	///         gets the schedule's brightness, which is what the whole house did before the feature existed. And the
+	///         validator is pure — it cannot run discovery — so it cannot know that a room will find an illuminance
+	///         sensor of its own at runtime. Erroring on something it cannot see would refuse a perfectly good
+	///         document.
+	///     </para>
+	///     <para>
+	///         What it <i>can</i> see is the case that motivates the feature: a hallway has no lux sensor, so the
+	///         reading has to come from <see cref="GlobalConfig.OutdoorLuxSensor"/> — and if that is blank and no
+	///         room pins one either, the switch is on and nothing anywhere is guaranteed to feed it. Said once, at
+	///         the top, in the same spirit as the include-label warning.
+	///     </para>
+	/// </remarks>
+	private static void ValidateLuxBrightnessSource(AdaptiveLightingConfig config, ValidationResult result)
+	{
+		if (config.Global.OutdoorLuxSensor is { Length: > 0 })
+			return;
+
+		if (config.Areas.Any(area => area.LuxSensor is { Length: > 0 }))
+			return;
+
+		if (!config.Areas.Any(area => area.Effective(config.Defaults).LuxBrightnessEnabled))
+			return;
+
+		result.AddWarning(
+			"LuxBrightnessEnabled is on for at least one room, but the document names no lux sensor: set "
+			+ "Global.OutdoorLuxSensor, or a LuxSensor on the rooms that need one. Rooms that discover an "
+			+ "illuminance sensor of their own still follow the daylight; the rest keep the schedule's brightness.");
 	}
 
 	private static void ValidateGlobal(
@@ -532,6 +568,8 @@ public static class ConfigValidator
 		if (settings.LuxHysteresis < 0)
 			result.AddError($"[{scope}] LuxHysteresis must not be negative (is {settings.LuxHysteresis}).");
 
+		ValidateLuxBrightness(scope, settings, result);
+
 		if (settings.SunElevationThreshold is < MinSunElevationDegrees or > MaxSunElevationDegrees)
 			result.AddError($"[{scope}] SunElevationThreshold must be between {MinSunElevationDegrees} and {MaxSunElevationDegrees} degrees (is {settings.SunElevationThreshold}).");
 
@@ -543,5 +581,45 @@ public static class ConfigValidator
 
 		if (settings.NightTransitionSeconds < 0)
 			result.AddError($"[{scope}] NightTransitionSeconds must not be negative (is {settings.NightTransitionSeconds}).");
+	}
+
+	/// <summary>
+	///     The daylight brightness curve: two anchors, a ceiling and a shaping exponent.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Checked whether or not the feature is switched on, matching how <c>LuxThreshold</c> is checked for an
+	///         area gating on the sun alone: a number outside its range is a mistake in the document, and it is no
+	///         less a mistake for currently being inert — it would come alive the moment somebody flipped the
+	///         switch. Every default is valid, so a document that predates the feature passes untouched.
+	///     </para>
+	///     <para>
+	///         The engine survives all of these on its own (<c>LuxBrightnessCurve</c> makes a nonsensical curve
+	///         inert rather than dangerous), but that is a safety net, not a reason to accept the document. Silently
+	///         ignoring the curve an owner wrote is worse than telling them it cannot be read.
+	///     </para>
+	/// </remarks>
+	private static void ValidateLuxBrightness(string scope, AreaSettings settings, ValidationResult result)
+	{
+		// A logarithm needs a positive anchor. This is the one that would be genuinely undefined rather than merely
+		// odd, so it is checked before the ordering.
+		if (settings.LuxBrightnessStartLux <= 0)
+			result.AddError($"[{scope}] LuxBrightnessStartLux must be positive (is {settings.LuxBrightnessStartLux}) — the curve interpolates on log10(lux), which has no value at or below zero.");
+
+		// Covers inverted and equal in one: equal anchors leave no range to interpolate across.
+		if (settings.LuxBrightnessFullLux <= settings.LuxBrightnessStartLux)
+			result.AddError($"[{scope}] LuxBrightnessFullLux ({settings.LuxBrightnessFullLux}) must be above LuxBrightnessStartLux ({settings.LuxBrightnessStartLux}).");
+
+		if (settings.LuxBrightnessMaxPct is < MinBrightnessPct or > MaxBrightnessPct)
+			result.AddError($"[{scope}] LuxBrightnessMaxPct is {settings.LuxBrightnessMaxPct}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
+
+		// Zero is the dangerous one rather than merely the useless one: pow(0, 0) is 1, so a zero exponent reads as
+		// "full daylight level at any reading, including pitch dark" to anything that trusts the arithmetic.
+		if (settings.LuxBrightnessGamma <= 0)
+			result.AddError($"[{scope}] LuxBrightnessGamma must be positive (is {settings.LuxBrightnessGamma}); 1 is a straight line, above 1 holds the level back until it is properly bright.");
+
+		// On but unable to add anything: legal, inert, and almost certainly a switch flipped without a ceiling set.
+		if (settings.LuxBrightnessEnabled && settings.LuxBrightnessMaxPct <= MinBrightnessPct)
+			result.AddWarning($"[{scope}] LuxBrightnessEnabled is on but LuxBrightnessMaxPct is {settings.LuxBrightnessMaxPct}, so daylight can never raise the brightness above the schedule.");
 	}
 }

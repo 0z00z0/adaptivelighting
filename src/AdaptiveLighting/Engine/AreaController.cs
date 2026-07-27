@@ -34,6 +34,7 @@ public sealed class AreaController : IDisposable
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
 	private readonly CircadianCalculator _circadian;
 	private readonly IlluminanceGate _gateSensor;
+	private readonly LuxBrightnessCurve _luxBrightness;
 	private readonly OverrideDetector _detector;
 	private readonly ILightActuator _actuator;
 	private readonly IStatePublisher _publisher;
@@ -118,6 +119,11 @@ public sealed class AreaController : IDisposable
 			: global.OutdoorLuxSensor is { Length: > 0 } outdoor ? outdoor
 			: null;
 		_gateSensor = new IlluminanceGate(ha, luxSensor, area.Settings, _logger);
+
+		// Reads through the gate rather than resolving a sensor of its own, so "which sensor is this room looking
+		// at" has exactly one answer — including the fall-back to the house-wide outdoor sensor above, which is the
+		// case the feature was asked for (one outdoor reading brightening a hallway that has no sensor at all).
+		_luxBrightness = new LuxBrightnessCurve(area.Settings, _gateSensor.ReadLux);
 		_detector = new OverrideDetector(global, scheduler);
 	}
 
@@ -598,9 +604,23 @@ public sealed class AreaController : IDisposable
 		_scheduler.Now - lastMotion < TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds);
 
 	/// <summary>
-	///     The area's target now (09 §3.4): the one shared table, then — only for a sleep-respecting area while the
-	///     house is asleep — clamped to the sleep-clamp period's caps.
+	///     The area's target now (09 §3.4): the one shared table, then the daylight adjustment, then — only for a
+	///     sleep-respecting area while the house is asleep — clamped to the sleep-clamp period's caps.
 	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The daylight adjustment lives here rather than in <see cref="ApplyTarget"/> so that the periodic
+	///         tick sees it: <see cref="OnTick"/> compares this against the standing target and retargets when they
+	///         differ, which is the only thing that would ever notice the sun coming out. Applied in
+	///         <c>ApplyTarget</c> alone it would raise the level on the next motion event and never before, which
+	///         in a hallway is exactly never.
+	///     </para>
+	///     <para>
+	///         And it runs <i>before</i> the sleep clamp, not after. Sleep is the stronger statement of the two: a
+	///         bright reading during an afternoon nap must not lift the room past the night rules, and the clamp
+	///         can only be sure of that if it has the last word.
+	///     </para>
+	/// </remarks>
 	private LightTarget? ResolveTarget()
 	{
 		LightTarget? target = _circadian.GetTarget(_scheduler.Now);
@@ -611,10 +631,12 @@ public sealed class AreaController : IDisposable
 			return null;
 		}
 
-		if (_house.Mode == HouseMode.Sleep && _area.Settings.RespectSleepMode)
-			return ClampToSleepCaps(target);
+		LightTarget adjusted = _luxBrightness.Apply(target);
 
-		return target;
+		if (_house.Mode == HouseMode.Sleep && _area.Settings.RespectSleepMode)
+			return ClampToSleepCaps(adjusted);
+
+		return adjusted;
 	}
 
 	/// <summary>

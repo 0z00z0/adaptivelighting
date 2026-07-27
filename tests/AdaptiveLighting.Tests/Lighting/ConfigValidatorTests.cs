@@ -216,6 +216,158 @@ public sealed class ConfigValidatorTests
 		StringAssert.Contains(result.ToString(), "Stue", "the household needs to know which room to go and fix");
 	}
 
+	// ===================== the daylight brightness curve =====================
+
+	/// <summary>
+	///     Checked whether or not the feature is switched on, exactly as <c>LuxThreshold</c> is checked for an area
+	///     gating on the sun alone: an inverted pair of anchors is a mistake in the document, and it is no less a
+	///     mistake for being inert until somebody flips the switch.
+	/// </summary>
+	[TestMethod]
+	public void Inverted_Anchors_Are_Rejected_Even_With_The_Feature_Off()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessStartLux = 10000;
+		config.Defaults.LuxBrightnessFullLux = 100;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		Assert.IsTrue(result.Errors.Any(e => e.Contains("LuxBrightnessFullLux", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void Equal_Anchors_Are_Rejected()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessStartLux = 1000;
+		config.Defaults.LuxBrightnessFullLux = 1000;
+
+		Assert.IsFalse(ConfigValidator.Validate(config).IsValid, "equal anchors leave no range to interpolate across");
+	}
+
+	[TestMethod]
+	public void A_Start_Anchor_At_Or_Below_Zero_Is_Rejected()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessStartLux = 0;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		Assert.IsTrue(result.Errors.Any(e => e.Contains("log10", StringComparison.Ordinal)),
+			"the message must say why zero is impossible rather than merely disallowed");
+	}
+
+	[TestMethod]
+	public void A_Ceiling_Outside_The_Brightness_Range_Is_Rejected()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessMaxPct = 140;
+
+		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
+	}
+
+	[TestMethod]
+	public void A_Non_Positive_Gamma_Is_Rejected()
+	{
+		AdaptiveLightingConfig zero = Minimal();
+		zero.Defaults.LuxBrightnessGamma = 0;
+
+		AdaptiveLightingConfig negative = Minimal();
+		negative.Defaults.LuxBrightnessGamma = -1;
+
+		Assert.IsFalse(ConfigValidator.Validate(zero).IsValid, "pow(0, 0) is 1 — a zero exponent reads as full daylight in the dark");
+		Assert.IsFalse(ConfigValidator.Validate(negative).IsValid);
+	}
+
+	[TestMethod]
+	public void A_Rooms_Own_Bad_Curve_Is_Caught_Under_Its_Name()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas = [new() { Name = "Gang", AreaId = "gang", LuxBrightnessFullLux = 10 }];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		StringAssert.Contains(result.ToString(), "Gang", "the household needs to know which room to go and fix");
+	}
+
+	/// <summary>
+	///     Degrades rather than breaks — a room with no reading simply keeps the schedule's brightness — so it is a
+	///     warning. The validator is pure and cannot run discovery, so it must not refuse a document over a sensor
+	///     the room may well find at runtime.
+	/// </summary>
+	[TestMethod]
+	public void Switching_It_On_With_No_Lux_Sensor_Named_Anywhere_Only_Warns()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "no sensor is a room on the schedule alone, not a broken document");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void A_House_Wide_Outdoor_Sensor_Answers_That_Warning()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+
+		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
+			"one outdoor sensor driving every room is the case the feature was asked for");
+	}
+
+	[TestMethod]
+	public void A_Rooms_Own_Pinned_Sensor_Answers_It_Too()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", LuxSensor = "sensor.stue_lux" }];
+
+		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void A_Room_That_Opted_Out_Does_Not_Raise_The_Warning()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", LuxBrightnessEnabled = false }];
+
+		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
+			"the only room in the house switched it off, so nothing is waiting on a sensor");
+	}
+
+	[TestMethod]
+	public void On_But_With_A_Ceiling_Of_Zero_Warns_Without_Refusing()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+		config.Defaults.LuxBrightnessMaxPct = 0;
+		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("never raise", StringComparison.Ordinal)));
+	}
+
+	/// <summary>The two live houses: a document that has never heard of the feature must gain neither error nor warning.</summary>
+	[TestMethod]
+	public void A_Document_That_Never_Heard_Of_The_Feature_Is_Untouched_By_It()
+	{
+		ValidationResult result = ConfigValidator.Validate(Minimal());
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsFalse(result.Warnings.Any(w => w.Contains("LuxBrightness", StringComparison.Ordinal)));
+		Assert.IsTrue(ConfigValidator.Validate(AdaptiveLightingConfig.CreateDefault()).IsValid,
+			"and the seed a fresh installation starts from still validates");
+	}
+
 	// ===================== areas =====================
 
 	[TestMethod]
