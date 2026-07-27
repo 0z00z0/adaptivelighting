@@ -145,6 +145,13 @@ public sealed class HaCatalog
 	///         the document. A light assigned to an area in Home Assistant shows up on a page refresh, which is
 	///         the freshness this class already promised.
 	///     </para>
+	///     <para>
+	///         <b>Only answers go in here.</b> A discovery that threw is Home Assistant declining to answer, not an
+	///         answer of "nothing here", and it used to be cached as though it were one. Kestrel serves the moment
+	///         the process is up while NetDaemon connects afterwards — see <see cref="IsHomeAssistantReady"/> — so
+	///         any page opened during start-up asked at least once too early, and every area then read
+	///         "0 lights, 0 motion, 0 lux" for the whole circuit however long Home Assistant had since been up.
+	///     </para>
 	/// </remarks>
 	private readonly Dictionary<string, AreaDiscovery> _discoveries = new(StringComparer.Ordinal);
 
@@ -586,7 +593,11 @@ public sealed class HaCatalog
 		{
 			IsHomeAssistantReady = false;
 			_logger.LogDebug(exception, "Discovery for area {Area} is not available yet.", areaId);
-			discovered = new AreaDiscovery([], [], []);
+
+			// Returned but never filed. Caching this would turn "Home Assistant has not answered yet" into a
+			// standing answer of "this area yields nothing", which is what the pickers and the first-run chips
+			// would then read for the rest of the circuit — see the field's own remarks.
+			return new AreaDiscovery([], [], []);
 		}
 
 		_discoveries[areaId] = discovered;

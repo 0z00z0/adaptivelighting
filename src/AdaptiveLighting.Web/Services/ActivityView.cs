@@ -612,10 +612,25 @@ public static class ActivityView
 	///     explains everything after it, an empty house explains the rest, and the darkness gate is what a person
 	///     is looking for when they ask why nothing happened.
 	/// </summary>
+	/// <remarks>
+	///     <b>The block is named on every row, not only on the dusk verdict's own.</b>
+	///     <see cref="WasDeclined"/> files a room held off by a sleeping house or a blocking entity under
+	///     <see cref="ActivityCategory.Declined"/> whatever the reason for the report, and that chip promises the
+	///     reason on the row. It was only ever there when the reason happened to be
+	///     <see cref="TransitionReason.CircadianTick"/>, because that is the one branch <see cref="Describe"/>
+	///     hands to <see cref="DarkEnough"/>; the other fourteen produced a row filed under "nothing happened"
+	///     that said nothing about anything happening. <see cref="RoomFacts.NextLine"/> already answers a gated
+	///     room ahead of everything its state would otherwise say, for the same reason.
+	/// </remarks>
 	private static string? Condition(AreaSnapshot snapshot) => snapshot.State switch
 	{
 		AreaState.Disabled => "Automatic lighting is switched off for this room.",
 		AreaState.Away => "Nobody home — the room waits for the first arrival.",
+
+		// Through DarkEnough rather than worded again, so the chip, this row and the dusk row it sits above all
+		// say one thing about one condition.
+		AreaState.AutoVacant when BoardView.IsBlockedFromLighting(snapshot) => $"{DarkEnough(snapshot)}.",
+
 		AreaState.AutoVacant when snapshot.IsDark is false =>
 			Reading(snapshot) is { Length: > 0 } reading
 				? $"Too bright to switch on — {reading}"
