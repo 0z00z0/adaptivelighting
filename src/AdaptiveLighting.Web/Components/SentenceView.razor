@@ -1,0 +1,111 @@
+@*
+	A room's behaviour as readable prose, with the values inline and editable.
+
+	The design's central move: reading what a room does and changing it are the same act. A form of
+	seventeen numeric fields assumes somebody who remembers what VacancyTimeoutSeconds meant; a sentence
+	assumes only that they can read English, which is the whole argument for this surface existing.
+
+	It renders sentences; it does not build them. The projection from a document to prose is a pure function
+	(AreaSentences, and whatever a page writes with SentenceBuilder) precisely so it can be tested — this repo
+	has no Razor render harness, and a sentence assembled inside markup is a sentence nothing can assert about.
+
+	It also does not save. Every edit leaves through a callback and the page decides what it means; the
+	existing validate-then-write pipeline stays the one way configuration reaches disk.
+*@
+
+<div class="sentences">
+	@foreach (Sentence sentence in Sentences)
+	{
+		<p class="sentence">
+			@foreach (SentencePart part in sentence.Parts)
+			{
+				@switch (part)
+				{
+					case SentenceText text:
+						@text.Text
+						break;
+
+					case SentenceToken token:
+						<SentenceTokenView Token="@token"
+										   Editable="@Editable"
+										   Note="@Note"
+										   Edited="@Edited"
+										   Reverted="@Reverted" />
+						break;
+
+					case SentenceFigure figure:
+						<span class="sentence-figure" role="img" aria-label="@figure.AltText">@figure.Content</span>
+						break;
+				}
+			}
+		</p>
+	}
+</div>
+
+@if (ShowLegend && Editable && HasOwnValues)
+{
+	<p class="sentence-legend">
+		<span class="tok-own-dot" aria-hidden="true"></span>
+		<span>@LegendText</span>
+	</p>
+}
+
+@code {
+	/// <summary>The sentences to draw, in reading order.</summary>
+	[Parameter, EditorRequired]
+	public IReadOnlyList<Sentence> Sentences { get; set; } = [];
+
+	/// <summary>
+	///     Whether the values are controls or just words.
+	/// </summary>
+	/// <remarks>
+	///     The House tab renders its defaults with this off: the same sentences, values in bold, because editing
+	///     a default is rarer and its rows are one tap below. Turning it off is also the honest rendering of a
+	///     room nobody may change — a switched-off room's page, or a read-only view.
+	/// </remarks>
+	[Parameter]
+	public bool Editable { get; set; } = true;
+
+	/// <summary>
+	///     Raised when a value is picked. The page applies it and saves; nothing here writes anything.
+	/// </summary>
+	/// <remarks>
+	///     The key is the setting's property name, so a handler reads
+	///     <c>case nameof(AreaSettings.VacancyTimeoutSeconds)</c> and cannot drift from the schema without the
+	///     compiler noticing.
+	/// </remarks>
+	[Parameter]
+	public EventCallback<SentenceEdit> Edited { get; set; }
+
+	/// <summary>
+	///     Raised when the reader asks a value to follow the house again, carrying the setting's key.
+	/// </summary>
+	/// <remarks>
+	///     Distinct from an edit on purpose: the handler should clear the room's property — write <c>null</c> —
+	///     rather than copy the house's current number into the room, so the room keeps following the house the
+	///     next time the house changes.
+	/// </remarks>
+	[Parameter]
+	public EventCallback<string> Reverted { get; set; }
+
+	/// <summary>
+	///     One line in each popover about when a pick takes effect, or nothing.
+	/// </summary>
+	/// <remarks>
+	///     Left to the page because only the page knows. A room editor behind the save bar should say so; a
+	///     surface that applies at once should promise the undo. A default sentence here would be wrong on one
+	///     of them, and a promise about saving is the worst kind of thing to be wrong about.
+	/// </remarks>
+	[Parameter]
+	public string? Note { get; set; }
+
+	/// <summary>Whether to explain the amber dot underneath. On by default, and shown only when a dot exists.</summary>
+	[Parameter]
+	public bool ShowLegend { get; set; } = true;
+
+	/// <summary>What the legend says. Worded for a room by default.</summary>
+	[Parameter]
+	public string LegendText { get; set; } = "= this room's own setting, not the house's";
+
+	private bool HasOwnValues => Sentences.Sum(sentence => sentence.OwnValueCount) > 0;
+}

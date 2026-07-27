@@ -9,10 +9,16 @@
 *@
 
 <article class="area family-@Family" aria-label="@Snapshot.AreaName">
+	@*
+		The badge used to be a word in a colour, and the colour was the only thing saying which state this
+		was — invisible to a colourblind reader and to every greyscale screenshot. It is now a shared chip
+		carrying a shape as well, and the words come from the same mapping the rest of the UI reads, so no
+		two surfaces can name one state two ways.
+	*@
 	<header class="area-head">
 		<span class="lamp @LampClass" style="@LampStyle" aria-hidden="true"></span>
 		<span class="area-name">@Snapshot.AreaName</span>
-		<span class="area-badge" title="State: @Snapshot.State">@Badge</span>
+		<StateChip State="@Snapshot.State" Kelvin="@Snapshot.ColorTempKelvin" Title="@($"State: {Snapshot.State}")" />
 	</header>
 
 	<p class="area-line">@Headline</p>
@@ -86,18 +92,6 @@
 	///     fact in Settings.
 	/// </summary>
 	private string Family => AreaView.Family(Snapshot.State);
-
-	private string Badge => Snapshot.State switch
-	{
-		AreaState.AutoActive => "auto · on",
-		AreaState.AutoVacant => "auto · standing by",
-		AreaState.PreOff => "auto · dimming",
-		AreaState.OverriddenOn => "set by hand",
-		AreaState.SuppressedOff => "off by hand",
-		AreaState.Away => "away",
-		AreaState.Disabled => "stopped",
-		_ => Snapshot.State.ToString()
-	};
 
 	// An adopted area's lights are on, but at levels the engine never chose and cannot read back — so the lamp
 	// is lit and colourless rather than either dark (a lie) or warm (a level it would be inventing).
