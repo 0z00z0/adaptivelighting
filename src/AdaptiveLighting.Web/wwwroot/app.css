@@ -388,7 +388,9 @@ body {
 
 .content {
 	flex: 1;
-	padding: 0.9rem 1.5rem 1.5rem;
+	/* The generous foot keeps the last row clear of the floating save bar, which is out of flow and would
+	   otherwise cover it at the bottom of a long page. Harmless on the pages that have no bar. */
+	padding: 0.9rem 1.5rem 5rem;
 	max-width: 1100px;
 	width: 100%;
 	margin: 0 auto;
@@ -1171,13 +1173,23 @@ button.mode-card:disabled {
 }
 
 /* ---- save bar ----
-   Sticky because the form is long: a save button only at the bottom of a page
-   with six areas on it is a save button nobody finds. */
+   Floats at the foot of the viewport, and only while there is something to save.
+   It was sticky at the top and always present, which had it competing for the
+   first screenful with the section rail on a page that is mostly reading. Fixed
+   to the bottom it is reachable from any scroll position without occupying the
+   place a reader starts; rendered only when dirty, its presence is itself the
+   answer to "have I changed anything?".
+
+   One of the two things allowed elevation (visual-foundation §1): it genuinely
+   floats over the content rather than sitting in the flow. */
 
 .savebar {
-	position: sticky;
-	top: 0;
-	z-index: 5;
+	position: fixed;
+	left: 50%;
+	transform: translateX(-50%);
+	bottom: 1rem;
+	z-index: 40;
+	width: min(1100px, calc(100vw - 3rem));
 	display: flex;
 	align-items: center;
 	gap: 0.75rem;
@@ -1186,8 +1198,9 @@ button.mode-card:disabled {
 	border: 1px solid var(--line);
 	border-radius: var(--radius);
 	padding: 0.6rem 0.9rem;
-	margin: 1rem 0;
+	box-shadow: var(--shadow-float);
 }
+
 
 .savebar-note {
 	font-size: 0.85rem;

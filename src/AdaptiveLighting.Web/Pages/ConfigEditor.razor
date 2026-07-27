@@ -134,6 +134,11 @@ else
 	}
 
 	@* --------------------------------------------------------------------------------------------- *@
+	@* Only while there is something to say: an unsaved edit, a refusal to explain, or a confirmation to
+	   deliver. A bar that is always there says nothing by being there, and this one now floats over the
+	   content — permanent furniture in front of the page is worse than no furniture at all. *@
+	@if (ShowSaveBar)
+	{
 	<div class="savebar">
 		<button type="button" class="primary" @onclick="Save" disabled="@_busy">Save and apply</button>
 		<button type="button" @onclick="Reload" disabled="@_busy">Discard changes</button>
@@ -157,6 +162,7 @@ else
 			<span class="savebar-note ok savebar-toast" role="status">@confirmation</span>
 		}
 	</div>
+	}
 
 	@* The validator already returns precise, actionable messages. They are shown verbatim: restating them
 	   here would mean two descriptions of one rule, and the one on this page would be the one that rots.
@@ -1281,6 +1287,7 @@ else
 
 		LoadCatalog();
 		Revalidate();
+		MarkClean();
 	}
 
 	private void StartFromScratch()
@@ -1343,8 +1350,67 @@ else
 	///     Every edit already routes through here, so hanging the derived views off it means they can never be one
 	///     edit behind what is on screen — and it costs a dictionary of at most a few dozen rooms.
 	/// </remarks>
+	/// <summary>
+	///     Whether the document in memory differs from the one on disk.
+	/// </summary>
+	/// <remarks>
+	///     Measured by comparing the serialised document against a snapshot taken the last time the two were
+	///     known to agree, rather than by a flag each edit path remembers to set. There are a dozen ways to
+	///     change this document — a token, a switch, a picker, adding a room, a re-setup — and a flag would
+	///     eventually be forgotten on one of them, leaving somebody's edit with no way to save it.
+	/// </remarks>
+	private bool _dirty;
+
+	/// <summary>The serialised document as it was when it last matched the file, or <c>null</c> if it never has.</summary>
+	private string? _cleanDocument;
+
+	/// <summary>
+	///     Whether the save bar has anything to say: an unsaved edit, a refusal that has not been resolved, or a
+	///     confirmation still on screen.
+	/// </summary>
+	/// <remarks>
+	///     <see cref="_userIdInput"/> is asked for separately because it is deliberately <i>not</i> part of the
+	///     document until the save applies it, so a half-typed id leaves <see cref="_dirty"/> false. Without this
+	///     the one field whose whole purpose is to be written would be the one field with no way to write it.
+	/// </remarks>
+	private bool ShowSaveBar =>
+		_dirty
+		|| !string.IsNullOrWhiteSpace(_userIdInput)
+		|| _saveConfirmation is { Length: > 0 }
+		|| _result is { Written: false };
+
+	/// <summary>Records the document as matching the file — after a load, and after a save that wrote.</summary>
+	private void MarkClean()
+	{
+		_cleanDocument = Snapshot();
+		_dirty = false;
+	}
+
+	/// <summary>
+	///     The document as text, or <c>null</c> when it cannot be serialised.
+	/// </summary>
+	/// <remarks>
+	///     A document that will not serialise is one the page cannot compare and cannot save, so it counts as
+	///     changed: showing the bar and letting the save report the real error beats hiding the bar and leaving
+	///     somebody with no button.
+	/// </remarks>
+	private string? Snapshot()
+	{
+		try
+		{
+			return LightingConfigDocument.Serialize(_config);
+		}
+		catch (LightingConfigException)
+		{
+			return null;
+		}
+	}
+
 	private void Revalidate()
 	{
+		string? current = Snapshot();
+		_dirty = current is null || _cleanDocument is null || !string.Equals(current, _cleanDocument, StringComparison.Ordinal);
+
 		_liveValidation = Engine.Validate(_config);
 		_blendSentence = [HouseSentences.Blend(_config.Global)];
 		_awaySentence = [HouseSentences.AwayDebounce(_config.Global)];
@@ -1872,6 +1938,7 @@ else
 				_config = Engine.Store.Load();
 				LoadCatalog();
 				Revalidate();
+				MarkClean();
 			}
 		}
 		catch (LightingConfigException exception)
