@@ -1,6 +1,7 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AdaptiveLighting.Tests.Lighting;
@@ -11,8 +12,12 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class AreaEntityResolverTests
 {
-	private static AreaEntityResolver Resolver(FakeHaContext ha, FakeAreaRegistry registry, GlobalConfig? global = null) =>
-		new(ha, registry, global ?? new GlobalConfig(), NullLogger.Instance);
+	private static AreaEntityResolver Resolver(
+		FakeHaContext ha,
+		FakeAreaRegistry registry,
+		GlobalConfig? global = null,
+		ILogger? logger = null) =>
+		new(ha, registry, global ?? new GlobalConfig(), logger ?? NullLogger.Instance);
 
 	// ===================== the happy path =====================
 
@@ -180,6 +185,171 @@ public sealed class AreaEntityResolverTests
 
 		CollectionAssert.AreEqual(new[] { "light.stue_group" }, area!.Lights.ToArray(),
 			"commanding a group and its members is the same bulbs twice");
+	}
+
+	// ===================== light groups as a real house builds them =====================
+	//
+	// "Prefer the group" is only simple while every group is one level deep, sits inside one area and shares no
+	// bulb with its neighbour. All three assumptions fail on one live instance, and each failure hands the same
+	// bulb to two commands — or, worse, hands one room's bulbs to another room's motion sensor.
+
+	/// <summary>
+	///     Nesting must be followed all the way down, not one hop. The one-hop rule only ever worked because the
+	///     inner group happened to sit in the same area, so its own members were collected in passing; unassign it
+	///     and the leaf bulbs survive alongside the outer group that already commands them.
+	/// </summary>
+	[TestMethod]
+	public void A_Nested_Group_Beats_Its_Leaf_Bulbs_Even_When_The_Inner_Group_Is_Not_In_The_Area()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.stuelys_alle", "light.stue_tak_1", "light.stue_tak_2", "binary_sensor.m"];
+		ha.SetState("light.stuelys_alle", "off", new() { ["entity_id"] = new[] { "light.stue_taklys" } });
+		// light.stue_taklys is the intermediate group, and it is deliberately in no area at all.
+		ha.SetState("light.stue_taklys", "off", new() { ["entity_id"] = new[] { "light.stue_tak_1", "light.stue_tak_2" } });
+		ha.SetState("light.stue_tak_1", "off");
+		ha.SetState("light.stue_tak_2", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "light.stuelys_alle" }, area.Lights.ToArray(),
+			"membership is transitive, so the outer group holds the bulbs whether or not the inner group is in the room");
+	}
+
+	/// <summary>
+	///     The living room's "all lights" group holds the kitchen's group on one live instance, so preferring it
+	///     would put the living room in charge of the kitchen: the two rooms take turns setting each other's
+	///     brightness, and the first vacancy timeout to fire switches the lights off on whoever is in the other
+	///     room. The area boundary wins, and the room falls back to the group that stays inside it.
+	/// </summary>
+	[TestMethod]
+	public void A_Group_Reaching_Into_Another_Area_Loses_To_The_Lights_The_Area_Owns()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.stuelys_alle", "light.stue_taklys", "light.stue_tak_1", "light.stue_tak_2", "binary_sensor.m"];
+		registry.Areas["kjokken"] = ["light.kjokkenlys_alle", "light.kjokken_1", "light.kjokken_2", "binary_sensor.k"];
+		ha.SetState("light.stuelys_alle", "off", new() { ["entity_id"] = new[] { "light.stue_taklys", "light.kjokkenlys_alle" } });
+		ha.SetState("light.stue_taklys", "off", new() { ["entity_id"] = new[] { "light.stue_tak_1", "light.stue_tak_2" } });
+		ha.SetState("light.stue_tak_1", "off");
+		ha.SetState("light.stue_tak_2", "off");
+		ha.SetState("light.kjokkenlys_alle", "off", new() { ["entity_id"] = new[] { "light.kjokken_1", "light.kjokken_2" } });
+		ha.SetState("light.kjokken_1", "off");
+		ha.SetState("light.kjokken_2", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.k", "off", new() { ["device_class"] = "motion" });
+
+		RecordingLogger logger = new();
+		Resolver(ha, registry, logger: logger).TryResolve(
+			new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? stue, out string? error);
+		Resolver(ha, registry).TryResolve(
+			new AreaConfig { AreaId = "kjokken" }, new AreaSettings(), out ResolvedArea? kjokken, out _);
+
+		Assert.IsNotNull(stue, error);
+		CollectionAssert.AreEqual(new[] { "light.stue_taklys" }, stue.Lights.ToArray(),
+			"the living room still prefers a group — just the one that does not reach into the kitchen");
+		CollectionAssert.AreEqual(new[] { "light.kjokkenlys_alle" }, kjokken!.Lights.ToArray(),
+			"and the kitchen keeps command of its own bulbs");
+
+		Assert.AreEqual(1, logger.Warnings.Count);
+		StringAssert.Contains(logger.Warnings[0], "stue", "a rule this surprising has to name the area it changed");
+		StringAssert.Contains(logger.Warnings[0], "kjokken", "and the area it was reaching into, or it is undiagnosable");
+		StringAssert.Contains(logger.Warnings[0], "light.stuelys_alle");
+	}
+
+	/// <summary>
+	///     The clip has a floor: a room whose only light is a reaching group keeps it. A shared bulb is a fault, a
+	///     dark room is a bigger one, and the warning is then the only signal the household gets.
+	/// </summary>
+	[TestMethod]
+	public void A_Reaching_Group_Is_Kept_When_It_Is_All_The_Area_Has()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["gang"] = ["light.gang_alle", "binary_sensor.m"];
+		registry.Areas["stue"] = ["light.stue_1"];
+		ha.SetState("light.gang_alle", "off", new() { ["entity_id"] = new[] { "light.stue_1" } });
+		ha.SetState("light.stue_1", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		RecordingLogger logger = new();
+		bool ok = Resolver(ha, registry, logger: logger).TryResolve(
+			new AreaConfig { AreaId = "gang" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsTrue(ok, error);
+		CollectionAssert.AreEqual(new[] { "light.gang_alle" }, area!.Lights.ToArray(),
+			"a room with nothing else to light keeps the group it has");
+		Assert.AreEqual(1, logger.Warnings.Count, "and says so, because nothing else will");
+	}
+
+	/// <summary>
+	///     Two hallway groups on one live instance share three of their bulbs while containing neither the other,
+	///     so the old rule dropped neither and commanded those three twice. The widest group wins; the narrower one
+	///     is traded for the bulb only it holds, because a bulb missing from its room is worse than a doubled call.
+	/// </summary>
+	[TestMethod]
+	public void Overlapping_Sibling_Groups_Command_No_Bulb_Twice_And_Lose_None()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		// The narrower group is listed first on purpose: coverage decides this, not registry order.
+		registry.Areas["gang"] =
+		[
+			"light.gang_vegglys_opp", "light.gang_vegglys",
+			"light.bulb_a", "light.bulb_b", "light.bulb_c", "light.bulb_d", "light.wiz_rgbw",
+			"binary_sensor.m"
+		];
+		ha.SetState("light.gang_vegglys", "off",
+			new() { ["entity_id"] = new[] { "light.bulb_a", "light.bulb_b", "light.bulb_c", "light.bulb_d" } });
+		ha.SetState("light.gang_vegglys_opp", "off",
+			new() { ["entity_id"] = new[] { "light.bulb_b", "light.bulb_c", "light.wiz_rgbw" } });
+		ha.SetState("light.bulb_a", "off");
+		ha.SetState("light.bulb_b", "off");
+		ha.SetState("light.bulb_c", "off");
+		ha.SetState("light.bulb_d", "off");
+		ha.SetState("light.wiz_rgbw", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		RecordingLogger logger = new();
+		Resolver(ha, registry, logger: logger).TryResolve(
+			new AreaConfig { AreaId = "gang" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEquivalent(new[] { "light.gang_vegglys", "light.wiz_rgbw" }, area.Lights.ToArray(),
+			"the wider group keeps its four bulbs, and the fifth arrives on its own rather than not at all");
+		CollectionAssert.DoesNotContain(area.Lights.ToArray(), "light.gang_vegglys_opp",
+			"keeping both groups is three bulbs commanded twice");
+		Assert.AreEqual(1, logger.Warnings.Count);
+		StringAssert.Contains(logger.Warnings[0], "light.gang_vegglys_opp");
+		StringAssert.Contains(logger.Warnings[0], "light.wiz_rgbw", "the bulb that changed hands has to be named");
+	}
+
+	/// <summary>
+	///     Home Assistant will let a household build a group that contains itself. Walking that without a visited
+	///     set never returns, and a resolver that hangs takes the whole house with it, so the walk visits each id
+	///     once and a loop that reaches no bulb stands for itself.
+	/// </summary>
+	[TestMethod]
+	[Timeout(10000)]
+	public void A_Light_Group_That_Contains_Itself_Terminates_And_Still_Lights_The_Room()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["gang"] = ["light.loop_a", "light.loop_b", "light.self", "light.bulb", "binary_sensor.m"];
+		ha.SetState("light.loop_a", "off", new() { ["entity_id"] = new[] { "light.loop_b" } });
+		ha.SetState("light.loop_b", "off", new() { ["entity_id"] = new[] { "light.loop_a" } });
+		ha.SetState("light.self", "off", new() { ["entity_id"] = new[] { "light.self", "light.bulb" } });
+		ha.SetState("light.bulb", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		bool ok = Resolver(ha, registry).TryResolve(
+			new AreaConfig { AreaId = "gang" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsTrue(ok, error);
+		CollectionAssert.AreEquivalent(new[] { "light.loop_a", "light.self" }, area!.Lights.ToArray(),
+			"a two-hop loop folds into one of its halves, a self-member still commands the bulb it holds");
 	}
 
 	[TestMethod]
@@ -790,5 +960,33 @@ public sealed class AreaEntityResolverTests
 		Assert.AreEqual(0, found.Lights.Count);
 		Assert.AreEqual(0, found.MotionSensors.Count);
 		Assert.AreEqual(0, found.LuxSensors.Count);
+	}
+
+	/// <summary>
+	///     Captures what was logged, because a group rule that quietly changes which bulbs a room commands is only
+	///     defensible while it says so out loud — "and it warns" is half of each cross-area and overlap contract.
+	/// </summary>
+	private sealed class RecordingLogger : ILogger
+	{
+		private readonly List<string> _warnings = [];
+
+		public IReadOnlyList<string> Warnings => _warnings;
+
+		public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+		public bool IsEnabled(LogLevel logLevel) => true;
+
+		public void Log<TState>(
+			LogLevel logLevel,
+			EventId eventId,
+			TState state,
+			Exception? exception,
+			Func<TState, Exception?, string> formatter)
+		{
+			ArgumentNullException.ThrowIfNull(formatter);
+
+			if (logLevel >= LogLevel.Warning)
+				_warnings.Add(formatter(state, exception));
+		}
 	}
 }

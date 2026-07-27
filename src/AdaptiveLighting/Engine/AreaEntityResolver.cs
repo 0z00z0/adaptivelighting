@@ -214,17 +214,239 @@ public sealed class AreaEntityResolver
 			.Distinct(StringComparer.Ordinal)
 			.ToList();
 
-		// A light group and its members are the same bulbs twice. Commanding both doubles every service call
-		// and makes the group's own state a lie mid-transition, so the members lose and the group wins.
-		HashSet<string> members = candidates
-			.SelectMany(id => _ha.AttrStringList(id, GroupMembersAttribute))
-			.ToHashSet(StringComparer.Ordinal);
-
-		if (members.Count > 0)
-			_logger.LogDebug("Area {Area}: dropping {Count} light group members in favour of their groups.", areaId, members.Count);
-
-		return [.. candidates.Where(id => !members.Contains(id))];
+		return PreferGroups(areaId, candidates);
 	}
+
+	/// <summary>
+	///     Settles an area's light groups against each other and against their own bulbs.
+	/// </summary>
+	/// <remarks>
+	///     A light group and its members are the same bulbs twice. Commanding both doubles every service call
+	///     and makes the group's own state a lie mid-transition, so the members lose and the group wins.
+	///     <para>
+	///         Comparing a group only against the ids it lists is not enough for that rule to hold, because a real
+	///         house breaks it three ways — all three measured on one live instance (2026-07-27):
+	///     </para>
+	///     <para>
+	///         <b>Nesting.</b> A group of groups lists groups, not bulbs, so membership is followed all the way down
+	///         (<see cref="LeavesOf"/>). One level of comparison worked only while every intermediate group happened
+	///         to sit in the same area; unassign one and its leaf bulbs survive and are commanded alongside the outer
+	///         group that already holds them.
+	///     </para>
+	///     <para>
+	///         <b>Reach.</b> A group may hold bulbs Home Assistant assigns to another room — see
+	///         <see cref="WithoutGroupsReachingIntoAnotherArea"/>, which is where that is decided.
+	///     </para>
+	///     <para>
+	///         <b>Overlap.</b> Two groups can share bulbs without either containing the other, so neither drops the
+	///         other and the shared bulbs are commanded twice. The widest coverage wins and the narrower group is
+	///         traded for the bulbs only it holds: no bulb twice, and no bulb quietly missing from its own room —
+	///         a bulb dropped from the room is a worse fault than a bulb commanded twice.
+	///     </para>
+	/// </remarks>
+	/// <param name="areaId">The area being discovered, for the messages and for deciding what counts as foreign.</param>
+	/// <param name="candidates">The area's lights, already filtered by label and liveness.</param>
+	private List<string> PreferGroups(string areaId, List<string> candidates)
+	{
+		// A room of plain bulbs has nothing to settle, and this is nearly every room. Answered before the
+		// transitive walk and the registry sweep below, neither of which would find anything to do.
+		if (!candidates.Any(IsGroup))
+			return candidates;
+
+		Dictionary<string, IReadOnlySet<string>> coverage =
+			candidates.ToDictionary(id => id, LeavesOf, StringComparer.Ordinal);
+
+		// Widest first, so the group that holds the most bulbs claims them before any narrower rival gets a say.
+		// OrderByDescending is stable, so equally wide lights keep the registry's order and the answer never
+		// depends on how a dictionary felt like enumerating.
+		List<string> ordered = [.. WithoutGroupsReachingIntoAnotherArea(areaId, candidates, coverage)
+			.OrderByDescending(id => coverage[id].Count)];
+
+		List<string> kept = [];
+		HashSet<string> claimed = new(StringComparer.Ordinal);
+
+		foreach (string candidate in ordered)
+		{
+			IReadOnlySet<string> covers = coverage[candidate];
+			List<string> unclaimed = [.. covers.Where(bulb => !claimed.Contains(bulb))];
+
+			// Nothing of its own left: a member of a group already kept, or the same bulbs under another name.
+			if (unclaimed.Count == 0)
+				continue;
+
+			if (unclaimed.Count == covers.Count)
+			{
+				kept.Add(candidate);
+				claimed.UnionWith(covers);
+				continue;
+			}
+
+			// Overlapping siblings. The bulbs only this group holds still have to be lit, so they are managed
+			// individually — the group they came in through already passed every filter, so they are not
+			// strangers to the room; only the exclude label and liveness get to stop them here.
+			List<string> alone = [.. unclaimed.Where(bulb => !IsExcluded(bulb)).Where(IsLive)];
+
+			_logger.LogWarning(
+				"Area '{Area}': light group '{Group}' shares {Shared} of its bulbs with {Rivals} while containing neither, "
+				+ "so it is not used as a group here — commanding both would command those bulbs twice. The {Alone} bulbs only "
+				+ "it holds are managed on their own ({Bulbs}). Nest the groups, or stop them overlapping, to settle it properly.",
+				areaId, candidate, covers.Count - unclaimed.Count, RivalsOf(kept, coverage, covers), alone.Count,
+				alone.Count > 0 ? string.Join(", ", alone) : "none — the rest are excluded or unavailable");
+
+			kept.AddRange(alone);
+			claimed.UnionWith(covers);
+		}
+
+		if (kept.Count != candidates.Count)
+			_logger.LogDebug("Area {Area}: {Total} discovered lights settle into {Count} once their groups have had their say.",
+				areaId, candidates.Count, kept.Count);
+
+		return kept;
+	}
+
+	/// <summary>
+	///     Drops the groups that reach past the area's own walls, naming the room they were reaching into.
+	/// </summary>
+	/// <remarks>
+	///     Home Assistant lets a group hold bulbs from anywhere, and one live instance has a living-room group
+	///     holding the kitchen's group (2026-07-27). Preferring that group would put the living room in charge of
+	///     the kitchen's lighting: the two areas take turns setting each other's brightness, and whichever vacancy
+	///     timeout fires first switches the lights off on somebody standing in the other room. There is no way to
+	///     keep the group and not command what is inside it, so the area boundary wins and the room falls back to
+	///     the lights it owns — usually the inner group that stays inside it, which is still a group, so
+	///     "prefer groups" survives whole and only the reach is clipped.
+	///     <para>
+	///         Assigned to no area at all does not count as foreign: a bulb whose group carries the area assignment
+	///         is the ordinary way to set a house up, and treating it as another room's would clip nearly every group
+	///         in the house.
+	///     </para>
+	///     <para>
+	///         The one thing worse than a shared bulb is a dark room, so an area left with nothing after the clip
+	///         keeps its reaching group, and the warning is then the only signal there is.
+	///     </para>
+	/// </remarks>
+	private List<string> WithoutGroupsReachingIntoAnotherArea(
+		string areaId,
+		List<string> candidates,
+		Dictionary<string, IReadOnlySet<string>> coverage)
+	{
+		IReadOnlyDictionary<string, string> elsewhere =
+			AreasHolding(areaId, [.. coverage.Values.SelectMany(bulbs => bulbs)]);
+
+		if (elsewhere.Count == 0)
+			return candidates;
+
+		List<string> kept = [];
+		List<(string Group, string Areas, string Bulbs)> reaching = [];
+
+		foreach (string candidate in candidates)
+		{
+			List<string> foreign = [.. coverage[candidate].Where(elsewhere.ContainsKey).Order(StringComparer.Ordinal)];
+
+			if (foreign.Count == 0)
+			{
+				kept.Add(candidate);
+				continue;
+			}
+
+			reaching.Add((
+				candidate,
+				string.Join(", ", foreign.Select(bulb => elsewhere[bulb]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)),
+				string.Join(", ", foreign)));
+		}
+
+		foreach ((string group, string areas, string bulbs) in reaching)
+			if (kept.Count > 0)
+				_logger.LogWarning(
+					"Area '{Area}': light group '{Group}' reaches into area '{Other}' ({Bulbs}), so the area drives the lights "
+					+ "it owns instead of the group. Two areas commanding the same bulbs set each other's brightness and switch "
+					+ "each other off. Split the group, or move those lights, to have the area use it again.",
+					areaId, group, areas, bulbs);
+			else
+				_logger.LogWarning(
+					"Area '{Area}': light group '{Group}' reaches into area '{Other}' ({Bulbs}), and the area has no lights of "
+					+ "its own to fall back on, so it keeps the group and both areas command those bulbs. Split the group, or "
+					+ "assign the area its own lights.",
+					areaId, group, areas, bulbs);
+
+		return kept.Count > 0 ? kept : candidates;
+	}
+
+	/// <summary>
+	///     Which other area holds each of <paramref name="bulbs"/>, for the ones another area holds at all.
+	/// </summary>
+	/// <remarks>
+	///     A reverse sweep of the registry rather than a per-bulb lookup, because <see cref="IAreaRegistry"/> answers
+	///     "what is in this area" and the question here is the other way round. One pass over the house, and only
+	///     when the area actually has a group to check. A bulb this area holds itself is never foreign, whatever any
+	///     other area claims — the room being resolved is the one asking.
+	/// </remarks>
+	private IReadOnlyDictionary<string, string> AreasHolding(string areaId, HashSet<string> bulbs)
+	{
+		HashSet<string> own = [.. _registry.EntitiesInArea(areaId)];
+		Dictionary<string, string> holders = new(StringComparer.Ordinal);
+
+		foreach (string other in _registry.AreaIds)
+		{
+			if (string.Equals(other, areaId, StringComparison.Ordinal))
+				continue;
+
+			foreach (string entityId in _registry.EntitiesInArea(other))
+				if (bulbs.Contains(entityId) && !own.Contains(entityId))
+					holders.TryAdd(entityId, other);
+		}
+
+		return holders;
+	}
+
+	/// <summary>
+	///     Every bulb <paramref name="entityId"/> actually commands, following group membership all the way down.
+	/// </summary>
+	/// <remarks>
+	///     A plain bulb commands itself, which is what makes a group and a bulb comparable at all: both answer the
+	///     same question, so one selection pass settles group-versus-member, group-versus-group and bulb-versus-bulb
+	///     without special cases.
+	///     <para>
+	///         Home Assistant will happily let a household build a group that contains itself, directly or round a
+	///         longer loop, and a resolver that hangs on a misconfiguration takes the whole house down with it. The
+	///         walk therefore visits each id once. A loop bottoms out with no bulbs at the end of it, and something
+	///         still has to be returned or the room resolves to nothing, so such a group stands for itself and
+	///         everything it reaches — which lets the widest one win and the rest fold into it, exactly as a healthy
+	///         nest does.
+	///     </para>
+	/// </remarks>
+	private IReadOnlySet<string> LeavesOf(string entityId)
+	{
+		HashSet<string> bulbs = new(StringComparer.Ordinal);
+		HashSet<string> seen = new(StringComparer.Ordinal) { entityId };
+		Stack<string> pending = new();
+		pending.Push(entityId);
+
+		while (pending.Count > 0)
+		{
+			string current = pending.Pop();
+			IReadOnlyList<string> members = _ha.AttrStringList(current, GroupMembersAttribute);
+
+			if (members.Count == 0)
+			{
+				bulbs.Add(current);
+				continue;
+			}
+
+			foreach (string member in members)
+				if (seen.Add(member))
+					pending.Push(member);
+		}
+
+		return bulbs.Count > 0 ? bulbs : seen;
+	}
+
+	/// <summary>Whether the entity lists members, which is the only thing that makes a light a group.</summary>
+	private bool IsGroup(string entityId) => _ha.AttrStringList(entityId, GroupMembersAttribute).Count > 0;
+
+	/// <summary>The already-kept lights an overlapping group is overlapping, so the warning can name them.</summary>
+	private static string RivalsOf(List<string> kept, Dictionary<string, IReadOnlySet<string>> coverage, IReadOnlySet<string> covers) =>
+		string.Join(", ", kept.Where(id => coverage.TryGetValue(id, out IReadOnlySet<string>? theirs) && theirs.Overlaps(covers)));
 
 	/// <summary>
 	///     Whether the entity is something Home Assistant can actually act on right now.
