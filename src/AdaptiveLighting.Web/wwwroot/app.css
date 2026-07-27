@@ -3301,3 +3301,559 @@ button.mode-pill:disabled {
 	font-size: var(--text-sm);
 	color: var(--muted);
 }
+
+/* ============================================================================
+   THE BOARD — Pages/Dashboard.razor (ui-design-c.md §5.1, "C4")
+   The home surface: an exception tray, room swim-lanes on a shared time axis
+   under the schedule band, one now-line through everything, and the decision
+   log below.
+
+   The problem this block is mostly solving is SEVENTEEN LANES. A swim-lane
+   board reads beautifully at six and becomes a scrolling wall at seventeen, so
+   three things buy the height back:
+
+     - a quiet room costs a CHIP, not a row (.board-quiet). Same room, same tap
+       through to its page, a fifth of the height. Which rooms qualify is
+       BoardView.Partition's decision, not this file's;
+     - a floor is headed only when it has a lane to head, so six floor groups
+       do not become six separators over nothing;
+     - the tracks scroll sideways under a name column that stays put, which is
+       the design's accepted phone compromise — sideways, never a vertical hunt.
+
+   Radii: chart MARKS (a block, a band segment) are 2px, below the smallest
+   surface radius on purpose — a two-pixel sliver at --radius-chip is a dot with
+   no length, and a five-second visit to the hall has to stay visible. Every
+   surface here keeps the scale.
+   ============================================================================ */
+
+/* ---- the exception tray ----
+   The rooms worth a look, hoisted above the board so the board beneath can be
+   scanned rather than read. The edge carries the family: amber for the one
+   state that is about to act, violet for the three where somebody's decision is
+   standing. Never the accent — these are states, and the accent means "you can
+   change this". */
+.tray {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.6rem;
+	margin: 0 0 0.85rem;
+}
+
+.tray-chip {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	background: var(--panel);
+	border: var(--rule);
+	border-left: 3px solid var(--line);
+	border-radius: var(--radius-control);
+	padding: 0.45rem 0.8rem;
+	font-size: var(--text-md);
+	color: var(--text);
+	text-decoration: none;
+}
+
+.tray-chip:hover {
+	background: var(--panel-2);
+}
+
+.tray-chip:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.tray-warn { border-left-color: var(--warn); }
+.tray-human { border-left-color: var(--human); }
+
+.tray-text b {
+	font-weight: 650;
+}
+
+/* The whole reassurance budget: one sentence about every room that is fine. */
+.tray-quiet {
+	color: var(--muted);
+	font-size: var(--text-md);
+}
+
+/* ---- the board panel ---- */
+.board {
+	background: var(--panel);
+	border: var(--rule);
+	border-radius: var(--radius-panel);
+	overflow: hidden;
+}
+
+.board-head,
+.board-loghead {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-4);
+	padding: var(--space-4) var(--space-5) var(--space-3);
+}
+
+.board-loghead {
+	padding: 0;
+	margin: var(--space-6) 0 var(--space-3);
+}
+
+/* An h2 that has to look like every other uppercase section label rather than
+   like the page-wide h2 rule, whose margins are meant for a bare heading. */
+.board-title {
+	margin: 0;
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.board-span {
+	font-family: var(--mono);
+	font-size: var(--text-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Said out loud because a restart wipes the morning: without it an empty lane
+   reads as a room that did nothing rather than as history the board never had. */
+.board-since {
+	margin-left: auto;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* ---- the time grid ----
+   The axis, the band and every lane are one flex row each: a sticky gutter the
+   width of the name column, then a track. Sharing the gutter is what makes a
+   block, its hour and its period line up — an axis drawn across the full width
+   would be off by the name column and quietly lie about when things happened. */
+/* direction: rtl on the scroller, ltr back on its content. That is the one CSS-only way to open a
+   horizontal scroller at its RIGHT edge, and where it opens is load-bearing here: the board's right-hand
+   end is now and what happens next, and a phone that opened on four-hours-ago would hide the live edge
+   behind a swipe nobody knew to make. Content direction is restored immediately, so nothing reads
+   right-to-left; position:sticky is physical and the name column still pins to the left. */
+.board-scroll {
+	overflow-x: auto;
+	direction: rtl;
+}
+
+.board-grid {
+	--lane-name: 128px;
+	direction: ltr;
+	position: relative;
+	min-width: 680px;
+}
+
+.board-axis,
+.board-band,
+.lane {
+	display: flex;
+	align-items: stretch;
+}
+
+.board-gutter,
+.lane-name {
+	position: sticky;
+	left: 0;
+	z-index: 3;
+	width: var(--lane-name);
+	flex: 0 0 auto;
+	background: var(--panel);
+	border-right: var(--rule);
+}
+
+/* The gridlines are one repeating background rather than an element per room
+   per hour: seventeen lanes times seven hours is 119 divs that say nothing. The
+   window is snapped to whole hours precisely so this can work. */
+.board-track {
+	position: relative;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	background: var(--lane);
+	background-image: linear-gradient(to right, var(--grid) 1px, transparent 1px);
+	background-size: var(--hour-w) 100%;
+}
+
+.board-track-bare {
+	background-color: transparent;
+}
+
+.board-axis {
+	height: 26px;
+	border-top: var(--rule);
+	border-bottom: var(--rule);
+}
+
+.board-tick {
+	position: absolute;
+	bottom: 5px;
+	transform: translateX(-50%);
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* The end ticks hang inward instead of centring, so neither is half-clipped by
+   the name column or the panel's right edge. */
+.board-tick-first { transform: translateX(0); }
+.board-tick-last { transform: translateX(-100%); }
+
+/* ---- the schedule band ----
+   What the house was told to do, above what each room actually did. */
+.board-band {
+	height: 24px;
+	border-bottom: var(--rule);
+}
+
+.band-seg {
+	position: absolute;
+	top: 4px;
+	bottom: 4px;
+	border-radius: 2px;
+	opacity: 0.8;
+}
+
+/* Dark ink, in both themes, and not a token: a segment's colour is a Kelvin, so
+   it is always rgb(255, g, b) — bright by construction. --text would vanish on
+   it in the dark theme and --accent-ink is white in the light one. */
+.band-name {
+	position: absolute;
+	top: 0;
+	line-height: 24px;
+	padding-left: 6px;
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: rgba(20, 22, 16, 0.78);
+	white-space: nowrap;
+}
+
+.board-band-none {
+	position: absolute;
+	left: 6px;
+	line-height: 24px;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* ---- a lane ----
+   A link, not a row with a click handler: the room page is a page, and a link
+   is what a keyboard, a middle click and a screen reader all already understand. */
+.lane {
+	height: 34px;
+	border-bottom: var(--rule-inner);
+	text-decoration: none;
+	color: inherit;
+}
+
+.lane:hover .board-track {
+	background-color: var(--panel-2);
+}
+
+.lane:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+.lane-name {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0 0.5rem;
+	font-size: var(--text-md);
+	font-weight: 600;
+}
+
+.lane-room {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* A floor header, and it appears only when the floor has a lane under it. */
+.board-floor {
+	display: flex;
+	align-items: center;
+	height: 22px;
+	background: var(--panel-2);
+	border-bottom: var(--rule-inner);
+}
+
+.board-floor-name {
+	position: sticky;
+	left: 0;
+	padding: 0 0.5rem;
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* ---- what a room did ----
+   A lit block wears the warmth the engine actually commanded (--blk, straight
+   off the snapshot); the rest wear their semantic colour. Off-by-hand is hatched
+   rather than filled, because nothing was lit and a solid block would say it was. */
+.blk {
+	position: absolute;
+	top: 7px;
+	bottom: 7px;
+	border-radius: 2px;
+}
+
+.blk-lit {
+	background: var(--blk, var(--machine));
+	opacity: 0.85;
+}
+
+.blk-hand {
+	background: var(--human);
+	opacity: 0.8;
+}
+
+.blk-dimming {
+	background: var(--warn);
+}
+
+.blk-held {
+	background: repeating-linear-gradient(45deg, var(--idle) 0 3px, transparent 3px 7px);
+}
+
+/* What happens next: a dotted mark in the same 2px stroke family as the now-line,
+   with the time and the verb beside it. */
+.lane-mark {
+	position: absolute;
+	top: 4px;
+	bottom: 4px;
+	width: 0;
+	border-left: var(--stroke-mark) dotted var(--muted);
+}
+
+.lane-mark i {
+	position: absolute;
+	left: 5px;
+	top: 50%;
+	transform: translateY(-50%);
+	font-style: normal;
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+/* ---- the now-line ----
+   One line through the axis, the band and every lane. Below the sticky name
+   column deliberately: scrolled far enough back it slides under the names
+   rather than cutting across them. */
+.board-now {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	z-index: 2;
+	width: var(--stroke-mark);
+	background: var(--now);
+	pointer-events: none;
+}
+
+/* The tag, unlike the line, sits ABOVE the sticky gutter (z-index 4 against its 3). It rides on the axis
+   row, where the gutter is empty, and scrolled far enough back it would otherwise be sliced in half by
+   that empty box and read "6:13" — caught on a phone, where the board opens with now near the left edge. */
+.board-now-tag {
+	position: absolute;
+	top: 3px;
+	z-index: 4;
+	transform: translateX(-50%);
+	background: var(--now);
+	color: var(--bg);
+	border-radius: var(--radius-chip);
+	padding: 0 6px;
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	font-weight: 700;
+	pointer-events: none;
+}
+
+/* ---- the quiet shelf ----
+   Where fourteen rooms go so three can be read. Absent entirely below
+   BoardView.LaneBudget, because in a two-room house an empty track IS the
+   answer and a footnote instead of a lane would look like a fault. */
+.board-quiet {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 0.45rem;
+	padding: var(--space-3) var(--space-5);
+	border-top: var(--rule);
+	background: var(--panel-2);
+}
+
+.board-quiet-lab,
+.board-quiet-floor {
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.board-quiet-floor {
+	font-weight: 600;
+	margin-left: 0.35rem;
+}
+
+.quiet-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: var(--panel);
+	border: var(--rule);
+	border-radius: var(--radius-chip);
+	padding: 0.1rem 0.45rem;
+	font-size: var(--text-sm);
+	color: var(--muted);
+	text-decoration: none;
+}
+
+.quiet-chip:hover {
+	color: var(--text);
+	border-color: var(--muted);
+}
+
+.quiet-chip:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* ---- the legend and the footnotes ----
+   Glyph plus swatch per key: the one place the shape language is taught where
+   the colour is also explained (§6.2). */
+.board-foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 1rem;
+	padding: var(--space-3) var(--space-5);
+	border-top: var(--rule);
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+.board-key {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.board-swatch {
+	width: 14px;
+	height: 9px;
+	border-radius: 2px;
+	flex: 0 0 auto;
+}
+
+.board-swatch-next {
+	width: 0;
+	height: 12px;
+	border-radius: 0;
+	border-left: var(--stroke-mark) dotted var(--muted);
+}
+
+.board-foot-end {
+	margin-left: auto;
+}
+
+.board-note {
+	margin: 0;
+	padding: var(--space-3) var(--space-5);
+	border-top: var(--rule);
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* A log row's room name is the way through to that room's page. Coloured only
+   on hover: twelve accented names down the left edge is texture. */
+.log-room-link {
+	color: inherit;
+	text-decoration: none;
+}
+
+.log-room-link:hover {
+	color: var(--accent);
+}
+
+/* The board's own log rows: one line each, time and room beside one another and
+   the reading beside the event. On the Activity page the log IS the page and can
+   afford two lines a row; here it sits under a board, and twelve two-line rows
+   would outweigh the thing they explain. Same markup, same colours, one line. */
+.log-compact .log-row {
+	grid-template-columns: 13rem 1fr;
+	padding: 0.35rem 1rem;
+}
+
+.log-compact .log-when {
+	flex-direction: row;
+	align-items: baseline;
+	gap: 0.55rem;
+}
+
+.log-compact .log-body {
+	flex-direction: row;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 0 0.4rem;
+}
+
+/* The dash belongs to the layout, not to the sentence: ActivityView hands over two
+   strings precisely so a surface can set them side by side or stacked. */
+.log-compact .log-why::before {
+	content: "— ";
+}
+
+.rooms-off a,
+.log-foot a {
+	color: var(--accent);
+	text-decoration: none;
+	font-weight: 600;
+}
+
+.rooms-off a:hover,
+.log-foot a:hover {
+	text-decoration: underline;
+}
+
+/* On a phone the name column narrows and the meta line drops below the title
+   rather than being squeezed against it. The tracks keep scrolling sideways —
+   that is the design's stated compromise, and it is the only one. */
+@media (max-width: 640px) {
+	.board-grid {
+		--lane-name: 100px;
+	}
+
+	.lane-name {
+		font-size: var(--text-sm);
+		padding: 0 0.4rem;
+	}
+
+	.board-since {
+		margin-left: 0;
+		width: 100%;
+	}
+
+	.board-foot-end {
+		margin-left: 0;
+	}
+}
+
+/* The log's own two-line fallback, at the width the shipped rows already take it:
+   13rem of room name beside a sentence leaves the sentence a strip too narrow to
+   read, whether or not the rows are the compact ones. */
+@media (max-width: 560px) {
+	.log-compact .log-row {
+		grid-template-columns: 1fr;
+		gap: 0.1rem;
+	}
+}
