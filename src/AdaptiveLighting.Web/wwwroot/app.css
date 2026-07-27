@@ -299,12 +299,15 @@ body {
    own box where .content paints straight over it — the tabs are visible but untappable. Reported
    on a phone, 2026-07-17. Row-gap matters for the same reason: once it wraps, the rows need air.
 */
+/* 44px, not 56: the bar carries a mark, three words and three tabs, and every pixel it spends is a pixel the
+   board's first lane does not get. It stays a comfortable touch target because the nav links carry their own
+   padding, and it still grows rather than clipping when the nav wraps. */
 .topbar {
 	display: flex;
 	align-items: center;
-	gap: 0.5rem 2rem;
-	padding: 0.5rem 1.5rem;
-	min-height: 56px;
+	gap: 0.4rem 2rem;
+	padding: 0.35rem 1.5rem;
+	min-height: 44px;
 	background: var(--panel);
 	border-bottom: 1px solid var(--line);
 	flex-wrap: wrap;
@@ -377,7 +380,7 @@ body {
 	}
 
 	.content {
-		padding: 1rem;
+		padding: 0.75rem 1rem 1rem;
 	}
 }
 
@@ -385,7 +388,7 @@ body {
 
 .content {
 	flex: 1;
-	padding: 1.5rem;
+	padding: 0.9rem 1.5rem 1.5rem;
 	max-width: 1100px;
 	width: 100%;
 	margin: 0 auto;
@@ -803,56 +806,6 @@ code {
 	/* A file path or entity id is one unbreakable token, and on a phone one long token is the whole
 	   page scrolling sideways. Break anywhere rather than push the save bar off-screen. */
 	overflow-wrap: anywhere;
-}
-
-/* ---- dashboard master switch ----
-   The one control at the top of the dashboard that pauses or resumes the whole engine. It reflects the live
-   state of the configured kill switch and flips it through ModeService's existing config-resolved toggle. The
-   left edge carries the state colour — ok when commanding, muted when paused, warn when Home Assistant has not
-   answered and the state is unknown. */
-
-.master-switch {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	flex-wrap: wrap;
-	background: var(--panel);
-	border: 1px solid var(--line);
-	border-left: 3px solid var(--idle);
-	border-radius: var(--radius);
-	padding: 0.85rem 1.1rem;
-	margin-bottom: 1rem;
-}
-
-.master-switch.on {
-	border-left-color: var(--ok);
-}
-
-.master-switch.off {
-	border-left-color: var(--idle);
-}
-
-.master-switch.unknown {
-	border-left-color: var(--warn);
-}
-
-.master-switch-copy {
-	display: flex;
-	flex-direction: column;
-	gap: 0.15rem;
-	min-width: 0;
-}
-
-.master-switch-title {
-	font-weight: 600;
-	font-size: 1rem;
-}
-
-.master-switch-sub {
-	color: var(--muted);
-	font-size: 0.85rem;
-	max-width: 60ch;
 }
 
 /* ---- mode toggles ---- */
@@ -2709,50 +2662,129 @@ select {
 	font-size: 0.9rem;
 }
 
-/* ---- 10-web-ux: dashboard house strip ----
-   The two read cards — House mode and Who's home — sit side by side on a desktop and stack on a phone
-   with no media query: auto-fit collapses the track count when the viewport narrows. Both are .panel
-   cards, so their surface, border and radius come for free and stay theme-aware. */
+/* ---- the house bar ----
+   The board's chrome: the master switch, the house mode and who's home, in ONE strip.
 
-.house-strip {
+   They used to be a card and then two more, stacked — about three hundred pixels before the first lane, which
+   on a phone is the entire first screen. Almost all of that height was a second line under each fact restating
+   what the fact already said, so the compaction is mostly deletion: the "everything is fine" line moved into
+   the toggle's hover, the mode's meaning into the value's, and the who's-home table became one row of chips.
+   What each mode actually does is now written out in full on the House tab, which is where somebody reading
+   about modes rather than glancing at one is standing.
+
+   Three cells, hairline-separated, wrapping to a column on a narrow screen with no media query — auto-fit
+   collapses the track count by itself. The master switch is first and keeps the state colour on the panel's
+   own left edge, because it is the one control here that stops everything. */
+
+.housebar {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-	gap: 0.9rem;
-	margin-bottom: 1rem;
+	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+	gap: 0 var(--space-5);
+	background: var(--panel);
+	border: var(--rule);
+	border-left: 3px solid var(--idle);
+	border-radius: var(--radius-panel);
+	padding: 0.55rem 0.9rem;
+	margin-bottom: var(--space-4);
 }
 
-.house-strip .panel {
-	margin-bottom: 0;
+.housebar:has(.housebar-master.on) { border-left-color: var(--ok); }
+.housebar:has(.housebar-master.off) { border-left-color: var(--idle); }
+.housebar:has(.housebar-master.unknown) { border-left-color: var(--warn); }
+
+/* A hairline between cells rather than three boxes: one panel with internal rules reads as one strip, and
+   three panels read as three things to look at. The rule disappears on the first cell of a wrapped row —
+   there is no reliable selector for that, so it is drawn on the left and simply not drawn on the first. */
+.housebar-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	min-width: 0;
+	padding-left: var(--space-5);
+	border-left: var(--rule-inner);
 }
 
-.house-panel-head {
+.housebar-cell:first-child {
+	padding-left: 0;
+	border-left: 0;
+}
+
+.housebar-lab {
 	color: var(--muted);
-	font-size: 0.78rem;
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-	margin-bottom: 0.5rem;
-}
-
-.house-mode-current {
+	font-size: var(--text-xs);
 	font-weight: 600;
-	font-size: 1.25rem;
-	line-height: 1.15;
+	text-transform: uppercase;
+	letter-spacing: var(--label-track);
 }
 
-.house-mode-current.unknown {
+/* The fact and its control on one line. The pills wrap under the value when the cell is narrow. */
+.housebar-main {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+	min-height: 30px;
+}
+
+.housebar-value {
+	font-weight: 600;
+	font-size: 1.05rem;
+	line-height: 1.2;
+	white-space: nowrap;
+}
+
+.housebar-value.unknown {
 	color: var(--muted);
 	font-style: italic;
+	font-weight: 500;
 }
 
-.house-mode-meaning {
+/* Only news gets a line. Paused and unreachable keep theirs; "lights adjust automatically" does not. */
+.housebar-note {
+	margin: 0;
 	color: var(--muted);
-	font-size: 0.85rem;
-	margin: 0.3rem 0 0.75rem;
+	font-size: var(--text-sm);
+	line-height: 1.35;
+	max-width: 46ch;
 }
 
-.house-mode-empty {
+.housebar-note.ok { color: var(--ok); }
+.housebar-note.bad { color: var(--bad); }
+
+.housebar-master .toggle {
+	margin-left: auto;
+}
+
+/* One row of chips, not one row per person: a household of three cost three rows to say three words. */
+.people-row {
+	gap: var(--space-2);
+}
+
+.person-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	background: var(--chip);
+	border-radius: var(--radius-chip);
+	padding: 0.15rem 0.45rem;
+	font-size: var(--text-sm);
+	max-width: 100%;
+}
+
+.person-chip-name {
+	font-weight: 550;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.person-chip-state {
 	color: var(--muted);
-	font-size: 0.9rem;
+	font-size: var(--text-xs);
+}
+
+.person-chip.home .person-chip-state {
+	color: var(--ok);
 }
 
 /* The switch row reuses the .pill look, but these pills are buttons. The current one lights in the
@@ -2791,18 +2823,7 @@ button.mode-pill:disabled {
 	cursor: not-allowed;
 }
 
-/* Who's home: one row per watched person — a state dot, the name, and the plain word home/away/unknown. */
-.person-row {
-	display: flex;
-	align-items: center;
-	gap: 0.55rem;
-	padding: 0.25rem 0;
-}
-
-.person-row + .person-row {
-	border-top: 1px solid var(--line);
-}
-
+/* The state dot on a person's chip: filled when home, hollow when away, dashed when unknown. */
 .person-dot {
 	flex: none;
 	width: 0.7rem;
@@ -2819,28 +2840,6 @@ button.mode-pill:disabled {
 
 .person-dot.unknown {
 	border-style: dashed;
-}
-
-.person-name {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.person-state {
-	color: var(--muted);
-	font-size: 0.85rem;
-}
-
-.person-state.home {
-	color: var(--ok);
-}
-
-.whos-home-empty {
-	color: var(--muted);
-	font-size: 0.9rem;
 }
 
 /* ---- the activity timeline ----
@@ -4524,5 +4523,246 @@ button.mode-pill:disabled {
 	.room-log .log-row {
 		grid-template-columns: 4rem 1fr;
 		padding: 0.45rem 1rem;
+	}
+}
+
+
+/* ============================================================================
+   THE HOUSE TAB  —  Pages/ConfigEditor.razor  (ui-design-c.md §5.3, "C3")
+   Everything that isn't one room: what every room starts with, the day's
+   schedule, the modes, the people, and the engine itself.
+
+   Almost nothing here is new, and that is the point. The cards are the room
+   page's cards (.room-card, .room-card-head, .room-sentences, .room-morebar,
+   .room-groups, .sgroup, .srow, .stepper, .seg), because the two surfaces
+   teach one model and a reader who learned it on a room should recognise it
+   on the house. What this block adds is only what the House tab has and the
+   room page does not:
+
+     · a room LIST, where the room page has one room. A row is a switch you
+       can hit and a link you cannot hit by accident — the two are siblings,
+       never nested, because a control inside an anchor is neither valid
+       markup nor a thing a thumb can aim at.
+     · a rule list, where a mode is a bold name and a sentence on one line.
+     · the small adjustments a card needs when it holds form fields rather
+       than settings rows.
+   ============================================================================ */
+
+/* Blazor moves focus to the page's h1 on every navigation, so a screen reader
+   lands on what the page is about. That must not paint a box around the title
+   for somebody who arrived with a mouse. Keyed on the tabindex FocusOnNavigate
+   itself adds, which is the narrowest possible target: nothing can Tab to a
+   tabindex="-1" element, so no keyboard user loses a ring they could have
+   earned. :focus-visible alone does not do it — Chrome matches it for
+   programmatic focus on a fresh load, which is exactly this case. */
+h1[tabindex="-1"]:focus {
+	outline: none;
+}
+
+/* ---- the room list ----
+   One row per room: its power switch, its name, its slug, how far it strays,
+   and the way through to its own page. The left edge is the dashboard's live
+   family colour and flat grey when the room is switched off — settings and
+   board speak one colour language, so "violet means somebody touched it" is
+   learned once. */
+
+.room-rows {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	margin-bottom: var(--space-4);
+}
+
+.room-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	background: var(--panel);
+	border: var(--rule);
+	border-left: 3px solid var(--idle);
+	border-radius: var(--radius-panel);
+	padding: 0.4rem 0.75rem;
+	min-width: 0;
+}
+
+.room-row.family-machine { border-left-color: var(--machine); }
+.room-row.family-human { border-left-color: var(--human); }
+.room-row.family-idle { border-left-color: var(--idle); }
+.room-row.family-off { border-left-color: var(--line); }
+
+/* The link is everything except the switch, so the row is one large target and
+   the switch is a small one carved out of it. */
+.room-open {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem 0.7rem;
+	flex: 1 1 auto;
+	min-width: 0;
+	flex-wrap: wrap;
+	padding: 0.35rem 0;
+	color: inherit;
+	text-decoration: none;
+	border-radius: var(--radius-control);
+}
+
+.room-open:hover .area-title {
+	color: var(--accent);
+}
+
+.room-open:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* A room with no page yet — no Home Assistant area, or added since the last
+   save. It keeps the row's shape so the list stays a list, and says why. */
+.room-open-shut {
+	cursor: default;
+}
+
+.room-open-chevron {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-right: 2px solid var(--muted);
+	border-top: 2px solid var(--muted);
+	transform: rotate(45deg);
+}
+
+.room-open:hover .room-open-chevron {
+	border-color: var(--accent);
+}
+
+.room-drop {
+	padding: 0.1rem 0.45rem;
+	font-size: var(--text-xs);
+}
+
+/* The way back for a room that names no area: without one it has no page, and
+   everything on that page would be out of reach. Full width on its own line,
+   because a picker squeezed into a row header is a picker nobody uses. */
+.room-adopt {
+	flex: 1 1 16rem;
+	min-width: 0;
+}
+
+/* ---- the cards ----
+   The room page's card, on a page that also holds ordinary form fields. The
+   fields keep their own padding rather than inheriting the card's zero. */
+
+.house-card {
+	margin-bottom: var(--space-5);
+}
+
+.house-card .room-card-head {
+	align-items: center;
+}
+
+.house-fields,
+.house-chart {
+	padding: 0.2rem 1.15rem 0.5rem;
+}
+
+.house-fields .field:last-child {
+	margin-bottom: 0;
+}
+
+/* The all-rooms sentences carry no amber dots — these values ARE the house —
+   so the reveal bar is the only thing under them, and it needs the rule the
+   legend would otherwise have separated it with. */
+.house-card .room-morebar {
+	border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+}
+
+.house-card .room-groups + .room-morebar,
+.house-card .room-groups {
+	border-radius: 0;
+}
+
+/* Picking which room to add. An accent edge because it is a step in a flow
+   rather than a resting part of the page — the same mark the re-setup panel
+   carries, for the same reason. */
+.house-add {
+	border-left: 3px solid var(--accent);
+	margin-bottom: var(--space-4);
+}
+
+/* ---- the rules ----
+   A house mode as one line: its name in bold, then what it does as a sentence
+   with its two tunable values inline. The sentence machinery renders block
+   elements, so they are pulled back inline here — a mode is a line, not a
+   paragraph with a heading. */
+
+.house-rules {
+	padding: 0 1.15rem 0.6rem;
+}
+
+.house-rule {
+	padding: 0.6rem 0;
+	border-top: var(--rule-inner);
+	font-size: var(--text-base);
+	line-height: 1.9;
+}
+
+.house-rule:first-child {
+	border-top: 0;
+}
+
+.house-rule .sentences,
+.house-rule .sentence {
+	display: inline;
+	padding: 0;
+	border-top: 0;
+}
+
+.house-rule-name {
+	font-weight: 700;
+}
+
+/* The mode the house is standing on. Green rather than accent: it is a state,
+   and state is never the accent. */
+.house-rule-now {
+	margin-left: var(--space-2);
+	padding: 0.05rem 0.4rem;
+	border-radius: var(--radius-chip);
+	background: var(--ok-bg);
+	color: var(--ok);
+	font-size: var(--text-xs);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+/* ---- narrow ----
+   One column, and a room row of exactly two lines: the name over the summary,
+   with the chevron pinned to the right edge rather than wrapping to a line of
+   its own — which is what a chevron in the flex flow does, and it turns every
+   room into three lines of mostly nothing. */
+@media (max-width: 640px) {
+	.house-fields,
+	.house-chart,
+	.house-rules {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+
+	.room-row {
+		position: relative;
+		padding: 0.3rem 0.6rem;
+	}
+
+	.room-open {
+		row-gap: 0;
+		padding-right: var(--space-4);
+	}
+
+	.room-open .area-summary-hint {
+		margin-left: 0;
+		flex-basis: 100%;
+	}
+
+	.room-open-chevron {
+		position: absolute;
+		right: 0.7rem;
+		top: calc(50% - 5px);
 	}
 }

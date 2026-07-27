@@ -1,28 +1,33 @@
 @*
-	The who's-home card on the dashboard: one row per watched person, a dot for their state, and the plain word
-	home / away / unknown. Read-only — it shows the same people the engine watches for Home and Away
+	The who's-home cell of the board's house bar: one chip per watched person, a dot for their state, and the
+	plain word home / away / unknown. Read-only — it shows the same people the engine watches for Home and Away
 	(ModeService.GetPeople mirrors PresenceMonitor). No timestamps, no entity ids, no actions.
+
+	Chips on one wrapping row rather than a stacked table: a household of three cost three rows of the board's
+	chrome to say three words, and the dot is what an eye reads here anyway.
 *@
 
-<div class="panel">
-	<div class="house-panel-head">Who's home</div>
+<div class="housebar-cell">
+	<span class="housebar-lab">Who's home</span>
 
 	@if (People.Count == 0)
 	{
-		<div class="whos-home-empty">
+		<div class="housebar-note">
 			No people to watch. Adaptive lighting assumes someone is always home.
 		</div>
 	}
 	else
 	{
-		@foreach (PersonView person in People)
-		{
-			<div class="person-row">
-				<span class="person-dot @DotClass(person)" aria-hidden="true"></span>
-				<span class="person-name">@person.Name</span>
-				<span class="person-state @(person is { IsAvailable: true, IsHome: true } ? "home" : "")">@StateWord(person)</span>
-			</div>
-		}
+		<div class="housebar-main people-row">
+			@foreach (PersonView person in People)
+			{
+				<span class="person-chip @DotClass(person)" title="@($"{person.Name} — {StateWord(person)}")">
+					<span class="person-dot @DotClass(person)" aria-hidden="true"></span>
+					<span class="person-chip-name">@person.Name</span>
+					<span class="person-chip-state">@StateWord(person)</span>
+				</span>
+			}
+		</div>
 	}
 </div>
 

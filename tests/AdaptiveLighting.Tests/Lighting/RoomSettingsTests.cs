@@ -370,6 +370,114 @@ public sealed class RoomSettingsTests
 			"a choice that names no member of the enum is not a change to make");
 	}
 
+	// ===================== the house's own copy of the same settings =====================
+
+	/// <summary>
+	///     The House tab writes the very same settings against <see cref="AreaSettings"/>, and the conversion
+	///     between what a control shows and what the document stores has to be the same one — a warning dim
+	///     written as 50 in the house and 0.5 in a room is two documents that disagree about the same word.
+	/// </summary>
+	[TestMethod]
+	public void The_House_Writes_A_Shown_Value_The_Way_A_Room_Does()
+	{
+		AreaSettings house = House;
+		AreaConfig room = new();
+
+		foreach (RoomSetting setting in AllSettings.Where(item => item.Control is not (RoomControl.Flag or RoomControl.Choice or RoomControl.Entity)))
+		{
+			double shown = Math.Max(setting.Min, 5);
+
+			RoomSettings.SetShown(house, setting.Key, shown);
+			RoomSettings.SetShown(room, setting.Key, shown);
+
+			Assert.AreEqual(
+				RoomSettings.Shown(room, House, setting.Key),
+				RoomSettings.Shown(null, house, setting.Key),
+				1e-9,
+				$"{setting.Key} must mean the same number on both surfaces");
+		}
+	}
+
+	/// <summary>A house value is bounded by the same limits a room's is, including through the keyboard escape hatch.</summary>
+	[TestMethod]
+	public void A_House_Value_Is_Held_To_The_Settings_Own_Bounds()
+	{
+		AreaSettings house = House;
+
+		RoomSettings.SetShown(house, nameof(AreaSettings.PreOffBrightnessFactor), 400);
+
+		Assert.AreEqual(1.0, house.PreOffBrightnessFactor, 1e-9, "a percentage cannot exceed its own ceiling");
+
+		RoomSettings.SetShown(house, nameof(AreaSettings.VacancyTimeoutSeconds), -30);
+
+		Assert.AreEqual(1, house.VacancyTimeoutSeconds, "the lights cannot stay on for a negative time");
+	}
+
+	/// <summary>Flags and entities land on the house's non-nullable twins, with empty meaning none rather than null.</summary>
+	[TestMethod]
+	public void The_House_Writes_Flags_And_Entities()
+	{
+		AreaSettings house = House;
+
+		RoomSettings.SetFlag(house, nameof(AreaSettings.WelcomeHome), true);
+		RoomSettings.SetEntity(house, nameof(AreaSettings.SunEntity), "sun.other");
+
+		Assert.IsTrue(house.WelcomeHome);
+		Assert.AreEqual("sun.other", house.SunEntity);
+
+		RoomSettings.SetEntity(house, nameof(AreaSettings.SunEntity), null);
+
+		Assert.AreEqual(string.Empty, house.SunEntity, "the house has no null to fall back to, so none is written as empty");
+	}
+
+	/// <summary>
+	///     A sentence edit applies to the house exactly as it applies to a room — the same unit conversions,
+	///     so the two surfaces cannot write different values for one pick.
+	/// </summary>
+	[TestMethod]
+	public void A_Sentence_Edit_Applies_To_The_House_As_It_Does_To_A_Room()
+	{
+		AreaSettings house = House;
+		AreaConfig room = new();
+
+		(string Key, TokenKind Kind, string Value)[] edits =
+		[
+			(nameof(AreaSettings.VacancyTimeoutSeconds), TokenKind.Duration, "600"),
+			(nameof(AreaSettings.PreOffSeconds), TokenKind.Duration, "45"),
+			(nameof(AreaSettings.PreOffBrightnessFactor), TokenKind.Percentage, "30"),
+			(nameof(AreaSettings.OverrideDurationMinutes), TokenKind.Duration, "7200"),
+			(nameof(AreaSettings.VacancyResetMinutes), TokenKind.Duration, "900"),
+			(nameof(AreaSettings.LuxThreshold), TokenKind.Number, "60"),
+			(nameof(AreaSettings.SunElevationThreshold), TokenKind.Number, "-3"),
+			(nameof(AreaSettings.Darkness), TokenKind.Choice, nameof(DarknessSource.Always))
+		];
+
+		foreach ((string key, TokenKind kind, string value) in edits)
+		{
+			SentenceEdit edit = new(key, kind, value);
+
+			Assert.IsTrue(RoomSettings.Apply(house, edit), $"{key} is a key the House tab must know how to apply");
+			Assert.IsTrue(RoomSettings.Apply(room, edit), $"{key} is a key the room page must know how to apply");
+		}
+
+		Assert.AreEqual(600, house.VacancyTimeoutSeconds);
+		Assert.AreEqual(45, house.PreOffSeconds);
+		Assert.AreEqual(0.3, house.PreOffBrightnessFactor, 1e-9);
+		Assert.AreEqual(120, house.OverrideDurationMinutes);
+		Assert.AreEqual(15, house.VacancyResetMinutes);
+		Assert.AreEqual(60, house.LuxThreshold, 1e-9);
+		Assert.AreEqual(-3, house.SunElevationThreshold, 1e-9);
+		Assert.AreEqual(DarknessSource.Always, house.Darkness);
+	}
+
+	/// <summary>An unknown key is refused rather than silently swallowed, so a drifted sentence can be logged.</summary>
+	[TestMethod]
+	public void The_House_Refuses_A_Key_It_Cannot_Apply()
+	{
+		Assert.IsFalse(RoomSettings.Apply(House, new SentenceEdit("NotASetting", TokenKind.Number, "1")));
+		Assert.IsFalse(RoomSettings.Apply(House, new SentenceEdit(nameof(AreaSettings.Darkness), TokenKind.Choice, "Twilight")));
+	}
+
 	// ===================== helpers =====================
 
 	private static RoomSetting Setting(string key) => AllSettings.Single(setting => setting.Key == key);
