@@ -27,6 +27,22 @@ under one version, because they are compiled against each other.
   - New reports are counted as they arrive but not inserted. A button adds them, so the timeline never
     moves under somebody who is reading it.
 
+- **Brightness that follows the daylight.** A room can now be told to brighten as it gets lighter
+  outside, so a hallway does not read as gloomy against a bright window at noon. Off by default: a
+  house that does not switch it on behaves exactly as it did.
+  - Five per-room settings, inherited from *Defaults* and overridable per room like every other:
+    `LuxBrightnessEnabled`, `LuxBrightnessStartLux` (at or below it, the schedule is used unchanged),
+    `LuxBrightnessFullLux` (at or above it, the adjustment is fully applied), `LuxBrightnessMaxPct`
+    (the brightness it is raised *toward*) and `LuxBrightnessGamma` (the curve's shape).
+  - The interpolation is on `log10(lux)`, not lux. Illuminance spans orders of magnitude while
+    perceived brightness is roughly its logarithm, so a linear map would spend its whole range in the
+    top decade. With anchors at 100 and 10 000 lx, 1 000 lx is exactly halfway up the curve.
+  - It raises, it never lowers, and the period's own `MinBrightnessPct`/`MaxBrightnessPct` still bind:
+    a night period capped at 30 % stays capped at 30 % whatever the sky is doing. Sleep mode's clamp
+    also still wins.
+  - The reading comes from the room's own lux sensor when it has one, and otherwise from
+    `Global.OutdoorLuxSensor` — the same sensor the darkness gate reads, resolved once.
+
 ## [2.0.0]
 
 **Zone became area.** Home Assistant calls a room an *area*; a *zone* is a GPS region like "Home" or

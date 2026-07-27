@@ -63,6 +63,26 @@ public class AreaConfig
 	/// <inheritdoc cref="AreaSettings.LuxHysteresis"/>
 	public double? LuxHysteresis { get; set; }
 
+	/// <inheritdoc cref="AreaSettings.LuxBrightnessEnabled"/>
+	/// <remarks>
+	///     A nullable <c>bool</c> rather than "set the numbers to turn it on": a room must be able to override the
+	///     house both ways. <c>false</c> here switches the feature off in one room while the defaults leave it on
+	///     everywhere else — which a null-means-off scheme could not express without also losing the room's curve.
+	/// </remarks>
+	public bool? LuxBrightnessEnabled { get; set; }
+
+	/// <inheritdoc cref="AreaSettings.LuxBrightnessStartLux"/>
+	public double? LuxBrightnessStartLux { get; set; }
+
+	/// <inheritdoc cref="AreaSettings.LuxBrightnessFullLux"/>
+	public double? LuxBrightnessFullLux { get; set; }
+
+	/// <inheritdoc cref="AreaSettings.LuxBrightnessMaxPct"/>
+	public double? LuxBrightnessMaxPct { get; set; }
+
+	/// <inheritdoc cref="AreaSettings.LuxBrightnessGamma"/>
+	public double? LuxBrightnessGamma { get; set; }
+
 	/// <inheritdoc cref="AreaSettings.SunElevationThreshold"/>
 	public double? SunElevationThreshold { get; set; }
 
@@ -116,6 +136,11 @@ public class AreaConfig
 			Darkness = Darkness ?? defaults.Darkness,
 			LuxThreshold = LuxThreshold ?? defaults.LuxThreshold,
 			LuxHysteresis = LuxHysteresis ?? defaults.LuxHysteresis,
+			LuxBrightnessEnabled = LuxBrightnessEnabled ?? defaults.LuxBrightnessEnabled,
+			LuxBrightnessStartLux = LuxBrightnessStartLux ?? defaults.LuxBrightnessStartLux,
+			LuxBrightnessFullLux = LuxBrightnessFullLux ?? defaults.LuxBrightnessFullLux,
+			LuxBrightnessMaxPct = LuxBrightnessMaxPct ?? defaults.LuxBrightnessMaxPct,
+			LuxBrightnessGamma = LuxBrightnessGamma ?? defaults.LuxBrightnessGamma,
 			SunElevationThreshold = SunElevationThreshold ?? defaults.SunElevationThreshold,
 			SunEntity = SunEntity ?? defaults.SunEntity,
 			DayTransitionSeconds = DayTransitionSeconds ?? defaults.DayTransitionSeconds,

@@ -235,7 +235,7 @@ public static class AreaSetupService
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>
-	///     How many of the sixteen per-room settings the area overrides.
+	///     How many of the twenty-one per-room settings the area overrides.
 	/// </summary>
 	/// <remarks>
 	///     Spelled out rather than reflected over, matching the same count in the editor: the two are read
@@ -247,6 +247,9 @@ public static class AreaSetupService
 		+ (area.PreOffBrightnessFactor is not null ? 1 : 0) + (area.OverrideDurationMinutes is not null ? 1 : 0)
 		+ (area.VacancyResetMinutes is not null ? 1 : 0) + (area.Darkness is not null ? 1 : 0)
 		+ (area.LuxThreshold is not null ? 1 : 0) + (area.LuxHysteresis is not null ? 1 : 0)
+		+ (area.LuxBrightnessEnabled is not null ? 1 : 0) + (area.LuxBrightnessStartLux is not null ? 1 : 0)
+		+ (area.LuxBrightnessFullLux is not null ? 1 : 0) + (area.LuxBrightnessMaxPct is not null ? 1 : 0)
+		+ (area.LuxBrightnessGamma is not null ? 1 : 0)
 		+ (area.SunElevationThreshold is not null ? 1 : 0) + (area.SunEntity is not null ? 1 : 0)
 		+ (area.DayTransitionSeconds is not null ? 1 : 0) + (area.NightTransitionSeconds is not null ? 1 : 0)
 		+ (area.RespectSleepMode is not null ? 1 : 0) + (area.SleepBlocksAutoOn is not null ? 1 : 0)

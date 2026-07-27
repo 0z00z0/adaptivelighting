@@ -345,9 +345,10 @@ public sealed class AreaSetupServiceTests
 
 		AdaptiveLightingConfig config = Document(before);
 
-		// The number the editor renders as "n of 16". Anchored so the reflection above cannot pass by finding
+		// The number the editor renders as "n of 21". Anchored so the reflection above cannot pass by finding
 		// nothing, and so a settings model that grew has to be looked at rather than silently accommodated.
-		Assert.AreEqual(16, SettingProperties.Count, "the per-room settings, minus Enabled");
+		// Sixteen until the five daylight-brightness settings arrived.
+		Assert.AreEqual(21, SettingProperties.Count, "the per-room settings, minus Enabled");
 
 		Assert.AreEqual(SettingProperties.Count, OverridesOf(before).Count, "the fixture set them all");
 		Assert.AreEqual(OverridesOf(before).Count, Plan(config, house, "stue").Rebuilds.Single().OverrideCount);

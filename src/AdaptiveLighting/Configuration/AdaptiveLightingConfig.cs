@@ -242,6 +242,69 @@ public class AreaSettings
 	/// <summary>Extra lux required to leave the dark state, so a sensor sitting on the threshold cannot flap.</summary>
 	public double LuxHysteresis { get; set; } = 10;
 
+	/// <summary>
+	///     Whether the light outside also raises this area's brightness, on top of the circadian schedule.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Off, and off is the whole point.</b> Every house that predates this setting must behave exactly as
+	///         it did, so the default is <c>false</c> and a disabled area never touches the schedule's brightness at
+	///         all — not "raises it by zero", but leaves the target object untouched. See
+	///         <see cref="Engine.LuxBrightnessCurve"/>.
+	///     </para>
+	///     <para>
+	///         Deliberately independent of <see cref="Darkness"/>, which answers a different question. The darkness
+	///         gate decides <i>whether</i> the engine may light the area; this decides <i>how bright</i> given how
+	///         bright it is outside. A hallway that gates on the sun still looks gloomy against a bright window at
+	///         noon, and that is precisely the case this exists for — so the reading is taken whatever the gate is
+	///         configured to consult.
+	///     </para>
+	/// </remarks>
+	public bool LuxBrightnessEnabled { get; set; }
+
+	/// <summary>
+	///     The illuminance at which the daylight adjustment starts. At or below it the schedule's brightness is
+	///     used unchanged.
+	/// </summary>
+	/// <remarks>
+	///     Must be positive: the curve interpolates on <c>log10</c>, which has no value at or below zero. The
+	///     default of 100 lx is roughly deep twilight outdoors — dim enough that a room genuinely wants only what
+	///     the schedule asked for.
+	/// </remarks>
+	public double LuxBrightnessStartLux { get; set; } = 100;
+
+	/// <summary>
+	///     The illuminance at which the adjustment is fully applied. At or above it the area holds
+	///     <see cref="LuxBrightnessMaxPct"/>, subject to the active period's own cap.
+	/// </summary>
+	/// <remarks>
+	///     The default of 10 000 lx is a bright overcast day outdoors, two decades above the start anchor. Direct
+	///     sun is another decade beyond that; anchoring "full" at the bright-overcast point means an ordinary day
+	///     reaches the top of the curve rather than sitting halfway up it.
+	/// </remarks>
+	public double LuxBrightnessFullLux { get; set; } = 10000;
+
+	/// <summary>
+	///     The brightness the area is raised <i>toward</i> at <see cref="LuxBrightnessFullLux"/> and beyond.
+	/// </summary>
+	/// <remarks>
+	///     A ceiling, never a replacement: the adjustment interpolates from whatever the schedule asked for up to
+	///     this value, so it can only ever add light. A period whose brightness already exceeds this is left alone
+	///     rather than dimmed — dimming on a bright reading would fight the circadian intent instead of serving it.
+	/// </remarks>
+	public double LuxBrightnessMaxPct { get; set; } = 100;
+
+	/// <summary>
+	///     Shapes the curve between the two anchors: the normalised 0–1 position is raised to this power.
+	/// </summary>
+	/// <remarks>
+	///     1 is a straight line in log space and is the default. Above 1 holds the level back until it is properly
+	///     bright out — the adjustment then arrives late and quickly. Below 1 does the opposite, lifting the room
+	///     as soon as the light outside starts climbing. It exists because "which decade matters to me" is a
+	///     genuinely per-room judgement that neither anchor can express on its own.
+	/// </remarks>
+	public double LuxBrightnessGamma { get; set; } = 1.0;
+
 	/// <summary>Sun elevation in degrees below which the area counts as dark.</summary>
 	public double SunElevationThreshold { get; set; } = 3.0;
 
