@@ -2165,6 +2165,13 @@ select.cell.wide {
 	padding: 0.35rem 1.15rem 0.75rem;
 }
 
+/* A body whose content already spans the fold: the all-rooms card's sentences, its reveal bar, and the two
+   columns of settings groups all bring their own 1.15rem and their own full-width rules. Inset again they
+   would stop short of the fold's border, which reads as a mistake rather than as a nested box. */
+.group-body-flush {
+	padding: 0;
+}
+
 /* A framing note at the top of a group's body: the legacy-switches group says once that the whole
    group is superseded, instead of every field mumbling it. Quiet on purpose — it is context, not
    a warning, and the fields below it still carry their own badges. */
@@ -4733,8 +4740,12 @@ button.mode-pill:disabled {
        never nested, because a control inside an anchor is neither valid
        markup nor a thing a thumb can aim at.
      · a rule list, where a mode is a bold name and a sentence on one line.
-     · the small adjustments a card needs when it holds form fields rather
-       than settings rows.
+     · the small adjustments a card needs when it holds a chart or a rule list
+       rather than settings rows.
+
+   The House section itself owns no card rules any more: every group there is a
+   GroupFold, so its styling is the shared .group-* block further up. The one
+   thing that needed adding for it is .group-body-flush, beside .group-body.
    ============================================================================ */
 
 /* Blazor moves focus to the page's h1 on every navigation, so a screen reader
@@ -4847,25 +4858,17 @@ h1[tabindex="-1"]:focus {
 	align-items: center;
 }
 
-.house-fields,
 .house-chart {
 	padding: 0.2rem 1.15rem 0.5rem;
 }
 
-.house-fields .field:last-child {
-	margin-bottom: 0;
-}
-
 /* The all-rooms sentences carry no amber dots — these values ARE the house —
    so the reveal bar is the only thing under them, and it needs the rule the
-   legend would otherwise have separated it with. */
-.house-card .room-morebar {
+   legend would otherwise have separated it with. It sits at the bottom edge of
+   its fold only while All settings is shut; with the groups open it is a
+   divider mid-panel and must keep its corners square. */
+.group-body-flush > .room-morebar:last-child {
 	border-radius: 0 0 var(--radius-panel) var(--radius-panel);
-}
-
-.house-card .room-groups + .room-morebar,
-.house-card .room-groups {
-	border-radius: 0;
 }
 
 /* Picking which room to add. An accent edge because it is a step in a flow
@@ -4927,7 +4930,6 @@ h1[tabindex="-1"]:focus {
    its own — which is what a chevron in the flex flow does, and it turns every
    room into three lines of mostly nothing. */
 @media (max-width: 640px) {
-	.house-fields,
 	.house-chart,
 	.house-rules {
 		padding-left: 1rem;

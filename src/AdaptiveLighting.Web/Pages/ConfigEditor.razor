@@ -547,6 +547,35 @@ else
 
 					Behind one fold at the bottom, never in a section of its own, are the internals. "Advanced" as
 					a place answered "how confident do I need to be?"; it never answered "where do I look?".
+
+					EVERY GROUP IS THE SAME KIND OF THING. The section arrived in two batches, and it showed: the
+					two groups that moved in from Areas kept the room page's always-open card, while the ones that
+					grew here were folds. Two mechanisms for one list of groups means the page has no answer to
+					"can I close this?" — so there is one mechanism, GroupFold, and no exceptions. The card heads
+					lost their glyphs with the cards, which is what §6.2 asked for on this page in the first place:
+					seven repeated marks down one column are texture, not information.
+
+					ALL COLLAPSED. The whole section is its own table of contents — seven titled lines a person can
+					read in one screen and then open the one they came for. Nothing starts open, including the
+					all-rooms defaults: leading the order already says they are the main thing, and a group that
+					opens itself would push everything after it off the screen, which is the state this restructure
+					was called to fix.
+
+					THE ORDER: what you come back to, then what you set once, then what you only read when
+					something looks wrong.
+
+					  1. Every room starts with these  — the baseline every room page is read against.
+					  2. Finding lights & sensors      — which lights that baseline reaches. Read with 1.
+					  3. People                        — changes when the household does.
+					  4. Master switch                 — pointed at an entity once; flipped day to day on the board.
+					  5. House name                    — typed at setup, then never.
+					  6. Fine tuning                   — the internals.
+					  7. This installation             — read-only, and only when something is wrong.
+
+					The problem report this ordering does NOT contain is the engine/connection warning and the
+					validation errors: both stay above the section rail, where a fault cannot hide inside a group
+					nobody opened. "This installation" is the calm version of the same facts, which is why it can
+					fold.
 				*@
 				<header class="section-head">
 					<h2>House</h2>
@@ -561,14 +590,15 @@ else
 				   the same settings again as rows. First in the section, with the discovery labels under it: one
 				   says how a room behaves by default, the other says which lights that reaches, and they are read
 				   together.
-				   -------------------------------------------------------------------------------------------- *@
-				<section class="panel room-card house-card">
-					<div class="room-card-head">
-						<Icon Name="@Glyph.Areas" Class="ic-head" />
-						<span class="room-card-title">Every room starts with these</span>
-						<span class="room-card-note">a room's own settings win</span>
-					</div>
 
+				   Flush, because everything inside already spans the fold: the sentences, the reveal bar that
+				   carries its own background and rule, and the two columns of settings groups under it. Opening
+				   it is the third disclosure level on this page — sentences, then All settings, then a group —
+				   which is one more than the room page has and the price of the section fitting on a screen.
+				   -------------------------------------------------------------------------------------------- *@
+				<GroupFold Title="Every room starts with these"
+						   Description="How long lights stay on, how a room decides it's dark, and how it behaves. A room's own settings win."
+						   Flush="true">
 					<div class="room-sentences">
 						<SentenceView Sentences="@AreaSentences.ForDefaults(_config.Defaults)"
 									  Edited="@OnDefaultEdited"
@@ -676,7 +706,7 @@ else
 							}
 						</div>
 					}
-				</section>
+				</GroupFold>
 
 				@* One include label, one exclude label, one motion label, one device-class set — for the whole
 				   house, with no per-room twin of any of them, which is what makes this a House setting rather
@@ -828,119 +858,112 @@ else
 					</details>
 				</GroupFold>
 
-				<section class="panel room-card house-card">
-					<div class="room-card-head">
-						<Icon Name="@Glyph.Residents" Class="ic-head" />
-						<span class="room-card-title">People</span>
-						<span class="room-card-note">whose presence decides Home and Away</span>
-					</div>
+				@* Who the house watches to decide Home and Away. The sentence carries how long everyone must be
+				   gone before the house counts as empty; the field carries who counts at all. *@
+				<GroupFold Title="People"
+						   Description="Whose presence decides Home and Away, and how long before the house counts as empty.">
+					<SentenceView Sentences="@_awaySentence"
+								  Edited="@OnGlobalEdited"
+								  Note="@TokenNote"
+								  ShowLegend="false" />
 
-					<div class="room-sentences">
-						<SentenceView Sentences="@_awaySentence"
-									  Edited="@OnGlobalEdited"
-									  Note="@TokenNote"
-									  ShowLegend="false" />
-					</div>
-
-					<div class="house-fields">
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Who lives here
-									<InfoPopover Label="Who lives here">
-										Whose presence decides Home and Away. Empty means everyone Home Assistant knows, including
-										people added later — usually right. List people only to leave someone out (a car tracker,
-										a guest entity).
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control">
-								<EntityListPicker Value="@_config.Global.Persons"
-												  ValueChanged="@SetPersons"
-												  Options="@_persons"
-												  NameResolver="@Name"
-												  KnownResolver="@Catalog.Knows"
-												  EmptyLabel="Empty — everyone Home Assistant knows, including people added later."
-												  AddLabel="Watch someone…"
-												  EmptyNote="@EmptyNote("No people found in Home Assistant — type an id.")"
-												  Placeholder="person.example" />
-							</div>
+					<div class="field">
+						<div class="field-head">
+							<label class="field-label">Who lives here
+								<InfoPopover Label="Who lives here">
+									Whose presence decides Home and Away. Empty means everyone Home Assistant knows, including
+									people added later — usually right. List people only to leave someone out (a car tracker,
+									a guest entity).
+								</InfoPopover>
+							</label>
+						</div>
+						<div class="field-control">
+							<EntityListPicker Value="@_config.Global.Persons"
+											  ValueChanged="@SetPersons"
+											  Options="@_persons"
+											  NameResolver="@Name"
+											  KnownResolver="@Catalog.Knows"
+											  EmptyLabel="Empty — everyone Home Assistant knows, including people added later."
+											  AddLabel="Watch someone…"
+											  EmptyNote="@EmptyNote("No people found in Home Assistant — type an id.")"
+											  Placeholder="person.example" />
 						</div>
 					</div>
-				</section>
+				</GroupFold>
 
-				<section class="panel room-card house-card">
-					<div class="room-card-head">
-						<Icon Name="@Glyph.House" Class="ic-head" />
-						<span class="room-card-title">Master switch</span>
-						<span class="room-card-note">one switch pauses everything</span>
-					</div>
+				@* The switch is picked from whatever Home Assistant has. That deliberately does not care how it got
+				   there — a hand-made helper today, or the enable switch NetDaemon's state manager publishes for
+				   this app, which is the built-in default when nothing is chosen.
 
-					@* The switch is picked from whatever Home Assistant has. That deliberately does not care how it got
-					   there — a hand-made helper today, or the enable switch NetDaemon's state manager publishes for
-					   this app, which is the built-in default when nothing is chosen. *@
-					<div class="house-fields">
-						<p class="group-note">
-							On means lights adjust automatically; off pauses everything at once &mdash; nothing is turned off,
-							changes just stop. This is the same switch as the On/Off control on the board.
-						</p>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Master switch
-									<InfoPopover Label="Master switch">
-										One switch that pauses all automatic lighting. Left unset, it uses this app's own enable
-										switch in Home Assistant. Point it at your own helper toggle to override.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control">
-								<EntityPicker Value="@_config.Global.KillSwitchEntity"
-											  ValueChanged="@(value => Set(() => _config.Global.KillSwitchEntity = value))"
-											  Options="@_switches"
-											  NoneLabel="(default — this app's own enable switch)"
-											  EmptyNote="@EmptyNote("No switches or toggle helpers found — type an id.")"
-											  Placeholder="input_boolean.adaptive_lighting_enabled" />
-							</div>
-							@if (string.IsNullOrWhiteSpace(_config.Global.KillSwitchEntity))
-							{
-								@* Defaulted: the built-in switch is by definition an enabled-flag, so the polarity dropdown is
-								   hidden and the concrete id is shown instead. *@
-								<div class="field-help">
-									@if (_config.Global.EffectiveKillSwitchEntity is { Length: > 0 } builtIn)
-									{
-										<span>
-											Using <code>@builtIn</code> — the app's own switch in Home Assistant. Note: turning it
-											off pauses the whole app, this page included.
-										</span>
-									}
-									else
-									{
-										<span>
-											Will default to this app's own enable switch once the host has connected to Home Assistant.
-										</span>
-									}
-								</div>
-							}
-							else
-							{
-								@* Bound through strings rather than straight to the bool: @bind writes "True"/"False" into
-								   the element, neither option matches, and the select renders with nothing chosen — which
-								   is exactly the control that must never be ambiguous about which way round it reads. *@
-								<div class="field-control">
-									<select class="cell wide"
-											@bind:get="@(_config.Global.KillSwitchActiveWhenOff ? "true" : "false")"
-											@bind:set="SetKillSwitchPolarity">
-										<option value="true">read as an enabled flag — off kills the engine</option>
-										<option value="false">read as a kill switch — on kills the engine</option>
-									</select>
-								</div>
-								<div class="field-help">Gates the whole engine. This overrides the built-in default switch.</div>
-							}
+				   It folds like every other group here, and folding it hides nothing urgent: whether automatic
+				   lighting is on right now is said by the board's On/Off control and by the warning above the rail.
+				   What is here is which entity that switch is, and which way round it reads — chosen once. *@
+				<GroupFold Title="Master switch"
+						   Description="Which switch pauses all automatic lighting, and which way round it reads.">
+					<p class="group-note">
+						On means lights adjust automatically; off pauses everything at once &mdash; nothing is turned off,
+						changes just stop. This is the same switch as the On/Off control on the board.
+					</p>
+					<div class="field">
+						<div class="field-head">
+							<label class="field-label">Master switch
+								<InfoPopover Label="Master switch">
+									One switch that pauses all automatic lighting. Left unset, it uses this app's own enable
+									switch in Home Assistant. Point it at your own helper toggle to override.
+								</InfoPopover>
+							</label>
 						</div>
+						<div class="field-control">
+							<EntityPicker Value="@_config.Global.KillSwitchEntity"
+										  ValueChanged="@(value => Set(() => _config.Global.KillSwitchEntity = value))"
+										  Options="@_switches"
+										  NoneLabel="(default — this app's own enable switch)"
+										  EmptyNote="@EmptyNote("No switches or toggle helpers found — type an id.")"
+										  Placeholder="input_boolean.adaptive_lighting_enabled" />
+						</div>
+						@if (string.IsNullOrWhiteSpace(_config.Global.KillSwitchEntity))
+						{
+							@* Defaulted: the built-in switch is by definition an enabled-flag, so the polarity dropdown is
+							   hidden and the concrete id is shown instead. *@
+							<div class="field-help">
+								@if (_config.Global.EffectiveKillSwitchEntity is { Length: > 0 } builtIn)
+								{
+									<span>
+										Using <code>@builtIn</code> — the app's own switch in Home Assistant. Note: turning it
+										off pauses the whole app, this page included.
+									</span>
+								}
+								else
+								{
+									<span>
+										Will default to this app's own enable switch once the host has connected to Home Assistant.
+									</span>
+								}
+							</div>
+						}
+						else
+						{
+							@* Bound through strings rather than straight to the bool: @bind writes "True"/"False" into
+							   the element, neither option matches, and the select renders with nothing chosen — which
+							   is exactly the control that must never be ambiguous about which way round it reads. *@
+							<div class="field-control">
+								<select class="cell wide"
+										@bind:get="@(_config.Global.KillSwitchActiveWhenOff ? "true" : "false")"
+										@bind:set="SetKillSwitchPolarity">
+									<option value="true">read as an enabled flag — off kills the engine</option>
+									<option value="false">read as a kill switch — on kills the engine</option>
+								</select>
+							</div>
+							<div class="field-help">Gates the whole engine. This overrides the built-in default switch.</div>
+						}
 					</div>
-				</section>
+				</GroupFold>
 
-				<GroupFold Title="Fine tuning"
-						   Description="The house's name and the internals: clocks, how the engine tells its own changes from a person's, and how close is close enough.">
+				@* One field, and a fold of its own rather than a line inside Fine tuning — where it used to sit,
+				   and where nobody looking for what their house is called would think to open. A name is not a
+				   tuning knob, and the section's own lede promises "what this house is called". *@
+				<GroupFold Title="House name"
+						   Description="What this house is called in logs and notifications.">
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">House name
@@ -951,7 +974,10 @@ else
 						</div>
 						<div class="field-control"><input class="cell wide" @bind="_config.ConfigName" placeholder="Adaptive lighting" /></div>
 					</div>
+				</GroupFold>
 
+				<GroupFold Title="Fine tuning"
+						   Description="How often rooms re-check, how the engine tells its own changes from a person's, and how close is close enough.">
 					@* -----------------------------------------------------------------------------------------
 					   NetDaemonUserId is write-only here, on purpose. It is rendered as set/not-set and never as
 					   its value, in either direction — the input starts empty and only overwrites what is stored
@@ -1051,7 +1077,7 @@ else
 				   did or did not reach the house. Below the settings because they are read once, when something is
 				   wrong, rather than on every visit. *@
 				<GroupFold Title="This installation"
-						   Description="Where the document lives, and whether the engine is running.">
+						   Description="Whether the engine is running, whether Home Assistant is answering, and where the settings file is kept.">
 					<div class="status-row">
 						<span class="status-label">Engine</span>
 						@if (Engine.IsRunning)
