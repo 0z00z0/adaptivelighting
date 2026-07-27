@@ -1,65 +1,271 @@
 /* Served at _content/AdaptiveLighting.Web/app.css. Hand-written and dependency-free: a CDN link would not load
    on a LAN with no internet, which is exactly where this UI runs. */
 
-/* The machine/human/idle triple is the state-machine diagram's own colour language (docs/adaptive-lighting/
-   state-machine.svg): blue when the engine decides, amber when a human did, grey when it watches without
-   commanding. The dashboard speaks the same language so the docs and the live page read as one system. */
+/* ============================================================================
+   THE DESIGN TOKENS — "The Workshop" (docs/design/ui-design-c.md §6)
+   Written up for consumers in docs/design/visual-foundation.md.
+
+   Four rules the tokens exist to enforce, because a rule nobody can look up is
+   a rule that lasts one page:
+
+   1. FLAT.       Surfaces are a 1px line on a flat ground — the same
+                  outline-on-nothing the icons are drawn with. Elevation is
+                  information, not decoration, so only genuinely floating
+                  layers get --shadow-float. A glow that reports a light's
+                  actual warmth is data, not elevation, and stays.
+   2. GEOMETRIC.  Radii come from the icons' own rx ≈ 1.5-1.7 on 24 units:
+                  panels 8, controls 7, chips 6. The pill is not a default —
+                  it survives only where the shape IS the meaning (a switch).
+   3. ONE ACCENT. --accent (brass) marks EDITABILITY AND PRIMARY ACTION and
+                  nothing else: tokens, steppers, the active tab, the commit
+                  button. State is never accent — --machine / --human / --warn
+                  / --idle / --now are semantic and reach icons through
+                  currentColor.
+   4. ONE STROKE. Icon strokes (1.7 / 2), control borders (1 / 1.5px) and the
+                  2px now-line are one family of lines, not three decisions.
+
+   Every token is defined in BOTH themes. --icon-accent is per theme on
+   purpose: the glyphs bind their accent to var(--icon-accent, currentColor)
+   so they work in either, and a state glyph overrides it to currentColor at
+   the point of use so shape and colour carry one message.
+   ============================================================================ */
+
 :root {
-	--bg: #14161a;
-	--panel: #1c1f26;
-	--panel-2: #232733;
-	--line: #2f3542;
-	--text: #e7eaf0;
-	--muted: #9aa3b2;
-	--accent: #f2b544;
-	--ok: #4ec9a5;
-	--warn: #e8a33d;
-	--bad: #e2686a;
-	--info: #6aa9e9;
-	--machine: #7fb3d5;
-	--machine-bg: #16242e;
-	--human: #e9a33c;
-	--human-bg: #2a2011;
-	--idle: #6f767c;
-	--idle-bg: #1d2125;
-	/* Daylight-chart bands: warm daylight → cool twilight → deep-cool night, never pure black; each a themed surface
-	   (09 §5.5). The day fill leans into the amber accent, the twilight/night into blue, so the chart reads as one
-	   system with the rest of the palette. --daylight-halo is the outline behind chart labels that keeps them legible
-	   over any band (paint-order stroke) — dark here, since the label text is light. */
+	/* ---- surfaces ---- */
+	--bg: #141610;
+	--panel: #1c1e16;
+	--panel-2: #22251b;
+	--chip: #262a1e;          /* inset fill: chips, tokens, badges, stepper wells */
+	--lane: #181a12;          /* a track a timeline is drawn on */
+	--glow-track: #2c2f22;    /* the unlit part of a ring, bar or lamp */
+
+	/* ---- lines. Two weights, and the difference is load-bearing:
+	   --line draws the edge OF a surface (panel border, control border);
+	   --grid draws a hairline INSIDE one (row separators, gridlines). ---- */
+	--line: #33362a;
+	--grid: #262921;
+
+	/* ---- text ---- */
+	--text: #eaeadf;
+	--muted: #9a9c8a;
+	--accent-ink: #221a05;    /* text ON --accent, never text near it */
+
+	/* ---- the one accent: editability and primary action ---- */
+	--accent: #e2ae45;
+
+	/* ---- semantic state. Never the accent, never each other's hue. ----
+	   --machine  the engine acting (a lit room's own Kelvin overrides it)
+	   --human    a person acted — violet, so "somebody touched it" and
+	              "look at this now" can never be read as the same amber
+	   --warn     the warning dim, and anything else asking to be noticed
+	   --ok/--bad healthy / broken
+	   --idle     watching without commanding
+	   --now      the live edge: the now-line, the running badge */
+	--machine: #e8a24a;
+	--machine-bg: #2e2412;
+	--kelvin-weight: 100%;
+	--kelvin-shade: transparent;
+	--human: #a99af2;
+	--human-bg: #2a2447;
+	--warn: #efa23b;
+	--warn-bg: #3a2d12;
+	--ok: #8fbf7a;
+	--ok-bg: #1e2a18;
+	--bad: #e07a5f;
+	--bad-bg: #33201a;
+	--idle: #7c7f6d;
+	--idle-bg: #20231a;
+	--now: #5fc2ac;
+	--info: #7fb3d5;          /* neutral remark colour; not a state */
+
+	/* ---- icons. Set here so a glyph is themed, never hard-coded; the state
+	   chips override it to currentColor where shape and colour must agree. ---- */
+	--icon-accent: var(--accent);
+
+	/* ---- Daylight-chart bands: warm daylight → cool twilight → deep-cool night, never pure black; each a themed
+	   surface (09 §5.5). --daylight-halo is the outline behind chart labels that keeps them legible over any band
+	   (paint-order stroke) — dark here, since the label text is light. ---- */
 	--daylight-night: #1c2442;
 	--daylight-twilight: #3b4f8f;
 	--daylight-day: #ab8640;
 	--daylight-halo: rgba(9, 11, 18, 0.72);
-	--radius: 10px;
-	--mono: ui-monospace, "Cascadia Code", "Consolas", monospace;
+
+	/* ---- elevation: the exception, not the rule ---- */
+	--shadow-float: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
+
 	color-scheme: dark;
 }
 
 @media (prefers-color-scheme: light) {
 	:root {
-		--bg: #f2f1ee;
-		--panel: #fbfaf8;
-		--panel-2: #eceae5;
-		--line: #d9d7d0;
-		--text: #22252a;
-		--muted: #636b78;
-		--accent: #b4700f;
-		--ok: #1d8a6b;
-		--warn: #a86412;
-		--bad: #b23a3d;
+		--bg: #eeefe9;
+		--panel: #ffffff;
+		--panel-2: #f6f6f1;
+		--chip: #ebede2;
+		--lane: #f3f4ee;
+		--glow-track: #e4e5da;
+
+		--line: #d9dcce;
+		--grid: #e2e4d8;
+
+		--text: #23261f;
+		--muted: #6e7365;
+		--accent-ink: #ffffff;
+
+		--accent: #8f6c15;
+
+		--machine: #8a5214;
+		--machine-bg: #f6ecdb;
+		--kelvin-weight: 45%;
+		--kelvin-shade: #23261f;
+		--human: #6553c4;
+		--human-bg: #e9e5f8;
+		--warn: #b26a00;
+		--warn-bg: #f4e4c6;
+		--ok: #3e7a46;
+		--ok-bg: #e6efe4;
+		--bad: #a8402f;
+		--bad-bg: #f6e3df;
+		--idle: #8a8d7d;
+		--idle-bg: #f0f1ea;
+		--now: #2e6e62;
 		--info: #2c6e9b;
-		--machine: #2c6e9b;
-		--machine-bg: #eaf2f8;
-		--human: #b4700f;
-		--human-bg: #fbf2e3;
-		--idle: #8c8e84;
-		--idle-bg: #f0f0ee;
+
+		--icon-accent: var(--accent);
+
 		--daylight-night: #384777;
 		--daylight-twilight: #7e93c9;
 		--daylight-day: #e8d296;
 		--daylight-halo: rgba(255, 255, 255, 0.8);
+
+		--shadow-float: 0 1px 2px rgba(35, 38, 31, 0.05), 0 5px 18px rgba(35, 38, 31, 0.12);
+
 		color-scheme: light;
 	}
+}
+
+/*
+   The explicit escape hatches. prefers-color-scheme is the device's answer and stays the default; these let a
+   screenshot harness — or a future in-app toggle — ask for one theme and get it. The attribute selector outranks
+   the bare :root above and is unaffected by the media query, so it wins in both directions.
+*/
+:root[data-theme="dark"] {
+	--bg: #141610;
+	--panel: #1c1e16;
+	--panel-2: #22251b;
+	--chip: #262a1e;
+	--lane: #181a12;
+	--glow-track: #2c2f22;
+	--line: #33362a;
+	--grid: #262921;
+	--text: #eaeadf;
+	--muted: #9a9c8a;
+	--accent-ink: #221a05;
+	--accent: #e2ae45;
+	--machine: #e8a24a;
+	--machine-bg: #2e2412;
+	--kelvin-weight: 100%;
+	--kelvin-shade: transparent;
+	--human: #a99af2;
+	--human-bg: #2a2447;
+	--warn: #efa23b;
+	--warn-bg: #3a2d12;
+	--ok: #8fbf7a;
+	--ok-bg: #1e2a18;
+	--bad: #e07a5f;
+	--bad-bg: #33201a;
+	--idle: #7c7f6d;
+	--idle-bg: #20231a;
+	--now: #5fc2ac;
+	--info: #7fb3d5;
+	--icon-accent: var(--accent);
+	--daylight-night: #1c2442;
+	--daylight-twilight: #3b4f8f;
+	--daylight-day: #ab8640;
+	--daylight-halo: rgba(9, 11, 18, 0.72);
+	--shadow-float: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
+	color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+	--bg: #eeefe9;
+	--panel: #ffffff;
+	--panel-2: #f6f6f1;
+	--chip: #ebede2;
+	--lane: #f3f4ee;
+	--glow-track: #e4e5da;
+	--line: #d9dcce;
+	--grid: #e2e4d8;
+	--text: #23261f;
+	--muted: #6e7365;
+	--accent-ink: #ffffff;
+	--accent: #8f6c15;
+	--machine: #8a5214;
+	--machine-bg: #f6ecdb;
+	--kelvin-weight: 45%;
+	--kelvin-shade: #23261f;
+	--human: #6553c4;
+	--human-bg: #e9e5f8;
+	--warn: #b26a00;
+	--warn-bg: #f4e4c6;
+	--ok: #3e7a46;
+	--ok-bg: #e6efe4;
+	--bad: #a8402f;
+	--bad-bg: #f6e3df;
+	--idle: #8a8d7d;
+	--idle-bg: #f0f1ea;
+	--now: #2e6e62;
+	--info: #2c6e9b;
+	--icon-accent: var(--accent);
+	--daylight-night: #384777;
+	--daylight-twilight: #7e93c9;
+	--daylight-day: #e8d296;
+	--daylight-halo: rgba(255, 255, 255, 0.8);
+	--shadow-float: 0 1px 2px rgba(35, 38, 31, 0.05), 0 5px 18px rgba(35, 38, 31, 0.12);
+	color-scheme: light;
+}
+
+/*
+   Theme-independent tokens. Shape, rhythm and type do not change with the lights, so they are stated once —
+   and stating them once is what stops a page inventing a 9px radius or a 13px gap of its own.
+*/
+:root {
+	/* ---- the geometric radius scale ---- */
+	--radius-panel: 8px;      /* cards, panels, the board, folds */
+	--radius-control: 7px;    /* buttons, inputs, steppers, segmented controls */
+	--radius-chip: 6px;       /* chips, sentence tokens, badges, gear pills */
+	--radius-switch: 999px;   /* TRUE SWITCHES ONLY — the shape is the meaning */
+	--radius: var(--radius-panel);   /* the pre-token name, kept pointing at the scale */
+
+	/* ---- the stroke grammar. One family: hairline inside a surface, a
+	   heavier border on a control you can press, 2px for a mark on a chart.
+	   Icon strokes are SVG attributes (1.7 normal, 2 below ~16px) and belong
+	   to the same family — see docs/design/icons/README.md. ---- */
+	--stroke-hair: 1px;
+	--stroke-control: 1.5px;
+	--stroke-mark: 2px;
+	--rule: 1px solid var(--line);         /* the edge of a surface */
+	--rule-inner: 1px solid var(--grid);   /* a separator within one */
+
+	/* ---- spacing. Six steps; anything between them is a decision that
+	   should have been one of these. ---- */
+	--space-1: 4px;
+	--space-2: 6px;
+	--space-3: 8px;
+	--space-4: 12px;
+	--space-5: 16px;
+	--space-6: 24px;
+
+	/* ---- type ---- */
+	--font-sans: Seravek, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+	--mono: "Cascadia Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+	--text-xs: 11px;          /* the uppercase section label */
+	--text-sm: 12.5px;        /* help lines, meta, timestamps */
+	--text-md: 13.5px;        /* dense body: settings rows, log lines */
+	--text-base: 15px;        /* body */
+	--text-lg: 19px;          /* page and card headings */
+	--text-xl: 24px;          /* the one number a page is about */
+	--label-track: 0.14em;    /* letter-spacing on uppercase labels */
 }
 
 * {
@@ -74,7 +280,7 @@ html, body {
 body {
 	background: var(--bg);
 	color: var(--text);
-	font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+	font-family: var(--font-sans);
 	font-size: 15px;
 	line-height: 1.5;
 }
@@ -111,12 +317,14 @@ body {
 	font-weight: 600;
 }
 
+/* The product in one mark: the app-mark glyph, ink outline and brass light point. It replaced a glowing dot,
+   which was a shadow used as decoration — the one thing §6 struck off the page. The glow was also the only
+   accent on the bar that meant nothing; brass now means the same here as everywhere: the thing you act on. */
 .brand-mark {
-	width: 12px;
-	height: 12px;
-	border-radius: 50%;
-	background: var(--accent);
-	box-shadow: 0 0 10px var(--accent);
+	width: 22px;
+	height: 22px;
+	color: var(--text);
+	flex: 0 0 auto;
 }
 
 .nav {
@@ -124,12 +332,15 @@ body {
 	gap: 0.35rem;
 }
 
+/* The active tab is brass on a brass underline, not a filled block: the tab is the primary action of the bar,
+   and the underline is the same 2px mark the board's now-line is drawn with. */
 .nav-link {
 	color: var(--muted);
 	text-decoration: none;
 	padding: 0.35rem 0.75rem;
-	border-radius: var(--radius);
+	border-radius: var(--radius-control);
 	font-size: 0.92rem;
+	border-bottom: var(--stroke-mark) solid transparent;
 }
 
 .nav-link:hover {
@@ -140,6 +351,7 @@ body {
 .nav-link.active {
 	background: var(--panel-2);
 	color: var(--accent);
+	border-bottom-color: var(--accent);
 }
 
 /*
@@ -265,7 +477,7 @@ h2 {
 	align-items: baseline;
 	gap: 0.35rem;
 	border: 1px solid var(--line);
-	border-radius: 6px;
+	border-radius: var(--radius-chip);
 	padding: 0.15rem 0.55rem;
 	background: var(--idle-bg);
 	color: var(--muted);
@@ -286,9 +498,9 @@ h2 {
 	display: inline-block;
 	background: var(--accent);
 	border: 1px solid var(--accent);
-	border-radius: 6px;
+	border-radius: var(--radius-control);
 	padding: 0.4rem 0.85rem;
-	color: #1a1206;
+	color: var(--accent-ink);
 	font-size: 0.9rem;
 	font-weight: 600;
 	text-decoration: none;
@@ -336,7 +548,17 @@ h2 {
 	padding: 0.9rem 1rem;
 }
 
-.area.family-machine { border-left-color: var(--machine); }
+/*
+   The left edge groups a grid of cards at a glance, and the design asks that glance to find the exceptions.
+   A room the engine is running is the ordinary case — fourteen out of seventeen — so its edge is the panel's
+   own line and the grid stays quiet; a room somebody has touched is the thing worth finding, and keeps its
+   colour. What each room is doing right now is on its chip, in shape and colour both.
+
+   This is the dark-cockpit rule applied to the edge. It also stops the palette change from painting most of
+   the house amber: --machine used to be a calm blue, and lighting fourteen edges with the engine's new warm
+   would make the three that matter impossible to pick out.
+*/
+.area.family-machine { border-left-color: var(--line); }
 .area.family-human { border-left-color: var(--human); }
 
 .area.family-idle {
@@ -357,20 +579,14 @@ h2 {
 	font-size: 1.02rem;
 }
 
-.area-badge {
+/* The card's state chip sits on the right edge of the header. The chip itself is shared and knows nothing
+   about cards, so its placement is stated here rather than as a variant inside the component. */
+.area-head .state-chip {
 	margin-left: auto;
-	padding: 0.12rem 0.55rem;
-	border-radius: 999px;
-	font-size: 0.72rem;
-	font-weight: 600;
-	letter-spacing: 0.02em;
-	white-space: nowrap;
-	cursor: default;
 }
 
-.family-machine .area-badge { color: var(--machine); background: var(--machine-bg); }
-.family-human .area-badge { color: var(--human); background: var(--human-bg); }
-.family-idle .area-badge { color: var(--idle); background: var(--idle-bg); }
+/* The card's own state colouring now lives in the shared chip. The card keeps the left edge, which is a
+   different job: the edge groups a grid of cards at a glance, the chip names one room's state exactly. */
 
 /* The lamp. Lit: filled and glowing, colour and strength from the actual command (inline style).
    Off: an empty ring. Human-held: filled amber, glowing gently — on, but not at the engine's levels. */
@@ -525,7 +741,7 @@ h2 {
 .badge {
 	display: inline-block;
 	padding: 0.1rem 0.5rem;
-	border-radius: 999px;
+	border-radius: var(--radius-chip);
 	font-size: 0.75rem;
 	font-weight: 600;
 	background: var(--panel-2);
@@ -678,7 +894,7 @@ button.toggle {
 	border: 1px solid var(--line);
 	background: var(--panel-2);
 	color: var(--text);
-	border-radius: 999px;
+	border-radius: var(--radius-control);
 	padding: 0.4rem 1.1rem;
 	font-size: 0.87rem;
 	font-weight: 600;
@@ -693,7 +909,7 @@ button.toggle:hover:not(:disabled) {
 }
 
 button.toggle.on {
-	background: rgba(78, 201, 165, 0.12);
+	background: color-mix(in srgb, var(--ok) 14%, transparent);
 	border-color: var(--ok);
 	color: var(--ok);
 }
@@ -766,7 +982,7 @@ button.toggle:disabled {
 	align-items: center;
 	gap: 0.3rem;
 	border: 1px solid var(--line);
-	border-radius: 999px;
+	border-radius: var(--radius-chip);
 	padding: 0.2rem 0.65rem;
 	font-size: 0.8rem;
 	font-weight: 600;
@@ -791,19 +1007,19 @@ button.toggle:disabled {
 .pill.sleep.on {
 	color: var(--info);
 	border-color: var(--info);
-	background: rgba(106, 169, 233, 0.12);
+	background: color-mix(in srgb, var(--info) 14%, transparent);
 }
 
 .pill.guest.on {
 	color: var(--accent);
 	border-color: var(--accent);
-	background: rgba(242, 181, 68, 0.12);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .pill.away.on {
 	color: var(--bad);
 	border-color: var(--bad);
-	background: rgba(226, 104, 106, 0.12);
+	background: color-mix(in srgb, var(--bad) 14%, transparent);
 }
 
 .mode-cards {
@@ -832,7 +1048,7 @@ button.mode-card:hover:not(:disabled) {
 
 button.mode-card.current {
 	border-color: var(--accent);
-	background: rgba(242, 181, 68, 0.08);
+	background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 button.mode-card:disabled {
@@ -865,7 +1081,7 @@ button.mode-card:disabled {
 	align-items: center;
 	gap: 0.25rem;
 	border: 1px solid var(--line);
-	border-radius: 6px;
+	border-radius: var(--radius-chip);
 	padding: 0.05rem 0.4rem;
 	font-size: 0.72rem;
 	font-weight: 600;
@@ -873,9 +1089,9 @@ button.mode-card:disabled {
 	background: var(--panel-2);
 }
 
-.chip.sleep { color: var(--info); border-color: rgba(106, 169, 233, 0.4); }
-.chip.guest { color: var(--accent); border-color: rgba(242, 181, 68, 0.4); }
-.chip.away { color: var(--bad); border-color: rgba(226, 104, 106, 0.4); }
+.chip.sleep { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, transparent); }
+.chip.guest { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.chip.away { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
 
 .mode-card-drives {
 	color: var(--muted);
@@ -1065,7 +1281,7 @@ button {
 	background: var(--panel-2);
 	color: var(--text);
 	border: 1px solid var(--line);
-	border-radius: 6px;
+	border-radius: var(--radius-control);
 	padding: 0.35rem 0.7rem;
 	font: inherit;
 	font-size: 0.85rem;
@@ -1084,7 +1300,7 @@ button:disabled {
 button.primary {
 	background: var(--accent);
 	border-color: var(--accent);
-	color: #1a1206;
+	color: var(--accent-ink);
 	font-weight: 600;
 	transition: transform 0.06s ease, filter 0.06s ease;
 }
@@ -1115,7 +1331,7 @@ input[type="text"], input[type="number"], input[type="password"], select {
 	background: var(--bg);
 	color: var(--text);
 	border: 1px solid var(--line);
-	border-radius: 6px;
+	border-radius: var(--radius-control);
 	padding: 0.3rem 0.45rem;
 	font: inherit;
 	font-size: 0.85rem;
@@ -1302,7 +1518,7 @@ select.cell.wide {
 	min-width: 0;
 	background: var(--panel-2);
 	border: 1px solid var(--line);
-	border-radius: 999px;
+	border-radius: var(--radius-chip);
 	padding: 0.15rem 0.5rem;
 	font-size: 0.8rem;
 }
@@ -1488,7 +1704,7 @@ select.cell.wide {
 	flex: 0 0 auto;
 	background: none;
 	border: none;
-	border-radius: 999px;
+	border-radius: var(--radius-control);
 	padding: 0.1rem 0.2rem;
 	color: var(--muted);
 	font-size: 0.76rem;
@@ -1501,7 +1717,7 @@ select.cell.wide {
 	height: 18px;
 	flex: 0 0 auto;
 	border: 1px solid var(--line);
-	border-radius: 999px;
+	border-radius: var(--radius-switch);
 	background: var(--panel-2);
 	transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -1675,7 +1891,7 @@ select.cell.wide {
 
 .chips-plain .chip {
 	background: none;
-	border-radius: 6px;
+	border-radius: var(--radius-chip);
 }
 
 /* ---- disclosure ---- */
@@ -1777,7 +1993,7 @@ select.cell.wide {
 	background: none;
 	border: none;
 	border-left: 2px solid transparent;
-	border-radius: 0 6px 6px 0;
+	border-radius: 0 var(--radius-chip) var(--radius-chip) 0;
 	color: var(--muted);
 	padding: 0.45rem 0.7rem;
 	font-size: 0.9rem;
@@ -1801,7 +2017,7 @@ select.cell.wide {
 	font-variant-numeric: tabular-nums;
 	background: var(--panel);
 	border: 1px solid var(--line);
-	border-radius: 999px;
+	border-radius: var(--radius-chip);
 	padding: 0 0.45rem;
 	color: var(--muted);
 }
@@ -1824,7 +2040,7 @@ select.cell.wide {
 		flex: 1 0 auto;
 		justify-content: center;
 		border: 1px solid var(--line);
-		border-radius: 999px;
+		border-radius: var(--radius-control);
 		padding: 0.55rem 1rem;   /* a chip a thumb can hit */
 	}
 
@@ -2062,7 +2278,7 @@ select.cell.wide {
 	-webkit-backdrop-filter: blur(10px);
 	border: 1px solid var(--line);
 	border-radius: var(--radius);
-	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+	box-shadow: var(--shadow-float);
 	padding: 0.7rem 0.85rem;
 	color: var(--text);
 	font-size: 0.82rem;
@@ -2100,7 +2316,7 @@ select.cell.wide {
 		top: auto;
 		bottom: 0.75rem;
 		width: auto;
-		box-shadow: 0 -6px 40px rgba(0, 0, 0, 0.45);
+		box-shadow: var(--shadow-float);
 	}
 }
 
@@ -2479,7 +2695,7 @@ select {
 	background: var(--bg);
 	color: var(--text);
 	border: 1px solid var(--line);
-	border-radius: 6px;
+	border-radius: var(--radius-control);
 	font: inherit;            /* body font, weight 400 — never the UA's form font */
 	font-size: 0.95rem;       /* up from 0.85rem */
 	font-weight: 400;         /* explicit: names must not render bold anywhere */
@@ -2549,7 +2765,7 @@ select {
 
 button.mode-pill {
 	border: 1px solid var(--line);
-	border-radius: 999px;
+	border-radius: var(--radius-control);
 	padding: 0.3rem 0.85rem;
 	font-size: 0.85rem;
 	font-weight: 600;
@@ -2567,7 +2783,7 @@ button.mode-pill:hover:not(:disabled) {
 button.mode-pill.current {
 	color: var(--accent);
 	border-color: var(--accent);
-	background: rgba(242, 181, 68, 0.12);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 button.mode-pill:disabled {
@@ -2591,7 +2807,7 @@ button.mode-pill:disabled {
 	flex: none;
 	width: 0.7rem;
 	height: 0.7rem;
-	border-radius: 999px;
+	border-radius: 50%;
 	border: 1px solid var(--muted);
 	background: transparent;
 }
@@ -2732,7 +2948,7 @@ button.mode-pill:disabled {
 	margin-left: auto;
 	background: var(--panel-2);
 	border: 1px solid var(--accent);
-	border-radius: 6px;
+	border-radius: var(--radius-control);
 	padding: 0.35rem 0.7rem;
 	color: var(--accent);
 	font-size: 0.82rem;
@@ -2740,7 +2956,7 @@ button.mode-pill:disabled {
 }
 
 .log-new:hover {
-	background: rgba(242, 181, 68, 0.12);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .log-foot {
@@ -2762,4 +2978,326 @@ button.mode-pill:disabled {
 		align-items: baseline;
 		gap: 0.5rem;
 	}
+}
+
+/* ============================================================================
+   THE SHARED VOCABULARY
+   Icons, state chips and the sentence primitive: the three things every page is
+   expected to use rather than re-invent. See docs/design/visual-foundation.md.
+   ============================================================================ */
+
+/* ---- icons ----
+   Drawn once as <symbol>s by <IconSprite>, used everywhere by <Icon>. The glyph takes the text colour of
+   wherever it sits (currentColor) and its one flat accent from --icon-accent, which each theme sets to brass.
+   The sizes are a short list on purpose: 18px beside a line of body text, 15px on a chip, 22px on a card head. */
+.ic {
+	width: 18px;
+	height: 18px;
+	flex: 0 0 auto;
+	display: block;
+}
+
+.ic-sm { width: 15px; height: 15px; }
+.ic-lg { width: 22px; height: 22px; }
+
+/* A section head's glyph is furniture, not the subject: muted outline, brass accent, never competing with the
+   heading beside it. */
+.ic-head {
+	color: var(--muted);
+	width: 17px;
+	height: 17px;
+}
+
+/* ---- state chips ----
+   Room state read as SHAPE plus colour. It used to be colour alone, which says nothing to a colourblind reader
+   and nothing at all in a greyscale screenshot. Inside a chip the glyph's accent collapses to currentColor, so
+   outline and accent are one semantic colour: the shape carries the meaning and the colour agrees with it,
+   rather than the two saying different things. */
+.state-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.15rem 0.5rem 0.15rem 0.4rem;
+	border-radius: var(--radius-chip);
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+	cursor: default;
+	--icon-accent: currentColor;
+}
+
+.state-chip .ic {
+	width: 14px;
+	height: 14px;
+}
+
+/* The quiet state has no glyph at all — the dark-cockpit rule carried into iconography. A shape means something
+   is happening; a room merely watching gets a dot and no claim on the eye. */
+.state-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: currentColor;
+	flex: 0 0 auto;
+	opacity: 0.75;
+}
+
+/* Colour and well are separate rules because the mark is used both ways: a chip needs the well, and a bare
+   mark in a dense row needs the colour without a painted box behind it. */
+.state-machine { color: var(--machine); }
+.state-human { color: var(--human); }
+.state-warn { color: var(--warn); }
+.state-idle { color: var(--idle); }
+
+.state-chip:not(.state-bare).state-machine { background: var(--machine-bg); }
+.state-chip:not(.state-bare).state-human { background: var(--human-bg); }
+.state-chip:not(.state-bare).state-warn { background: var(--warn-bg); }
+.state-chip:not(.state-bare).state-idle { background: var(--idle-bg); }
+
+/* The mark alone: the same glyph, the same semantic colour, no box and no word. For a lane, a list row or
+   anywhere the text beside it already says what is happening. */
+.state-chip.state-bare {
+	padding: 0;
+	background: none;
+	gap: 0;
+	width: 15px;
+	height: 15px;
+	justify-content: center;
+}
+
+.state-chip.state-bare .ic {
+	width: 15px;
+	height: 15px;
+}
+
+/*
+   A lit room's glyph is tinted with the Kelvin it was actually commanded to (inline style, straight off the
+   snapshot), so the chip and the lamp beside it report one fact.
+
+   The GLYPH, not the word. Kelvin colours are rgb(255, g, b) — at 6000 K that is very nearly white, which is
+   correct as light and invisible as text on a pale panel. Caught in the light theme, where a cool-white chip
+   read as an empty box. So the word keeps the semantic colour and stays legible, and the warmth is carried by
+   the shape it belongs to.
+
+   --kelvin-weight / --kelvin-shade are what make one rule work in both themes: dark takes the colour as-is
+   against a dark well, light pulls it toward ink until a 6000 K mark clears 3:1 against its own background.
+   Hue survives the pull, so a 2200 K night dim and a 4500 K midday white are still visibly different rooms.
+*/
+.state-chip.state-kelvin .ic {
+	color: color-mix(in srgb, var(--state-kelvin, var(--machine)) var(--kelvin-weight), var(--kelvin-shade));
+}
+
+/* The warning dim blinks because it is the one state that wants to be noticed right now — and it blinks in
+   addition to having its own shape, never instead of one. Motion-sensitive readers keep the shape. */
+.state-blink {
+	animation: state-blink 1.1s step-end infinite;
+}
+
+@keyframes state-blink {
+	50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.state-blink {
+		animation: none;
+	}
+}
+
+/* The sprite itself never draws. It is a bag of definitions hosted once by the layout; without this it
+   reserves a line box at the top of every page. */
+.icon-sprite {
+	display: none;
+}
+
+/* ---- sentences ----
+   A room's behaviour as prose with its values inline and editable: reading the sentence and changing it are the
+   same act. Line-height is generous because every other word is a boxed control, and tokens on a tight line
+   make the paragraph vibrate. */
+.sentences {
+	display: flex;
+	flex-direction: column;
+}
+
+/* margin: 0 because these are <p> elements and the UA's 1em margins would stack on top of the padding, which
+   opens a hole between a sentence and the rule under it wide enough to read as a missing paragraph. */
+.sentence {
+	margin: 0;
+	padding: 0.6rem 0;
+	border-top: var(--rule-inner);
+	font-size: var(--text-base);
+	line-height: 1.9;
+}
+
+.sentence:first-child {
+	border-top: 0;
+}
+
+/* The token. Brass on hover and focus, because brass means "you can change this" — the accent budget's whole
+   job in one control. An amber dot, not an amber box, marks a value this room owns: the box is about
+   editability and the dot about provenance, and merging them would make one signal do two jobs. */
+.tok {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: var(--chip);
+	border: var(--stroke-hair) solid var(--line);
+	border-radius: var(--radius-chip);
+	padding: 0.05rem 0.45rem;
+	margin: 0 1px;
+	font-family: var(--mono);
+	font-size: var(--text-md);
+	font-weight: 600;
+	color: inherit;
+	line-height: 1.7;
+	white-space: nowrap;
+	cursor: pointer;
+	vertical-align: baseline;
+}
+
+.tok:hover,
+.tok[aria-expanded="true"] {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.tok:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* Not editable, and saying so in the shape: a dashed edge reads as "a value, not a control" without needing a
+   tooltip to explain the difference. */
+.tok-fixed {
+	border-style: dashed;
+	color: var(--muted);
+	cursor: default;
+}
+
+.tok-fixed:hover {
+	border-color: var(--line);
+	color: var(--muted);
+}
+
+/* The provenance dot. Amber, and the same amber the settings rows use for an override, so "this one is mine" is
+   one mark learned once. Deliberately NOT the accent: brass says editable, amber says changed. */
+.tok-own-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--warn);
+	flex: 0 0 auto;
+}
+
+/* Not editable and not a control: the House tab's defaults render this way, because editing a default is the
+   rarer act and its rows are one tap below. */
+.tok-static {
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+}
+
+/* The token popover: curated common values, one tap each. One of the two things on a page that genuinely
+   floats, so one of the two that keeps a shadow.
+
+   position: absolute against .tok-host, which is position: relative. Anchoring a popover to a container that is
+   not a positioning context drops it in the page's bottom-left corner — a bug this project has fixed once
+   already, and the reason .tok-host exists at all. */
+.tok-host {
+	position: relative;
+	display: inline-block;
+}
+
+.tok-pop {
+	position: absolute;
+	z-index: 70;
+	left: 0;
+	top: calc(100% + 4px);
+	min-width: 10rem;
+	max-width: min(16rem, 80vw);
+	background: var(--panel);
+	border: var(--rule);
+	border-radius: var(--radius-panel);
+	box-shadow: var(--shadow-float);
+	padding: 4px;
+	text-align: left;
+	white-space: normal;
+	line-height: 1.5;   /* its own, never the sentence's 1.9 — a list is not prose */
+}
+
+.tok-pop button {
+	display: block;
+	width: 100%;
+	text-align: left;
+	background: none;
+	border: 0;
+	border-radius: var(--radius-chip);
+	padding: 0.3rem 0.6rem;
+	font-family: var(--mono);
+	font-size: var(--text-md);
+	color: var(--text);
+}
+
+.tok-pop button:hover:not(:disabled) {
+	background: var(--chip);
+	border-color: transparent;
+}
+
+.tok-pop button.cur {
+	color: var(--accent);
+	font-weight: 700;
+}
+
+.tok-pop-note {
+	display: block;
+	padding: 0.3rem 0.6rem 0.35rem;
+	font-size: var(--text-xs);
+	line-height: 1.45;
+	color: var(--muted);
+	font-family: var(--font-sans);
+}
+
+/* On a phone the popover becomes a sheet pinned above the bottom edge: a token near the right-hand margin would
+   otherwise open a card half off the screen, and there is no CSS that flips it. The same move the info popover
+   already makes, for the same reason. */
+@media (max-width: 560px) {
+	.tok-pop {
+		position: fixed;
+		left: 0.75rem;
+		right: 0.75rem;
+		top: auto;
+		bottom: 0.75rem;
+		max-width: none;
+		min-width: 0;
+	}
+
+	.tok-pop button {
+		padding: 0.55rem 0.7rem;   /* a row a thumb can hit */
+	}
+}
+
+/* A figure set inside a sentence — a response curve, a band. Sized to the line it sits on and given the same
+   air a token gets, so a paragraph with one in it does not develop a bulge. */
+/* Straddling the baseline rather than standing on it: an inline box's baseline is its bottom edge, so a 20px
+   figure aligned to the baseline floats a whole line above the words it belongs to. */
+.sentence-figure {
+	display: inline-flex;
+	align-items: center;
+	vertical-align: -0.4em;
+	margin: 0 2px;
+}
+
+.curve-glyph {
+	width: 40px;
+	height: 20px;
+	display: block;
+}
+
+/* The legend under a set of sentences: what the amber dot means, said once, where the dots are. */
+.sentence-legend {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin: 0.15rem 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted);
 }

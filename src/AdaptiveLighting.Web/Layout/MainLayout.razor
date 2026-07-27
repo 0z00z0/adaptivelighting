@@ -1,9 +1,16 @@
 @inherits LayoutComponentBase
 
+@*
+	The sprite is hosted here, once, and never by a page: two copies would mean two elements sharing every
+	glyph id, and a <use> resolves to whichever the browser saw first. Hosting it in the layout also means a
+	page cannot forget it — an icon that renders as an empty box says nothing in the console.
+*@
+<IconSprite />
+
 <div class="shell">
 	<header class="topbar">
 		<div class="brand">
-			<span class="brand-mark"></span>
+			<Icon Name="@Glyph.App" Class="brand-mark" Label="Adaptive lighting" />
 			<span class="brand-text">Adaptive lighting</span>
 		</div>
 		<nav class="nav">

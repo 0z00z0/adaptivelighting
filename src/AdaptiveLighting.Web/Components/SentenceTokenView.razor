@@ -1,0 +1,188 @@
+@*
+	One value inside a sentence, rendered as the control that changes it.
+
+	Three renderings, decided by what the value is rather than by a flag the caller passes:
+
+	  · not editable here      — the value in bold. The House tab's defaults read this way, because editing a
+	                             default is the rarer act and its row is one tap below.
+	  · a yes/no               — a token that flips where it stands. Two states do not deserve a popover: it
+	                             would cost a tap and a re-read for a decision already made.
+	  · anything else          — a token that opens a curated shortlist.
+
+	Keyboard and thumb, both. It is a real <button>, so Enter and Space work and the tab order is the reading
+	order; Escape closes the popover; on a phone the popover becomes a sheet above the bottom edge, because a
+	token near the right margin would otherwise open a card half off the screen.
+
+	No script. The page is served under a strict content policy and the rest of this UI already does its
+	disclosure in plain CSS and Blazor — the cost is that clicking elsewhere on the page does not dismiss the
+	popover, which is the same trade InfoPopover already makes, and the reason the token itself closes it.
+
+	The wrapper is position: relative (.tok-host). A popover anchored to a container that is not a positioning
+	context lands in the page's bottom-left corner — a bug this project has fixed once already.
+*@
+
+@if (!Editable || !Token.Editable)
+{
+	@if (!Editable)
+	{
+		<b class="tok-static">@Token.Text</b>
+	}
+	else
+	{
+		<span class="tok tok-fixed" title="@($"{Token.Label} — fixed here")">
+			@Token.Text
+			@if (Token.Origin == TokenOrigin.Own)
+			{
+				<span class="tok-own-dot" aria-hidden="true"></span>
+			}
+		</span>
+	}
+}
+else
+{
+	<span class="tok-host" @onkeydown="OnKeyDown">
+		<button type="button"
+				class="tok"
+				aria-expanded="@(_open ? "true" : "false")"
+				aria-label="@AccessibleName"
+				title="@HoverTitle"
+				@onclick="OnActivate">
+			@Token.Text
+			@if (Token.Origin == TokenOrigin.Own)
+			{
+				<span class="tok-own-dot" aria-hidden="true"></span>
+			}
+		</button>
+
+		@if (_open)
+		{
+			<span class="tok-pop" role="listbox" aria-label="@Token.Label">
+				@foreach (TokenChoice choice in Token.Choices)
+				{
+					<button type="button"
+							class="@(IsCurrent(choice) ? "cur" : null)"
+							role="option"
+							aria-selected="@(IsCurrent(choice) ? "true" : "false")"
+							@onclick="() => Pick(choice)">@choice.Text</button>
+				}
+
+				@if (Token.Origin == TokenOrigin.Own && Token.HouseText is { Length: > 0 } house)
+				{
+					<button type="button" class="tok-pop-revert" @onclick="Revert">Use house setting (@house)</button>
+				}
+
+				@if (Note is { Length: > 0 } note)
+				{
+					<span class="tok-pop-note">@note</span>
+				}
+			</span>
+		}
+	</span>
+}
+
+@code {
+	/// <summary>The value to render.</summary>
+	[Parameter, EditorRequired]
+	public SentenceToken Token { get; set; } = default!;
+
+	/// <summary>Whether the surrounding sentence is being edited at all.</summary>
+	[Parameter]
+	public bool Editable { get; set; } = true;
+
+	/// <summary>Raised when a value is picked. The page decides what applying it means.</summary>
+	[Parameter]
+	public EventCallback<SentenceEdit> Edited { get; set; }
+
+	/// <summary>
+	///     Raised when the reader asks to follow the house again, carrying the token's key.
+	/// </summary>
+	/// <remarks>
+	///     A separate callback from <see cref="Edited"/> because they are different edits to the document:
+	///     picking the house's current value writes that number into the room, while reverting clears the
+	///     property so the room follows the house from now on — including the next time the house changes.
+	///     One callback carrying both would force every page to guess which was meant.
+	/// </remarks>
+	[Parameter]
+	public EventCallback<string> Reverted { get; set; }
+
+	/// <summary>What the popover says about when a pick takes effect. The page knows; this component does not.</summary>
+	[Parameter]
+	public string? Note { get; set; }
+
+	private bool _open;
+
+	/// <summary>
+	///     Named for a screen reader, which does not get the sentence around it.
+	/// </summary>
+	/// <remarks>
+	///     "10 min" read on its own is not a control anybody can operate. The label plus the value is, and the
+	///     provenance is spoken rather than left to an amber dot nothing announces.
+	/// </remarks>
+	private string AccessibleName =>
+		Token.Origin == TokenOrigin.Own
+			? $"{Token.Label}: {Token.Text}, this room's own setting"
+			: $"{Token.Label}: {Token.Text}";
+
+	private string HoverTitle => Token.Origin switch
+	{
+		TokenOrigin.Own when Token.HouseText is { Length: > 0 } house =>
+			$"{Token.Label} — this room's own setting. The house says {house}.",
+		TokenOrigin.Own => $"{Token.Label} — this room's own setting.",
+		TokenOrigin.Inherited => $"{Token.Label} — following the house setting.",
+		_ => Token.Label
+	};
+
+	/// <summary>
+	///     A toggle flips; everything else opens its shortlist.
+	/// </summary>
+	/// <remarks>
+	///     A toggle with no second option would be a dead control, so a malformed one falls back to the popover
+	///     rather than silently doing nothing when tapped.
+	/// </remarks>
+	private Task OnActivate()
+	{
+		if (Token.Kind == TokenKind.Toggle && Token.Choices.Count == 2)
+			return Flip();
+
+		_open = !_open;
+
+		return Task.CompletedTask;
+	}
+
+	private Task Flip()
+	{
+		TokenChoice next = Token.Choices.First(choice => !IsCurrent(choice));
+
+		return Edited.InvokeAsync(new SentenceEdit(Token.Key, Token.Kind, next.Value));
+	}
+
+	private Task Pick(TokenChoice choice)
+	{
+		_open = false;
+
+		return Edited.InvokeAsync(new SentenceEdit(Token.Key, Token.Kind, choice.Value));
+	}
+
+	private Task Revert()
+	{
+		_open = false;
+
+		return Reverted.InvokeAsync(Token.Key);
+	}
+
+	/// <summary>
+	///     Which option is the current one, matched on the words rather than the value.
+	/// </summary>
+	/// <remarks>
+	///     The token carries its value already formatted, and the shortlist formats its own the same way, so the
+	///     written forms match exactly when the values do. Comparing the carried strings instead would call
+	///     "0.5" and "0.50" different values and tick neither.
+	/// </remarks>
+	private bool IsCurrent(TokenChoice choice) => string.Equals(choice.Text, Token.Text, StringComparison.Ordinal);
+
+	private void OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
+	{
+		if (args.Key == "Escape")
+			_open = false;
+	}
+}
