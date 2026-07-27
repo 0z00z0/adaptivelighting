@@ -394,6 +394,33 @@ public sealed class AreaEntityResolverTests
 			"a two-hop loop folds into one of its halves, a self-member still commands the bulb it holds");
 	}
 
+	/// <summary>
+	///     A group's membership is whatever Home Assistant put in the attribute, and the overlap rule promotes the
+	///     bulbs only one group holds into the room's own list. A member outside the <c>light</c> domain arriving
+	///     that way became an id the area hands to the actuator, which calls <c>light.turn_on</c> unconditionally —
+	///     a service call Home Assistant rejects, on every command, for ever. Discovery filters the domain; a bulb
+	///     entering by the back door gets the same filter.
+	/// </summary>
+	[TestMethod]
+	public void A_Group_Member_Outside_The_Light_Domain_Is_Not_Promoted_On_Its_Own()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["gang"] = ["light.gang_alle", "light.gang_vegg", "binary_sensor.m"];
+		ha.SetState("light.gang_alle", "off", new() { ["entity_id"] = new[] { "light.bulb_a", "light.bulb_b" } });
+		ha.SetState("light.gang_vegg", "off", new() { ["entity_id"] = new[] { "light.bulb_b", "switch.relay" } });
+		ha.SetState("light.bulb_a", "off");
+		ha.SetState("light.bulb_b", "off");
+		ha.SetState("switch.relay", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "gang" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "light.gang_alle" }, area.Lights.ToArray(),
+			"the wider group keeps its bulbs, and the switch the narrower one held is not a light this engine can drive");
+	}
+
 	[TestMethod]
 	public void The_Exclude_Label_Drops_An_Entity()
 	{

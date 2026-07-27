@@ -192,6 +192,26 @@ public sealed class LuxBrightnessCurveTests
 		Assert.IsTrue(double.IsFinite(raised));
 	}
 
+	/// <summary>
+	///     Two anchors can differ while their logarithms do not: <c>log10(100)</c> and
+	///     <c>log10(100.00000000000003)</c> are the same double, so the span the interpolation divides by is zero
+	///     and so is the numerator. The validator has no reason to object to either number — full is genuinely
+	///     above start — and 0/0 is a NaN <see cref="LuxBrightnessCurve.Position"/> promises never to return.
+	///     <see cref="LuxBrightnessCurve.Raise"/> survived it on its own finiteness check; anything drawing the
+	///     curve did not.
+	/// </summary>
+	[TestMethod]
+	public void Anchors_Whose_Logarithms_Are_Indistinguishable_Are_Inert_Rather_Than_NaN()
+	{
+		AreaSettings settings = Curve(startLux: 100, fullLux: 100.00000000000003);
+
+		double position = LuxBrightnessCurve.Position(100.00000000000001, settings);
+
+		Assert.IsTrue(double.IsFinite(position), "a position that is not a number is not a position");
+		Assert.AreEqual(0, position, "a curve with nothing to interpolate across is inert, as every other degenerate anchor is");
+		Assert.AreEqual(40, LuxBrightnessCurve.Raise(40, 100.00000000000001, settings));
+	}
+
 	[TestMethod]
 	public void A_Start_Anchor_At_Or_Below_Zero_Has_No_Logarithm_And_Is_Inert()
 	{

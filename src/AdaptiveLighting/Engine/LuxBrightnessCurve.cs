@@ -136,7 +136,16 @@ public sealed class LuxBrightnessCurve
 		if (reading >= full)
 			return Shape(1, settings);
 
-		double fraction = (Math.Log10(reading) - Math.Log10(start)) / (Math.Log10(full) - Math.Log10(start));
+		// Two anchors can differ while their logarithms do not: log10(100) and log10(100.00000000000003) are the
+		// same double, and the validator has no reason to object to either number. The span is then zero, the
+		// numerator is zero too, and 0/0 is the one value this method promises never to hand back — so the
+		// degenerate-anchor answer of 0 is given here as well, rather than a NaN travelling out through Position
+		// into whatever is drawing the curve. (Raise survives it either way; its own finiteness check catches it.)
+		double span = Math.Log10(full) - Math.Log10(start);
+		if (span <= 0)
+			return 0;
+
+		double fraction = (Math.Log10(reading) - Math.Log10(start)) / span;
 		return Shape(Math.Clamp(fraction, 0, 1), settings);
 	}
 
