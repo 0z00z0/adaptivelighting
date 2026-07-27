@@ -80,6 +80,10 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		[.. _snapshots.Values.OrderBy(snapshot => snapshot.AreaName, StringComparer.CurrentCulture)];
 
 	/// <summary>Pushes each snapshot as it arrives, so a component can re-render without polling.</summary>
+	/// <remarks>
+	///     Subscribable at any point in the process's life, including while it is shutting down — see
+	///     <see cref="DisposeAsync"/> for why the subject behind this is never disposed.
+	/// </remarks>
 	public IObservable<AreaSnapshot> Changes => _changes;
 
 	/// <summary>Whether any snapshot has arrived yet. Drives the dashboard's empty state.</summary>
@@ -120,6 +124,27 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 	public async Task StopAsync(CancellationToken cancellationToken) => await DisposeAsync().ConfigureAwait(false);
 
 	/// <summary>Drops the subscription and its scope. Safe to call more than once.</summary>
+	/// <remarks>
+	///     <para>
+	///         <b><see cref="Changes"/>'s subject is deliberately not disposed.</b> The host stops hosted services
+	///         in reverse registration order, and <c>GenericWebHostService</c> is registered by
+	///         <c>WebApplication.CreateBuilder</c> — before <c>AddLightingWeb</c> — so this stops <i>first</i> and
+	///         Kestrel is still serving pages afterwards. Every one of the three live pages subscribes to
+	///         <see cref="Changes"/> in <c>OnInitialized</c>, and <c>Subject&lt;T&gt;.Subscribe</c> on a disposed
+	///         subject throws <see cref="ObjectDisposedException"/> — which <c>SubscribeSafe</c> does not catch,
+	///         because it guards the handler and not the subscription. So a reader who opened a page while the
+	///         process was going down met Blazor's unhandled-error screen instead of a graceful shutdown.
+	///     </para>
+	///     <para>
+	///         Not disposing it costs nothing and removes the whole class of "observed after disposal" without a
+	///         lock: dropping <c>_subscription</c> above is what actually stops snapshots arriving, so the subject
+	///         can never fire again anyway; it holds no unmanaged resources and goes with the singleton at process
+	///         exit; and <c>Subject&lt;T&gt;.Dispose</c> does not signal completion, so live subscribers were never
+	///         being told anything by it. It also settles the other half of the same race — a Home Assistant event
+	///         already inside <see cref="Record"/> reaching <c>OnNext</c> after teardown, which threw for exactly
+	///         the same reason.
+	///     </para>
+	/// </remarks>
 	/// <returns>A task that completes once the scope has been disposed.</returns>
 	public async ValueTask DisposeAsync()
 	{
@@ -131,8 +156,6 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 			_scope = null;
 			await scope.DisposeAsync().ConfigureAwait(false);
 		}
-
-		_changes.Dispose();
 	}
 
 	private void Record(Event<AreaSnapshotEvent> @event)
