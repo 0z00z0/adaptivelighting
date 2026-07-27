@@ -29,6 +29,8 @@ namespace AdaptiveLighting.Abstractions;
 /// <param name="HouseModeValue">The raw house-mode option string in effect (<c>Sover</c>, <c>Borte</c>), or <c>null</c> when no select is configured. Beside <paramref name="Mode"/> so a card can say "Sover", not just "Sleep".</param>
 /// <param name="DarknessDetail">The darkness gate's reading in words the last time it was consulted (e.g. <c>lux 86, dark below 40</c>), or <c>null</c> if it never has been. Lets a card say <i>why</i> a bright vacant area is waiting rather than just that it is. Descriptive, like <paramref name="Reason"/>: excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/> so a drifting lux reading does not republish on its own.</param>
 /// <param name="AreaId">The HA registry area id this area was built from, or <c>null</c> when it was configured with explicit entity lists and no area. This is the stable join between a snapshot and the document that produced it: <paramref name="AreaName"/> is editable mid-session and an id is not, so a reader that matched on the name alone lost the area the moment somebody renamed a room. Excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/>: it identifies the area rather than describing its state, and cannot change without the area being rebuilt anyway.</param>
+/// <param name="AutoOnBlockedBy">Which gate would refuse to light this area for movement at this instant, <see cref="AutoOnBlock.None"/> when none would, or <c>null</c> from a build that predates the field. Two of the refusals — a sleeping house, and an <c>IgnoreWhenOn</c> entity that is on — leave the area in <see cref="AreaState.AutoVacant"/> looking exactly like an area that is merely waiting, so a reader holding only <paramref name="State"/> and <paramref name="IsDark"/> would confidently promise a light that will not come on. Descriptive, like <paramref name="DarknessDetail"/>: excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/>, so a television switching on does not by itself republish every area it blocks.</param>
+/// <param name="AutoOnBlockingEntity">The entity id holding auto-on off when <paramref name="AutoOnBlockedBy"/> is <see cref="AutoOnBlock.EntityOn"/>, and <c>null</c> otherwise. Named rather than counted: "something is on" leaves the reader hunting through the room, which is the dead end this field exists to end.</param>
 public sealed record AreaSnapshot(
 	string AreaName,
 	AreaState State,
@@ -46,7 +48,9 @@ public sealed record AreaSnapshot(
 	DateTimeOffset? NextChangeFrom,
 	string? HouseModeValue = null,
 	string? DarknessDetail = null,
-	string? AreaId = null)
+	string? AreaId = null,
+	AutoOnBlock? AutoOnBlockedBy = null,
+	string? AutoOnBlockingEntity = null)
 {
 	/// <summary>
 	///     Whether <paramref name="other"/> says the same thing about the area as this snapshot does — the
@@ -70,6 +74,12 @@ public sealed record AreaSnapshot(
 	///         <see cref="LastMotionAt"/> being excluded has one honest consequence: motion in an area too bright
 	///         to light updates the engine's record of it, and no tick will republish for that alone. That is the
 	///         intended trade — the alternative is an event every time anyone walks through a sunlit room.
+	///     </para>
+	///     <para>
+	///         <see cref="AutoOnBlockedBy"/> is excluded on the same trade. It is a verdict rather than an "as of"
+	///         field, but including it would republish every area a television blocks the moment it is switched on,
+	///         and again when it goes off. Each report still carries the verdict that held when it was published,
+	///         which is what a timeline row needs; what it does not do is generate rows of its own.
 	///     </para>
 	/// </remarks>
 	/// <param name="other">The snapshot to compare against, typically the last one published for this area.</param>

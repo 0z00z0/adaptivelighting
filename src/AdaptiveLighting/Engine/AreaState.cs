@@ -89,3 +89,38 @@ public enum TransitionReason
 	/// <summary>A Guest scene took the area into, or released it from, an indefinite hold.</summary>
 	SceneHold
 }
+
+/// <summary>
+///     Which gate is refusing to switch an area's lights on for movement. Carried in
+///     <see cref="AdaptiveLighting.Abstractions.AreaSnapshot"/> because two of these refusals are otherwise
+///     invisible from outside: a sleeping house and a blocking entity both leave the area in
+///     <see cref="AreaState.AutoVacant"/>, which is the same state as an area simply waiting for someone to
+///     walk in. A reader holding only the state and the darkness verdict would promise a light that is never
+///     going to come on.
+/// </summary>
+public enum AutoOnBlock
+{
+	/// <summary>Nothing is refusing: movement would light the area.</summary>
+	None,
+
+	/// <summary>Automatic lighting is switched off for this area.</summary>
+	Disabled,
+
+	/// <summary>The master switch is on, so the engine commands nothing anywhere.</summary>
+	KillSwitch,
+
+	/// <summary>The house is away, or nobody is home.</summary>
+	Away,
+
+	/// <summary>The house is asleep and this area is set not to light itself while it is.</summary>
+	Sleep,
+
+	/// <summary>
+	///     One of the area's <c>IgnoreWhenOn</c> entities is on. Which one is published beside this, because
+	///     "something is on" sends somebody hunting through the room.
+	/// </summary>
+	EntityOn,
+
+	/// <summary>The darkness gate says it is too bright.</summary>
+	NotDark
+}

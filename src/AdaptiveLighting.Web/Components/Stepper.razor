@@ -1,0 +1,129 @@
+@*
+	A number moved in its own natural grain, with the keyboard one tap away.
+
+	The design's bargain about numbers: the sentence token offers the handful of values a sane house uses, the
+	stepper covers everything between them, and clicking the readout turns it into a plain input so no value
+	expressible in the document becomes inexpressible here. Three layers, each one tap deeper than the last.
+
+	Minus and plus rather than a slider or a free box, because a constrained control is what makes applying a
+	change the moment it is made safe: no press here can produce a value the validator would refuse, so the page
+	needs no review step between the hand and the house.
+
+	The readout is muted while the value is the house's and solid once the room owns it — the same fact the
+	amber dot beside the label carries, said again where the eye actually is when it presses a button.
+*@
+
+<span class="stepper">
+	<button type="button"
+			class="stepper-step"
+			aria-label="@($"Less — {Label}")"
+			title="@($"Less — {Label}")"
+			disabled="@(Value <= Min)"
+			@onclick="Down">&minus;</button>
+
+	@if (_typing)
+	{
+		@*
+			@bind is deliberately not used: it writes on every keystroke, and every write here schedules a save.
+			onchange fires on Enter and on leaving the box, which is when a typed number is actually meant.
+		*@
+		<input class="stepper-input"
+			   type="number"
+			   step="@Invariant(Step)"
+			   min="@Invariant(Min)"
+			   max="@(Max is { } max ? Invariant(max) : null)"
+			   value="@Invariant(Value)"
+			   aria-label="@Label"
+			   @onchange="OnTyped"
+			   @onblur="StopTyping" />
+	}
+	else
+	{
+		<button type="button"
+				class="stepper-value @(IsOwn ? null : "stepper-inherited")"
+				title="@($"{Label} — click to type a value")"
+				@onclick="StartTyping">@Text</button>
+	}
+
+	<button type="button"
+			class="stepper-step"
+			aria-label="@($"More — {Label}")"
+			title="@($"More — {Label}")"
+			disabled="@(Max is { } ceiling && Value >= ceiling)"
+			@onclick="Up">+</button>
+</span>
+
+@code {
+	/// <summary>The current value, in the unit the readout shows.</summary>
+	[Parameter, EditorRequired]
+	public double Value { get; set; }
+
+	/// <summary>The value as it is written, unit and all. Formatted by the caller, which knows the kind.</summary>
+	[Parameter, EditorRequired]
+	public string Text { get; set; } = "";
+
+	/// <summary>The setting's name, for the accessible names of three unlabelled buttons.</summary>
+	[Parameter, EditorRequired]
+	public string Label { get; set; } = "";
+
+	/// <summary>How far one press moves it.</summary>
+	[Parameter]
+	public double Step { get; set; } = 1;
+
+	/// <summary>The lowest value a press will reach.</summary>
+	[Parameter]
+	public double Min { get; set; }
+
+	/// <summary>The highest, or <c>null</c> for unbounded above.</summary>
+	[Parameter]
+	public double? Max { get; set; }
+
+	/// <summary>Whether this is the room's own value, which decides how solidly the readout is drawn.</summary>
+	[Parameter]
+	public bool IsOwn { get; set; }
+
+	/// <summary>Raised with the new value. The page decides what applying it means; nothing here writes anything.</summary>
+	[Parameter]
+	public EventCallback<double> ValueChanged { get; set; }
+
+	private bool _typing;
+
+	/// <summary>
+	///     Snaps to the step's own grid rather than adding to whatever is there.
+	/// </summary>
+	/// <remarks>
+	///     A room sitting on a hand-typed 7 min with a 5 min step should reach 10, not 12: the grid is what the
+	///     step is for, and stepping off it would leave a value nobody could reach again by pressing the other way.
+	/// </remarks>
+	private Task Down() => Move(Math.Ceiling(Round(Value / Step) - 1) * Step);
+
+	private Task Up() => Move(Math.Floor(Round(Value / Step) + 1) * Step);
+
+	private Task Move(double next) => ValueChanged.InvokeAsync(Bounded(next));
+
+	private void StartTyping() => _typing = true;
+
+	private void StopTyping() => _typing = false;
+
+	private Task OnTyped(ChangeEventArgs args)
+	{
+		_typing = false;
+
+		// A box left empty or holding something unparseable is not an instruction to change anything. Writing a
+		// zero into a timeout because somebody selected the text and tabbed away would be the worst reading of it.
+		if (args.Value is not string typed
+			|| !double.TryParse(typed, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed))
+		{
+			return Task.CompletedTask;
+		}
+
+		return Move(parsed);
+	}
+
+	private double Bounded(double value) => Math.Clamp(value, Min, Max ?? double.MaxValue);
+
+	/// <summary>Rounds away the binary drift a chain of 0.1 steps accumulates, so the grid stays a grid.</summary>
+	private static double Round(double value) => Math.Round(value, 6);
+
+	private static string Invariant(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+}
