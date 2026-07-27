@@ -61,6 +61,12 @@ public static class ActivityView
 	///         The master switch outranks everything: while it is off the engine commands nothing, and a row that
 	///         described a transition without saying so would send somebody hunting a room-level fault.
 	///     </para>
+	///     <para>
+	///         Where a row would otherwise say what the engine is about to do, it says it only if the engine has
+	///         said so itself — see <see cref="DarkEnough"/>. Softening the wording instead was considered and
+	///         rejected: a hedge printed over every house that is merely asleep is a different false statement,
+	///         not a smaller one.
+	///     </para>
 	/// </remarks>
 	/// <param name="snapshot">The report to describe.</param>
 	/// <returns>The row's two lines.</returns>
@@ -76,7 +82,7 @@ public static class ActivityView
 		if (snapshot is { Reason: TransitionReason.CircadianTick, State: AreaState.AutoVacant, IsDark: { } dark })
 		{
 			return new ActivityLine(
-				dark ? "Dark enough now — movement will switch the lights on" : "Too bright to switch the lights on",
+				dark ? DarkEnough(snapshot) : "Too bright to switch the lights on",
 				Reading(snapshot));
 		}
 
@@ -255,6 +261,35 @@ public static class ActivityView
 				: "Too bright to switch on.",
 		AreaState.AutoVacant when snapshot.IsDark is null => "Darkness hasn't been checked here yet.",
 		_ => null
+	};
+
+	/// <summary>
+	///     What "dark enough" is worth to this room — which is not always a light.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>The sentence this replaced was false.</b> Darkness is one of five gates on auto-on, and two of
+	///         the other four leave the room sitting in <see cref="AreaState.AutoVacant"/>, indistinguishable from
+	///         a room merely waiting for somebody to walk in: a sleeping house over a room set not to light itself,
+	///         and one of the room's own blocking entities being on. Auto-discovery sets the first on every bedroom
+	///         it finds, so "movement will switch the lights on" was wrong in every bedroom in the house every
+	///         night — and printed at dusk, which is the moment somebody comes here asking why the room stayed dark.
+	///     </para>
+	///     <para>
+	///         Read from the verdict the engine published rather than worked out again here. The engine is the only
+	///         thing that knows which gates it consulted, and a second copy of those rules would drift from the one
+	///         it acts on — which is how this class of bug is born. A report from a build that predates the verdict
+	///         carries none, and the row then says exactly what it always said: an older payload can support a new
+	///         claim no better in the negative than in the positive.
+	///     </para>
+	/// </remarks>
+	private static string DarkEnough(AreaSnapshot snapshot) => snapshot.AutoOnBlockedBy switch
+	{
+		AutoOnBlock.Sleep => "Dark enough now, but the house is asleep — movement will not switch the lights on",
+		AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
+			? $"Dark enough now, but {blocker} is on — movement will not switch the lights on"
+			: "Dark enough now, but something here is on — movement will not switch the lights on",
+		_ => "Dark enough now — movement will switch the lights on"
 	};
 
 	/// <summary>

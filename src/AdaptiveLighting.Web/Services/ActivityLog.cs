@@ -25,6 +25,24 @@ public sealed record ActivityEntry(long Sequence, AreaSnapshot Snapshot)
 }
 
 /// <summary>
+///     The timeline as one consistent read: everything the log was holding, and the sequence it had reached,
+///     as of the same instant.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>The bug this exists to prevent.</b> The page used to read <see cref="ActivityLog.Entries"/> and
+///         then <see cref="ActivityLog.Newest"/>, each correctly locked but locked separately. A report landing
+///         between the two was counted as shown while being absent from the list it was supposedly shown in: the
+///         "new reports" button never appeared for it, and that row stayed invisible until some later report
+///         happened to arrive — which in a quiet house is hours. The two numbers only mean anything together, so
+///         they are handed over together.
+///     </para>
+/// </remarks>
+/// <param name="Entries">Every report the log held, newest first.</param>
+/// <param name="Newest">The sequence of the newest report recorded by that same instant, or zero when none had been.</param>
+public sealed record ActivityTimeline(IReadOnlyList<ActivityEntry> Entries, long Newest);
+
+/// <summary>
 ///     The engine's recent decisions, kept in order and bounded.
 /// </summary>
 /// <remarks>
@@ -67,6 +85,11 @@ public sealed class ActivityLog
 	private long _sequence;
 
 	/// <summary>Every report the log still holds, newest first — the order the page renders them in.</summary>
+	/// <remarks>
+	///     Only ever read on its own. A caller that needs the entries <i>and</i> how far the log has counted must
+	///     take <see cref="Read"/> instead: two separately-locked reads leave a gap a report can land in, and a
+	///     report that lands in that gap is counted as shown while being absent from what was shown.
+	/// </remarks>
 	public IReadOnlyList<ActivityEntry> Entries
 	{
 		get
@@ -102,6 +125,20 @@ public sealed class ActivityLog
 
 	/// <summary>Whether nothing has been recorded yet. Drives the activity page's empty state.</summary>
 	public bool IsEmpty => Count == 0;
+
+	/// <summary>
+	///     The timeline and the count that goes with it, under one lock.
+	/// </summary>
+	/// <remarks>
+	///     The correctness lives here rather than in the page so that a page rewrite cannot quietly undo it. See
+	///     <see cref="ActivityTimeline"/> for the report that used to go missing between the two reads this replaces.
+	/// </remarks>
+	/// <returns>Everything the log holds, newest first, and the sequence it has reached — both as of one instant.</returns>
+	public ActivityTimeline Read()
+	{
+		lock (_gate)
+			return new ActivityTimeline([.. _entries.Reverse()], _sequence);
+	}
 
 	/// <summary>
 	///     Records a report, evicting the oldest once the buffer is full.

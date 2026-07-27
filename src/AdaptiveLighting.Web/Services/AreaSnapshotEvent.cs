@@ -107,6 +107,18 @@ public sealed record AreaSnapshotEvent
 	public string? DarknessDetail { get; init; }
 
 	/// <summary>
+	///     Which gate was holding auto-on off (an <see cref="AutoOnBlock"/> name), or <c>null</c>. Absent from
+	///     events published by builds that predate it, which deserializes as <c>null</c> — and null here means
+	///     "this report cannot say", never "nothing was blocking", which is a claim it has no grounds for.
+	/// </summary>
+	[JsonPropertyName("auto_on_blocked_by")]
+	public string? AutoOnBlockedBy { get; init; }
+
+	/// <summary>The entity id behind an <see cref="AutoOnBlock.EntityOn"/> block, or <c>null</c>.</summary>
+	[JsonPropertyName("auto_on_blocking_entity")]
+	public string? AutoOnBlockingEntity { get; init; }
+
+	/// <summary>
 	///     Rebuilds an <see cref="AreaSnapshot"/> from the wire shape, or returns <c>null</c> when the payload
 	///     does not name an area.
 	/// </summary>
@@ -138,6 +150,11 @@ public sealed record AreaSnapshotEvent
 			NextChangeFrom,
 			HouseModeValue,
 			DarknessDetail,
-			AreaId);
+			AreaId,
+			// Unlike the enums above, an unreadable or absent value degrades to null rather than to the zero
+			// value: AutoOnBlock's zero is "nothing is blocking", and a report that never carried the field
+			// made no such statement.
+			Enum.TryParse(AutoOnBlockedBy, out AutoOnBlock block) ? block : null,
+			AutoOnBlockingEntity);
 	}
 }

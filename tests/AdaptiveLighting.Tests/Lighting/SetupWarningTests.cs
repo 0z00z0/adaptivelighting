@@ -133,6 +133,35 @@ public sealed class SetupWarningTests
 		StringAssert.Contains(bod.Note, "no longer shows both a light and a motion sensor");
 	}
 
+	/// <summary>
+	///     Two rows for one Home Assistant area get their own lines, not two copies of the first row's name.
+	///     <see cref="AreaSetupService.Plan"/> emits one rebuild per row, so resolving a line by first match on the
+	///     area id quoted the wrong room's custom name — in the one dialog whose whole job is telling somebody
+	///     precisely what they are about to lose. The counts were right either way, so it never under-warned; it
+	///     mis-labelled, which is worse in a warning read once and clicked through.
+	/// </summary>
+	[TestMethod]
+	public void Two_Rows_For_One_Area_Are_Each_Named_As_Themselves()
+	{
+		House house = Build("stue");
+		AdaptiveLightingConfig config = Document(
+			new AreaConfig { AreaId = "stue", Name = "Stua nede" },
+			new AreaConfig { AreaId = "stue", Name = "Stua oppe", Lights = ["light.a"] });
+
+		SetupPlan plan = Plan(config, house, "stue");
+
+		Assert.AreEqual(2, plan.Rebuilds.Count, "one rebuild per row, which is what the lines have to line up with");
+
+		IReadOnlyList<SetupWarningLine> lines = SetupWarning.Lines(plan, config);
+
+		Assert.AreEqual(2, lines.Count);
+		Assert.AreEqual("Stua nede", lines[0].Name);
+		Assert.AreEqual("Stua oppe", lines[1].Name, "the second line is the second row, not the first one again");
+		StringAssert.Contains(lines[1].Consequence, "“Stua oppe”",
+			"and the name it quotes as lost is the name that row will actually lose");
+		StringAssert.Contains(lines[1].Consequence, "1 hand-picked entity");
+	}
+
 	// ===================== the rest of the dialog =====================
 
 	/// <summary>New rooms are named, and named as switched off: adding a room nobody switched on cannot hurt.</summary>

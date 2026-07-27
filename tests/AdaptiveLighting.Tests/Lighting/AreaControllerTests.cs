@@ -676,6 +676,84 @@ public sealed class AreaControllerTests
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 30 });
 	}
 
+	// ===================== what the snapshot says about auto-on =====================
+
+	/// <summary>
+	///     A snapshot has to carry whether movement would actually light the area, because two of the refusals
+	///     leave it in <see cref="AreaState.AutoVacant"/> — the same state as an area simply waiting for someone
+	///     to walk in. Read from the gate the engine itself consults, not from a second copy of its rules.
+	/// </summary>
+	[TestMethod]
+	public void A_Sleeping_House_Is_Published_As_The_Reason_Auto_On_Would_Refuse()
+	{
+		Fixture t = Build(s => s.SleepBlocksAutoOn = true);
+
+		t.House.OnNext(House(kind: ModeKind.Sleep));
+		Advance(t, TimeSpan.FromMinutes(1));
+
+		AreaSnapshot latest = t.Publisher.Snapshots[^1];
+
+		Assert.AreEqual(AreaState.AutoVacant, latest.State, "the refusal is invisible in the state, which is the point");
+		Assert.AreEqual(true, latest.IsDark, "and invisible in the darkness verdict too");
+		Assert.AreEqual(AutoOnBlock.Sleep, latest.AutoOnBlockedBy);
+		Assert.IsNull(latest.AutoOnBlockingEntity, "no entity is holding this one off");
+	}
+
+	/// <summary>
+	///     The blocking entity is named, not counted. This is the dusk case: the darkness verdict flips, the tick
+	///     publishes on it, and that report is the one somebody reads when the room stayed dark.
+	/// </summary>
+	[TestMethod]
+	public void A_Blocking_Entity_Is_Published_By_Name()
+	{
+		Fixture t = Build(ignoreWhenOn: [Blocker]);
+
+		t.Ha.SetState(Lux, "500");
+		Advance(t, TimeSpan.FromMinutes(1));
+
+		t.Ha.SetState(Blocker, "on");
+		t.Ha.SetState(Lux, "5");
+		Advance(t, TimeSpan.FromMinutes(1));
+
+		AreaSnapshot dusk = t.Publisher.Snapshots[^1];
+
+		Assert.AreEqual(AreaState.AutoVacant, dusk.State);
+		Assert.AreEqual(true, dusk.IsDark, "dusk: the verdict just flipped, which is why this report exists");
+		Assert.AreEqual(AutoOnBlock.EntityOn, dusk.AutoOnBlockedBy);
+		Assert.AreEqual(Blocker, dusk.AutoOnBlockingEntity);
+	}
+
+	/// <summary>
+	///     An area with nothing in the way says so, so the field is a verdict rather than a flag that is only ever
+	///     set when something is wrong.
+	/// </summary>
+	[TestMethod]
+	public void An_Area_With_Nothing_In_The_Way_Publishes_An_Open_Gate()
+	{
+		Fixture t = Build();
+
+		Assert.AreEqual(AutoOnBlock.None, t.Publisher.Snapshots[0].AutoOnBlockedBy);
+	}
+
+	/// <summary>
+	///     The gate the snapshot reports is the gate that decides, not a second reading of the same rules: an area
+	///     the snapshot calls blocked is an area motion really does leave dark.
+	/// </summary>
+	[TestMethod]
+	public void What_The_Snapshot_Reports_Is_What_Motion_Actually_Does()
+	{
+		Fixture t = Build(s => s.SleepBlocksAutoOn = true);
+		t.House.OnNext(House(kind: ModeKind.Sleep));
+		Advance(t, TimeSpan.FromMinutes(1));
+
+		Assert.AreNotEqual(AutoOnBlock.None, t.Publisher.Snapshots[^1].AutoOnBlockedBy);
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State, "which is exactly what the report promised");
+		Assert.AreEqual(0, t.Actuator.Applied.Count);
+	}
+
 	// ===================== circadian tick =====================
 
 	[TestMethod]

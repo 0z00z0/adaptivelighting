@@ -129,6 +129,63 @@ public sealed class HaStatePublisherTests
 		Assert.IsNull(rebuilt.AreaId, "absent means null, not a broken payload");
 	}
 
+	// ===================== the auto-on gate =====================
+
+	/// <summary>
+	///     The gate verdict and the entity behind it both have to survive the wire, or the activity page is back
+	///     to guessing from the state alone — which is what made it promise lights that never came on.
+	/// </summary>
+	[TestMethod]
+	public void The_Auto_On_Gate_Survives_The_Serialize_Event_ToSnapshot_Round_Trip()
+	{
+		FakeHaContext ha = new();
+		HaStatePublisher publisher = new(ha, NullLogger.Instance);
+
+		AreaSnapshot snapshot = new(
+			"Stue", AreaState.AutoVacant, TransitionReason.CircadianTick, HouseMode.Home,
+			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: null, ColorTempKelvin: null,
+			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
+			NextChangeFrom: null, HouseModeValue: null, DarknessDetail: "lux 12, dark below 40", AreaId: "stue",
+			AutoOnBlockedBy: AutoOnBlock.EntityOn, AutoOnBlockingEntity: "media_player.stue_tv");
+
+		publisher.Publish(snapshot);
+
+		string json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(json)!.ToSnapshot();
+
+		Assert.IsNotNull(rebuilt);
+		Assert.AreEqual(AutoOnBlock.EntityOn, rebuilt!.AutoOnBlockedBy);
+		Assert.AreEqual("media_player.stue_tv", rebuilt.AutoOnBlockingEntity);
+	}
+
+	/// <summary>
+	///     Additive, exactly as <c>area_id</c> was. An event from a build that never carried the gate must still
+	///     rebuild, with a null verdict — because null is "this report cannot say", and the zero value would be
+	///     the claim that nothing was blocking.
+	/// </summary>
+	[TestMethod]
+	public void An_Event_From_A_Build_Without_The_Auto_On_Gate_Rebuilds_With_No_Verdict()
+	{
+		const string OldEvent =
+			"""
+			{
+			  "area": "Stue",
+			  "state": "AutoVacant",
+			  "reason": "CircadianTick",
+			  "mode": "Home",
+			  "kill_switch_active": false,
+			  "is_dark": true,
+			  "timestamp": "1970-01-01T00:00:00+00:00"
+			}
+			""";
+
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(OldEvent)!.ToSnapshot();
+
+		Assert.IsNotNull(rebuilt);
+		Assert.IsNull(rebuilt!.AutoOnBlockedBy, "absent means the report cannot say, not that nothing blocked");
+		Assert.IsNull(rebuilt.AutoOnBlockingEntity);
+	}
+
 	/// <summary>An area configured with explicit entity lists and no area id publishes none, and that is fine.</summary>
 	[TestMethod]
 	public void An_Area_With_No_Registry_Area_Publishes_A_Null_Id()
