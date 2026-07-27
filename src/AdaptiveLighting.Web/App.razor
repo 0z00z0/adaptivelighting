@@ -3,7 +3,7 @@
 	the program.cs call to MapRazorComponents<App>() — a host adopts this by copying that call.
 *@
 @* No hard-coded theme: app.css defines a dark palette and a light override behind
-   prefers-color-scheme, so the page follows the device. *@
+   prefers-color-scheme, so a browser that has chosen nothing still follows the device. *@
 <!DOCTYPE html>
 <html lang="en">
 
@@ -14,6 +14,12 @@
 	<title>Adaptive lighting</title>
 	<link rel="stylesheet" href="_content/AdaptiveLighting.Web/app.css" />
 	<link rel="icon" type="image/svg+xml" href="_content/AdaptiveLighting.Web/favicon.svg" />
+	@*
+		Blocking, in <head>, above the body: the server paints this page, so a theme read after render arrives
+		one repaint too late. This puts data-theme on <html> before the body is parsed. data-themes is the
+		allow-list, so an id from a withdrawn theme falls back to the device rather than to no palette at all.
+	*@
+	<script src="_content/AdaptiveLighting.Web/theme.js" data-themes="@AppThemes.DataThemeIds"></script>
 	<HeadOutlet @rendermode="InteractiveServer" />
 </head>
 

@@ -1,0 +1,61 @@
+@inject IJSRuntime Js
+
+@*
+	Which palette this browser paints in.
+
+	It lives on the top bar rather than in the House tab because it is not house configuration: it is stored in
+	this browser, it takes effect on the tap, and nothing about it reaches the YAML. Every other control on the
+	House tab is a document edit sitting behind a save bar, and a control that applies at once among controls
+	that apply on save is the worst kind of ambiguity to introduce — "a promise about saving is the worst kind
+	of thing to be wrong about". The bar also puts it on every page, including the board, which is the page
+	somebody would be looking at while deciding whether they like a theme.
+
+	The list, and what an unrecognised stored id falls back to, are AppThemes' job — this component renders the
+	list and hands the chosen id to the browser.
+*@
+<label class="theme-picker">
+	<span class="theme-picker-label">Theme</span>
+	<select class="theme-select" @bind:get="_selected" @bind:set="OnPicked">
+		@foreach (AppTheme theme in AppThemes.All)
+		{
+			<option value="@theme.Id">@theme.Name</option>
+		}
+	</select>
+</label>
+
+@code {
+	// The default, and what the server necessarily renders: the first paint happens before any circuit exists,
+	// so the server cannot know what this browser stored. theme.js has already painted the page correctly by
+	// then; the only thing still to correct is which option this select shows as chosen, which is why the
+	// round trip below is worth its one interop call and a cookie is not worth the request weight.
+	private string _selected = AppThemes.System.Id;
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender)
+		{
+			return;
+		}
+
+		string? stored = await Js.InvokeAsync<string?>("adaptiveLightingTheme.stored");
+		AppTheme theme = AppThemes.Resolve(stored);
+
+		if (theme.Id == _selected)
+		{
+			return;
+		}
+
+		_selected = theme.Id;
+		StateHasChanged();
+	}
+
+	// Resolved rather than trusted, so the id written to storage is always one this build ships — the same
+	// rule the head script applies, from the same list.
+	private async Task OnPicked(string picked)
+	{
+		AppTheme theme = AppThemes.Resolve(picked);
+		_selected = theme.Id;
+
+		await Js.InvokeVoidAsync("adaptiveLightingTheme.apply", theme.Id);
+	}
+}
