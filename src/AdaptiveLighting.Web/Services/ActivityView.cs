@@ -17,6 +17,75 @@ namespace AdaptiveLighting.Web.Services;
 public sealed record ActivityLine(string What, string? Why);
 
 /// <summary>
+///     What a row is about, as the activity page's filter chips divide it.
+/// </summary>
+/// <remarks>
+///     <para>
+///         Flags, because a report is regularly about more than one thing: movement in a room somebody switched
+///         off by hand is both movement and a refusal to act, and the quiet re-check that finds a room dark and
+///         blocked is both the lux reading and the reason the light will not come on. A report that could only
+///         hold one category would have to pick, and every pick would hide it from the chip somebody was using.
+///     </para>
+///     <para>
+///         <b>A row's categories follow the words the row shows.</b> The filter hides rows, and a row is what it
+///         says — so the master switch, which replaces a row's wording outright in <see cref="ActivityView.Describe"/>,
+///         replaces its categories too. The alternative is a chip that promises a kind of row and then shows one
+///         that says something else entirely.
+///     </para>
+/// </remarks>
+[Flags]
+public enum ActivityCategory
+{
+	/// <summary>No category. Never a report's answer — see <see cref="ActivityView.Categorise"/>.</summary>
+	None = 0,
+
+	/// <summary>A motion sensor reported.</summary>
+	Movement = 1,
+
+	/// <summary>The engine commanded these lights: on, the circadian re-aim, the warning dim, or off.</summary>
+	LightChange = 2,
+
+	/// <summary>
+	///     The row states where the room stands against the level it counts as dark, with the reading behind it.
+	/// </summary>
+	Illumination = 4,
+
+	/// <summary>Somebody set or switched these lights themselves, or a hand-set decision ran its course.</summary>
+	HandChange = 8,
+
+	/// <summary>The engine considered lighting the room and did not — and the row says why.</summary>
+	Declined = 16,
+
+	/// <summary>A mode switch, the house emptying or filling, or the master switch.</summary>
+	House = 32,
+
+	/// <summary>Housekeeping: rechecks, start-up, and a room switched on or off for automatic lighting.</summary>
+	Background = 64
+}
+
+/// <summary>
+///     One filter chip: the category, what it is called, how many of the reports on offer it holds, and whether
+///     it is currently letting them through.
+/// </summary>
+/// <remarks>
+///     The count is over the reports the <i>room</i> filter left, not over the whole buffer, because that is what
+///     makes the two filters legible together: choose one room and the chips say what that room has done. A zero
+///     is worth rendering rather than hiding — "this room has no illumination rows" is an answer, and a chip that
+///     disappeared would leave somebody wondering where the category went.
+/// </remarks>
+/// <param name="Category">Which category the chip switches.</param>
+/// <param name="Label">Its name on the chip.</param>
+/// <param name="Title">One line on what falls into it, for the chip's hover explanation.</param>
+/// <param name="Count">How many of the reports on offer it holds.</param>
+/// <param name="IsOn">Whether it is letting them through.</param>
+public sealed record ActivityFilterChip(
+	ActivityCategory Category,
+	string Label,
+	string Title,
+	int Count,
+	bool IsOn);
+
+/// <summary>
 ///     A day's worth of the timeline, under the heading the page shows.
 /// </summary>
 /// <param name="Day">The local date the entries fell on.</param>
@@ -45,6 +114,57 @@ public static class ActivityView
 {
 	/// <summary>What the room filter is set to when it is not filtering.</summary>
 	public const string AllRooms = "";
+
+	/// <summary>Every category — what <i>show everything</i> puts the chips back to.</summary>
+	public const ActivityCategory AllCategories =
+		ActivityCategory.Movement
+		| ActivityCategory.LightChange
+		| ActivityCategory.Illumination
+		| ActivityCategory.HandChange
+		| ActivityCategory.Declined
+		| ActivityCategory.House
+		| ActivityCategory.Background;
+
+	/// <summary>
+	///     What the page opens with: everything the engine decided, and none of the housekeeping.
+	/// </summary>
+	/// <remarks>
+	///     Background is the only category that starts off. It is by a long way the highest volume — every room
+	///     re-checks itself on every tick — and by a long way the lowest signal, and a timeline that opens on a
+	///     screenful of "Rechecked the room" is one nobody scans a second time. Every other category is a decision
+	///     the engine made or refused to make, and a page about decisions that opened with some of them switched
+	///     off would be answering a question nobody asked it.
+	/// </remarks>
+	public const ActivityCategory DefaultCategories = AllCategories & ~ActivityCategory.Background;
+
+	/// <summary>A category's fixed half: what it is called, and one line on what falls into it.</summary>
+	private sealed record CategoryName(ActivityCategory Category, string Label, string Title);
+
+	/// <summary>
+	///     The chips, in the order they are shown.
+	/// </summary>
+	/// <remarks>
+	///     The four the owner asked for lead, then the two that answer "why did nothing happen", then the house,
+	///     then the housekeeping — which is last because it is the one that starts switched off, and a control
+	///     that is off belongs at the end of a row rather than as a gap in the middle of one.
+	/// </remarks>
+	private static readonly CategoryName[] Catalogue =
+	[
+		new(ActivityCategory.Movement, "Movement", "A motion sensor reported."),
+		new(ActivityCategory.LightChange, "Light change",
+			"The engine commanded the lights: on, retuned to the time of day, dimmed as a warning, or off."),
+		new(ActivityCategory.Illumination, "Illumination change",
+			"How dark the room was measured to be, against the level it counts as dark."),
+		new(ActivityCategory.HandChange, "Hand changes",
+			"Somebody set or switched the lights themselves, and what happened when that ran its course."),
+		new(ActivityCategory.Declined, "Nothing happened",
+			"The engine could have lit the room and did not — with the reason."),
+		new(ActivityCategory.House, "House & modes",
+			"Mode changes, the house emptying and filling, and the master switch."),
+		new(ActivityCategory.Background, "Background tasks",
+			"Rechecks, start-up, and rooms switched on or off for automatic lighting. Starts hidden: it is the "
+			+ "highest volume and the lowest signal.")
+	];
 
 	/// <summary>
 	///     Puts a report into words.
@@ -145,6 +265,247 @@ public static class ActivityView
 				.OrderBy(name => name, StringComparer.CurrentCulture)
 		];
 	}
+
+	// ===================== the category filter =====================
+
+	/// <summary>
+	///     What a report is about, as the chips divide it.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Derived from <see cref="TransitionReason"/> and <see cref="AreaState"/> — the two things the engine
+	///         publishes about why it moved — and written to track <see cref="Describe"/> branch for branch, so a
+	///         chip and the row it lets through can never be about different things. <b>Every pair lands in at
+	///         least one category, and a test walks all of them:</b> a report no chip can reach is a report the
+	///         page has hidden, which on the one page that exists to explain a missing light is the same failure
+	///         as losing it.
+	///     </para>
+	///     <para>
+	///         There is deliberately no catch-all. A reason added to the enum later has to be placed here by hand,
+	///         and until it is, the exhaustive test fails rather than the page quietly swallowing its rows.
+	///     </para>
+	///     <para>
+	///         Categories overlap on purpose. A room too bright to light is both the lux reading somebody came for
+	///         and the reason nothing happened, and each chip has to be complete on its own: a person who ticks
+	///         only <i>Nothing happened</i> is asking for every refusal, not for the ones that no other chip
+	///         happened to claim.
+	///     </para>
+	/// </remarks>
+	/// <param name="snapshot">The report to place.</param>
+	/// <returns>Every category it belongs to. Never <see cref="ActivityCategory.None"/>.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is <c>null</c>.</exception>
+	public static ActivityCategory Categorise(AreaSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		// The master switch replaces the row's words outright, so it replaces its categories too: the row says
+		// "Paused by the master switch" and nothing about movement, lights or lux, and a chip that offered it as
+		// one of those would be pointing at a sentence that does not mention them.
+		if (snapshot.KillSwitchActive)
+			return ActivityCategory.House;
+
+		ActivityCategory categories = ActivityCategory.None;
+
+		if (snapshot.Reason is TransitionReason.Motion)
+			categories |= ActivityCategory.Movement;
+
+		if (CommandedTheLights(snapshot))
+			categories |= ActivityCategory.LightChange;
+
+		if (NamesTheDarknessVerdict(snapshot))
+			categories |= ActivityCategory.Illumination;
+
+		if (snapshot.Reason is TransitionReason.ManualOn
+			or TransitionReason.ManualOff
+			or TransitionReason.OverrideExpired
+			or TransitionReason.SuppressionLifted)
+			categories |= ActivityCategory.HandChange;
+
+		if (WasDeclined(snapshot))
+			categories |= ActivityCategory.Declined;
+
+		if (snapshot.Reason is TransitionReason.HouseModeChanged
+			or TransitionReason.EveryoneLeft
+			or TransitionReason.FirstPersonArrived
+			or TransitionReason.SceneHold)
+			categories |= ActivityCategory.House;
+
+		// Start-up and a room's own switch are housekeeping outright. A tick is housekeeping only when nothing
+		// above wanted it: the same reason carries the circadian re-aim and the dusk verdict, and those are the
+		// two rows this page exists for — miscounting either as background would hide them by default.
+		if (snapshot.Reason is TransitionReason.Startup
+			or TransitionReason.AdoptedAtStartup
+			or TransitionReason.EnablementChanged
+			|| (snapshot.Reason is TransitionReason.CircadianTick && categories == ActivityCategory.None))
+			categories |= ActivityCategory.Background;
+
+		return categories;
+	}
+
+	/// <summary>
+	///     Only the reports in <paramref name="categories"/>, in the order they were given.
+	/// </summary>
+	/// <remarks>
+	///     Applied to a list already read out of <see cref="ActivityLog"/>, never inside its lock. The log hands
+	///     over the entries and the sequence together for a reason, and a filtered read would have to choose one
+	///     of the two to be right about.
+	/// </remarks>
+	/// <param name="entries">The entries to filter.</param>
+	/// <param name="categories">The categories that are switched on.</param>
+	/// <returns>The matching entries, in the order they were given.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="entries"/> is <c>null</c>.</exception>
+	public static IReadOnlyList<ActivityEntry> InCategories(IEnumerable<ActivityEntry> entries, ActivityCategory categories)
+	{
+		ArgumentNullException.ThrowIfNull(entries);
+
+		if (categories == AllCategories)
+			return [.. entries];
+
+		return [.. entries.Where(entry => (Categorise(entry.Snapshot) & categories) != ActivityCategory.None)];
+	}
+
+	/// <summary>
+	///     The chips the page draws: every category, its count within what is on offer, and whether it is on.
+	/// </summary>
+	/// <remarks>
+	///     Every category is always offered, including the ones holding nothing. A chip that vanished when its
+	///     count reached zero would take the reader's map of the page with it, and "this room has never reported
+	///     a hand change" is an answer worth being able to read.
+	/// </remarks>
+	/// <param name="entries">The reports on offer — the ones the room filter left, so the counts describe the room.</param>
+	/// <param name="chosen">The categories that are switched on.</param>
+	/// <returns>One chip per category, in display order.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="entries"/> is <c>null</c>.</exception>
+	public static IReadOnlyList<ActivityFilterChip> Chips(IEnumerable<ActivityEntry> entries, ActivityCategory chosen)
+	{
+		ArgumentNullException.ThrowIfNull(entries);
+
+		int[] counts = new int[Catalogue.Length];
+
+		foreach (ActivityEntry entry in entries)
+		{
+			ActivityCategory found = Categorise(entry.Snapshot);
+
+			for (int index = 0; index < Catalogue.Length; index++)
+			{
+				if ((found & Catalogue[index].Category) != ActivityCategory.None)
+					counts[index]++;
+			}
+		}
+
+		return
+		[
+			.. Catalogue.Select((name, index) => new ActivityFilterChip(
+				name.Category,
+				name.Label,
+				name.Title,
+				counts[index],
+				(chosen & name.Category) != ActivityCategory.None))
+		];
+	}
+
+	/// <summary>
+	///     What the filters are keeping off the page, or <c>null</c> when they are keeping nothing off it.
+	/// </summary>
+	/// <remarks>
+	///     A filtered timeline that looks like an empty one is the same failure as a report the log lost: somebody
+	///     reads "nothing" and stops looking. So the page says how many reports are behind the filters and which
+	///     filter is holding them, and offers the one tap back. <c>null</c> for "nothing hidden" keeps that
+	///     decision here rather than as a condition in the markup that could disagree with the wording beside it.
+	/// </remarks>
+	/// <param name="held">How many reports the timeline is holding.</param>
+	/// <param name="shown">How many of them survived both filters.</param>
+	/// <param name="room">The chosen room, or <c>null</c>/empty for every room.</param>
+	/// <param name="categories">The categories that are switched on.</param>
+	public static string? HiddenNote(int held, int shown, string? room, ActivityCategory categories)
+	{
+		int hidden = held - shown;
+
+		if (hidden <= 0)
+			return null;
+
+		string count = hidden == 1 ? "1 report is hidden" : $"{hidden} reports are hidden";
+		bool byRoom = !string.IsNullOrWhiteSpace(room);
+		bool byCategory = categories != AllCategories;
+
+		return (byRoom, byCategory) switch
+		{
+			(true, true) => $"{count} — they came from other rooms, or fall into categories that are switched off.",
+			(true, false) => $"{count} — they came from other rooms.",
+			_ => $"{count} — they fall into categories that are switched off."
+		};
+	}
+
+	/// <summary>
+	///     Whether this report is the engine's own command reaching the lights.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Read off the reason and the state rather than off <see cref="AreaSnapshot.LastCommandAt"/>. That
+	///         timestamp is set an instant before the snapshot is built, so on a real clock the two differ by
+	///         microseconds and any threshold comparing them would be a guess with a number in it.
+	///     </para>
+	///     <para>
+	///         The leaving sweep is the one command deliberately left out. An away scene, or the room's own
+	///         opt-out, holds it, and the report does not say which happened — so it stays a house event rather
+	///         than a claim about lights that may never have moved.
+	///     </para>
+	/// </remarks>
+	private static bool CommandedTheLights(AreaSnapshot snapshot) => snapshot.Reason switch
+	{
+		// The vacancy pair is nothing but commands: the warning dim, and then the lights out.
+		TransitionReason.VacancyTimeout or TransitionReason.PreOffElapsed => true,
+
+		// An override running out hands the room back by commanding it — retuned if somebody is still in it,
+		// off if nobody is.
+		TransitionReason.OverrideExpired => true,
+
+		// Start-up takes the room as it found it, a scene hold is the engine standing back, a hand change is
+		// somebody else's command, a suppression lifting only stops ignoring movement, and switching a room on
+		// or off changes what the engine may do rather than what the lights are doing.
+		TransitionReason.Startup
+			or TransitionReason.AdoptedAtStartup
+			or TransitionReason.SceneHold
+			or TransitionReason.ManualOn
+			or TransitionReason.ManualOff
+			or TransitionReason.SuppressionLifted
+			or TransitionReason.EnablementChanged
+			or TransitionReason.EveryoneLeft => false,
+
+		// What is left — movement, the tick, a mode switch, the first arrival — commands exactly where it left
+		// the room lit and aimed, which is what AutoActive means and what the row then says in words.
+		_ => snapshot.State is AreaState.AutoActive
+	};
+
+	/// <summary>
+	///     Whether the row states where the room stands against the level it counts as dark.
+	/// </summary>
+	/// <remarks>
+	///     The two places <see cref="Describe"/> says it: as the headline, when a quiet re-check found the verdict
+	///     had moved, and under the headline, when a vacant room is too bright to light. A dark vacant room that
+	///     reached that state some other way says nothing about darkness, and must not be offered as though it
+	///     had — this is the chip somebody opens holding "why did the hall light not come on", and it has to be
+	///     the rows that answer it rather than the rows that merely could have.
+	/// </remarks>
+	private static bool NamesTheDarknessVerdict(AreaSnapshot snapshot) =>
+		snapshot.State is AreaState.AutoVacant
+		&& (snapshot.IsDark is false
+			|| (snapshot.IsDark is true && snapshot.Reason is TransitionReason.CircadianTick));
+
+	/// <summary>
+	///     Whether the engine could have lit the room and did not.
+	/// </summary>
+	/// <remarks>
+	///     Three refusals, and the row names all three: movement that lit nothing because somebody's own decision
+	///     is standing; a room dark and waiting but held off by a sleeping house or a named entity, which
+	///     <see cref="BoardView.IsBlockedFromLighting"/> decides for the board as well so the two surfaces cannot
+	///     disagree; and a room simply too bright. A room whose darkness has never been checked is not a refusal —
+	///     nothing has been decided there yet, and saying otherwise would invent a verdict.
+	/// </remarks>
+	private static bool WasDeclined(AreaSnapshot snapshot) =>
+		(snapshot.Reason is TransitionReason.Motion && snapshot.State is not AreaState.AutoActive)
+		|| BoardView.IsBlockedFromLighting(snapshot)
+		|| (snapshot.State is AreaState.AutoVacant && snapshot.IsDark is false);
 
 	/// <summary>
 	///     Cuts the timeline into days, keeping the order it was given.
