@@ -225,9 +225,121 @@
 	color-scheme: light;
 }
 
+/* ============================================================================
+   THE 0z0 TECH THEME  —  :root[data-theme="0z0"]
+   The ZeroZero Software design language (0z0-design/design-language.md) applied
+   to this UI. A third choice beside light and dark; nothing above this line
+   changed, so a browser that has chosen nothing still follows its device.
+
+   THE SPLIT THE LANGUAGE ITSELF DRAWS. design-language.md keeps its palette for
+   "anything that reads as ZeroZero Software" and lets every app "introduce its
+   own accent colours for PRODUCT-specific meaning" — the rule ChargeKeeper
+   already ships against (history, 2026-07-15: studio palette on the chrome,
+   its own functional battery-fill palette kept). So:
+
+     CHROME     — surfaces, lines, text, the one accent — is the studio palette
+                  verbatim. bg/bg2/bg3/border/text are its own hex values, and
+                  --accent is teal #27e0c8, which the palette table names the
+                  primary accent and which ChargeKeeper's chrome already took.
+     STATE      — machine / human / warn / ok / bad / idle / now / info — is
+                  product meaning. Three come straight from the studio palette
+                  where it names the job (amber IS "warnings"; purple IS the
+                  violet --human has to be; blue is the engine, and the board's
+                  own comment records that --machine used to be one). The rest
+                  are derived, and marked below.
+
+   The four rules still hold. One accent, and no state borrows it — which is
+   why --now cannot stay a teal here and is derived instead. Flat: only
+   --shadow-float floats. The radius and stroke scales are untouched.
+
+   MONOSPACE THROUGHOUT is the one token outside the palette this block sets.
+   The language calls it "a deliberate, load-bearing choice ... not just a
+   code-block convention", covering "headings, navigation and body copy", so a
+   0z0 theme in a proportional face would be a recolour rather than the
+   language. --font-sans becomes the existing --mono stack, which already lists
+   Cascadia Mono first and degrades to ui-monospace where it is not installed —
+   the language's own zero-dependency rule for its typeface on the web.
+   ============================================================================ */
+:root[data-theme="0z0"] {
+	/* ---- surfaces. bg / bg2 / bg3 verbatim from the palette table. --chip,
+	   --lane and --glow-track are DERIVED: the studio has three surfaces and
+	   this UI needs six, so the two extra fills continue the same blue-black
+	   ladder and --lane steps below --panel, which is what a track does. ---- */
+	--bg: #0a0f17;
+	--panel: #0e1620;
+	--panel-2: #101a26;
+	--chip: #13202f;
+	--lane: #0a121c;
+	--glow-track: #17233a;
+
+	/* --line is the palette's own `border`. --grid is DERIVED one step quieter,
+	   because the two weights are load-bearing and the studio names one. */
+	--line: #1a2840;
+	--grid: #152034;
+
+	/* --text verbatim. --muted is the palette's #64788f LIFTED one step: at
+	   3.96:1 on --panel it is below AA for the 11-12.5px secondary text this UI
+	   spends it on, and legibility is not negotiable. Same hue, same chroma,
+	   5.0:1 on --panel. The stated value is not wasted — it becomes --idle,
+	   whose shipped contrast band is 3.4-4.1:1 in both existing themes. */
+	--text: #dde6f4;
+	--muted: #7789a3;
+	--accent-ink: #0a0f17;
+
+	/* ---- the one accent: the palette's teal, "Primary accent". ---- */
+	--accent: #27e0c8;
+
+	/* ---- semantic state ----
+	   Studio: --machine blue, --human purple (the violet the rule demands),
+	   --warn amber (the palette gives amber "warnings" outright).
+	   DERIVED: --ok, --bad, --now, --info. Taken together the eight complete
+	   the studio's five hues into a terminal palette — red, green, yellow,
+	   blue, magenta, cyan — which is the language's own voice (CLI tokens,
+	   prompt lines, a blinking cursor) rather than an invention beside it.
+	   --now is magenta because every other bright hue is spoken for and the
+	   live edge must never be mistaken for the accent. --info is deliberately
+	   the palest rung of the slate ladder (--idle < --muted < --info): it is a
+	   remark, not a state, and it sits beside --machine on the room page. */
+	--machine: #11a9d6;
+	--machine-bg: #102a3f;
+	--kelvin-weight: 100%;
+	--kelvin-shade: transparent;
+	--human: #7b8cff;
+	--human-bg: #221f4a;
+	--warn: #d8a657;
+	--warn-bg: #33280f;
+	--ok: #54cc7a;
+	--ok-bg: #0f2a1c;
+	--bad: #f06a5a;
+	--bad-bg: #3a1a1c;
+	--idle: #64788f;
+	--idle-bg: #111a26;
+	--now: #e46ad6;
+	--info: #9db3cf;
+
+	--icon-accent: var(--accent);
+
+	/* DERIVED. The chart's three bands are real times of day, so they keep the
+	   existing themes' shape — deep-cool night, indigo twilight, warm day — cut
+	   from the studio's indigo and amber and darkened to sit on this ground. */
+	--daylight-night: #101a30;
+	--daylight-twilight: #2f4788;
+	--daylight-day: #8a6a30;
+	--daylight-halo: rgba(5, 8, 14, 0.75);
+
+	--shadow-float: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(2, 5, 10, 0.55);
+
+	/* See the header: the language's monospace-throughout rule, not a per-theme
+	   type experiment. --mono is defined on :root below and resolves there. */
+	--font-sans: var(--mono);
+
+	color-scheme: dark;
+}
+
 /*
    Theme-independent tokens. Shape, rhythm and type do not change with the lights, so they are stated once —
    and stating them once is what stops a page inventing a 9px radius or a 13px gap of its own.
+   (The 0z0 theme overrides --font-sans, on the record above: monospace is that language, not a decoration.)
 */
 :root {
 	/* ---- the geometric radius scale ---- */
@@ -5066,4 +5178,99 @@ h1[tabindex="-1"]:focus {
 .thread:hover,
 .thread:focus-visible {
 	text-decoration: none;
+}
+
+
+/* ============================================================================
+   THE THEME PICKER  —  Components/ThemePicker.razor
+   Which palette this browser paints in, on the top bar because it is a per-
+   browser choice about the chrome and not a line of house configuration — see
+   the component's own note for why it is not on the House tab.
+
+   It costs the bar as little as a control can: no panel, no border of its own
+   until it is hovered or focused, and a label at the section-label size the
+   rest of the UI already uses for "this is what the thing beside me is". Rule
+   3 holds — the accent appears only on focus, where it means "you are editing
+   this", the same as every other control.
+   ============================================================================ */
+
+.theme-picker {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	margin-left: auto;    /* the far end of the bar: chrome, not navigation */
+}
+
+.theme-picker-label {
+	color: var(--muted);
+	font-size: var(--text-xs);
+	font-weight: 600;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+}
+
+/* Transparent until touched, so three tabs and a mark do not become three tabs,
+   a mark and a box. The border appears on hover and turns accent on focus. */
+.theme-select {
+	background: none;
+	border: 1px solid transparent;
+	border-radius: var(--radius-control);
+	padding: 0.2rem 0.35rem;
+	color: var(--text);
+	font: inherit;
+	font-size: var(--text-md);
+	line-height: 1.3;
+	cursor: pointer;
+}
+
+.theme-select:hover {
+	border-color: var(--line);
+}
+
+.theme-select:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+/* An open native dropdown paints its own list with the UA's colours, and a
+   transparent background would leave the closed control's options unreadable on
+   some engines. The list gets the panel it sits on. */
+.theme-select option {
+	background: var(--panel);
+	color: var(--text);
+}
+
+/*
+   Phones. The bar wraps and .nav takes a row of its own, which would push the
+   picker onto a third row and spend about a sixth of the board's height on
+   chrome. Ordering puts it beside the brand on the first row instead; the DOM
+   order stays brand, navigation, picker, which is the order to read them in.
+*/
+@media (max-width: 560px) {
+	.theme-picker {
+		order: 2;
+	}
+
+	.nav {
+		order: 3;
+	}
+
+	.theme-picker-label {
+		display: none;    /* the option's own words say what it is */
+	}
+
+	.theme-select {
+		border-color: var(--line);    /* nothing else on that row is pressable, so say that this is */
+		padding: 0.35rem 0.4rem;
+	}
+
+	/*
+	   The word beside the mark goes, so the bar stays two rows. The name and the picker together are wider
+	   than a 390px screen, and a third row costs about 34px of every page below it — on the board that is
+	   most of a lane. The mark keeps the product's identity, carries "Adaptive lighting" as its accessible
+	   label, and the page's own heading is the next thing down. Measured at 390x844.
+	*/
+	.brand-text {
+		display: none;
+	}
 }

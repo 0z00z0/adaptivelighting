@@ -11,6 +11,20 @@ under one version, because they are compiled against each other.
 
 ### Added
 
+- **A theme picker**, at the right-hand end of the top bar, with a third palette beside light and dark.
+  - *Follow the system* is the default and is what every browser did before this shipped: no
+    `data-theme` attribute, `prefers-color-scheme` answers, nothing changes for anyone who does not
+    open the dropdown.
+  - **0z0 tech** is the new palette — the ZeroZero Software design language: blue-black surfaces, a
+    teal accent, and monospace type throughout, which that language calls a load-bearing choice rather
+    than a code-block convention. State colours are the app's own, as that language's product-colour
+    rule expects.
+  - The choice is kept in this browser, not in the configuration document, so two people reading the
+    same house can read it in different colours and neither has anything to save.
+  - No flash on reload. A blocking script in the document head puts `data-theme` on `<html>` before the
+    body is parsed, which a Blazor Server app needs: the server paints the first frame, so a preference
+    read after render arrives one repaint too late.
+
 - **An activity page**, at *Activity* in the top bar: the engine's recent decisions as a timeline,
   newest first, grouped by day, with the room and the time down the left. Each row says what happened
   and — where the engine declined to act — why, in the darkness gate's own words: *Too bright to switch

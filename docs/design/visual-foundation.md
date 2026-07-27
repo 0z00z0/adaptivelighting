@@ -29,8 +29,14 @@ Everything below follows from these. They are also written at the top of `app.cs
 
 ## 2. The tokens
 
-Every token is defined in **both** themes. `prefers-color-scheme` is the default; `:root[data-theme="light"]`
-and `:root[data-theme="dark"]` force one and outrank it.
+Every token is defined in **every** theme — there are three. `prefers-color-scheme` is the default;
+`:root[data-theme="light"]`, `:root[data-theme="dark"]` and `:root[data-theme="0z0"]` force one and outrank it.
+**A new theme defines the whole table below, not the tokens that seem to matter**: anything left out falls
+through to the bare `:root` block, which is the dark palette, and the omission shows up on one page, in one
+state, on somebody else's screen.
+
+The theme is chosen in the top bar and kept in this browser (`localStorage`, key `adaptive-lighting-theme`).
+The list, and what an unrecognised stored id falls back to, are `AppThemes` in C# — see §8.
 
 ### Surfaces
 
@@ -408,4 +414,46 @@ lookup, and why the curve is a path builder. The pattern to follow is `AreaView`
 Current cover: `TokenFormatTests` (how values are written and carried, including a culture test —
 `nb-NO` writes decimals with a comma, and a half carried as "0,5" would parse back as **five**),
 `AreaSentencesTests` (the §3 table, provenance, the flags sentence), `SentenceBuilderTests`,
-`StateGlyphTests` (that no two states are drawn the same way), `CurvePathTests`.
+`StateGlyphTests` (that no two states are drawn the same way), `CurvePathTests`, `AppThemeTests`.
+
+---
+
+## 8. The themes, and the picker
+
+`Services/AppTheme.cs` holds the list — `system` · `light` · `dark` · `0z0` — and `AppThemes.Resolve` turns a
+stored id back into one of them. **An id is a storage key, not a word: renaming one drops every browser that
+had chosen it.** An id this build no longer ships resolves to `system`, because `data-theme="solarized"` would
+match no block at all and hand a light desk a dark page.
+
+**The picker is on the top bar, not the House tab.** It is a per-browser preference that applies on the tap and
+never reaches the YAML; the House tab's controls are document edits behind a save bar, and mixing the two is a
+promise about saving that would be wrong.
+
+**The first paint is the server's.** `wwwroot/theme.js` is loaded from `<head>` with no `defer`, so `data-theme`
+is on `<html>` before the body is parsed; a preference read in `OnAfterRenderAsync` arrives one repaint late and
+the page visibly changes colour. Its allow-list arrives on the script tag as `data-themes`, rendered from
+`AppThemes.DataThemeIds`, so the ids are defined once.
+
+### The 0z0 theme, and what in it was derived
+
+Its source is `0z0-design/design-language.md`. That document keeps its palette for "anything that reads as
+ZeroZero Software" and lets an app "introduce its own accent colours for **product**-specific meaning", which is
+the split this theme follows: **chrome** is the studio palette verbatim (`bg` `bg2` `bg3` `border` `text`, and
+teal `#27e0c8`, which the palette names the primary accent); **state** is this app's own.
+
+Taken from the language: teal as the accent · blue as `--machine` · purple as `--human` (the violet rule 3
+requires) · amber as `--warn` (the palette gives amber "warnings" outright) · monospace as `--font-sans` (called
+"a deliberate, load-bearing choice" covering headings, navigation and body copy).
+
+Derived, and on the record as derivations:
+
+| Token | Why it is not in the palette |
+|---|---|
+| `--chip` `--lane` `--glow-track` `--grid` | the studio names three surfaces and one border; this UI needs six and two |
+| `--muted` | the stated `#64788f` is 3.96:1 on `--panel`, below AA for 11–12.5 px text. Lifted one step, same hue; the stated value becomes `--idle`, whose shipped band is 3.4–4.1:1 |
+| `--ok` `--bad` `--now` `--info` | no green, red or magenta in a five-hue palette. With the four studio hues they complete a terminal palette, which is that language's own voice |
+| `--now` | magenta specifically: every other bright hue is spoken for, and the live edge must never read as the accent |
+| `--daylight-*` | the chart's bands are times of day; cut from the studio's indigo and amber, darkened to this ground |
+
+The `[Ø]` studio mark is **not** used: it is studio identity only and never an app's own icon. The brand typeface
+is listed first in a font stack and never fetched, which is that language's zero-dependency rule for the web.
