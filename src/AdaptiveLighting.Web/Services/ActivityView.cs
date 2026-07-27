@@ -109,9 +109,20 @@ public static class ActivityView
 	///     The rooms the filter offers: the ones that have actually reported, named once each.
 	/// </summary>
 	/// <remarks>
-	///     Built from the log rather than from the configuration document on purpose. A filter listing rooms with
-	///     nothing in the timeline would offer choices that all lead to an empty page, and a room the document no
-	///     longer mentions still has entries worth finding.
+	///     <para>
+	///         Built from the log rather than from the configuration document on purpose. A filter listing rooms
+	///         with nothing in the timeline would offer choices that all lead to an empty page, and a room the
+	///         document no longer mentions still has entries worth finding.
+	///     </para>
+	///     <para>
+	///         Named once each by <see cref="InRoom"/>'s own equality, not by the culture's: the two have to agree
+	///         about what "the same room" is or an option stops meaning a filter. Case-sensitive de-duplication
+	///         offered a room renamed only in its capitalisation twice, both leading to the same list; and the
+	///         culture comparer's looser equality could collapse two names into one option that the filter — which
+	///         is ordinal — would then match only half the entries of, quietly hiding the rest. Sorted in the
+	///         reader's culture all the same: which names are the same room and what order they read in are
+	///         different questions.
+	///     </para>
 	/// </remarks>
 	/// <param name="entries">The entries to read the names from.</param>
 	/// <returns>Distinct display names, alphabetical in the reader's culture.</returns>
@@ -124,7 +135,7 @@ public static class ActivityView
 		[
 			.. entries
 				.Select(entry => entry.AreaName)
-				.Distinct(StringComparer.CurrentCulture)
+				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.OrderBy(name => name, StringComparer.CurrentCulture)
 		];
 	}

@@ -354,6 +354,56 @@ public sealed class AreaSetupServiceTests
 		Assert.AreEqual(OverridesOf(before).Count, Plan(config, house, "stue").Rebuilds.Single().OverrideCount);
 	}
 
+	/// <summary>
+	///     The claim itself, with no number in it: fill every field the model has, rebuild, and check that the
+	///     plan's three counts cover every field that actually disappeared.
+	/// </summary>
+	/// <remarks>
+	///     The reflection above guards the <i>settings</i> half — a setting added to <see cref="AreaConfig"/>
+	///     without being added to <c>OverrideCount</c> fails it. Nothing guarded the other half: an entity list
+	///     added to the model and left out of <c>PinnedEntityCount</c> would be destroyed by every rebuild and
+	///     counted by nobody, and the hand-written copy of that formula in this file would agree with the mistake.
+	///     Stated this way the two halves are one assertion, and it does not have to be revisited every time the
+	///     settings model grows.
+	/// </remarks>
+	[TestMethod]
+	public void Nothing_The_Rebuild_Destroys_Goes_Uncounted()
+	{
+		House house = Build("stue");
+
+		// Everything a rebuild can take. AreaId and Enabled are the two it gives back, so they are not losses.
+		IReadOnlyList<PropertyInfo> destructible =
+		[.. typeof(AreaConfig)
+			.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+			.Where(property => property.CanWrite)
+			.Where(property => property.Name is not (nameof(AreaConfig.AreaId) or nameof(AreaConfig.Enabled)))];
+
+		AreaConfig before = new() { AreaId = "stue" };
+
+		foreach (PropertyInfo property in destructible)
+			property.SetValue(before, FilledValueFor(property));
+
+		AdaptiveLightingConfig config = Document(before);
+
+		AreaRebuildPlan rebuild = Plan(config, house, "stue").Rebuilds.Single();
+		AreaSetupService.Apply(config, Plan(config, house, "stue"));
+
+		AreaConfig after = config.Areas.Single();
+
+		Assert.AreEqual(
+			destructible.Count, destructible.Count(property => property.GetValue(after) is null),
+			"a rebuild replaces the room, so every field it carried is gone — 'stue' names no role, so nothing is "
+			+ "guessed back in. A field that now survives is one the plan must stop counting as a loss.");
+
+		// Every entity list is filled with exactly one id, so each destroyed field is worth exactly one count:
+		// a name, an entity, or a setting.
+		int warned = rebuild.PinnedEntityCount + rebuild.OverrideCount + (rebuild.HasCustomName ? 1 : 0);
+
+		Assert.IsTrue(
+			warned >= destructible.Count,
+			$"the warning promised {warned} losses and {destructible.Count} fields went — a warning must never count short");
+	}
+
 	/// <summary><c>Enabled</c> is not counted: it survives, so warning about it would be warning about nothing.</summary>
 	[TestMethod]
 	public void The_Switch_Is_Not_Counted_As_A_Setting_The_Rebuild_Destroys()
@@ -477,6 +527,59 @@ public sealed class AreaSetupServiceTests
 			new[] { "gang", "stue", "bad" }, config.Areas.Select(area => area.AreaId).ToArray());
 	}
 
+	// ===================== a plan the document has moved on from =====================
+
+	/// <summary>
+	///     A plan is a value somebody holds across an edit. The Areas page keeps the setup panel open beside its
+	///     own "Add a room" and "Discard changes" buttons, so by the time the run is confirmed the document may
+	///     already carry the room the plan meant to add. Adding it anyway leaves two rows for one Home Assistant
+	///     area — which either refuses every save (the validator rejects a duplicate area name) or, once one row
+	///     carries a name of its own, runs two state machines against the same lights.
+	/// </summary>
+	[TestMethod]
+	public void A_Room_Added_By_Hand_After_The_Plan_Was_Made_Is_Not_Added_Twice()
+	{
+		House house = Build("stue", "loft");
+		AdaptiveLightingConfig config = Document(new AreaConfig { AreaId = "stue" });
+
+		SetupPlan plan = Plan(config, house, "stue");
+
+		Assert.AreEqual("loft", plan.NewAreas.Single().AreaId, "the plan means to add the room the document lacks");
+
+		// The owner adds it themselves while the confirmation step is still on screen.
+		config.Areas.Add(new AreaConfig { AreaId = "loft", Name = "Loft" });
+
+		AreaSetupService.Apply(config, plan);
+
+		CollectionAssert.AreEqual(
+			new[] { "stue", "loft" }, config.Areas.Select(area => area.AreaId).ToArray(),
+			"one row per Home Assistant area");
+		Assert.AreEqual("Loft", config.Areas[1].Name,
+			"and the owner's own row stands: adding a room is not rebuilding one");
+	}
+
+	/// <summary>
+	///     The same plan applied twice is the same document. Confirming is one click on a panel surrounded by
+	///     other live controls, and appending the plan's own <see cref="AreaConfig"/> instances a second time put
+	///     one object at two indices — so editing either row edited both.
+	/// </summary>
+	[TestMethod]
+	public void Applying_The_Same_Plan_Twice_Leaves_The_Same_Document()
+	{
+		House house = Build("stue", "gang");
+		AdaptiveLightingConfig config = Document();
+
+		SetupPlan plan = Plan(config, house);
+
+		AreaSetupService.Apply(config, plan);
+		string once = LightingConfigDocument.Serialize(config);
+
+		AreaSetupService.Apply(config, plan);
+
+		Assert.AreEqual(2, config.Areas.Count, "applying a plan is not adding its rooms twice");
+		Assert.AreEqual(once, LightingConfigDocument.Serialize(config));
+	}
+
 	// ===================== fixtures and counting =====================
 
 	/// <summary>A person's <c>device_trackers</c> attribute — the presence sources backing them.</summary>
@@ -533,6 +636,23 @@ public sealed class AreaSetupServiceTests
 	[.. SettingProperties
 		.Where(property => property.GetValue(area) is not null)
 		.Select(property => property.Name)];
+
+	/// <summary>
+	///     Any non-null value of the property's type, including the entity lists — so a fixture can fill in
+	///     everything a rebuild destroys, not only the settings.
+	/// </summary>
+	/// <remarks>
+	///     One id per list on purpose: it makes each destroyed field worth exactly one count, which is what lets
+	///     <see cref="Nothing_The_Rebuild_Destroys_Goes_Uncounted"/> compare fields against counts. A property of a
+	///     shape nothing here can fill throws rather than being skipped — a field nobody can fill is a field
+	///     nobody has thought about losing.
+	/// </remarks>
+	private static object FilledValueFor(PropertyInfo property)
+	{
+		Type type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+
+		return type == typeof(List<string>) ? new List<string> { "light.one" } : SampleFor(property);
+	}
 
 	/// <summary>Any non-null value of the property's type, so a fixture can fill every setting in.</summary>
 	private static object SampleFor(PropertyInfo property)

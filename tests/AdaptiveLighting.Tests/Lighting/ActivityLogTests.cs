@@ -219,6 +219,24 @@ public sealed class ActivityLogTests
 			ActivityView.Rooms(entries).ToArray());
 	}
 
+	/// <summary>
+	///     One option per filter. The dropdown is built from the names in the buffer and the filter matches them
+	///     ignoring case, so the two have to agree about what "the same room" is: a room renamed only in its
+	///     capitalisation must not become two options that both show the same entries — and, the way round that
+	///     actually loses history, one option must never stand for names the filter will then decline to match.
+	/// </summary>
+	[TestMethod]
+	public void The_Filter_Offers_A_Room_Once_However_Its_Name_Was_Capitalised()
+	{
+		ActivityEntry[] entries = [Entry(2, Report("Stue")), Entry(1, Report("stue"))];
+
+		IReadOnlyList<string> rooms = ActivityView.Rooms(entries);
+
+		Assert.AreEqual(1, rooms.Count, "the dropdown offers a room once, not once per spelling");
+		Assert.AreEqual(2, ActivityView.InRoom(entries, rooms[0]).Count,
+			"and choosing it finds everything the room reported under either spelling");
+	}
+
 	// ===================== grouping by day =====================
 
 	/// <summary>
