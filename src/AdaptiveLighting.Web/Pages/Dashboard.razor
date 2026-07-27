@@ -40,31 +40,45 @@
 <PageTitle>Board &mdash; Adaptive lighting</PageTitle>
 
 @*
-	The master switch, at the top where a hand reaches for it: one control that pauses or resumes all
-	automatic lighting. It reflects the live state of the configured switch and flips the real Home Assistant
-	entity through ModeService's existing config-resolved Toggle. When Home Assistant has not answered, it
-	reads "unknown" rather than pretending everything is off.
-*@
-@if (_masterSwitch is { } master)
-{
-	<div class="master-switch @MasterClass(master)">
-		<div class="master-switch-copy">
-			<span class="master-switch-title">Adaptive lighting: @MasterStateWord(master)</span>
-			<span class="master-switch-sub">@MasterSub(master)</span>
-		</div>
-		<button type="button"
-				class="toggle @(master is { IsAvailable: true, AdaptiveLightingOn: true } ? "on" : "")"
-				disabled="@(!master.IsAvailable || !master.Toggle.CanToggle)"
-				title="@MasterTitle(master)"
-				@onclick="ToggleMaster">
-			@(master.IsAvailable ? master.AdaptiveLightingOn ? "On" : "Off" : "?")
-		</button>
-	</div>
-}
+	The house bar: the one control that stops everything, the mode the house is in, and who is home — one strip
+	where there used to be a card and then two more.
 
-@* The house strip: what mode the house is in (with the buttons to switch it) and who's home. Both are
-   read on the same ticker as the master switch; only the house mode acts, through SelectHouseMode. *@
-<div class="house-strip">
+	This is the board's chrome, and chrome is measured against what it displaces. Stacked, the three cost about
+	three hundred pixels before the first lane — on a phone, the whole first screen — to say three short facts
+	and offer two controls. Side by side in one panel they cost roughly a third of that and say the same things,
+	because almost all of the height was a second line under each fact restating what the fact already said.
+
+	What survives whole is the master switch: it is leftmost, it keeps the state colour on its edge and its own
+	large On/Off button, and it keeps a line under it whenever there is news — paused, or unreachable. Only the
+	"everything is fine" line went, into the button's own hover, because a permanent sentence saying nothing is
+	wrong is exactly the reassurance budget this design refuses to spend. The mode's meaning line went the same
+	way and to a better home: the House tab now says in full what each mode does.
+
+	All three read on the same ticker; only the master switch and the mode act, and both through ModeService's
+	existing config-resolved calls. Nothing here touches the document.
+*@
+<div class="housebar">
+	@if (_masterSwitch is { } master)
+	{
+		<div class="housebar-cell housebar-master @MasterClass(master)">
+			<span class="housebar-lab">Adaptive lighting</span>
+			<div class="housebar-main">
+				<span class="housebar-value">@MasterStateWord(master)</span>
+				<button type="button"
+						class="toggle @(master is { IsAvailable: true, AdaptiveLightingOn: true } ? "on" : "")"
+						disabled="@(!master.IsAvailable || !master.Toggle.CanToggle)"
+						title="@MasterTitle(master)"
+						@onclick="ToggleMaster">
+					@(master.IsAvailable ? master.AdaptiveLightingOn ? "On" : "Off" : "?")
+				</button>
+			</div>
+			@if (MasterNote(master) is { Length: > 0 } note)
+			{
+				<p class="housebar-note">@note</p>
+			}
+		</div>
+	}
+
 	<HouseModePanel HouseMode="_houseMode" Message="@_modeMessage" Confirmation="@_modeConfirmation" OnSelect="SelectMode" />
 	<WhoIsHomePanel People="_people" />
 </div>
@@ -715,7 +729,17 @@ else
 	private static string MasterStateWord(MasterSwitchView master) =>
 		!master.IsAvailable ? "unknown" : master.AdaptiveLightingOn ? "On" : "Off";
 
-	private static string MasterSub(MasterSwitchView master)
+	/// <summary>
+	///     The line under the master switch, or <c>null</c> while there is nothing to say.
+	/// </summary>
+	/// <remarks>
+	///     Only news earns a line. "Lights adjust automatically" restates the word beside it and the colour on its
+	///     edge, and a permanent sentence saying nothing is wrong is precisely the reassurance this design refuses
+	///     to buy with the board's own space; it lives in the button's hover instead. The other two states keep
+	///     theirs, because paused and unreachable are the two a reader has to be told about — and paused is the one
+	///     place the control's real consequence can be spelled out.
+	/// </remarks>
+	private static string? MasterNote(MasterSwitchView master)
 	{
 		if (!master.IsAvailable)
 		{
@@ -725,8 +749,8 @@ else
 		}
 
 		return master.AdaptiveLightingOn
-			? "Lights adjust automatically. Turn off to pause everything."
-			: "Paused — no lights will change until you turn it back on.";
+			? null
+			: "Paused — nothing was turned off, but no lights will change until you turn it back on.";
 	}
 
 	private static string MasterTitle(MasterSwitchView master)

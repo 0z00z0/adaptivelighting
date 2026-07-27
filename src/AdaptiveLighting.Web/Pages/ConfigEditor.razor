@@ -5,12 +5,15 @@
 @inject ConfigLocation Location
 @inject HomeLocation HomeGeo
 @inject AreaSnapshotCache Cache
+@inject ILogger<ConfigEditor> Logger
 
 @*
-	The configuration page. It used to be a viewer, which meant it was an ornament: the thing it displayed
-	could only be changed by editing YAML over SSH and restarting the host, so the page's own existence made
-	nothing possible. It now reads and writes the document, validates before writing, and rebuilds the
-	running engine in place afterwards.
+	The House tab — everything that isn't one room: what every room starts with, the day's schedule, the modes,
+	the people, and the engine itself.
+
+	It used to be a viewer, which meant it was an ornament: the thing it displayed could only be changed by
+	editing YAML over SSH and restarting the host, so the page's own existence made nothing possible. It now
+	reads and writes the document, validates before writing, and rebuilds the running engine in place afterwards.
 
 	The page has four sections — Areas, Schedule, House modes, House — and shows one at a time behind a section
 	rail rather than stacking them into one endless scroll: on a phone the old page was several screens of
@@ -18,9 +21,38 @@
 	point at, not after where a value is stored: a setting lives under the noun it changes, and anything rarely
 	touched folds away at the bottom of that section rather than into a top-level "Advanced" drawer.
 
-	What must stay visible whatever the section is visible above the rail: the status panel, the save bar, and
-	every validation message. A problem in a section you are not looking at still stops the save, so it cannot
-	be allowed to hide with its section.
+	THE DISCLOSURE MODEL, the same one the room page uses. Each card leads with the thing said as English, with
+	the values inline and clickable, and keeps the full detail underneath for somebody who came for a specific
+	knob: the all-rooms defaults are four sentences over an All-settings reveal, the schedule is a chart and a
+	blend sentence over the period table, and each house mode is one sentence over the field-by-field editor.
+	Overlap between a sentence and the rows below it is intended — the sentence is how somebody reads the house,
+	the rows are how somebody finds a setting by what it changes.
+
+	THE ROOMS ARE A LIST, NOT AN EDITOR. Each room is one row that opens its own page at /room/{areaId}, where
+	its live state, its evidence and all twenty-one of its settings are. The inline per-room editor this page
+	used to host is gone: two editors for one room could not stay equivalent, and did not — the old one offered
+	no rows at all for the five daylight-brightness settings, so a room tuned on the new page had values the old
+	one could neither show nor change. What the list keeps is what only a list can do: the power switch on each
+	room, the live-state edge colour, the floor grouping and its per-floor bulk switch, and the two acts that
+	are about the set of rooms rather than about one of them.
+
+	THE WRITE PATH — deliberately still the save bar, where the room page chose to debounce.
+	A room-page edit changes one room; every edit here changes something every room inherits, and Save rebuilds
+	every area controller in the house. Three things follow from that and all three point the same way:
+
+	  - The batch is real. "Switch on this floor" is six rooms in one press, and "Set up rooms again" rebuilds
+	    several at once — its warning dialog says in so many words that nothing is written until Save and that
+	    Discard changes undoes it. Instant apply would make an owner-approved warning untrue.
+	  - Not every control here is constrained. The house name, the device-class set and the write-only NetDaemon
+	    user id are free text, and the argument that makes per-change apply safe elsewhere ("no interaction can
+	    produce an invalid document") does not hold for them. The user id in particular is applied on save by
+	    design, and a debounce would write it half-typed.
+	  - Regret costs more. A mis-dragged default is live in seventeen rooms, and Discard changes is a stronger
+	    answer than a one-deep undo: it puts the whole document back to what is on disk.
+
+	So the save bar stays, it stays sticky, and every token popover says what it promises — applies when you
+	save, Discard changes puts it back. No new write path either way: Save goes to LightingEngineHost, which
+	validates, writes one file, re-reads it and rebuilds the engine.
 
 	Two properties this page must never lose:
 
@@ -32,9 +64,9 @@
 	    resolved server-side at start-up. Nothing on this page names a path, and nothing it posts can.
 *@
 
-<PageTitle>Configuration &mdash; Adaptive lighting</PageTitle>
+<PageTitle>The house &mdash; Adaptive lighting</PageTitle>
 
-<h1>Configuration</h1>
+<h1>The house</h1>
 
 @if (_loadError is { Length: > 0 })
 {
@@ -51,7 +83,8 @@
 else
 {
 	<p class="lede">
-		Changes apply as soon as you save &mdash; no restart needed.
+		Everything that isn't one room: what every room starts with, the day's schedule, the modes, the people
+		and the engine itself. Changes apply as soon as you save &mdash; no restart needed.
 	</p>
 
 	@* ---------------------------------------------------------------------------------------------
@@ -67,40 +100,31 @@ else
 		</div>
 	}
 
-	<div class="panel status">
-		<div class="status-row">
-			<span class="status-label">Engine</span>
-			@if (Engine.IsRunning)
+	@*
+		The engine and the connection, above the rail and only when one of them is wrong.
+
+		The shipped page carried a three-row status panel on every visit to say that everything was fine, which
+		is the same reassurance budget the board's chrome was spending. What could not move into a fold is the
+		part that is a problem report: a stopped engine and an unreachable Home Assistant both explain why an
+		edit did not reach the house, and an explanation that hides with a section somebody is not looking at
+		explains nothing. The full detail — the file, its backup, the managed-room count — lives under House.
+	*@
+	@if (!Engine.IsRunning || !HomeAssistantIsAnswering)
+	{
+		<div class="notice warn">
+			@if (!Engine.IsRunning)
 			{
-				<span class="badge ok">running</span>
-				<span>@Engine.RunningAreaCount @(Engine.RunningAreaCount == 1 ? "room" : "rooms") managed.</span>
+				<div><strong>Automatic lighting isn't running.</strong> @(Engine.Fault ?? "Not started yet.") Edits here are saved either way, and take effect when it starts.</div>
 			}
-			else
+			@if (!HomeAssistantIsAnswering)
 			{
-				<span class="badge bad">not running</span>
-				<span>@(Engine.Fault ?? "Not started yet.")</span>
+				<div>
+					<strong>Waiting for Home Assistant.</strong> The pickers below have nothing to offer until it answers.
+					You can still type ids by hand; name checks are skipped if you save now.
+				</div>
 			}
 		</div>
-		<div class="status-row">
-			<span class="status-label">File</span>
-			<code>@Location.Path</code>
-			<span class="badge">@Describe(Location.Source)</span>
-			@if (Engine.Store.HasBackup)
-			{
-				<span class="hint">previous version kept at <code>@Engine.Store.BackupPath</code></span>
-			}
-		</div>
-		@if (!HomeAssistantIsAnswering)
-		{
-			<div class="status-row">
-				<span class="status-label">Home Assistant</span>
-				<span class="badge bad">not connected</span>
-				<span>
-					Waiting for Home Assistant. You can still type ids by hand; name checks are skipped if you save now.
-									</span>
-			</div>
-		}
-	</div>
+	}
 
 	@* --------------------------------------------------------------------------------------------- *@
 	<div class="savebar">
@@ -186,12 +210,14 @@ else
 					<h2>Areas</h2>
 					<p class="lede">
 						Rooms not listed here are never touched. Lights and sensors are found automatically from Home
-						Assistant's areas &mdash; open a room to see what was found.
+						Assistant's areas &mdash; open a room to see what was found and to change how it behaves.
 					</p>
 				</header>
 
 				<div class="panel-actions">
-					<button type="button" @onclick="AddArea">Add a room</button>
+					<button type="button" @onclick="ToggleAddRoom" disabled="@(_setupScope is not null)">
+						@(_addingRoom ? "Cancel" : "Add a room")
+					</button>
 					<button type="button" @onclick="OpenSetupForEveryRoom" disabled="@(!CanSetUpAgain)">Set up rooms again</button>
 				</div>
 
@@ -201,6 +227,30 @@ else
 						Setting rooms up again needs Home Assistant &mdash; each room is rebuilt from what the registry
 						says right now.
 					</p>
+				}
+
+				@*
+					Adding a room is picking one of the Home Assistant areas that has no room yet. It used to append a
+					blank row whose only purpose was to make you choose an area inside it; asking first means the room
+					arrives already knowing what it is, and a room that already exists is never offered twice.
+				*@
+				@if (_addingRoom)
+				{
+					<div class="panel house-add">
+						<div class="field">
+							<div class="field-head"><label class="field-label">Which room?</label></div>
+							<div class="field-control">
+								<AreaPicker Value="@_addAreaId"
+											ValueChanged="@AddRoom"
+											Areas="@_addableAreas"
+											NoneLabel="(pick a room)"
+											EmptyNote="@AddEmptyNote" />
+							</div>
+							<div class="field-help">
+								It arrives switched off, so nothing in it changes until you switch it on.
+							</div>
+						</div>
+					</div>
 				}
 
 				@if (_setupNote is { Length: > 0 } setupNote)
@@ -218,9 +268,9 @@ else
 									 Cancelled="@CloseSetup" />
 				}
 
-				@* Floors come from the registry through the shared grouping helper, so this list and the dashboard's
-				   grid can never disagree about which room is upstairs. A house with no floors gets one unnamed
-				   group and therefore no headers at all — exactly the flat list it had before floors existed. *@
+				@* Floors come from the registry through the shared grouping helper, so this list and the board's lanes
+				   can never disagree about which room is upstairs. A house with no floors gets one unnamed group and
+				   therefore no headers at all — exactly the flat list it had before floors existed. *@
 				@foreach (FloorGroup<AreaConfig> group in _areaGroups)
 				{
 					FloorGroup<AreaConfig> floor = group;
@@ -233,25 +283,71 @@ else
 						</div>
 					}
 
-					@foreach (AreaConfig area in floor.Items)
-					{
-						AreaConfig current = area;
-						<AreaEditor @key="current"
-									Area="@current"
-									Defaults="@_config.Defaults"
-									Global="@_config.Global"
-									Catalog="@Catalog"
-									Areas="@_areas"
-									Lights="@_lights"
-									MotionSensors="@_motionSensors"
-									LuxSensors="@_luxSensors"
-									Blockers="@_blockers"
-									SunEntities="@_sunEntities"
-									LiveState="@LiveStateOf(current)"
-									Changed="@Revalidate"
-									SetUpAgainRequested="@(() => OpenSetupForRoom(current))"
-									Removed="@(() => RemoveArea(current))" />
-					}
+					<div class="room-rows">
+						@foreach (AreaConfig area in floor.Items)
+						{
+							AreaConfig current = area;
+							bool enabled = AreaView.IsEnabled(current, _config.Defaults);
+
+							<div class="room-row @AreaView.EdgeClass(enabled, LiveStateOf(current))" @key="current">
+								@* The switch is the room's power state, so it is a switch and it is on the row where a
+								   hand reaches for it. It stays outside the link: a control inside an anchor is neither
+								   valid markup nor a thing a thumb can aim at without also navigating. *@
+								<button type="button"
+										class="switch @(enabled ? "on" : null)"
+										role="switch"
+										aria-checked="@(enabled ? "true" : "false")"
+										aria-label="@($"Automatic lighting in {HouseView.DisplayName(current)}")"
+										title="@ToggleTitle(enabled)"
+										@onclick="() => ToggleEnabled(current)">
+									<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+									<span class="switch-word">@(enabled ? "on" : "off")</span>
+								</button>
+
+								@if (RoomLink(current) is { Length: > 0 } href)
+								{
+									<a class="room-open" href="@href">
+										<span class="area-title">@HouseView.DisplayName(current)</span>
+										<code class="area-slug">@current.AreaId</code>
+										<span class="area-summary-hint">@HouseView.RoomSummary(current)</span>
+										<span class="room-open-chevron" aria-hidden="true"></span>
+									</a>
+								}
+								else
+								{
+									@* No page to open: either the room names no Home Assistant area, or it does but has
+									   not been saved yet, and the room page reads the file rather than this document. *@
+									<span class="room-open room-open-shut">
+										<span class="area-title">@HouseView.DisplayName(current)</span>
+										@if (current.AreaId is { Length: > 0 } pending)
+										{
+											<code class="area-slug">@pending</code>
+											<span class="area-summary-hint">save to open this room</span>
+										}
+										else
+										{
+											@* A room that names no area has no address, so its own page cannot exist and
+											   everything on it would be out of reach. The picker is the way back: name the
+											   area and the room becomes an ordinary room with an ordinary page. Only a
+											   hand-edited document reaches this state — every path that proposes a room
+											   proposes it with an area id — but a document that reaches it must not become
+											   uneditable. *@
+											<span class="badge bad">no area</span>
+											<span class="area-summary-hint">@HouseView.RoomSummary(current)</span>
+											<span class="room-adopt">
+												<AreaPicker Value="@current.AreaId"
+															ValueChanged="@(areaId => AdoptArea(current, areaId))"
+															Areas="@_addableAreas"
+															NoneLabel="(pick this room's area)"
+															EmptyNote="@AddEmptyNote" />
+											</span>
+											<button type="button" class="danger room-drop" @onclick="() => RemoveArea(current)">Remove</button>
+										}
+									</span>
+								}
+							</div>
+						}
+					</div>
 				}
 
 				@if (_config.Areas.Count == 0)
@@ -259,239 +355,138 @@ else
 					<div class="empty">No rooms yet. Add one to get started.</div>
 				}
 
-				@* After the room list, not before: the rooms are what people come here for, and the shared settings
-				   are reference material they consult once. *@
-				<GroupFold Title="All rooms"
-						   Description="Settings every room starts with. A room's own settings win.">
-					<div class="setting-box">
-						<div class="setting-box-title">Movement &amp; timing</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Lights stay on for
-									<InfoPopover Label="Lights stay on for">
-										After the last movement, how long the lights stay on before the warning dim. Longer for
-										rooms where people sit still (reading, TV), shorter for hallways.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control"><input class="cell num" type="number" min="1" @bind="_config.Defaults.VacancyTimeoutSeconds" /> <span class="unit">s</span></div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Warning dim lasts
-									<InfoPopover Label="Warning dim lasts">
-										Before going out, lights dim for this long. Any movement brings them straight back.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.PreOffSeconds" /> <span class="unit">s</span></div>
-							<div class="field-help">Must be shorter than the time the lights stay on.</div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Warning dim level
-									<InfoPopover Label="Warning dim level">
-										How deep the warning dim is. 0.5 means half the current brightness.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control"><input class="cell num" type="number" step="0.05" min="0" max="1" @bind="_config.Defaults.PreOffBrightnessFactor" /></div>
-							<div class="field-help">A fraction of the current brightness, between 0 and 1.</div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Hand changes hold for
-									<InfoPopover Label="Hand changes hold for">
-										When someone adjusts a light by hand, their choice is left alone for this long. Then
-										automatic control resumes.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.OverrideDurationMinutes" /> <span class="unit">min</span></div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">After a manual off, wait
-									<InfoPopover Label="After a manual off, wait">
-										After someone turns the lights off by hand, movement won't turn them back on until the
-										room has been empty this long.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control"><input class="cell num" type="number" min="0" @bind="_config.Defaults.VacancyResetMinutes" /> <span class="unit">min</span></div>
-						</div>
+				@* Where the board's footer thread lands. The rooms are in the list above with their own switches, so
+				   this line counts them rather than listing them a second time. *@
+				@if (HouseView.SwitchedOffLine(_config.Areas, _config.Defaults) is { Length: > 0 } switchedOff)
+				{
+					<p class="rooms-off">@switchedOff</p>
+				}
+
+				@* --------------------------------------------------------------------------------------------
+				   What every room starts with, in the same two layers the room page uses: the sentences, then
+				   the same settings again as rows. After the room list, not before — the rooms are what people
+				   come here for, and the shared settings are reference material they consult once.
+				   -------------------------------------------------------------------------------------------- *@
+				<section class="panel room-card house-card">
+					<div class="room-card-head">
+						<Icon Name="@Glyph.Areas" Class="ic-head" />
+						<span class="room-card-title">Every room starts with these</span>
+						<span class="room-card-note">a room's own settings win</span>
 					</div>
 
-					<div class="setting-box">
-						<div class="setting-box-title">Darkness</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">How a room decides it's dark
-									<InfoPopover Label="How a room decides it's dark">
-										What decides the room is dark enough to need light. A lux sensor measures the room; the
-										sun option estimates from the sun's height. "Either" lights when either says dark.
-										"Always" is for windowless rooms.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control">
-								<select class="cell wide" @bind="_config.Defaults.Darkness">
-									<option value="@DarknessSource.Lux">Lux sensor (falls back to the outdoor sensor, then the sun)</option>
-									<option value="@DarknessSource.Sun">Sun height</option>
-									<option value="@DarknessSource.Either">Either &mdash; dark when either says so</option>
-									<option value="@DarknessSource.Always">Always &mdash; no daylight check</option>
-								</select>
-							</div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Outdoor light sensor
-									<InfoPopover Label="Outdoor light sensor">
-										A house-wide outdoor light sensor. Any room without its own lux sensor uses this to decide
-										whether it is dark, instead of falling back to the sun’s height — which follows clouds, not
-										just the clock. A room with its own lux sensor keeps using that. Leave empty to use sun height.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control">
-								<EntityPicker Value="@_config.Global.OutdoorLuxSensor"
-											  ValueChanged="@(value => SetOutdoorLux(value))"
-											  Options="@_luxSensors"
-											  NoneLabel="(none — rooms without their own lux use sun height)"
-											  EmptyNote="@EmptyNote("No illuminance sensors found — type an id.")"
-											  Placeholder="sensor.ute_lux" />
-							</div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Dark below
-									<InfoPopover Label="Dark below">
-										At or below this many lux the room counts as dark. The second box is the extra light
-										needed to count as bright again (hysteresis) — it stops the verdict flickering around
-										the threshold.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control">
-								<input class="cell num" type="number" min="0" @bind="_config.Defaults.LuxThreshold" /> <span class="unit">lx</span>
-								<span class="hint">bright again above</span>
-								<input class="cell num" type="number" min="0" @bind="_config.Defaults.LuxHysteresis" /> <span class="unit">lx</span>
-							</div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Dark when the sun is below
-									<InfoPopover Label="Dark when the sun is below">
-										The room counts as dark when the sun is below this height. Raise it to light earlier in
-										the evening; lower it to wait for real dusk.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control">
-								<input class="cell num" type="number" step="0.5" min="-90" max="90" @bind="_config.Defaults.SunElevationThreshold" /> <span class="unit">°</span>
-							</div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Fades
-									<InfoPopover Label="Fades">
-										How long a light takes to fade to a new level. Slow at night (eyes are dark-adapted),
-										quick by day.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control">
-								<span class="hint">day</span>
-								<input class="cell num" type="number" step="0.5" min="0" @bind="_config.Defaults.DayTransitionSeconds" /> <span class="unit">s</span>
-								<span class="hint">night</span>
-								<input class="cell num" type="number" step="0.5" min="0" @bind="_config.Defaults.NightTransitionSeconds" /> <span class="unit">s</span>
-							</div>
-						</div>
+					<div class="room-sentences">
+						<SentenceView Sentences="@AreaSentences.ForDefaults(_config.Defaults)"
+									  Edited="@OnDefaultEdited"
+									  Note="@TokenNote"
+									  ShowLegend="false" />
+					</div>
 
-						<details class="advanced">
-							<summary>Advanced</summary>
-							<div class="field">
-								<div class="field-head">
-									<label class="field-label">Sun entity
-										<InfoPopover Label="Sun entity">
-											The Home Assistant entity that tracks the sun. There's normally exactly one (sun.sun) —
-											no reason to change this.
-										</InfoPopover>
-									</label>
+					<div class="room-morebar">
+						<button type="button"
+								class="room-more"
+								aria-expanded="@(_showAllRooms ? "true" : "false")"
+								@onclick="() => _showAllRooms = !_showAllRooms">
+							All settings @(_showAllRooms ? "▴" : "▾")
+						</button>
+						<span class="room-more-note">@HouseView.StrayLine(_config.Areas)</span>
+					</div>
+
+					@if (_showAllRooms)
+					{
+						<div class="room-groups">
+							@foreach (RoomSettingGroup group in RoomSettings.Groups)
+							{
+								RoomSettingGroup current = group;
+								bool open = IsOpen(current);
+
+								<div class="sgroup @(open ? "sgroup-open" : null)">
+									<button type="button"
+											class="sgroup-head"
+											aria-expanded="@(open ? "true" : "false")"
+											@onclick="() => Toggle(current)">
+										<span class="sgroup-title">@current.Title</span>
+										<span class="sgroup-note">@current.Note</span>
+										<span class="area-chevron" aria-hidden="true"></span>
+									</button>
+
+									@if (open)
+									{
+										<div class="sgroup-body">
+											@* These values ARE the house, so there is no inherit tag and no road back: a
+											   SettingRow with no house text renders neither. *@
+											@foreach (RoomSetting setting in current.Settings.Where(item => item.AppliesTo(_config.Defaults)))
+											{
+												RoomSetting item = setting;
+
+												<SettingRow Label="@item.Label" Help="@item.Help">
+													@switch (item.Control)
+													{
+														case RoomControl.Flag:
+															<button type="button"
+																	class="switch @(RoomSettings.Flag(null, _config.Defaults, item.Key) ? "on" : null)"
+																	role="switch"
+																	aria-checked="@(RoomSettings.Flag(null, _config.Defaults, item.Key) ? "true" : "false")"
+																	aria-label="@item.Label"
+																	@onclick="() => SetHouseFlag(item.Key, !RoomSettings.Flag(null, _config.Defaults, item.Key))">
+																<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+															</button>
+															break;
+
+														case RoomControl.Choice:
+															<div class="seg" role="group" aria-label="@item.Label">
+																@foreach (TokenChoice option in RoomSettings.DarknessOptions)
+																{
+																	TokenChoice choice = option;
+																	<button type="button"
+																			class="@(IsCurrentChoice(item.Key, choice) ? "cur" : null)"
+																			aria-pressed="@(IsCurrentChoice(item.Key, choice) ? "true" : "false")"
+																			@onclick="() => SetHouseChoice(item.Key, choice.Value)">@choice.Text</button>
+																}
+															</div>
+															break;
+
+														case RoomControl.Entity:
+															<EntityPicker Value="@RoomSettings.Entity(null, _config.Defaults, item.Key)"
+																		  ValueChanged="@(value => SetHouseEntity(item.Key, value))"
+																		  Options="@_sunEntities"
+																		  NoneLabel="(none — the engine needs one)"
+																		  EmptyNote="@EmptyNote("No sun entity found — type an id (normally sun.sun).")"
+																		  Placeholder="sun.sun" />
+															break;
+
+														default:
+															<Stepper Value="@RoomSettings.Shown(null, _config.Defaults, item.Key)"
+																	 Text="@RoomSettings.Describe(null, _config.Defaults, item.Key)"
+																	 Label="@item.Label"
+																	 Step="@item.Step"
+																	 Min="@item.Min"
+																	 Max="@item.Max"
+																	 IsOwn="true"
+																	 ValueChanged="@(value => SetHouseNumber(item.Key, value))" />
+
+															@if (string.Equals(item.Key, nameof(AreaSettings.LuxBrightnessGamma), StringComparison.Ordinal))
+															{
+																@* The one setting that is a shape rather than a quantity. The number stays
+																   in the stepper where it can be changed; the curve says what it means. *@
+																<CurveGlyph Exponent="@RoomSettings.Shown(null, _config.Defaults, item.Key)"
+																			Label="@CurvePath.Describe(RoomSettings.Shown(null, _config.Defaults, item.Key))" />
+															}
+															break;
+													}
+												</SettingRow>
+											}
+										</div>
+									}
 								</div>
-								<div class="field-control">
-									<EntityPicker Value="@_config.Defaults.SunEntity"
-												  ValueChanged="@(value => SetDefaultSunEntity(value))"
-												  Options="@_sunEntities"
-												  NoneLabel="(none — the engine needs one)"
-												  EmptyNote="@EmptyNote("No sun entity found — type an id (normally sun.sun).")"
-												  Placeholder="sun.sun" />
-								</div>
-							</div>
-						</details>
-					</div>
-
-					<div class="setting-box">
-						<div class="setting-box-title">Room behaviour</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Respects sleep mode
-									<InfoPopover Label="Respects sleep mode">
-										While the house sleeps, this room is held to night levels — a 03:00 glass of water gets a
-										dim light, not a bright one. For bedrooms and the rooms on the way to them.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control checks">
-								<label><input type="checkbox" @bind="_config.Defaults.RespectSleepMode" /> hold sleeping-house lights to the sleep period's limits</label>
-							</div>
+							}
 						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Sleep blocks auto-on
-									<InfoPopover Label="Sleep blocks auto-on">
-										While the house sleeps, this room never turns on by itself. For the bedroom itself. The
-										wall switch still works.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control checks">
-								<label><input type="checkbox" @bind="_config.Defaults.SleepBlocksAutoOn" /> never auto-on while the house sleeps</label>
-							</div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Stays on when everyone leaves
-									<InfoPopover Label="Stays on when everyone leaves">
-										When the last person leaves, lights are turned off everywhere. Rooms with this set are
-										left alone — porch and security lights are wanted precisely when nobody's home.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control checks">
-								<label><input type="checkbox" @bind="_config.Defaults.SkipAwaySweep" /> leave these rooms alone when everyone leaves</label>
-							</div>
-						</div>
-						<div class="field">
-							<div class="field-head">
-								<label class="field-label">Welcome home
-									<InfoPopover Label="Welcome home">
-										When the first person comes home to a dark house, this room lights up to meet them. For
-										the hallway.
-									</InfoPopover>
-								</label>
-							</div>
-							<div class="field-control checks">
-								<label><input type="checkbox" @bind="_config.Defaults.WelcomeHome" /> light up when the first person arrives in the dark</label>
-							</div>
-						</div>
-					</div>
-				</GroupFold>
+					}
+				</section>
 
 				@* The labels and device classes are about rooms, so they live in Areas — folded, because they are
 				   read once and then forgotten, not because they are frightening. *@
 				<GroupFold Title="Finding lights &amp; sensors"
-						   Description="Which lights this app may manage, and what counts as a sensor.">
+						   Description="Which lights this app may manage, what counts as a sensor, and where the house reads the daylight.">
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">Only manage lights with (label)
@@ -548,6 +543,32 @@ else
 										 NoneLabel="(none — device classes decide)"
 										 UnknownNote="Nothing carries this label yet, so only the device classes below decide."
 										 Placeholder="adaptive-motion" />
+						</div>
+					</div>
+
+					@*
+						The outdoor sensor sits here rather than under the all-rooms Darkness group, per ui-design-c §4:
+						it is an input the house discovers darkness with, and grouping it with the other "how rooms find
+						things" settings leaves one fewer home for sensor-ish settings. A deliberate small deviation from
+						area-restructure §3.1, flagged there and again here.
+					*@
+					<div class="field">
+						<div class="field-head">
+							<label class="field-label">Outdoor light sensor
+								<InfoPopover Label="Outdoor light sensor">
+									A house-wide outdoor light sensor. Any room without its own lux sensor uses this to decide
+									whether it is dark, instead of falling back to the sun's height — which follows clouds, not
+									just the clock. A room with its own lux sensor keeps using that. Leave empty to use sun height.
+								</InfoPopover>
+							</label>
+						</div>
+						<div class="field-control">
+							<EntityPicker Value="@_config.Global.OutdoorLuxSensor"
+										  ValueChanged="@(value => SetOutdoorLux(value))"
+										  Options="@_luxSensors"
+										  NoneLabel="(none — rooms without their own lux use sun height)"
+										  EmptyNote="@EmptyNote("No illuminance sensors found — type an id.")"
+										  Placeholder="sensor.ute_lux" />
 						</div>
 					</div>
 
@@ -619,27 +640,27 @@ else
 					</p>
 				</header>
 
-				<DaylightChart Periods="@_config.Periods" Location="@_homeLocation" />
-
-				@* Blending belongs to the schedule, not to a timing grab-bag: it is entirely about what happens at
-				   the boundaries the chart above draws. *@
-				<div class="panel">
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Blend between periods
-								<InfoPopover Label="Blend between periods">
-									With blending on, lights drift to the next period's level over this many minutes instead
-									of stepping at the boundary.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Global.SmoothTransitions" /> lights drift to the next period's level instead of stepping</label>
-							<span class="hint">blend over</span>
-							<input class="cell num" type="number" min="0" @bind="_config.Global.BlendMinutes" /> <span class="unit">min</span>
-						</div>
+				<section class="panel room-card house-card">
+					<div class="room-card-head">
+						<Icon Name="@Glyph.Schedule" Class="ic-head" />
+						<span class="room-card-title">Through the day</span>
+						<span class="room-card-note">one rhythm for the whole house</span>
 					</div>
-				</div>
+
+					<div class="house-chart">
+						<DaylightChart Periods="@_config.Periods" Location="@_homeLocation" />
+					</div>
+
+					@* Blending belongs to the schedule, not to a timing grab-bag: it is entirely about what happens at
+					   the boundaries the chart above draws. One token rather than a switch beside a number — blending
+					   off and blending over nothing are the same instruction. *@
+					<div class="room-sentences">
+						<SentenceView Sentences="@_blendSentence"
+									  Edited="@OnGlobalEdited"
+									  Note="@TokenNote"
+									  ShowLegend="false" />
+					</div>
+				</section>
 
 				<PeriodsEditor Periods="@_config.Periods"
 							   Changed="@Revalidate"
@@ -656,7 +677,7 @@ else
 					<h2>House modes</h2>
 					<p class="lede">
 						The house mode (Normal, Sleep, Away, Guest) lives in a Home Assistant dropdown helper. Pick the
-						helper, then say what each option means. You switch modes on the <a href="/">Dashboard</a>.
+						helper, then say what each option means. You switch modes on the <a href="/">board</a>.
 					</p>
 				</header>
 
@@ -685,8 +706,43 @@ else
 					</div>
 				</div>
 
+				@* What the modes actually do, in one sentence each, above the field-by-field editor that changes
+				   everything else about them. The two values a house actually tunes — how long it must be still
+				   before a mode arms itself, and the grace in which your own leaving doesn't cancel it — are
+				   tokens here; the rest is prose, because a scene and a period are picked from what Home
+				   Assistant has rather than from a shortlist. *@
+				@if (_modeLines.Count > 0)
+				{
+					<section class="panel room-card house-card">
+						<div class="room-card-head">
+							<Icon Name="@Glyph.Modes" Class="ic-head" />
+							<span class="room-card-title">What each mode does</span>
+							<span class="room-card-note">@_config.Global.HouseMode?.Entity</span>
+						</div>
+
+						<div class="house-rules">
+							@foreach (ModeLine line in _modeLines)
+							{
+								ModeLine mode = line;
+
+								<div class="house-rule">
+									<b class="house-rule-name">@mode.Name</b>
+									<SentenceView Sentences="@mode.Sentences"
+												  Edited="@OnModeEdited"
+												  Note="@TokenNote"
+												  ShowLegend="false" />
+									@if (IsActiveMode(mode))
+									{
+										<span class="house-rule-now">active now</span>
+									}
+								</div>
+							}
+						</div>
+					</section>
+				}
+
 				@* The option cards render at section level, not inside a form .field-control, so they stretch to the
-				   full width the area and period cards use rather than shrinking to their content. *@
+				   full width the period cards use rather than shrinking to their content. *@
 				@if (_config.Global.HouseMode?.Entity is { Length: > 0 })
 				{
 					<header class="section-head subsection">
@@ -724,8 +780,119 @@ else
 					</p>
 				</header>
 
-				<GroupFold Title="Identity"
-						   Description="What this house is called in logs and notifications.">
+				<section class="panel room-card house-card">
+					<div class="room-card-head">
+						<Icon Name="@Glyph.Residents" Class="ic-head" />
+						<span class="room-card-title">People</span>
+						<span class="room-card-note">whose presence decides Home and Away</span>
+					</div>
+
+					<div class="room-sentences">
+						<SentenceView Sentences="@_awaySentence"
+									  Edited="@OnGlobalEdited"
+									  Note="@TokenNote"
+									  ShowLegend="false" />
+					</div>
+
+					<div class="house-fields">
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Who lives here
+									<InfoPopover Label="Who lives here">
+										Whose presence decides Home and Away. Empty means everyone Home Assistant knows, including
+										people added later — usually right. List people only to leave someone out (a car tracker,
+										a guest entity).
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control">
+								<EntityListPicker Value="@_config.Global.Persons"
+												  ValueChanged="@SetPersons"
+												  Options="@_persons"
+												  NameResolver="@Name"
+												  KnownResolver="@Catalog.Knows"
+												  EmptyLabel="Empty — everyone Home Assistant knows, including people added later."
+												  AddLabel="Watch someone…"
+												  EmptyNote="@EmptyNote("No people found in Home Assistant — type an id.")"
+												  Placeholder="person.example" />
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<section class="panel room-card house-card">
+					<div class="room-card-head">
+						<Icon Name="@Glyph.House" Class="ic-head" />
+						<span class="room-card-title">Master switch</span>
+						<span class="room-card-note">one switch pauses everything</span>
+					</div>
+
+					@* The switch is picked from whatever Home Assistant has. That deliberately does not care how it got
+					   there — a hand-made helper today, or the enable switch NetDaemon's state manager publishes for
+					   this app, which is the built-in default when nothing is chosen. *@
+					<div class="house-fields">
+						<p class="group-note">
+							On means lights adjust automatically; off pauses everything at once &mdash; nothing is turned off,
+							changes just stop. This is the same switch as the On/Off control on the board.
+						</p>
+						<div class="field">
+							<div class="field-head">
+								<label class="field-label">Master switch
+									<InfoPopover Label="Master switch">
+										One switch that pauses all automatic lighting. Left unset, it uses this app's own enable
+										switch in Home Assistant. Point it at your own helper toggle to override.
+									</InfoPopover>
+								</label>
+							</div>
+							<div class="field-control">
+								<EntityPicker Value="@_config.Global.KillSwitchEntity"
+											  ValueChanged="@(value => Set(() => _config.Global.KillSwitchEntity = value))"
+											  Options="@_switches"
+											  NoneLabel="(default — this app's own enable switch)"
+											  EmptyNote="@EmptyNote("No switches or toggle helpers found — type an id.")"
+											  Placeholder="input_boolean.adaptive_lighting_enabled" />
+							</div>
+							@if (string.IsNullOrWhiteSpace(_config.Global.KillSwitchEntity))
+							{
+								@* Defaulted: the built-in switch is by definition an enabled-flag, so the polarity dropdown is
+								   hidden and the concrete id is shown instead. *@
+								<div class="field-help">
+									@if (_config.Global.EffectiveKillSwitchEntity is { Length: > 0 } builtIn)
+									{
+										<span>
+											Using <code>@builtIn</code> — the app's own switch in Home Assistant. Note: turning it
+											off pauses the whole app, this page included.
+										</span>
+									}
+									else
+									{
+										<span>
+											Will default to this app's own enable switch once the host has connected to Home Assistant.
+										</span>
+									}
+								</div>
+							}
+							else
+							{
+								@* Bound through strings rather than straight to the bool: @bind writes "True"/"False" into
+								   the element, neither option matches, and the select renders with nothing chosen — which
+								   is exactly the control that must never be ambiguous about which way round it reads. *@
+								<div class="field-control">
+									<select class="cell wide"
+											@bind:get="@(_config.Global.KillSwitchActiveWhenOff ? "true" : "false")"
+											@bind:set="SetKillSwitchPolarity">
+										<option value="true">read as an enabled flag — off kills the engine</option>
+										<option value="false">read as a kill switch — on kills the engine</option>
+									</select>
+								</div>
+								<div class="field-help">Gates the whole engine. This overrides the built-in default switch.</div>
+							}
+						</div>
+					</div>
+				</section>
+
+				<GroupFold Title="Fine tuning"
+						   Description="The house's name and the internals: clocks, how the engine tells its own changes from a person's, and how close is close enough.">
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">House name
@@ -736,109 +903,7 @@ else
 						</div>
 						<div class="field-control"><input class="cell wide" @bind="_config.ConfigName" placeholder="Adaptive lighting" /></div>
 					</div>
-				</GroupFold>
 
-				<GroupFold Title="People"
-						   Description="Whose presence decides Home and Away, and how long an empty house stays empty.">
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Who lives here
-								<InfoPopover Label="Who lives here">
-									Whose presence decides Home and Away. Empty means everyone Home Assistant knows, including
-									people added later — usually right. List people only to leave someone out (a car tracker,
-									a guest entity).
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<EntityListPicker Value="@_config.Global.Persons"
-											  ValueChanged="@SetPersons"
-											  Options="@_persons"
-											  NameResolver="@Name"
-											  KnownResolver="@Catalog.Knows"
-											  EmptyLabel="Empty — everyone Home Assistant knows, including people added later."
-											  AddLabel="Watch someone…"
-											  EmptyNote="@EmptyNote("No people found in Home Assistant — type an id.")"
-											  Placeholder="person.example" />
-						</div>
-					</div>
-
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Count the house as empty after
-								<InfoPopover Label="Count the house as empty after">
-									How long everyone must be gone before rooms react to an empty house. A short trip to the bin
-									should not sweep the lights off.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<input class="cell num" type="number" min="0" @bind="_config.Global.AwayDebounceMinutes" /> <span class="unit">min</span>
-						</div>
-					</div>
-				</GroupFold>
-
-				<GroupFold Title="Master switch"
-						   Description="One switch that pauses or resumes the whole engine — flip it here, on the dashboard, or in Home Assistant.">
-					@* The switch is picked from whatever Home Assistant has. That deliberately does not care how it got
-					   there — a hand-made helper today, or the enable switch NetDaemon's state manager publishes for
-					   this app, which is the built-in default when nothing is chosen. *@
-					<p class="group-note">
-						On means lights adjust automatically; off pauses everything at once &mdash; nothing is turned off,
-						changes just stop. This is the same switch as the On/Off control on the Dashboard.
-					</p>
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Master switch
-								<InfoPopover Label="Master switch">
-									One switch that pauses all automatic lighting. Left unset, it uses this app's own enable
-									switch in Home Assistant. Point it at your own helper toggle to override.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<EntityPicker Value="@_config.Global.KillSwitchEntity"
-										  ValueChanged="@(value => Set(() => _config.Global.KillSwitchEntity = value))"
-										  Options="@_switches"
-										  NoneLabel="(default — this app's own enable switch)"
-										  EmptyNote="@EmptyNote("No switches or toggle helpers found — type an id.")"
-										  Placeholder="input_boolean.adaptive_lighting_enabled" />
-						</div>
-						@if (string.IsNullOrWhiteSpace(_config.Global.KillSwitchEntity))
-						{
-							@* Defaulted: the built-in switch is by definition an enabled-flag, so the polarity dropdown is
-							   hidden and the concrete id is shown instead. *@
-							<div class="field-help">
-								@if (_config.Global.EffectiveKillSwitchEntity is { Length: > 0 } builtIn)
-								{
-									<span>
-										Using <code>@builtIn</code> — the app's own switch in Home Assistant. Note: turning it
-										off pauses the whole app, this page included.
-									</span>
-								}
-								else
-								{
-									<span>
-										Will default to this app's own enable switch once the host has connected to Home Assistant.
-									</span>
-								}
-							</div>
-						}
-						else
-						{
-							<div class="field-control">
-								<select class="cell wide" @bind="_config.Global.KillSwitchActiveWhenOff">
-									<option value="true">read as an enabled flag — off kills the engine</option>
-									<option value="false">read as a kill switch — on kills the engine</option>
-								</select>
-							</div>
-							<div class="field-help">Gates the whole engine. This overrides the built-in default switch.</div>
-						}
-					</div>
-				</GroupFold>
-
-				<GroupFold Title="Fine tuning"
-						   Description="The internals: clocks, how the engine tells its own changes from a person's, and how close is close enough.">
 					@* -----------------------------------------------------------------------------------------
 					   NetDaemonUserId is write-only here, on purpose. It is rendered as set/not-set and never as
 					   its value, in either direction — the input starts empty and only overwrites what is stored
@@ -933,6 +998,48 @@ else
 						</div>
 					</div>
 				</GroupFold>
+
+				@* Where the file lives and whether the engine is running: the two facts that explain why an edit here
+				   did or did not reach the house. Below the settings because they are read once, when something is
+				   wrong, rather than on every visit. *@
+				<GroupFold Title="This installation"
+						   Description="Where the document lives, and whether the engine is running.">
+					<div class="status-row">
+						<span class="status-label">Engine</span>
+						@if (Engine.IsRunning)
+						{
+							<span class="badge ok">running</span>
+							<span>@Engine.RunningAreaCount @(Engine.RunningAreaCount == 1 ? "room" : "rooms") managed.</span>
+						}
+						else
+						{
+							<span class="badge bad">not running</span>
+							<span>@(Engine.Fault ?? "Not started yet.")</span>
+						}
+					</div>
+					<div class="status-row">
+						<span class="status-label">File</span>
+						<code>@Location.Path</code>
+						<span class="badge">@Describe(Location.Source)</span>
+						@if (Engine.Store.HasBackup)
+						{
+							<span class="hint">previous version kept at <code>@Engine.Store.BackupPath</code></span>
+						}
+					</div>
+					<div class="status-row">
+						<span class="status-label">Home Assistant</span>
+						@if (HomeAssistantIsAnswering)
+						{
+							<span class="badge ok">connected</span>
+							<span>@_areas.Count @(_areas.Count == 1 ? "area" : "areas") known.</span>
+						}
+						else
+						{
+							<span class="badge bad">not connected</span>
+							<span>You can still type ids by hand; name checks are skipped if you save now.</span>
+						}
+					</div>
+				</GroupFold>
 			}
 		</div>
 	</div>
@@ -944,7 +1051,7 @@ else
 	/// </summary>
 	/// <remarks>
 	///     Four, not five: a setting now lives under the noun it changes, so there is no <c>Defaults</c> beside
-	///     <c>Areas</c> (the all-rooms settings <i>are</i> area settings, and are a group inside it) and no
+	///     <c>Areas</c> (the all-rooms settings <i>are</i> area settings, and are a card inside it) and no
 	///     <c>Advanced</c> at all (its contents went to the section whose noun they change, each behind that
 	///     section's own fold). "Advanced" answered "how confident must I be?"; it never answered "where do I look?".
 	/// </remarks>
@@ -955,6 +1062,16 @@ else
 		HouseModes,
 		House
 	}
+
+	/// <summary>
+	///     What every token popover on this page promises.
+	/// </summary>
+	/// <remarks>
+	///     There is no default for this in <c>SentenceView</c> on purpose: only the page knows whether a pick waits
+	///     behind a save bar or applies by itself, and a promise about saving is the worst kind of thing to be
+	///     wrong about. This page waits, and names its own undo.
+	/// </remarks>
+	private const string TokenNote = "Applies when you save. Discard changes puts it back.";
 
 	private AdaptiveLightingConfig _config = new();
 	private ValidationResult? _liveValidation;
@@ -974,15 +1091,14 @@ else
 	// area, and asking Home Assistant for every light once per area per render is how a page with six areas
 	// becomes slow for no reason.
 	private IReadOnlyList<AreaOption> _areas = [];
-	private IReadOnlyList<EntityOption> _lights = [];
-	private IReadOnlyList<EntityOption> _motionSensors = [];
+	private IReadOnlyList<AreaOption> _addableAreas = [];
 	private IReadOnlyList<EntityOption> _luxSensors = [];
-	private IReadOnlyList<EntityOption> _blockers = [];
 	private IReadOnlyList<EntityOption> _sunEntities = [];
 	private IReadOnlyList<EntityOption> _persons = [];
 	private IReadOnlyList<EntityOption> _switches = [];
 	private IReadOnlyList<EntityOption> _inputSelects = [];
 	private IReadOnlyList<EntityOption> _scenes = [];
+	private IReadOnlyList<EntityOption> _motionSensors = [];
 	private IReadOnlyList<EntityOption> _presenceEntities = [];
 	private IReadOnlyList<EntityOption> _dateTimes = [];
 	private IReadOnlyList<EntityOption> _activationEntities = [];
@@ -994,20 +1110,37 @@ else
 	private IReadOnlyList<string> _sensorDeviceClasses = [];
 	private IReadOnlyList<string> _motionDeviceClassChoices = [];
 
+	// The sentences, rebuilt with the document rather than during render: a projection asked for once per
+	// keystroke on a page that re-renders on every keystroke is work nobody sees.
+	private IReadOnlyList<Sentence> _blendSentence = [];
+	private IReadOnlyList<Sentence> _awaySentence = [];
+	private IReadOnlyList<ModeLine> _modeLines = [];
+
 	// The room list, grouped by the floor each area sits on. Recomputed whenever the document changes rather than
 	// during render: grouping asks the registry for a floor per area, and Blazor re-renders this page on every
 	// keystroke in it.
 	private IReadOnlyList<FloorGroup<AreaConfig>> _areaGroups = [];
 
-	// What each room is doing right now, for the header edge colour, keyed by area id with a name fallback — the
+	// What each room is doing right now, for the row's edge colour, keyed by area id with a name fallback — the
 	// same join the snapshot cache itself uses. Read from the cache rather than subscribed to: this page is an
 	// editor, and a live re-render mid-edit buys a livelier edge at the cost of the thing being edited.
 	private IReadOnlyDictionary<string, AreaState> _liveStates = new Dictionary<string, AreaState>(StringComparer.Ordinal);
 
 	// The re-setup flow. Null means the panel is closed; otherwise these are the rooms it opens with ticked —
-	// every room from the section header, one from inside a room's editor.
+	// every room from the section header, one from inside a room's page.
 	private IReadOnlyCollection<string>? _setupScope;
 	private string? _setupNote;
+
+	// Adding a room: which area it will be, and the ids added since the last save. A room the file does not
+	// have yet cannot be opened, because the room page reads the document from disk rather than from here.
+	private bool _addingRoom;
+	private string? _addAreaId;
+	private readonly HashSet<string> _unsaved = new(StringComparer.Ordinal);
+
+	// The all-rooms detail view: revealed on demand, and the sections a reader has opened or closed inside it.
+	private bool _showAllRooms;
+	private readonly HashSet<string> _closedGroups = new(StringComparer.Ordinal);
+	private readonly HashSet<string> _openedGroups = new(StringComparer.Ordinal);
 
 	/// <summary>
 	///     Whether Home Assistant is actually answering, as opposed to merely not throwing.
@@ -1021,11 +1154,11 @@ else
 	///     came back is the only signal that covers both.
 	/// </remarks>
 	private bool HomeAssistantIsAnswering =>
-		Catalog.IsHomeAssistantReady && (_areas.Count > 0 || _lights.Count > 0);
+		Catalog.IsHomeAssistantReady && (_areas.Count > 0 || _luxSensors.Count > 0 || _switches.Count > 0);
 
 	/// <summary>
 	///     Which section to open on load, taken from the URL (<c>?section=housemodes</c>). Lets another page
-	///     deep-link straight to a room: the dashboard's "set up a house mode" link lands on House modes rather
+	///     deep-link straight to a room: the board's "set up a house mode" link lands on House modes rather
 	///     than the default Areas. An absent or unrecognised value leaves the default. Read once on load — after
 	///     that the section rail owns which room is showing.
 	/// </summary>
@@ -1046,11 +1179,11 @@ else
 	///     The section a <c>?section=</c> value names, or <c>null</c> when it names none.
 	/// </summary>
 	/// <remarks>
-	///     The two sections that were renamed answer to their old names as well. A bookmark or a phone shortcut is
-	///     somebody's saved intent, and the restructure moved the contents rather than deleting them — landing on
-	///     Areas with no explanation would look like the link broke. <c>defaults</c> lands on Areas because that is
-	///     where the all-rooms settings went; <c>advanced</c> lands on House for the same reason, its remainder
-	///     having gone to the section whose noun it changes.
+	///     The renamed sections answer to their old names as well. A bookmark or a phone shortcut is somebody's
+	///     saved intent, and the restructure moved the contents rather than deleting them — landing on Areas with
+	///     no explanation would look like the link broke. <c>defaults</c> lands on Areas because that is where the
+	///     all-rooms settings went; <c>advanced</c> lands on House for the same reason, its remainder having gone
+	///     to the section whose noun it changes.
 	/// </remarks>
 	private static Section? Resolve(string? query)
 	{
@@ -1064,7 +1197,9 @@ else
 		{
 			"periods" => Section.Schedule,
 			"defaults" => Section.Areas,
+			"rooms" => Section.Areas,
 			"advanced" => Section.House,
+			"people" => Section.House,
 			_ => null
 		};
 	}
@@ -1078,6 +1213,8 @@ else
 		_result = null;
 		_userIdInput = null;
 		CloseSetup();
+		CloseAdd();
+		_unsaved.Clear();
 		_setupNote = null;
 
 		try
@@ -1113,7 +1250,6 @@ else
 		// discovery reads have to come from the document being edited rather than from a default.
 		_areas = Catalog.Areas(_config.Global);
 		_labelOptions = Catalog.LabelOptions();
-		_lights = Catalog.EntitiesInDomains("light");
 		_sunEntities = Catalog.EntitiesInDomains("sun");
 		_persons = Catalog.EntitiesInDomains("person", "device_tracker");
 		_switches = Catalog.EntitiesInDomains("input_boolean", "switch");
@@ -1125,10 +1261,9 @@ else
 		_activeModeValue = Catalog.CurrentStateOf(_config.Global.HouseMode?.Entity);
 		_houseModeOptionValues = HouseModeOptionValues();
 		_homeLocation = HomeGeo.TryRead();
-		_blockers = Catalog.EntitiesInDomains("binary_sensor", "input_boolean", "switch", "media_player");
 		_sensorDeviceClasses = Catalog.SensorDeviceClasses();
 
-		// Offer what discovery would accept, so the explicit list is a correction to discovery rather than a
+		// Offer what discovery would accept, so an explicit list is a correction to discovery rather than a
 		// parallel universe of every binary sensor in the house.
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _config.Global.EffectiveMotionDeviceClasses]);
 		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_config.Global.IlluminanceDeviceClass]);
@@ -1149,8 +1284,9 @@ else
 	}
 
 	/// <summary>
-	///     Re-reads the document's own verdict on itself, and with it the two things the room list derives from
-	///     outside the document: which floor each room is on, and what each room is doing.
+	///     Re-reads the document's own verdict on itself, and with it everything the page derives from the
+	///     document: its sentences, which floor each room is on, what each room is doing, and which areas are
+	///     still free to add.
 	/// </summary>
 	/// <remarks>
 	///     Every edit already routes through here, so hanging the derived views off it means they can never be one
@@ -1159,12 +1295,16 @@ else
 	private void Revalidate()
 	{
 		_liveValidation = Engine.Validate(_config);
+		_blendSentence = [HouseSentences.Blend(_config.Global)];
+		_awaySentence = [HouseSentences.AwayDebounce(_config.Global)];
+		_modeLines = HouseSentences.Modes(_config.Global.HouseMode, _config.Periods);
+		_addableAreas = HouseView.Unconfigured(_areas, _config.Areas);
 		RegroupAreas();
 		RefreshLiveStates();
 	}
 
 	/// <summary>
-	///     Groups the rooms by floor through the helper the dashboard shares, so the two pages can never disagree.
+	///     Groups the rooms by floor through the helper the board shares, so the two pages can never disagree.
 	/// </summary>
 	/// <remarks>
 	///     A registry that has not connected throws rather than answering, and a settings page that refused to
@@ -1208,7 +1348,38 @@ else
 		if (area.AreaId is { Length: > 0 } areaId && _liveStates.TryGetValue(areaId, out AreaState byId))
 			return byId;
 
-		return _liveStates.TryGetValue(area.DisplayName, out AreaState byName) ? byName : null;
+		return _liveStates.TryGetValue(HouseView.DisplayName(area), out AreaState byName) ? byName : null;
+	}
+
+	// ===================== the room list =====================
+
+	/// <summary>
+	///     A room's own page, or <c>null</c> when there is nothing to open yet.
+	/// </summary>
+	/// <remarks>
+	///     A room with no Home Assistant area has no route at all. A room that has one but was added since the
+	///     last save has no page <i>yet</i>: the room page loads the document from disk, so following the link
+	///     would land on "no such room" and read as a broken list rather than as an unsaved edit.
+	/// </remarks>
+	private string? RoomLink(AreaConfig area) =>
+		area.AreaId is { Length: > 0 } areaId && !_unsaved.Contains(areaId) ? HouseView.RoomHref(areaId) : null;
+
+	private static string ToggleTitle(bool enabled) => enabled
+		? "On — the lights in this room are managed. Switch off to leave them alone."
+		: "Off — this room is watched but its lights are never changed.";
+
+	/// <summary>
+	///     Flips a room's power switch.
+	/// </summary>
+	/// <remarks>
+	///     Writes an explicit <c>true</c> or <c>false</c>, never <c>null</c>: inheritance stays for documents that
+	///     predate the switch, but a decision somebody just made with their thumb belongs in the file as itself.
+	///     And it is an edit like any other — it arms the save bar rather than saving.
+	/// </remarks>
+	private void ToggleEnabled(AreaConfig area)
+	{
+		area.Enabled = !AreaView.IsEnabled(area, _config.Defaults);
+		Revalidate();
 	}
 
 	/// <summary>What the floor's bulk action offers: switching a floor off once every room on it is already on.</summary>
@@ -1225,6 +1396,235 @@ else
 		Revalidate();
 	}
 
+	private void ToggleAddRoom()
+	{
+		if (_addingRoom)
+			CloseAdd();
+		else
+		{
+			_setupNote = null;
+			_addingRoom = true;
+		}
+	}
+
+	private void CloseAdd()
+	{
+		_addingRoom = false;
+		_addAreaId = null;
+	}
+
+	/// <summary>
+	///     Adds a room for one Home Assistant area.
+	/// </summary>
+	/// <remarks>
+	///     Switched off explicitly, exactly as discovery proposes rooms: software that starts commanding lights in
+	///     a room the moment it is named is the first experience this design spent a work package removing. The
+	///     name follows the area's own, because a room called "stue" is worse than one called "Stue" and making
+	///     somebody type it again is worse than both.
+	/// </remarks>
+	private void AddRoom(string? areaId)
+	{
+		if (areaId is not { Length: > 0 })
+			return;
+
+		CloseAdd();
+
+		string name = _areas.FirstOrDefault(area => string.Equals(area.Id, areaId, StringComparison.Ordinal))?.Name ?? areaId;
+
+		_config.Areas.Add(new AreaConfig { AreaId = areaId, Name = name, Enabled = false });
+		_unsaved.Add(areaId);
+		_setupNote = $"{name} added, switched off. Save and apply, then open it to set it up.";
+
+		Revalidate();
+	}
+
+	/// <summary>
+	///     Gives a room with no Home Assistant area one, which is also what gives it a page.
+	/// </summary>
+	/// <remarks>
+	///     Marked unsaved like a newly added room: the room page reads the document from disk, so the link only
+	///     works once the file says the same thing this page does.
+	/// </remarks>
+	private void AdoptArea(AreaConfig area, string? areaId)
+	{
+		if (areaId is not { Length: > 0 })
+			return;
+
+		area.AreaId = areaId;
+
+		if (string.IsNullOrWhiteSpace(area.Name))
+			area.Name = _areas.FirstOrDefault(option => string.Equals(option.Id, areaId, StringComparison.Ordinal))?.Name ?? areaId;
+
+		_unsaved.Add(areaId);
+		Revalidate();
+	}
+
+	/// <summary>
+	///     Drops a room the list cannot open.
+	/// </summary>
+	/// <remarks>
+	///     Removing a room is the room page's own act, at the bottom of the page past everything it would throw
+	///     away. A room with no Home Assistant area has no page, so it would otherwise be unreachable and
+	///     unremovable — old documents that list entities explicitly and name no area are exactly that case.
+	/// </remarks>
+	private void RemoveArea(AreaConfig area)
+	{
+		_config.Areas.Remove(area);
+		Revalidate();
+	}
+
+	// ===================== the all-rooms settings =====================
+
+	/// <summary>
+	///     Whether a section of the detail view is open. Sections carry their own default and a reader's toggle
+	///     outranks it, so the rare sections stay folded until somebody wants them and stay open once they did.
+	/// </summary>
+	private bool IsOpen(RoomSettingGroup group) =>
+		group.StartsOpen ? !_closedGroups.Contains(group.Title) : _openedGroups.Contains(group.Title);
+
+	private void Toggle(RoomSettingGroup group)
+	{
+		if (IsOpen(group))
+		{
+			_openedGroups.Remove(group.Title);
+			_closedGroups.Add(group.Title);
+		}
+		else
+		{
+			_closedGroups.Remove(group.Title);
+			_openedGroups.Add(group.Title);
+		}
+	}
+
+	private bool IsCurrentChoice(string key, TokenChoice choice) =>
+		string.Equals(RoomSettings.Choice(null, _config.Defaults, key).ToString(), choice.Value, StringComparison.Ordinal);
+
+	/// <summary>
+	///     Applies one edit from the all-rooms sentences.
+	/// </summary>
+	/// <remarks>
+	///     A key this page cannot apply is a sentence and a page that have drifted apart. Silently doing nothing
+	///     would look like a dead control, so it is logged where it can be found.
+	/// </remarks>
+	private void OnDefaultEdited(SentenceEdit edit)
+	{
+		if (!RoomSettings.Apply(_config.Defaults, edit))
+		{
+			Logger.LogWarning("A sentence offered an edit to {Key}, which the House tab does not know how to apply.", edit.Key);
+			return;
+		}
+
+		Revalidate();
+	}
+
+	private void SetHouseNumber(string key, double value)
+	{
+		RoomSettings.SetShown(_config.Defaults, key, value);
+		Revalidate();
+	}
+
+	private void SetHouseFlag(string key, bool value)
+	{
+		RoomSettings.SetFlag(_config.Defaults, key, value);
+		Revalidate();
+	}
+
+	private void SetHouseChoice(string key, string value)
+	{
+		if (!Enum.TryParse(value, out DarknessSource source))
+			return;
+
+		_config.Defaults.Darkness = source;
+		Revalidate();
+	}
+
+	private void SetHouseEntity(string key, string? value)
+	{
+		RoomSettings.SetEntity(_config.Defaults, key, value);
+		Revalidate();
+	}
+
+	// ===================== the house's own sentences =====================
+
+	/// <summary>
+	///     Applies an edit from a house-wide sentence — the schedule's blend and the away debounce.
+	/// </summary>
+	/// <remarks>
+	///     Blending is one value in two properties: zero minutes means the lights step at the boundary, which is
+	///     what <c>SmoothTransitions</c> off already meant. The minute count is left alone when blending is
+	///     switched off, so turning it back on restores what it was rather than a zero nobody chose.
+	/// </remarks>
+	private void OnGlobalEdited(SentenceEdit edit)
+	{
+		switch (edit.Key)
+		{
+			case nameof(GlobalConfig.BlendMinutes):
+				int minutes = edit.Integer;
+				_config.Global.SmoothTransitions = minutes > 0;
+
+				if (minutes > 0)
+					_config.Global.BlendMinutes = minutes;
+
+				break;
+
+			case nameof(GlobalConfig.AwayDebounceMinutes):
+				_config.Global.AwayDebounceMinutes = edit.Minutes;
+				break;
+
+			default:
+				Logger.LogWarning("A house sentence offered an edit to {Key}, which the House tab does not know how to apply.", edit.Key);
+				return;
+		}
+
+		Revalidate();
+	}
+
+	/// <summary>
+	///     Applies an edit from a mode sentence.
+	/// </summary>
+	/// <remarks>
+	///     The key carries which option it belongs to, because a house has several modes on one card. It is read
+	///     back by <see cref="HouseSentences.TryReadModeKey"/> rather than parsed here, so both halves of the
+	///     encoding stay in one file.
+	/// </remarks>
+	private void OnModeEdited(SentenceEdit edit)
+	{
+		if (!HouseSentences.TryReadModeKey(edit.Key, out int index, out string property)
+			|| _config.Global.HouseMode is not { } houseMode
+			|| index < 0
+			|| index >= houseMode.Options.Count)
+		{
+			Logger.LogWarning("A mode sentence offered an edit to {Key}, which names no option on this document.", edit.Key);
+			return;
+		}
+
+		HouseModeOptionConfig option = houseMode.Options[index];
+
+		switch (property)
+		{
+			case nameof(HouseModeOptionConfig.ActivateAfterNoMotionMinutes):
+				option.ActivateAfterNoMotionMinutes = edit.Minutes;
+				break;
+
+			case nameof(HouseModeOptionConfig.ResetPresenceGraceMinutes):
+				option.ResetPresenceGraceMinutes = edit.Minutes;
+				break;
+
+			default:
+				Logger.LogWarning("A mode sentence offered an edit to {Property}, which the House tab does not know how to apply.", property);
+				return;
+		}
+
+		Revalidate();
+	}
+
+	/// <summary>Whether the house is standing on this mode right now, as Home Assistant reports it.</summary>
+	private bool IsActiveMode(ModeLine mode) =>
+		_activeModeValue is { Length: > 0 } active
+		&& string.Equals(active.Trim(), mode.Name.Trim(), StringComparison.OrdinalIgnoreCase);
+
+	// ===================== setting rooms up again =====================
+
 	/// <summary>
 	///     Whether setting rooms up again can be offered: it rebuilds each room from the registry, so a registry
 	///     that is not answering means the button would produce an empty plan and a confusing dialog.
@@ -1234,13 +1634,8 @@ else
 	private void OpenSetupForEveryRoom()
 	{
 		_setupNote = null;
+		CloseAdd();
 		_setupScope = [.. _config.Areas.Select(area => area.AreaId).OfType<string>().Where(areaId => areaId.Length > 0)];
-	}
-
-	private void OpenSetupForRoom(AreaConfig area)
-	{
-		_setupNote = null;
-		_setupScope = area.AreaId is { Length: > 0 } areaId ? [areaId] : [];
 	}
 
 	private void CloseSetup() => _setupScope = null;
@@ -1268,7 +1663,15 @@ else
 			done.Add($"{Rooms(plan.Rebuilds.Count)} rebuilt");
 
 		if (plan.NewAreas.Count > 0)
+		{
 			done.Add($"{Rooms(plan.NewAreas.Count)} added, switched off");
+
+			foreach (AreaConfig added in plan.NewAreas)
+			{
+				if (added.AreaId is { Length: > 0 } areaId)
+					_unsaved.Add(areaId);
+			}
+		}
 
 		_setupNote = done.Count == 0
 			? "Nothing changed."
@@ -1282,6 +1685,8 @@ else
 	/// <summary>The name Home Assistant shows for an area id, for rooms the document does not have yet.</summary>
 	private string AreaName(string areaId) =>
 		_areas.FirstOrDefault(area => string.Equals(area.Id, areaId, StringComparison.Ordinal))?.Name ?? areaId;
+
+	// ===================== the write path =====================
 
 	private void Save()
 	{
@@ -1323,10 +1728,15 @@ else
 					: "Saved, but the file timestamp did not change — check the log.");
 				_result = null;
 
+				// Everything on disk now has a page to open.
+				_unsaved.Clear();
+				_setupNote = null;
+
 				// Re-read so the page shows what is actually on disk, formatting and all, rather than the
 				// object it happened to be holding.
 				_config = Engine.Store.Load();
 				LoadCatalog();
+				Revalidate();
 			}
 		}
 		catch (LightingConfigException exception)
@@ -1378,18 +1788,7 @@ else
 		_confirmationCts?.Dispose();
 	}
 
-	private void AddArea()
-	{
-		_config.Areas.Add(new AreaConfig());
-		_section = Section.Areas;
-		Revalidate();
-	}
-
-	private void RemoveArea(AreaConfig area)
-	{
-		_config.Areas.Remove(area);
-		Revalidate();
-	}
+	// ===================== the small print =====================
 
 	private void ClearUserId()
 	{
@@ -1403,8 +1802,9 @@ else
 		Revalidate();
 	}
 
-	private void SetDefaultSunEntity(string? value) =>
-		Set(() => _config.Defaults.SunEntity = value ?? string.Empty);
+	/// <summary>Which way round the master switch reads, written from the segment the select stands on.</summary>
+	private void SetKillSwitchPolarity(string? value) =>
+		Set(() => _config.Global.KillSwitchActiveWhenOff = string.Equals(value, "true", StringComparison.Ordinal));
 
 	private void SetOutdoorLux(string? value) =>
 		Set(() => _config.Global.OutdoorLuxSensor = string.IsNullOrWhiteSpace(value) ? null : value);
@@ -1507,6 +1907,11 @@ else
 	private string EmptyNote(string noneYet) => HomeAssistantIsAnswering
 		? noneYet
 		: "Waiting for Home Assistant — type an id for now.";
+
+	/// <summary>Why the add-a-room picker has nothing to offer: no connection, or no area left unclaimed.</summary>
+	private string AddEmptyNote => !HomeAssistantIsAnswering
+		? "Waiting for Home Assistant — type an area id for now."
+		: "Every area Home Assistant knows already has a room. Type an id if one is coming.";
 
 	private static string Describe(ConfigLocationSource source) => source switch
 	{

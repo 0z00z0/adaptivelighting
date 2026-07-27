@@ -99,10 +99,18 @@ public sealed record RoomSetting(
 public sealed record RoomSettingGroup(string Title, string Note, IReadOnlyList<RoomSetting> Settings, bool StartsOpen);
 
 /// <summary>
-///     The room page's model of the settings one room can override: which they are, what they are called, how
-///     they are grouped, and how one is read, written and sent back to following the house.
+///     The model of the settings one room can override: which they are, what they are called, how they are
+///     grouped, and how one is read, written and sent back to following the house.
 /// </summary>
 /// <remarks>
+///     <para>
+///         Two surfaces read it. The room page renders these settings against one <see cref="AreaConfig"/>; the
+///         House tab renders the very same list against the document's <see cref="AreaSettings"/> defaults —
+///         which is why every reader takes a nullable room and every writer has a twin that takes the house
+///         instead. Splitting the two into separate classes would duplicate the key-to-property mapping and the
+///         unit conversions, and a house that wrote a warning dim as 50 while a room wrote it as 0.5 is exactly
+///         the drift this class exists to prevent.
+///     </para>
 ///     <para>
 ///         <b>The set of settings is derived, not listed.</b> <see cref="Keys"/> is reflection over the nullable
 ///         twins <see cref="AreaConfig"/> declares for <see cref="AreaSettings"/> properties, so a setting added
@@ -607,6 +615,130 @@ public static class RoomSettings
 					return false;
 
 				room.Darkness = source;
+				return true;
+
+			default:
+				return false;
+		}
+	}
+
+	// ===================== the house's own copy of the same settings =====================
+	//
+	// The House tab edits AreaSettings directly: these values ARE the house, so there is no null to mean
+	// "inherit" and no road back to offer. Everything else — which keys exist, what each is called, how a shown
+	// value converts to a stored one — is the same metadata the room page reads, so a change to a bound or a
+	// unit lands on both surfaces at once.
+
+	/// <summary>
+	///     Writes a numeric house default from a value given in the unit its control shows.
+	/// </summary>
+	/// <remarks>
+	///     Bounded and converted by exactly <see cref="SetShown(AreaConfig, string, double)"/>'s rules. The house
+	///     has no nullable twin, so this always writes a value — there is nothing above it to fall back to.
+	/// </remarks>
+	/// <param name="house">The document's all-rooms settings, changed in place.</param>
+	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
+	/// <param name="shown">The new value, in the control's own unit.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="house"/> is <c>null</c>.</exception>
+	public static void SetShown(AreaSettings house, string key, double shown)
+	{
+		ArgumentNullException.ThrowIfNull(house);
+
+		RoomSetting setting = Of(key);
+		double bounded = Math.Clamp(shown, setting.Min, setting.Max ?? double.MaxValue);
+		double stored = setting.Control == RoomControl.Fraction ? bounded / 100 : bounded;
+
+		PropertyInfo property = HouseProperties[key];
+
+		property.SetValue(
+			house,
+			property.PropertyType == typeof(int)
+				? (int)Math.Round(stored, MidpointRounding.AwayFromZero)
+				: Convert.ChangeType(stored, property.PropertyType, CultureInfo.InvariantCulture));
+	}
+
+	/// <summary>Writes a yes/no house default.</summary>
+	/// <param name="house">The document's all-rooms settings, changed in place.</param>
+	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
+	/// <param name="value">The new value.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="house"/> is <c>null</c>.</exception>
+	public static void SetFlag(AreaSettings house, string key, bool value)
+	{
+		ArgumentNullException.ThrowIfNull(house);
+
+		HouseProperties[key].SetValue(house, value);
+	}
+
+	/// <summary>
+	///     Writes an entity-valued house default.
+	/// </summary>
+	/// <remarks>
+	///     An empty pick is stored as an empty string rather than <c>null</c>: the house's own properties are not
+	///     nullable, and empty is already what the engine reads as "nothing chosen".
+	/// </remarks>
+	/// <param name="house">The document's all-rooms settings, changed in place.</param>
+	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
+	/// <param name="value">The entity id, or <c>null</c>/empty for none.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="house"/> is <c>null</c>.</exception>
+	public static void SetEntity(AreaSettings house, string key, string? value)
+	{
+		ArgumentNullException.ThrowIfNull(house);
+
+		HouseProperties[key].SetValue(house, value ?? string.Empty);
+	}
+
+	/// <summary>
+	///     Applies one sentence-token edit to the house's defaults.
+	/// </summary>
+	/// <remarks>
+	///     The same typed conversions <see cref="Apply(AreaConfig, SentenceEdit)"/> makes, against the
+	///     non-nullable twins — so a value picked in the House tab's sentence and the same value picked in a
+	///     room's sentence cannot land in the document meaning different things.
+	/// </remarks>
+	/// <param name="house">The document's all-rooms settings, changed in place. Nothing here writes to disk.</param>
+	/// <param name="edit">The edit the sentence handed back.</param>
+	/// <returns>Whether the key was one this class knows how to apply.</returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public static bool Apply(AreaSettings house, SentenceEdit edit)
+	{
+		ArgumentNullException.ThrowIfNull(house);
+		ArgumentNullException.ThrowIfNull(edit);
+
+		switch (edit.Key)
+		{
+			case nameof(AreaSettings.VacancyTimeoutSeconds):
+				house.VacancyTimeoutSeconds = edit.Seconds;
+				return true;
+
+			case nameof(AreaSettings.PreOffSeconds):
+				house.PreOffSeconds = edit.Seconds;
+				return true;
+
+			case nameof(AreaSettings.PreOffBrightnessFactor):
+				house.PreOffBrightnessFactor = edit.Fraction;
+				return true;
+
+			case nameof(AreaSettings.OverrideDurationMinutes):
+				house.OverrideDurationMinutes = edit.Minutes;
+				return true;
+
+			case nameof(AreaSettings.VacancyResetMinutes):
+				house.VacancyResetMinutes = edit.Minutes;
+				return true;
+
+			case nameof(AreaSettings.LuxThreshold):
+				house.LuxThreshold = edit.Number;
+				return true;
+
+			case nameof(AreaSettings.SunElevationThreshold):
+				house.SunElevationThreshold = edit.Number;
+				return true;
+
+			case nameof(AreaSettings.Darkness):
+				if (!edit.TryEnum(out DarknessSource source))
+					return false;
+
+				house.Darkness = source;
 				return true;
 
 			default:

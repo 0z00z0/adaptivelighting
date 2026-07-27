@@ -1,60 +1,60 @@
 @*
-	The house-mode card on the dashboard: the mode the house is in right now, one plain line on what that
-	means, and a row of pill buttons to switch it. It is the only caller of ModeService.SelectHouseMode now
-	that the standalone Modes page is gone — and it adds no write path of its own. Everything shown is
-	read-only enrichment (the current value, the meaning line, the reset summary), and the single action is the
-	existing config-resolved SelectHouseMode, which re-resolves the entity against the configuration before it
-	acts. The parent (Dashboard) owns the data and the write; this component renders and reports the click.
+	The house-mode cell of the board's house bar: the mode the house is in right now, and a row of pill buttons
+	to switch it. It is the only caller of ModeService.SelectHouseMode now that the standalone Modes page is
+	gone — and it adds no write path of its own. Everything shown is read-only enrichment (the current value,
+	the meaning line, the reset summary), and the single action is the existing config-resolved SelectHouseMode,
+	which re-resolves the entity against the configuration before it acts. The parent (Dashboard) owns the data
+	and the write; this component renders and reports the click.
+
+	It used to be a card of its own, three rows tall, with the meaning as a permanent line. It is now one cell of
+	one strip and the meaning is the value's own hover: the board's chrome is measured against the lanes it
+	displaces, and what each mode does is written out properly on the House tab.
 *@
 
-<div class="panel">
-	<div class="house-panel-head">House mode</div>
+<div class="housebar-cell">
+	<span class="housebar-lab">House mode</span>
 
 	@if (HouseMode is not { } houseMode)
 	{
-		<div class="house-mode-empty">
-			No house mode set up. Add one under <a href="config?section=housemodes"><strong>Configuration &rarr; House modes</strong></a>.
+		<div class="housebar-note">
+			No house mode set up. <a href="config?section=housemodes">Add one under House modes</a>.
 		</div>
 	}
 	else
 	{
-		@if (Available)
-		{
-			<div class="house-mode-current">@houseMode.CurrentValue</div>
-			@if (MeaningLine is { Length: > 0 } meaning)
-			{
-				<p class="house-mode-meaning">@meaning</p>
-			}
-		}
-		else
-		{
-			<div class="house-mode-current unknown">unknown</div>
-			<p class="house-mode-meaning">
-				Waiting for Home Assistant &mdash; the mode can't be read or changed right now.
-			</p>
-		}
+		@* The mode's own meaning is the title rather than a line of its own: it is reference material, it costs
+		   two rows of the board's chrome every visit, and the House tab now says it in full for every mode. *@
+		<div class="housebar-main">
+			<span class="housebar-value @(Available ? null : "unknown")" title="@MeaningLine">
+				@(Available ? houseMode.CurrentValue : "unknown")
+			</span>
 
-		<div class="mode-pill-row">
-			@foreach (HouseModeOptionView option in houseMode.Options)
-			{
-				HouseModeOptionView pick = option;
-				<button type="button"
-						class="mode-pill @(pick.IsCurrent ? "current" : "")"
-						disabled="@(!houseMode.IsAvailable)"
-						title="Switch the house to @pick.Value"
-						@onclick="() => OnSelect.InvokeAsync(pick.Value)">
-					@pick.Value
-				</button>
-			}
+			<div class="mode-pill-row">
+				@foreach (HouseModeOptionView option in houseMode.Options)
+				{
+					HouseModeOptionView pick = option;
+					<button type="button"
+							class="mode-pill @(pick.IsCurrent ? "current" : "")"
+							disabled="@(!houseMode.IsAvailable)"
+							title="Switch the house to @pick.Value"
+							@onclick="() => OnSelect.InvokeAsync(pick.Value)">
+						@pick.Value
+					</button>
+				}
+			</div>
 		</div>
 
+		@if (!Available)
+		{
+			<p class="housebar-note">Waiting for Home Assistant &mdash; the mode can't be read or changed right now.</p>
+		}
 		@if (Confirmation is { Length: > 0 } confirmation)
 		{
-			<div class="notice ok">@confirmation</div>
+			<p class="housebar-note ok">@confirmation</p>
 		}
 		@if (Message is { Length: > 0 } message)
 		{
-			<div class="notice bad">@message</div>
+			<p class="housebar-note bad">@message</p>
 		}
 	}
 </div>
