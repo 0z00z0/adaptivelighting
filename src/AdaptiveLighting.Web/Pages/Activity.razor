@@ -169,10 +169,17 @@ else
 	/// <summary>
 	///     Draws everything the log is holding and moves the read mark to the newest report.
 	/// </summary>
+	/// <remarks>
+	///     One <see cref="ActivityLog.Read"/>, never the two properties in turn: a report landing between two
+	///     separately-locked reads would be marked as shown while being absent from the list that was shown, and
+	///     nothing would offer it again until the next report happened to arrive.
+	/// </remarks>
 	private void ShowNew()
 	{
-		_entries = Log.Entries;
-		_shownThrough = Log.Newest;
+		ActivityTimeline timeline = Log.Read();
+
+		_entries = timeline.Entries;
+		_shownThrough = timeline.Newest;
 
 		ApplyFilter();
 	}

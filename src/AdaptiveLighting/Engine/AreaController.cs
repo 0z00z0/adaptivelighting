@@ -551,39 +551,54 @@ public sealed class AreaController : IDisposable
 
 	private bool CanAutoOn(out string blockedBy)
 	{
-		blockedBy = "";
+		AutoOnBlock block = AutoOnBlockNow(RefreshDarkness(), out string? blocker);
+
+		blockedBy = block switch
+		{
+			AutoOnBlock.None => "",
+			AutoOnBlock.KillSwitch => "kill switch is active",
+			AutoOnBlock.Disabled => "area is disabled",
+			AutoOnBlock.Away => _house.IsAnyoneHome ? "the house is set to away" : "nobody is home",
+			AutoOnBlock.Sleep => "sleep mode blocks auto-on for this area",
+			AutoOnBlock.EntityOn => $"{blocker} is on",
+			_ => $"not dark enough ({_gateSensor.DarknessDetail()})"
+		};
+
+		return block == AutoOnBlock.None;
+	}
+
+	/// <summary>
+	///     Which gate would refuse to light this area for movement right now, judged against <paramref name="dark"/>.
+	/// </summary>
+	/// <remarks>
+	///     The one place the auto-on gates are written down. <see cref="CanAutoOn"/> asks it before acting and
+	///     <see cref="Snapshot"/> asks it to fill <see cref="AreaSnapshot.AutoOnBlockedBy"/>, so what a reader is
+	///     told is the verdict the engine acted on. A second copy of these rules kept in the publisher or the page
+	///     would drift from this one, and that drift is exactly how the activity page came to promise lights that
+	///     were never going to come on.
+	/// </remarks>
+	/// <param name="dark">The darkness verdict to judge against, passed in so the caller decides which reading applies.</param>
+	/// <param name="blocker">The entity holding auto-on off, when <see cref="AutoOnBlock.EntityOn"/> is the answer.</param>
+	private AutoOnBlock AutoOnBlockNow(bool dark, out string? blocker)
+	{
+		blocker = null;
 
 		if (!IsEngineAllowed())
-		{
-			blockedBy = _house.KillSwitchActive ? "kill switch is active" : "area is disabled";
-			return false;
-		}
+			return _house.KillSwitchActive ? AutoOnBlock.KillSwitch : AutoOnBlock.Disabled;
 
 		if (_house.Mode == HouseMode.Away)
-		{
-			blockedBy = _house.IsAnyoneHome ? "the house is set to away" : "nobody is home";
-			return false;
-		}
+			return AutoOnBlock.Away;
 
 		if (_area.Settings.SleepBlocksAutoOn && _house.Mode == HouseMode.Sleep)
+			return AutoOnBlock.Sleep;
+
+		if (_area.IgnoreWhenOn.FirstOrDefault(_ha.IsOn) is { } blocking)
 		{
-			blockedBy = "sleep mode blocks auto-on for this area";
-			return false;
+			blocker = blocking;
+			return AutoOnBlock.EntityOn;
 		}
 
-		if (_area.IgnoreWhenOn.FirstOrDefault(_ha.IsOn) is { } blocker)
-		{
-			blockedBy = $"{blocker} is on";
-			return false;
-		}
-
-		if (!RefreshDarkness())
-		{
-			blockedBy = $"not dark enough ({_gateSensor.DarknessDetail()})";
-			return false;
-		}
-
-		return true;
+		return dark ? AutoOnBlock.None : AutoOnBlock.NotDark;
 	}
 
 	/// <summary>Re-reads the darkness gate, keeping the verdict the snapshot and the fade length both use.</summary>
@@ -804,6 +819,10 @@ public sealed class AreaController : IDisposable
 		// rather than copied from the last command, so an idle area still names the period it is sitting in.
 		LightCommand? standing = _lastCommand is { On: true } ? _lastCommand : null;
 
+		// Asked at the snapshot's own instant, against the verdict already read rather than a fresh one, so the
+		// gate a report carries and the reading beside it are the same moment's answer.
+		AutoOnBlock blocked = AutoOnBlockNow(_lastDarkVerdict ?? false, out string? blocker);
+
 		return new AreaSnapshot(
 			Name,
 			_state,
@@ -821,7 +840,9 @@ public sealed class AreaController : IDisposable
 			_nextChangeFrom,
 			_house.ModeValue,
 			_lastDarknessDetail,
-			_areaId);
+			_areaId,
+			blocked,
+			blocker);
 	}
 
 	/// <summary>The period name for <paramref name="now"/>, resolving (and caching) it only if this instant is not the one already resolved.</summary>

@@ -60,7 +60,11 @@ public sealed class HaStatePublisher : IStatePublisher
 				last_motion_at = snapshot.LastMotionAt,
 				next_change_at = snapshot.NextChangeAt,
 				next_change_from = snapshot.NextChangeFrom,
-				darkness_detail = snapshot.DarknessDetail
+				darkness_detail = snapshot.DarknessDetail,
+				// Additive, exactly as area_id was: a consumer that never learned about the auto-on gate reads
+				// every field it already knew unchanged, and sees them as absent rather than as "nothing blocks".
+				auto_on_blocked_by = snapshot.AutoOnBlockedBy?.ToString(),
+				auto_on_blocking_entity = snapshot.AutoOnBlockingEntity
 			});
 		}
 		catch (Exception exception)

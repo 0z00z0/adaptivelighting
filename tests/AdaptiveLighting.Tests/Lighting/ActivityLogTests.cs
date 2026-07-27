@@ -10,11 +10,12 @@ namespace AdaptiveLighting.Tests.Lighting;
 /// <remarks>
 ///     <para>
 ///         This repo has no Razor render-test harness and deliberately does not gain one, so the timeline's
-///         judgement was written as pure functions and only its arrangement lives in the page. Four things are
+///         judgement was written as pure functions and only its arrangement lives in the page. Five things are
 ///         worth being sure about: the buffer really is bounded (an unbounded one is a leak that only shows up
 ///         on the houses that have been running longest), it evicts oldest-first (or the page silently loses the
-///         wrong end of the history), the room filter matches what the dropdown offered, and the line built from
-///         a report says what the engine actually saw.
+///         wrong end of the history), the entries and the count that goes with them come back from one read (or a
+///         report landing between two is counted as shown while missing from what was shown), the room filter
+///         matches what the dropdown offered, and the line built from a report says what the engine actually saw.
 ///     </para>
 ///     <para>
 ///         That last one is the feature's reason for existing. The owner's question was why a light did not come
@@ -38,7 +39,9 @@ public sealed class ActivityLogTests
 		double? brightness = null,
 		int? kelvin = null,
 		HouseMode mode = HouseMode.Home,
-		string? houseModeValue = null) =>
+		string? houseModeValue = null,
+		AutoOnBlock? autoOnBlockedBy = null,
+		string? autoOnBlockingEntity = null) =>
 		new(
 			area,
 			state,
@@ -55,7 +58,10 @@ public sealed class ActivityLogTests
 			null,
 			null,
 			houseModeValue,
-			darknessDetail);
+			darknessDetail,
+			null,
+			autoOnBlockedBy,
+			autoOnBlockingEntity);
 
 	private static ActivityEntry Entry(long sequence, AreaSnapshot snapshot) => new(sequence, snapshot);
 
@@ -146,6 +152,81 @@ public sealed class ActivityLogTests
 
 		Assert.IsFalse(log.IsEmpty);
 		Assert.AreEqual(1L, log.Newest, "sequences count from one, so zero can mean 'nothing yet'");
+	}
+
+	/// <summary>
+	///     The timeline and the count that goes with it come back together, and mean the same instant.
+	/// </summary>
+	[TestMethod]
+	public void A_Read_Hands_Over_The_Entries_And_The_Count_As_One()
+	{
+		ActivityLog log = new();
+
+		ActivityTimeline nothing = log.Read();
+
+		Assert.AreEqual(0, nothing.Entries.Count);
+		Assert.AreEqual(0L, nothing.Newest, "sequences count from one, so zero still means 'nothing yet'");
+
+		log.Record(Report("Stue"));
+		log.Record(Report("Bad"));
+
+		ActivityTimeline timeline = log.Read();
+
+		Assert.AreEqual(2, timeline.Entries.Count);
+		Assert.AreEqual("Bad", timeline.Entries[0].AreaName, "newest first, exactly as Entries hands them over");
+		Assert.AreEqual(2L, timeline.Newest);
+	}
+
+	/// <summary>
+	///     <b>The report that used to vanish.</b> Reading the entries and the sequence as two separately-locked
+	///     calls leaves a gap, and a report landing in it is counted as shown while being absent from what was
+	///     shown: no "new reports" button appears for it and the row stays invisible until some later report
+	///     happens to arrive, which in a quiet house is hours. So the two come back from one lock, and the
+	///     invariant that proves it is that the newest entry held is the newest sequence counted.
+	/// </summary>
+	[TestMethod]
+	public void A_Report_Arriving_Mid_Read_Is_Never_Counted_As_Shown_While_Missing()
+	{
+		// Reader-driven: a fixed number of reads against a writer that runs until they are done, so the window
+		// the race needs is never closed early by the writer finishing first. The reads only begin once the
+		// writer has filed one report, because reads of an empty log cost nothing and five thousand of them can
+		// otherwise be over before the pool has started the writer at all.
+		ActivityLog log = new();
+		const int Reads = 5_000;
+
+		using CancellationTokenSource stop = new();
+		using ManualResetEventSlim running = new();
+
+		Task writer = Task.Run(() =>
+		{
+			log.Record(Report("Stue"));
+			running.Set();
+
+			while (!stop.IsCancellationRequested)
+				log.Record(Report("Stue"));
+		});
+
+		Assert.IsTrue(running.Wait(TimeSpan.FromSeconds(30)), "the writer never started, so nothing was raced");
+
+		long torn = 0;
+
+		for (int read = 0; read < Reads; read++)
+		{
+			ActivityTimeline timeline = log.Read();
+
+			if (timeline.Entries.Count > 0 && timeline.Entries[0].Sequence != timeline.Newest)
+				torn++;
+		}
+
+		stop.Cancel();
+		writer.GetAwaiter().GetResult();
+
+		Assert.AreEqual(0L, torn,
+			$"{torn} of {Reads} reads counted a report that was not in the list they came with");
+
+		ActivityTimeline settled = log.Read();
+
+		Assert.AreEqual(settled.Newest, settled.Entries[0].Sequence, "and the two still agree once the house goes quiet");
 	}
 
 	// ===================== the room filter =====================
@@ -326,6 +407,75 @@ public sealed class ActivityLogTests
 
 		Assert.AreEqual("Dark enough now — movement will switch the lights on", line.What);
 		Assert.AreEqual("lux 12, dark below 40", line.Why);
+	}
+
+	/// <summary>
+	///     <b>The line that used to lie.</b> Dark enough is only half the question. An area set not to light
+	///     itself while the house sleeps sits in exactly the state of an area merely waiting for someone to walk
+	///     in, so the row promised a light that was never going to come on — and it appeared at dusk, which is
+	///     when somebody is reading this page to find out why the room stayed dark. Auto-discovery sets that
+	///     setting on every bedroom it finds, so this was every bedroom in the house, every night.
+	/// </summary>
+	[TestMethod]
+	public void A_Sleeping_House_Does_Not_Promise_A_Light_That_Will_Not_Come_On()
+	{
+		ActivityLine line = ActivityView.Describe(Report(
+			"Soverom",
+			AreaState.AutoVacant,
+			TransitionReason.CircadianTick,
+			isDark: true,
+			darknessDetail: "lux 12, dark below 40",
+			mode: HouseMode.Sleep,
+			autoOnBlockedBy: AutoOnBlock.Sleep));
+
+		Assert.AreEqual(
+			"Dark enough now, but the house is asleep — movement will not switch the lights on",
+			line.What);
+		Assert.AreEqual("lux 12, dark below 40", line.Why,
+			"the reading is still the measurement the verdict was reached on");
+	}
+
+	/// <summary>
+	///     A television on at dusk is the everyday version of the same lie, and the row has to say which entity:
+	///     "something is on" leaves the reader walking the room looking for it, which is the dead end this page
+	///     exists to end.
+	/// </summary>
+	[TestMethod]
+	public void A_Blocking_Entity_Is_Named_Rather_Than_Alluded_To()
+	{
+		ActivityLine line = ActivityView.Describe(Report(
+			"Stue",
+			AreaState.AutoVacant,
+			TransitionReason.CircadianTick,
+			isDark: true,
+			darknessDetail: "lux 12, dark below 40",
+			autoOnBlockedBy: AutoOnBlock.EntityOn,
+			autoOnBlockingEntity: "media_player.stue_tv"));
+
+		Assert.AreEqual(
+			"Dark enough now, but media_player.stue_tv is on — movement will not switch the lights on",
+			line.What);
+		Assert.AreEqual("lux 12, dark below 40", line.Why);
+	}
+
+	/// <summary>
+	///     Nothing in the way keeps the original sentence, and so does a report from a build that never carried
+	///     the verdict: absent means "this report cannot say", and a row may no more invent a refusal than it
+	///     may invent a promise.
+	/// </summary>
+	[TestMethod]
+	public void An_Open_Gate_And_An_Older_Report_Both_Keep_The_Original_Words()
+	{
+		const string Promise = "Dark enough now — movement will switch the lights on";
+
+		Assert.AreEqual(Promise, ActivityView.Describe(Report(
+			"Stue", AreaState.AutoVacant, TransitionReason.CircadianTick,
+			isDark: true, autoOnBlockedBy: AutoOnBlock.None)).What);
+
+		Assert.AreEqual(Promise, ActivityView.Describe(Report(
+			"Stue", AreaState.AutoVacant, TransitionReason.CircadianTick,
+			isDark: true)).What,
+			"a report from a build that predates the field says exactly what it always said");
 	}
 
 	/// <summary>

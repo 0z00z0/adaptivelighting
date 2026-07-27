@@ -51,6 +51,12 @@ public static class SetupWarning
 	/// <summary>
 	///     One line per room the plan rebuilds, in the plan's own order.
 	/// </summary>
+	/// <remarks>
+	///     One line per <i>row</i>, because that is what the plan is: <see cref="AreaSetupService.Plan"/> emits an
+	///     <see cref="AreaRebuildPlan"/> for every row it will rebuild, and a document can carry two rows for one
+	///     Home Assistant area. So each line takes the row at its own position among the rows sharing that id, and
+	///     not the first row a search for the id finds.
+	/// </remarks>
 	/// <param name="plan">The plan being confirmed.</param>
 	/// <param name="config">The document the plan was made against, for the names and the custom name it quotes.</param>
 	/// <returns>The lines, empty when nothing is being rebuilt.</returns>
@@ -63,10 +69,23 @@ public static class SetupWarning
 		HashSet<string> stopped = new(plan.NoLongerQualifying, StringComparer.Ordinal);
 		List<SetupWarningLine> lines = [];
 
+		// Resolved by position among the rows sharing an id, never by first match on it. Plan emits one rebuild
+		// per row in the document's own order, so the nth rebuild for an id is the nth row carrying it — whereas a
+		// search would hand every rebuild the first such row, and a second row would be warned about under the
+		// first one's custom name. A document that has drifted from the plan runs out of rows and the line falls
+		// back to the area id, which is honest; quoting some other room's name is not.
+		ILookup<string, AreaConfig> rows = config.Areas
+			.Where(candidate => candidate.AreaId is { Length: > 0 })
+			.ToLookup(candidate => candidate.AreaId!, StringComparer.Ordinal);
+
+		Dictionary<string, int> taken = new(StringComparer.Ordinal);
+
 		foreach (AreaRebuildPlan rebuild in plan.Rebuilds)
 		{
-			AreaConfig? area = config.Areas.FirstOrDefault(candidate =>
-				string.Equals(candidate.AreaId, rebuild.AreaId, StringComparison.Ordinal));
+			int position = taken.GetValueOrDefault(rebuild.AreaId);
+			taken[rebuild.AreaId] = position + 1;
+
+			AreaConfig? area = rows[rebuild.AreaId].ElementAtOrDefault(position);
 
 			lines.Add(new SetupWarningLine(
 				area?.DisplayName ?? rebuild.AreaId,
