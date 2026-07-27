@@ -113,9 +113,12 @@ public static class EntityStateExtensions
 	///     not <c>unavailable</c>.
 	/// </summary>
 	/// <remarks>
-	///     Matches the engine's <c>AreaEntityResolver.IsLive</c> exactly — a <c>null</c> state (a registry row with
-	///     no device) and <c>unavailable</c> are both dropped; <c>unknown</c> is deliberately <b>not</b> checked,
-	///     so a sensor reporting <c>unknown</c> still counts as available.
+	///     This is Home Assistant's plain "available" meaning: a <c>null</c> state (a registry row with no device)
+	///     and <c>unavailable</c> are dropped, but <c>unknown</c> is deliberately <b>not</b> — an entity reporting
+	///     <c>unknown</c> exists and is reachable, it simply does not know its value yet, which is a real state to
+	///     act on. The engine's discovery gate <c>AreaEntityResolver.IsLive</c> is stricter: for pre-populating
+	///     rooms it additionally drops <c>unknown</c>, because an entity that has never reported is indistinguishable
+	///     from absent there. The two answer different questions and are intentionally not identical.
 	/// </remarks>
 	public static bool IsAvailable(this EntityState? state) =>
 		state is not null && !string.Equals(state.State, "unavailable", StringComparison.OrdinalIgnoreCase);

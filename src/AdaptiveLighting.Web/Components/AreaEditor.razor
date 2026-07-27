@@ -92,7 +92,10 @@
 							<ul class="chips chips-plain">
 								@foreach (string light in resolved.Lights)
 								{
-									<li class="chip"><span class="chip-name">@Name(light)</span><code class="chip-id">@light</code></li>
+									<li class="chip">
+										<span class="chip-name">@Name(light)</span><code class="chip-id">@light</code>
+										<button type="button" class="chip-remove" title="Exclude this light from the room" @onclick="() => ExcludeEntity(light)">&times;</button>
+									</li>
 								}
 							</ul>
 						</td>
@@ -103,7 +106,10 @@
 							<ul class="chips chips-plain">
 								@foreach (string sensor in resolved.MotionSensors)
 								{
-									<li class="chip"><span class="chip-name">@Name(sensor)</span><code class="chip-id">@sensor</code></li>
+									<li class="chip">
+										<span class="chip-name">@Name(sensor)</span><code class="chip-id">@sensor</code>
+										<button type="button" class="chip-remove" title="Exclude this sensor from the room" @onclick="() => ExcludeEntity(sensor)">&times;</button>
+									</li>
 								}
 							</ul>
 						</td>
@@ -671,6 +677,27 @@
 	{
 		Refresh();
 		await Changed.InvokeAsync().ConfigureAwait(false);
+	}
+
+	/// <summary>
+	///     Drops one discovered entity from this room without switching it to a hand-picked list.
+	/// </summary>
+	/// <remarks>
+	///     Adds the id to <see cref="AreaConfig.ExcludeEntities"/> — discovery keeps finding everything else, and the
+	///     preview re-runs so the entity disappears from it. This is the per-entity escape hatch a household needs
+	///     when one sensor in the room's area should not drive its lighting, without retyping the whole room as an
+	///     explicit list. Like every other edit here it arms the save bar rather than saving, so the one write path
+	///     stays the one write path; discarding unsaved changes is the undo.
+	/// </remarks>
+	private Task ExcludeEntity(string entityId)
+	{
+		List<string> excluded = Area.ExcludeEntities is { } existing ? [.. existing] : [];
+
+		if (!excluded.Contains(entityId, StringComparer.Ordinal))
+			excluded.Add(entityId);
+
+		Area.ExcludeEntities = excluded;
+		return Notify();
 	}
 
 	private Task Remove() => Removed.InvokeAsync();

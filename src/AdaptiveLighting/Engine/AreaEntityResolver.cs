@@ -59,6 +59,7 @@ public sealed class AreaEntityResolver
 	private const string DeviceClassAttribute = "device_class";
 	private const string GroupMembersAttribute = "entity_id";
 	private const string UnavailableState = "unavailable";
+	private const string UnknownState = "unknown";
 
 	private readonly IHaContext _ha;
 	private readonly IAreaRegistry _registry;
@@ -130,10 +131,10 @@ public sealed class AreaEntityResolver
 		}
 
 		// An explicit list bypasses both labels, exactly as it bypasses discovery: an explicit pick is the owner
-		// overruling the rules, and the rules do not get a veto.
+		// overruling the rules, and the rules do not get a veto — including the per-room exclude below.
 		List<string> lights = area.Lights is { Count: > 0 } explicitLights
 			? [.. explicitLights]
-			: DiscoverLights(areaId);
+			: WithoutExcluded(DiscoverLights(areaId), area);
 
 		if (lights.Count == 0)
 		{
@@ -143,7 +144,7 @@ public sealed class AreaEntityResolver
 
 		List<string> motion = area.MotionSensors is { Count: > 0 } explicitMotion
 			? [.. explicitMotion]
-			: DiscoverMotionSensors(areaId);
+			: WithoutExcluded(DiscoverMotionSensors(areaId), area);
 
 		if (motion.Count == 0)
 		{
@@ -158,7 +159,7 @@ public sealed class AreaEntityResolver
 		{
 			lux = explicitLux;
 		}
-		else if (!TryDiscoverLuxSensor(areaId, out lux, out string? luxError))
+		else if (!TryDiscoverLuxSensor(areaId, area, out lux, out string? luxError))
 		{
 			error = luxError;
 			return false;
@@ -233,10 +234,15 @@ public sealed class AreaEntityResolver
 	///     still comes back from <see cref="IAreaRegistry.EntitiesInArea"/>, but it has no state at all — on one live instance
 	///     that swept up <c>light.router_socket_status_led</c> and a water sensor's indicator LED and called them
 	///     room lighting (2026-07-17). <c>unavailable</c> is dropped too: a light the engine cannot reach is a
-	///     light it cannot dim, and including it only produces commands that go nowhere.
+	///     light it cannot dim, and including it only produces commands that go nowhere. <c>unknown</c> is dropped
+	///     for the same reason: an entity sitting on <c>unknown</c> has never reported, which is indistinguishable
+	///     from absent for discovery's purposes, and a sensor that has never reported is as dead as an unavailable one.
 	///     <para>
-	///         The cost is that a lamp which is merely offline at startup stays out of its area until the engine
-	///         is next rebuilt — which the Configuration page can do without a restart.
+	///         The cost is that a lamp which is merely offline at startup — now including one that starts on
+	///         <c>unknown</c> — stays out of its area until the engine is next rebuilt, which the Configuration page
+	///         can do without a restart. That cost is acceptable for the same reason it was for <c>unavailable</c>:
+	///         a device that cannot answer is one the engine cannot drive, and inviting it in only produces commands
+	///         that go nowhere.
 	///     </para>
 	/// </remarks>
 	private bool IsLive(string entityId)
@@ -249,9 +255,10 @@ public sealed class AreaEntityResolver
 			return false;
 		}
 
-		if (string.Equals(state.State, UnavailableState, StringComparison.OrdinalIgnoreCase))
+		if (string.Equals(state.State, UnavailableState, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(state.State, UnknownState, StringComparison.OrdinalIgnoreCase))
 		{
-			_logger.LogDebug("Ignoring {EntityId}: unavailable.", entityId);
+			_logger.LogDebug("Ignoring {EntityId}: {State}.", entityId, state.State);
 			return false;
 		}
 
@@ -300,7 +307,7 @@ public sealed class AreaEntityResolver
 			.Distinct(StringComparer.Ordinal)];
 	}
 
-	private bool TryDiscoverLuxSensor(string? areaId, out string? luxSensor, out string? error)
+	private bool TryDiscoverLuxSensor(string? areaId, AreaConfig area, out string? luxSensor, out string? error)
 	{
 		luxSensor = null;
 		error = null;
@@ -308,7 +315,10 @@ public sealed class AreaEntityResolver
 		if (areaId is null)
 			return true;
 
-		List<string> candidates = DiscoverLuxSensors(areaId);
+		// Excluded before the ambiguity decision, not after: excluding one of two candidates must leave the other
+		// as the single chosen sensor, and excluding the only candidate must leave the room on the sun — never a
+		// choice deferred over a sensor the room was told to ignore.
+		List<string> candidates = WithoutExcluded(DiscoverLuxSensors(areaId), area);
 
 		switch (candidates.Count)
 		{
@@ -341,6 +351,25 @@ public sealed class AreaEntityResolver
 
 				return true;
 		}
+	}
+
+	/// <summary>
+	///     Drops the ids the area lists under <see cref="AreaConfig.ExcludeEntities"/> from a discovered list.
+	/// </summary>
+	/// <remarks>
+	///     The per-room twin of the exclude label, and the same "discover, then remove" shape — but by id and for
+	///     this room only, so a sensor sitting in the room's Home Assistant area (a fridge's own illuminance probe
+	///     was the motivating case) can be kept out of its lighting without touching any other room. Applied to
+	///     discovered lists only: an explicit <see cref="AreaConfig.Lights"/> or <see cref="AreaConfig.MotionSensors"/>
+	///     list is already the owner overruling discovery by hand, and the rules — this one included — do not re-filter it.
+	/// </remarks>
+	private static List<string> WithoutExcluded(List<string> discovered, AreaConfig area)
+	{
+		if (area.ExcludeEntities is not { Count: > 0 } excluded)
+			return discovered;
+
+		HashSet<string> drop = new(excluded, StringComparer.Ordinal);
+		return [.. discovered.Where(id => !drop.Contains(id))];
 	}
 
 	private string? DeviceClassOf(string entityId) => _ha.AttrString(entityId, DeviceClassAttribute);

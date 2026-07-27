@@ -27,7 +27,8 @@ public sealed record SetupPlan(
 /// <param name="AreaId">The area being rebuilt. Its identity, and the one field that survives besides the switch.</param>
 /// <param name="PinnedEntityCount">
 ///     How many entity ids the area lists instead of discovering: explicit lights, motion sensors, a lux sensor,
-///     and the blockers under <c>IgnoreWhenOn</c>.
+///     the blockers under <c>IgnoreWhenOn</c>, and the per-room exclusions under <c>ExcludeEntities</c> — all of
+///     which a rebuild throws away, so all of which the warning must count.
 /// </param>
 /// <param name="OverrideCount">
 ///     How many of the sixteen per-room settings the area overrides. <c>Enabled</c> is not among them: it survives
@@ -61,6 +62,12 @@ public static class AreaSetupService
 {
 	/// <summary>The domain presence is read from when the document names nobody.</summary>
 	private const string PersonDomain = "person";
+
+	/// <summary>
+	///     The attribute a <c>person.*</c> state carries: the device-tracker entity ids that back it. An empty or
+	///     missing list means the person has no presence source, so it is never seeded.
+	/// </summary>
+	private const string DeviceTrackersAttribute = "device_trackers";
 
 	/// <summary>
 	///     Works out what setting up <paramref name="scope"/> again would do, without touching anything.
@@ -175,10 +182,20 @@ public static class AreaSetupService
 	///         requirement, because a non-technical owner should be able to <i>see</i> who decides Home and Away —
 	///         and remove the car tracker — instead of trusting a rule they cannot read.
 	///     </para>
+	///     <para>
+	///         Only a person <i>with a device tracker</i> is seeded. A <c>person.*</c> entity with no tracker can
+	///         never resolve to home or away — it is not a presence source at all — so it is dead weight in the
+	///         Home/Away calculation and, having no friendly name, renders as its raw entity id in the UI. A live
+	///         house carried exactly such a stray (<c>person.espen</c>, <c>unavailable</c>, no trackers) beside the
+	///         two real people; the tracker filter keeps it out.
+	///     </para>
 	/// </remarks>
 	/// <param name="config">The document to seed. Only <c>Global.Persons</c> is touched.</param>
 	/// <param name="ha">Where the <c>person.*</c> entities are read from.</param>
-	/// <returns>The ids written, in entity-id order. Empty when the list was already non-empty, or HA knows nobody.</returns>
+	/// <returns>
+	///     The ids written, in entity-id order. Empty when the list was already non-empty, or HA knows nobody with
+	///     a device tracker.
+	/// </returns>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static IReadOnlyList<string> SeedPersons(AdaptiveLightingConfig config, IHaContext ha)
 	{
@@ -191,6 +208,7 @@ public static class AreaSetupService
 		List<string> persons = [.. ha.GetAllEntities()
 			.Select(entity => entity.EntityId)
 			.Where(entityId => entityId.HasDomain(PersonDomain))
+			.Where(entityId => ha.AttrStringList(entityId, DeviceTrackersAttribute).Count > 0)
 			.Distinct(StringComparer.Ordinal)
 			.Order(StringComparer.Ordinal)];
 
@@ -208,12 +226,13 @@ public static class AreaSetupService
 			.Where(areaId => areaId is { Length: > 0 })
 			.Select(areaId => areaId!);
 
-	/// <summary>How many entity ids the area lists instead of discovering them.</summary>
+	/// <summary>How many entity ids the area lists instead of discovering them, plus the ids it excludes from discovery.</summary>
 	private static int PinnedEntityCount(AreaConfig area) =>
 		(area.Lights?.Count ?? 0)
 		+ (area.MotionSensors?.Count ?? 0)
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
-		+ (area.IgnoreWhenOn?.Count ?? 0);
+		+ (area.IgnoreWhenOn?.Count ?? 0)
+		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>
 	///     How many of the sixteen per-room settings the area overrides.

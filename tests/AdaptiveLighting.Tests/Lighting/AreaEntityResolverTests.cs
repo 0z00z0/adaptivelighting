@@ -76,6 +76,26 @@ public sealed class AreaEntityResolverTests
 			"a light the engine cannot reach is a light it cannot dim");
 	}
 
+	/// <summary>
+	///     A light stuck on <c>unknown</c> has never reported — indistinguishable from absent — so it is dropped
+	///     exactly as an <c>unavailable</c> one is. The owner asked that dead sensors stay out of pre-population.
+	/// </summary>
+	[TestMethod]
+	public void An_Unknown_Light_Is_Not_Discovered_Any_More_Than_An_Unavailable_One()
+	{
+		var ha = new FakeHaContext();
+		var registry = new FakeAreaRegistry();
+		registry.Areas["tilbygg"] = ["light.wiz", "light.never_reported", "binary_sensor.m"];
+		ha.SetState("light.wiz", "off");
+		ha.SetState("light.never_reported", "unknown");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out var area, out _);
+
+		CollectionAssert.AreEqual(new[] { "light.wiz" }, area!.Lights.ToArray(),
+			"a light that has never reported is as dead for discovery as an unavailable one");
+	}
+
 	[TestMethod]
 	public void An_Unavailable_Motion_Sensor_Is_Not_Discovered()
 	{
@@ -558,6 +578,101 @@ public sealed class AreaEntityResolverTests
 
 		Assert.IsFalse(ok);
 		StringAssert.Contains(error!, "No lights");
+	}
+
+	// ===================== ExcludeEntities: dropping one discovered entity per room =====================
+	//
+	// The per-room escape hatch: a sensor that sits in the room's HA area but should not drive its lighting — a
+	// fridge's own illuminance probe was the motivating case. It filters discovery only; an explicit list is the
+	// owner already overruling discovery by hand and is not re-filtered by it.
+
+	[TestMethod]
+	public void An_Excluded_Discovered_Entity_Is_Absent_From_The_Resolved_Room()
+	{
+		var ha = new FakeHaContext();
+		var registry = new FakeAreaRegistry();
+		registry.Areas["stue"] = ["light.keep", "light.drop", "binary_sensor.keep", "binary_sensor.drop"];
+		ha.SetState("light.keep", "off");
+		ha.SetState("light.drop", "off");
+		ha.SetState("binary_sensor.keep", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.drop", "off", new() { ["device_class"] = "motion" });
+
+		var ok = Resolver(ha, registry).TryResolve(
+			new AreaConfig { AreaId = "stue", ExcludeEntities = ["light.drop", "binary_sensor.drop"] },
+			new AreaSettings(), out var area, out var error);
+
+		Assert.IsTrue(ok, error);
+		CollectionAssert.AreEqual(new[] { "light.keep" }, area!.Lights.ToArray(),
+			"an excluded light is not part of the room, though discovery keeps everything else");
+		CollectionAssert.AreEqual(new[] { "binary_sensor.keep" }, area.MotionSensors.ToArray());
+	}
+
+	/// <summary>
+	///     An explicit list is the owner overruling discovery by hand, so the per-room exclude does not re-filter
+	///     it — exactly as the exclude label and the include label do not touch an explicit list.
+	/// </summary>
+	[TestMethod]
+	public void An_Explicit_Lights_List_Is_Not_Filtered_By_ExcludeEntities()
+	{
+		var ha = new FakeHaContext();
+		var registry = new FakeAreaRegistry();
+		registry.Areas["stue"] = ["binary_sensor.m"];
+		ha.SetState("light.hand_picked", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		var ok = Resolver(ha, registry).TryResolve(
+			new AreaConfig { AreaId = "stue", Lights = ["light.hand_picked"], ExcludeEntities = ["light.hand_picked"] },
+			new AreaSettings(), out var area, out var error);
+
+		Assert.IsTrue(ok, error);
+		CollectionAssert.AreEqual(new[] { "light.hand_picked" }, area!.Lights.ToArray(),
+			"a hand-picked light stays; ExcludeEntities filters discovery, not the owner's explicit list");
+	}
+
+	/// <summary>
+	///     Excluding the only lux sensor leaves the room resolving without one — the already-handled case where a
+	///     room decides darkness from the outdoor sensor or the sun — rather than failing.
+	/// </summary>
+	[TestMethod]
+	public void Excluding_The_Only_Lux_Sensor_Leaves_The_Room_Resolving_Without_One()
+	{
+		var ha = new FakeHaContext();
+		var registry = new FakeAreaRegistry();
+		registry.Areas["kjokken"] = ["light.l", "binary_sensor.m", "sensor.fridge_lux"];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("sensor.fridge_lux", "3", new() { ["device_class"] = "illuminance" });
+
+		var ok = Resolver(ha, registry).TryResolve(
+			new AreaConfig { AreaId = "kjokken", ExcludeEntities = ["sensor.fridge_lux"] },
+			new AreaSettings(), out var area, out var error);
+
+		Assert.IsTrue(ok, error);
+		Assert.IsNull(area!.LuxSensor, "the excluded sensor is gone, and a room with no lux sensor runs on the sun");
+	}
+
+	/// <summary>
+	///     Excluding one of two lux candidates disambiguates rather than leaving the area on the sun: the exclude
+	///     is applied to the candidate list before the count decides, so the surviving sensor is chosen outright.
+	/// </summary>
+	[TestMethod]
+	public void Excluding_One_Of_Two_Lux_Sensors_Chooses_The_Other()
+	{
+		var ha = new FakeHaContext();
+		var registry = new FakeAreaRegistry();
+		registry.Areas["kjokken"] = ["light.l", "binary_sensor.m", "sensor.room_lux", "sensor.fridge_lux"];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("sensor.room_lux", "40", new() { ["device_class"] = "illuminance" });
+		ha.SetState("sensor.fridge_lux", "3", new() { ["device_class"] = "illuminance" });
+
+		var ok = Resolver(ha, registry).TryResolve(
+			new AreaConfig { AreaId = "kjokken", ExcludeEntities = ["sensor.fridge_lux"] },
+			new AreaSettings(), out var area, out var error);
+
+		Assert.IsTrue(ok, error);
+		Assert.AreEqual("sensor.room_lux", area!.LuxSensor,
+			"with the fridge sensor excluded only one candidate remains, so the area is no longer ambiguous");
 	}
 
 	// ===================== DiscoverArea: what the configuration page is allowed to show =====================

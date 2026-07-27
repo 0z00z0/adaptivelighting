@@ -27,6 +27,18 @@ public class AreaConfig
 	/// <summary>Entities that block auto-on while they are on — a projector, a "do not disturb" flag.</summary>
 	public List<string>? IgnoreWhenOn { get; set; }
 
+	/// <summary>
+	///     Entity ids discovery must skip for this room — the escape hatch for a sensor sitting in the room's HA
+	///     area that should not drive its lighting, such as a fridge's internal illuminance sensor.
+	/// </summary>
+	/// <remarks>
+	///     Distinct from <see cref="IgnoreWhenOn"/>, which blocks auto-on while something is on, and from the global
+	///     exclude <i>label</i>, which hides an entity from every room: this is per-room and by id. It filters
+	///     discovery only. An explicit <see cref="Lights"/> or <see cref="MotionSensors"/> list is already the owner
+	///     overruling discovery by hand and is not touched by it.
+	/// </remarks>
+	public List<string>? ExcludeEntities { get; set; }
+
 	/// <inheritdoc cref="AreaSettings.VacancyTimeoutSeconds"/>
 	public int? VacancyTimeoutSeconds { get; set; }
 

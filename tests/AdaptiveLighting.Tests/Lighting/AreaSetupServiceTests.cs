@@ -106,11 +106,11 @@ public sealed class AreaSetupServiceTests
 	// ===================== people =====================
 
 	[TestMethod]
-	public void A_First_Run_Names_The_People_Home_Assistant_Knows_When_Nobody_Is_Named()
+	public void A_First_Run_Names_The_Tracker_Backed_People_When_Nobody_Is_Named()
 	{
 		House house = Build("stue");
-		house.Ha.SetState("person.espen", "home");
-		house.Ha.SetState("person.anne", "not_home");
+		house.Ha.SetState("person.espen", "home", Trackers("device_tracker.espen_phone"));
+		house.Ha.SetState("person.anne", "not_home", Trackers("device_tracker.anne_phone", "device_tracker.anne_watch"));
 		house.Ha.SetState("device_tracker.bil", "home");
 
 		AdaptiveLightingConfig config = Document();
@@ -120,6 +120,42 @@ public sealed class AreaSetupServiceTests
 		CollectionAssert.AreEqual(new[] { "person.anne", "person.espen" }, seeded.ToArray(),
 			"the person domain only — a car tracker is not somebody who lives here");
 		CollectionAssert.AreEqual(seeded.ToArray(), config.Global.Persons.ToArray());
+	}
+
+	/// <summary>
+	///     A <c>person.*</c> with no device tracker can never resolve to home or away, so it is not a presence
+	///     source and is not seeded. A live house carried exactly such a stray beside the two real people.
+	/// </summary>
+	[TestMethod]
+	public void A_First_Run_Skips_A_Person_That_Has_No_Device_Tracker()
+	{
+		House house = Build("stue");
+		house.Ha.SetState("person.anne", "home", Trackers("device_tracker.anne_phone"));
+		house.Ha.SetState("person.espen", "unavailable");            // the stray: no device_trackers attribute at all
+		house.Ha.SetState("person.gjest", "unknown", Trackers());   // present but with an empty tracker list
+
+		AdaptiveLightingConfig config = Document();
+
+		IReadOnlyList<string> seeded = AreaSetupService.SeedPersons(config, house.Ha);
+
+		CollectionAssert.AreEqual(new[] { "person.anne" }, seeded.ToArray(),
+			"only a person with at least one device tracker is a presence source");
+		CollectionAssert.AreEqual(seeded.ToArray(), config.Global.Persons.ToArray());
+	}
+
+	/// <summary>A house whose only persons are tracker-less seeds none and leaves the list empty.</summary>
+	[TestMethod]
+	public void A_House_Whose_Only_People_Have_No_Trackers_Seeds_Nobody()
+	{
+		House house = Build("stue");
+		house.Ha.SetState("person.espen", "unavailable");
+		house.Ha.SetState("person.ghost", "home", Trackers());
+
+		AdaptiveLightingConfig config = Document();
+
+		Assert.AreEqual(0, AreaSetupService.SeedPersons(config, house.Ha).Count,
+			"a tracker-less person is dead weight in Home/Away, so an all-strays house seeds nobody");
+		Assert.AreEqual(0, config.Global.Persons.Count);
 	}
 
 	/// <summary>
@@ -188,6 +224,7 @@ public sealed class AreaSetupServiceTests
 		Assert.IsNull(after.MotionSensors);
 		Assert.IsNull(after.LuxSensor);
 		Assert.IsNull(after.IgnoreWhenOn);
+		Assert.IsNull(after.ExcludeEntities, "and the per-room exclusions");
 		CollectionAssert.AreEqual(Array.Empty<string>(), OverridesOf(after).ToArray(),
 			"and every changed setting — 'stue' names no role, so nothing is guessed back in");
 	}
@@ -441,6 +478,10 @@ public sealed class AreaSetupServiceTests
 
 	// ===================== fixtures and counting =====================
 
+	/// <summary>A person's <c>device_trackers</c> attribute — the presence sources backing them.</summary>
+	private static Dictionary<string, object> Trackers(params string[] trackerIds) =>
+		new() { ["device_trackers"] = trackerIds };
+
 	/// <summary>An area carrying one of everything a rebuild destroys.</summary>
 	private static AreaConfig Rich(string areaId) => new()
 	{
@@ -450,17 +491,19 @@ public sealed class AreaSetupServiceTests
 		MotionSensors = [$"binary_sensor.{areaId}_m"],
 		LuxSensor = $"sensor.{areaId}_lux",
 		IgnoreWhenOn = [$"media_player.{areaId}"],
+		ExcludeEntities = [$"sensor.{areaId}_fridge_lux"],
 		VacancyTimeoutSeconds = 900,
 		PreOffSeconds = 45,
 		Darkness = DarknessSource.Sun
 	};
 
-	/// <summary>Entity ids the area lists instead of discovering.</summary>
+	/// <summary>Entity ids the area lists instead of discovering, plus the ids it excludes from discovery.</summary>
 	private static int PinnedCountOf(AreaConfig area) =>
 		(area.Lights?.Count ?? 0)
 		+ (area.MotionSensors?.Count ?? 0)
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
-		+ (area.IgnoreWhenOn?.Count ?? 0);
+		+ (area.IgnoreWhenOn?.Count ?? 0)
+		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>Property names that are the room's identity or its entity lists, not one of its settings.</summary>
 	private static readonly HashSet<string> NotASetting = new(StringComparer.Ordinal)
@@ -471,6 +514,7 @@ public sealed class AreaSetupServiceTests
 		nameof(AreaConfig.MotionSensors),
 		nameof(AreaConfig.LuxSensor),
 		nameof(AreaConfig.IgnoreWhenOn),
+		nameof(AreaConfig.ExcludeEntities),
 
 		// Survives the rebuild, so it is never one of the losses.
 		nameof(AreaConfig.Enabled)
