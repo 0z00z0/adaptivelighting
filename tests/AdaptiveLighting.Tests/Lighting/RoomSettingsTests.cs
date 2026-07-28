@@ -274,6 +274,161 @@ public sealed class RoomSettingsTests
 		}
 	}
 
+	// ===================== a value that spans decades =====================
+
+	/// <summary>
+	///     A light level is bounded by what a sensor can report, and typed rather than stepped.
+	/// </summary>
+	/// <remarks>
+	///     The bound is the hardware's: illuminance sensors report 0–65 535 lx. The control follows from the same
+	///     numbers rather than from a flag, because it is arithmetic — a five-lux step needs 7 992 presses to get
+	///     from 40 to 40 000, and no other step is both usable at 3 lx and usable at 30 000.
+	/// </remarks>
+	[TestMethod]
+	public void A_Light_Level_Is_Bounded_By_The_Sensor_And_Typed_Rather_Than_Stepped()
+	{
+		foreach (string key in new[] { nameof(AreaSettings.LuxThreshold), nameof(AreaSettings.LuxHysteresis) })
+		{
+			RoomSetting setting = Setting(key);
+
+			Assert.AreEqual(RoomSettings.MaxLux, setting.Max, $"{key} takes what a 16-bit reading can carry");
+			Assert.AreEqual(0, setting.Min, 1e-9, $"{key} starts at nothing");
+			Assert.IsTrue(RoomSettings.SpansDecades(setting.Min, setting.Max), $"{key} is typed, not stepped");
+		}
+	}
+
+	/// <summary>
+	///     Nothing else changes control. A stepper is right for a timeout and for a percentage, and the wide box
+	///     must not leak onto a setting whose whole range fits in one grain.
+	/// </summary>
+	[TestMethod]
+	public void Only_The_Light_Levels_Span_Decades()
+	{
+		string[] wide =
+		[
+			.. AllSettings
+				.Where(setting => RoomSettings.SpansDecades(setting.Min, setting.Max))
+				.Select(setting => setting.Key)
+		];
+
+		CollectionAssert.AreEquivalent(
+			new[] { nameof(AreaSettings.LuxThreshold), nameof(AreaSettings.LuxHysteresis) },
+			wide);
+
+		Assert.IsFalse(RoomSettings.SpansDecades(0, null), "unbounded above is not a reason to stop stepping");
+		Assert.IsFalse(RoomSettings.SpansDecades(-90, 90), "a sun elevation is one grain from end to end");
+		Assert.IsFalse(RoomSettings.SpansDecades(0, 100), "so is a percentage");
+	}
+
+	/// <summary>A number inside the range is taken as typed, including at either end of it.</summary>
+	[TestMethod]
+	public void A_Typed_Number_Inside_The_Range_Is_Taken()
+	{
+		Assert.AreEqual(1000, RoomSettings.ReadNumber("1000", 0, RoomSettings.MaxLux, "lx").Value);
+		Assert.AreEqual(62.5, RoomSettings.ReadNumber("62.5", 0, RoomSettings.MaxLux, "lx").Value);
+		Assert.AreEqual(0, RoomSettings.ReadNumber("0", 0, RoomSettings.MaxLux, "lx").Value);
+		Assert.AreEqual(65535, RoomSettings.ReadNumber("65535", 0, RoomSettings.MaxLux, "lx").Value,
+			"the bound itself is a value, not the first one over the line");
+
+		Assert.IsNull(RoomSettings.ReadNumber("1000", 0, RoomSettings.MaxLux, "lx").Refusal,
+			"a number that was taken has nothing to explain");
+
+		Assert.AreEqual(1000, RoomSettings.ReadNumber("  1000  ", 0, RoomSettings.MaxLux, "lx").Value,
+			"a box that was tabbed through picks up whitespace and that is not a mistake");
+	}
+
+	/// <summary>
+	///     A number outside the range is refused and the refusal says what happened.
+	/// </summary>
+	/// <remarks>
+	///     Never clamped. Turning 70 000 into 65 535 without a word answers a question nobody asked, and leaves
+	///     somebody looking at a number they did not type with no way to tell it from a typo of their own.
+	/// </remarks>
+	[TestMethod]
+	public void A_Typed_Number_Outside_The_Range_Is_Refused_And_Says_So()
+	{
+		TypedNumber over = RoomSettings.ReadNumber("70000", 0, RoomSettings.MaxLux, "lx");
+
+		Assert.IsNull(over.Value, "refused, not reshaped into something nobody typed");
+		StringAssert.Contains(over.Refusal, "65535 lx", "the refusal names the bound");
+		StringAssert.Contains(over.Refusal, "70000 lx", "and the value it turned away");
+
+		TypedNumber under = RoomSettings.ReadNumber("-5", 0, RoomSettings.MaxLux, "lx");
+
+		Assert.IsNull(under.Value);
+		StringAssert.Contains(under.Refusal, "0 lx");
+		StringAssert.Contains(under.Refusal, "-5 lx");
+	}
+
+	/// <summary>Something that is not a number, and an empty box, both change nothing and both say why.</summary>
+	[TestMethod]
+	public void An_Unreadable_Entry_Changes_Nothing_And_Says_Why()
+	{
+		foreach (string? entry in new string?[] { null, "", "   " })
+		{
+			TypedNumber blank = RoomSettings.ReadNumber(entry, 0, RoomSettings.MaxLux, "lx");
+
+			Assert.IsNull(blank.Value);
+			Assert.IsFalse(string.IsNullOrWhiteSpace(blank.Refusal),
+				"an empty box that silently snapped back would look like a control that does nothing");
+		}
+
+		TypedNumber words = RoomSettings.ReadNumber("dark", 0, RoomSettings.MaxLux, "lx");
+
+		Assert.IsNull(words.Value);
+		StringAssert.Contains(words.Refusal, "dark", "the refusal quotes what was actually typed");
+	}
+
+	/// <summary>
+	///     A value typed on the owner's own machine round-trips, and every number this control writes is invariant.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <c>nb-NO</c> writes decimals with a comma and groups thousands with a non-breaking space. Two things
+	///         have to survive that. A typed "62,5" has to reach the document as 62.5 rather than as 625; and every
+	///         number this control writes back out — the bound in a refusal, the value in an HTML attribute — has to
+	///         be invariant, because <c>value="62,5"</c> is not a number to any browser and renders as an empty box
+	///         over a value that is really set. This project has already shipped that bug once.
+	///     </para>
+	///     <para>
+	///         The invariant pass runs first and without thousands separators, on purpose: allowing them would read
+	///         "1,5" as fifteen before the Norwegian pass ever saw it.
+	///     </para>
+	/// </remarks>
+	[TestMethod]
+	public void A_Value_Typed_Under_A_Comma_Decimal_Culture_Round_Trips()
+	{
+		CultureInfo original = CultureInfo.CurrentCulture;
+
+		try
+		{
+			CultureInfo.CurrentCulture = new CultureInfo("nb-NO");
+
+			Assert.AreEqual(1000, RoomSettings.ReadNumber("1000", 0, RoomSettings.MaxLux, "lx").Value);
+			Assert.AreEqual(62.5, RoomSettings.ReadNumber("62,5", 0, RoomSettings.MaxLux, "lx").Value,
+				"a Norwegian decimal comma is a decimal, not a thousands separator");
+			Assert.AreEqual(62.5, RoomSettings.ReadNumber("62.5", 0, RoomSettings.MaxLux, "lx").Value,
+				"and the browser's own invariant form still reads as itself");
+
+			StringAssert.Contains(
+				RoomSettings.ReadNumber("70000", 0, RoomSettings.MaxLux, "lx").Refusal,
+				"65535 lx",
+				"the bound is written invariant — '65 535 lx' carries a non-breaking space into an English sentence");
+
+			AreaConfig room = new();
+			RoomSettings.SetShown(room, nameof(AreaSettings.LuxThreshold),
+				RoomSettings.ReadNumber("62,5", 0, RoomSettings.MaxLux, "lx").Value!.Value);
+
+			Assert.AreEqual(62.5, room.LuxThreshold!.Value, 1e-9);
+			Assert.AreEqual("62.5 lx", RoomSettings.Describe(room, House, nameof(AreaSettings.LuxThreshold)),
+				"and it reads back as a number, not as 62,5 in the middle of an English sentence");
+		}
+		finally
+		{
+			CultureInfo.CurrentCulture = original;
+		}
+	}
+
 	// ===================== the gates =====================
 
 	/// <summary>

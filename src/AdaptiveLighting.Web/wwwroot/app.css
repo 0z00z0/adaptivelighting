@@ -4479,6 +4479,73 @@ button.mode-pill:disabled {
 	font-family: var(--mono);
 }
 
+/* ---- the number box ----
+   What a setting whose range spans decades gets instead of a stepper: a real field, always open, because the
+   value is typed rather than nudged. Same 30px height, same control radius and same 1.5px border as the
+   stepper beside it, so the two read as one family of controls and not as a field somebody bolted on.
+
+   The refusal sits under the box in --bad and wraps to the box's own width rather than the row's, so a long
+   sentence pushes the row taller instead of shoving the label off a phone. Empty it is removed outright, so
+   the live region costs no layout while it has nothing to say. Right-aligned with the control, which is where
+   the eye already is after pressing Enter. */
+.numbox {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 0.25rem;
+	flex: 0 0 auto;
+}
+
+.numbox-row {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.35rem;
+}
+
+.numbox-input[type="number"] {
+	width: 7rem;
+	padding: 0.25rem 0.5rem;
+	border-width: var(--stroke-control);
+	background: var(--panel-2);
+	font-family: var(--mono);
+	font-size: var(--text-sm);
+	font-weight: 650;
+	text-align: right;
+	appearance: textfield;    /* Firefox, and the standard property */
+}
+
+/* The browser's own spinner is removed, not styled. It nudges by one, which is the grain this control exists
+   to reject — a chip promising a step of 1 lx on a field whose useful range is 3 to 10 000. It also lands as a
+   pale block inside a dark box, drawn by the platform in a palette no theme here defines. Arrow keys still
+   step for anyone who wants that, and a phone still gets the numeric keypad from type="number". */
+.numbox-input::-webkit-outer-spin-button,
+.numbox-input::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+/* Muted while the value is still the house's — the same fact the stepper's readout carries. */
+.numbox-inherited[type="number"] {
+	color: var(--muted);
+	font-weight: 500;
+}
+
+.numbox-input[aria-invalid="true"] {
+	border-color: var(--bad);
+}
+
+.numbox-refusal {
+	max-width: 15rem;
+	color: var(--bad);
+	font-size: var(--text-xs);
+	line-height: 1.35;
+	text-align: right;
+}
+
+.numbox-refusal:empty {
+	display: none;
+}
+
 /* ---- a segmented choice ----
    Every option visible without a tap, which is what a four-way rule deserves: "how the room decides it's
    dark" is not a value to nudge, it is a decision to see the alternatives of. */

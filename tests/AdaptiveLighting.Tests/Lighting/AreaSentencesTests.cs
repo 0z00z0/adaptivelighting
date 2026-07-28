@@ -101,6 +101,150 @@ public sealed class AreaSentencesTests
 		Assert.AreEqual(4, token.Choices.Count, "all four ways of deciding stay reachable");
 	}
 
+	// ===================== the light-level shortlist =====================
+
+	/// <summary>
+	///     The rungs climb by a factor of about three, not by a fixed amount.
+	/// </summary>
+	/// <remarks>
+	///     Illuminance spans four orders of magnitude, so a ladder with a constant <i>difference</i> between rungs
+	///     is either unusably fine at the bottom or useless at the top. A constant <i>ratio</i> is the only shape
+	///     that covers 3 lx and 10 000 lx in the same handful of taps, and this asserts the shape rather than the
+	///     particular numbers, so a later re-tuning stays honest.
+	/// </remarks>
+	[TestMethod]
+	public void The_Light_Level_Rungs_Climb_By_Ratio_Not_By_Difference()
+	{
+		IReadOnlyList<double> ladder = AreaSentences.LuxLadder;
+
+		for (int index = 1; index < ladder.Count; index++)
+		{
+			double ratio = ladder[index] / ladder[index - 1];
+
+			Assert.IsTrue(ratio is >= 2.5 and <= 4,
+				$"{ladder[index - 1]} lx to {ladder[index]} lx is a factor of {ratio}, which is not a half-decade step");
+		}
+	}
+
+	/// <summary>
+	///     Every light level a real house meets is on a rung or beside one.
+	/// </summary>
+	/// <remarks>
+	///     The measurements are from the house this was written for: a shaded outdoor sensor reading 1–3 lx at
+	///     night and up to 3 706 by day, an unshaded one reaching 10 000–50 000, and an interior room that is
+	///     genuinely dark while its sensor says 170. A shortlist topping out at 60 lx could express none of them.
+	/// </remarks>
+	[TestMethod]
+	public void The_Light_Level_Rungs_Reach_Every_Reading_A_House_Meets()
+	{
+		IReadOnlyList<double> ladder = AreaSentences.LuxLadder;
+
+		Assert.IsTrue(ladder.Any(rung => rung <= 3),
+			"deep night: a shaded sensor bottoms out at 1–3 lx, and 'only when it is truly night' has to be sayable");
+
+		Assert.IsTrue(ladder.Any(rung => rung is >= 170 and <= 400),
+			"indoor dark: a room reading 170 lx is still dark, so a rung has to sit above that reading");
+
+		Assert.IsTrue(ladder.Any(rung => rung is >= 1000 and <= 4000),
+			"overcast day: the shaded sensor tops out at 3 706 lx");
+
+		Assert.IsTrue(ladder.Any(rung => rung >= 10000),
+			"full daylight: an unshaded sensor works in tens of thousands");
+	}
+
+	/// <summary>
+	///     The value the room is on is always one of the offered ones, even when nothing on the ladder matches it.
+	/// </summary>
+	/// <remarks>
+	///     The detail view now takes any reading up to 65 535, so the ladder cannot hold every value a room can be
+	///     on. A popover that opened on eight alternatives with nothing ticked would have the same fault as one
+	///     missing its own default: the reader cannot tell where they are from where they could go.
+	/// </remarks>
+	[TestMethod]
+	public void A_Typed_Light_Level_Is_Slotted_Into_The_Shortlist_In_Its_Place()
+	{
+		string[] offered = [.. AreaSentences.LuxChoicesFor(620).Select(choice => choice.Text)];
+
+		CollectionAssert.Contains(offered, "620 lx", "a room sitting on a typed value must see it ticked");
+
+		Assert.AreEqual(
+			Array.IndexOf(offered, "300 lx") + 1,
+			Array.IndexOf(offered, "620 lx"),
+			"and it belongs between the rungs it falls between, not appended at the end");
+
+		Assert.AreEqual(
+			AreaSentences.LuxLadder.Count + 1,
+			AreaSentences.LuxChoicesFor(1000).Count,
+			"a value already on the ladder is not offered twice — the ladder plus the off option is the whole list");
+	}
+
+	/// <summary>
+	///     A room on a hand-typed threshold opens its popover with that threshold showing.
+	/// </summary>
+	[TestMethod]
+	public void A_Room_On_A_Typed_Threshold_Sees_It_In_Its_Own_Popover()
+	{
+		AreaConfig room = Room();
+		room.LuxThreshold = 620;
+
+		SentenceToken token = TokenFor(AreaSentences.ForArea(room, Defaults()), nameof(AreaSettings.LuxThreshold));
+
+		Assert.AreEqual("620 lx", token.Text);
+		Assert.IsTrue(token.Choices.Any(choice => choice.Text == token.Text),
+			"the token shows a value its own shortlist does not offer");
+	}
+
+	/// <summary>
+	///     Off is a change of darkness source, not a lux value that secretly means disabled.
+	/// </summary>
+	/// <remarks>
+	///     A sentinel — <c>-1</c>, or <c>0</c> read as "never dark" — would have to be understood by the engine,
+	///     the validator, every format string and anybody reading the YAML, and would render as a real reading
+	///     wherever one of them forgot. The schema already has the word for "stop consulting the sensor", and it
+	///     is <see cref="DarknessSource.Sun"/>.
+	/// </remarks>
+	[TestMethod]
+	public void Turning_The_Light_Sensor_Off_Changes_The_Source_Rather_Than_The_Number()
+	{
+		TokenChoice off = AreaSentences.LuxChoicesFor(1000)[^1];
+
+		Assert.AreEqual(AreaSentences.LuxOff, off, "off is the last thing offered, after every value");
+		Assert.AreEqual(nameof(AreaSettings.Darkness), off.Key, "it edits the darkness rule, not the threshold");
+		Assert.AreEqual(TokenKind.Choice, off.Kind);
+		Assert.AreEqual(nameof(DarknessSource.Sun), off.Value);
+
+		Assert.IsFalse(
+			AreaSentences.LuxChoicesFor(1000).SkipLast(1).Any(choice => choice.Key is not null),
+			"every other option is an ordinary threshold, keyed by the token it sits in");
+
+		AreaConfig room = Room();
+		room.Darkness = DarknessSource.Either;
+
+		Assert.IsTrue(RoomSettings.Apply(room, new SentenceEdit(off.Key!, off.Kind!.Value, off.Value)));
+		Assert.AreEqual(DarknessSource.Sun, room.Darkness, "the room now decides by the sun alone");
+		Assert.IsNull(room.LuxThreshold, "and the threshold it had is left exactly as it was");
+	}
+
+	/// <summary>
+	///     With the sensor out of the rule, the room stops showing a threshold at all.
+	/// </summary>
+	/// <remarks>
+	///     The proof that off means something: the clause carrying the lux value is gone from the sentence, rather
+	///     than still there showing a number that no longer decides anything.
+	/// </remarks>
+	[TestMethod]
+	public void A_Room_With_The_Sensor_Off_Shows_No_Threshold()
+	{
+		AreaConfig room = Room();
+		room.Darkness = DarknessSource.Sun;
+
+		Assert.IsFalse(
+			AreaSentences.ForArea(room, Defaults())
+				.SelectMany(sentence => sentence.Parts)
+				.OfType<SentenceToken>()
+				.Any(token => token.Key == nameof(AreaSettings.LuxThreshold)));
+	}
+
 	// ===================== provenance =====================
 
 	/// <summary>

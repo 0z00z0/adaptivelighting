@@ -45,9 +45,67 @@ public static class AreaSentences
 	public static IReadOnlyList<TokenChoice> HandOffWaitChoices { get; } =
 		TokenChoices.DurationsInMinutes(2, 5, 10, 15, 30);
 
-	/// <summary>The shortlist offered for the lux a room counts as dark below.</summary>
-	public static IReadOnlyList<TokenChoice> LuxChoices { get; } =
-		TokenChoices.Numbers("lx", 10, 20, 40, 60, 100);
+	/// <summary>
+	///     The rungs the light-level shortlist offers, one every half decade.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Illuminance spans four orders of magnitude, so a shortlist clustered at one end of it can express
+	///         only one kind of house. A shaded outdoor sensor on a real house reads <b>1–3 lx at night</b> and up
+	///         to <b>3 706 by day</b>; an unshaded one reaches 10 000–50 000; an interior room can be genuinely
+	///         dark while reading 170. A list topping out at 60 lx cannot name any of those, and the reader is left
+	///         with no way to say what their own sensor is telling them.
+	///     </para>
+	///     <para>
+	///         So the rungs climb by a factor of about three rather than by a fixed amount, and every reading a
+	///         house actually meets is on one or beside one: <b>3</b> is the night floor of a shaded sensor,
+	///         <b>100–300</b> is an interior room that is dark despite the number, <b>1000–3000</b> is overcast
+	///         daylight, and <b>10 000</b> is a real day outdoors. Eight rungs cover the whole span in one tap,
+	///         which no linear list of five can.
+	///     </para>
+	/// </remarks>
+	public static IReadOnlyList<double> LuxLadder { get; } = [3, 10, 30, 100, 300, 1000, 3000, 10000];
+
+	/// <summary>
+	///     Taking the light sensor out of the darkness rule, written as the change of source it actually is.
+	/// </summary>
+	/// <remarks>
+	///     The owner asked for "off" in this list and was right to, but off is not a lux value. A room that stops
+	///     consulting its sensor is a room deciding by the sun, which the schema already says as
+	///     <see cref="DarknessSource.Sun"/>. Spelling it that way keeps the threshold a threshold: a sentinel
+	///     number would have to be recognised by the engine, the validator and anybody reading the YAML, and would
+	///     read as a real reading everywhere one of them forgot.
+	/// </remarks>
+	public static TokenChoice LuxOff { get; } = new(
+		"Off — use the sun",
+		nameof(DarknessSource.Sun),
+		nameof(AreaSettings.Darkness),
+		TokenKind.Choice);
+
+	/// <summary>
+	///     The shortlist offered for the lux a room counts as dark below, around the value it is on.
+	/// </summary>
+	/// <remarks>
+	///     <see cref="LuxLadder"/> plus the room's own value when that is not already a rung. The detail view now
+	///     takes any reading up to 65 535, so the ladder cannot hold every value a room can be on — and a popover
+	///     that opens on eight alternatives with nothing ticked has the same fault as one missing its own default:
+	///     the reader cannot tell where they are from where they could go.
+	/// </remarks>
+	/// <param name="current">The value the room is on now, in lux.</param>
+	public static IReadOnlyList<TokenChoice> LuxChoicesFor(double current)
+	{
+		List<double> rungs = [.. LuxLadder];
+
+		// Matched on the written form rather than the number, for the same reason the popover ticks on words:
+		// 1000 and 1000.0 are one rung, and offering both would be offering the same value twice.
+		if (!rungs.Exists(rung => string.Equals(InLux(rung), InLux(current), StringComparison.Ordinal)))
+		{
+			rungs.Add(current);
+			rungs.Sort();
+		}
+
+		return [.. rungs.Select(rung => new TokenChoice(InLux(rung), TokenFormat.Carry(rung))), LuxOff];
+	}
 
 	/// <summary>The shortlist offered for the sun elevation a room counts as dark below.</summary>
 	public static IReadOnlyList<TokenChoice> SunChoices { get; } =
@@ -271,13 +329,16 @@ public static class AreaSentences
 			: SentenceBuilder.Start($"This room {JoinClauses(clauses)}.").Build();
 	}
 
+	/// <summary>A light level as the sentence and the shortlist both write it, so the popover can tick on words.</summary>
+	private static string InLux(double lux) => TokenFormat.Number(lux, "lx");
+
 	private static void Lux(SentenceBuilder builder, AreaConfig? area, AreaSettings defaults, AreaSettings effective) =>
 		builder.Number(
 			nameof(AreaSettings.LuxThreshold),
 			"Dark below",
 			effective.LuxThreshold,
 			"lx",
-			LuxChoices,
+			LuxChoicesFor(effective.LuxThreshold),
 			OriginOf(area, area?.LuxThreshold),
 			defaults.LuxThreshold);
 

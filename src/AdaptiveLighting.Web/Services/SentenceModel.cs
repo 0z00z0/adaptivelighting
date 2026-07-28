@@ -64,13 +64,25 @@ public enum TokenOrigin
 ///     One value a token offers, as it is written and as it is carried.
 /// </summary>
 /// <remarks>
-///     Two fields because the two must be allowed to differ: "10 min" is what a person picks and <c>600</c> is
-///     what the document stores, and a popover that handed back its own label would make every page re-parse
-///     English. <see cref="Value"/> is always culture-invariant — see <see cref="TokenFormat"/>.
+///     <para>
+///         Two fields because the two must be allowed to differ: "10 min" is what a person picks and <c>600</c> is
+///         what the document stores, and a popover that handed back its own label would make every page re-parse
+///         English. <see cref="Value"/> is always culture-invariant — see <see cref="TokenFormat"/>.
+///     </para>
+///     <para>
+///         <see cref="Key"/> and <see cref="Kind"/> exist for the option that answers the sentence's question by
+///         changing a <i>different</i> setting. Turning a lux threshold off is the room deciding by the sun
+///         instead — a change of darkness source, not a lux reading that secretly means "disabled". Carrying the
+///         redirect on the option keeps the alternative out of the document: a sentinel like <c>-1</c> would have
+///         to be understood by the engine, the validator, every format string and anybody reading the YAML, and
+///         each of them is a place for it to be read as a real number.
+///     </para>
 /// </remarks>
 /// <param name="Text">What the option says in the popover.</param>
 /// <param name="Value">The canonical value handed back to the page, in the kind's own encoding.</param>
-public sealed record TokenChoice(string Text, string Value);
+/// <param name="Key">The setting this option changes, when that is not the token's own.</param>
+/// <param name="Kind">How <see cref="Value"/> is encoded, when it is not the token's own kind.</param>
+public sealed record TokenChoice(string Text, string Value, string? Key = null, TokenKind? Kind = null);
 
 /// <summary>One piece of a sentence: either prose or an inline value.</summary>
 public abstract record SentencePart;

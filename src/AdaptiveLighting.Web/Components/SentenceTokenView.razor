@@ -153,15 +153,27 @@ else
 	{
 		TokenChoice next = Token.Choices.First(choice => !IsCurrent(choice));
 
-		return Edited.InvokeAsync(new SentenceEdit(Token.Key, Token.Kind, next.Value));
+		return Edited.InvokeAsync(EditFor(next));
 	}
 
 	private Task Pick(TokenChoice choice)
 	{
 		_open = false;
 
-		return Edited.InvokeAsync(new SentenceEdit(Token.Key, Token.Kind, choice.Value));
+		return Edited.InvokeAsync(EditFor(choice));
 	}
+
+	/// <summary>
+	///     The edit an option asks for, which is not always an edit to this token's own setting.
+	/// </summary>
+	/// <remarks>
+	///     An option may answer the sentence's question by changing something else: "off" on a lux threshold is
+	///     the room deciding by the sun instead, and a number cannot say that without a sentinel value the whole
+	///     document would then have to understand. The redirect rides on the option, so the page still receives
+	///     one ordinary edit and needs no special case.
+	/// </remarks>
+	private SentenceEdit EditFor(TokenChoice choice) =>
+		new(choice.Key ?? Token.Key, choice.Kind ?? Token.Kind, choice.Value);
 
 	private Task Revert()
 	{

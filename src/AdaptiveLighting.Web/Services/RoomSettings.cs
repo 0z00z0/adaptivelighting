@@ -87,6 +87,19 @@ public sealed record RoomSetting(
 }
 
 /// <summary>
+///     What reading a typed number produced: the value to apply, or the sentence saying why nothing was.
+/// </summary>
+/// <remarks>
+///     Both fields can be absent at once only in principle — a reading either yields a number or explains itself,
+///     so the reader is never left with a field that changed nothing and said nothing about it.
+/// </remarks>
+/// <param name="Value">The number to apply, or <c>null</c> when nothing should change.</param>
+/// <param name="Refusal">
+///     Why nothing changed, in words meant for the person who typed it, or <c>null</c> when a value came through.
+/// </param>
+public sealed record TypedNumber(double? Value, string? Refusal);
+
+/// <summary>
 ///     One named section of the detail view: the unit a person navigates by.
 /// </summary>
 /// <param name="Title">What the section is called.</param>
@@ -167,6 +180,16 @@ public static class RoomSettings
 		Keys = keys;
 		ByKey = Groups.SelectMany(group => group.Settings).ToDictionary(setting => setting.Key, StringComparer.Ordinal);
 	}
+
+	/// <summary>
+	///     The most a light-level setting takes: the largest illuminance a 16-bit sensor reading can carry.
+	/// </summary>
+	/// <remarks>
+	///     A bound taken from the hardware rather than from taste. Real sensors report 0–65 535 lx, so a number
+	///     above it is not a preference this UI should quietly reshape — it is a value nothing will ever produce,
+	///     and saying so is more use than clamping it to something the reader did not type.
+	/// </remarks>
+	public const double MaxLux = 65535;
 
 	/// <summary>
 	///     Every setting a room can state for itself, derived from the schema.
@@ -253,14 +276,14 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.LuxThreshold),
 					"Dark below",
-					"At or below this many lux the room counts as dark.",
-					RoomControl.Number, Unit: "lx", Step: 5, Min: 0,
+					"At or below this many lux the room counts as dark. Readings run from a few lux at night to tens of thousands at midday, so pick the decade before the number.",
+					RoomControl.Number, Unit: "lx", Step: 1, Min: 0, Max: MaxLux,
 					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux or DarknessSource.Either),
 				new RoomSetting(
 					nameof(AreaSettings.LuxHysteresis),
 					"Bright again above",
-					"The extra light needed to count as bright again, so a sensor sitting on the threshold cannot flap.",
-					RoomControl.Number, Unit: "lx", Step: 5, Min: 0,
+					"The extra light needed to count as bright again, so a sensor sitting on the threshold cannot flap. Scale it with the threshold: 10 lx is a quarter of 40, and inside the sensor's own noise at 1000.",
+					RoomControl.Number, Unit: "lx", Step: 1, Min: 0, Max: MaxLux,
 					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux or DarknessSource.Either),
 				new RoomSetting(
 					nameof(AreaSettings.SunElevationThreshold),
@@ -356,6 +379,70 @@ public static class RoomSettings
 			],
 			StartsOpen: false)
 	];
+
+	/// <summary>
+	///     Whether a setting's range spans so many decades that no single step can serve it.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Derived from the bounds rather than flagged setting by setting, because it is arithmetic and not
+	///         taste. A control running 0–65 535 lx with a five-lux step needs 7 992 presses to get from 40 to
+	///         40 000, and no other step rescues it: 5 is absurd at the top of the range and 500 is unusable at
+	///         the bottom. The instrument is wrong, not its calibration.
+	///     </para>
+	///     <para>
+	///         So a setting shaped like this is typed rather than stepped, with the sentence's shortlist for the
+	///         decade and the box for the number. Illuminance is the case that raised it; the rule is general, so
+	///         a future setting with the same shape gets the same control without anyone remembering to ask.
+	///     </para>
+	/// </remarks>
+	/// <param name="min">The setting's floor, in the unit its control shows.</param>
+	/// <param name="max">Its ceiling, or <c>null</c> for unbounded above.</param>
+	public static bool SpansDecades(double min, double? max) =>
+		max is { } ceiling && ceiling / Math.Max(min, 1) >= 1000;
+
+	/// <summary>
+	///     Reads a number somebody typed, in the unit the control shows.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Refuses rather than clamps, and says which.</b> A box that silently turns 70 000 into 65 535 has
+	///         answered a question nobody asked, and the person who typed it is left looking at a number they did
+	///         not choose, unable to tell a rejected entry from a typo of their own.
+	///     </para>
+	///     <para>
+	///         Invariant first, then the machine's own culture. A browser hands <c>type="number"</c> back in HTML
+	///         number syntax, but a paste, an autofill or a locale-aware field can arrive written the way the desk
+	///         writes numbers, and on an <c>nb-NO</c> host that is "62,5". The invariant pass deliberately refuses
+	///         thousands separators: allowing them would read "1,5" as fifteen before the Norwegian pass ever saw
+	///         it, which is the same class of bug as writing <c>value="62,5"</c> into an HTML attribute.
+	///     </para>
+	/// </remarks>
+	/// <param name="typed">What was in the box.</param>
+	/// <param name="min">The lowest value the setting takes, in the shown unit.</param>
+	/// <param name="max">The highest, or <c>null</c> for unbounded above.</param>
+	/// <param name="unit">The unit, so a refusal names the bound the way the readout does.</param>
+	public static TypedNumber ReadNumber(string? typed, double min, double? max, string unit = "")
+	{
+		string entered = typed?.Trim() ?? string.Empty;
+
+		if (entered.Length == 0)
+			return new TypedNumber(null, "Nothing was entered, so nothing changed.");
+
+		if (!double.TryParse(entered, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+			&& !double.TryParse(entered, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out value))
+		{
+			return new TypedNumber(null, $"“{entered}” is not a number, so nothing changed.");
+		}
+
+		if (value < min)
+			return new TypedNumber(null, $"{TokenFormat.Number(min, unit)} is the least this takes, so {TokenFormat.Number(value, unit)} was not applied.");
+
+		if (max is { } ceiling && value > ceiling)
+			return new TypedNumber(null, $"{TokenFormat.Number(ceiling, unit)} is the most this takes, so {TokenFormat.Number(value, unit)} was not applied.");
+
+		return new TypedNumber(value, null);
+	}
 
 	/// <summary>The setting a key names.</summary>
 	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
