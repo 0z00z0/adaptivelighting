@@ -1658,7 +1658,12 @@ select.cell.wide {
 .housemode-fold,
 .group-fold {
 	padding: 0;
-	overflow: hidden;   /* the header wash must not poke past the rounded corners */
+	/* NOT overflow: hidden. It was here so the header wash could not poke past the rounded corners, but the
+	   header already rounds itself in both states — full radius closed, top-only when open (see
+	   .group-fold[open] > .group-summary) — so the clip bought nothing and cost the info popovers: measured on
+	   a live house, 132 px of a 140 px panel fell outside the fold and was simply not painted. That is why the
+	   help "was not complete" — it was complete and invisible. Popovers are absolutely positioned and must be
+	   allowed to leave. */
 	/* A dimmed-green edge by default — alive but quiet — so the cards read as a healthy list rather than plain
 	   grey. The period/mode in force turns this edge accent (below); green is the resting state, orange is "now". */
 	border-left: 3px solid color-mix(in srgb, var(--ok) 42%, var(--line));
