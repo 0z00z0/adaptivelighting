@@ -51,12 +51,12 @@ else if (_room is not { } room)
 	<div class="empty">
 		<strong>Nothing here is set up as <code>@AreaId</code>.</strong>
 		<p>The room may have been removed, or its Home Assistant area may have been changed.</p>
-		<p><a href="">Back to the board</a> &mdash; or <a href="config?section=areas">see every room</a>.</p>
+		<p><a href="">Back to the dashboard</a> &mdash; or <a href="config?section=areas">see every room</a>.</p>
 	</div>
 }
 else
 {
-	<a class="room-back" href="">&lsaquo; Board</a>
+	<a class="room-back" href="">&lsaquo; Dashboard</a>
 
 	@* --------------------------------------------------------------------------------------------------
 	   The top: what the room is doing on the left, what the engine measured on the right. Side by side on
@@ -336,7 +336,7 @@ else
 					@if (_identityOpen)
 					{
 						<div class="sgroup-body">
-							<SettingRow Label="Name" Help="The room's name everywhere in this app. Left empty it follows the area's name in Home Assistant, so renaming it there renames it here.">
+							<SettingRow Label="Name" Help="What this room is called everywhere here. Leave it empty and it follows the Home Assistant area's name, so renaming it there renames it here.">
 								<input type="text"
 									   class="cell wide"
 									   value="@room.Name"
@@ -345,7 +345,7 @@ else
 									   @onchange="OnNameChanged" />
 							</SettingRow>
 
-							<SettingRow Label="Home Assistant area" Help="Which room this is. Lights and sensors are found from it.">
+							<SettingRow Label="Home Assistant area" Help="Which area this room is. Changing it looks for lights and sensors again, so what is found below changes with it, and this page moves to the new address.">
 								<AreaPicker Value="@room.AreaId" ValueChanged="@OnAreaChanged" Areas="@_areas" />
 							</SettingRow>
 						</div>
@@ -467,35 +467,35 @@ else
 							</div>
 						}
 
-						<SettingRow Label="Lights" Help="Leave empty to use whatever discovery finds in this area.">
+						<SettingRow Label="Lights" Help="Empty means every light found in this room. Name any here and only those are managed — nothing else in the room is touched, whatever labels it carries.">
 							<EntityListPicker Value="@(room.Lights ?? [])"
 											  ValueChanged="@(value => SetList(value, list => room.Lights = list))"
 											  Options="@_lightChoices"
 											  NameResolver="@Name"
 											  KnownResolver="@Catalog.Knows"
-											  EmptyLabel="Discovered from the area."
+											  EmptyLabel="Found in this room."
 											  AddLabel="Add a light…"
 											  EmptyNote="@EmptyNote("lights")"
 											  Placeholder="light.example" />
 						</SettingRow>
 
-						<SettingRow Label="Motion sensors" Help="Sensors that report motion, occupancy or presence.">
+						<SettingRow Label="Motion sensors" Help="Empty means every motion sensor found in this room. Name any here and only those wake the lights.">
 							<EntityListPicker Value="@(room.MotionSensors ?? [])"
 											  ValueChanged="@(value => SetList(value, list => room.MotionSensors = list))"
 											  Options="@_motionChoices"
 											  NameResolver="@Name"
 											  KnownResolver="@Catalog.Knows"
-											  EmptyLabel="Discovered from the area."
+											  EmptyLabel="Found in this room."
 											  AddLabel="Add a motion sensor…"
 											  EmptyNote="@EmptyNote("motion sensors")"
 											  Placeholder="binary_sensor.example" />
 						</SettingRow>
 
-						<SettingRow Label="Light-level sensor" Help="Only needed when the room has more than one.">
+						<SettingRow Label="Light-level sensor" Help="Which reading decides whether this room is dark. Only needed when the room has more than one — otherwise the one that is found is used.">
 							<EntityPicker Value="@room.LuxSensor"
 										  ValueChanged="@(value => Set(() => room.LuxSensor = value))"
 										  Options="@_luxChoices"
-										  NoneLabel="(discovered from the area)"
+										  NoneLabel="(the one found in this room)"
 										  EmptyNote="@EmptyNote("light-level sensors")"
 										  Placeholder="sensor.example_illuminance" />
 						</SettingRow>
@@ -589,7 +589,7 @@ else
 			else
 			{
 				<p class="room-card-foot">
-					Nothing recorded for this room yet. The timeline starts when the engine starts, and a room
+					Nothing recorded for this room yet. Recording starts when adaptive lighting starts, and a room
 					appears the first time it decides something.
 				</p>
 			}

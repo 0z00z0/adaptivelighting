@@ -114,7 +114,7 @@
 			: option.Preview.EffectSummary,                                    // D10
 		ModeKind.Sleep => option.ClampPeriod is { Length: > 0 } clamp
 			? $"night levels (\"{clamp}\" period) in the rooms that sleep"     // D15
-			: "night levels — but no night period is set (see Configuration → Periods)", // D15
+			: "night levels — but no night period is set (see Configuration → Schedule)", // D15
 		_ => option.Preview.EffectSummary                                      // D12 — everyday lighting
 	};
 

@@ -37,7 +37,7 @@
 	The /modes route is kept so old bookmarks land here.
 *@
 
-<PageTitle>Board &mdash; Adaptive lighting</PageTitle>
+<PageTitle>Dashboard &mdash; Adaptive lighting</PageTitle>
 
 @*
 	The house bar: the one control that stops everything, the mode the house is in, and who is home — one strip
@@ -86,15 +86,16 @@
 @if (_snapshots.Any(area => area.KillSwitchActive))
 {
 	<div class="notice bad">
-		<strong>Adaptive lighting is switched off.</strong> No lights will change until you turn it back on above.
+		<strong>Adaptive lighting is paused.</strong> Nothing was turned off, but no lights will change until you
+		turn it back on above.
 	</div>
 }
 else if (!Engine.IsRunning && Cache.HasData)
 {
 	<div class="notice bad">
-		<strong>Automatic lighting has stopped@(Engine.Fault is { Length: > 0 } ? ":" : ".")</strong>
+		<strong>Adaptive lighting has stopped@(Engine.Fault is { Length: > 0 } ? ":" : ".")</strong>
 		@Engine.Fault
-		The board shows what each room was doing when it stopped.
+		The timeline below shows what each room was doing when it stopped.
 	</div>
 }
 
@@ -114,7 +115,7 @@ else if (!Engine.IsRunning && Cache.HasData)
 else if (!Cache.HasData && !Engine.IsRunning)
 {
 	<div class="empty">
-		<strong>Connected, but automatic lighting isn't running.</strong>
+		<strong>Connected, but adaptive lighting isn't running.</strong>
 		<p>@(Engine.Fault ?? "No reason was recorded.")</p>
 		<p>See <a href="config">Configuration</a> for details.</p>
 	</div>
@@ -158,7 +159,7 @@ else if (_lanes.Count == 0)
 {
 	@*
 		Reports have arrived, but none from a room that is switched on — a state filtering makes possible and an
-		unfiltered board never could. Said plainly rather than left as an axis over nothing.
+		unfiltered dashboard never could. Said plainly rather than left as an axis over nothing.
 	*@
 	<div class="empty">
 		<strong>None of the rooms you switched on has reported yet.</strong>
@@ -185,7 +186,7 @@ else
 
 	<section class="board">
 		<div class="board-head">
-			<h2 class="board-title">The board</h2>
+			<h2 class="board-title">Timeline</h2>
 			<span class="board-span">@BoardView.Clock(_window.Start) &rarr; @BoardView.Clock(_window.End)</span>
 			<span class="board-since">@SinceLine</span>
 		</div>
@@ -316,8 +317,8 @@ else
 		@if (_entries.Count == 0)
 		{
 			<p class="board-note">
-				Nothing has been recorded yet. The board and the log start when adaptive lighting starts, and a
-				room appears the first time it decides something.
+				Nothing has been recorded yet. Recording starts when adaptive lighting starts, and a room appears
+				the first time it decides something.
 			</p>
 		}
 
@@ -352,7 +353,7 @@ else
 		which is what somebody arriving with "why didn't that light come on" is actually here for.
 	*@
 	<div class="board-loghead">
-		<h2 class="board-title">The log &mdash; every decision, newest first</h2>
+		<h2 class="board-title">Activity &mdash; every decision, newest first</h2>
 		<span class="board-since">@LogFoot</span>
 	</div>
 
@@ -400,7 +401,7 @@ else
 			}
 		</ol>
 
-		<p class="log-foot"><a href="activity">The full log &rsaquo;</a></p>
+		<p class="log-foot"><a href="activity">All activity &rsaquo;</a></p>
 	}
 }
 
@@ -684,8 +685,8 @@ else
 	///     rooms were found (the system's half is done) and nothing will change (so nothing is broken).
 	/// </summary>
 	private string FoundLine => _rooms.Count == 1
-		? "Set-up found one room. It isn't switched on yet, so no lights will change."
-		: $"Set-up found {_rooms.Count} rooms. None are switched on yet, so no lights will change.";
+		? "Setting up found one room. It isn't switched on yet, so no lights will change."
+		: $"Setting up found {_rooms.Count} rooms. None are switched on yet, so no lights will change.";
 
 	private static string LightsWord(int lights) => lights == 1 ? "1 light" : $"{lights} lights";
 

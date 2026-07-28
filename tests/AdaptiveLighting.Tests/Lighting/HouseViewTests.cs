@@ -56,12 +56,12 @@ public sealed class HouseViewTests
 		room.Lights = ["light.a", "light.b"];
 		room.LuxSensor = "sensor.stue_lux";
 
-		Assert.AreEqual("2 lights, lux sensor picked by hand", HouseView.RoomSummary(room));
+		Assert.AreEqual("2 lights, light-level sensor picked by hand", HouseView.RoomSummary(room));
 
 		room.VacancyTimeoutSeconds = 1800;
 
 		Assert.AreEqual(
-			$"2 lights, lux sensor picked by hand · 1 of {AreaView.OverridableSettingCount} changed",
+			$"2 lights, light-level sensor picked by hand · 1 of {AreaView.OverridableSettingCount} changed",
 			HouseView.RoomSummary(room));
 	}
 

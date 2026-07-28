@@ -68,7 +68,7 @@ public sealed record SaveResult(SaveStatus Status, ValidationResult Validation, 
 /// </remarks>
 public sealed class LightingEngineHost : IDisposable
 {
-	private const string InvalidConfigTitle = "Adaptive lighting: invalid configuration";
+	private const string InvalidConfigTitle = "Adaptive lighting: the settings file has errors";
 
 	private readonly LightingConfigStore _store;
 	private readonly ILoggerFactory _loggerFactory;
@@ -174,7 +174,7 @@ public sealed class LightingEngineHost : IDisposable
 			_ha = null;
 			_registry = null;
 			_scheduler = null;
-			Fault = "The lighting app was stopped, so the engine has no Home Assistant connection.";
+			Fault = "The lighting app was switched off in Home Assistant, so nothing is connected to it.";
 		}
 	}
 
@@ -370,7 +370,7 @@ public sealed class LightingEngineHost : IDisposable
 				// The flag deliberately stays unset. Finding nothing is far more likely to mean "asked too early"
 				// than "this house has no lit rooms", and looking again on the next start costs nothing.
 				_logger.LogInformation(
-					"No Home Assistant area has both a light and a motion sensor yet. Add rooms on the Configuration page, or restart to look again.");
+					"No Home Assistant area has both a light and a motion sensor yet. Add rooms under Configuration → Areas, or restart to look again.");
 				return;
 			}
 
@@ -406,13 +406,13 @@ public sealed class LightingEngineHost : IDisposable
 			}
 
 			_logger.LogInformation(
-				"Discovered {Count} areas from the area registry ({Areas}), all switched off. Choose which to switch on "
-				+ "from the Configuration page — no lights will change until you do.",
+				"Discovered {Count} rooms from the area registry ({Areas}), all switched off. Choose which to switch on "
+				+ "under Configuration → Areas — no lights will change until you do.",
 				plan.NewAreas.Count, string.Join(", ", plan.NewAreas.Select(area => area.AreaId)));
 
 			if (seeded.Count > 0)
 				_logger.LogInformation(
-					"Home and Away will follow {Count} people ({Persons}). Change who on the Configuration page.",
+					"Home and Away will follow {Count} people ({Persons}). Change who under Configuration → House.",
 					seeded.Count, string.Join(", ", seeded));
 
 			ApplyCore(config);
@@ -525,7 +525,7 @@ public sealed class LightingEngineHost : IDisposable
 		if (!validation.IsValid)
 		{
 			StopCore();
-			Fault = "The configuration on disk has document-level errors, so no engine is running.";
+			Fault = "The settings file has errors that stop the whole house, so nothing is running. Fix them under Configuration.";
 
 			_logger.LogError(
 				"Adaptive lighting configuration is invalid, engine stopped:{NewLine}{Validation}",
@@ -535,15 +535,15 @@ public sealed class LightingEngineHost : IDisposable
 			// failure nobody notices otherwise.
 			Notify(validation);
 
-			return new SaveResult(SaveStatus.Failed, validation, "Saved, but the engine cannot run this document.");
+			return new SaveResult(SaveStatus.Failed, validation, "Saved, but nothing can run on these settings.");
 		}
 
 		if (_ha is null || _registry is null || _scheduler is null)
 		{
-			Fault = "The lighting app has not started yet, so the engine has no Home Assistant connection.";
+			Fault = "The lighting app has not started yet, so nothing is connected to Home Assistant.";
 			_logger.LogWarning("Configuration is valid but no Home Assistant connection is attached; not starting.");
 
-			return new SaveResult(SaveStatus.Saved, validation, "Saved. The engine will start when the host connects to Home Assistant.");
+			return new SaveResult(SaveStatus.Saved, validation, "Saved. Rooms start being managed as soon as Home Assistant answers.");
 		}
 
 		StopCore();
@@ -571,7 +571,7 @@ public sealed class LightingEngineHost : IDisposable
 				"Adaptive lighting is running: {Areas} of {Configured} areas resolved.",
 				orchestrator.Areas.Count, config.Areas.Count);
 
-			return new SaveResult(SaveStatus.Saved, validation, $"Engine rebuilt: {orchestrator.Areas.Count} of {config.Areas.Count} areas are running.");
+			return new SaveResult(SaveStatus.Saved, validation, $"Saved: {orchestrator.Areas.Count} of {config.Areas.Count} rooms are running.");
 		}
 		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
 		{
@@ -581,7 +581,7 @@ public sealed class LightingEngineHost : IDisposable
 				// is now caught (bar the two unrecoverable ones), logged with its stack trace, and reported as a
 				// failed save the operator can see.
 			StopCore();
-			Fault = $"The engine failed to start: {exception.Message}";
+			Fault = $"Adaptive lighting could not start: {exception.Message}";
 			_logger.LogError(exception, "The lighting engine failed to start.");
 
 			return new SaveResult(SaveStatus.Failed, validation, Fault);

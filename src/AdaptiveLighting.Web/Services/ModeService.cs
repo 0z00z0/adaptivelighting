@@ -422,7 +422,7 @@ public sealed class ModeService
 		{
 			var where = option.ResetPresenceSensors.Count > 0
 				? $"{option.ResetPresenceSensors.Count} chosen {(option.ResetPresenceSensors.Count == 1 ? "sensor" : "sensors")}"
-				: "any area's motion";
+				: "any room's motion";
 			parts.Add($"on presence ({where}, after {option.ResetPresenceGraceMinutes} min)");
 		}
 

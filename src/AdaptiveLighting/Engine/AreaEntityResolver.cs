@@ -137,7 +137,12 @@ public sealed class AreaEntityResolver
 		{
 			if (!_registry.AreaExists(configuredArea))
 			{
-				error = $"AreaId '{configuredArea}' is not a registry area id (it is the slug, not the display name). Known ids: {string.Join(", ", _registry.AreaIds.Order(StringComparer.Ordinal))}.";
+				// The known-id list is only worth printing when there is one. A registry that has not answered
+				// yet leaves it empty, and "Known ids: ." reads as a fault in this app rather than as a
+				// connection that is still coming up.
+				error = _registry.AreaIds.Count > 0
+					? $"Home Assistant has no area '{configuredArea}'. It must be the area's id — the slug — not its display name. Known ids: {string.Join(", ", _registry.AreaIds.Order(StringComparer.Ordinal))}."
+					: $"Home Assistant has no area '{configuredArea}', and lists no areas at all yet — it may still be starting up.";
 				return false;
 			}
 

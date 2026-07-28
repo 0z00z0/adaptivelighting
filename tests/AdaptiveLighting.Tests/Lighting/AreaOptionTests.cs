@@ -20,7 +20,7 @@ public sealed class AreaOptionTests
 	{
 		var option = new AreaOption("stue", "Stue", LightCount: 1, MotionCount: 1, LuxCount: 1);
 
-		Assert.AreEqual("Stue (stue) — 1 light, 1 motion, 1 lux", option.Label);
+		Assert.AreEqual("Stue (stue) — 1 light, 1 motion, 1 light-level", option.Label);
 	}
 
 	[TestMethod]
@@ -28,7 +28,7 @@ public sealed class AreaOptionTests
 	{
 		var option = new AreaOption("tilbygg", "tilbygg", LightCount: 2, MotionCount: 0, LuxCount: 0);
 
-		Assert.AreEqual("tilbygg — 2 lights, 0 motion, 0 lux", option.Label,
+		Assert.AreEqual("tilbygg — 2 lights, 0 motion, 0 light-level", option.Label,
 			"'tilbygg (tilbygg)' tells a household nothing twice");
 	}
 
@@ -48,8 +48,8 @@ public sealed class AreaOptionTests
 	[TestMethod]
 	public void One_Light_Is_Singular_And_Two_Are_Not()
 	{
-		Assert.AreEqual("1 light, 0 motion, 0 lux", new AreaOption("a", "a", 1, 0, 0).Counts);
-		Assert.AreEqual("2 lights, 0 motion, 0 lux", new AreaOption("a", "a", 2, 0, 0).Counts);
+		Assert.AreEqual("1 light, 0 motion, 0 light-level", new AreaOption("a", "a", 1, 0, 0).Counts);
+		Assert.AreEqual("2 lights, 0 motion, 0 light-level", new AreaOption("a", "a", 2, 0, 0).Counts);
 	}
 
 	[TestMethod]

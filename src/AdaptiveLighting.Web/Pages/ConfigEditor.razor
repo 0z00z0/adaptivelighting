@@ -121,13 +121,13 @@ else
 		<div class="notice warn">
 			@if (!Engine.IsRunning)
 			{
-				<div><strong>Automatic lighting isn't running.</strong> @(Engine.Fault ?? "Not started yet.") Edits here are saved either way, and take effect when it starts.</div>
+				<div><strong>Adaptive lighting isn't running.</strong> @(Engine.Fault ?? "Not started yet.") Edits here are saved either way, and take effect when it starts.</div>
 			}
 			@if (!HomeAssistantIsAnswering)
 			{
 				<div>
 					<strong>Waiting for Home Assistant.</strong> The pickers below have nothing to offer until it answers.
-					You can still type ids by hand; name checks are skipped if you save now.
+					You can still type ids by hand; they are not checked against Home Assistant if you save now.
 				</div>
 			}
 		</div>
@@ -432,8 +432,9 @@ else
 				<header class="section-head">
 					<h2>House modes</h2>
 					<p class="lede">
-						The house mode (Normal, Sleep, Away, Guest) lives in a Home Assistant dropdown helper. Pick the
-						helper, then say what each option means. You switch modes on the <a href="/">board</a>.
+						The house mode lives in a Home Assistant dropdown helper. Pick the helper, then say what each
+						of its options means &mdash; Normal, Sleep, Away or Guest. You switch modes on the
+						<a href="/">dashboard</a>.
 					</p>
 				</header>
 
@@ -442,9 +443,10 @@ else
 						<div class="field-head">
 							<label class="field-label">House mode
 								<InfoPopover Label="House mode">
-									Create the helper in Home Assistant: <strong>Settings → Devices &amp; services → Helpers →
-									Create helper → Dropdown.</strong> Add your options, save, then pick it here. Home Assistant
-									owns the helper, so it survives restarts.
+									Which dropdown helper holds this house's modes. Picking one reads its options into the
+									cards below: an option the new helper also offers keeps its settings, the rest are dropped.
+									No helper yet? Make one in Home Assistant under <strong>Settings → Devices &amp; services →
+									Helpers → Create helper → Dropdown</strong>, add your options, then pick it here.
 								</InfoPopover>
 							</label>
 						</div>
@@ -452,12 +454,12 @@ else
 							<EntityPicker Value="@_config.Global.HouseMode?.Entity"
 										  ValueChanged="@SetHouseModeEntity"
 										  Options="@_inputSelects"
-										  NoneLabel="(none — the house has no mode select)"
-										  EmptyNote="@EmptyNote("No dropdown helpers yet — create one in Home Assistant (Settings → Devices & services → Helpers), or type an id.")"
+										  NoneLabel="(none — the house has no modes)"
+										  EmptyNote="@EmptyNote("No dropdown helpers yet — make one in Home Assistant under Settings → Devices & services → Helpers, or type an id.")"
 										  Placeholder="input_select.husmodus" />
 						</div>
 						<div class="field-help">
-							Say below what each option of the helper means.
+							Without one the house is always in everyday lighting. Say below what each option means.
 						</div>
 					</div>
 				</div>
@@ -718,8 +720,9 @@ else
 						<div class="field-head">
 							<label class="field-label">Only manage lights with (label)
 								<InfoPopover Label="Only manage lights with (label)">
-									When set, only lights carrying this label are managed. Leave empty to manage every light
-									that's found. Lights you list by hand in a room are managed either way.
+									Set it and every light without this label stops being managed, in every room &mdash; useful
+									when a room resolves to status LEDs and colour channels as well as lamps. Lights you named
+									by hand in a room are managed either way, and <em>Never touch</em> below still wins.
 								</InfoPopover>
 							</label>
 						</div>
@@ -731,15 +734,16 @@ else
 										 UnknownNote="No light carries this label yet, so no room will resolve. Label the lights in Home Assistant, or clear this."
 										 Placeholder="adaptive" />
 						</div>
-						<div class="field-help">Empty is the usual answer: every light discovery finds is managed.</div>
+						<div class="field-help">Empty is the usual answer: every light found is managed.</div>
 					</div>
 
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">Never touch (label)
 								<InfoPopover Label="Never touch (label)">
-									Anything in Home Assistant carrying this label is invisible to this app — it is never
-									discovered, never commanded, never counted.
+									Anything carrying this label stops being found: never discovered, never commanded, never
+									counted. Put it on the fridge lamp and the router's status LED. A light you named by hand
+									in a room is the one thing it does not reach.
 								</InfoPopover>
 							</label>
 						</div>
@@ -751,15 +755,16 @@ else
 										 UnknownNote="Nothing carries this label, so nothing is excluded — that's fine."
 										 Placeholder="adaptive-exclude" />
 						</div>
-						<div class="field-help">This wins over every other setting, including the include label above.</div>
+						<div class="field-help">This beats the label above: carrying both means the light is left alone.</div>
 					</div>
 
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">Counts as motion (label)
 								<InfoPopover Label="Counts as motion (label)">
-									A sensor with this label is treated as a motion sensor whatever its type. For the odd
-									sensor Home Assistant classifies as something else.
+									A sensor carrying this label wakes the lights in its room whatever Home Assistant thinks it
+									measures. For the odd door or vibration sensor that is really a presence sensor. It adds to
+									the device classes below rather than replacing them.
 								</InfoPopover>
 							</label>
 						</div>
@@ -781,11 +786,12 @@ else
 					*@
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Outdoor light sensor
-								<InfoPopover Label="Outdoor light sensor">
-									A house-wide outdoor light sensor. Any room without its own lux sensor uses this to decide
-									whether it is dark, instead of falling back to the sun's height — which follows clouds, not
-									just the clock. A room with its own lux sensor keeps using that. Leave empty to use sun height.
+							<label class="field-label">Outdoor light-level sensor
+								<InfoPopover Label="Outdoor light-level sensor">
+									Where the house reads the daylight, so darkness follows the clouds rather than the clock.
+									A room reads it only when the settings file gives that room <code>FollowOutdoorLux: true</code>
+									&mdash; there is no control for that here. A room with a light-level sensor of its own always
+									uses that instead.
 								</InfoPopover>
 							</label>
 						</div>
@@ -793,8 +799,8 @@ else
 							<EntityPicker Value="@_config.Global.OutdoorLuxSensor"
 										  ValueChanged="@(value => SetOutdoorLux(value))"
 										  Options="@_luxSensors"
-										  NoneLabel="(none — rooms without their own lux use sun height)"
-										  EmptyNote="@EmptyNote("No illuminance sensors found — type an id.")"
+										  NoneLabel="(none — no room can follow the house's daylight)"
+										  EmptyNote="@EmptyNote("No light-level sensors found — type an id.")"
 										  Placeholder="sensor.ute_lux" />
 						</div>
 					</div>
@@ -806,9 +812,9 @@ else
 							<div class="field-head">
 								<label class="field-label">What counts as a motion sensor
 									<InfoPopover Label="What counts as a motion sensor">
-										Which kinds of binary sensor count as movement. The built-in set (motion, occupancy,
-										presence) suits nearly every house. Ticking anything replaces the whole set — include the
-										built-ins you still want.
+										Which kinds of binary sensor wake the lights. The built-in set &mdash; motion, occupancy,
+										presence &mdash; suits nearly every house. Ticking anything <strong>replaces</strong> that
+										set rather than adding to it, so a room can go silent by losing a class you forgot to tick.
 									</InfoPopover>
 								</label>
 							</div>
@@ -837,7 +843,9 @@ else
 							<div class="field-head">
 								<label class="field-label">What counts as a light-level sensor
 									<InfoPopover Label="What counts as a light-level sensor">
-										What counts as a light-level sensor. "illuminance" is nearly always right.
+										Which kind of sensor a room takes its light reading from. <code>illuminance</code> is
+										nearly always right; change it and rooms whose sensor reports something else start
+										reading the daylight, and rooms that were reading it stop.
 									</InfoPopover>
 								</label>
 							</div>
@@ -853,7 +861,7 @@ else
 									}
 								</select>
 							</div>
-							<div class="field-help">What qualifies a sensor as a room's lux source during discovery.</div>
+							<div class="field-help">What makes a sensor count as a room's light-level reading.</div>
 						</div>
 					</details>
 				</GroupFold>
@@ -872,8 +880,8 @@ else
 							<label class="field-label">Who lives here
 								<InfoPopover Label="Who lives here">
 									Whose presence decides Home and Away. Empty means everyone Home Assistant knows, including
-									people added later — usually right. List people only to leave someone out (a car tracker,
-									a guest entity).
+									people added later &mdash; usually right. Name people only to leave someone out: a car
+									tracker or a guest phone that would otherwise keep the house from ever counting as empty.
 								</InfoPopover>
 							</label>
 						</div>
@@ -902,14 +910,15 @@ else
 						   Description="Which switch pauses all automatic lighting, and which way round it reads.">
 					<p class="group-note">
 						On means lights adjust automatically; off pauses everything at once &mdash; nothing is turned off,
-						changes just stop. This is the same switch as the On/Off control on the board.
+						changes just stop. This is the same switch as the On/Off control on the dashboard.
 					</p>
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">Master switch
 								<InfoPopover Label="Master switch">
-									One switch that pauses all automatic lighting. Left unset, it uses this app's own enable
-									switch in Home Assistant. Point it at your own helper toggle to override.
+									Which Home Assistant switch pauses everything. Left unset it uses this app's own switch,
+									which is what the dashboard's On/Off control flips. Point it at your own toggle to gate the
+									app on something else &mdash; an alarm state, a holiday helper.
 								</InfoPopover>
 							</label>
 						</div>
@@ -929,8 +938,8 @@ else
 								@if (_config.Global.EffectiveKillSwitchEntity is { Length: > 0 } builtIn)
 								{
 									<span>
-										Using <code>@builtIn</code> — the app's own switch in Home Assistant. Note: turning it
-										off pauses the whole app, this page included.
+										Using <code>@builtIn</code> — the app's own switch in Home Assistant. Turning it off
+										pauses the whole app, this page included.
 									</span>
 								}
 								else
@@ -950,11 +959,14 @@ else
 								<select class="cell wide"
 										@bind:get="@(_config.Global.KillSwitchActiveWhenOff ? "true" : "false")"
 										@bind:set="SetKillSwitchPolarity">
-									<option value="true">read as an enabled flag — off kills the engine</option>
-									<option value="false">read as a kill switch — on kills the engine</option>
+									<option value="true">on lets lights adjust, off pauses everything</option>
+									<option value="false">off lets lights adjust, on pauses everything</option>
 								</select>
 							</div>
-							<div class="field-help">Gates the whole engine. This overrides the built-in default switch.</div>
+							<div class="field-help">
+								Which way round this switch reads. Get it backwards and the house pauses exactly when it
+								should be working. This switch replaces the app's own.
+							</div>
 						}
 					</div>
 				</GroupFold>
@@ -988,8 +1000,10 @@ else
 						<div class="field-head">
 							<label class="field-label">NetDaemon user id
 								<InfoPopover Label="NetDaemon user id">
-									The Home Assistant user this app connects as (Settings → People, on the token's user).
-									Naming it helps tell the app's own light changes from a person's. Optional.
+									The Home Assistant user this app connects as &mdash; find it under Settings → People, on
+									the token's user. Naming it lets a light change be recognised as the app's own by who made
+									it. Left unset, that is judged by timing alone, so a person at a switch during the window
+									below can be mistaken for the app.
 								</InfoPopover>
 							</label>
 						</div>
@@ -997,12 +1011,12 @@ else
 							@if (string.IsNullOrWhiteSpace(_config.Global.NetDaemonUserId))
 							{
 								<span class="badge">not set</span>
-								<span class="hint">not set — manual changes are detected by timing alone.</span>
+								<span class="hint">hand changes are told apart by timing alone.</span>
 							}
 							else
 							{
 								<span class="badge ok">set</span>
-								<span class="hint">set — the value is never shown.</span>
+								<span class="hint">the stored value is never shown, in either direction.</span>
 								<button type="button" @onclick="ClearUserId">Clear</button>
 							}
 						</div>
@@ -1015,7 +1029,8 @@ else
 						<div class="field-head">
 							<label class="field-label">Re-check the rooms every
 								<InfoPopover Label="Re-check the rooms every">
-									How often each room re-checks the time of day and the light outside. Once a minute is plenty.
+									How often each room re-reads the time of day and the light outside, in seconds. 60 is
+									plenty; shorter makes dusk arrive sooner but costs a pass over every room each time.
 								</InfoPopover>
 							</label>
 						</div>
@@ -1028,30 +1043,30 @@ else
 						<div class="field-head">
 							<label class="field-label">Recognise own changes for
 								<InfoPopover Label="Recognise own changes for">
-									How long the app's own commands are recognised as its own rather than as a person at a switch.
+									A light that changes within this many seconds of one of the app's own commands is read as
+									the echo of that command, not as somebody at a switch. Too short and the app mistakes
+									itself for a person and backs off; too long and a real hand change is ignored. 8 s suits
+									most houses.
 								</InfoPopover>
 							</label>
 						</div>
 						<div class="field-control">
 							<input class="cell num" type="number" min="0" @bind="_config.Global.SelfEchoWindowSeconds" /> <span class="unit">s</span>
 						</div>
-						<div class="field-help">
-							A state change on a light within this window of a command is read as our own echo rather than as a
-							human at a switch.
-						</div>
 					</div>
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Other automations count as manual
-								<InfoPopover Label="Other automations count as manual">
-									When another automation changes a light here, treat it like a manual change and back off.
-									Untick only if this app should always win.
+							<label class="field-label">Other automations count as hand changes
+								<InfoPopover Label="Other automations count as hand changes">
+									Ticked, a light another automation changes is treated as a hand change: this app stands
+									back for as long as <em>Hand changes hold for</em> says. Unticked, it corrects the light on
+									the next re-check and keeps winning.
 								</InfoPopover>
 							</label>
 						</div>
 						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Global.TreatAutomationsAsManual" /> a change from another automation counts as a manual override</label>
+							<label><input type="checkbox" @bind="_config.Global.TreatAutomationsAsManual" /> a change from another automation counts as a hand change</label>
 						</div>
 					</div>
 
@@ -1059,8 +1074,10 @@ else
 						<div class="field-head">
 							<label class="field-label">Close enough
 								<InfoPopover Label="Close enough">
-									A light already this close to its target is left alone. Without a margin, lights would be
-									endlessly re-corrected over invisible differences.
+									How far a light may sit from its target before the app corrects it: percentage points of
+									brightness, kelvin of colour. Raise them and small drifts are left alone; drop them to zero
+									and lights are re-commanded endlessly over differences no eye can see. 2 % and 50 K are
+									comfortable.
 								</InfoPopover>
 							</label>
 						</div>
@@ -1110,7 +1127,7 @@ else
 						else
 						{
 							<span class="badge bad">not connected</span>
-							<span>You can still type ids by hand; name checks are skipped if you save now.</span>
+							<span>You can still type ids by hand; they are not checked against Home Assistant if you save now.</span>
 						}
 					</div>
 				</GroupFold>

@@ -87,7 +87,7 @@ public static class HouseView
 			parts.Add(Count(motion.Count, "motion sensor"));
 
 		if (area.LuxSensor is { Length: > 0 })
-			parts.Add("lux sensor");
+			parts.Add("light-level sensor");
 
 		if (area.IgnoreWhenOn is { Count: > 0 } blockers)
 			parts.Add(Count(blockers.Count, "blocker"));

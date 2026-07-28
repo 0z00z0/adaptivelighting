@@ -153,7 +153,7 @@ public static class ActivityView
 		new(ActivityCategory.Movement, "Movement", "A motion sensor reported."),
 		new(ActivityCategory.LightChange, "Light change",
 			"The engine commanded the lights: on, retuned to the time of day, dimmed as a warning, or off."),
-		new(ActivityCategory.Illumination, "Illumination change",
+		new(ActivityCategory.Illumination, "Darkness",
 			"How dark the room was measured to be, against the level it counts as dark."),
 		new(ActivityCategory.HandChange, "Hand changes",
 			"Somebody set or switched the lights themselves, and what happened when that ran its course."),

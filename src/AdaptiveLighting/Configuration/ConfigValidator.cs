@@ -538,7 +538,7 @@ public static class ConfigValidator
 		// configuration has document-level errors", which is both alarming and untrue.
 		if (config.Areas.Count == 0)
 		{
-			result.AddWarning("No areas yet — the engine is running but managing nothing. Add a room on the Configuration page.");
+			result.AddWarning("No rooms yet — adaptive lighting is running but managing nothing. Add a room under Configuration → Areas.");
 			return;
 		}
 
@@ -548,7 +548,7 @@ public static class ConfigValidator
 			.Select(g => g.Key);
 
 		foreach (string? name in duplicateAreas)
-			result.AddError($"Duplicate area name '{name}'.");
+			result.AddError($"Duplicate area name '{name}' — two rooms cannot share one name. Rename one of them.");
 
 		foreach (AreaConfig area in config.Areas)
 		{
@@ -567,7 +567,7 @@ public static class ConfigValidator
 
 		if (string.IsNullOrWhiteSpace(area.AreaId) && !hasExplicitLights)
 		{
-			result.AddAreaError(area.DisplayName, "Neither AreaId nor an explicit Lights list — nothing to resolve.");
+			result.AddAreaError(area.DisplayName, "This room names no Home Assistant area and lists no lights, so nothing can be found for it. Pick an area, or name its lights by hand.");
 			return;
 		}
 
@@ -580,7 +580,7 @@ public static class ConfigValidator
 
 		foreach (string entityId in EnumerateAreaEntities(area))
 			if (!knownEntityIds.Contains(entityId))
-				result.AddAreaError(area.DisplayName, $"Refers to '{entityId}', which Home Assistant does not know.");
+				result.AddAreaError(area.DisplayName, $"Names '{entityId}', which Home Assistant does not know. Check it for typos, or remove it.");
 	}
 
 	private static IEnumerable<string> EnumerateAreaEntities(AreaConfig area)

@@ -126,7 +126,7 @@
 		}
 		else if (!Engine.IsRunning)
 		{
-			<strong>Connected, but automatic lighting isn't running.</strong>
+			<strong>Connected, but adaptive lighting isn't running.</strong>
 			<p>@(Engine.Fault ?? "No reason was recorded.")</p>
 			<p>See <a href="config">Configuration</a> for details.</p>
 		}
@@ -134,7 +134,7 @@
 		{
 			<strong>Nothing has happened yet.</strong>
 			<p>
-				The timeline starts when adaptive lighting starts, and a room appears here the first time it
+				Recording starts when adaptive lighting starts, and a room appears here the first time it
 				decides something &mdash; movement, a change of house mode, or the light outside crossing the
 				level it counts as dark.
 			</p>
@@ -150,7 +150,7 @@ else if (_inRoom.Count == 0)
 {
 	@* The room has nothing left in the buffer at all — a different quiet from the categories hiding it. *@
 	<div class="empty">
-		<strong>No reports from @_room in what the timeline is holding.</strong>
+		<strong>Nothing from @_room is still being held.</strong>
 		<p>Its older reports may have been dropped to make room. The rest of the house is still here.</p>
 		<p><button type="button" class="log-reset" @onclick="ShowEverything">Show everything</button></p>
 	</div>
@@ -166,8 +166,8 @@ else if (_visible.Count == 0)
 		<strong>Every report is in a category you switched off.</strong>
 		<p>
 			@(_inRoom.Count == 1
-				? "The timeline is holding 1 report"
-				: $"The timeline is holding {_inRoom.Count} reports")@(string.IsNullOrEmpty(_room) ? "" : $" from {_room}"),
+				? "1 report is being held"
+				: $"{_inRoom.Count} reports are being held")@(string.IsNullOrEmpty(_room) ? "" : $" from {_room}"),
 			and none of them falls into the categories that are switched on.
 		</p>
 		<p><button type="button" class="log-reset" @onclick="ShowEverything">Show everything</button></p>
@@ -317,7 +317,7 @@ else
 
 			return _entries.Count < ActivityLog.Capacity
 				? $"Showing {shown} since adaptive lighting started."
-				: $"Showing {shown}. The timeline keeps the most recent {ActivityLog.Capacity}; older ones have been dropped.";
+				: $"Showing {shown}. Only the most recent {ActivityLog.Capacity} are kept; older ones have been dropped.";
 		}
 	}
 

@@ -31,7 +31,13 @@ public sealed record AreaOption(string Id, string Name, int LightCount, int Moti
 	public string Label => $"{NameAndId} — {Counts}";
 
 	/// <summary>What a room here resolves to, in words — the whole reason the label is worth reading.</summary>
-	public string Counts => $"{Pluralise(LightCount, "light")}, {MotionCount} motion, {LuxCount} lux";
+	/// <remarks>
+	///     The two sensor kinds are named the way the rest of the UI names them — "motion" and "light-level",
+	///     never "lux" — so the picker, the room page's gear list and the settings rows read as one vocabulary.
+	///     Counted rather than pluralised for the sensors, because "1 motion sensor, 2 light-level sensors" is
+	///     twice the width of the name it sits beside.
+	/// </remarks>
+	public string Counts => $"{Pluralise(LightCount, "light")}, {MotionCount} motion, {LuxCount} light-level";
 
 	/// <summary>Whether a room here could run at all. An area with no lights is the common, silent mistake.</summary>
 	public bool HasLights => LightCount > 0;

@@ -76,6 +76,16 @@
 				</summary>
 
 				<div class="housemode-kinds">
+					<span class="housemode-field-label">
+						What this option means
+						<InfoPopover Label="What this option means">
+							<strong>Normal</strong> is everyday lighting and the option every reset returns to.
+							<strong>Sleep</strong> holds the rooms set to be gentle at night to a dimmer period.
+							<strong>Away</strong> sweeps the lights off and stops adjusting them.
+							<strong>Guest</strong> leaves every room exactly as it is. Picking one shows only that
+							kind's settings and clears the others.
+						</InfoPopover>
+					</span>
 					@foreach (ModeKind choice in Kinds)
 					{
 						<label class="housemode-kind">
@@ -88,11 +98,11 @@
 
 				<div class="housemode-field">
 					<span class="housemode-field-label">
-						Activate this scene when entering mode
-						<InfoPopover Label="Activate this scene when entering mode">
-							A scene to run the moment this mode starts. On Away and Guest it stands — those pause automatic
-							lighting. On Normal and Sleep the engine keeps adjusting, so the scene is a one-shot on entry that
-							automatic control may soon override.
+						Run this scene when the mode starts
+						<InfoPopover Label="Run this scene when the mode starts">
+							A scene fired the moment the house enters this mode. On Away and Guest it stands, because those
+							pause automatic lighting. On Normal and Sleep the rooms keep adjusting, so the scene lasts only
+							until the next re-check.
 						</InfoPopover>
 					</span>
 					<EntityPicker Value="@(Find(current)?.Scene)"
@@ -113,11 +123,11 @@
 						{
 							<div class="housemode-field">
 								<span class="housemode-field-label">
-									Dim level while asleep
-									<InfoPopover Label="Dim level while asleep">
-										While the house sleeps, sleep-respecting rooms are held to this period's dimness instead
-										of the clock's. The default picks the period that starts this mode, or one named "night" —
-										usually right.
+									Hold sleeping rooms to this period
+									<InfoPopover Label="Hold sleeping rooms to this period">
+										While the house is in this mode, every room set to <em>Gentle while the house sleeps</em>
+										is held to this period's levels instead of the clock's. Left on the default it picks the
+										period that switches this mode on, or one named "night" — usually right.
 									</InfoPopover>
 								</span>
 								<select class="cell wide" @bind:get="boundOption.ClampPeriod ?? string.Empty"
@@ -139,9 +149,9 @@
 							<span class="housemode-field-label">
 								Turn this mode on while …
 								<InfoPopover Label="Turn this mode on while …">
-									While any of these is on, this mode is active whatever the dropdown says — a bedside "sleep"
-									toggle, a "guests over" switch. It never changes the dropdown itself; turning them all off
-									hands control back to it.
+									While any of these is on, the house is in this mode whatever the dropdown says — a bedside
+									sleep toggle, a "guests over" switch. The dropdown itself is never changed; turning them
+									all off hands control straight back to it.
 								</InfoPopover>
 							</span>
 							<EntityListPicker Value="@boundOption.ActivateWhileOn"
@@ -159,11 +169,11 @@
 							<label class="housemode-field-label">
 								<input type="checkbox" checked="@(boundOption.ActivateAfterNoMotionMinutes is > 0)"
 									   @onchange="args => ToggleNoMotion(boundOption, args.Value is true)" />
-								Activate when no movement for
-								<InfoPopover Label="Activate when no movement for">
-									After the whole house has had no motion for this long, it switches to this mode on its own —
-									an auto-away. Pair it with a presence reset below so someone moving switches it back. It
-									watches every area's motion sensors.
+								Switch to this mode after no movement for
+								<InfoPopover Label="Switch to this mode after no movement for">
+									With no motion anywhere in the house for this long, the house switches itself to this mode
+									— an auto-away. Every room's motion sensors count. Pair it with the presence reset below,
+									or the house stays in this mode until somebody changes it by hand.
 								</InfoPopover>
 							</label>
 							@if (boundOption.ActivateAfterNoMotionMinutes is > 0)
@@ -183,13 +193,13 @@
 							<span class="housemode-resets-head">
 								Reset triggers
 								<InfoPopover Label="Reset triggers">
-									When to switch back to Normal automatically. Any of these can be set; the first to happen
-									wins. Leave them all unset to switch back by hand.
+									What switches the house back to the Normal option. Set as many as you like; the first to
+									happen wins. Set none and the house stays in this mode until somebody changes it by hand.
 								</InfoPopover>
 							</span>
 
 							<div class="housemode-field">
-								<span class="housemode-field-label">Reset when a period starts</span>
+								<span class="housemode-field-label">Reset when this period starts</span>
 								<select class="cell wide" @bind:get="boundOption.ResetOnPeriodStart ?? string.Empty"
 										@bind:set="@(v => SetField(boundOption, () => boundOption.ResetOnPeriodStart = Blank(v)))">
 									<option value="">(none)</option>
@@ -208,7 +218,12 @@
 								<label class="housemode-field-label">
 									<input type="checkbox" checked="@boundOption.ResetOnPresence"
 										   @onchange="args => SetField(boundOption, () => boundOption.ResetOnPresence = args.Value is true)" />
-									Reset on presence
+									Reset when somebody is detected
+									<InfoPopover Label="Reset when somebody is detected">
+										Movement, or a person coming home, switches the house back to Normal. The grace is how
+										long after the mode starts arrivals are ignored, so walking out of the door does not
+										cancel the mode you just set. Leave the sensor list empty to watch every room's motion.
+									</InfoPopover>
 								</label>
 								@if (boundOption.ResetOnPresence)
 								{
@@ -218,12 +233,12 @@
 														  Options="@PresenceSensors"
 														  NameResolver="@NameResolver"
 														  KnownResolver="@KnownResolver"
-														  EmptyLabel="(default: the union of every area's motion sensors)"
+														  EmptyLabel="(default — every room's motion sensors)"
 														  AddLabel="Add a sensor…"
 														  EmptyNote="@EmptyNote("No motion sensors found — type an id.")"
 														  Placeholder="binary_sensor.gang_bevegelse" />
 										<div class="housemode-grace">
-											<span class="hint">grace</span>
+											<span class="hint">ignore arrivals for</span>
 											<input class="cell num" type="number" min="0" value="@boundOption.ResetPresenceGraceMinutes"
 												   @onchange="args => SetGrace(boundOption, args.Value as string)" />
 											<span class="unit">min</span>
@@ -558,7 +573,7 @@
 	/// <summary>The scene picker's "none" label, worded for what no scene means to each kind.</summary>
 	private static string SceneNoneLabel(ModeKind kind) => kind switch
 	{
-		ModeKind.Away => "(none — sweep the areas off)",
+		ModeKind.Away => "(none — sweep the rooms off)",
 		ModeKind.Guest => "(none — leave the lights alone)",
 		_ => "(none)"
 	};

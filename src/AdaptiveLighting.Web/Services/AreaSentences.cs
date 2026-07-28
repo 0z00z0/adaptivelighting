@@ -278,10 +278,10 @@ public static class AreaSentences
 				HandHoldChoices,
 				OriginOf(area, area?.OverrideDurationMinutes),
 				defaults.OverrideDurationMinutes * 60)
-			.Text("; after a manual off, movement is ignored until the room is empty ")
+			.Text("; after somebody switches them off by hand, movement is ignored until the room has been empty ")
 			.Duration(
 				nameof(AreaSettings.VacancyResetMinutes),
-				"After a manual off, wait",
+				"After switching off by hand, wait",
 				effective.VacancyResetMinutes * 60,
 				HandOffWaitChoices,
 				OriginOf(area, area?.VacancyResetMinutes),

@@ -162,11 +162,11 @@ public sealed class DashboardViewTests
 	{
 		HiddenRoomsNote many = AreaView.HiddenNote(4)!;
 		Assert.AreEqual("4 rooms are switched off —", many.Lead);
-		Assert.AreEqual("turn them on in Settings", many.LinkText);
+		Assert.AreEqual("turn them on in Configuration", many.LinkText);
 
 		HiddenRoomsNote one = AreaView.HiddenNote(1)!;
 		Assert.AreEqual("1 room is switched off —", one.Lead);
-		Assert.AreEqual("turn it on in Settings", one.LinkText);
+		Assert.AreEqual("turn it on in Configuration", one.LinkText);
 	}
 
 	// ===================== waiting for the first choice =====================

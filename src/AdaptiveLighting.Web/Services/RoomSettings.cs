@@ -239,27 +239,27 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.VacancyTimeoutSeconds),
 					"Lights stay on for",
-					"After the last movement, how long the lights stay on before the warning dim. Longer for rooms where people sit still.",
+					"How long after the last movement the lights hold, before the warning dim starts. Raise it for rooms where people sit still; 10 min suits most.",
 					RoomControl.Seconds, Step: 60, Min: 1),
 				new RoomSetting(
 					nameof(AreaSettings.PreOffBrightnessFactor),
 					"Warning dim level",
-					"How deep the warning dim is. 50 % is half the brightness the room was holding.",
+					"How far the lights drop for the warning. 50 % is half the brightness the room was holding; lower makes the warning harder to miss.",
 					RoomControl.Fraction, Step: 5, Min: 0, Max: 100),
 				new RoomSetting(
 					nameof(AreaSettings.PreOffSeconds),
 					"Warning dim lasts",
-					"Before going out, the lights dim for this long. Any movement brings them straight back.",
+					"How long the room sits dimmed before the lights go out. Any movement in that time brings them straight back. Must be shorter than the time above.",
 					RoomControl.Seconds, Step: 5, Min: 0),
 				new RoomSetting(
 					nameof(AreaSettings.OverrideDurationMinutes),
 					"Hand changes hold for",
-					"When someone adjusts a light by hand, their choice is left alone for this long.",
+					"How long a light somebody set by hand is left alone before the room takes it back. Zero hands it back at the next re-check.",
 					RoomControl.Minutes, Step: 15, Min: 0),
 				new RoomSetting(
 					nameof(AreaSettings.VacancyResetMinutes),
-					"After a manual off, wait",
-					"After someone turns the lights off by hand, movement won't turn them back on until the room has been empty this long.",
+					"After switching off by hand, wait",
+					"How long the room must stay empty before movement lights it again. Without it, switching the lights off and walking out turns them straight back on.",
 					RoomControl.Minutes, Step: 5, Min: 0)
 			],
 			StartsOpen: true),
@@ -271,24 +271,24 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.Darkness),
 					"How the room decides it's dark",
-					"Which signal decides the room is dark enough to light.",
+					"What has to say dark before movement lights the room. Always dark skips the check, for a windowless room.",
 					RoomControl.Choice),
 				new RoomSetting(
 					nameof(AreaSettings.LuxThreshold),
 					"Dark below",
-					"At or below this many lux the room counts as dark. Readings run from a few lux at night to tens of thousands at midday, so pick the decade before the number.",
+					"At or under this many lux the room counts as dark. A shaded outdoor sensor reads 1–3 lx at night and a few thousand by day, an indoor one far less — pick the decade first, then the number.",
 					RoomControl.Number, Unit: "lx", Step: 1, Min: 0, Max: MaxLux,
 					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux or DarknessSource.Either),
 				new RoomSetting(
 					nameof(AreaSettings.LuxHysteresis),
 					"Bright again above",
-					"The extra light needed to count as bright again, so a sensor sitting on the threshold cannot flap. Scale it with the threshold: 10 lx is a quarter of 40, and inside the sensor's own noise at 1000.",
+					"How far above Dark below the reading must climb before the room counts as bright again, so a sensor sitting on the line cannot flap. Scale it with the threshold — 10 lx is a quarter of 40 and lost in the noise at 1000.",
 					RoomControl.Number, Unit: "lx", Step: 1, Min: 0, Max: MaxLux,
 					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux or DarknessSource.Either),
 				new RoomSetting(
 					nameof(AreaSettings.SunElevationThreshold),
 					"Dark when the sun is below",
-					"Sun elevation below which the room counts as dark. Also the fallback when a room has no light sensor.",
+					"How high the sun may stand and the room still count as dark, in degrees above the horizon. 0° is sunset, −6° is dusk. Also what a room falls back on when its light-level sensor says nothing.",
 					RoomControl.Number, Unit: "°", Step: 1, Min: -90, Max: 90,
 					AppliesWhen: settings => settings.Darkness is not DarknessSource.Always)
 			],
@@ -301,30 +301,30 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessEnabled),
 					"Brighten with daylight",
-					"On a bright day the room is lifted above the schedule's brightness, so it doesn't look gloomy against a bright window.",
+					"On a bright day this room is lifted above the schedule's brightness, so it doesn't look gloomy against a bright window. Needs a light-level reading; without one nothing changes.",
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessStartLux),
 					"Daylight level where brightening starts",
-					"At or below this reading outside, the schedule's brightness is used unchanged.",
+					"At or under this reading the schedule's brightness is used unchanged. Above it the room starts climbing. 100 lx is a dull room.",
 					RoomControl.Number, Unit: "lx", Step: 50, Min: 1,
 					AppliesWhen: settings => settings.LuxBrightnessEnabled),
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessFullLux),
 					"Daylight level for full brightness",
-					"At or above this reading the room holds the brightest it goes. 10 000 lx is a bright overcast day.",
+					"At or over this reading the room sits at the brightest it goes. 10 000 lx is a bright overcast day. Must be above the level where brightening starts.",
 					RoomControl.Number, Unit: "lx", Step: 1000, Min: 1,
 					AppliesWhen: settings => settings.LuxBrightnessEnabled),
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessMaxPct),
 					"Brightest it goes",
-					"The brightness the room is raised toward. It can only add light — a period already brighter than this is left alone.",
+					"How bright daylight may push this room, as a percentage. It only ever adds light — a period already brighter than this is left alone.",
 					RoomControl.Number, Unit: "%", Step: 5, Min: 0, Max: 100,
 					AppliesWhen: settings => settings.LuxBrightnessEnabled),
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessGamma),
 					"Curve shape",
-					"1 rises steadily. Above 1 holds back until it is properly bright out; below 1 lifts the room as soon as the light outside starts climbing.",
+					"How the climb between the two levels is shaped. 1 rises steadily; above 1 holds back until it is properly bright out; below 1 lifts the room as soon as the light outside starts climbing.",
 					RoomControl.Number, Step: 0.1, Min: 0.1, Max: 5,
 					AppliesWhen: settings => settings.LuxBrightnessEnabled)
 			],
@@ -337,22 +337,22 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.RespectSleepMode),
 					"Gentle while the house sleeps",
-					"Held to the night period's limits, so a 03:00 glass of water gets a dim light.",
+					"In sleep mode this room is held to the night period's limits, so a 03:00 glass of water gets a dim light instead of the day's.",
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.SleepBlocksAutoOn),
 					"Never comes on by itself while the house sleeps",
-					"For the bedroom itself. The wall switch still works.",
+					"In sleep mode movement leaves this room dark — for the bedroom itself. The wall switch still works, and this overrides the setting above.",
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.SkipAwaySweep),
 					"Stays on when everyone leaves",
-					"Porch and security lights are wanted precisely when nobody's home.",
+					"The lights-off sweep skips this room when the house empties. For porch and security lights, which are wanted precisely when nobody's home.",
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.WelcomeHome),
 					"Welcome home",
-					"Lights up when the first person arrives in the dark.",
+					"This room lights the moment the first person arrives, if it is dark — no waiting for a motion sensor to catch them.",
 					RoomControl.Flag)
 			],
 			StartsOpen: true),
@@ -364,17 +364,17 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.DayTransitionSeconds),
 					"Fade when it's light out",
-					"How long the lights take to reach a new level while the room is not dark.",
+					"How many seconds the lights take to reach a new level while the room is not dark. 1 s is brisk; 0 snaps.",
 					RoomControl.Number, Unit: "s", Step: 0.5, Min: 0),
 				new RoomSetting(
 					nameof(AreaSettings.NightTransitionSeconds),
 					"Fade when it's dark out",
-					"Gentler, because eyes are dark-adapted.",
+					"The same, for a dark room. Longer than the daytime fade, because dark-adapted eyes notice a step. 15 s is easy on them.",
 					RoomControl.Number, Unit: "s", Step: 0.5, Min: 0),
 				new RoomSetting(
 					nameof(AreaSettings.SunEntity),
 					"Sun entity",
-					"A house normally has exactly one, so there is usually no reason to change this.",
+					"Which entity the sun's height is read from. A house has exactly one, so there is normally no reason to change this.",
 					RoomControl.Entity)
 			],
 			StartsOpen: false)

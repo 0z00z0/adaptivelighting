@@ -99,7 +99,7 @@ public sealed class ConfigValidatorTests
 		// "document-level errors" to somebody whose only sin is not having configured anything yet.
 		Assert.IsFalse(result.Errors.Any(e => e.Contains("areas", StringComparison.OrdinalIgnoreCase)),
 			"an empty area list is a warning, not a document error");
-		Assert.IsTrue(result.Warnings.Any(w => w.Contains("No areas yet", StringComparison.Ordinal)));
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("No rooms yet", StringComparison.Ordinal)));
 	}
 
 	/// <summary>
