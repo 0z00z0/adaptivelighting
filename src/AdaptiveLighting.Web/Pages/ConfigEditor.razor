@@ -2090,9 +2090,59 @@ else
 		}
 
 		_liveSelectOptions = Catalog.SelectOptionsOf(_config.Global.HouseMode?.Entity);
+		AdoptHelperOptions();
 		_activeModeValue = Catalog.CurrentStateOf(_config.Global.HouseMode?.Entity);
 		_houseModeOptionValues = HouseModeOptionValues();
 		Revalidate();
+	}
+
+	/// <summary>
+	///     Rebuilds the mode list from the helper that was just picked.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Without this the list is whatever the <i>previous</i> helper had. Picking a new dropdown left the old
+	///         one's options sitting under it, each still claiming to say what a mode does — so the section described
+	///         a helper the house no longer uses, and the only way to correct it was to edit the file.
+	///     </para>
+	///     <para>
+	///         An option whose value the new helper also has **keeps its entire configuration** — its kind, its scene,
+	///         its resets. Two helpers that both offer "Away" mean the same thing by it, and rebuilding from scratch
+	///         would throw away work over a rename elsewhere in the list. Options the new helper does not offer are
+	///         dropped: they can never be selected, and leaving them would keep the section describing a mode that
+	///         cannot happen.
+	///     </para>
+	///     <para>
+	///         Nothing is guessed. An option the document has never seen arrives with no kind set rather than with
+	///         one inferred from its wording — the adoption path at first start is allowed to guess because it is
+	///         reporting a discovery, whereas this is a person making a choice, and quietly assigning meanings to
+	///         their options would be a different edit from the one they asked for.
+	///     </para>
+	/// </remarks>
+	private void AdoptHelperOptions()
+	{
+		if (_config.Global.HouseMode is not { } mode || _liveSelectOptions.Count == 0)
+			return;
+
+		List<HouseModeOptionConfig> adopted = [];
+
+		foreach (string value in _liveSelectOptions)
+		{
+			HouseModeOptionConfig? kept = mode.Options
+				.FirstOrDefault(option => string.Equals(option.Value?.Trim(), value, StringComparison.OrdinalIgnoreCase));
+
+			if (kept is not null)
+			{
+				kept.Value = value;
+				adopted.Add(kept);
+			}
+			else
+			{
+				adopted.Add(new HouseModeOptionConfig { Value = value });
+			}
+		}
+
+		mode.Options = adopted;
 	}
 
 	private void OnHouseModeOptionsChanged()
