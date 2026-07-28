@@ -11,6 +11,30 @@ under one version, because they are compiled against each other.
 
 ### Added
 
+- **An honest record of when each entity was last heard from**, in a new `AdaptiveLighting.LastSeen`
+  module, because Home Assistant cannot answer that question about itself. `last_updated` and
+  `last_changed` are Home Assistant's own bookkeeping and it resets them on every restart: measured on a
+  live house, 2.3 hours after a restart, the *oldest* timestamp among 51 motion sensors was 2.30 hours —
+  a sensor dead for a week was indistinguishable from one that reported five minutes before the restart.
+  - Restarts are recognised from the shape of the whole entity population rather than from anything Home
+    Assistant has to tell us: a running house has timestamps spread over hours or days, and a restart
+    collapses that spread to nothing. `homeassistant_start` is honoured too, when it arrives — usually it
+    does not, because the socket is down while Home Assistant is restarting.
+  - For five minutes after a restart nothing advances, so every entity keeps the record it already had.
+    Refusing a genuine report costs minutes of apparent staleness; believing a restore costs the whole
+    point of the feature.
+  - Never confuses "the value did not change" with "it did not report" — a light-level sensor sitting at
+    a constant 3 lx all night is healthy and quiet, and is counted alive.
+  - The record survives a redeploy: it is JSON beside the configuration document, split into
+    `<document>.last-seen.{illuminance,motion,light,other}.json` so somebody diagnosing their lux sensors
+    opens one small file rather than reading past 250 motion entries. Written atomically with one `.bak`
+    apiece, batched to one flush every five minutes plus one on shutdown, ~42 KB for a 300-entity house.
+  - A missing or corrupt file costs only the history in it: every answer degrades to "we do not know",
+    never to "everything is dead", and `HasBeenSilentFor` returns `false` for anything unknown. Deleting
+    the files by hand is safe, and each one says so in its first line.
+  - Nothing consumes it yet; it is registered by `AddLightingWeb` so that it is accumulating history
+    before the first consumer needs it.
+
 - **A theme picker**, at the right-hand end of the top bar, with a third palette beside light and dark.
   - *Follow the system* is the default and is what every browser did before this shipped: no
     `data-theme` attribute, `prefers-color-scheme` answers, nothing changes for anyone who does not
