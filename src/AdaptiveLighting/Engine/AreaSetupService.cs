@@ -26,9 +26,10 @@ public sealed record SetupPlan(
 /// </summary>
 /// <param name="AreaId">The area being rebuilt. Its identity, and the one field that survives besides the switch.</param>
 /// <param name="PinnedEntityCount">
-///     How many entity ids the area lists instead of discovering: explicit lights, motion sensors, a lux sensor,
-///     the blockers under <c>IgnoreWhenOn</c>, and the per-room exclusions under <c>ExcludeEntities</c> — all of
-///     which a rebuild throws away, so all of which the warning must count.
+///     How many entity choices the area has made by hand rather than discovering: explicit lights, motion sensors,
+///     a lux sensor, a decision to follow the house's outdoor one, the blockers under <c>IgnoreWhenOn</c>, and the
+///     per-room exclusions under <c>ExcludeEntities</c> — all of which a rebuild throws away, so all of which the
+///     warning must count.
 /// </param>
 /// <param name="OverrideCount">
 ///     How many of the sixteen per-room settings the area overrides. <c>Enabled</c> is not among them: it survives
@@ -241,11 +242,22 @@ public static class AreaSetupService
 			.Where(areaId => areaId is { Length: > 0 })
 			.Select(areaId => areaId!);
 
-	/// <summary>How many entity ids the area lists instead of discovering them, plus the ids it excludes from discovery.</summary>
+	/// <summary>
+	///     How many entity choices the area has made by hand instead of discovering them, plus the ids it excludes
+	///     from discovery.
+	/// </summary>
+	/// <remarks>
+	///     <c>FollowOutdoorLux</c> counts among them, and belongs here rather than with the settings: it answers
+	///     the same question <c>LuxSensor</c> answers — which entity supplies this room's illuminance — and a
+	///     rebuild drops it exactly as it drops a pinned id. Counting it as a setting instead would put it in a
+	///     numerator whose denominator is the per-room settings the model has, and a room could then report
+	///     overriding more settings than exist.
+	/// </remarks>
 	private static int PinnedEntityCount(AreaConfig area) =>
 		(area.Lights?.Count ?? 0)
 		+ (area.MotionSensors?.Count ?? 0)
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
+		+ (area.FollowOutdoorLux is not null ? 1 : 0)
 		+ (area.IgnoreWhenOn?.Count ?? 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 

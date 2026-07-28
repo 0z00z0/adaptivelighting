@@ -54,7 +54,7 @@ public class GlobalConfig
 	public string? KillSwitchEntity { get; set; }               // input_boolean/switch; null => this app's own enable switch
 	public bool KillSwitchActiveWhenOff { get; set; } = true;   // true: state "off" muzzles the engine
 	public HouseModeConfig? HouseMode { get; set; }             // the mode select and its option kinds; null => no modes
-	public string? OutdoorLuxSensor { get; set; }               // house-wide fallback for rooms with no lux sensor
+	public string? OutdoorLuxSensor { get; set; }               // read by the rooms that set FollowOutdoorLux; never automatic
 	public bool AreasAutoDiscovered { get; set; }               // set once by first-run set-up; never reset
 	public string? NetDaemonUserId { get; set; }                // optional: HA user id of the ND token, for override detection
 	public int AwayDebounceMinutes { get; set; } = 5;
@@ -80,7 +80,7 @@ public class AreaSettings                                       // every knob a 
 	public int OverrideDurationMinutes { get; set; } = 120;
 	public int VacancyResetMinutes { get; set; } = 10;          // lifts SuppressedOff
 	public DarknessSource Darkness { get; set; } = DarknessSource.Either; // Lux|Sun|Either|Always
-	public double LuxThreshold { get; set; } = 40;
+	public double LuxThreshold { get; set; } = 1000;            // a daylight number: the reading is usually an outdoor sensor
 	public double LuxHysteresis { get; set; } = 10;
 	public double SunElevationThreshold { get; set; } = 3.0;    // degrees
 	public string SunEntity { get; set; } = "sun.sun";
@@ -99,7 +99,8 @@ public class AreaConfig                                          // AreaSettings
 	public string? AreaId { get; set; }                          // HA area id => registry discovery
 	public List<string>? Lights { get; set; }                    // explicit override; wins over discovery
 	public List<string>? MotionSensors { get; set; }             // explicit override; wins over discovery
-	public string? LuxSensor { get; set; }                       // explicit override
+	public string? LuxSensor { get; set; }                       // explicit override; one sensor, no average
+	public bool? FollowOutdoorLux { get; set; }                  // read Global.OutdoorLuxSensor when the room finds none of its own
 	public List<string>? IgnoreWhenOn { get; set; }              // e.g. binary_sensor.projektor_er_pa: block auto-on while on
 	// nullable twins of every AreaSettings property:
 	public int? VacancyTimeoutSeconds { get; set; }
@@ -144,13 +145,21 @@ temperature) is **not** in the registry — it lives in state attributes
 **Recommendation: hybrid, discovery-first — this matches the user's own flagged direction.**
 
 - An area declares `AreaId` and nothing else in the common case. `AreaEntityResolver` then:
-  - lights = `area.Entities` where domain `light`, minus group members (attribute `entity_id`
-    present ⇒ group; drop its members), minus entities labelled `adaptive-exclude` — and, when
-    `IncludeLabel` is set, minus every light that does *not* carry it;
+  - lights = `area.Entities` where domain `light`, minus entities labelled `adaptive-exclude` — and,
+    when `IncludeLabel` is set, minus every light that does *not* carry it;
   - motion = `binary_sensor` in area with `device_class ∈ {motion, occupancy, presence}`,
     plus any entity labelled `adaptive-motion` (covers mmWave sensors with odd device classes);
-  - lux = single `sensor` in area with `device_class == illuminance` (two candidates ⇒
-    validation error naming both — explicit `LuxSensor` required to disambiguate).
+  - lux = every `sensor` in area with `device_class == illuminance`. Several are averaged
+    geometrically at read time, dead and stale ones dropped; an explicit `LuxSensor` pins one.
+- Two de-duplication passes then run over **all three** lists, in this order:
+  - **Groups win over their members.** Membership is followed transitively (`entity_id`), a group
+    reaching into another HA area is clipped, overlapping groups are settled by widest coverage, and
+    a group that contains itself terminates rather than hanging.
+  - **One entity per Home Assistant device** (lights and illuminance only). Several entities on one
+    device are one fixture — an RGBW lamp's combined entity beside its own colour channels — so only
+    one is used, and a group, which has no device, claims the devices of everything beneath it.
+    Motion is deliberately exempt: a device there is a *controller*, and a multi-zone presence sensor
+    exposes genuinely different zones, so collapsing them would make the room blind.
 - Explicit YAML lists (`Lights`, `MotionSensors`, `LuxSensor`) fully replace discovery for that
   slot when present — the escape hatch when HA's area assignments are wrong. An explicit list
   bypasses both labels: an explicit pick is the owner overruling the rules, and the rules do not
@@ -213,7 +222,7 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     OverrideDurationMinutes: 120
     VacancyResetMinutes: 10
     Darkness: Either
-    LuxThreshold: 40
+    LuxThreshold: 1000
     LuxHysteresis: 10
     SunElevationThreshold: 3.0
     DayTransitionSeconds: 1

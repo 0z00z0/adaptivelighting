@@ -97,7 +97,7 @@ public sealed class AreaControllerTests
 			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30 }
 		};
 
-		var area = new ResolvedArea("Test", settings, [Light], [Motion], Lux, ignoreWhenOn ?? []);
+		var area = new ResolvedArea("Test", settings, [Light], [Motion], [Lux], ignoreWhenOn ?? []);
 		var actuator = new FakeLightActuator();
 		var publisher = new FakeStatePublisher();
 		var house = new BehaviorSubject<HouseState>(HouseState.Initial);
@@ -144,7 +144,7 @@ public sealed class AreaControllerTests
 	public void Motion_When_Not_Dark_Is_Logged_But_Not_Acted_On()
 	{
 		var t = Build();
-		t.Ha.SetState(Lux, "500");
+		t.Ha.SetState(Lux, "5000");
 
 		t.Ha.Trigger(Motion, "on");
 
@@ -739,7 +739,7 @@ public sealed class AreaControllerTests
 	public void A_WelcomeHome_Area_Stays_Dark_When_It_Is_Not_Dark()
 	{
 		var t = Build(s => s.WelcomeHome = true);
-		t.Ha.SetState(Lux, "500");
+		t.Ha.SetState(Lux, "5000");
 		t.House.OnNext(House(home: false));
 		t.Actuator.Clear();
 
@@ -821,7 +821,7 @@ public sealed class AreaControllerTests
 	{
 		Fixture t = Build(ignoreWhenOn: [Blocker]);
 
-		t.Ha.SetState(Lux, "500");
+		t.Ha.SetState(Lux, "5000");
 		Advance(t, TimeSpan.FromMinutes(1));
 
 		t.Ha.SetState(Blocker, "on");
@@ -962,7 +962,7 @@ public sealed class AreaControllerTests
 		var ha = new FakeHaContext();
 		ha.SetState(Motion, "off");
 		ha.SetState(Light, "off");
-		ha.SetState(Lux, "500");
+		ha.SetState(Lux, "5000");
 
 		var settings = new AreaSettings { Darkness = DarknessSource.Lux };
 		var global = new GlobalConfig { SmoothTransitions = false, CircadianTickSeconds = 60 };
@@ -973,7 +973,7 @@ public sealed class AreaControllerTests
 
 		var publisher = new FakeStatePublisher();
 		var controller = new AreaController(
-			ha, scheduler, new ResolvedArea("Test", settings, [Light], [Motion], Lux, []), global, periods,
+			ha, scheduler, new ResolvedArea("Test", settings, [Light], [Motion], [Lux], []), global, periods,
 			new CircadianCalculator(periods, global, () => SunTimes.Unknown),
 			new FakeLightActuator(), publisher, new BehaviorSubject<HouseState>(HouseState.Initial),
 			NullLoggerFactory.Instance);
@@ -981,11 +981,45 @@ public sealed class AreaControllerTests
 		controller.Start();
 
 		Assert.AreEqual(false, publisher.Snapshots.Single().IsDark,
-			"500 lux is not dark, and the opening snapshot must say so rather than echo a default");
+			"5000 lux is not dark, and the opening snapshot must say so rather than echo a default");
 	}
 
+	/// <summary>
+	///     The opt-in: a room with no lux sensor reads the house's outdoor one <i>because it said so</i>.
+	/// </summary>
+	/// <remarks>
+	///     This used to happen to every sensorless room without anyone asking, which is how a whole house came to
+	///     refuse to light itself: one shaded outdoor sensor reads several hundred lux while the rooms behind it
+	///     are dark. Asserted against a bright outdoor reading rather than a dark one, because a dark one cannot
+	///     tell the two rules apart — a room with no reading at all now counts as dark too.
+	/// </remarks>
 	[TestMethod]
-	public void An_Area_With_No_Lux_Sensor_Reads_The_House_Wide_Outdoor_Lux()
+	public void A_Room_That_Follows_The_Outdoor_Sensor_Is_Gated_By_It()
+	{
+		AreaSnapshot opted = SensorlessRoom(outdoorLux: "5000", followOutdoorLux: true);
+
+		Assert.AreEqual(false, opted.IsDark,
+			"the room asked to follow the outdoor sensor, and outdoors it is broad daylight");
+	}
+
+	/// <summary>
+	///     And the room that did not ask has no reading at all, so the lux gate stops holding it back.
+	/// </summary>
+	/// <remarks>
+	///     The owner's rule: "No sensor means always trigger light, then allow manually setting to following
+	///     outdoor." Better to light too early than never.
+	/// </remarks>
+	[TestMethod]
+	public void A_Room_That_Did_Not_Ask_Ignores_The_Outdoor_Sensor_And_Counts_As_Dark()
+	{
+		AreaSnapshot silent = SensorlessRoom(outdoorLux: "5000", followOutdoorLux: false);
+
+		Assert.AreEqual(true, silent.IsDark,
+			"no lux sensor and no opt-in means no reading, and a gate with nothing to read refuses nothing");
+	}
+
+	/// <summary>Starts a room that resolved no lux sensor of its own, and hands back its opening report.</summary>
+	private static AreaSnapshot SensorlessRoom(string outdoorLux, bool followOutdoorLux)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -994,9 +1028,9 @@ public sealed class AreaControllerTests
 		var ha = new FakeHaContext();
 		ha.SetState(Motion, "off");
 		ha.SetState(Light, "off");
-		ha.SetState(Outdoor, "5");   // dark outside
+		ha.SetState(Outdoor, outdoorLux);
 
-		var settings = new AreaSettings { Darkness = DarknessSource.Lux, LuxThreshold = 40 };
+		var settings = new AreaSettings { Darkness = DarknessSource.Lux, LuxThreshold = 1000 };
 		var global = new GlobalConfig { SmoothTransitions = false, CircadianTickSeconds = 60, OutdoorLuxSensor = Outdoor };
 		var periods = new List<TimePeriodConfig>
 		{
@@ -1005,15 +1039,15 @@ public sealed class AreaControllerTests
 
 		var publisher = new FakeStatePublisher();
 		var controller = new AreaController(
-			ha, scheduler, new ResolvedArea("Test", settings, [Light], [Motion], null, []), global, periods,
+			ha, scheduler,
+			new ResolvedArea("Test", settings, [Light], [Motion], [], [], followOutdoorLux),
+			global, periods,
 			new CircadianCalculator(periods, global, () => SunTimes.Unknown),
 			new FakeLightActuator(), publisher, new BehaviorSubject<HouseState>(HouseState.Initial),
 			NullLoggerFactory.Instance);
 
 		controller.Start();
-
-		Assert.AreEqual(true, publisher.Snapshots.Single().IsDark,
-			"the area has no lux sensor, so it reads the house-wide outdoor sensor: 5 lux is dark");
+		return publisher.Snapshots.Single();
 	}
 
 	// ===================== deadlines and republishing =====================
@@ -1241,7 +1275,7 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void A_Lit_Area_Is_Adopted_Even_When_It_Is_Too_Bright_To_Have_Been_Lit()
 	{
-		var t = BuildAlreadyLit(lux: "500");
+		var t = BuildAlreadyLit(lux: "5000");
 
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.AreEqual(false, t.Publisher.Snapshots[^1].IsDark, "it is not dark, and the snapshot says so");
@@ -1299,7 +1333,7 @@ public sealed class AreaControllerTests
 	public void A_Vacant_Area_Publishes_Once_When_Darkness_Changes_Under_It()
 	{
 		var t = Build(s => s.Darkness = DarknessSource.Lux);
-		t.Ha.SetState(Lux, "500");
+		t.Ha.SetState(Lux, "5000");
 
 		// One tick to notice it got bright, then quiet again.
 		Advance(t, TimeSpan.FromMinutes(1));
@@ -1592,5 +1626,151 @@ public sealed class AreaControllerTests
 
 		Assert.AreNotEqual(AreaState.SceneHold, t.Area.State, "a guest mode with no scene does not hold the area");
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "it stays on the baseline instead");
+	}
+
+	// ===================== movement the engine turned down =====================
+	//
+	// Movement into a blocked room used to publish nothing at all, so the one page that exists to answer "why
+	// did that light not come on" had no row to answer it with. Publishing per blocked movement was deferred for
+	// a real reason — an event every time anyone walks through a sunlit room — so what is asserted here is not
+	// just that the report exists but the bound that makes it affordable.
+
+	/// <summary>
+	///     <b>The churn bound.</b> Forty walks under one unchanged block produce exactly one report.
+	/// </summary>
+	/// <remarks>
+	///     The comparison is on the refusing <i>gate</i>, not on the reading behind it, which is why a drifting lux
+	///     value under one unchanged <c>NotDark</c> cannot produce a second row either. Over any interval the
+	///     number of these reports is bounded by how often the gate itself changes, never by footfall.
+	/// </remarks>
+	[TestMethod]
+	public void Forty_Walks_Under_One_Unchanged_Block_Produce_One_Report()
+	{
+		Fixture t = Build();
+		t.Ha.SetState(Lux, "5000");
+		t.Publisher.Snapshots.Clear();
+
+		for (int walk = 0; walk < 40; walk++)
+		{
+			t.Ha.Trigger(Motion, "off");
+			t.Ha.Trigger(Motion, "on");
+		}
+
+		AreaSnapshot[] declined = [.. t.Publisher.Snapshots.Where(s => s.Reason == TransitionReason.Motion)];
+
+		Assert.AreEqual(1, declined.Length, "one refusal reported, not forty — the reason never changed");
+		Assert.AreEqual(AutoOnBlock.NotDark, declined[0].AutoOnBlockedBy);
+		Assert.AreEqual(AreaState.AutoVacant, declined[0].State);
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "and still no light, which is the point of the row");
+	}
+
+	/// <summary>
+	///     A lux reading that drifts without crossing the threshold is not a new refusal, and must not be a new row.
+	/// </summary>
+	/// <remarks>
+	///     This is the objection that deferred the feature once: <see cref="AreaSnapshot.AutoOnBlockedBy"/> is kept
+	///     out of <see cref="AreaSnapshot.HasSameMeaningAs"/> so a drifting reading cannot republish every area.
+	///     Bounding on the reason rather than the reading is what keeps that property while still producing the row.
+	/// </remarks>
+	[TestMethod]
+	public void A_Drifting_Reading_Under_One_Unchanged_Reason_Adds_No_Row()
+	{
+		Fixture t = Build();
+		t.Ha.SetState(Lux, "5000");
+		t.Ha.Trigger(Motion, "on");
+		t.Publisher.Snapshots.Clear();
+
+		foreach (string reading in new[] { "5100", "5300", "4900", "6000" })
+		{
+			t.Ha.SetState(Lux, reading);
+			t.Ha.Trigger(Motion, "off");
+			t.Ha.Trigger(Motion, "on");
+		}
+
+		Assert.AreEqual(0, t.Publisher.Snapshots.Count(s => s.Reason == TransitionReason.Motion),
+			"four different readings, one unchanged verdict, nothing new to say");
+	}
+
+	/// <summary>
+	///     A block that changes is news again, and so is a block that returns after the room has actually lit.
+	/// </summary>
+	/// <remarks>
+	///     The second half is what stops the bound from swallowing the spell somebody is looking for: a room that
+	///     was blocked, then lit, then blocked by the same gate again has to report the second spell.
+	/// </remarks>
+	[TestMethod]
+	public void A_Changed_Reason_Reports_Again_And_So_Does_A_Block_That_Returns()
+	{
+		Fixture t = Build(ignoreWhenOn: [Blocker]);
+		t.Ha.SetState(Lux, "5000");
+		t.Publisher.Snapshots.Clear();
+
+		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
+
+		// Same room, different gate: the television goes on and now outranks the darkness verdict.
+		t.Ha.SetState(Blocker, "on");
+		t.Ha.Trigger(Motion, "on");
+
+		AutoOnBlock?[] reasons = [.. t.Publisher.Snapshots
+			.Where(s => s.Reason == TransitionReason.Motion)
+			.Select(s => s.AutoOnBlockedBy)];
+
+		CollectionAssert.AreEqual(new AutoOnBlock?[] { AutoOnBlock.NotDark, AutoOnBlock.EntityOn }, reasons,
+			"two different refusals are two rows, and the second names the entity rather than the sensor");
+
+		Assert.AreEqual(Blocker, t.Publisher.Snapshots.Last(s => s.Reason == TransitionReason.Motion).AutoOnBlockingEntity);
+
+		// Everything clears, the room lights, and then the same block returns.
+		t.Ha.SetState(Blocker, "off");
+		t.Ha.SetState(Lux, "5");
+		t.Ha.Trigger(Motion, "off");
+		t.Ha.Trigger(Motion, "on");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "nothing is in the way now, so the room lights");
+
+		t.Ha.SetState(Lux, "5000");
+		Advance(t, TimeSpan.FromMinutes(11));   // vacancy, pre-off, back to AutoVacant
+		t.Publisher.Snapshots.Clear();
+		t.Ha.Trigger(Motion, "off");
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.AreEqual(1, t.Publisher.Snapshots.Count(s => s.Reason == TransitionReason.Motion),
+			"the room lit in between, so the refusal that came back is news again rather than a repeat");
+	}
+
+	/// <summary>
+	///     Every gate that can refuse movement produces a report naming itself — including the four the area used
+	///     to return from without publishing anything at all.
+	/// </summary>
+	[TestMethod]
+	public void Every_Refusal_Names_Itself_On_A_Declined_Movement()
+	{
+		Assert.AreEqual(AutoOnBlock.NotDark, FirstDeclined(Build(), t => t.Ha.SetState(Lux, "5000")));
+
+		Assert.AreEqual(AutoOnBlock.Disabled, FirstDeclined(Build(s => s.Enabled = false), _ => { }));
+
+		Assert.AreEqual(AutoOnBlock.KillSwitch, FirstDeclined(Build(), t => t.House.OnNext(House(killed: true))));
+
+		Assert.AreEqual(AutoOnBlock.Away, FirstDeclined(Build(), t => t.House.OnNext(House(home: false))));
+
+		Assert.AreEqual(AutoOnBlock.Sleep,
+			FirstDeclined(Build(s => s.SleepBlocksAutoOn = true), t => t.House.OnNext(House(kind: ModeKind.Sleep))));
+
+		Assert.AreEqual(AutoOnBlock.EntityOn,
+			FirstDeclined(Build(ignoreWhenOn: [Blocker]), t => t.Ha.SetState(Blocker, "on")));
+
+		Assert.AreEqual(AutoOnBlock.SceneHold,
+			FirstDeclined(Build(), t => t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"))),
+			"the fourth silent refusal: a guest scene holds the room, and saying 'not dark enough' would be a lie");
+	}
+
+	/// <summary>Arranges a block, walks through the room once, and hands back the gate the report named.</summary>
+	private static AutoOnBlock? FirstDeclined(Fixture fixture, Action<Fixture> block)
+	{
+		block(fixture);
+		fixture.Publisher.Snapshots.Clear();
+		fixture.Ha.Trigger(Motion, "on");
+
+		return fixture.Publisher.Snapshots.Single(s => s.Reason == TransitionReason.Motion).AutoOnBlockedBy;
 	}
 }

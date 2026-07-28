@@ -158,6 +158,85 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(expected.Enabled, actual.Enabled);
 	}
 
+	// ===================== the darkness threshold, and what saying nothing means =====================
+
+	/// <summary>
+	///     A room counts as dark below <b>1000 lx</b>, and a document that never mentions the threshold gets that.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Asserted on a document with no <c>LuxThreshold</c> key at all rather than on <c>new AreaSettings()</c>
+	///         alone, because that — not an explicit value — is what every existing file looks like, and "the
+	///         default" is only worth anything if it is what an absent value means.
+	///     </para>
+	///     <para>
+	///         The number itself is the owner's product decision. The reading a room gates on is usually a shaded
+	///         outdoor sensor, measured at 1000–3706 lx through the day and 1–3 at night; against the old 40 lx
+	///         every room read "not dark" from first light to dusk while sitting dark. Better to light up too early
+	///         than never.
+	///     </para>
+	/// </remarks>
+	[TestMethod]
+	public void A_Document_That_Never_Mentions_A_Lux_Threshold_Counts_As_Dark_Below_1000()
+	{
+		Assert.AreEqual(1000d, new AreaSettings().LuxThreshold);
+
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			"""
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Periods:
+			    - Name: day
+			      Start: "07:00"
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			""");
+
+		Assert.AreEqual(1000d, read.Config.Defaults.LuxThreshold, "saying nothing means the shipped default");
+		Assert.IsNull(read.Config.Areas[0].LuxThreshold, "and the room inherits rather than carrying a copy");
+		Assert.AreEqual(1000d, read.Config.Areas[0].Effective(read.Config.Defaults).LuxThreshold);
+	}
+
+	/// <summary>
+	///     Following the house's outdoor sensor is opt-in, and a document that never mentions it does not.
+	/// </summary>
+	/// <remarks>
+	///     The fallback it replaced was silent, so this is the assertion that says what the silence now means: a
+	///     room that says nothing has no lux reading, and the lux half of its gate stops holding it back. Round
+	///     tripped as well, because a setting that cannot survive a save is a setting nobody can rely on.
+	/// </remarks>
+	[TestMethod]
+	public void Following_The_Outdoor_Sensor_Is_Off_Until_A_Room_Says_Otherwise()
+	{
+		DocumentReadResult silent = LightingConfigDocument.Deserialize(
+			"""
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Global:
+			    OutdoorLuxSensor: sensor.outdoor_illuminance
+			  Periods:
+			    - Name: day
+			      Start: "07:00"
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			""");
+
+		Assert.IsNull(silent.Config.Areas[0].FollowOutdoorLux,
+			"an existing document says nothing, and saying nothing must not mean following");
+
+		Assert.IsFalse(LightingConfigDocument.Serialize(silent.Config).Contains("FollowOutdoorLux", StringComparison.Ordinal),
+			"and a save must not write the setting into a file that never asked for it");
+
+		AdaptiveLightingConfig opted = new()
+		{
+			Periods = [new() { Name = "day", Start = "07:00" }],
+			Areas = [new() { Name = "Gang", AreaId = "gang", FollowOutdoorLux = true }]
+		};
+
+		Assert.AreEqual(true,
+			LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(opted)).Config.Areas[0].FollowOutdoorLux);
+	}
+
 	[TestMethod]
 	public void RoundTrip_PreservesPeriods()
 	{

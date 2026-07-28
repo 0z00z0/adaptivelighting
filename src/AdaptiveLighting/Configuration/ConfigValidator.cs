@@ -52,9 +52,56 @@ public static class ConfigValidator
 		ValidateHouseMode(config, knownEntityIds, liveSelectOptions, result);
 		ValidateSettings("Defaults", config.Defaults, result);
 		ValidateAreas(config, knownEntityIds, knownAreaIds, result);
+		ValidateOutdoorLuxOptIn(config, result);
 		ValidateLuxBrightnessSource(config, result);
 
 		return result;
+	}
+
+	/// <summary>
+	///     The house names an outdoor lux sensor, and no room asked to read it.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>This is a meaning change, said out loud, and it is the only place a document can be told about
+	///         it.</b> The outdoor sensor was once handed to every room that resolved no lux sensor of its own,
+	///         silently. It is now an opt-in per room (<see cref="AreaConfig.FollowOutdoorLux"/>), because one
+	///         shaded outdoor sensor reading several hundred lux through the day held off every sensorless room in
+	///         a house that was genuinely dark. A document written under the old rule looks identical under the
+	///         new one and means something different: rooms that used to gate on the outdoor reading now have no
+	///         reading, so the lux half of their gate stops refusing and they light on movement.
+	///     </para>
+	///     <para>
+	///         A warning rather than a migration, deliberately. The validator is pure and cannot run discovery, so
+	///         it cannot know which rooms will find a sensor of their own and are therefore unaffected; and
+	///         rewriting somebody's file to preserve a behaviour they may well have been suffering under is the
+	///         kind of help nobody asked for. The new behaviour is the intended one — better to light too early
+	///         than never — so this says what changed and how to put it back, room by room, and leaves the choice
+	///         where it belongs.
+	///     </para>
+	///     <para>
+	///         The mirror case is an area-level warning: a room that asked to follow an outdoor sensor the house
+	///         does not name has asked for nothing, and would sit there counting as dark while believing itself
+	///         gated.
+	///     </para>
+	/// </remarks>
+	private static void ValidateOutdoorLuxOptIn(AdaptiveLightingConfig config, ValidationResult result)
+	{
+		bool houseHasOne = config.Global.OutdoorLuxSensor is { Length: > 0 };
+		List<AreaConfig> following = [.. config.Areas.Where(area => area.FollowOutdoorLux == true)];
+
+		if (houseHasOne && following.Count == 0)
+			result.AddWarning(
+				"Global.OutdoorLuxSensor is set but no room follows it. It used to be applied automatically to every room "
+				+ "that found no light sensor of its own; that fallback is gone, so those rooms now have no lux reading and "
+				+ "count as dark — they will light on movement where they previously waited for the outdoor reading to drop. "
+				+ "Set FollowOutdoorLux on the rooms that should keep gating on it.");
+
+		if (!houseHasOne)
+			foreach (AreaConfig area in following)
+				result.AddWarning(
+					$"[{area.DisplayName}] FollowOutdoorLux is on but Global.OutdoorLuxSensor names no sensor, so the room "
+					+ "has no lux reading and counts as dark. Name the house's outdoor sensor, or give the room a LuxSensor.");
 	}
 
 	/// <summary>
@@ -70,25 +117,33 @@ public static class ConfigValidator
 	///     </para>
 	///     <para>
 	///         What it <i>can</i> see is the case that motivates the feature: a hallway has no lux sensor, so the
-	///         reading has to come from <see cref="GlobalConfig.OutdoorLuxSensor"/> — and if that is blank and no
-	///         room pins one either, the switch is on and nothing anywhere is guaranteed to feed it. Said once, at
-	///         the top, in the same spirit as the include-label warning.
+	///         reading has to come from <see cref="GlobalConfig.OutdoorLuxSensor"/> — and if no room pins one and
+	///         no room follows the house's, the switch is on and nothing anywhere is guaranteed to feed it. Said
+	///         once, at the top, in the same spirit as the include-label warning.
+	///     </para>
+	///     <para>
+	///         <b>Naming the outdoor sensor is no longer enough to satisfy this.</b> It used to be: the sensor was
+	///         handed to every room that had none. Now a room reads it only if it says so
+	///         (<see cref="AreaConfig.FollowOutdoorLux"/>), and the daylight curve reads whatever the darkness gate
+	///         reads — one sensor per room, one answer — so a house that names an outdoor sensor no room follows
+	///         feeds the curve nothing at all.
 	///     </para>
 	/// </remarks>
 	private static void ValidateLuxBrightnessSource(AdaptiveLightingConfig config, ValidationResult result)
 	{
-		if (config.Global.OutdoorLuxSensor is { Length: > 0 })
-			return;
+		bool someRoomHasAReading =
+			config.Areas.Any(area => area.LuxSensor is { Length: > 0 })
+			|| (config.Global.OutdoorLuxSensor is { Length: > 0 } && config.Areas.Any(area => area.FollowOutdoorLux == true));
 
-		if (config.Areas.Any(area => area.LuxSensor is { Length: > 0 }))
+		if (someRoomHasAReading)
 			return;
 
 		if (!config.Areas.Any(area => area.Effective(config.Defaults).LuxBrightnessEnabled))
 			return;
 
 		result.AddWarning(
-			"LuxBrightnessEnabled is on for at least one room, but the document names no lux sensor: set "
-			+ "Global.OutdoorLuxSensor, or a LuxSensor on the rooms that need one. Rooms that discover an "
+			"LuxBrightnessEnabled is on for at least one room, but no room is guaranteed a lux reading: give those rooms "
+			+ "a LuxSensor, or set FollowOutdoorLux on them and name Global.OutdoorLuxSensor. Rooms that discover an "
 			+ "illuminance sensor of their own still follow the daylight; the rest keep the schedule's brightness.");
 	}
 
@@ -141,14 +196,15 @@ public static class ConfigValidator
 				result.AddWarning($"The built-in master switch '{killSwitch}' is not known to Home Assistant yet; the state manager creates it at app start.");
 		}
 
-		// Outdoor lux sensor: the house-wide default lux source. It fails open — an unknown or non-sensor id just
-		// leaves areas without their own lux falling back to sun elevation — so both are warnings, not errors.
+		// Outdoor lux sensor: the reading offered to the rooms that ask for it. It fails open — an unknown or
+		// non-sensor id just leaves those rooms with no reading, which now means they count as dark rather than
+		// that they stop lighting — so both are warnings, not errors.
 		if (global.OutdoorLuxSensor is { Length: > 0 } outdoorLux)
 		{
 			if (outdoorLux.Domain() is not "sensor")
-				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not a sensor entity; areas without their own lux sensor will fall back to sun elevation.");
+				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not a sensor entity; the rooms that follow it have no lux reading and count as dark.");
 			else if (!knownEntityIds.Contains(outdoorLux))
-				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not known to Home Assistant; areas without their own lux sensor fall back to sun elevation until it appears.");
+				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not known to Home Assistant; the rooms that follow it count as dark until it appears.");
 		}
 	}
 

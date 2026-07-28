@@ -25,6 +25,66 @@ public sealed class ConfigValidatorTests
 		Assert.IsTrue(ConfigValidator.Validate(Minimal()).IsValid);
 	}
 
+	// ===================== the outdoor sensor stopped being a silent fallback =====================
+
+	/// <summary>
+	///     <b>A document can now mean something different from what it used to, and this is where it is told so.</b>
+	/// </summary>
+	/// <remarks>
+	///     The outdoor sensor used to be handed to every room that resolved no lux sensor of its own. It is now an
+	///     opt-in per room, so a document written under the old rule looks identical and behaves differently: the
+	///     rooms that used to gate on the outdoor reading now have none, and light on movement. A warning rather
+	///     than a migration — the validator is pure and cannot know which rooms will discover a sensor of their
+	///     own, and rewriting somebody's file to preserve a behaviour they were suffering under is not help.
+	/// </remarks>
+	[TestMethod]
+	public void An_Outdoor_Sensor_No_Room_Follows_Is_Warned_About_As_A_Change_Of_Meaning()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "the document still runs — it just does something else than it did");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("no room follows it", StringComparison.Ordinal)),
+			"the one place an upgraded house is told what changed under it");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("FollowOutdoorLux", StringComparison.Ordinal)),
+			"and a warning without the name of the fix is a warning nobody can act on");
+	}
+
+	[TestMethod]
+	public void A_Room_That_Follows_The_Outdoor_Sensor_Silences_That_Warning()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+		config.Areas[0].FollowOutdoorLux = true;
+
+		Assert.IsFalse(
+			ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("no room follows it", StringComparison.Ordinal)));
+	}
+
+	/// <summary>The mirror case: a room following a sensor the house does not name has asked for nothing.</summary>
+	[TestMethod]
+	public void Following_An_Outdoor_Sensor_The_House_Does_Not_Name_Warns_Per_Room()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas[0].FollowOutdoorLux = true;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsTrue(result.Warnings.Any(w =>
+			w.Contains("Stue", StringComparison.Ordinal) && w.Contains("counts as dark", StringComparison.Ordinal)),
+			"the room believes itself gated and is not, which is worth naming the room over");
+	}
+
+	/// <summary>A document that names no outdoor sensor at all gains nothing from any of this.</summary>
+	[TestMethod]
+	public void A_Document_With_No_Outdoor_Sensor_Is_Untouched_By_The_Opt_In()
+	{
+		Assert.AreEqual(0, ConfigValidator.Validate(Minimal()).Warnings.Count);
+	}
+
 	[TestMethod]
 	public void An_Empty_Document_Fails_On_Periods_But_Only_Warns_On_Areas()
 	{
@@ -310,15 +370,29 @@ public sealed class ConfigValidatorTests
 		Assert.IsTrue(result.Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)));
 	}
 
+	/// <summary>
+	///     A house-wide outdoor sensor answers the warning only once a room says it reads it.
+	/// </summary>
+	/// <remarks>
+	///     <b>This test's contract changed, and the name says how.</b> Naming the sensor used to be enough, because
+	///     it reached every sensorless room automatically. That fallback is gone — a room now opts in — and the
+	///     daylight curve reads whatever the darkness gate reads, so a house that names an outdoor sensor no room
+	///     follows feeds the curve nothing at all and the warning is still earned.
+	/// </remarks>
 	[TestMethod]
-	public void A_House_Wide_Outdoor_Sensor_Answers_That_Warning()
+	public void A_House_Wide_Outdoor_Sensor_Answers_That_Warning_Once_A_Room_Follows_It()
 	{
 		AdaptiveLightingConfig config = Minimal();
 		config.Defaults.LuxBrightnessEnabled = true;
 		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
 
+		Assert.IsTrue(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
+			"the sensor is named but nothing reads it, so no room is guaranteed a reading");
+
+		config.Areas = [new() { Name = "Gang", AreaId = "gang", FollowOutdoorLux = true }];
+
 		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
-			"one outdoor sensor driving every room is the case the feature was asked for");
+			"one outdoor sensor brightening the rooms that follow it is the case the feature was asked for");
 	}
 
 	[TestMethod]

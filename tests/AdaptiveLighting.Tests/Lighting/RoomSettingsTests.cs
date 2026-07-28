@@ -241,7 +241,7 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual("10 min", RoomSettings.Describe(room, House, nameof(AreaSettings.VacancyTimeoutSeconds)));
 		Assert.AreEqual("30 s", RoomSettings.Describe(room, House, nameof(AreaSettings.PreOffSeconds)));
 		Assert.AreEqual("2 h", RoomSettings.Describe(room, House, nameof(AreaSettings.OverrideDurationMinutes)));
-		Assert.AreEqual("40 lx", RoomSettings.Describe(room, House, nameof(AreaSettings.LuxThreshold)));
+		Assert.AreEqual("1000 lx", RoomSettings.Describe(room, House, nameof(AreaSettings.LuxThreshold)));
 		Assert.AreEqual("3°", RoomSettings.Describe(room, House, nameof(AreaSettings.SunElevationThreshold)));
 		Assert.AreEqual("no", RoomSettings.Describe(room, House, nameof(AreaSettings.WelcomeHome)));
 		Assert.AreEqual("Either", RoomSettings.Describe(room, House, nameof(AreaSettings.Darkness)));

@@ -51,12 +51,14 @@ public sealed class LuxBrightnessControllerTests
 	/// <param name="lux">What the area's own lux sensor reads.</param>
 	/// <param name="luxSensor">The area's own sensor, or <c>null</c> for a room that resolved none.</param>
 	/// <param name="outdoorLux">The house-wide outdoor sensor's reading, or <c>null</c> to leave it unconfigured.</param>
+	/// <param name="followOutdoorLux">Whether the room asked to read the house's outdoor sensor when it has none of its own.</param>
 	/// <param name="houseMode">The house-mode helper, for the sleep-clamp test.</param>
 	private static Fixture Build(
 		Action<AreaSettings>? tweak = null,
 		string lux = "5",
 		string? luxSensor = Lux,
 		string? outdoorLux = null,
+		bool followOutdoorLux = false,
 		HouseModeConfig? houseMode = null)
 	{
 		TestScheduler scheduler = new();
@@ -96,7 +98,8 @@ public sealed class LuxBrightnessControllerTests
 			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30 }
 		];
 
-		ResolvedArea area = new("Hallway", settings, [Light], [Motion], luxSensor, []);
+		ResolvedArea area = new(
+			"Hallway", settings, [Light], [Motion], luxSensor is null ? [] : [luxSensor], [], followOutdoorLux);
 		FakeLightActuator actuator = new();
 		BehaviorSubject<HouseState> house = new(HouseState.Initial);
 
@@ -176,16 +179,39 @@ public sealed class LuxBrightnessControllerTests
 
 	// ===================== which sensor =====================
 
-	/// <summary>The feature as it was asked for: one outdoor sensor brightening a hallway that has none of its own.</summary>
+	/// <summary>
+	///     The feature as it was asked for: one outdoor sensor brightening a hallway that has none of its own —
+	///     now that the hallway has said it wants that.
+	/// </summary>
+	/// <remarks>
+	///     <b>This test's contract changed: the opt-in is the new half of it.</b> The outdoor sensor used to reach
+	///     every sensorless room automatically, which is the fallback the owner removed. The daylight curve reads
+	///     whatever the darkness gate reads — one sensor per room, one answer — so a room that does not follow the
+	///     outdoor sensor gets no reading here either, which the test below pins.
+	/// </remarks>
 	[TestMethod]
-	public void A_Room_With_No_Sensor_Follows_The_House_Wide_Outdoor_One()
+	public void A_Room_That_Follows_The_Outdoor_Sensor_Brightens_With_It()
+	{
+		Fixture area = Build(
+			settings => settings.LuxBrightnessEnabled = true,
+			luxSensor: null,
+			outdoorLux: "20000",
+			followOutdoorLux: true);
+
+		Assert.AreEqual(100d, CommandedOnMotion(area));
+	}
+
+	/// <summary>And a room that did not ask keeps the schedule's brightness, because it has no reading to follow.</summary>
+	[TestMethod]
+	public void A_Room_That_Did_Not_Ask_Keeps_The_Schedules_Brightness()
 	{
 		Fixture area = Build(
 			settings => settings.LuxBrightnessEnabled = true,
 			luxSensor: null,
 			outdoorLux: "20000");
 
-		Assert.AreEqual(100d, CommandedOnMotion(area));
+		Assert.AreEqual(70d, CommandedOnMotion(area),
+			"blazing outside, but this room never asked to look — so the schedule stands, as it did before the feature existed");
 	}
 
 	/// <summary>The room's own sensor wins, exactly as it does for the darkness verdict — one resolution, one answer.</summary>
