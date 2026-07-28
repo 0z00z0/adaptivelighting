@@ -1,4 +1,5 @@
 using AdaptiveLighting.Hosting;
+using AdaptiveLighting.LastSeen;
 using AdaptiveLighting.Web.Services;
 
 using Microsoft.Extensions.Configuration;
@@ -54,6 +55,11 @@ public static class ServiceCollectionExtensions
 		// Singleton: there is one engine per process, and it must outlive both any Blazor circuit and any
 		// single load of the configuration document.
 		services.AddSingleton<LightingEngineHost>();
+
+		// After the store, because the last-seen cache derives its own file names from the document's path. Nothing
+		// consumes IEntityLastSeen yet; the cache has to be running and accumulating history before anything can,
+		// which is exactly why it is registered on its own rather than alongside a first consumer.
+		services.AddEntityLastSeen();
 
 		// Singleton, and registered before the cache that fills it: the activity page's history is the same
 		// stream the cards come from, kept in order and bounded, and it must survive every browser circuit.
