@@ -46,6 +46,18 @@ public static class RegistryExtensions
 	public static bool HasLabel(this IHaRegistry registry, string entityId, string label) =>
 		registry.LabelsOf(entityId).Contains(label, StringComparer.OrdinalIgnoreCase);
 
+	/// <summary>
+	///     The id of the device <paramref name="entityId"/> belongs to, or <c>null</c> when it belongs to none.
+	/// </summary>
+	/// <remarks>
+	///     The exact answer to "are these two entities the same piece of hardware", which every naming convention
+	///     can only guess at. A group helper and a template entity have no device, which is what makes <c>null</c>
+	///     an ordinary answer rather than a fault — and conveniently means a group can never be mistaken for a
+	///     duplicate of the entities inside it.
+	/// </remarks>
+	public static string? DeviceOf(this IHaRegistry registry, string entityId) =>
+		registry.GetEntityRegistration(entityId)?.Device?.Id is { Length: > 0 } device ? device : null;
+
 	/// <summary>The entity ids in <paramref name="areaId"/> that are in <paramref name="domain"/>.</summary>
 	public static IReadOnlyList<string> EntityIdsInAreaByDomain(this IHaRegistry registry, string areaId, string domain) =>
 		[.. registry.EntityIdsInArea(areaId).Where(id => id.HasDomain(domain))];

@@ -100,11 +100,16 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     SmoothTransitions: true
     BlendMinutes: 30
 
-    # A house-wide outdoor lux sensor: the darkness reading for any room that
-    # resolves no lux sensor of its own. One outdoor sensor can drive "is it
-    # dark" across the whole house instead of every room needing one. Omit it
-    # and such rooms fall back to sun elevation.
+    # The house's outdoor lux sensor. Rooms read it only if they ask to, with
+    # FollowOutdoorLux — it is not a silent fallback, because one shaded outdoor
+    # sensor reads hundreds of lux while the rooms behind it are dark. A room
+    # with no reading at all simply counts as dark and lights on movement.
     # OutdoorLuxSensor: sensor.outdoor_illuminance
+
+    # How long a light-level sensor may go without reporting before it stops
+    # counting. Illuminance only: a motion sensor that has said nothing for
+    # hours is a room nobody walked through, not a fault.
+    # LuxSensorStaleAfterMinutes: 120
 
     # The house mode select and its option kinds. Set up from the House modes
     # section rather than by hand — first-run set-up adopts an obvious
@@ -191,7 +196,8 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     #   Either — dark when either says so
     #   Always — no daylight gate (rooms without windows)
     Darkness: Either
-    LuxThreshold: 40           # "Dark below": at or below this many lux
+    LuxThreshold: 1000         # "Dark below": below this many lux. A daylight number,
+                               # because the reading is usually an outdoor sensor.
     LuxHysteresis: 10          # extra light needed to count as bright again
     SunElevationThreshold: 3.0 # "Dark when the sun is below", in degrees
     SunEntity: sun.sun

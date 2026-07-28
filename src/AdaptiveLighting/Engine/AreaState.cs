@@ -112,6 +112,17 @@ public enum AutoOnBlock
 	/// <summary>The house is away, or nobody is home.</summary>
 	Away,
 
+	/// <summary>
+	///     A Guest-kind mode with a scene holds the area: the scene is the look, so movement records occupancy and
+	///     commands nothing.
+	/// </summary>
+	/// <remarks>
+	///     Added when declined movement became reportable. The area refuses movement in exactly four places, and
+	///     this was the one with no name — so a report of movement into a scene-held room either named a different
+	///     gate or named none, and both are worse than the silence they replaced.
+	/// </remarks>
+	SceneHold,
+
 	/// <summary>The house is asleep and this area is set not to light itself while it is.</summary>
 	Sleep,
 

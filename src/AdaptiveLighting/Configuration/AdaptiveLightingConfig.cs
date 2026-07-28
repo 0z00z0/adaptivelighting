@@ -114,12 +114,24 @@ public class GlobalConfig
 	public HouseModeConfig? HouseMode { get; set; }
 
 	/// <summary>
-	///     A house-wide outdoor lux sensor, used as the default darkness reading for any area that resolves no lux
-	///     sensor of its own. One outdoor sensor can then drive "is it dark" across every room, instead of each area
-	///     needing its own or falling back to sun elevation. An area with its own lux sensor keeps using that; an area
-	///     whose <see cref="AreaSettings.Darkness"/> is <c>Sun</c> or <c>Always</c> ignores lux entirely. <c>null</c>
-	///     leaves today's behaviour (per-area lux, else the sun-elevation fallback).
+	///     The house's outdoor lux sensor, offered to the rooms that ask for it by name.
 	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>It is no longer a silent fallback.</b> This used to be handed automatically to every area that
+	///         resolved no lux sensor of its own, which meant a room's darkness could be decided by a sensor
+	///         nobody in that room had ever chosen — and, because one shaded outdoor sensor reads hundreds of lux
+	///         while the rooms behind it are dark, decided wrongly. A room now says so explicitly with
+	///         <see cref="AreaConfig.FollowOutdoorLux"/>; a room that says nothing simply has no lux reading, and
+	///         the lux half of its darkness gate stops holding it back (<see cref="Engine.IlluminanceGate"/>).
+	///     </para>
+	///     <para>
+	///         Naming it here rather than repeating the id on every room is the whole point of the setting: change
+	///         the house's outdoor sensor once and every room following it moves with it. A room that wants some
+	///         other sensor names it under <see cref="AreaConfig.LuxSensor"/> instead, and a room's own sensor
+	///         always wins over this one.
+	///     </para>
+	/// </remarks>
 	public string? OutdoorLuxSensor { get; set; }
 
 	/// <summary>
@@ -205,6 +217,30 @@ public class GlobalConfig
 	/// <summary>Device class that qualifies a <c>sensor</c> as the area's lux source during discovery.</summary>
 	public string IlluminanceDeviceClass { get; set; } = "illuminance";
 
+	/// <summary>
+	///     How long a <b>light-level</b> sensor may go without reporting before the engine stops believing it.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         A room reads the average of its illuminance sensors, so one dead sensor stuck on its last value
+	///         drags that average with it for ever. Two hours is the default: an illuminance sensor reports a
+	///         continuously varying number, so on any ordinary day it has something new to say every few minutes,
+	///         and two hours of silence from one is a fault rather than a quiet afternoon.
+	///     </para>
+	///     <para>
+	///         <b>Illuminance only, and the narrowness is deliberate.</b> The obvious generalisation — cull any
+	///         sensor that has not reported — is wrong for motion and would break the house: a motion sensor
+	///         reports on change, and a battery PIR reports on nothing else, so silence from one means nobody
+	///         walked through that room. Measured on one live instance (2026-07-28), 30 of 51 motion sensors had
+	///         not reported in over two hours and every one of them was healthy. Motion's only test for death stays
+	///         the one that cannot be wrong: no state, <c>unavailable</c> or <c>unknown</c>.
+	///     </para>
+	///     <para>
+	///         Zero or less switches the rule off, for a house whose illuminance sensors genuinely report rarely.
+	///     </para>
+	/// </remarks>
+	public int LuxSensorStaleAfterMinutes { get; set; } = 120;
+
 	/// <summary>Brightness difference below which a light is considered already at target, and no command is sent.</summary>
 	public double BrightnessTolerancePct { get; set; } = 2;
 
@@ -236,8 +272,28 @@ public class AreaSettings
 	/// <summary>Which signal decides whether the area is dark enough to light.</summary>
 	public DarknessSource Darkness { get; set; } = DarknessSource.Either;
 
-	/// <summary>Lux at or below which the area counts as dark.</summary>
-	public double LuxThreshold { get; set; } = 40;
+	/// <summary>
+	///     Lux below which the area counts as dark.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>A daylight threshold, not an indoor one — which is why it is 1000 and not 40.</b> The reading a
+	///         room gates on is very often not a reading of that room at all: most houses have one outdoor lux
+	///         sensor and a good many rooms with none of their own. One live instance's outdoor sensor, measured
+	///         over 30 hours, sits at 1–3 lx at night, 9–47 at 04:00, 102–570 at 05:00 and 1000–3706 through the
+	///         day — and it is shaded, so an unobstructed one would read 10 000–50 000. Against a threshold of 40
+	///         every room in that house read "not dark" from first light until dusk while sitting genuinely dark;
+	///         the owner's office reports 170 lx and is dark.
+	///     </para>
+	///     <para>
+	///         So the number answers "is the sun still doing this room's lighting for it", and the rule behind it
+	///         is the owner's: better to light up too early than never. A room whose sensor really does measure the
+	///         room — a bathroom probe, a windowless hallway — is exactly the case for overriding this per room
+	///         with a low number, which costs one line and is a decision somebody has made rather than a default
+	///         everybody inherits.
+	///     </para>
+	/// </remarks>
+	public double LuxThreshold { get; set; } = 1000;
 
 	/// <summary>Extra lux required to leave the dark state, so a sensor sitting on the threshold cannot flap.</summary>
 	public double LuxHysteresis { get; set; } = 10;
@@ -333,16 +389,30 @@ public class AreaSettings
 	public bool Enabled { get; set; } = true;
 }
 
-/// <summary>Which signal an area consults to decide it is dark enough to light.</summary>
+/// <summary>
+///     Which signal an area consults to decide it is dark enough to light.
+/// </summary>
+/// <remarks>
+///     This chooses the <i>signals</i>; which entity supplies the lux one is a separate question, answered by
+///     <see cref="AreaConfig.LuxSensor"/>, by discovery, or by <see cref="AreaConfig.FollowOutdoorLux"/>. Keeping
+///     the two apart is what lets a room follow the outdoor sensor for its brightness curve while gating darkness
+///     on the sun, and what stops "which sensor" needing a value of its own in here for every combination.
+/// </remarks>
 public enum DarknessSource
 {
-	/// <summary>Lux sensor only. Falls back to the sun when no lux sensor resolves.</summary>
+	/// <summary>
+	///     Lux only. A room whose sensor cannot be read falls back to the sun; a room with no lux sensor at all is
+	///     simply dark, because a gate with nothing to read is not a gate — see <see cref="Engine.IlluminanceGate"/>.
+	/// </summary>
 	Lux,
 
-	/// <summary>Sun elevation only.</summary>
+	/// <summary>Sun elevation only. No lux sensor is consulted, so a room with none is unaffected by having none.</summary>
 	Sun,
 
-	/// <summary>Dark when either the lux sensor or the sun says so.</summary>
+	/// <summary>
+	///     Dark when either the lux sensor or the sun says so. With no lux sensor the lux half says dark, so this
+	///     behaves as <see cref="Always"/> until the room is given a reading to gate on.
+	/// </summary>
 	Either,
 
 	/// <summary>Always dark. For rooms without daylight.</summary>

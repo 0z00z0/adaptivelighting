@@ -65,6 +65,13 @@ public sealed class AreaController : IDisposable
 	private bool? _lastDarkVerdict;
 	private string? _lastDarknessDetail;
 	private AreaSnapshot? _lastPublished;
+
+	// The gate named by the last declined-motion report, and the entity behind it. Together they are what makes
+	// ReportDeclinedMotion bounded: movement under a block that has not changed since it was last reported says
+	// nothing new, so it publishes nothing. Both are cleared the moment the area actually lights.
+	private AutoOnBlock? _reportedDecline;
+	private string? _reportedDeclineEntity;
+
 	private bool _disposed;
 
 	/// <summary>Creates a controller for one resolved area.</summary>
@@ -112,17 +119,26 @@ public sealed class AreaController : IDisposable
 
 		_logger = loggerFactory.CreateLogger($"{typeof(AreaController).FullName}.{area.Name}");
 
-		// An area with its own lux sensor uses it; otherwise it falls back to the house-wide outdoor lux sensor,
-		// and only when neither resolves does the gate fall back to sun elevation. Empty strings normalise to null
-		// so the gate reads them as "no sensor" rather than trying to read the state of an empty id.
-		string? luxSensor = area.LuxSensor is { Length: > 0 } own ? own
-			: global.OutdoorLuxSensor is { Length: > 0 } outdoor ? outdoor
-			: null;
-		_gateSensor = new IlluminanceGate(ha, luxSensor, area.Settings, _logger);
+		// An area with lux sensors of its own reads them — all of them, averaged. Otherwise it reads the
+		// house-wide outdoor sensor only if it asked to (ResolvedArea.FollowOutdoorLux); the fallback used to be
+		// automatic, which handed every sensorless room a reading taken outside it and, on a shaded outdoor
+		// sensor, held the whole house off through daylight. A room that has neither has no reading at all, and
+		// IlluminanceGate treats that as dark.
+		IReadOnlyList<string> luxSensors = area.LuxSensors is { Count: > 0 } own ? own
+			: area.FollowOutdoorLux && global.OutdoorLuxSensor is { Length: > 0 } outdoor ? [outdoor]
+			: [];
+
+		_gateSensor = new IlluminanceGate(
+			ha,
+			luxSensors,
+			area.Settings,
+			TimeSpan.FromMinutes(global.LuxSensorStaleAfterMinutes),
+			() => _scheduler.Now,
+			_logger);
 
 		// Reads through the gate rather than resolving a sensor of its own, so "which sensor is this room looking
-		// at" has exactly one answer — including the fall-back to the house-wide outdoor sensor above, which is the
-		// case the feature was asked for (one outdoor reading brightening a hallway that has no sensor at all).
+		// at" has exactly one answer — including the opted-in outdoor sensor above, which is the case the feature
+		// was asked for (one outdoor reading brightening a hallway that has no sensor at all).
 		_luxBrightness = new LuxBrightnessCurve(area.Settings, _gateSensor.ReadLux);
 		_detector = new OverrideDetector(global, scheduler);
 	}
@@ -236,7 +252,9 @@ public sealed class AreaController : IDisposable
 			switch (_state)
 			{
 				case AreaState.Disabled or AreaState.Away or AreaState.SceneHold:
-					// SceneHold records occupancy (above) but commands nothing: the scene is the look.
+					// SceneHold records occupancy (above) but commands nothing: the scene is the look. All three
+					// are refusals, so they are reported as refusals rather than passed over in silence.
+					ReportDeclinedMotion();
 					return;
 
 				case AreaState.SuppressedOff:
@@ -261,6 +279,7 @@ public sealed class AreaController : IDisposable
 
 				case AreaState.PreOff:
 					_preOffTimer.Disposable = Disposable.Empty;
+					ForgetDeclinedMotion();
 					Enter(AreaState.AutoActive, TransitionReason.Motion);
 					RestartVacancyTimer();
 					ApplyTarget(TransitionReason.Motion);
@@ -270,9 +289,11 @@ public sealed class AreaController : IDisposable
 					if (!CanAutoOn(out string? blockedBy))
 					{
 						_logger.LogDebug("Motion in {Area} but auto-on is blocked: {Reason}.", Name, blockedBy);
+						ReportDeclinedMotion();
 						return;
 					}
 
+					ForgetDeclinedMotion();
 					Enter(AreaState.AutoActive, TransitionReason.Motion);
 					RestartVacancyTimer();
 					ApplyTarget(TransitionReason.Motion);
@@ -608,12 +629,79 @@ public sealed class AreaController : IDisposable
 			AutoOnBlock.KillSwitch => "kill switch is active",
 			AutoOnBlock.Disabled => "area is disabled",
 			AutoOnBlock.Away => _house.IsAnyoneHome ? "the house is set to away" : "nobody is home",
+			AutoOnBlock.SceneHold => $"a guest scene ({_house.ActiveScene}) is holding this area",
 			AutoOnBlock.Sleep => "sleep mode blocks auto-on for this area",
 			AutoOnBlock.EntityOn => $"{blocker} is on",
 			_ => $"not dark enough ({_gateSensor.DarknessDetail()})"
 		};
 
 		return block == AutoOnBlock.None;
+	}
+
+	/// <summary>
+	///     Publishes "somebody moved in here and I did not light it, and here is what stopped me" — but only when
+	///     what stopped it has changed since the last such report.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>The hole this fills.</b> Movement into a blocked room used to publish nothing at all, so the one
+	///         page that exists to answer "why did that light not come on" had no row to answer it with: the room
+	///         sat on whatever it last said, and the movement left no trace anywhere but a debug log.
+	///     </para>
+	///     <para>
+	///         <b>Why it was deferred, and what makes it safe now.</b> Publishing per blocked movement risks an
+	///         event every time anyone walks through a sunlit room, which is why <see cref="AreaSnapshot.AutoOnBlockedBy"/>
+	///         is excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/> in the first place. The bound is on the
+	///         <i>reason</i>, not the reading behind it: one report per area per change of the refusing gate, so N
+	///         movements under an unchanged block produce exactly one report whatever N is, and a lux value
+	///         drifting from 900 to 950 to 980 under one unchanged <see cref="AutoOnBlock.NotDark"/> produces none
+	///         at all. Over any interval the number of these reports is bounded by how often the gate itself
+	///         changes — the master switch, the room's switch, the house mode, a blocking entity, the darkness
+	///         verdict crossing its threshold — and never by footfall.
+	///     </para>
+	///     <para>
+	///         It publishes past <see cref="Publish"/>'s identical-consecutive guard deliberately, because that
+	///         guard would suppress every one of these: a declined movement moves only the fields the guard
+	///         excludes on purpose (the reason, the reading, the block, the last-motion instant). The bound above
+	///         is what replaces the guard here, and it is a stricter one — the guard would let a second row through
+	///         the moment any other field moved.
+	///     </para>
+	/// </remarks>
+	private void ReportDeclinedMotion()
+	{
+		AutoOnBlock block = AutoOnBlockNow(RefreshDarkness(), out string? blocker);
+
+		// Nothing is refusing, so there is nothing to report. Reachable from the states that decline before the
+		// gates are consulted at all — a scene-held area whose scene has just been cleared, say.
+		if (block == AutoOnBlock.None)
+		{
+			ForgetDeclinedMotion();
+			return;
+		}
+
+		if (_reportedDecline == block && string.Equals(_reportedDeclineEntity, blocker, StringComparison.Ordinal))
+			return;
+
+		_reportedDecline = block;
+		_reportedDeclineEntity = blocker;
+
+		AreaSnapshot snapshot = Snapshot(TransitionReason.Motion);
+		_lastPublished = snapshot;
+		_publisher.Publish(snapshot);
+	}
+
+	/// <summary>
+	///     Forgets the last declined-motion report, so the next refusal is news again.
+	/// </summary>
+	/// <remarks>
+	///     Called where the area actually lights on movement. Without it, a room that was blocked, then lit, then
+	///     blocked again by the same gate would report the second spell only if the gate had changed to something
+	///     else and back — which is precisely the spell somebody is looking for when a light stops working again.
+	/// </remarks>
+	private void ForgetDeclinedMotion()
+	{
+		_reportedDecline = null;
+		_reportedDeclineEntity = null;
 	}
 
 	/// <summary>
@@ -637,6 +725,12 @@ public sealed class AreaController : IDisposable
 
 		if (_house.Mode == HouseMode.Away)
 			return AutoOnBlock.Away;
+
+		// The scene is the look, so movement records occupancy and commands nothing (see OnMotion). Named here
+		// rather than left to fall through to the darkness gate: an area held by a guest scene that reported
+		// "not dark enough" would send somebody to the lux sensor over a mode they set themselves.
+		if (_house.Mode == HouseMode.Guest && _house.ActiveScene is { Length: > 0 })
+			return AutoOnBlock.SceneHold;
 
 		if (_area.Settings.SleepBlocksAutoOn && _house.Mode == HouseMode.Sleep)
 			return AutoOnBlock.Sleep;

@@ -178,8 +178,11 @@ public static class ActivityView
 	///         moved — so the verdict becomes the headline and its reading the line beneath.
 	///     </para>
 	///     <para>
-	///         The master switch outranks everything: while it is off the engine commands nothing, and a row that
-	///         described a transition without saying so would send somebody hunting a room-level fault.
+	///         The master switch outranks every transition: while it is off the engine commands nothing, and a row
+	///         that described a transition without saying so would send somebody hunting a room-level fault. It
+	///         does not outrank a <i>refused movement</i>, which is not a transition but a report published for the
+	///         express purpose of naming what refused — and which names the master switch itself when that is the
+	///         answer, so the reason the rule exists is served rather than overridden.
 	///     </para>
 	///     <para>
 	///         Where a row would otherwise say what the engine is about to do, it says it only if the engine has
@@ -194,6 +197,13 @@ public static class ActivityView
 	public static ActivityLine Describe(AreaSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
+
+		// Ahead of the master switch, and it is the one thing allowed ahead of it. The engine publishes movement
+		// into a blocked room precisely so this row can exist, and "Paused by the master switch" would answer a
+		// question nobody asked while dropping the one fact the row was published to carry: somebody moved. The
+		// wording below names the master switch itself when that is what refused, so nothing is lost.
+		if (IsDeclinedMotion(snapshot))
+			return new ActivityLine(MovementRefusedBy(snapshot), RefusalDetail(snapshot));
 
 		if (snapshot.KillSwitchActive)
 			return new ActivityLine("Paused by the master switch", "No lights will change until it is turned back on.");
@@ -300,8 +310,9 @@ public static class ActivityView
 
 		// The master switch replaces the row's words outright, so it replaces its categories too: the row says
 		// "Paused by the master switch" and nothing about movement, lights or lux, and a chip that offered it as
-		// one of those would be pointing at a sentence that does not mention them.
-		if (snapshot.KillSwitchActive)
+		// one of those would be pointing at a sentence that does not mention them. A refused movement is the one
+		// row it does not replace — Describe keeps that one's words — so it keeps its own categories as well.
+		if (snapshot.KillSwitchActive && !IsDeclinedMotion(snapshot))
 			return ActivityCategory.House;
 
 		ActivityCategory categories = ActivityCategory.None;
@@ -328,6 +339,11 @@ public static class ActivityView
 			or TransitionReason.EveryoneLeft
 			or TransitionReason.FirstPersonArrived
 			or TransitionReason.SceneHold)
+			categories |= ActivityCategory.House;
+
+		// A refused movement that reached here past the master-switch return says so in its own words, and the
+		// words are what the chips follow: the row names the master switch, so the house chip must offer it.
+		if (snapshot.KillSwitchActive)
 			categories |= ActivityCategory.House;
 
 		// Start-up and a room's own switch are housekeeping outright. A tick is housekeeping only when nothing
@@ -667,6 +683,57 @@ public static class ActivityView
 			: "Dark enough now, but something here is on — movement will not switch the lights on",
 		_ => "Dark enough now — movement will switch the lights on"
 	};
+
+	/// <summary>
+	///     Whether this report is movement the engine turned down, with the gate that turned it down named.
+	/// </summary>
+	/// <remarks>
+	///     The engine publishes one of these per change of the refusing gate rather than one per movement, so a
+	///     person pacing under an unchanged block is one row and not forty. A report from a build that predates
+	///     <see cref="AreaSnapshot.AutoOnBlockedBy"/> carries none, and reads exactly as it always did — an older
+	///     payload cannot support this claim any better than it can support its opposite.
+	/// </remarks>
+	private static bool IsDeclinedMotion(AreaSnapshot snapshot) =>
+		snapshot.Reason is TransitionReason.Motion
+		&& snapshot.State is not AreaState.AutoActive
+		&& snapshot.AutoOnBlockedBy is { } block
+		&& block is not AutoOnBlock.None;
+
+	/// <summary>
+	///     Movement, and the plain sentence for whichever gate stopped it.
+	/// </summary>
+	/// <remarks>
+	///     One sentence per value of <see cref="AutoOnBlock"/>, because the whole point of the report is that the
+	///     reason reaches the reader. The two refusals a room can hide — a sleeping house and a blocking entity —
+	///     are worded as <see cref="RoomFacts"/> and <see cref="BoardView"/> word them, so a person who learned the
+	///     phrase on one surface reads the same fact on this one.
+	/// </remarks>
+	private static string MovementRefusedBy(AreaSnapshot snapshot) => snapshot.AutoOnBlockedBy switch
+	{
+		AutoOnBlock.KillSwitch => "Movement, but the master switch is off",
+		AutoOnBlock.Disabled => "Movement, but automatic lighting is switched off for this room",
+		AutoOnBlock.Away => "Movement, but the house is away — the room waits for the first arrival",
+		AutoOnBlock.SceneHold => "Movement, but a guest scene has this room",
+		AutoOnBlock.Sleep => "Movement, but the house is asleep and this room does not light itself while it is",
+		AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
+			? $"Movement, but {blocker} is on"
+			: "Movement, but something here is on",
+		AutoOnBlock.NotDark => "Movement, but the room is bright enough already",
+
+		// Unreachable while IsDeclinedMotion guards this: None and null are both excluded there. Worded rather
+		// than thrown, because a row that says less is a better failure than a page that does not render.
+		_ => "Movement"
+	};
+
+	/// <summary>
+	///     What goes under a refused movement: the reading, and only where the reading is what refused.
+	/// </summary>
+	/// <remarks>
+	///     Every other gate has already named itself in the headline, and repeating the lux figure beside "the
+	///     house is asleep" invites the reader to blame the sensor for a decision the house mode made.
+	/// </remarks>
+	private static string? RefusalDetail(AreaSnapshot snapshot) =>
+		snapshot.AutoOnBlockedBy is AutoOnBlock.NotDark ? Reading(snapshot) : null;
 
 	/// <summary>
 	///     The darkness gate's own words — the measured reading and the threshold it was compared against.

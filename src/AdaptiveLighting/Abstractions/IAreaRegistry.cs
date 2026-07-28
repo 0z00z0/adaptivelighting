@@ -59,6 +59,28 @@ public interface IAreaRegistry
 	/// </summary>
 	IReadOnlyList<string> LabelsOf(string entityId);
 
+	/// <summary>
+	///     The id of the Home Assistant <i>device</i> <paramref name="entityId"/> belongs to, or <c>null</c> when
+	///     it belongs to none — which is what a group helper, a template entity and an unknown id all look like.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Here because "these two entities are the same piece of hardware" has no other exact answer. One
+	///         live instance's office holds five light entities on one device — a four-channel RGBW fixture's
+	///         <c>_nw</c>, <c>_ww</c> and two more channels, plus the fixture's own combined entity — and the
+	///         engine was commanding all five, which is one lamp told four contradictory things and four times the
+	///         service calls. Every one of those duplicates has a device id and every group helper has none, so the
+	///         device is both the signal and its own guard.
+	///     </para>
+	///     <para>
+	///         The alternative in use elsewhere is to infer channels from id suffixes (<c>LightAudit</c> does, and
+	///         still earns its keep for the entities that are genuinely foreign rather than duplicated). A suffix
+	///         is a naming convention; a device is a fact the registry records, so where both can answer, this one
+	///         is believed.
+	///     </para>
+	/// </remarks>
+	string? DeviceOf(string entityId);
+
 	/// <summary>The floor <paramref name="areaId"/> sits on, or null — floors are optional in HA.</summary>
 	AreaFloor? FloorOf(string areaId);
 }

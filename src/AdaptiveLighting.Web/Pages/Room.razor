@@ -384,18 +384,23 @@ else
 							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
 						</span>
 					}
-					@if (resolved.LuxSensor is { Length: > 0 } lux)
+					@foreach (string sensor in resolved.LuxSensors)
 					{
+						string entityId = sensor;
 						<span class="gchip gchip-lux">
-							<span class="chip-name">@Name(lux)</span><code class="chip-id">@lux</code>
-							<button type="button" class="chip-remove" title="@($"Leave {Name(lux)} out of this room")" @onclick="() => Exclude(lux)">&times;</button>
+							<span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code>
+							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
 						</span>
 					}
 				</div>
 
-				@if (resolved.LuxSensor is null)
+				@if (resolved.LuxSensors.Count == 0)
 				{
-					<p class="room-card-foot">No light-level sensor here &mdash; darkness is judged by the sun instead.</p>
+					<p class="room-card-foot">No light-level sensor here &mdash; the room counts as dark, so movement lights it.</p>
+				}
+				else if (resolved.LuxSensors.Count > 1)
+				{
+					<p class="room-card-foot">@resolved.LuxSensors.Count light-level sensors here &mdash; the room reads the average of whichever are still reporting.</p>
 				}
 			}
 			else

@@ -49,7 +49,7 @@ public sealed class AreaSentencesTests
 		Assert.AreEqual(2, sentences.Count, "movement and hands; no flags are on");
 
 		Assert.AreEqual(
-			"Lights when someone moves and it's darker than 40 lx — or the sun is below 3°. " +
+			"Lights when someone moves and it's darker than 1000 lx — or the sun is below 3°. " +
 			"After 10 min without movement, dim to 50 % for 30 s, then off.",
 			sentences[0].PlainText);
 
@@ -65,7 +65,7 @@ public sealed class AreaSentencesTests
 		AreaSettings defaults = Defaults();
 
 		Assert.IsTrue(First(DarknessSource.Lux, defaults).StartsWith(
-			"Lights when someone moves and it's darker than 40 lx.", StringComparison.Ordinal),
+			"Lights when someone moves and it's darker than 1000 lx.", StringComparison.Ordinal),
 			"the sensor alone: no mention of the sun");
 
 		Assert.IsTrue(First(DarknessSource.Sun, defaults).StartsWith(

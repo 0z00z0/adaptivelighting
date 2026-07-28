@@ -81,6 +81,13 @@ public sealed record AreaSnapshot(
 	///         and again when it goes off. Each report still carries the verdict that held when it was published,
 	///         which is what a timeline row needs; what it does not do is generate rows of its own.
 	///     </para>
+	///     <para>
+	///         The one report that does turn on this field — movement into a blocked room — is published past this
+	///         comparison rather than through it, and carries its own bound: one row per change of the refusing
+	///         gate, not one per movement. See <c>AreaController.ReportDeclinedMotion</c>. That is deliberately a
+	///         stricter rule than including the field here would have been, which is what makes the exclusion above
+	///         still the right trade.
+	///     </para>
 	/// </remarks>
 	/// <param name="other">The snapshot to compare against, typically the last one published for this area.</param>
 	/// <returns><c>true</c> when the two carry the same news; <c>false</c> when something worth publishing moved.</returns>

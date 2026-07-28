@@ -609,19 +609,129 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Automatic lighting is switched off for this room.", line.Why);
 	}
 
+	// ===================== movement the engine turned down =====================
+
+	/// <summary>
+	///     <b>Every gate that can refuse movement reads as a plain sentence naming what stopped it.</b>
+	/// </summary>
+	/// <remarks>
+	///     The row exists because movement into a blocked room used to publish nothing, so the page that answers
+	///     "why did that light not come on" had nothing to answer with. A row that said only "Movement" would be
+	///     the same failure with an extra line in it, so every value of <see cref="AutoOnBlock"/> is worded here
+	///     and the exhaustive test below is what stops one being forgotten.
+	/// </remarks>
+	[TestMethod]
+	public void A_Refused_Movement_Names_The_Gate_That_Refused_It()
+	{
+		Assert.AreEqual("Movement, but the room is bright enough already",
+			Declined(AutoOnBlock.NotDark, isDark: false).What);
+
+		Assert.AreEqual("Movement, but the house is asleep and this room does not light itself while it is",
+			Declined(AutoOnBlock.Sleep).What);
+
+		Assert.AreEqual("Movement, but media_player.stue_tv is on",
+			Declined(AutoOnBlock.EntityOn, blocker: "media_player.stue_tv").What);
+
+		Assert.AreEqual("Movement, but automatic lighting is switched off for this room",
+			Declined(AutoOnBlock.Disabled, state: AreaState.Disabled).What);
+
+		Assert.AreEqual("Movement, but the house is away — the room waits for the first arrival",
+			Declined(AutoOnBlock.Away, state: AreaState.Away).What);
+
+		Assert.AreEqual("Movement, but a guest scene has this room",
+			Declined(AutoOnBlock.SceneHold, state: AreaState.SceneHold).What);
+	}
+
+	/// <summary>
+	///     The master switch is the one refusal that outranked everything, and a refused movement is the one row
+	///     it does not replace.
+	/// </summary>
+	/// <remarks>
+	///     "Paused by the master switch" answers a question nobody asked while dropping the fact the report was
+	///     published to carry: somebody moved. The wording names the master switch itself, so the reason that rule
+	///     exists — never letting a row send somebody hunting a room-level fault — is served rather than overridden.
+	/// </remarks>
+	[TestMethod]
+	public void A_Refused_Movement_Survives_The_Master_Switch_And_Still_Names_It()
+	{
+		AreaSnapshot muzzled = Report(
+			"Stue", AreaState.Disabled, TransitionReason.Motion,
+			killSwitch: true, autoOnBlockedBy: AutoOnBlock.KillSwitch);
+
+		Assert.AreEqual("Movement, but the master switch is off", ActivityView.Describe(muzzled).What);
+
+		ActivityCategory categories = ActivityView.Categorise(muzzled);
+
+		Assert.IsTrue(categories.HasFlag(ActivityCategory.Movement), "somebody moved, and the row says so");
+		Assert.IsTrue(categories.HasFlag(ActivityCategory.Declined), "and nothing happened, which is the other chip");
+		Assert.IsTrue(categories.HasFlag(ActivityCategory.House), "and it names the master switch, so the house chip offers it");
+	}
+
+	/// <summary>The reading goes under the row only where the reading is what refused.</summary>
+	[TestMethod]
+	public void Only_A_Darkness_Refusal_Carries_The_Reading_Beneath_It()
+	{
+		Assert.AreEqual("lux 1700, dark below 1000",
+			Declined(AutoOnBlock.NotDark, isDark: false, detail: "lux 1700, dark below 1000").Why);
+
+		Assert.IsNull(
+			Declined(AutoOnBlock.Sleep, detail: "lux 3, dark below 1000").Why,
+			"the house mode made this decision, and printing the sensor beside it invites blaming the sensor");
+	}
+
+	/// <summary>
+	///     A movement that <i>did</i> light the room is untouched: the block field is <see cref="AutoOnBlock.None"/>
+	///     there, and the row goes on saying what it always said.
+	/// </summary>
+	[TestMethod]
+	public void A_Movement_That_Lit_The_Room_Is_Not_A_Refusal()
+	{
+		AreaSnapshot lit = Report(
+			"Stue", AreaState.AutoActive, TransitionReason.Motion,
+			isDark: true, brightness: 70, kelvin: 2700, autoOnBlockedBy: AutoOnBlock.None);
+
+		Assert.AreEqual("Movement — lights on at 70 %, 2700 K", ActivityView.Describe(lit).What);
+	}
+
+	/// <summary>Puts a refused movement into words. The line, not the whole report.</summary>
+	private static ActivityLine Declined(
+		AutoOnBlock block,
+		AreaState state = AreaState.AutoVacant,
+		bool? isDark = true,
+		string? detail = null,
+		string? blocker = null) =>
+		ActivityView.Describe(Report(
+			"Stue", state, TransitionReason.Motion,
+			isDark: isDark, darknessDetail: detail, autoOnBlockedBy: block, autoOnBlockingEntity: blocker));
+
 	/// <summary>Every reason the engine can publish has words of its own; none falls through to an enum name.</summary>
 	[TestMethod]
 	public void Every_Transition_Reason_Has_Words()
 	{
+		AutoOnBlock?[] blocks = [null, .. Enum.GetValues<AutoOnBlock>().Cast<AutoOnBlock?>()];
+
 		foreach (TransitionReason reason in Enum.GetValues<TransitionReason>())
 		{
 			foreach (AreaState state in Enum.GetValues<AreaState>())
 			{
-				ActivityLine line = ActivityView.Describe(Report("Stue", state, reason, isDark: true));
+				// The block is walked too: a refused movement is worded from it, so a value added to AutoOnBlock
+				// later has to be given a sentence here rather than falling through to a bare "Movement".
+				foreach (AutoOnBlock? block in blocks)
+				{
+					ActivityLine line = ActivityView.Describe(Report("Stue", state, reason, isDark: true, autoOnBlockedBy: block));
 
-				Assert.AreNotEqual(reason.ToString(), line.What,
-					$"{reason} in {state} fell through to its enum name instead of a sentence");
-				Assert.IsFalse(string.IsNullOrWhiteSpace(line.What));
+					Assert.AreNotEqual(reason.ToString(), line.What,
+						$"{reason} in {state} (blocked by {block?.ToString() ?? "nothing recorded"}) fell through to its enum name");
+					Assert.IsFalse(string.IsNullOrWhiteSpace(line.What));
+
+					if (reason is TransitionReason.Motion
+						&& state is not AreaState.AutoActive
+						&& block is { } named and not AutoOnBlock.None)
+					{
+						Assert.AreNotEqual("Movement", line.What,
+							$"a movement refused by {named} must say what refused it, or the row is the silence it replaced");
+					}
+				}
 			}
 		}
 	}
@@ -651,6 +761,7 @@ public sealed class ActivityLogTests
 	public void Every_Report_The_Engine_Can_Publish_Lands_In_A_Category()
 	{
 		bool?[] verdicts = [null, true, false];
+		AutoOnBlock?[] blocks = [null, .. Enum.GetValues<AutoOnBlock>().Cast<AutoOnBlock?>()];
 
 		foreach (TransitionReason reason in Enum.GetValues<TransitionReason>())
 		{
@@ -660,15 +771,22 @@ public sealed class ActivityLogTests
 				{
 					foreach (bool killSwitch in new[] { false, true })
 					{
-						AreaSnapshot snapshot = Report("Stue", state, reason, isDark: dark, killSwitch: killSwitch);
-						ActivityCategory categories = ActivityView.Categorise(snapshot);
+						// The sixth input: a refused movement is the one row the master switch does not replace,
+						// so the block has to be walked or that branch is exhaustively untested.
+						foreach (AutoOnBlock? block in blocks)
+						{
+							AreaSnapshot snapshot = Report(
+								"Stue", state, reason, isDark: dark, killSwitch: killSwitch, autoOnBlockedBy: block);
+							ActivityCategory categories = ActivityView.Categorise(snapshot);
 
-						Assert.AreNotEqual(ActivityCategory.None, categories,
-							$"{reason} in {state} (dark: {dark?.ToString() ?? "unchecked"}, master switch: "
-							+ $"{(killSwitch ? "off" : "on")}) belongs to no category, so no filter can reach it");
+							Assert.AreNotEqual(ActivityCategory.None, categories,
+								$"{reason} in {state} (dark: {dark?.ToString() ?? "unchecked"}, master switch: "
+								+ $"{(killSwitch ? "off" : "on")}, blocked by {block?.ToString() ?? "nothing recorded"}) "
+								+ "belongs to no category, so no filter can reach it");
 
-						Assert.AreEqual(categories, categories & ActivityView.AllCategories,
-							$"{reason} in {state} claimed a category the chips do not offer");
+							Assert.AreEqual(categories, categories & ActivityView.AllCategories,
+								$"{reason} in {state} claimed a category the chips do not offer");
+						}
 					}
 				}
 			}

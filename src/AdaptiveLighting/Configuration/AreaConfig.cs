@@ -28,6 +28,42 @@ public class AreaConfig
 	/// <summary>Explicit lux sensor id. When present, fully replaces discovery for this slot.</summary>
 	public string? LuxSensor { get; set; }
 
+	/// <summary>
+	///     Whether this room reads <see cref="GlobalConfig.OutdoorLuxSensor"/> when it has no lux sensor of its own.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>The opt-in that replaced a silent fallback.</b> Every sensorless room used to be handed the
+	///         house's outdoor sensor without being asked, so a room's darkness was decided by a reading taken
+	///         outside it — and one shaded outdoor sensor reads hundreds of lux while the rooms behind it are dark,
+	///         which is how a whole house came to refuse to light itself. Saying nothing now means the room has no
+	///         lux reading at all, and the lux half of its gate stops holding it back; a room that genuinely wants
+	///         to follow the weather says so here.
+	///     </para>
+	///     <para>
+	///         <b>It sits beside <see cref="LuxSensor"/> rather than among the settings on purpose.</b> This
+	///         answers the same question that slot answers — which entity supplies this room's illuminance — and
+	///         not "how should the room behave". That is the same line <see cref="Lights"/>,
+	///         <see cref="MotionSensors"/> and <see cref="ExcludeEntities"/> already sit on: entity bindings live
+	///         on the room, tunables live in <see cref="AreaSettings"/> and are inherited from the document
+	///         defaults. A room's own sensor still wins over the outdoor one, so this only ever fills a gap.
+	///     </para>
+	///     <para>
+	///         It composes with <see cref="AreaSettings.Darkness"/> rather than duplicating it. Under <c>Lux</c> or
+	///         <c>Either</c> it decides whether there is a lux verdict to have; under <c>Sun</c> or <c>Always</c>
+	///         darkness ignores lux entirely — but the reading is still taken, because
+	///         <see cref="AreaSettings.LuxBrightnessEnabled"/> follows the daylight whatever the gate consults, and
+	///         a hallway lit on motion at any hour whose <i>level</i> should follow the sun outside is precisely
+	///         the case that feature exists for.
+	///     </para>
+	///     <para>
+	///         Nullable, though <c>null</c> and <c>false</c> mean the same thing to the engine: it keeps the
+	///         document silent for every room that has not been asked (<c>OmitNull</c>), so adding the setting
+	///         rewrites nobody's file.
+	///     </para>
+	/// </remarks>
+	public bool? FollowOutdoorLux { get; set; }
+
 	/// <summary>Entities that block auto-on while they are on — a projector, a "do not disturb" flag.</summary>
 	public List<string>? IgnoreWhenOn { get; set; }
 

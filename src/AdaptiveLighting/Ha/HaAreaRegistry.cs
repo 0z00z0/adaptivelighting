@@ -33,6 +33,9 @@ public sealed class HaAreaRegistry : IAreaRegistry
 	public IReadOnlyList<string> LabelsOf(string entityId) => _registry.LabelsOf(entityId);
 
 	/// <inheritdoc/>
+	public string? DeviceOf(string entityId) => _registry.DeviceOf(entityId);
+
+	/// <inheritdoc/>
 	/// <remarks>
 	///     A floor with no id cannot be grouped on — the group key is the id — so it is read as no floor at all
 	///     rather than as an anonymous one every floorless area would then share.

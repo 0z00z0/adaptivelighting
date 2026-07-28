@@ -626,11 +626,12 @@ public sealed class AreaSetupServiceTests
 		Darkness = DarknessSource.Sun
 	};
 
-	/// <summary>Entity ids the area lists instead of discovering, plus the ids it excludes from discovery.</summary>
+	/// <summary>Entity choices the area made by hand instead of discovering, plus the ids it excludes from discovery.</summary>
 	private static int PinnedCountOf(AreaConfig area) =>
 		(area.Lights?.Count ?? 0)
 		+ (area.MotionSensors?.Count ?? 0)
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
+		+ (area.FollowOutdoorLux is not null ? 1 : 0)
 		+ (area.IgnoreWhenOn?.Count ?? 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 
@@ -642,6 +643,12 @@ public sealed class AreaSetupServiceTests
 		nameof(AreaConfig.Lights),
 		nameof(AreaConfig.MotionSensors),
 		nameof(AreaConfig.LuxSensor),
+
+		// Which entity supplies the room's illuminance, in its second form: "the house's outdoor one". It is the
+		// twin of LuxSensor above rather than a behaviour knob, so it is counted as a pinned entity choice — which
+		// also keeps the settings numerator honest against the "n of 21" denominator, which is read off AreaSettings.
+		nameof(AreaConfig.FollowOutdoorLux),
+
 		nameof(AreaConfig.IgnoreWhenOn),
 		nameof(AreaConfig.ExcludeEntities),
 

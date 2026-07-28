@@ -20,6 +20,13 @@ public sealed class FakeAreaRegistry : IAreaRegistry
 	/// <summary>Entity id to its registry labels.</summary>
 	public Dictionary<string, List<string>> Labels { get; } = new(StringComparer.Ordinal);
 
+	/// <summary>
+	///     Entity id to the device it belongs to. An entity absent from here belongs to none, which is what a
+	///     group helper looks like — and what every entity looked like before the duplicate-device rule existed,
+	///     so an untouched fixture keeps behaving exactly as it did.
+	/// </summary>
+	public Dictionary<string, string> Devices { get; } = new(StringComparer.Ordinal);
+
 	/// <summary>Area id to the floor it sits on. An area absent from here is floorless, as most houses' are.</summary>
 	public Dictionary<string, AreaFloor> Floors { get; } = new(StringComparer.Ordinal);
 
@@ -43,6 +50,9 @@ public sealed class FakeAreaRegistry : IAreaRegistry
 
 	/// <inheritdoc/>
 	public IReadOnlyList<string> LabelsOf(string entityId) => Labels.GetValueOrDefault(entityId) ?? [];
+
+	/// <inheritdoc/>
+	public string? DeviceOf(string entityId) => Devices.GetValueOrDefault(entityId);
 
 	/// <inheritdoc/>
 	public AreaFloor? FloorOf(string areaId) => Floors.GetValueOrDefault(areaId);

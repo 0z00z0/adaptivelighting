@@ -75,8 +75,70 @@ under one version, because they are compiled against each other.
   - The switch works either way and the note is dismissible; a room already read is not raised again.
     Switching a whole floor on raises nothing — six notes at once is a wall rather than a warning.
 
+### Changed — action required
+
+- **A room counts as dark below 1000 lx, not 40.** The reading a room gates on is usually not a
+  reading of that room at all: most houses have one outdoor lux sensor and many rooms with none. One
+  live instance's outdoor sensor, measured over 30 hours, sits at 1–3 lx at night and 1000–3706
+  through the day — and it is shaded, so an unobstructed one would read 10 000–50 000. Against 40 lx
+  every room read *not dark* from first light until dusk while sitting genuinely dark. The owner's
+  rule: better to light up too early than never. A room whose sensor really does measure the room
+  wants a low number, which is one line on that room.
+- **The house-wide outdoor lux sensor is no longer a silent fallback.** `Global.OutdoorLuxSensor`
+  used to be handed to every room that resolved no lux sensor of its own, so a room's darkness could
+  be decided by a reading taken outside it. A room now opts in with **`FollowOutdoorLux: true`**.
+  - **A room with no lux sensor is simply dark** — the lux half of its gate stops holding it back and
+    movement lights it. Under `Darkness: Either` that makes such a room behave as `Always` until it
+    is given a reading; under `Lux` a sensor that *exists* and will not read still falls back to the
+    sun, because a Zigbee dropout is not the same as having no sensor.
+  - Existing documents are **not rewritten**. A document that names an outdoor sensor no room follows
+    now gets a validation warning saying exactly what changed and how to put it back.
+  - The daylight brightness curve reads whatever the darkness gate reads — one sensor per room, one
+    answer — so a room following the outdoor sensor for its *level* opts in the same way.
+- **A room with several light-level sensors averages them instead of using none.** An area with more
+  than one candidate used to use neither, on the ground that the engine could not tell which was the
+  room's. That left a better-instrumented room strictly worse off than a bare one, and once disabled
+  8 of 17 rooms on one house. The average is **geometric**, at the owner's decision: brightness is
+  perceived logarithmically, so 170 lx and 3000 lx average to 714 rather than 1585, and those fall on
+  opposite sides of a 1000 lx threshold. Non-positive readings are dropped before the average, since
+  a geometric mean multiplies; a room whose every reading is zero is 0, which is pitch dark.
+  - Dead sensors are dropped first: no state, `unavailable`, `unknown`, or **silent for longer than
+    `Global.LuxSensorStaleAfterMinutes`** (default two hours). Silence is judged on `last_updated`,
+    not `last_changed`, so a sensor sitting at a steady 3 lx all night is not condemned for being
+    consistent. Nothing is called dead until the engine has been watching for at least that window —
+    Home Assistant resets every timestamp when it restarts.
+  - **Illuminance only.** Measured on one live instance, 30 of 51 motion sensors had not reported in
+    over two hours and every one was healthy: a motion sensor reports on change, so silence means
+    nobody walked through that room. Motion's only test for death stays no state / `unavailable` /
+    `unknown`.
+
 ### Changed
 
+- **Groups are preferred for motion and light-level sensors, exactly as they already were for
+  lights.** The same code, reached from all three domains: transitive membership, a cycle guard, a
+  clip on any group reaching into another Home Assistant area, and widest-coverage selection between
+  overlapping groups.
+  - The bug this fixes: on one live instance `binary_sensor.kontor_trening_bevegelse` is a `motion`
+    group of two sensors and the office subscribed to all three, so one wave of a hand fired the area
+    three times — re-arming its vacancy timer and publishing on each.
+  - For light-level sensors it can settle a room outright: a group listed beside the two sensors
+    inside it was three candidates and is now one reading.
+- **Several entities on one Home Assistant device are one piece of hardware, and only one is used.**
+  Measured on one live instance: five light entities in the office — an RGBW fixture's combined
+  entity beside its own colour channels — are one device, and the engine commanded all five. Groups
+  have no device and every duplicate does, so a group claims the devices of everything beneath it and
+  the loose entities on the same fixture drop; the office resolves to `light.kontorlys_alle` alone.
+  Where no group covers a device, the entity its siblings extend with an underscore wins, then the
+  shortest id, so the answer never depends on registry order. Motion is deliberately exempt — a
+  device there is a *controller*, and a multi-zone presence sensor exposes genuinely different zones.
+- **Movement into a room the engine will not light now leaves a row on the activity page**, naming
+  what stopped it: the master switch, the room's own switch, an empty house, a guest scene, a
+  sleeping house, a named entity that is on, or simply that the room is bright enough already.
+  - Bounded on the *reason*, not the reading: one report per area per change of the refusing gate, so
+    forty walks under one unchanged block produce one row and a lux value drifting from 900 to 980
+    produces none. The bound resets once the room actually lights, so a block that returns is news
+    again. That is what makes this affordable — publishing per blocked movement was deferred once
+    precisely because it risked an event every time anyone walked through a sunlit room.
 - **Rooms are called what Home Assistant calls them.** An auto-discovered room writes only its area
   id, and nothing asked the registry for the area's name, so the room page's heading, the board's
   lanes and the activity log's room column all read the slug — `kjeller_bad` for a room Home

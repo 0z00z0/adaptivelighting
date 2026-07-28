@@ -37,7 +37,7 @@ public sealed class AreaEntityResolverTests
 		Assert.IsTrue(ok);
 		Assert.AreEqual(2, area!.Lights.Count);
 		CollectionAssert.AreEqual(new[] { "binary_sensor.stue_motion" }, area.MotionSensors.ToArray());
-		Assert.AreEqual("sensor.stue_lux", area.LuxSensor);
+		CollectionAssert.AreEqual(new[] { "sensor.stue_lux" }, area.LuxSensors.ToArray());
 		CollectionAssert.DoesNotContain(area.Lights.ToArray(), "switch.noise", "a switch is not a light");
 	}
 
@@ -134,7 +134,7 @@ public sealed class AreaEntityResolverTests
 		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out var area, out var error);
 
 		Assert.IsTrue(ok, error);
-		Assert.AreEqual("sensor.annex_illuminance", area!.LuxSensor);
+		CollectionAssert.AreEqual(new[] { "sensor.annex_illuminance" }, area!.LuxSensors.ToArray());
 	}
 
 	/// <summary>
@@ -421,6 +421,401 @@ public sealed class AreaEntityResolverTests
 			"the wider group keeps its bulbs, and the switch the narrower one held is not a light this engine can drive");
 	}
 
+	// ===================== the same rules, for motion and illuminance =====================
+	//
+	// "Groups are not prioritised when they exist. Should be the same for lights, motion and luminance." The
+	// machinery below is literally the same code, so these tests exist to pin that it is reached from all three
+	// domains and that each domain's own consequences follow — a motion group and its members fire the area two
+	// or three times per movement, and an illuminance group and its members weight one instrument twice in the
+	// area's average.
+
+	/// <summary>
+	///     <b>The bug that stopped the whole house reacting.</b> Measured on one live instance (2026-07-28):
+	///     <c>binary_sensor.kontor_trening_bevegelse</c> is a <c>motion</c> group of two sensors, and the office
+	///     subscribed to all three — so one wave of a hand fired the area three times.
+	/// </summary>
+	[TestMethod]
+	public void A_Motion_Group_Wins_Over_Its_Members()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["kontor"] =
+		[
+			"light.l",
+			"binary_sensor.kontor_trening_bevegelse",
+			"binary_sensor.office_motion_detection_desk",
+			"binary_sensor.trening_bevegelse_motion_detection"
+		];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.kontor_trening_bevegelse", "off", new()
+		{
+			["device_class"] = "motion",
+			["entity_id"] = new[] { "binary_sensor.office_motion_detection_desk", "binary_sensor.trening_bevegelse_motion_detection" }
+		});
+		ha.SetState("binary_sensor.office_motion_detection_desk", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.trening_bevegelse_motion_detection", "off", new() { ["device_class"] = "motion" });
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "kontor" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "binary_sensor.kontor_trening_bevegelse" }, area.MotionSensors.ToArray(),
+			"a group and its members are the same movement two or three times over");
+	}
+
+	/// <summary>Nesting is followed for motion exactly as it is for lights — one walk, one copy of it.</summary>
+	[TestMethod]
+	public void A_Nested_Motion_Group_Beats_Its_Leaf_Sensors()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["kontor"] = ["light.l", "binary_sensor.alle", "binary_sensor.pir_1", "binary_sensor.pir_2"];
+		ha.SetState("binary_sensor.alle", "off", new()
+		{
+			["device_class"] = "motion",
+			["entity_id"] = new[] { "binary_sensor.inner" }
+		});
+		// The intermediate group is deliberately in no area at all.
+		ha.SetState("binary_sensor.inner", "off", new()
+		{
+			["device_class"] = "motion",
+			["entity_id"] = new[] { "binary_sensor.pir_1", "binary_sensor.pir_2" }
+		});
+		ha.SetState("binary_sensor.pir_1", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.pir_2", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("light.l", "off");
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "kontor" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "binary_sensor.alle" }, area.MotionSensors.ToArray(),
+			"membership is transitive, whether or not the intermediate group sits in the room");
+	}
+
+	/// <summary>
+	///     Overlapping motion groups: the widest wins and the sensor only the narrower one holds is kept on its
+	///     own, so nothing fires twice and no corner of the room stops being watched.
+	/// </summary>
+	[TestMethod]
+	public void Overlapping_Motion_Groups_Fire_Nothing_Twice_And_Lose_No_Sensor()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["gang"] = ["light.l", "binary_sensor.wide", "binary_sensor.narrow", "binary_sensor.a", "binary_sensor.b", "binary_sensor.c", "binary_sensor.lonely"];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.wide", "off", new()
+		{
+			["device_class"] = "motion",
+			["entity_id"] = new[] { "binary_sensor.a", "binary_sensor.b", "binary_sensor.c" }
+		});
+		ha.SetState("binary_sensor.narrow", "off", new()
+		{
+			["device_class"] = "motion",
+			["entity_id"] = new[] { "binary_sensor.b", "binary_sensor.lonely" }
+		});
+		ha.SetState("binary_sensor.a", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.b", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.c", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.lonely", "off", new() { ["device_class"] = "motion" });
+
+		RecordingLogger logger = new();
+		Resolver(ha, registry, logger: logger).TryResolve(
+			new AreaConfig { AreaId = "gang" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEquivalent(new[] { "binary_sensor.wide", "binary_sensor.lonely" }, area.MotionSensors.ToArray(),
+			"the wider group keeps its three, and the fourth is watched on its own rather than not at all");
+		Assert.AreEqual(1, logger.Warnings.Count, "a rule that quietly changes what a room listens to has to say so");
+		StringAssert.Contains(logger.Warnings[0], "motion", "and name which kind of group it settled");
+	}
+
+	/// <summary>
+	///     A motion group reaching into another room would light this one whenever somebody moved in that one, so
+	///     the area boundary clips it — the same rule, and the same code, as for lights.
+	/// </summary>
+	[TestMethod]
+	public void A_Motion_Group_Reaching_Into_Another_Area_Loses_To_The_Sensors_The_Area_Owns()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.l", "binary_sensor.stue_alle", "binary_sensor.stue_pir"];
+		registry.Areas["kjokken"] = ["binary_sensor.kjokken_pir"];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.stue_alle", "off", new()
+		{
+			["device_class"] = "motion",
+			["entity_id"] = new[] { "binary_sensor.stue_pir", "binary_sensor.kjokken_pir" }
+		});
+		ha.SetState("binary_sensor.stue_pir", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.kjokken_pir", "off", new() { ["device_class"] = "motion" });
+
+		RecordingLogger logger = new();
+		Resolver(ha, registry, logger: logger).TryResolve(
+			new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "binary_sensor.stue_pir" }, area.MotionSensors.ToArray(),
+			"the living room listens to its own sensor rather than to one in the kitchen");
+		StringAssert.Contains(logger.Warnings[0], "kjokken");
+	}
+
+	/// <summary>
+	///     A motion group that contains itself must terminate, exactly as a light group must: a resolver that
+	///     hangs on a misconfiguration takes the whole house down with it.
+	/// </summary>
+	[TestMethod]
+	[Timeout(10000)]
+	public void A_Motion_Group_That_Contains_Itself_Terminates_And_Still_Watches_The_Room()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["gang"] = ["light.l", "binary_sensor.loop_a", "binary_sensor.loop_b", "binary_sensor.self", "binary_sensor.pir"];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.loop_a", "off", new() { ["device_class"] = "motion", ["entity_id"] = new[] { "binary_sensor.loop_b" } });
+		ha.SetState("binary_sensor.loop_b", "off", new() { ["device_class"] = "motion", ["entity_id"] = new[] { "binary_sensor.loop_a" } });
+		ha.SetState("binary_sensor.self", "off", new() { ["device_class"] = "motion", ["entity_id"] = new[] { "binary_sensor.self", "binary_sensor.pir" } });
+		ha.SetState("binary_sensor.pir", "off", new() { ["device_class"] = "motion" });
+
+		bool ok = Resolver(ha, registry).TryResolve(
+			new AreaConfig { AreaId = "gang" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsTrue(ok, error);
+		CollectionAssert.AreEquivalent(new[] { "binary_sensor.loop_a", "binary_sensor.self" }, area!.MotionSensors.ToArray(),
+			"a two-hop loop folds into one of its halves, a self-member still watches the sensor it holds");
+	}
+
+	/// <summary>
+	///     An illuminance group and the sensors inside it are one reading under three names. Preferring the group
+	///     is what turns three candidates into one answer — and it is the shape that used to make an area
+	///     "ambiguous" and cost it its lux gate entirely.
+	/// </summary>
+	[TestMethod]
+	public void An_Illuminance_Group_Wins_Over_Its_Members_And_Settles_The_Room()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.l", "binary_sensor.m", "sensor.lux_alle", "sensor.lux_a", "sensor.lux_b"];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("sensor.lux_alle", "12", new()
+		{
+			["device_class"] = "illuminance",
+			["entity_id"] = new[] { "sensor.lux_a", "sensor.lux_b" }
+		});
+		ha.SetState("sensor.lux_a", "10", new() { ["device_class"] = "illuminance" });
+		ha.SetState("sensor.lux_b", "14", new() { ["device_class"] = "illuminance" });
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "sensor.lux_alle" }, area.LuxSensors.ToArray(),
+			"three candidates were one reading; the group is the room's answer and there is nothing left to average");
+	}
+
+	/// <summary>Nesting, overlap and self-reference behave for illuminance as they do everywhere else.</summary>
+	[TestMethod]
+	[Timeout(10000)]
+	public void Illuminance_Groups_Nest_Overlap_And_Loop_Like_Every_Other_Domain()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["nest"] = ["light.l", "binary_sensor.m", "sensor.outer", "sensor.leaf_1", "sensor.leaf_2"];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("sensor.outer", "9", new() { ["device_class"] = "illuminance", ["entity_id"] = new[] { "sensor.inner" } });
+		ha.SetState("sensor.inner", "9", new() { ["device_class"] = "illuminance", ["entity_id"] = new[] { "sensor.leaf_1", "sensor.leaf_2" } });
+		ha.SetState("sensor.leaf_1", "8", new() { ["device_class"] = "illuminance" });
+		ha.SetState("sensor.leaf_2", "10", new() { ["device_class"] = "illuminance" });
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "nest" }, new AreaSettings(), out ResolvedArea? nested, out string? error);
+
+		Assert.IsNotNull(nested, error);
+		CollectionAssert.AreEqual(new[] { "sensor.outer" }, nested.LuxSensors.ToArray(),
+			"membership is transitive here too, and the intermediate group is in no area");
+
+		FakeHaContext loopy = new();
+		FakeAreaRegistry loopyRegistry = new();
+		loopyRegistry.Areas["loop"] = ["light.l", "binary_sensor.m", "sensor.a", "sensor.b"];
+		loopy.SetState("light.l", "off");
+		loopy.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+		loopy.SetState("sensor.a", "5", new() { ["device_class"] = "illuminance", ["entity_id"] = new[] { "sensor.b" } });
+		loopy.SetState("sensor.b", "5", new() { ["device_class"] = "illuminance", ["entity_id"] = new[] { "sensor.a" } });
+
+		bool ok = Resolver(loopy, loopyRegistry).TryResolve(
+			new AreaConfig { AreaId = "loop" }, new AreaSettings(), out ResolvedArea? looped, out string? loopError);
+
+		Assert.IsTrue(ok, loopError);
+		Assert.AreEqual(1, looped!.LuxSensors.Count, "a two-hop loop folds into one of its halves rather than hanging");
+	}
+
+	// ===================== one entity per piece of hardware =====================
+	//
+	// Measured on one live instance (2026-07-28): five light entities in `kontor` are one RGBW fixture, and the
+	// engine commanded all five. Groups have no device; every duplicate does — so the device is both the signal
+	// and its own guard, and it is exact where a suffix convention could only guess.
+
+	/// <summary>
+	///     The office, as measured: a group of two channels, the fixture's own combined entity, and two more
+	///     channels — five entities, one device. The group covers that device, so the group is the whole answer.
+	/// </summary>
+	[TestMethod]
+	public void A_Group_Claims_Its_Devices_So_Loose_Entities_On_The_Same_Fixture_Drop()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["kontor"] =
+		[
+			"light.kontorlys_alle", "light.kontor_taklys_alle", "light.kontor_taklys_nw", "light.kontor_taklys_ww",
+			"light.trening_taklys_nw", "light.trening_taklys_rl", "binary_sensor.m"
+		];
+
+		foreach (string channel in new[]
+		{
+			"light.kontor_taklys_alle", "light.kontor_taklys_nw", "light.kontor_taklys_ww",
+			"light.trening_taklys_nw", "light.trening_taklys_rl"
+		})
+		{
+			ha.SetState(channel, "off");
+			registry.Devices[channel] = "2c97a05e";
+		}
+
+		// The group helper: no device of its own, which is what a group is in the registry.
+		ha.SetState("light.kontorlys_alle", "off",
+			new() { ["entity_id"] = new[] { "light.kontor_taklys_nw", "light.kontor_taklys_ww" } });
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		RecordingLogger logger = new();
+		Resolver(ha, registry, logger: logger).TryResolve(
+			new AreaConfig { AreaId = "kontor" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "light.kontorlys_alle" }, area.Lights.ToArray(),
+			"one physical fixture, commanded once, through the group the owner built for it");
+		Assert.AreEqual(1, logger.Warnings.Count, "and the four entities that folded into it are named");
+	}
+
+	/// <summary>
+	///     With no group over them, the combined entity wins its own channels: the id its siblings extend with an
+	///     underscore is how Home Assistant names the parent of an RGBW fixture.
+	/// </summary>
+	[TestMethod]
+	public void Without_A_Group_The_Parent_Entity_Wins_Its_Own_Colour_Channels()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.stue_vegglys_r", "light.stue_vegglys", "light.stue_vegglys_w", "binary_sensor.m"];
+
+		foreach (string channel in new[] { "light.stue_vegglys", "light.stue_vegglys_r", "light.stue_vegglys_w" })
+		{
+			ha.SetState(channel, "off");
+			registry.Devices[channel] = "aa94d1fd";
+		}
+
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "light.stue_vegglys" }, area.Lights.ToArray(),
+			"the parent is named first and the channels extend it, whatever order the registry lists them in");
+	}
+
+	/// <summary>
+	///     Two lamps on two devices stay two lamps. The rule collapses hardware, not names — <c>stue_tak_1</c> and
+	///     <c>stue_tak_2</c> read alike and are not the same fixture.
+	/// </summary>
+	[TestMethod]
+	public void Two_Lamps_On_Two_Devices_Are_Still_Two_Lamps()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.stue_tak_1", "light.stue_tak_1_1", "light.stue_tak_2", "binary_sensor.m"];
+		ha.SetState("light.stue_tak_1", "off");
+		ha.SetState("light.stue_tak_1_1", "off");
+		ha.SetState("light.stue_tak_2", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+		registry.Devices["light.stue_tak_1"] = "391ff1fd";
+		registry.Devices["light.stue_tak_1_1"] = "391ff1fd";
+		registry.Devices["light.stue_tak_2"] = "7c02aa11";
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEquivalent(new[] { "light.stue_tak_1", "light.stue_tak_2" }, area.Lights.ToArray(),
+			"one entity per device: the second lamp is a second device and keeps its place");
+	}
+
+	/// <summary>
+	///     <b>Motion is deliberately exempt, and the asymmetry is the point.</b> A device is one lamp but it is a
+	///     <i>controller</i>, not one sensor: a multi-zone presence sensor exposes genuinely different detection
+	///     zones on one device, and collapsing them makes the room blind wherever the dropped entity was watching.
+	///     A group is the household saying "these are one"; a shared device is not.
+	/// </summary>
+	[TestMethod]
+	public void Two_Motion_Zones_On_One_Controller_Are_Both_Kept()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.l", "binary_sensor.zone_near", "binary_sensor.zone_far"];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.zone_near", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.zone_far", "off", new() { ["device_class"] = "motion" });
+		registry.Devices["binary_sensor.zone_near"] = "mmwave_1";
+		registry.Devices["binary_sensor.zone_far"] = "mmwave_1";
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEquivalent(new[] { "binary_sensor.zone_near", "binary_sensor.zone_far" }, area.MotionSensors.ToArray(),
+			"losing coverage is silent and is the very failure this change exists to end; a doubled command is not");
+	}
+
+	/// <summary>
+	///     Illuminance <i>is</i> device-deduplicated, because the area now averages its sensors and one instrument
+	///     exposed twice would carry double weight in that mean.
+	/// </summary>
+	[TestMethod]
+	public void Two_Illuminance_Entities_On_One_Instrument_Count_Once()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.l", "binary_sensor.m", "sensor.probe", "sensor.probe_lux", "sensor.other"];
+		ha.SetState("light.l", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("sensor.probe", "10", new() { ["device_class"] = "illuminance" });
+		ha.SetState("sensor.probe_lux", "10", new() { ["device_class"] = "illuminance" });
+		ha.SetState("sensor.other", "900", new() { ["device_class"] = "illuminance" });
+		registry.Devices["sensor.probe"] = "shelly_1";
+		registry.Devices["sensor.probe_lux"] = "shelly_1";
+		registry.Devices["sensor.other"] = "shelly_2";
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEquivalent(new[] { "sensor.probe", "sensor.other" }, area.LuxSensors.ToArray(),
+			"two instruments, two votes — the same instrument twice would be one room's opinion counted twice");
+	}
+
+	/// <summary>
+	///     A house whose registry knows no devices at all behaves exactly as it did before the rule existed. That
+	///     is every fixture written before this change, and both live houses' entities that carry no device.
+	/// </summary>
+	[TestMethod]
+	public void A_House_With_No_Device_Information_Is_Untouched_By_The_Rule()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.a", "light.b", "binary_sensor.m"];
+		ha.SetState("light.a", "off");
+		ha.SetState("light.b", "off");
+		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
+
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
+
+		Assert.IsNotNull(area, error);
+		CollectionAssert.AreEqual(new[] { "light.a", "light.b" }, area.Lights.ToArray(),
+			"no device is no evidence, so nothing is folded and the registry's own order survives");
+	}
+
 	[TestMethod]
 	public void The_Exclude_Label_Drops_An_Entity()
 	{
@@ -604,7 +999,7 @@ public sealed class AreaEntityResolverTests
 		Assert.IsNotNull(area, error);
 		CollectionAssert.AreEqual(new[] { "binary_sensor.m" }, area.MotionSensors.ToArray(),
 			"an unlabelled motion sensor is still how the room knows somebody is in it");
-		Assert.AreEqual("sensor.lux", area.LuxSensor);
+		CollectionAssert.AreEqual(new[] { "sensor.lux" }, area.LuxSensors.ToArray());
 	}
 
 	[TestMethod]
@@ -768,7 +1163,7 @@ public sealed class AreaEntityResolverTests
 	}
 
 	[TestMethod]
-	public void Two_Illuminance_Sensors_Leave_The_Area_Running_Without_One()
+	public void Two_Illuminance_Sensors_Are_Both_Kept_For_The_Area_To_Average()
 	{
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
@@ -780,18 +1175,20 @@ public sealed class AreaEntityResolverTests
 
 		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var ambiguous, out _);
 
-		// Neither guess nor refuse. Picking one would gate the room on a sensor that may have nothing to do with
-		// its daylight - a real house offered the sensor inside its fridge as a candidate. But refusing left a
-		// room with two sensors worse off than a room with none, and disabled 8 of 17 rooms on that same house.
-		// So the room runs and decides darkness the way a room with no sensor does: outdoor lux, or the sun.
-		Assert.IsTrue(ok, "an ambiguous lux sensor must not disable the room");
-		Assert.IsNull(ambiguous!.LuxSensor, "and must not silently pick one either");
+		// Neither guess nor refuse — and, since the owner asked for an average, neither drop them. Picking one
+		// would gate the room on a sensor that may have nothing to do with its daylight (a real house offered the
+		// probe inside its fridge as a candidate); refusing left a room with two sensors strictly worse off than a
+		// room with none, and disabled 8 of 17 rooms on that same house. Both survive, and the gate averages them.
+		Assert.IsTrue(ok, "several lux sensors must not disable the room");
+		CollectionAssert.AreEquivalent(new[] { "sensor.lux_a", "sensor.lux_b" }, ambiguous!.LuxSensors.ToArray(),
+			"two plain sensors with no group and no shared device are two real instruments in one room");
 
 		var disambiguated = Resolver(ha, registry).TryResolve(
 			new AreaConfig { AreaId = "stue", LuxSensor = "sensor.lux_a" }, new AreaSettings(), out var area, out _);
 
 		Assert.IsTrue(disambiguated);
-		Assert.AreEqual("sensor.lux_a", area!.LuxSensor);
+		CollectionAssert.AreEqual(new[] { "sensor.lux_a" }, area!.LuxSensors.ToArray(),
+			"an explicit sensor is the owner naming the room's reading, and is one sensor by construction");
 	}
 
 	[TestMethod]
@@ -806,7 +1203,7 @@ public sealed class AreaEntityResolverTests
 		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
 
 		Assert.IsTrue(ok, "an area may legitimately gate on the sun alone");
-		Assert.IsNull(area!.LuxSensor);
+		Assert.AreEqual(0, area!.LuxSensors.Count);
 	}
 
 	[TestMethod]
@@ -887,7 +1284,8 @@ public sealed class AreaEntityResolverTests
 			new AreaSettings(), out var area, out var error);
 
 		Assert.IsTrue(ok, error);
-		Assert.IsNull(area!.LuxSensor, "the excluded sensor is gone, and a room with no lux sensor runs on the sun");
+		Assert.AreEqual(0, area!.LuxSensors.Count,
+			"the excluded sensor is gone, and a room with no lux sensor is simply dark");
 	}
 
 	/// <summary>
@@ -910,8 +1308,8 @@ public sealed class AreaEntityResolverTests
 			new AreaSettings(), out var area, out var error);
 
 		Assert.IsTrue(ok, error);
-		Assert.AreEqual("sensor.room_lux", area!.LuxSensor,
-			"with the fridge sensor excluded only one candidate remains, so the area is no longer ambiguous");
+		CollectionAssert.AreEqual(new[] { "sensor.room_lux" }, area!.LuxSensors.ToArray(),
+			"the fridge probe is out of the average, which is what excluding it by id is for");
 	}
 
 	// ===================== DiscoverArea: what the configuration page is allowed to show =====================

@@ -46,8 +46,9 @@ public static class AreaSentences
 		TokenChoices.DurationsInMinutes(2, 5, 10, 15, 30);
 
 	/// <summary>The shortlist offered for the lux a room counts as dark below.</summary>
+	/// <remarks>Half-decades, spanning an indoor probe and the outdoor sensor most rooms actually gate on.</remarks>
 	public static IReadOnlyList<TokenChoice> LuxChoices { get; } =
-		TokenChoices.Numbers("lx", 10, 20, 40, 60, 100);
+		TokenChoices.Numbers("lx", 10, 30, 100, 300, 1000, 3000);
 
 	/// <summary>The shortlist offered for the sun elevation a room counts as dark below.</summary>
 	public static IReadOnlyList<TokenChoice> SunChoices { get; } =
