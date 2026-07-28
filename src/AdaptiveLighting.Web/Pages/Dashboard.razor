@@ -351,6 +351,13 @@ else
 	@*
 		The log. The same reports the lanes are drawn from, in words, with the reading that decided each one —
 		which is what somebody arriving with "why didn't that light come on" is actually here for.
+
+		It is a SUMMARY, so it shows what the Activity page shows when you open it: the same default category set,
+		read from ActivityView rather than restated here, which means the housekeeping stays off it. Twelve rows of
+		"Rechecked the room · automatic lighting is switched off for this room" is a summary of nothing, and the
+		twelve-row budget is spent after the filter rather than before it — twelve rows worth reading, not twelve
+		of which nine are noise. The chips that switch the categories deliberately do not appear here: the filtering
+		control belongs on the page the link at the foot already goes to.
 	*@
 	<div class="board-loghead">
 		<h2 class="board-title">Activity &mdash; every decision, newest first</h2>
@@ -368,31 +375,50 @@ else
 			</p>
 		</div>
 	}
+	else if (_logRows.Count == 0)
+	{
+		@*
+			Everything held is housekeeping — the state the filter makes possible and the one it must not let look
+			like an empty log. Reports exist, they are simply not the kind this summary carries, and the way to
+			them is one tap.
+		*@
+		<div class="empty">
+			<strong>Nothing but background tasks so far.</strong>
+			<p>
+				@BackgroundOnlyLine Rechecks and start-up are kept off this summary, so it stays a summary &mdash;
+				<a href="activity">Activity</a> shows them.
+			</p>
+		</div>
+	}
 	else
 	{
 		@* Denser than the Activity page's own rows: there the log IS the page, here it sits under a board and
 		   twelve two-line rows would outweigh what they explain. Same rows, one line each. *@
 		<ol class="log log-compact">
-			@foreach (ActivityEntry entry in _entries.Take(BoardView.LogPreview))
+			@foreach (ActivityRow row in _logRows)
 			{
-				ActivityLine line = ActivityView.Describe(entry.Snapshot);
-
-				<li class="log-row family-@AreaView.Family(entry.Snapshot.State)" @key="entry.Sequence">
+				<li class="log-row family-@AreaView.Family(row.Snapshot.State)" @key="row.Sequence">
 					<div class="log-when">
-						<time class="log-time" datetime="@entry.At.ToString("o", CultureInfo.InvariantCulture)"
-							  title="@Full(entry.At)">@Clock(entry.At)</time>
-						@if (entry.Snapshot.AreaId is { Length: > 0 })
+						<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)"
+							  title="@Full(row.At)">@Clock(row.At)</time>
+						@if (row.IsAboutTheHouse)
 						{
-							<a class="log-room log-room-link" href="@RoomHref(entry.Snapshot.AreaId)">@entry.AreaName</a>
+							@* Not attributed to a room, because no room did it. Which rooms reported it is in the
+							   hover, so the one fact the missing name took with it is still reachable. *@
+							<span class="log-room log-room-house" title="@ActivityView.ReportedBy(row)">@HouseLabel(row)</span>
+						}
+						else if (row.Snapshot.AreaId is { Length: > 0 })
+						{
+							<a class="log-room log-room-link" href="@RoomHref(row.Snapshot.AreaId)">@row.Room</a>
 						}
 						else
 						{
-							<span class="log-room">@entry.AreaName</span>
+							<span class="log-room">@row.Room</span>
 						}
 					</div>
 					<div class="log-body">
-						<span class="log-what">@line.What</span>
-						@if (line.Why is { Length: > 0 } why)
+						<span class="log-what">@row.Line.What</span>
+						@if (row.Line.Why is { Length: > 0 } why)
 						{
 							<span class="log-why">@why</span>
 						}
@@ -409,6 +435,14 @@ else
 	private IReadOnlyList<AreaSnapshot> _snapshots = [];
 	private IReadOnlyList<RoomView> _rooms = [];
 	private IReadOnlyList<ActivityEntry> _entries = [];
+
+	// The log summary, in two steps. _kept is what the Activity page's default categories leave — counted, because
+	// the footer has to say how many reports the filter is holding back. _logRows is those reports collapsed into
+	// rows and cut to the budget, which is therefore spent on rows somebody wants to read rather than on
+	// housekeeping. The lanes above go on reading _entries: the board draws what every room did, filtered or not.
+	private int _kept;
+	private IReadOnlyList<ActivityRow> _logRows = [];
+
 	private IReadOnlyList<BoardLane> _lanes = [];
 	private bool _hasMarks;
 	private IReadOnlyList<FloorGroup<BoardLane>> _groups = [];
@@ -515,6 +549,13 @@ else
 		_ticks = _window.Ticks;
 		_nowPercent = Math.Clamp(_window.PercentAt(_now), 0, 100);
 		_entries = Log.Entries;
+
+		// The summary's own two steps, in the order the Activity page applies them: the categories it opens with,
+		// then the collapse into rows, then the budget. Limited rather than collapsed whole — the buffer holds five
+		// hundred reports and this runs once a second, and a dozen rows is all the markup below can use.
+		IReadOnlyList<ActivityEntry> kept = ActivityView.InCategories(_entries, ActivityView.DefaultCategories);
+		_kept = kept.Count;
+		_logRows = ActivityView.Rows(kept, BoardView.LogPreview);
 
 		IReadOnlyList<AreaSnapshot> visible = AreaView.VisibleCards(_snapshots, _rooms);
 
@@ -645,21 +686,27 @@ else
 			? $"since adaptive lighting started, {BoardView.Clock(started)}"
 			: "since adaptive lighting started";
 
-	/// <summary>What the log below is holding, and the cap it is held to.</summary>
-	private string LogFoot
-	{
-		get
-		{
-			if (_entries.Count == 0)
-				return "nothing recorded yet";
+	/// <summary>What the log below is showing, what the filter is holding back, and the cap it is all held to.</summary>
+	private string LogFoot => BoardView.LogFoot(_entries.Count, _kept, _logRows.Count, ActivityLog.Capacity);
 
-			string held = _entries.Count == 1 ? "1 report" : $"{_entries.Count} reports";
+	/// <summary>
+	///     The count in front of the housekeeping-only empty state, so it says how much is behind the link rather
+	///     than merely that something is.
+	/// </summary>
+	private string BackgroundOnlyLine => _entries.Count == 1
+		? "The one report so far is a background task."
+		: $"All {_entries.Count} reports so far are background tasks.";
 
-			return _entries.Count < ActivityLog.Capacity
-				? $"showing {Math.Min(_entries.Count, BoardView.LogPreview)} of {held}"
-				: $"showing {BoardView.LogPreview} of {held} — the most recent {ActivityLog.Capacity} are kept";
-		}
-	}
+	/// <summary>
+	///     What stands where a room name would: the house, and how many rooms a collapsed row came from.
+	/// </summary>
+	/// <remarks>
+	///     The count is shown rather than left to the hover because it is the answer to the question the stack of
+	///     identical rows used to raise — "did that really happen six times?" — and a reader who never hovers is
+	///     exactly the reader who was misled by it.
+	/// </remarks>
+	private static string HouseLabel(ActivityRow row) =>
+		row.Rooms.Count > 1 ? $"House · {row.Rooms.Count} rooms" : "House";
 
 	/// <summary>The first tick hangs off the left edge and the last off the right, so neither is clipped.</summary>
 	private string? TickClass(int index) =>

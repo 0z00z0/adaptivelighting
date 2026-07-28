@@ -25,6 +25,14 @@
 	start switched off, which is what makes a quiet log readable — and is also why the filters state their own
 	count and carry a way back. Everything they hide is still held; hidden and absent are not the same, and a
 	page that let them look the same would be lying in exactly the way this one exists to stop.
+
+	One report is not always one row. A house-wide event — a change of mode, the house emptying or filling, the
+	master switch — is published by every switched-on room, correctly, because each room really did re-evaluate
+	itself. Rendered one row per report it read as though each room had changed the house's mode, and it got
+	worse with every room switched on. So ActivityView.Rows collapses a run of house-wide reports that say the
+	same thing into a single row belonging to the house rather than to any room. That is a change to what is
+	drawn and not to what is recorded: the counts below, the chips above and the log itself are all still about
+	reports.
 *@
 
 <PageTitle>Activity &mdash; Adaptive lighting</PageTitle>
@@ -177,26 +185,34 @@ else
 {
 	@* "Today" is read against the clock at render time, not at page load: a page left open past midnight
 	   must not go on heading yesterday's entries Today. *@
-	@foreach (ActivityDay day in ActivityView.GroupByDay(_visible, DateTimeOffset.Now))
+	@foreach (ActivityDay day in ActivityView.GroupByDay(_rows, DateTimeOffset.Now))
 	{
 		<div class="floor-head">
 			<span class="floor-name">@day.Heading</span>
 		</div>
 
 		<ol class="log">
-			@foreach (ActivityEntry entry in day.Entries)
+			@foreach (ActivityRow row in day.Rows)
 			{
-				ActivityLine line = ActivityView.Describe(entry.Snapshot);
-
-				<li class="log-row family-@AreaView.Family(entry.Snapshot.State)" @key="entry.Sequence">
+				<li class="log-row family-@AreaView.Family(row.Snapshot.State)" @key="row.Sequence">
 					<div class="log-when">
-						<time class="log-time" datetime="@entry.At.ToString("o", CultureInfo.InvariantCulture)"
-							  title="@Full(entry.At)">@Clock(entry.At)</time>
-						<span class="log-room">@entry.AreaName</span>
+						<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)"
+							  title="@Full(row.At)">@Clock(row.At)</time>
+						@if (row.IsAboutTheHouse)
+						{
+							@* The house changed mode once; every switched-on room published it. Naming one of them
+							   here would say that room did it, so the row names none — and the hover says which
+							   rooms it was assembled from, which is the one fact the missing name took with it. *@
+							<span class="log-room log-room-house" title="@ActivityView.ReportedBy(row)">@HouseLabel(row)</span>
+						}
+						else
+						{
+							<span class="log-room">@row.Room</span>
+						}
 					</div>
 					<div class="log-body">
-						<span class="log-what">@line.What</span>
-						@if (line.Why is { Length: > 0 } why)
+						<span class="log-what">@row.Line.What</span>
+						@if (row.Line.Why is { Length: > 0 } why)
 						{
 							<span class="log-why">@why</span>
 						}
@@ -213,6 +229,12 @@ else
 	private IReadOnlyList<ActivityEntry> _entries = [];
 	private IReadOnlyList<ActivityEntry> _inRoom = [];
 	private IReadOnlyList<ActivityEntry> _visible = [];
+
+	// What the timeline actually draws: the visible reports with each house-wide run collapsed into one row. Kept
+	// beside _visible rather than replacing it, because the two answer different questions — the counts and the
+	// hidden note are about reports, and only the rendering is about rows.
+	private IReadOnlyList<ActivityRow> _rows = [];
+
 	private IReadOnlyList<ActivityFilterChip> _chips = [];
 	private string _room = ActivityView.AllRooms;
 	private ActivityCategory _categories = ActivityView.DefaultCategories;
@@ -272,8 +294,19 @@ else
 	{
 		_inRoom = ActivityView.InRoom(_entries, _room);
 		_visible = ActivityView.InCategories(_inRoom, _categories);
+		_rows = ActivityView.Rows(_visible);
 		_chips = ActivityView.Chips(_inRoom, _categories);
 	}
+
+	/// <summary>
+	///     What stands where a room name would on a house-wide row: the house, and how many rooms it came from.
+	/// </summary>
+	/// <remarks>
+	///     Counted in the open rather than only in the hover, because the count is the answer to the question the
+	///     stack of identical rows used to raise — a reader who never hovers is exactly the one it misled.
+	/// </remarks>
+	private static string HouseLabel(ActivityRow row) =>
+		row.Rooms.Count > 1 ? $"House · {row.Rooms.Count} rooms" : "House";
 
 	/// <summary>A chip's classes: whether it is letting rows through, and whether it has any to let through.</summary>
 	private static string ChipClass(ActivityFilterChip chip) =>

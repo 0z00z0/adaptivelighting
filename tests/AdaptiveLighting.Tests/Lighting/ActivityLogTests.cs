@@ -344,6 +344,11 @@ public sealed class ActivityLogTests
 	///     Grouping cuts the timeline where the day changes and keeps the order it was given: a newest-first
 	///     list visits each day once, so a group is a run, not a bucket to be re-sorted into.
 	/// </summary>
+	/// <remarks>
+	///     Over rows rather than reports since a house-wide run became one row. The order it must not disturb is
+	///     the same order, and the sequence numbers it is checked by are the rows' own — each row carries the
+	///     newest report behind it, which for an uncollapsed row is the report itself.
+	/// </remarks>
 	[TestMethod]
 	public void Grouping_Cuts_The_Timeline_By_Day_Without_Reordering_It()
 	{
@@ -356,14 +361,14 @@ public sealed class ActivityLogTests
 			Entry(1, Report("Kjøkken", at: now.AddDays(-4)))
 		];
 
-		IReadOnlyList<ActivityDay> days = ActivityView.GroupByDay(entries, now);
+		IReadOnlyList<ActivityDay> days = ActivityView.GroupByDay(ActivityView.Rows(entries), now);
 
 		Assert.AreEqual(3, days.Count);
 		Assert.AreEqual("Today", days[0].Heading);
-		Assert.AreEqual(2, days[0].Entries.Count);
-		CollectionAssert.AreEqual(new long[] { 4, 3 }, days[0].Entries.Select(entry => entry.Sequence).ToArray());
+		Assert.AreEqual(2, days[0].Rows.Count);
+		CollectionAssert.AreEqual(new long[] { 4, 3 }, days[0].Rows.Select(row => row.Sequence).ToArray());
 		Assert.AreEqual("Yesterday", days[1].Heading);
-		Assert.AreEqual(1, days[2].Entries.Count);
+		Assert.AreEqual(1, days[2].Rows.Count);
 	}
 
 	/// <summary>Nothing to group is no groups, not one empty one the page would then head.</summary>
@@ -1193,6 +1198,369 @@ public sealed class ActivityLogTests
 			ActivityView.HiddenNote(13, 12, ActivityView.AllRooms, ActivityView.DefaultCategories),
 			"1 report is hidden");
 	}
+
+	// ===================== one row per thing that happened =====================
+
+	/// <summary>
+	///     <b>The defect this exists for.</b> The house changed mode once; every switched-on room published its own
+	///     snapshot, correctly, and the record then showed one identical row per room — each attributed to a room,
+	///     as though that room had changed the house's mode. It got linearly worse with every room switched on.
+	/// </summary>
+	[TestMethod]
+	public void One_House_Mode_Change_Is_One_Row_Belonging_To_No_Room()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(4, Mode("Kontor", "Home", Noon.AddSeconds(2))),
+			Entry(3, Mode("Kjeller - bad", "Home", Noon.AddSeconds(2))),
+			Entry(2, Mode("Stue", "Home", Noon.AddSeconds(2))),
+			Entry(1, Mode("Kjøkken", "Home", Noon.AddSeconds(2)))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(1, rows.Count, "four reports of one event are one row");
+		Assert.AreEqual("The house changed mode to Home", rows[0].Line.What);
+		Assert.IsTrue(rows[0].IsAboutTheHouse);
+		Assert.IsNull(rows[0].Room, "no room did this, so the row names none");
+		Assert.AreEqual(4, rows[0].Rooms.Count);
+		Assert.AreEqual(4, rows[0].Sequence, "the row carries the newest report of the run");
+
+		string? reported = ActivityView.ReportedBy(rows[0]);
+
+		StringAssert.Contains(reported, "4 rooms");
+		StringAssert.Contains(reported, "Kjøkken", "the rooms are still reachable, or the row lost the only fact it had");
+	}
+
+	/// <summary>
+	///     A single house-wide report is unattributed too. One switched-on room is still not the thing that changed
+	///     the house's mode, and the row that names which room reported it is the hover, not the column.
+	/// </summary>
+	[TestMethod]
+	public void A_Lone_House_Event_Is_Still_Not_A_Rooms_Doing()
+	{
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows([Entry(1, Mode("Kontor", "Home", Noon))]);
+
+		Assert.AreEqual(1, rows.Count);
+		Assert.IsTrue(rows[0].IsAboutTheHouse);
+		Assert.IsNull(rows[0].Room);
+		Assert.AreEqual("Reported by Kontor.", ActivityView.ReportedBy(rows[0]));
+	}
+
+	/// <summary>
+	///     Rooms keep their own rows. Movement, a hand change and a light going off are things one room did, and a
+	///     record that pooled them would have answered the reported defect by inventing a worse one.
+	/// </summary>
+	[TestMethod]
+	public void A_Rooms_Own_Reports_Are_Never_Pooled()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(3, Report("Stue", AreaState.AutoActive, TransitionReason.Motion, at: Noon.AddSeconds(2))),
+			Entry(2, Report("Bad", AreaState.AutoActive, TransitionReason.Motion, at: Noon.AddSeconds(1))),
+			Entry(1, Report("Kjøkken", AreaState.AutoActive, TransitionReason.Motion, at: Noon))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(3, rows.Count);
+		CollectionAssert.AreEqual(
+			new[] { "Stue", "Bad", "Kjøkken" },
+			rows.Select(row => row.Room).ToArray(),
+			"three rooms moved; each says so under its own name");
+
+		foreach (ActivityRow row in rows)
+		{
+			Assert.IsFalse(row.IsAboutTheHouse);
+			Assert.IsNull(ActivityView.ReportedBy(row), "a row that already names its room does not need telling");
+		}
+	}
+
+	/// <summary>
+	///     The master switch speaks for the house; a scene taking one room over, and a room's own switch, do not —
+	///     whatever chip they are filed under. Merging those would have lost the distinction their words draw.
+	/// </summary>
+	[TestMethod]
+	public void Only_The_Sentences_That_Speak_For_The_House_Are_Unattributed()
+	{
+		Assert.IsTrue(ActivityView.IsAboutTheHouse(Mode("Stue", "Home", Noon)));
+		Assert.IsTrue(ActivityView.IsAboutTheHouse(Report("Stue", AreaState.Away, TransitionReason.EveryoneLeft)));
+		Assert.IsTrue(ActivityView.IsAboutTheHouse(
+			Report("Stue", AreaState.AutoVacant, TransitionReason.FirstPersonArrived)));
+		Assert.IsTrue(
+			ActivityView.IsAboutTheHouse(
+				Report("Stue", AreaState.Disabled, TransitionReason.EnablementChanged, killSwitch: true)),
+			"the master switch replaces the row's words with a sentence about the whole house");
+
+		Assert.IsFalse(
+			ActivityView.IsAboutTheHouse(Report("Stue", AreaState.SceneHold, TransitionReason.SceneHold)),
+			"the mode is house-wide, but 'a guest scene took THIS ROOM over' is a claim about one room");
+		Assert.IsFalse(
+			ActivityView.IsAboutTheHouse(Report("Stue", AreaState.Disabled, TransitionReason.EnablementChanged)),
+			"'switched off for this room' is a per-room fact even when a house-wide action caused it");
+		Assert.IsFalse(ActivityView.IsAboutTheHouse(Report("Stue", AreaState.AutoVacant, TransitionReason.Startup)));
+		Assert.IsFalse(ActivityView.IsAboutTheHouse(Report("Stue", AreaState.AutoActive, TransitionReason.Motion)));
+	}
+
+	/// <summary>
+	///     Only reports saying the same thing collapse. Two different modes are two events, and a row that merged
+	///     them would have to pick one of the two sentences to show and be wrong about the other.
+	/// </summary>
+	[TestMethod]
+	public void House_Rows_Collapse_Only_When_The_Whole_Sentence_Matches()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(4, Mode("Kontor", "Home", Noon.AddSeconds(3))),
+			Entry(3, Mode("Stue", "Home", Noon.AddSeconds(3))),
+			Entry(2, Mode("Kontor", "Guests", Noon.AddSeconds(1))),
+			Entry(1, Mode("Stue", "Guests", Noon.AddSeconds(1)))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(2, rows.Count);
+		Assert.AreEqual("The house changed mode to Home", rows[0].Line.What);
+		Assert.AreEqual("The house changed mode to Guests", rows[1].Line.What);
+		Assert.AreEqual(2, rows[0].Rooms.Count);
+		Assert.AreEqual(2, rows[1].Rooms.Count);
+	}
+
+	/// <summary>
+	///     A house-wide row drops the publishing room's own condition. "Too bright to switch on" is a verdict on
+	///     one room, and printed under a row headed <i>House</i> it asks the reader which room "here" is — which is
+	///     the question the row has just given up answering. It is also what lets one mode change be one row: the
+	///     rooms of a real house are in different states when the mode moves.
+	/// </summary>
+	[TestMethod]
+	public void A_House_Row_Carries_The_House_And_Not_The_Room_That_Published_It()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(2, Mode("Kontor", "Home", Noon) with { State = AreaState.Disabled }),
+			Entry(1, Mode("Stue", "Home", Noon) with { IsDark = false, DarknessDetail = "lux 214, dark below 40" })
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(1, rows.Count, "one mode change, whatever each room happened to be doing when it landed");
+		Assert.AreEqual("The house changed mode to Home", rows[0].Line.What);
+		Assert.IsNull(rows[0].Line.Why, "a room's own verdict has no room to belong to on this row");
+		Assert.AreEqual(2, rows[0].Rooms.Count);
+
+		// The room's verdict is untouched where it still has a room: only the row drops it.
+		StringAssert.Contains(
+			ActivityView.Describe(entries[1].Snapshot).Why,
+			"lux 214",
+			"Describe is what the room page reads, and there the condition is attributed and wanted");
+	}
+
+	/// <summary>
+	///     The master switch keeps its second line, because that sentence is about the house rather than about the
+	///     room that published it — and it is the one consequence of a pause somebody needs spelled out.
+	/// </summary>
+	[TestMethod]
+	public void The_Master_Switch_Keeps_Its_Own_Second_Line()
+	{
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(
+		[
+			Entry(2, Report("Kontor", AreaState.Disabled, TransitionReason.EnablementChanged, killSwitch: true)),
+			Entry(1, Report("Stue", AreaState.Disabled, TransitionReason.EnablementChanged, killSwitch: true))
+		]);
+
+		Assert.AreEqual(1, rows.Count);
+		Assert.AreEqual("Paused by the master switch", rows[0].Line.What);
+		StringAssert.Contains(rows[0].Line.Why, "until it is turned back on");
+	}
+
+	/// <summary>
+	///     Only a consecutive run collapses. Anything else in the record between two identical house events is
+	///     evidence that they are two events, and lifting one out to join the other would rewrite what followed what.
+	/// </summary>
+	[TestMethod]
+	public void Only_A_Run_Collapses_Never_A_Scattered_Set()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(3, Mode("Kontor", "Home", Noon.AddSeconds(4))),
+			Entry(2, Report("Stue", AreaState.AutoActive, TransitionReason.Motion, at: Noon.AddSeconds(2))),
+			Entry(1, Mode("Kontor", "Home", Noon))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(3, rows.Count);
+		Assert.IsTrue(rows[0].IsAboutTheHouse);
+		Assert.IsFalse(rows[1].IsAboutTheHouse);
+		Assert.IsTrue(rows[2].IsAboutTheHouse);
+	}
+
+	/// <summary>
+	///     The window bounds how wrong a delivery may go before two events are read as one. Inside it a burst is one
+	///     row; past it, with nothing in between, two identical mode changes stay two.
+	/// </summary>
+	[TestMethod]
+	public void Reports_Further_Apart_Than_The_Window_Stay_Two_Rows()
+	{
+		Assert.AreEqual(
+			1,
+			ActivityView.Rows(
+			[
+				Entry(2, Mode("Kontor", "Home", Noon + ActivityView.CollapseWindow)),
+				Entry(1, Mode("Stue", "Home", Noon))
+			]).Count,
+			"exactly at the window is still one event");
+
+		IReadOnlyList<ActivityRow> apart = ActivityView.Rows(
+		[
+			Entry(2, Mode("Kontor", "Home", Noon + ActivityView.CollapseWindow + TimeSpan.FromSeconds(1))),
+			Entry(1, Mode("Stue", "Home", Noon))
+		]);
+
+		Assert.AreEqual(2, apart.Count, "an hour apart with a silent house between them is two events, not one");
+	}
+
+	/// <summary>
+	///     A limited read finishes the run it is in the middle of. Otherwise the last row on the dashboard would
+	///     name however many rooms happened to fit under the budget, which is a number about the budget rather than
+	///     about the house.
+	/// </summary>
+	[TestMethod]
+	public void A_Limited_Read_Still_Finishes_Its_Last_Run()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(5, Report("Stue", AreaState.AutoActive, TransitionReason.Motion, at: Noon.AddSeconds(9))),
+			Entry(4, Mode("Kontor", "Home", Noon.AddSeconds(5))),
+			Entry(3, Mode("Stue", "Home", Noon.AddSeconds(5))),
+			Entry(2, Mode("Bad", "Home", Noon.AddSeconds(5))),
+			Entry(1, Mode("Kjøkken", "Home", Noon.AddSeconds(5)))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries, 2);
+
+		Assert.AreEqual(2, rows.Count);
+		Assert.AreEqual(4, rows[1].Rooms.Count, "the run is finished before the budget is honoured");
+		Assert.AreEqual(0, ActivityView.Rows(entries, 0).Count);
+	}
+
+	// ===================== what the dashboard's summary shows =====================
+
+	/// <summary>
+	///     <b>The other defect this exists for.</b> The dashboard's log had no filtering at all, so its dozen rows
+	///     filled with housekeeping about rooms that are switched off. It shows what the activity page shows when
+	///     you open it — the same default set, read from the same place — and its budget is spent after the filter,
+	///     so twelve rows means twelve rows worth reading.
+	/// </summary>
+	[TestMethod]
+	public void The_Dashboard_Summary_Applies_The_Activity_Pages_Default_Categories()
+	{
+		List<ActivityEntry> entries = [];
+		long sequence = 40;
+
+		// A quiet house, as the owner's was: three switched-off rooms rechecking themselves over and over, with
+		// four real decisions scattered through them.
+		for (int tick = 0; tick < 12; tick++)
+		{
+			foreach (string room in new[] { "Stue", "Kjeller - multimedia", "Kjøkken" })
+			{
+				entries.Add(Entry(
+					sequence--,
+					Report(room, AreaState.Disabled, TransitionReason.CircadianTick, at: Noon.AddMinutes(-tick))));
+			}
+
+			if (tick % 3 == 0)
+			{
+				entries.Add(Entry(
+					sequence--,
+					Report("Kontor", AreaState.AutoActive, TransitionReason.Motion, at: Noon.AddMinutes(-tick))));
+			}
+		}
+
+		IReadOnlyList<ActivityEntry> kept = ActivityView.InCategories(entries, ActivityView.DefaultCategories);
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(kept, BoardView.LogPreview);
+
+		Assert.AreEqual(4, kept.Count, "the housekeeping is what the default set leaves out");
+		Assert.AreEqual(4, rows.Count);
+
+		foreach (ActivityRow row in rows)
+		{
+			Assert.AreNotEqual("Rechecked the room", row.Line.What,
+				"the rows the owner quoted are exactly the ones the default set hides");
+		}
+	}
+
+	/// <summary>
+	///     The budget counts rows, after the filter. Twelve of which nine are hidden is a summary of nothing, which
+	///     is what the dashboard was showing.
+	/// </summary>
+	[TestMethod]
+	public void The_Summary_Spends_Its_Budget_On_Rows_It_Will_Show()
+	{
+		List<ActivityEntry> entries = [];
+
+		for (long sequence = 60; sequence > 0; sequence--)
+		{
+			entries.Add(sequence % 4 == 0
+				? Entry(sequence, Report("Stue", AreaState.AutoActive, TransitionReason.Motion, at: Noon))
+				: Entry(sequence, Report("Bad", AreaState.Disabled, TransitionReason.CircadianTick, at: Noon)));
+		}
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(
+			ActivityView.InCategories(entries, ActivityView.DefaultCategories),
+			BoardView.LogPreview);
+
+		Assert.AreEqual(BoardView.LogPreview, rows.Count, "a full budget of rows worth reading, not of hidden ones");
+	}
+
+	/// <summary>
+	///     A filter nobody is told about is indistinguishable from reports that were never recorded, which is the
+	///     one failure this project treats as worse than showing too much. So the summary's footer counts what it
+	///     is holding back, and says when the buffer has started dropping the oldest.
+	/// </summary>
+	[TestMethod]
+	public void The_Summarys_Footer_Owns_Up_To_What_It_Is_Hiding()
+	{
+		Assert.AreEqual("nothing recorded yet", BoardView.LogFoot(0, 0, 0, ActivityLog.Capacity));
+
+		// Sixty-three reports drawn as eleven rows, because four house-wide events arrived from fourteen rooms
+		// each. Setting the two counts against each other — "newest 11 of 63" — invites a subtraction whose answer
+		// is fifty-two reports that were never left out.
+		string wholeThing = BoardView.LogFoot(137, 63, 11, ActivityLog.Capacity);
+
+		StringAssert.Contains(wholeThing, "63 reports");
+		Assert.IsFalse(wholeThing.Contains("11", StringComparison.Ordinal),
+			"nothing was cut, so no row count is set against the report count");
+		StringAssert.Contains(wholeThing, "74 background tasks hidden");
+
+		string quiet = BoardView.LogFoot(40, 40, 8, ActivityLog.Capacity);
+
+		StringAssert.Contains(quiet, "40 reports");
+		Assert.IsFalse(quiet.Contains("background", StringComparison.Ordinal),
+			"nothing was hidden, so nothing is claimed to be");
+
+		// Out of room: the budget is spent, so the line says how many rows it drew and out of how many reports.
+		string cut = BoardView.LogFoot(600, 240, BoardView.LogPreview, ActivityLog.Capacity);
+
+		StringAssert.Contains(cut, $"newest {BoardView.LogPreview} rows of 240 reports");
+		StringAssert.Contains(cut, "360 background tasks hidden");
+
+		StringAssert.Contains(BoardView.LogFoot(1, 1, 1, ActivityLog.Capacity), "1 report");
+		StringAssert.Contains(BoardView.LogFoot(3, 2, 2, ActivityLog.Capacity), "1 background task hidden");
+
+		string housekeepingOnly = BoardView.LogFoot(71, 0, 0, ActivityLog.Capacity);
+
+		Assert.AreEqual("71 background tasks hidden", housekeepingOnly,
+			"'0 reports' beside a count of hidden ones reads as a contradiction: the log plainly holds something");
+
+		StringAssert.Contains(
+			BoardView.LogFoot(ActivityLog.Capacity, 300, 12, ActivityLog.Capacity),
+			$"the most recent {ActivityLog.Capacity} are kept",
+			"a full buffer has started forgetting, and a reader who is not told will read the oldest row as the beginning");
+	}
+
+	private static AreaSnapshot Mode(string area, string value, DateTimeOffset at) =>
+		Report(area, AreaState.AutoVacant, TransitionReason.HouseModeChanged, at: at, houseModeValue: value);
 
 	private static bool Has(ActivityCategory category, AreaSnapshot snapshot) =>
 		(ActivityView.Categorise(snapshot) & category) != ActivityCategory.None;

@@ -456,6 +456,59 @@ public static class BoardView
 		return $"{subject} doing what the schedule says.";
 	}
 
+	/// <summary>
+	///     What the board's activity summary is showing, out of what it is holding — and what it is holding back.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The summary shows the categories the Activity page opens with, which means it deliberately drops the
+	///         housekeeping: rechecks, start-up, and rooms switched on or off. That is the whole point of the
+	///         filter — a dozen rows of "Rechecked the room · automatic lighting is switched off for this room" is a
+	///         summary of nothing — but a filter nobody is told about is indistinguishable from reports that were
+	///         never recorded, which is the one failure this project treats as worse than showing too much. So the
+	///         hidden ones are counted here, and the link beneath the log is where they can be read.
+	///     </para>
+	///     <para>
+	///         <b><paramref name="shown"/> counts rows and <paramref name="kept"/> counts reports, and the line has
+	///         to say which is which.</b> A house-wide event that reached the record from six rooms is six reports
+	///         and one row, so the summary regularly carries every report it kept in fewer lines than it has
+	///         reports. "Newest 11 of 63 reports" would then be a false statement — it invites the subtraction, and
+	///         the answer to that subtraction is fifty-two reports that were never left out. So the two counts are
+	///         never set against each other: a summary that fits says how many reports it is showing, and one that
+	///         has run out of room says how many <i>rows</i> it drew and out of how many reports.
+	///     </para>
+	/// </remarks>
+	/// <param name="held">Every report the log is holding, before any filter.</param>
+	/// <param name="kept">How many of them fall into the categories the summary shows.</param>
+	/// <param name="shown">How many rows the board actually drew.</param>
+	/// <param name="capacity">The log's cap, so the line can say when the oldest reports have started falling off.</param>
+	public static string LogFoot(int held, int kept, int shown, int capacity)
+	{
+		if (held <= 0)
+			return "nothing recorded yet";
+
+		int hidden = Math.Max(0, held - kept);
+
+		string lead = shown >= LogPreview
+			? $"newest {shown} rows of {Count(kept, "report")}"
+			: Count(kept, "report");
+
+		// "0 reports" beside a count of hidden ones reads as a contradiction — the log plainly has something in it.
+		// When the filter has taken everything, the hidden count is the whole answer.
+		if (hidden > 0)
+		{
+			lead = kept == 0
+				? $"{Count(hidden, "background task")} hidden"
+				: $"{lead} — {Count(hidden, "background task")} hidden";
+		}
+
+		return held >= capacity
+			? $"{lead}; the most recent {capacity} are kept"
+			: lead;
+	}
+
+	private static string Count(int count, string singular) => $"{count} {(count == 1 ? singular : singular + "s")}";
+
 	// ===================== the schedule band =====================
 
 	/// <summary>

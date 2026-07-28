@@ -17,6 +17,57 @@ namespace AdaptiveLighting.Web.Services;
 public sealed record ActivityLine(string What, string? Why);
 
 /// <summary>
+///     One rendered line of the record: the words, when they were said, and who they are attributed to.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Why a row is not simply a report.</b> The engine publishes one snapshot per area, which is correct —
+///         every area really did re-evaluate itself, and the board, the cards and the room pages all read those
+///         per-area reports. But a house-wide event then reaches the record once per switched-on room, so a single
+///         change of house mode was rendered as a stack of identical rows, each attributed to a room as though
+///         that room had done something. This type is where the two views part company: the engine keeps
+///         publishing per area, and the record renders per <i>thing that happened</i>.
+///     </para>
+///     <para>
+///         The fix lives here rather than in the engine on purpose. The per-area snapshots are load-bearing
+///         elsewhere, and a presentation problem answered by publishing less would take the board's lanes and the
+///         room pages with it.
+///     </para>
+/// </remarks>
+/// <param name="Entry">
+///     The report the row is drawn from — the newest of the run when several collapsed, so the row carries the
+///     time the event was last seen and a key the page can render against.
+/// </param>
+/// <param name="Line">The words, identical across every report the row covers.</param>
+/// <param name="IsAboutTheHouse">
+///     Whether the row's words are about the whole house rather than about one room. Such a row is deliberately
+///     <b>not</b> attributed to a room: naming one would say that room changed the house's mode.
+/// </param>
+/// <param name="Rooms">
+///     The rooms whose reports this row covers, newest first and named once each. One entry is the ordinary case;
+///     more than one means a house-wide event reached the record from several rooms at once. Never empty — it is
+///     what tells a reader which rooms a house-wide row was actually assembled from.
+/// </param>
+public sealed record ActivityRow(
+	ActivityEntry Entry,
+	ActivityLine Line,
+	bool IsAboutTheHouse,
+	IReadOnlyList<string> Rooms)
+{
+	/// <summary>When the event happened — the newest report's time when several collapsed.</summary>
+	public DateTimeOffset At => Entry.At;
+
+	/// <summary>The row's key. Dense and never reused, so it survives eviction from the buffer.</summary>
+	public long Sequence => Entry.Sequence;
+
+	/// <summary>The report behind the row, for the colour family and the room link.</summary>
+	public AreaSnapshot Snapshot => Entry.Snapshot;
+
+	/// <summary>The room the row belongs to, or <c>null</c> when it belongs to the house rather than to a room.</summary>
+	public string? Room => IsAboutTheHouse ? null : Entry.AreaName;
+}
+
+/// <summary>
 ///     What a row is about, as the activity page's filter chips divide it.
 /// </summary>
 /// <remarks>
@@ -88,10 +139,10 @@ public sealed record ActivityFilterChip(
 /// <summary>
 ///     A day's worth of the timeline, under the heading the page shows.
 /// </summary>
-/// <param name="Day">The local date the entries fell on.</param>
+/// <param name="Day">The local date the rows fell on.</param>
 /// <param name="Heading">What that date is called on the page — <c>Today</c>, <c>Yesterday</c>, or the date.</param>
-/// <param name="Entries">The day's entries, newest first.</param>
-public sealed record ActivityDay(DateOnly Day, string Heading, IReadOnlyList<ActivityEntry> Entries);
+/// <param name="Rows">The day's rows, newest first.</param>
+public sealed record ActivityDay(DateOnly Day, string Heading, IReadOnlyList<ActivityRow> Rows);
 
 /// <summary>
 ///     The activity page's decisions, in one testable place: what a report is called, which room it belongs to,
@@ -523,46 +574,240 @@ public static class ActivityView
 		|| BoardView.IsBlockedFromLighting(snapshot)
 		|| (snapshot.State is AreaState.AutoVacant && snapshot.IsDark is false);
 
+	// ===================== one row per thing that happened =====================
+
+	/// <summary>
+	///     How far apart two reports of the same house-wide event may be and still be one row.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Thirty seconds. The reports this collapses are published in one pass over the areas and arrive
+	///         inside the same second, so the window is not sizing the burst — it is the bound on how wrong a
+	///         delivery can go before two events are treated as one. A house whose event stream is running half a
+	///         minute late is still collapsed correctly; two genuinely separate changes half a minute apart are not.
+	///     </para>
+	///     <para>
+	///         It is a smaller guarantee than it looks, because only a <i>run</i> collapses: anything else in the
+	///         record between two identical house events already separates them, whatever the clock says. The
+	///         window only decides the case where nothing else happened in between — a mode set to Home, and set to
+	///         Home again an hour later with a silent house between them, which are two events and read as two.
+	///     </para>
+	/// </remarks>
+	public static readonly TimeSpan CollapseWindow = TimeSpan.FromSeconds(30);
+
+	/// <summary>
+	///     Whether this report's words are about the whole house rather than about the room that published it.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Decided on the words, not on the cause.</b> Every reason in <see cref="TransitionReason"/> was
+	///         read against what <see cref="Describe"/> actually prints for it, and only four sentences speak about
+	///         the house: the master switch being off, a change of mode, the house emptying, and the first arrival.
+	///     </para>
+	///     <para>
+	///         Three near misses are deliberately left out, and each would have been a worse row than the one it
+	///         replaced. <see cref="TransitionReason.SceneHold"/> is filed under the house <i>chip</i> but says "a
+	///         guest scene took <b>this room</b> over" — the mode is house-wide, the takeover is not, and rooms
+	///         enter and leave the hold at different moments. <see cref="TransitionReason.EnablementChanged"/> is
+	///         raised on every area when the master switch moves, but its words are "automatic lighting was
+	///         switched on for this room", which is a per-room fact even though a house-wide action caused it — and
+	///         the report that <i>does</i> speak for the house on that path, the one taken while the switch is off,
+	///         is the first case below. <see cref="TransitionReason.Startup"/> likewise arrives once per room and
+	///         says what was found in each: rooms whose lights were already on are not the same news as rooms whose
+	///         were not, and merging them would lose exactly the distinction the two sentences exist to draw.
+	///     </para>
+	/// </remarks>
+	/// <param name="snapshot">The report to place.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is <c>null</c>.</exception>
+	public static bool IsAboutTheHouse(AreaSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		// The master switch replaces the row's words with a sentence about the whole house, and this takes the same
+		// branch Describe takes — including its one exception, a refused movement, whose words stay about the room
+		// somebody was walking through.
+		if (snapshot.KillSwitchActive && !IsDeclinedMotion(snapshot))
+			return true;
+
+		return snapshot.Reason is TransitionReason.HouseModeChanged
+			or TransitionReason.EveryoneLeft
+			or TransitionReason.FirstPersonArrived;
+	}
+
+	/// <summary>
+	///     A house-wide row's words: the report's own, minus the account of the room that published it.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The second line under a mode change, an emptying or a first arrival is <see cref="Condition"/>'s
+	///         verdict on the <i>publishing room</i> — "too bright to switch on", "darkness hasn't been checked
+	///         here yet". True of that room, and unattributable the moment the row stops belonging to one: printed
+	///         over a row headed "House" it asks the reader which room "here" is, and answering that is the job the
+	///         row has just given up.
+	///     </para>
+	///     <para>
+	///         The master switch keeps its own second line. That sentence — no lights will change until it is turned
+	///         back on — is about the whole house, and <see cref="Describe"/> does not build it from
+	///         <see cref="Condition"/> at all, which is exactly the distinction being drawn here.
+	///     </para>
+	///     <para>
+	///         Dropping it is also what lets one mode change be one row. The rooms of a real house are in different
+	///         states when the mode moves, so their conditions differ, and a collapse that kept them would split a
+	///         single event into a row per condition — the defect again, with a smaller number.
+	///     </para>
+	/// </remarks>
+	private static ActivityLine LineFor(AreaSnapshot snapshot)
+	{
+		ActivityLine line = Describe(snapshot);
+
+		return IsAboutTheHouse(snapshot) && !snapshot.KillSwitchActive
+			? line with { Why = null }
+			: line;
+	}
+
+	/// <summary>
+	///     Turns reports into the rows a page renders: one row per report, except that a run of house-wide reports
+	///     saying the same thing becomes a single row attributed to the house.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>The test for "the same thing" is the whole row, as the row will read.</b> Two reports collapse
+	///         only when both of their rendered lines match, so a row never says anything that was not in every
+	///         report behind it. Matching on the reason alone would have merged "the house changed mode to Home"
+	///         with "the house changed mode to Guests" — the mode is in the headline, and two modes are two events.
+	///         What the rendered line has already dropped by then is each room's private condition, which
+	///         <see cref="LineFor"/> explains.
+	///     </para>
+	///     <para>
+	///         Only a consecutive run collapses, never a scattered set. The record's order is the reader's account
+	///         of what followed what, and lifting a row out of the middle of it to join one further up would rewrite
+	///         that account — the two rows would have become one in a place where, on the evidence, something else
+	///         happened between them.
+	///     </para>
+	///     <para>
+	///         <paramref name="limit"/> exists for the dashboard, which wants a dozen rows out of a buffer of five
+	///         hundred reports and re-reads it once a second. The run in progress is always finished before the
+	///         count is honoured, so the last row on a limited read names every room it covers rather than however
+	///         many happened to fit.
+	///     </para>
+	/// </remarks>
+	/// <param name="entries">The reports, newest first — already through whatever filters the page applies.</param>
+	/// <param name="limit">How many rows to build at most, or <c>null</c> for all of them.</param>
+	/// <returns>The rows, newest first.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="entries"/> is <c>null</c>.</exception>
+	public static IReadOnlyList<ActivityRow> Rows(IEnumerable<ActivityEntry> entries, int? limit = null)
+	{
+		ArgumentNullException.ThrowIfNull(entries);
+
+		if (limit is <= 0)
+			return [];
+
+		List<ActivityEntry> ordered = [.. entries];
+		List<ActivityRow> rows = [];
+
+		int index = 0;
+		while (index < ordered.Count)
+		{
+			ActivityEntry head = ordered[index];
+			ActivityLine line = LineFor(head.Snapshot);
+			bool house = IsAboutTheHouse(head.Snapshot);
+			List<string> rooms = [head.AreaName];
+
+			index++;
+
+			// Absolute difference rather than a subtraction: the list is newest first by sequence, and a report
+			// whose timestamp disagrees with its position must not be swept in by an interval that went negative.
+			while (house
+				&& index < ordered.Count
+				&& IsAboutTheHouse(ordered[index].Snapshot)
+				&& (head.At - ordered[index].At).Duration() <= CollapseWindow
+				&& LineFor(ordered[index].Snapshot) == line)
+			{
+				string room = ordered[index].AreaName;
+
+				if (!rooms.Contains(room, StringComparer.OrdinalIgnoreCase))
+					rooms.Add(room);
+
+				index++;
+			}
+
+			rows.Add(new ActivityRow(head, line, house, rooms));
+
+			if (limit is { } cap && rows.Count >= cap)
+				break;
+		}
+
+		return rows;
+	}
+
+	/// <summary>
+	///     Which rooms a house-wide row was assembled from, or <c>null</c> when the row already names its room.
+	/// </summary>
+	/// <remarks>
+	///     Answered for a single room as well as for several, because a house-wide row shows no room name at all —
+	///     so without this, the one thing a reader could no longer find out is which rooms the row was built from.
+	///     That is the whole price of dropping the attribution, and it is worth paying only because it is paid
+	///     into a hover rather than into nothing.
+	/// </remarks>
+	/// <param name="row">The row to describe.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="row"/> is <c>null</c>.</exception>
+	public static string? ReportedBy(ActivityRow row)
+	{
+		ArgumentNullException.ThrowIfNull(row);
+
+		if (!row.IsAboutTheHouse || row.Rooms.Count == 0)
+			return null;
+
+		return row.Rooms.Count == 1
+			? $"Reported by {row.Rooms[0]}."
+			: $"Reported by {row.Rooms.Count} rooms: {string.Join(", ", row.Rooms)}.";
+	}
+
 	/// <summary>
 	///     Cuts the timeline into days, keeping the order it was given.
 	/// </summary>
 	/// <remarks>
 	///     <para>
-	///         Local dates, from both the entries and <paramref name="now"/>, so a heading says the day the person
-	///         reading it lived through rather than the day UTC was having. Entries are grouped consecutively, not
+	///         Local dates, from both the rows and <paramref name="now"/>, so a heading says the day the person
+	///         reading it lived through rather than the day UTC was having. Rows are grouped consecutively, not
 	///         collected: a newest-first list visits each day exactly once, and grouping consecutively preserves
 	///         the order rather than re-sorting it behind the caller's back.
+	///     </para>
+	///     <para>
+	///         Rows rather than reports, because collapsing has to happen first: a house-wide run that straddles
+	///         midnight is one event, and cutting it into days before collapsing it would put half of it under each
+	///         heading and call that two.
 	///     </para>
 	///     <para>
 	///         Only the two days a person thinks of by name get one. Anything older is dated, because "3 days ago"
 	///         is arithmetic somebody has to do twice — once to read it, once to check it against a clock.
 	///     </para>
 	/// </remarks>
-	/// <param name="entries">The entries, newest first.</param>
+	/// <param name="rows">The rows, newest first.</param>
 	/// <param name="now">The reader's present, for deciding what "today" is.</param>
-	/// <returns>One group per day, in the order the entries arrived in.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="entries"/> is <c>null</c>.</exception>
-	public static IReadOnlyList<ActivityDay> GroupByDay(IEnumerable<ActivityEntry> entries, DateTimeOffset now)
+	/// <returns>One group per day, in the order the rows arrived in.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="rows"/> is <c>null</c>.</exception>
+	public static IReadOnlyList<ActivityDay> GroupByDay(IEnumerable<ActivityRow> rows, DateTimeOffset now)
 	{
-		ArgumentNullException.ThrowIfNull(entries);
+		ArgumentNullException.ThrowIfNull(rows);
 
 		DateOnly today = DateOnly.FromDateTime(now.ToLocalTime().DateTime);
 		List<ActivityDay> days = [];
-		List<ActivityEntry> current = [];
+		List<ActivityRow> current = [];
 		DateOnly day = default;
 
-		foreach (ActivityEntry entry in entries)
+		foreach (ActivityRow row in rows)
 		{
-			DateOnly entryDay = DateOnly.FromDateTime(entry.At.ToLocalTime().DateTime);
+			DateOnly rowDay = DateOnly.FromDateTime(row.At.ToLocalTime().DateTime);
 
-			if (current.Count > 0 && entryDay != day)
+			if (current.Count > 0 && rowDay != day)
 			{
 				days.Add(new ActivityDay(day, DayHeading(day, today), current));
 				current = [];
 			}
 
-			day = entryDay;
-			current.Add(entry);
+			day = rowDay;
+			current.Add(row);
 		}
 
 		if (current.Count > 0)

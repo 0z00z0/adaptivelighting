@@ -1261,6 +1261,20 @@ button.mode-card:disabled {
 	color: var(--text);
 }
 
+/* The house-mode section's one call to action: what the dropdown helper offers, what this document has, and
+   the single control that takes the helper's list. A stack rather than a paragraph because it is three
+   sentences and a button — and the button lives inside the notice rather than under it, so what it does and
+   what it costs can never be read apart. */
+.modes-sync {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.modes-sync .panel-actions {
+	margin: 0.15rem 0 0;
+}
+
 /* ---- status ---- */
 
 .status-row {
@@ -3036,6 +3050,15 @@ button.mode-pill:disabled {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* A house-wide row belongs to no room, so it must not look like one. Muted and unweighted against the room
+   names above and below it: the eye scanning that column for a room skips it, which is the point — nothing in
+   this row is a claim about a room. The rooms it was assembled from are in its title. */
+.log-room-house {
+	font-weight: 450;
+	color: var(--muted);
+	font-style: italic;
 }
 
 .log-body {
