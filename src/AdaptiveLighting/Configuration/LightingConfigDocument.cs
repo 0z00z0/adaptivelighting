@@ -58,7 +58,7 @@ public sealed class LightingConfigException : Exception
 ///     <para>
 ///         <b>Comments do not survive.</b> YamlDotNet emits a fresh document; every hand-written comment in the
 ///         file is lost the first time the UI saves. That is accepted, and the worked examples that used to live
-///         in those comments are preserved in <c>docs/adaptive-lighting/example-config.md</c>.
+///         in those comments are published on the documentation site.
 ///         <see cref="Header"/> is re-emitted on every write so the file itself says where they went.
 ///     </para>
 /// </remarks>
@@ -102,12 +102,12 @@ public static class LightingConfigDocument
 		#  next save from the browser rewrites it from scratch, and any comments you
 		#  add here are lost at that moment. YamlDotNet cannot round-trip comments.
 		#
-		#  The annotated worked examples that used to live in this file — what every
-		#  knob means, and why — are preserved verbatim in:
+		#  What every setting means, and a worked example, are documented at:
 		#
-		#      docs/adaptive-lighting/example-config.md
+		#      https://adaptivelighting.netlify.app
 		#
-		#  The schema reference is docs/adaptive-lighting/03-configuration.md.
+		#  Everything here is also editable in the browser — this file is written
+		#  by the app, so a hand edit is overwritten on the next save.
 		#
 		#  The top-level key MUST stay the fully qualified config class name.
 		# ============================================================================
