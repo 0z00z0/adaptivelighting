@@ -1658,12 +1658,12 @@ select.cell.wide {
 .housemode-fold,
 .group-fold {
 	padding: 0;
-	/* NOT overflow: hidden. It was here so the header wash could not poke past the rounded corners, but the
-	   header already rounds itself in both states — full radius closed, top-only when open (see
-	   .group-fold[open] > .group-summary) — so the clip bought nothing and cost the info popovers: measured on
-	   a live house, 132 px of a 140 px panel fell outside the fold and was simply not painted. That is why the
-	   help "was not complete" — it was complete and invisible. Popovers are absolutely positioned and must be
-	   allowed to leave. */
+	/* NOT overflow: hidden. The clip kept the header wash inside the rounded corners, but it also cut off every
+	   info popover hanging past the fold — and a popover is absolutely positioned precisely so it can leave.
+	   The corners are held instead by each header rounding ITSELF (below): full radius closed, top-only when
+	   open. .group-summary already did that; the other three did not, so removing the clip on its own squared
+	   off every period and house-mode card. Anything added here that paints to the fold's edge must carry its
+	   own matching radius — there is nothing left to clip it. */
 	/* A dimmed-green edge by default — alive but quiet — so the cards read as a healthy list rather than plain
 	   grey. The period/mode in force turns this edge accent (below); green is the resting state, orange is "now". */
 	border-left: 3px solid color-mix(in srgb, var(--ok) 42%, var(--line));
@@ -1694,6 +1694,11 @@ select.cell.wide {
 	padding: 0.8rem 1.1rem;
 	cursor: pointer;
 	list-style: none;
+	/* The header rounds itself, because the fold no longer clips it. Closed, the summary IS the card, so it
+	   takes the full radius; open, only the top two (below) — the body owns the bottom edge. The fold sets
+	   padding: 0, so without this the hover/open wash paints a square corner straight over the panel's border.
+	   The same move .group-summary makes. */
+	border-radius: var(--radius);
 }
 
 .area-summary::-webkit-details-marker,
@@ -1712,6 +1717,7 @@ select.cell.wide {
 .period-fold[open] > .period-summary,
 .housemode-fold[open] > .housemode-summary {
 	background: var(--panel-2);
+	border-radius: var(--radius) var(--radius) 0 0;
 	border-bottom: 1px solid var(--line);
 	margin-bottom: 0.7rem;
 }
@@ -2226,12 +2232,10 @@ select.cell.wide {
 
 /* ---- group folds ----
    Defaults and Global are collapsible groups: a header that says what the group is for, a fold that
-   keeps a long page skimmable. The same <details> grammar as the area folds. overflow stays visible
-   — an info popover hanging past the last field must not be clipped by its own group. */
-
-.group-fold {
-	padding: 0;
-}
+   keeps a long page skimmable. The same <details> grammar — and the same shared block above — as the period
+   and house-mode folds, so only what is unique to a group lives down here; the fold's own padding, edge and
+   visible overflow all come from there. Visible overflow is why an info popover hanging past the last field
+   is not clipped by its own group. */
 
 .group-summary {
 	display: flex;
