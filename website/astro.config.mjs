@@ -22,22 +22,15 @@ export default defineConfig({
 				{
 					label: 'Start here',
 					items: [
-						{ label: 'User guide', slug: 'user-guide' },
-						{ label: 'Overview', slug: 'overview' },
+						{ label: 'How it works', slug: 'overview' },
+						{ label: 'How to use it', slug: 'user-guide' },
 					],
 				},
 				{
-					label: 'Configuration',
+					label: 'Reference',
 					items: [
-						{ label: 'Configuration reference', slug: 'configuration' },
+						{ label: 'Settings reference', slug: 'configuration' },
 						{ label: 'Example configuration', slug: 'example-config' },
-					],
-				},
-				{
-					label: 'Internals',
-					items: [
-						{ label: 'Architecture', slug: 'architecture' },
-						{ label: 'The web UI', slug: 'web-ui' },
 					],
 				},
 			],

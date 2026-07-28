@@ -5,7 +5,7 @@ template: splash
 hero:
   tagline: Lights that come on when you walk in — at the right brightness for the time of day, and only when it's actually dark.
   actions:
-    - text: User guide
+    - text: How to use it
       link: /user-guide/
       icon: right-arrow
     - text: View on GitHub
@@ -18,8 +18,9 @@ import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 <CardGrid stagger>
 	<Card title="Motion, gated by daylight" icon="sun">
-		A room lights when someone walks in — but only if it is genuinely dark, judged by a lux sensor,
-		the sun's height, or a house-wide outdoor sensor. No lights at noon.
+		A room lights when someone walks in — but only if it is dark, judged by its own light-level sensors
+		or the sun's height. A room with no sensor counts as dark; following a house-wide outdoor sensor is
+		something a room opts into.
 	</Card>
 	<Card title="It dims before it gives up" icon="moon">
 		Lights fade as a warning before switching off, so they never drop on someone sitting still.
@@ -27,7 +28,7 @@ import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 	</Card>
 	<Card title="It backs off when you intervene" icon="approve-check">
 		Touch a switch or a dimmer and the automation leaves your setting alone for a while. Every change
-		is classified as the engine's or a human's.
+		is worked out as the engine's or a person's.
 	</Card>
 	<Card title="House modes" icon="setting">
 		Normal, Sleep, Away and Guest — each able to run a Home Assistant scene, switch on a schedule or a
@@ -39,26 +40,22 @@ import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 ```bash
 dotnet add package AdaptiveLighting
-dotnet add package AdaptiveLighting.Web   # optional: dashboard + config editor
+dotnet add package AdaptiveLighting.Web   # optional: the board, room pages and settings
 ```
-
-The engine references no generated entity types — it is written against `IHaContext`, `IHaRegistry` and
-`IScheduler` — so it runs against any Home Assistant instance. Nothing is hard-coded: no entity ids,
-thresholds, times or room names exist in the C#.
 
 Start it once and it finds every room with a light and a motion sensor by itself — and writes them all
 **switched off**. No light changes until you open the UI and choose which rooms to hand over.
 
 :::caution[The web UI has no authentication]
-The dashboard is built for a **LAN-only** deployment. Anyone who can reach its port can rewrite your
+The UI is built for a **LAN-only** deployment. Anyone who can reach its port can rewrite your
 lighting configuration. Do not port-forward it. If you need it from outside, put it behind Home Assistant
 ingress or an authenticating reverse proxy. The engine itself has no network surface — skip
 `AdaptiveLighting.Web` if you don't want a UI.
 :::
 
 <CardGrid>
-	<LinkCard title="User guide" href="/user-guide/" description="Living with it: the dashboard, house modes, and why a light didn't turn on." />
-	<LinkCard title="Configuration" href="/configuration/" description="The document, layer by layer: Global, Defaults, Periods, Areas." />
-	<LinkCard title="Overview" href="/overview/" description="The mental model — areas, periods, the house, and origin." />
-	<LinkCard title="Architecture" href="/architecture/" description="Inside the engine: the area state machine and its seams." />
+	<LinkCard title="How to use it" href="/user-guide/" description="The first ten minutes, the four screens, and why a light didn't come on." />
+	<LinkCard title="How it works" href="/overview/" description="What happens when you walk into a room, and what decides it." />
+	<LinkCard title="Settings reference" href="/configuration/" description="Every setting, in the words the UI uses." />
+	<LinkCard title="Example configuration" href="/example-config/" description="What the configuration file looks like, annotated." />
 </CardGrid>

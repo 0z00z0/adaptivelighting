@@ -1,181 +1,141 @@
 ---
-title: "Overview"
-description: "How the system thinks: areas, periods, the house, and origin."
+title: "How it works"
+description: "What happens when you walk into a room, and what decides it."
 ---
 
-Start here. The other documents in this folder are the design record; this one is the map. For
-day‑to‑day use (the dashboard, house modes, "why didn't my light turn on?"), see the
-[user guide](/user-guide/).
+This page is what the system does. For installing it and living with it, see
+[How to use it](/user-guide/); for what each setting changes, see the
+[settings reference](/configuration/).
 
-## What it does
+## In one paragraph
 
-Lights turn on when you walk into a room, at a brightness and colour temperature that suit the
-time of day, but only if it's actually dark. They dim as a warning before going out, so they never
-drop on someone sitting still. If you touch a switch or a dimmer, the automation backs off and
-leaves your setting alone for a while. When the house empties the lights sweep off; when the first
-person comes back, the entry lights meet them. At 03:00 nothing gets brighter than a configured
-ceiling.
+Lights come on when you walk into a room, at a brightness and warmth that suit the time of day, and
+only when the room is dark. They dim as a warning before switching off, so they never drop on
+someone sitting still. Touch a switch and the automation leaves your setting alone for a while. When
+the house empties the lights sweep off; the first person home is met by the entry lights. One master
+switch pauses everything, and every room keeps reporting what it would have done.
 
-If any of that misbehaves, one kill switch stops the engine commanding anything, while it keeps
-watching so you can see what it *would* have done.
+## The four things it knows
 
-## The mental model
+**A room** is one Home Assistant area, with its lights, its motion sensors and any light-level
+sensors it holds. Rooms are opt-in: a room you have not switched on is still watched and still
+reported, but it is never commanded.
 
-Four ideas carry the whole system.
+**The schedule** is one table for the whole house, cut into periods — morning, day, evening, night.
+Each period sets a brightness and a colour temperature, and can cap how bright any light gets while
+it runs. Boundaries are clock times or sun events, and levels blend across a boundary rather than
+stepping.
 
-**An area** is a room the engine manages — one Home Assistant area. It owns its lights, its
-motion sensors, and optionally a lux sensor. Rooms are **opt-in**: an area you don't list, or have
-switched off, is never touched. Each runs its own independent state machine.
+**The house** holds what every room shares: who is home, which house mode is active, and whether the
+master switch is on. A room reads it and then decides for itself.
 
-**A period** is a slice of the day (morning / day / evening / night) with a target brightness and
-colour temperature. Periods are house-wide, not per room. Boundaries are clock times or sun events
-(`sunset-01:00`), and targets blend across a boundary rather than stepping.
+**Who made a change** is decided for every change to a light: the engine's own, or a person's. That
+is what makes your hand changes stick.
 
-**The house** has state that every room shares: who's home, which **house mode** is active, and whether
-the kill switch is on. A room consults it but decides for itself. The house mode is a single
-`input_select` whose options each carry one *kind* — Normal, Sleep, Away or Guest — and a period,
-a presence sensor or a clock can switch it automatically; every reset returns to Normal. Away and
-Guest apply an HA scene and pause the engine until a reset fires (see [Configuration](/configuration/)).
+## When you walk into a room
 
-**Origin** is the interesting one. Every change to a light is classified as *ours* or *a human's*.
-That distinction is what makes override work, and it's the hardest part of the system (see below).
+1. A motion sensor in the room reports movement.
+2. The room checks whether it is dark. If it is not, nothing happens, and the reason is recorded
+   with the reading and the threshold it was measured against.
+3. If it is dark, the lights come on at the brightness and warmth the current period asks for.
+4. Every minute the room re-reads the time of day and moves the lights with it. Movement restarts
+   the clock.
+5. After the room has been still for its timeout, the lights dim to a warning level. Any movement in
+   that window brings them straight back.
+6. If nothing moves, the lights go off.
 
-## The whole thing on one page
+## How a room decides it is dark
 
-Every arrow names the parameter that drives it — so if you want to change a behaviour, this tells
-you which setting to reach for.
+Each room reads either a light-level sensor, the sun's height, or both — that is the **How the room
+decides it's dark** setting, and out of the box it is *Either*, meaning dark when either says so.
 
-![Area state machine, annotated with the configuration parameter governing each transition](/state-machine.svg)
+- **A room with no light-level sensor counts as dark**, and movement lights it. A gate with nothing
+  to read holds nothing back.
+- **Several sensors in one room are averaged.** Sensors that are unavailable, unknown or silent for
+  longer than two hours are dropped from the average first.
+- **A house-wide outdoor sensor is opt-in per room.** Name one under *Finding lights & sensors*, then
+  give `FollowOutdoorLux: true` to the rooms that should read it. A room that does not ask for it
+  does not get it. This one is set in the configuration file; the UI has no control for it.
+- **The default threshold is 1000 lx**, because the reading is usually an outdoor one. A sensor that
+  really does measure the room wants a much lower number on that room.
 
-## The area state machine
+Once a room has decided it is bright, it needs a little extra light before it counts as bright again,
+so a reading sitting on the threshold cannot flap.
 
-Each room is always in exactly one state:
+### Brightening with daylight
 
-| State | Meaning |
+Separately from the gate above, a room can be told to lift its lights as it gets brighter outside, so
+it does not read as gloomy against a bright window. It is off until you switch it on, it only ever
+adds light, and the period's own brightness cap still binds.
+
+## What the system manages
+
+Give a room its Home Assistant area and its lights, motion sensors and light-level sensors are found
+for you.
+
+- Motion sensors are `binary_sensor` entities whose device class is `motion`, `occupancy` or
+  `presence`. Light-level sensors are `sensor` entities whose device class is `illuminance`.
+- **A Home Assistant light group wins over its members.** The group is commanded; the entities inside
+  it are not commanded separately.
+- **Several entities on one Home Assistant device count as one fixture**, so an RGBW lamp's combined
+  entity is used and its own colour channels are not. Motion is exempt: a multi-zone presence sensor
+  really does watch different places.
+- **Three Home Assistant labels steer it.** Anything carrying the *never touch* label is invisible.
+  Anything carrying the *counts as motion* label is treated as a motion sensor whatever its type. You
+  can also name an *only manage lights with* label, and then only lights carrying it are driven —
+  leave it empty and every light found is managed.
+- If Home Assistant's rooms do not match reality, pick a room's lights or sensors by hand. Each list
+  you fill in replaces the automatic choice for that list alone.
+
+## When somebody uses a switch
+
+The engine records what it expects before it commands a light, and compares what comes back. A change
+that does not match is a person's, and the room hands over:
+
+- **Somebody set a level** — the room holds that setting and stops re-aiming it. After two hours by
+  default, automatic control resumes.
+- **Somebody switched the lights off** — the room stays dark and ignores movement until it has been
+  still for ten minutes. Turning lights off means something.
+
+Changes from your other Home Assistant automations count as a person's too, so your automations win.
+You can turn that off.
+
+## The house
+
+**People.** Presence comes from the `person` and `device_tracker` entities you name, or from everyone
+Home Assistant knows if you name nobody. When the last one leaves and stays gone for the debounce, the
+house counts as empty: the lights sweep off, except in rooms set to stay on. The first person back
+lights the rooms marked *Welcome home*, if it is dark.
+
+**House modes.** The house mode is a Home Assistant dropdown helper (`input_select`). Each of its
+options is tagged with one behaviour:
+
+| Kind | What it does |
 |---|---|
-| `AutoVacant` | Nobody here, lights off, waiting for motion. |
-| `AutoActive` | Occupied and lit; retargets as the period drifts. |
-| `PreOff` | Vacancy timeout hit — dimmed as a warning. Motion here rescues it. |
-| `OverriddenOn` | A human set a level. Their setting is sacred until the override expires. |
-| `SuppressedOff` | A human turned it off. Motion is deliberately ignored — they wanted dark. |
-| `Away` | House is empty. |
-| `SceneHold` | A Guest-kind house mode with a scene owns the look. The engine commands nothing until the mode resets. |
-| `Disabled` | Kill switch, or the room is switched off. Still observing, never commanding. |
+| **Normal** | Everyday lighting, and the option every reset returns to. Mark exactly one option Normal. |
+| **Sleep** | Rooms set to be gentle while the house sleeps are held to one period's dimness — the one the option names, or `night` if it names none. Rooms set never to come on by themselves stay dark. |
+| **Away** | Runs a Home Assistant scene, or sweeps the lights off when no scene is named, and stands back until a reset fires. |
+| **Guest** | Runs a scene and holds the rooms. The engine commands nothing until the mode resets. |
 
-The two that make it feel considered rather than robotic are `PreOff` (a grace period instead of
-sudden darkness) and `SuppressedOff` (turning the lights off actually *means* something — the room
-doesn't fight you by relighting on your way out).
+A mode can switch itself on when the whole house has had no movement for a set time, and switch back
+when somebody moves, at a set time, or when a period starts. A period can also set a mode when it
+begins.
 
-## How override detection works, and its honest limit
+**The master switch.** One switch pauses every room. Nothing is commanded while it is off, and the
+board still shows what each room would be doing.
 
-`CallService` in NetDaemon is fire-and-forget: it never tells us the context id of the command it
-just sent. So there's no exact way to ask "was that state change mine?". Two heuristics combine:
+## The rooms, drawn
 
-1. **Command expectation** (primary) — before commanding a light, the engine records what it
-   expects. Changes matching that expectation, within a window, are its own echo.
-2. **Context inspection** — `UserId == null && ParentId == null` means a physical switch or dimmer.
-   A user id means the app or UI. A parent id means another automation (which counts as manual by
-   default, so your other automations win).
+Each arrow names the setting that drives it.
 
-The echo window spans the command's own fade. This matters more than it sounds: a 15-second night
-fade emits state changes for 15 seconds, and a fixed 8-second window would make the engine read
-the tail of its own fade as a human at the dimmer — overriding itself on every night retarget.
+![Area state machine, annotated with the configuration setting governing each transition](/state-machine.svg)
 
-## Configurability
+## When something is wrong
 
-**Nothing is hard-coded.** No entity ids, thresholds, times, or room names exist anywhere in the
-C#. It all lives in one YAML file per site — a commented example ships in the repo as the seed,
-and on a running host the live copy sits outside the publish tree where the config editor owns it.
-
-The schema is four layers, each narrowing the last:
-
-| Layer | What it sets |
-|---|---|
-| `Global` | House-wide: people, kill switch, house modes, override tuning, discovery labels. |
-| `Defaults` | The baseline every room starts with — every per-room knob has a default here. The settings page calls this group **All rooms**. |
-| `Periods` | The circadian table: when each period starts, its brightness/colour, its caps. |
-| `Areas` | Per room. Overrides *only* what differs from `Defaults`. |
-
-Most rooms are three lines, because of **discovery**. Give an area an `AreaId` and the engine finds
-its lights, motion sensors and lux sensor from the Home Assistant area registry — dropping group
-members and anything labelled `adaptive-exclude`. Explicit lists (`Lights`, `MotionSensors`,
-`LuxSensor`) are the escape hatch when HA's area assignments are wrong; each replaces discovery for
-that slot only. This keeps the config small enough to stay truthful, instead of a hand-listed
-inventory that silently rots when an entity is renamed.
-
-The knobs worth knowing:
-
-- **`Darkness`** — `Lux` / `Sun` / `Either` / `Always`. `Always` is for rooms with no daylight;
-  `Sun` for outdoors. `LuxHysteresis` stops flapping at the threshold.
-- **`VacancyTimeoutSeconds`** — 120 for a hallway, 1800 for a media room.
-- **`IgnoreWhenOn`** — block auto-on while something is on (a projector, a do-not-disturb flag).
-- **`RespectSleepMode` / `SleepBlocksAutoOn`** — bedroom-adjacent behaviour.
-- **`SkipAwaySweep`** — outdoor and security lights stay on when the house empties.
-- **`WelcomeHome`** — entrance rooms light on first arrival if it's dark.
-- **`MaxBrightnessPct` on the night period** — the 03:00 rule; caps *every* command, including
-  welcome-home.
-
-## Failure behaviour
-
-Deliberately split, because these deserve different answers:
-
-- **Bad global config** (a person or kill switch HA doesn't know) → the app **throws**, lands in
-  `ApplicationState.Error`, and posts a persistent notification listing every problem. The host and
-  all your other apps keep running.
-- **Bad room config** (an area id that doesn't exist) → that **room is skipped**, the rest run. One
-  aggregated notification, and it lists every real area id on your instance — which is the fastest
-  way to fix the file. A renamed entity must not black out the whole house.
-
-## Where it lives
-
-The engine is entirely in `AdaptiveLighting/` and never references a generated entity type. That's
-deliberate and it's why each host is a ~40-line bootstrap plus a YAML file — generated types are
-per-project and can never move to `AdaptiveLighting`, so the engine is written against
-`IHaContext` / `IHaRegistry` / `IScheduler` and three small interfaces of its own instead.
-
-A **Blazor UI** served by each host (LAN-only, no auth) does three things. The **dashboard** is the
-house-state hub: the master enable switch (clickable), who's home, which house mode is active, and
-the live per-room stories — what the lights are doing, what happened last, a countdown to the next
-change — with "unknown" a first-class value distinct from "not connected". Rooms are grouped by
-Home Assistant floor, and only the rooms you have switched on get a card. The **config editor**
-actually configures the system from the browser, in four sections — **Areas**, **Schedule**,
-**House modes**, **House**: pick an area from a dropdown and watch its lights, motion sensors and lux
-sensor resolve live; switch a room on or off from its header; edit rooms, periods and house modes in
-collapsible cards; save validates, writes atomically, and rebuilds the running engine in place — no
-YAML, no restart. The config file lives *outside* the publish tree, so a redeploy can't wipe your edits.
-
-## To make it actually work
-
-1. **Start the host and wait half a minute.** A fresh installation writes no entity ids and asks for
-   none. Thirty seconds after the connection settles, set-up reads the area registry and writes down
-   every room that has both a light and a motion sensor, guessing each room's role from its name — a
-   `soverom` respects sleep, a `gang` lights on arrival, an `ute` stays on when the house empties. It
-   adopts an obvious house-mode dropdown if it finds one, and seeds the list of people from Home
-   Assistant.
-2. **Every discovered room is written switched off.** Nothing changes about your lighting until you
-   say so. This is the point: software installed ten minutes ago should not be turning on a bedroom
-   light.
-3. **Open the UI and choose.** Settings → **Areas** lists the rooms by floor with a switch on each.
-   Turn on the ones you want, save, and the dashboard fills with exactly those rooms. Everything else
-   — timeouts, darkness sources, the day's schedule — has a working default and can wait.
-4. Deploying needs the **V6 add-on** (`netdaemon6`), and its port mapped in the add-on's Network
-   panel to reach the UI.
-
-If a room stops resolving later — a renamed entity, an area that lost its motion sensor — that room is
-skipped and the rest run, and the notification names the real ids.
-
-## Status — what's proven, and what isn't
-
-**It's live.** The engine runs a real house and a real cabin and controls real lights. The things this
-document once flagged as unproven have now happened in the house: motion → darkness gate → circadian
-target → `light.turn_on` → vacancy timeout → dim → off, the whole cycle, unprompted; the dashboard
-carries real snapshots; discovery resolves real entities; and override detection positively identifies
-the engine's own commands by user id. House modes, scenes and their reset triggers are configured from
-the dashboard and confirmed switching real modes. **466 tests** cover the engine and its web services.
-
-Still open, and honest: Sleep is a **mode kind**, not a helper the engine creates — a `Sleep` option on
-the house-mode select clamps sleep-respecting rooms to a named period, so the old MQTT-helper plan is
-retired. `MinBrightnessPct: 5` on the night period is an invented default worth reviewing. Concurrency
-is asserted by inspection — `TestScheduler` is single-threaded.
-
-Known gaps and design questions are tracked in the repository's issues.
+- **A room that cannot be resolved is skipped and the rest keep running** — a renamed entity does not
+  black out the house. The message names the real ids.
+- **A problem with the document itself** stops the engine commanding anything and posts a Home
+  Assistant notification listing every problem. The Configuration page keeps working, which is where
+  you fix it.
+- **Your settings survive a redeploy.** The live configuration file lives outside the deploy folder,
+  and the previous version is kept beside it.
