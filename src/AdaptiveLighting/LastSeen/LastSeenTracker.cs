@@ -77,7 +77,11 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	private readonly Lock _gate = new();
 
 	private readonly Dictionary<string, TrackedEntity> _entities = new(StringComparer.Ordinal);
-	private readonly HashSet<LastSeenKind> _dirty = [];
+
+	// Bucket keys, not an enum: a bucket is a device class or a domain, so the set is open-ended and known only
+	// from what is currently tracked. Ordinal because the keys are already normalised by LastSeenBuckets.
+	private readonly HashSet<string> _dirty = new(StringComparer.Ordinal);
+
 	private readonly CompositeDisposable _subscriptions = [];
 
 	private DateTimeOffset? _haStartedAt;
@@ -323,9 +327,9 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	{
 		_haStartedAt = startedAt;
 
-		// Every file carries the estimate, so every file is now out of date. This is rare and cheap.
-		foreach (LastSeenKind kind in LastSeenKinds.All)
-			_dirty.Add(kind);
+		// Every file carries the estimate, so every file is now out of date. Rare, and the only place that writes
+		// the whole cache at once — which is why the dirty set is keyed by bucket everywhere else.
+		DirtyEveryBucket();
 
 		_logger.LogInformation(
 			"Home Assistant appears to have restarted at {StartedAt:u} ({Evidence}). Its own last_updated timestamps have all been "
@@ -377,35 +381,50 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	/// </remarks>
 	private void Record(EntitySample sample, DateTimeOffset now)
 	{
-		LastSeenKind kind = KindOf(sample);
+		string bucket = BucketOf(sample);
 		bool evidence = IsEvidence(sample.Stamp);
 
 		if (!_entities.TryGetValue(sample.EntityId, out TrackedEntity? tracked))
 		{
-			_entities[sample.EntityId] = new TrackedEntity(sample.EntityId, kind, evidence ? sample.Stamp : null, now);
-			_dirty.Add(kind);
+			_entities[sample.EntityId] = new TrackedEntity(sample.EntityId, bucket, evidence ? sample.Stamp : null, now);
+			_dirty.Add(bucket);
 			return;
 		}
 
-		if (tracked.Kind != kind)
+		if (!string.Equals(tracked.Bucket, bucket, StringComparison.Ordinal))
 		{
 			// Moved, never copied: the old file is rewritten without it in the same flush that adds it to the new
 			// one. A device class can change when an integration is updated, and a record in two files would then
-			// be two divergent histories of one entity.
-			_dirty.Add(tracked.Kind);
-			tracked.Kind = kind;
-			_dirty.Add(kind);
+			// be two divergent histories of one entity. This is also the whole of the pre-split migration: every
+			// record loaded from the old catch-all moves the first time its class is read.
+			_dirty.Add(tracked.Bucket);
+			tracked.Bucket = bucket;
+			_dirty.Add(bucket);
 		}
 
 		if (!evidence || (tracked.LastSeen is { } seen && sample.Stamp <= seen))
 			return;
 
 		tracked.LastSeen = sample.Stamp;
-		_dirty.Add(kind);
+		_dirty.Add(bucket);
 	}
 
-	private LastSeenKind KindOf(EntitySample sample) =>
-		LastSeenKinds.Classify(sample.EntityId, sample.State.AttrString(DeviceClassAttribute), LabelsOf(sample.EntityId), _options);
+	private string BucketOf(EntitySample sample) =>
+		LastSeenBuckets.Classify(sample.EntityId, sample.State.AttrString(DeviceClassAttribute), LabelsOf(sample.EntityId), _options);
+
+	/// <summary>
+	///     Marks every bucket that currently holds something.
+	/// </summary>
+	/// <remarks>
+	///     There is no list of all possible buckets to iterate any more, and there should not be: a bucket exists
+	///     because an entity is in it. A bucket with nothing in it has no file either, so nothing is missed by
+	///     starting from what is tracked.
+	/// </remarks>
+	private void DirtyEveryBucket()
+	{
+		foreach (TrackedEntity tracked in _entities.Values)
+			_dirty.Add(tracked.Bucket);
+	}
 
 	private IEnumerable<string>? LabelsOf(string entityId)
 	{
@@ -416,7 +435,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 		catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)
 		{
 			// NetDaemon's registry throws until its first connection completes. A missing label means a sensor is
-			// filed under Other, which costs legibility and nothing else.
+			// filed under its own device class rather than under motion, which costs legibility and nothing else.
 			_logger.LogDebug(exception, "Could not read the labels of {EntityId} for filing.", entityId);
 			return null;
 		}
@@ -469,7 +488,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 
 		foreach (string entityId in dropped)
 			if (_entities.Remove(entityId, out TrackedEntity? tracked))
-				_dirty.Add(tracked.Kind);
+				_dirty.Add(tracked.Bucket);
 
 		_logger.LogInformation(
 			"Dropped {Count} last-seen records for entities Home Assistant no longer reports ({Entities}). Entities it still "
@@ -486,15 +505,16 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 
 		foreach (KeyValuePair<string, LoadedEntity> pair in load.Entities)
 			_entities[pair.Key] = new TrackedEntity(
-				pair.Key, pair.Value.Kind, pair.Value.Entry.LastSeen, pair.Value.Entry.TrackedSince);
+				pair.Key, pair.Value.Bucket, pair.Value.Entry.LastSeen, pair.Value.Entry.TrackedSince);
 
 		_haStartedAt = load.HomeAssistantStarted;
 
-		// A file that was found in the wrong bucket, or a bucket that failed to load, leaves the set inconsistent
-		// with what the next census will decide. Writing everything once settles it.
-		if (load.DuplicatesResolved > 0 || load.FilesUnreadable > 0)
-			foreach (LastSeenKind kind in LastSeenKinds.All)
-				_dirty.Add(kind);
+		// A record that was found in the wrong bucket, a bucket that failed to load, or a cache written before the
+		// catch-all was split all leave the set inconsistent with what the next census will decide. Writing
+		// everything once settles it — and for the pre-split case that write is the migration itself: each record
+		// lands in its class's file and the emptied catch-all takes its own file away.
+		if (load.DuplicatesResolved > 0 || load.FilesUnreadable > 0 || load.PreSplitRecords > 0)
+			DirtyEveryBucket();
 
 		if (load.FilesRead == 0)
 		{
@@ -523,41 +543,52 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	///         from for no gain whatsoever.
 	///     </para>
 	///     <para>
+	///         <b>Only the buckets that changed are written, and that matters more now than it did.</b> Splitting the
+	///         catch-all by device class turned four files into dozens, so a flush that rebuilt all of them would
+	///         multiply the write cost by the number of classes in the house for no reason at all. The dirty set is
+	///         keyed by bucket and is only ever added to where a record actually moved or advanced, so one entity
+	///         reporting writes one file.
+	///     </para>
+	///     <para>
 	///         The documents are built under the lock and written outside it, so a flush never blocks a lighting
 	///         decision on a file system.
 	///     </para>
 	/// </remarks>
 	private void Flush()
 	{
-		List<KeyValuePair<LastSeenKind, LastSeenDocument>> pending;
+		List<KeyValuePair<string, LastSeenDocument>> pending;
 
 		lock (_gate)
 		{
 			if (_dirty.Count == 0)
 				return;
 
-			pending = [.. _dirty.Select(kind => new KeyValuePair<LastSeenKind, LastSeenDocument>(kind, BuildDocument(kind)))];
+			pending = [.. _dirty.Select(bucket => new KeyValuePair<string, LastSeenDocument>(bucket, BuildDocument(bucket)))];
 			_dirty.Clear();
 		}
 
-		foreach (KeyValuePair<LastSeenKind, LastSeenDocument> pair in pending)
+		foreach (KeyValuePair<string, LastSeenDocument> pair in pending)
 			if (!_store.TrySave(pair.Key, pair.Value))
 				lock (_gate)
 					// Still unwritten, so still dirty: the next flush retries rather than losing the change.
 					_dirty.Add(pair.Key);
 	}
 
-	private LastSeenDocument BuildDocument(LastSeenKind kind)
+	/// <summary>
+	///     One bucket's file contents. An emptied bucket produces an empty document, which the store reads as
+	///     "take this file away" rather than as something to write.
+	/// </summary>
+	private LastSeenDocument BuildDocument(string bucket)
 	{
 		LastSeenDocument document = new()
 		{
-			Kind = kind.Token(),
+			Bucket = bucket,
 			SavedAt = _scheduler.Now.ToUniversalTime(),
 			HomeAssistantStarted = _haStartedAt
 		};
 
 		foreach (TrackedEntity tracked in _entities.Values)
-			if (tracked.Kind == kind)
+			if (string.Equals(tracked.Bucket, bucket, StringComparison.Ordinal))
 				document.Entities[tracked.EntityId] = new LastSeenEntry(tracked.LastSeen, tracked.TrackedSince);
 
 		return document;
@@ -598,11 +629,12 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	private sealed record EntitySample(string EntityId, DateTimeOffset Stamp, EntityState State);
 
 	/// <summary>One entity's record while the process is running. The disk shape is <see cref="LastSeenEntry"/>.</summary>
-	private sealed class TrackedEntity(string entityId, LastSeenKind kind, DateTimeOffset? lastSeen, DateTimeOffset trackedSince)
+	private sealed class TrackedEntity(string entityId, string bucket, DateTimeOffset? lastSeen, DateTimeOffset trackedSince)
 	{
 		public string EntityId { get; } = entityId;
 
-		public LastSeenKind Kind { get; set; } = kind;
+		/// <summary>Which file it belongs in: a device class, a domain, or one of the three curated buckets.</summary>
+		public string Bucket { get; set; } = bucket;
 
 		public DateTimeOffset? LastSeen { get; set; } = lastSeen;
 

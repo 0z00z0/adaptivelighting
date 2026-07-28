@@ -21,8 +21,8 @@ public sealed record LastSeenEntry(
 	[property: JsonPropertyName("trackedSince")] DateTimeOffset TrackedSince);
 
 /// <summary>
-///     One cache file: the records for a single <see cref="LastSeenKind"/>, plus enough context for a person who
-///     opens it to know what they are looking at.
+///     One cache file: the records for a single bucket, plus enough context for a person who opens it to know what
+///     they are looking at.
 /// </summary>
 /// <remarks>
 ///     JSON rather than the engine's YAML, and deliberately: this is machine-written, high-churn and disposable,
@@ -40,8 +40,18 @@ public sealed class LastSeenDocument
 		+ "Not configuration - nothing here is edited by hand, and deleting this file is safe: the only cost is the "
 		+ "history, and every entity in it reverts to 'unknown' until it reports again.";
 
-	/// <summary>The current document version. Bumped only when an older file could be misread.</summary>
-	public const int CurrentVersion = 1;
+	/// <summary>
+	///     The current document version. Bumped only when an older file could be misread.
+	/// </summary>
+	/// <remarks>
+	///     Version 1 split four ways, with one catch-all bucket named <c>other</c>. Version 2 splits the catch-all
+	///     by device class, so a version-1 file claiming <c>other</c> is not a bucket but a pile awaiting
+	///     redistribution — which is the one thing a reader has to tell apart, and the only reason this moved.
+	/// </remarks>
+	public const int CurrentVersion = 2;
+
+	/// <summary>The version whose <c>other</c> file held everything that was not a light, motion or illuminance.</summary>
+	public const int PreSplitVersion = 1;
 
 	/// <summary>The explanation above, first in the file so it is the first thing a reader sees.</summary>
 	[JsonPropertyName("_comment")]
@@ -53,10 +63,28 @@ public sealed class LastSeenDocument
 	[JsonPropertyOrder(-2)]
 	public int Version { get; set; } = CurrentVersion;
 
-	/// <summary>Which bucket this file holds, as a word. See <see cref="LastSeenKinds.FromToken"/> for why it is a hint.</summary>
+	/// <summary>
+	///     Which bucket this file holds, as a word — a device class, a domain, or one of the three curated names.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Still called <c>kind</c> on disk, because files written before the split already carry that name and
+	///         a rename would cost their history for nothing. In here it is the bucket key, which is the truth: the
+	///         file name is a <i>sanitised</i> form of this and can be fingerprinted, so the key survives only here.
+	///     </para>
+	///     <para>
+	///         It is a hint about where a record was last filed, not the truth about what the entity is — that is
+	///         re-derived from Home Assistant on the next census — so a key from an older or newer build must not
+	///         cost the history in the file.
+	///     </para>
+	///     <para>
+	///         <c>null</c> for a file that does not say, which is a different thing from one that says "the
+	///         catch-all": the loader falls back to the file's own name for the first and believes the second.
+	///     </para>
+	/// </remarks>
 	[JsonPropertyName("kind")]
 	[JsonPropertyOrder(-1)]
-	public string Kind { get; set; } = LastSeenKind.Other.Token();
+	public string? Bucket { get; set; }
 
 	/// <summary>When this file was written. Also the tie-breaker when an entity turns up in two files.</summary>
 	[JsonPropertyName("savedAt")]

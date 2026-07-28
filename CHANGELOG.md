@@ -26,9 +26,19 @@ under one version, because they are compiled against each other.
   - Never confuses "the value did not change" with "it did not report" — a light-level sensor sitting at
     a constant 3 lx all night is healthy and quiet, and is counted alive.
   - The record survives a redeploy: it is JSON beside the configuration document, split into
-    `<document>.last-seen.{illuminance,motion,light,other}.json` so somebody diagnosing their lux sensors
-    opens one small file rather than reading past 250 motion entries. Written atomically with one `.bak`
-    apiece, batched to one flush every five minutes plus one on shutdown, ~42 KB for a 300-entity house.
+    `<document>.last-seen.<bucket>.json` so somebody diagnosing their lux sensors opens one small file
+    rather than reading past 250 motion entries. Lights, motion sources and light-level sensors have
+    their own buckets by rule; everything else is filed under its own `device_class` — `temperature`,
+    `battery`, `door`, `power` — or, for an entity with no class, under its domain (`person`, `sun`,
+    `automation`, `script`). Nothing is dropped: an entity with neither lands in `other`. Written
+    atomically with one `.bak` apiece, batched to one flush every five minutes plus one on shutdown,
+    ~45 KB for a 300-entity house.
+  - The bucket name reaches the file system and comes from an external system, so it is sanitised
+    against an allow-list and fingerprinted whenever anything had to be dropped or truncated — two
+    device classes can never collide onto one file. An emptied bucket takes its file with it, which is
+    also how a cache written by the earlier four-file layout upgrades: the old `other` file is read,
+    its records keep their history, the first census re-files each one by class, and the empty original
+    removes itself.
   - A missing or corrupt file costs only the history in it: every answer degrades to "we do not know",
     never to "everything is dead", and `HasBeenSilentFor` returns `false` for anything unknown. Deleting
     the files by hand is safe, and each one says so in its first line.

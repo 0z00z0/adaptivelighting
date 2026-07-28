@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using AdaptiveLighting.LastSeen;
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -395,7 +397,7 @@ public sealed class LastSeenTrackerTests
 		first.Dispose();
 
 		LastSeenStore store = fixture.NewStore();
-		File.WriteAllText(store.PathFor(LastSeenKind.Motion), "{ this is not json");
+		File.WriteAllText(store.PathFor(LastSeenBuckets.Motion), "{ this is not json");
 
 		LastSeenCacheLoad load = store.Load();
 
@@ -515,7 +517,7 @@ public sealed class LastSeenTrackerTests
 	// ===================== filing =====================
 
 	[TestMethod]
-	public void An_Entity_That_Changes_Kind_Moves_Rather_Than_Duplicating()
+	public void An_Entity_That_Changes_Class_Moves_Rather_Than_Duplicating()
 	{
 		using Fixture fixture = new();
 		fixture.Ha.Set("binary_sensor.odd", "off", fixture.Now - TimeSpan.FromMinutes(1), "motion");
@@ -524,7 +526,7 @@ public sealed class LastSeenTrackerTests
 		first.Dispose();
 
 		LastSeenStore store = fixture.NewStore();
-		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenKind.Motion)), "binary_sensor.odd");
+		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenBuckets.Motion)), "binary_sensor.odd");
 
 		// An integration update changes the device class, so the entity is no longer motion.
 		fixture.Ha.Set("binary_sensor.odd", "off", fixture.Now, "door");
@@ -532,9 +534,9 @@ public sealed class LastSeenTrackerTests
 		LastSeenTracker second = fixture.Started();
 		second.Dispose();
 
-		Assert.IsFalse(File.ReadAllText(store.PathFor(LastSeenKind.Motion)).Contains("binary_sensor.odd", StringComparison.Ordinal),
-			"the old file must be rewritten without it");
-		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenKind.Other)), "binary_sensor.odd");
+		Assert.IsFalse(File.Exists(store.PathFor(LastSeenBuckets.Motion)),
+			"the old bucket has nothing left in it, so its file goes rather than sitting there empty");
+		StringAssert.Contains(File.ReadAllText(store.PathFor("door")), "binary_sensor.odd");
 
 		LastSeenCacheLoad load = store.Load();
 		Assert.AreEqual(0, load.DuplicatesResolved);
@@ -542,25 +544,188 @@ public sealed class LastSeenTrackerTests
 	}
 
 	[TestMethod]
-	public void The_Files_Hold_The_Kinds_They_Are_Named_For()
+	public void The_Files_Hold_What_They_Are_Named_For()
 	{
 		using Fixture fixture = new();
 		fixture.SeedHouse();
 		fixture.Ha.Set("light.kitchen", "on", fixture.Now - TimeSpan.FromMinutes(3));
-		fixture.Ha.Set("sensor.power", "42", fixture.Now - TimeSpan.FromMinutes(3), "power");
+		fixture.Ha.Set("sensor.washing_machine", "42", fixture.Now - TimeSpan.FromMinutes(3), "power");
+		fixture.Ha.Set("sensor.hall_temperature", "21", fixture.Now - TimeSpan.FromMinutes(3), "temperature");
+		fixture.Ha.Set("person.espen", "home", fixture.Now - TimeSpan.FromMinutes(3));
 
 		LastSeenTracker tracker = fixture.Started();
 		tracker.Dispose();
 
 		LastSeenStore store = fixture.NewStore();
 
-		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenKind.Illuminance)), Lux);
-		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenKind.Motion)), Dead);
-		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenKind.Light)), "light.kitchen");
-		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenKind.Other)), "sensor.power");
+		// The three curated buckets are untouched by the split.
+		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenBuckets.Illuminance)), Lux);
+		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenBuckets.Motion)), Dead);
+		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenBuckets.Light)), "light.kitchen");
 
-		Assert.IsFalse(File.ReadAllText(store.PathFor(LastSeenKind.Illuminance)).Contains(Dead, StringComparison.Ordinal),
+		// What used to be one catch-all file is now one file per class, and one per domain for a classless entity.
+		StringAssert.Contains(File.ReadAllText(store.PathFor("power")), "sensor.washing_machine");
+		StringAssert.Contains(File.ReadAllText(store.PathFor("temperature")), "sensor.hall_temperature");
+		StringAssert.Contains(File.ReadAllText(store.PathFor("person")), "person.espen");
+
+		Assert.IsFalse(File.Exists(store.PathFor(LastSeenBuckets.Unclassified)),
+			"a house where everything has a class or a domain needs no catch-all file at all");
+
+		Assert.IsFalse(File.ReadAllText(store.PathFor(LastSeenBuckets.Illuminance)).Contains(Dead, StringComparison.Ordinal),
 			"somebody diagnosing their light-level sensors should not have to read past the motion ones");
+	}
+
+	[TestMethod]
+	public void Nothing_Is_Dropped_By_The_Split()
+	{
+		using Fixture fixture = new();
+		fixture.SeedHouse();
+
+		// A spread of the shapes a real instance has: classed sensors, classless ones, odd domains, and a device
+		// class that has to be sanitised before it can be a file name.
+		fixture.Ha.Set("light.kitchen", "on", fixture.Now - TimeSpan.FromMinutes(3));
+		fixture.Ha.Set("sensor.washing_machine", "42", fixture.Now - TimeSpan.FromMinutes(3), "power");
+		fixture.Ha.Set("sensor.hall_temperature", "21", fixture.Now - TimeSpan.FromMinutes(4), "temperature");
+		fixture.Ha.Set("sensor.uptime", "5 days", fixture.Now - TimeSpan.FromMinutes(5));
+		fixture.Ha.Set("binary_sensor.light_detected", "on", fixture.Now - TimeSpan.FromMinutes(6), "light");
+		fixture.Ha.Set("person.espen", "home", fixture.Now - TimeSpan.FromMinutes(7));
+		fixture.Ha.Set("sun.sun", "above_horizon", fixture.Now - TimeSpan.FromMinutes(8));
+		fixture.Ha.Set("automation.wake_up", "on", fixture.Now - TimeSpan.FromMinutes(9));
+		fixture.Ha.Set("sensor.weird", "1", fixture.Now - TimeSpan.FromMinutes(10), "Kitchen / Ambient");
+		fixture.Ha.Set("no_domain_at_all", "1", fixture.Now - TimeSpan.FromMinutes(11));
+
+		LastSeenTracker tracker = fixture.Started();
+		int tracked = tracker.TrackedCount;
+		tracker.Dispose();
+
+		LastSeenStore store = fixture.NewStore();
+		LastSeenCacheLoad load = store.Load();
+
+		Assert.AreEqual(tracked, load.Entities.Count, "every tracked entity has to land in some file; a class nobody predicted is the one most likely to be misbehaving");
+		Assert.AreEqual(0, load.DuplicatesResolved);
+
+		StringAssert.Contains(File.ReadAllText(store.PathFor("Kitchen / Ambient")), "sensor.weird", "a class that needed sanitising still has a file");
+		StringAssert.Contains(File.ReadAllText(store.PathFor("binary_sensor_light")), "binary_sensor.light_detected");
+		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenBuckets.Unclassified)), "no_domain_at_all",
+			"an id with neither a class nor a domain still has a defined home");
+
+		Assert.IsFalse(File.ReadAllText(store.PathFor(LastSeenBuckets.Light)).Contains("binary_sensor.light_detected", StringComparison.Ordinal),
+			"a binary sensor that detects light is not a lamp, and the light file must hold exactly what it held before");
+	}
+
+	[TestMethod]
+	public void One_Changed_Entity_Writes_One_File()
+	{
+		using Fixture fixture = new();
+		fixture.SeedHouse();
+		fixture.Ha.Set("light.kitchen", "on", fixture.Now - TimeSpan.FromMinutes(3));
+		fixture.Ha.Set("sensor.washing_machine", "42", fixture.Now - TimeSpan.FromMinutes(4), "power");
+		fixture.Ha.Set("sensor.hall_temperature", "21", fixture.Now - TimeSpan.FromMinutes(6), "temperature");
+
+		using LastSeenTracker tracker = fixture.Started();
+		LastSeenStore store = fixture.NewStore();
+
+		// The first flush writes every bucket, because every record in them is new.
+		fixture.Advance(fixture.Options.FlushInterval);
+		Dictionary<string, DateTimeOffset> before = SavedAtByFile(store);
+
+		Assert.IsTrue(before.Count >= 5, $"the split should have given each class its own file, and produced {before.Count}");
+
+		// One sensor reports. With dozens of files rather than four, rebuilding all of them would multiply the
+		// write cost by the number of classes in the house for no gain at all.
+		fixture.Advance(TimeSpan.FromMinutes(1));
+		fixture.Ha.Set("sensor.washing_machine", "43", fixture.Now, "power");
+		fixture.Advance(fixture.Options.FlushInterval);
+
+		Dictionary<string, DateTimeOffset> after = SavedAtByFile(store);
+		List<string> rewritten = [.. after.Where(pair => pair.Value != before[pair.Key]).Select(pair => pair.Key).Order(StringComparer.Ordinal)];
+
+		CollectionAssert.AreEqual(new[] { "b1.last-seen.power.json" }, rewritten, $"rewritten: {string.Join(", ", rewritten)}");
+	}
+
+	// ===================== upgrading from the pre-split cache =====================
+
+	[TestMethod]
+	public void A_Pre_Split_Catch_All_Is_Redistributed_Without_Losing_A_Record()
+	{
+		using Fixture fixture = new();
+		fixture.SeedHouse();
+
+		DateTimeOffset heardAt = Noon - TimeSpan.FromHours(3);
+
+		// Older in Home Assistant than in the cache, so anything the cache carried over is visible rather than
+		// immediately overwritten by a fresh census.
+		fixture.Ha.Set("sensor.washing_machine", "0", Noon - TimeSpan.FromHours(5), "power");
+		fixture.Ha.Set("person.espen", "home", Noon - TimeSpan.FromHours(5));
+
+		WritePreSplitCatchAll(fixture, heardAt, "sensor.washing_machine", "person.espen", "sensor.long_gone");
+
+		LastSeenStore store = fixture.NewStore();
+		Assert.IsTrue(File.Exists(store.PathFor(LastSeenBuckets.Unclassified)), "the file an installation upgrading already has");
+
+		LastSeenTracker tracker = fixture.Started();
+
+		Assert.AreEqual(heardAt, tracker.LastSeenUtc("sensor.washing_machine"), "a record that survived a restart must not be lost to a rename");
+		Assert.AreEqual(heardAt, tracker.LastSeenUtc("person.espen"));
+		Assert.AreEqual(heardAt, tracker.LastSeenUtc("sensor.long_gone"), "and one Home Assistant no longer reports is still a record, not a leftover");
+
+		tracker.Dispose();
+
+		StringAssert.Contains(File.ReadAllText(store.PathFor("power")), "sensor.washing_machine");
+		StringAssert.Contains(File.ReadAllText(store.PathFor("person")), "person.espen");
+
+		string catchAll = File.ReadAllText(store.PathFor(LastSeenBuckets.Unclassified));
+
+		StringAssert.Contains(catchAll, "sensor.long_gone", "an entity nothing can re-classify keeps the only bucket anything knows about it");
+		Assert.IsFalse(catchAll.Contains("sensor.washing_machine", StringComparison.Ordinal), "and the ones that moved are rewritten out of it");
+
+		Assert.AreEqual(0, store.Load().DuplicatesResolved, "moved, never copied");
+	}
+
+	[TestMethod]
+	public void A_Pre_Split_Catch_All_Takes_Its_Own_File_Away_Once_It_Is_Empty()
+	{
+		using Fixture fixture = new();
+		fixture.SeedHouse();
+		fixture.Ha.Set("sensor.washing_machine", "0", Noon - TimeSpan.FromHours(5), "power");
+
+		WritePreSplitCatchAll(fixture, Noon - TimeSpan.FromHours(3), "sensor.washing_machine");
+
+		LastSeenTracker tracker = fixture.Started();
+		tracker.Dispose();
+
+		Assert.IsFalse(File.Exists(fixture.NewStore().PathFor(LastSeenBuckets.Unclassified)),
+			"every record in it was re-filed by class, so the pre-split file is not orphaned — it is gone");
+	}
+
+	/// <summary>Writes the file a version-1 installation has: one catch-all holding the whole rest of the house.</summary>
+	private static void WritePreSplitCatchAll(Fixture fixture, DateTimeOffset lastSeen, params string[] entityIds)
+	{
+		LastSeenDocument document = new()
+		{
+			Bucket = LastSeenBuckets.Unclassified,
+			Version = LastSeenDocument.PreSplitVersion,
+			SavedAt = Noon - TimeSpan.FromMinutes(30)
+		};
+
+		foreach (string entityId in entityIds)
+			document.Entities[entityId] = new LastSeenEntry(lastSeen, Noon - TimeSpan.FromDays(20));
+
+		File.WriteAllText(
+			fixture.NewStore().PathFor(LastSeenBuckets.Unclassified),
+			JsonSerializer.Serialize(document, LastSeenDocument.SerializerOptions));
+	}
+
+	/// <summary>Each cache file on disk and the moment the flush that wrote it happened.</summary>
+	private static Dictionary<string, DateTimeOffset> SavedAtByFile(LastSeenStore store)
+	{
+		Dictionary<string, DateTimeOffset> stamps = new(StringComparer.Ordinal);
+
+		foreach (string path in store.FilePaths)
+			stamps[Path.GetFileName(path)] =
+				JsonSerializer.Deserialize<LastSeenDocument>(File.ReadAllText(path), LastSeenDocument.SerializerOptions)!.SavedAt;
+
+		return stamps;
 	}
 
 	[TestMethod]
