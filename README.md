@@ -7,8 +7,9 @@ only if it's actually dark**. They dim as a warning before switching off, so the
 sitting still. Touch a switch and the automation backs off and leaves your setting alone for a while.
 When the house empties the lights sweep off; the first person home is met by the entry lights.
 
-There is a Blazor dashboard and configuration UI, so the whole thing is set up from a browser rather
-than by hand-editing YAML.
+There is a Blazor web UI — a board of room lanes on a shared time axis, a page per room, an activity
+log and a settings editor — so the whole thing is set up from a browser rather than by hand-editing
+YAML.
 
 ```
 ┌ AdaptiveLighting.Extensions ┐   host-agnostic HassModel helpers
@@ -41,7 +42,7 @@ reference `AdaptiveLighting.Web`; configure the YAML by hand and the engine runs
 
 ## Status
 
-**Preview.** The engine runs a real house and a real cabin, and is covered by 466 tests. The API and
+**Preview.** The engine runs a real house and a real cabin, and is covered by 927 tests. The API and
 the configuration schema may still move. Requires **.NET 10** and the **NetDaemon V6** add-on.
 
 **2.0 renames zones to areas.** The types, the YAML and the UI all say *area* now, and the published
@@ -128,15 +129,15 @@ one YAML file, in four layers, each narrowing the last:
 | Layer | What it sets |
 |---|---|
 | `Global` | House-wide: people, master switch, house modes, outdoor lux sensor, the discovery labels |
-| `Defaults` | The baseline every room starts with — the **All rooms** group in the UI |
+| `Defaults` | The baseline every room starts with — **House → Every room starts with these** in the UI |
 | `Periods` | The circadian table: when each period starts, its brightness/colour, its caps |
 | `Areas` | Per room — overrides *only* what differs from `Defaults` |
 
 Most rooms are three lines, because of **discovery**: give an area an `AreaId` and its lights, motion
 sensors and lux sensor are found from the Home Assistant area registry.
 
-Full documentation — the configuration reference, a worked example, the architecture and a user
-guide — is at **[adaptivelighting.netlify.app](https://adaptivelighting.netlify.app)** (source in
+Full documentation — how it works, how to use it, the settings reference and a worked example — is at
+**[adaptivelighting.netlify.app](https://adaptivelighting.netlify.app)** (source in
 [`website/`](website/)).
 
 ## Packages

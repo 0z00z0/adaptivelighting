@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Adaptive lighting">
+	<title>Adaptive lighting</title>
+	<defs>
+		<!-- A faint warm glow behind the source, so the rings read as light, not just circles. -->
+		<radialGradient id="core" cx="50%" cy="50%" r="50%">
+			<stop offset="0%" stop-color="#f0b860" stop-opacity="0.45"/>
+			<stop offset="100%" stop-color="#e9a33c" stop-opacity="0"/>
+		</radialGradient>
+	</defs>
+
+	<!-- Self-contained tile so the mark reads on a light or dark browser tab. -->
+	<rect width="64" height="64" rx="15" fill="#171a1d"/>
+
+	<!-- A light source and its expanding rings — warm at the centre, cooling as they spread into the room. -->
+	<circle cx="32" cy="32" r="13" fill="url(#core)"/>
+	<circle cx="32" cy="32" r="4.5" fill="#ffe6b0"/>
+	<circle cx="32" cy="32" r="11" fill="none" stroke="#f0b860" stroke-width="2.4" stroke-opacity="0.95"/>
+	<circle cx="32" cy="32" r="17.5" fill="none" stroke="#d98f3a" stroke-width="2.2" stroke-opacity="0.7"/>
+	<circle cx="32" cy="32" r="24" fill="none" stroke="#7fb3d5" stroke-width="2" stroke-opacity="0.5"/>
+</svg>

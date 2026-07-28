@@ -1,230 +1,251 @@
 ---
-title: "User guide"
-description: "Living with the system day to day: the dashboard, house modes, and why a light did not turn on."
+title: "How to use it"
+description: "The first ten minutes, the four screens, and what to do when a light does not come on."
 ---
 
-A short, practical guide to living with the system: what each screen does, and how to do the
-things you'll actually want to do. For the design and internals, see [Overview](/overview/),
-[Configuration](/configuration/) and [Architecture](/architecture/); this one is for using it.
+Install it, let it find your rooms, switch on the ones you trust it with, and tune from there. Nothing
+happens to your lights until you say so.
 
-> **Screenshots:** the slots below are marked `📷 [screenshot: …]`. Drop images into
-> `website/public/screenshots/` and replace each slot with `![caption](/screenshots/name.png)`.
+For what the system does once it is running, see [How it works](/overview/).
 
-The web UI runs on the LAN at **http://<host>:10000**. No login — it's LAN‑only. There are two pages:
-the **Dashboard**, and **Configuration**, which holds four sections — **Areas**, **Schedule**,
-**House modes** and **House**.
+:::note[Screenshots]
+The slots below are marked `📷 [screenshot: …]`. Drop images into `website/public/screenshots/` and
+replace each slot with `![caption](/screenshots/name.png)`.
+:::
 
----
+## 1. Install it
 
-## What it does, in one paragraph
+Adaptive lighting runs inside a [NetDaemon](https://netdaemon.xyz) host, on the **NetDaemon V6**
+add-on. It needs .NET 10.
 
-Lights come on when you walk into a room — at a brightness and warmth that suit the time of day —
-**but only if it's actually dark**. They dim as a warning before switching off, so they never drop on
-someone sitting still. Touch a switch and the automation backs off and leaves your setting alone for a
-while. When the house empties the lights sweep off; the first person home is met by the entry lights.
-One master switch stops everything while still letting you see what it *would* have done.
+```bash
+dotnet add package AdaptiveLighting
+dotnet add package AdaptiveLighting.Web   # the board, the room pages and the settings
+```
 
----
+Three things then need doing in your host, and they are all in the
+[README](https://github.com/0z00z0/adaptivelighting#quick-start):
 
-## The first ten minutes
+1. **Point it at a configuration file** in `appsettings.json`. Put the file **outside your deploy
+   folder**, or a redeploy wipes every edit you make in the browser.
+2. **Add a small NetDaemon app** that hands the engine your Home Assistant connection.
+3. **Serve the UI** on a port — the quick start uses 10000.
 
-Nothing needs typing, and nothing happens to your lights until you say so.
+Map that port in the add-on's **Network** panel, and the UI answers at `http://<host>:10000`.
 
-1. **Start it and wait.** About half a minute after it connects, set‑up reads Home Assistant's areas
-   and writes down every room that has both a light and a motion sensor. It guesses each room's role
-   from its name — a bedroom respects sleep mode, a hallway lights on arrival, an outdoor area stays on
-   when the house empties — adopts a house‑mode dropdown if it finds an obvious one, and fills in the
-   list of people from Home Assistant.
-2. **Every room it found is switched off.** The dashboard says so: *"Set‑up found 17 rooms. None are
-   switched on yet, so no lights will change."*
-3. **Choose the rooms.** Follow the button through to **Configuration → Areas**, where the rooms are
-   listed by floor with a switch on each. Turn on the ones you want the system to run — a floor at a
-   time with *Switch on this floor*, if that is easier — and press **Save and apply**.
-4. The dashboard now shows a card per room you chose, and the lights start behaving.
+:::caution[There is no login]
+Anyone who can reach that port can rewrite your lighting configuration. Keep it on your LAN. Do not
+port-forward it. If you need it from outside, put it behind Home Assistant ingress or an
+authenticating reverse proxy.
+:::
 
-You can come back and switch a room off at any time. A switched‑off room is still watched and still
-reported — the one thing it never gets is a command.
+## 2. Start it and wait half a minute
 
----
+Nothing needs typing. About thirty seconds after the connection settles — long enough for Home
+Assistant's entities to arrive — set-up runs once and:
 
-## The dashboard
+- writes down **every Home Assistant area that has both a light and a motion sensor**;
+- **guesses each room's role from its name**, so a bedroom is held to night levels and never lights
+  itself, a bathroom gets the night levels but still lights, a hallway or stairwell lights on
+  arrival, and a terrace or garage stays on when the house empties;
+- **adopts a house-mode dropdown** if it finds an obvious one;
+- **fills in the list of people** from Home Assistant.
 
-📷 [screenshot: the full dashboard — master switch, house strip, room cards]
+Then it stops. **Every room it found is switched off**, and the board says so:
 
-Top to bottom, it answers the questions you ask in order:
+> Set-up found 17 rooms. None are switched on yet, so no lights will change.
 
-- **Adaptive lighting: On / Off** — the master switch. Tap it to pause or resume *all* automatic
-  lighting. When it's off nothing changes until you turn it back on.
-- **House mode** — which mode the house is in (Normal, and any you've set up like *Borte*/*Sover*),
-  with buttons to switch it, and one plain line on what it means right now.
-- **Who's home** — each person and whether they're home.
-- **Rooms** — one card per room you have switched on, told as a short story: what the lights are doing,
-  what happened last, and what happens next. If Home Assistant knows which floor a room is on, the
-  cards are grouped under floor headings; a house with no floors set sees one plain grid, as before.
+📷 [screenshot: the board's first-run state — the found-rooms line, the grey room chips, and the
+"Choose which rooms to switch on" button]
 
-Rooms you have switched off get no card, and a line under the grid says how many are hidden and where
-to turn them back on. A room you disabled by accident never silently disappears.
+Set-up runs once. A house that deliberately has no rooms does not find them grown back after a
+restart.
 
-### Reading a room card
+## 3. Choose which rooms to switch on
 
-📷 [screenshot: one room card, ideally the "too bright" state]
+Follow the button through to **Configuration → Areas**. Rooms are listed by floor, each with a
+switch.
 
-Each card shows the room's state (auto · on, standing by, dimming, set by hand, …), a countdown to the
-next change, and chips for **darkness**, **period** and **house mode**. The important one to know:
+📷 [screenshot: Configuration → Areas — the floor-grouped room list with its switches and the
+per-floor "Switch on this floor" action]
 
-> **"Too bright to turn on right now (lux 86, dark below 40). Movement will light it once it's dark."**
+- Turn on the rooms you want it to run. A hallway is the easiest room to trust first.
+- *Switch on this floor* does a whole floor at once, where Home Assistant knows your floors.
+- Press **Save and apply**. *Discard changes* puts everything back.
 
-That's the darkness gate talking. The room saw movement but didn't light because it isn't dark enough —
-and it now tells you the exact reading and the threshold. This is the single most common "why didn't my
-light come on?" answer (see [Troubleshooting](#troubleshooting)).
+When you switch a room on, a note names **every light that room will now command**, and marks the ones
+that look like something other than room lighting — status LEDs, indicator lights, an RGBW lamp's
+colour channels, a light inside an appliance. If the list is full of things you did not mean, make a
+label in Home Assistant, put it on your real room lights, and name it under **House → Finding lights
+& sensors → Only manage lights with**. That setting reaches every room.
 
----
+A room you leave switched off is still watched and still reported. The one thing it never gets is a
+command.
 
-## House modes
+## 4. Watch the board
 
-📷 [screenshot: Configuration → House modes, the option cards]
+The board is the home page. It answers "is anything odd, and what happens next?".
 
-The house mode is a Home Assistant **dropdown helper** (`input_select`). Each option you add is tagged
-with one **kind**:
+📷 [screenshot: the board on a normal evening — the house bar, the exception tray, and the lanes with
+the now-line]
 
-| Kind | What it does |
-|---|---|
-| **Normal** | Everyday lighting. This is the one the house resets *back* to. Mark exactly one option Normal. |
-| **Sleep** | Sleep‑respecting rooms are held to a dim "night" level instead of the clock's. |
-| **Away** | Runs a scene (or sweeps the lights off) and pauses automatic lighting until a reset fires. |
-| **Guest** | Runs a scene and holds the rooms; otherwise like Normal. |
+Top to bottom:
 
-Switch modes from the **dashboard**. The card with the **orange edge and "active now" badge** is the one
-you're in right now.
+- **The house bar** — the master switch with its On/Off button, the house mode with buttons to change
+  it, and who is home.
+- **The exception tray** — one line per room that is doing something other than following the
+  schedule: a warning dim running, somebody's hand setting standing, a fault. When there is nothing,
+  the tray is one sentence saying the rest are doing what the schedule says.
+- **The lanes** — one line per room on a shared time axis, grouped under floor headings, showing the
+  last few hours behind a teal now-line and what is coming after it. A room behaving normally has an
+  empty track, and in a large house the quiet rooms drop to chips rather than claiming a row.
+- **The decision log** — what happened, newest first, each line naming the room, what it did and why.
+  Room names link through to their pages.
 
-### Setting up an Away mode with a scene
+Rooms you have switched off get no lane. A line under the board says how many are hidden and where to
+turn them back on.
 
-1. Create a dropdown helper in Home Assistant (**Settings → Devices & services → Helpers → Dropdown**),
-   add your options (e.g. `Hjemme`, `Borte`, `Sover`), and save.
-2. In **Configuration → House modes**, pick the helper, then classify each option.
-3. On the Away option: set the kind to **Away** and choose **"Activate this scene when entering mode"**
-   (e.g. `scene.borte_belysning`). Leave the scene empty and Away simply sweeps the lights off.
-4. Add a **reset trigger** so it comes back on its own — most commonly **Reset on presence** (someone
-   moving switches it back to Normal after a short grace).
+## 5. Tune one room
 
-### Auto‑away: switch to a mode when nothing moves
+Click a room name anywhere to open its page at `/room/<area id>`.
 
-📷 [screenshot: the "Activate when no movement for" control]
+📷 [screenshot: a room page — the header with the state pill and the room's switch, the behaviour
+sentences with their values as tappable tokens, and the facts panel]
 
-On any non‑Normal mode you can tick **"Activate when no movement for"** and set an hour/minute window
-(default **6 h**). After the whole house has been that long with no motion, it switches to that mode by
-itself. Pair it with a presence reset for the natural loop:
+The page has:
 
-> **empty for 6 h → Away, someone moves → Normal.**
+- **The header** — the room's name, what it is doing now, how long it has been doing it, and the
+  room's own on/off switch.
+- **Right now — what the engine saw** — the readings behind the claim: the lights and their levels,
+  the last movement, the last command, how dark the room measured against the level it counts as
+  dark.
+- **How this room behaves** — the room's settings as sentences with the values written into them:
 
----
+  > Lights when someone moves and it's darker than **1000 lx** — or the sun is below **3°**.
+  >
+  > After **10 min** without movement, dim to **50 %** for **30 s**, then off.
+  >
+  > Hand changes hold for **2 h**; after a manual off, movement is ignored until the room is empty
+  > **10 min**.
 
-## Areas (the rooms)
+  Tap any value to pick a different one from a short list. **All settings** opens the full set of
+  rows underneath, and says how many of them are this room's own rather than the house's.
+- **In this room** — the lights and sensors that were found, as chips. The **×** on a chip leaves that
+  entity out of this room, and the exclusions are listed so you can put one back. *Not right? Pick by
+  hand* replaces the automatic choice for one list at a time.
+- **What happened here** — the log, filtered to this room.
 
-📷 [screenshot: Configuration → Areas, the floor‑grouped room list]
+Changes on a room page apply about a second after you make them; there is no save button. A
+switched-off room's page is short, and offers to turn the room on.
 
-Every room the system knows lives here, grouped by Home Assistant floor. Rooms not listed here are never
-touched. Usually you pick the Home Assistant **area** and its lights, motion sensors and lux sensor are
-found automatically — open a room and the preview shows what was found.
+## 6. Find out why a light did not come on
 
-Each row carries the room's switch, its name, its area slug, and a one‑line summary of how far it has
-strayed from the shared settings ("all automatic", "2 of 16 changed"). The **coloured left edge** is the
-same language the dashboard speaks: blue while the engine is driving, amber while somebody's hand change
-is holding, grey when idle — and flat grey when the room is switched off.
+The **Activity** page is the whole house's decisions, newest first.
 
-Open a room to change anything about it on its own: a custom name, hand‑picked lights or motion sensors,
-something that blocks auto‑on while it's on, and an override of any shared setting.
+📷 [screenshot: Activity — the room filter, the category chips with their counts, and a
+"Nothing happened" row carrying its lux reading]
 
-### Switching rooms on and off
+Filter by room, and by category: *Movement*, *Light change*, *Illumination change*, *Hand changes*,
+*Nothing happened*, *House & modes*, and *Background tasks* — which starts hidden because it is the
+noisiest and says least.
 
-The switch on a room's row is the room's power. Off means the engine watches the room and reports on it
-but never commands it. Where a floor has a heading, *Switch on this floor* does the whole floor at once.
-Like every other edit, a switch is not live until you press **Save and apply** — *Discard changes* puts
-it back.
+*Nothing happened* is the one to reach for. It carries the reason the engine declined, with the
+evidence:
 
-### Setting a room up again
+> Too bright to switch the lights on · lux 86, dark below 40
 
-If a room has drifted — you moved the lights, renamed things, or hand‑edited yourself into a corner —
-**Set up rooms again** (whole house) and **Set this room up again** (one room) rebuild it from what Home
-Assistant knows right now, as if it were newly found.
+New entries are counted as they arrive but are not inserted under you; a button adds them when you
+are ready.
 
-This throws away what you changed by hand, so it warns first and is concrete about it, per room:
-*"Stue — loses 2 hand‑picked lights and 3 changed settings"*. A room with nothing to lose says so. Two
-things always survive a rebuild: which area the room is, and whether it is switched on. Rooms you didn't
-tick are untouched, rooms Home Assistant has newly qualified are added switched off, and nothing is
-written until you save.
+## 7. The settings
 
-Below the room list are the settings that apply to rooms in general, as two folds:
+**Configuration** holds four sections.
 
-- **All rooms** — the baseline every room starts with, in three boxes: *Movement & timing* (how long
-  lights stay on, the warning dim, how long hand changes hold), *Darkness* (how a room decides it's dark,
-  the lux threshold, the sun height, the outdoor light sensor, the fades) and *Room behaviour* (respects
-  sleep mode, sleep blocks auto‑on, stays on when everyone leaves, welcome home). A room's own settings
-  win over these.
-- **Finding lights & sensors** — the Home Assistant labels that steer discovery: *Only manage lights
-  with* (leave empty to manage every light found), *Never touch*, and *Counts as motion*. The device
-  classes that qualify a sensor sit behind an Advanced fold, because almost nobody needs them.
+**Areas** — your rooms, by floor, each with a switch and a way into its page. *Add a room* offers the
+Home Assistant areas that do not have one yet; it arrives switched off. *Set up rooms again* rebuilds
+chosen rooms from what Home Assistant knows right now, and warns first, per room, about what each one
+loses. Two things always survive a rebuild: which area the room is, and whether it is switched on.
 
----
+**Schedule** — how bright and how warm the lights are through the day, as periods on a daylight chart
+that shows the year at a glance.
 
-## Schedule (the day)
+📷 [screenshot: Configuration → Schedule — the daylight chart and the period table]
 
-📷 [screenshot: Configuration → Schedule, with the daylight chart]
+A period starts at a clock time (`22:30`) or a sun event with an offset (`sunset-01:00`), so it moves
+with the seasons. Each period sets a brightness and a colour temperature, and can cap or floor how
+bright any light gets while it runs — that cap is what stops a motion event putting 100 % in your face
+at 03:00. A period can also set a house mode when it begins. *Blend between periods* lets the lights
+drift to the next period's level instead of stepping at the boundary.
 
-The schedule is the house‑wide circadian table, made of **periods**: **when** each slice of the day starts
-and **how bright / how warm** the lights are then. Boundaries are clock times or sun events
-(`sunset-01:00`) that move with the seasons — the chart shows the year at a glance, with today's daylight
-band. The period in force now has the **orange edge and "active now" badge**. A period can optionally
-**set a house mode** when it starts (e.g. Night → Sover).
+Keep at least one clock-time boundary. Far north, a sun-anchored boundary can be unresolvable around
+midsummer and midwinter, and a period that cannot be placed is skipped.
 
-**Blend between periods** lives here too: lights drift towards the next period's level over the blend
-window instead of stepping at the boundary.
+**House modes** — pick the Home Assistant dropdown helper that carries your modes, then tag each
+option with what it means: Normal, Sleep, Away or Guest. An Away or Guest option can run a scene. A
+non-Normal option can switch itself on when the house has had no movement for a set time, and can
+reset to Normal on movement, at a time, or when a period starts. The mode you are in is marked
+*active now*.
 
----
+**House** — the settings there is exactly one of.
 
-## House
+📷 [screenshot: Configuration → House — "Every room starts with these" above "Finding lights &
+sensors"]
 
-📷 [screenshot: Configuration → House, the People and Master switch groups]
+- **Every room starts with these** — the baseline every room inherits, written as the same sentences
+  a room page uses, with the same *All settings* reveal underneath. A room's own settings win.
+- **Finding lights & sensors** — the three labels (only-manage / never-touch / counts-as-motion), the
+  house's outdoor light sensor, and the device classes behind a fold.
+- **People** — who is watched for presence, and how long everyone must be gone before rooms react to
+  an empty house. Leave the list empty and it means everyone Home Assistant knows, including people
+  added later.
+- **Master switch** — the one switch that pauses everything.
+- **House name**, and a **Fine tuning** fold for the things you set once.
+- **This installation** — whether the engine is running, whether Home Assistant is answering, and
+  where your settings file is kept.
 
-The installation itself: its **name** (a label for logs and notifications), **who lives here** and how
-long everyone must be gone before rooms react to an empty house, and the **master switch**. Leave the
-people list empty and it means everyone Home Assistant knows, including people added later.
+Every edit here waits for **Save and apply**, which validates, writes, and rebuilds the running engine
+in place. No restart.
 
-One **Fine tuning** fold at the bottom holds the things you set once and forget: the NetDaemon user id,
-how often rooms re‑check the world, how long the app recognises its own changes, whether other
-automations count as a person at the switch, and the "close enough" tolerances.
+## 8. Themes
 
----
+The picker at the right-hand end of the top bar offers **Follow the system** (the default), **Light**,
+**Dark** and **0z0 tech**. The choice is kept in your browser, so two people can read the same house
+in different colours and neither has anything to save.
 
 ## Troubleshooting
 
-**A light didn't turn on when I walked in.** Check the room's card on the dashboard. The usual cause is
-the **darkness gate**: the card will say *"Too bright to turn on right now (lux 86, dark below 40)."* In a
-Norwegian summer evening it's genuinely bright until late, so raise **Dark below** for that room (or for
-**All rooms**), or set **How a room decides it's dark** to Sun. The same reasoning is in the add‑on log:
+**A light did not come on when I walked in.** Open the room and read *Right now — what the engine
+saw*, or filter the Activity page to that room and the *Nothing happened* category. The usual answer
+is that the room did not count as dark, and the row names the reading and the threshold. Either lower
+*Dark below* for that room, or set *How the room decides it's dark* to **Sun** or **Always dark**.
 
-```
-Motion in Tilbygg but auto-on is blocked: not dark enough (lux 86, dark below 40)
-```
+**The room has no light-level sensor and still would not light.** That is not the darkness gate — a
+room with no sensor counts as dark. Look for another reason in the same rows: the master switch, the
+room's own switch, an empty house, a guest scene, a sleeping house, or an entity named under *Blocked
+while on*.
 
-**A room I expected has no card.** It is switched off. The line under the grid says how many rooms are —
-turn it on in **Configuration → Areas**.
+**A room I expected has no lane.** It is switched off. The line under the board says how many are, and
+links to where you turn them back on.
 
-**Nothing is changing at all.** Check the **master switch** on the dashboard — if it's Off, everything is
-paused on purpose. The room cards still show what each room *would* be doing.
+**Nothing is changing at all.** Check the master switch in the house bar. While it is off, everything
+is paused on purpose, and the board still shows what each room would be doing.
 
-**The mode won't switch / I don't see my modes.** Make sure the dropdown helper is picked in
-**Configuration → House modes** and has options. The dashboard's House‑mode card links straight there.
+**A room's name reads as a slug.** The room is named after its Home Assistant area, resolved every
+time it is shown. If it reads `kjeller_bad`, Home Assistant is not answering — the display name comes
+from the registry.
 
-**No lights are found in a room.** If **Only manage lights with** is set, only lights carrying that Home
-Assistant label are managed — a room whose lights are all unlabelled resolves to nothing and is skipped,
-and the message names the label. Either label the lights in Home Assistant or clear the field, which goes
-back to managing every light found.
+**No lights were found in a room.** If *Only manage lights with* is set, only lights carrying that
+label are managed, and a room whose lights are all unlabelled resolves to nothing. The message names
+the label. Either label the lights in Home Assistant, or clear the field, which goes back to managing
+every light found.
+
+**Some rooms are listed as skipped.** A room that cannot be resolved is skipped and the rest keep
+running. The message names the real Home Assistant ids, which is the fastest way to fix it.
 
 **My own Home Assistant automation stopped firing.** From 2.0 the published event is
 `adaptive_lighting_area` with an `area` field, not `laget_lighting_zone` with a `zone` field. Nothing
-publishes the old name any more; update the automation or dashboard card by hand.
+publishes the old name any more. Update the automation or dashboard card by hand — and match on the
+new `area_id` field rather than the display name, which is editable.
 
-**My edits disappeared after a deploy.** They shouldn't — the live config lives outside the deploy folder
-and survives. If a room stops resolving, it's usually a renamed Home Assistant entity; the validator lists
-the real ids.
+**My edits disappeared after a deploy.** The live configuration file must live outside your deploy
+folder. **Configuration → House → This installation** shows where it is.
