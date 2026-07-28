@@ -3,6 +3,7 @@ using System.Reactive.Disposables;
 
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.LastSeen;
 
 using NetDaemon.HassModel.Entities;
 
@@ -85,6 +86,11 @@ public sealed class AreaController : IDisposable
 	/// <param name="publisher">Where snapshots go.</param>
 	/// <param name="houseChanged">The house-wide state stream, owned by the orchestrator.</param>
 	/// <param name="loggerFactory">Builds the area's logger.</param>
+	/// <param name="lastSeen">
+	///     Tracks when each entity was genuinely last heard from, across both a Home Assistant restart and an
+	///     engine restart. Optional: when absent the lux staleness rule falls back to Home Assistant's own
+	///     timestamps, which reset on its restart and cannot tell a dead sensor from a quiet one.
+	/// </param>
 	/// <param name="areaId">
 	///     The registry area id the configuration named, or <c>null</c> when it named none. Published on every
 	///     snapshot so a reader can join live state to the document by identity rather than by display name.
@@ -102,7 +108,8 @@ public sealed class AreaController : IDisposable
 		IStatePublisher publisher,
 		IObservable<HouseState> houseChanged,
 		ILoggerFactory loggerFactory,
-		string? areaId = null)
+		string? areaId = null,
+		IEntityLastSeen? lastSeen = null)
 	{
 		ArgumentNullException.ThrowIfNull(loggerFactory);
 
@@ -134,7 +141,8 @@ public sealed class AreaController : IDisposable
 			area.Settings,
 			TimeSpan.FromMinutes(global.LuxSensorStaleAfterMinutes),
 			() => _scheduler.Now,
-			_logger);
+			_logger,
+			lastSeen);
 
 		// Reads through the gate rather than resolving a sensor of its own, so "which sensor is this room looking
 		// at" has exactly one answer — including the opted-in outdoor sensor above, which is the case the feature

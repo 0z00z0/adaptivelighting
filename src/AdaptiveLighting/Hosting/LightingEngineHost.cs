@@ -3,6 +3,7 @@ using System.Reactive.Concurrency;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
+using AdaptiveLighting.LastSeen;
 
 namespace AdaptiveLighting.Hosting;
 
@@ -73,6 +74,9 @@ public sealed class LightingEngineHost : IDisposable
 	private readonly ILoggerFactory _loggerFactory;
 	private readonly ILogger<LightingEngineHost> _logger;
 
+	/// <summary>Handed to every area's illuminance gate, so a dead sensor is judged on evidence that survives a restart.</summary>
+	private readonly IEntityLastSeen? _lastSeen;
+
 	// Every transition of the orchestrator goes through this. A save from one browser tab and a save from
 	// another must not interleave a Dispose with a Start.
 	private readonly Lock _gate = new();
@@ -86,9 +90,14 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>Creates the host. Nothing runs until <see cref="Attach"/> and <see cref="Reload"/>.</summary>
 	/// <param name="store">The configuration document, and the only file this host reads or writes.</param>
 	/// <param name="loggerFactory">Builds the loggers for every part of the engine.</param>
+	/// <param name="lastSeen">
+	///     Tracks when each entity was genuinely last heard from. Optional so a test can build a host without
+	///     one; when absent the gates fall back to Home Assistant's own timestamps, which reset on its restart.
+	/// </param>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory)
+	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen = null)
 	{
+		_lastSeen = lastSeen;
 		_store = store ?? throw new ArgumentNullException(nameof(store));
 		_loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 		_logger = loggerFactory.CreateLogger<LightingEngineHost>();
@@ -549,7 +558,8 @@ public sealed class LightingEngineHost : IDisposable
 				new HaLightActuator(_ha, config.Global, _loggerFactory.CreateLogger<HaLightActuator>()),
 				new HaStatePublisher(_ha, _loggerFactory.CreateLogger<HaStatePublisher>()),
 				new HaNotifier(_ha, _loggerFactory.CreateLogger<HaNotifier>()),
-				_loggerFactory);
+				_loggerFactory,
+				_lastSeen);
 
 			orchestrator.Start();
 

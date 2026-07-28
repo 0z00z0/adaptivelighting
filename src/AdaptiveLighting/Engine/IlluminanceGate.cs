@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.LastSeen;
 
 using NetDaemon.HassModel.Entities;
 
@@ -26,6 +27,18 @@ public sealed class IlluminanceGate
 	private readonly Func<DateTimeOffset> _now;
 	private readonly DateTimeOffset _startedAt;
 	private readonly ILogger _logger;
+
+	/// <summary>
+	///     Who to ask when a sensor was last heard from, or <c>null</c> when nobody is tracking.
+	/// </summary>
+	/// <remarks>
+	///     Home Assistant resets every entity's timestamps when it restarts, so its own fields cannot tell a
+	///     sensor that died last week from one that reported a minute before the restart — measured on a live
+	///     instance where the oldest timestamp in the house was the restart, 2.3 hours old. This tracker keeps its
+	///     own record across both restarts and answers <c>false</c> when it has no opinion, so an unwatched house
+	///     can never condemn a sensor.
+	/// </remarks>
+	private readonly IEntityLastSeen? _lastSeen;
 	private readonly object _gate = new();
 
 	private bool _isDark;
@@ -60,13 +73,19 @@ public sealed class IlluminanceGate
 	///     rest of the area runs on and a test can answer it deterministically.
 	/// </param>
 	/// <param name="logger">Where the notes about missing and dead sensors go.</param>
+	/// <param name="lastSeen">
+	///     Tracks when each entity was genuinely last heard from, across both a Home Assistant restart and an
+	///     engine restart. Optional: when absent the lux staleness rule falls back to Home Assistant's own
+	///     timestamps, which reset on its restart and cannot tell a dead sensor from a quiet one.
+	/// </param>
 	public IlluminanceGate(
 		IHaContext ha,
 		IReadOnlyList<string> luxEntityIds,
 		AreaSettings settings,
 		TimeSpan staleAfter,
 		Func<DateTimeOffset> now,
-		ILogger logger)
+		ILogger logger,
+		IEntityLastSeen? lastSeen = null)
 	{
 		ArgumentNullException.ThrowIfNull(luxEntityIds);
 
@@ -76,6 +95,7 @@ public sealed class IlluminanceGate
 		_staleAfter = staleAfter;
 		_now = now ?? throw new ArgumentNullException(nameof(now));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
+		_lastSeen = lastSeen;
 		_startedAt = _now();
 	}
 
@@ -201,7 +221,7 @@ public sealed class IlluminanceGate
 		{
 			EntityState? state = _ha.GetState(entityId);
 
-			if (state.StateAsDouble() is not { } lux || IsStale(state))
+			if (state.StateAsDouble() is not { } lux || IsStale(entityId, state))
 				continue;
 
 			readings.Add(lux);
@@ -249,9 +269,17 @@ public sealed class IlluminanceGate
 	///         reading it as death would kill a sensor over a payload shape rather than over its behaviour.
 	///     </para>
 	/// </remarks>
-	private bool IsStale(EntityState? state)
+	private bool IsStale(string entityId, EntityState? state)
 	{
-		if (_staleAfter <= TimeSpan.Zero || state?.LastUpdated is not { } reported)
+		if (_staleAfter <= TimeSpan.Zero)
+			return false;
+
+		// The tracker outranks Home Assistant's own fields whenever there is one, because it survives the restart
+		// that resets them. It answers false when it has no record, which is the safe reading and needs no guard.
+		if (_lastSeen is not null)
+			return _lastSeen.HasBeenSilentFor(entityId, _staleAfter);
+
+		if (state?.LastUpdated is not { } reported)
 			return false;
 
 		DateTimeOffset now = _now();

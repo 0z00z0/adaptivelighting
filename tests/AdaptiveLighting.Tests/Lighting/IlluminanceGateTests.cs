@@ -1,5 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.LastSeen;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -25,21 +26,37 @@ public sealed class IlluminanceGateTests
 		DarknessSource source,
 		string? luxSensor = Lux,
 		Action<AreaSettings>? tweak = null,
-		TimeSpan? staleAfter = null) =>
-		BuildMany(ha, source, luxSensor is null ? [] : [luxSensor], tweak, staleAfter);
+		TimeSpan? staleAfter = null,
+		IEntityLastSeen? lastSeen = null) =>
+		BuildMany(ha, source, luxSensor is null ? [] : [luxSensor], tweak, staleAfter, lastSeen);
 
 	private IlluminanceGate BuildMany(
 		FakeHaContext ha,
 		DarknessSource source,
 		IReadOnlyList<string> luxSensors,
 		Action<AreaSettings>? tweak = null,
-		TimeSpan? staleAfter = null)
+		TimeSpan? staleAfter = null,
+		IEntityLastSeen? lastSeen = null)
 	{
 		var settings = new AreaSettings { Darkness = source, LuxThreshold = 40, LuxHysteresis = 10, SunElevationThreshold = 3 };
 		tweak?.Invoke(settings);
 
 		return new IlluminanceGate(
-			ha, luxSensors, settings, staleAfter ?? TimeSpan.Zero, () => _now, NullLogger.Instance);
+			ha, luxSensors, settings, staleAfter ?? TimeSpan.Zero, () => _now, NullLogger.Instance, lastSeen);
+	}
+
+	/// <summary>Answers whatever the test says, so the gate's preference for it can be asserted directly.</summary>
+	private sealed class StubLastSeen(bool silent) : IEntityLastSeen
+	{
+		public DateTimeOffset? LastSeenUtc(string entityId) => null;
+
+		public TimeSpan? SilenceOf(string entityId) => null;
+
+		public bool HasBeenSilentFor(string entityId, TimeSpan threshold) => silent;
+
+		public DateTimeOffset? HomeAssistantStartedUtc => null;
+
+		public int TrackedCount => 0;
 	}
 
 	private static FakeHaContext Ha(string? lux = null, double? sunElevation = null)
@@ -471,5 +488,35 @@ public sealed class IlluminanceGateTests
 	{
 		Assert.AreEqual(800d, Build(Ha(lux: "800", sunElevation: 30), DarknessSource.Sun).ReadLux());
 		Assert.AreEqual(800d, Build(Ha(lux: "800"), DarknessSource.Always).ReadLux());
+	}
+
+	/// <summary>
+	///     The tracker's verdict outranks Home Assistant's own timestamp, in both directions.
+	/// </summary>
+	/// <remarks>
+	///     Home Assistant resets every entity's <c>LastUpdated</c> when it restarts, so shortly afterwards a sensor
+	///     that died last week and one that reported a minute before the restart look identical — measured on a live
+	///     house where the oldest timestamp anywhere was the restart itself, 2.3 hours old. A gate reading only that
+	///     field therefore trusts a dead sensor and, once the grace period lapses, doubts a healthy quiet one. These
+	///     two cases are the whole reason the tracker exists, so they are asserted against a fresh timestamp and an
+	///     ancient one respectively — each the opposite of the answer the tracker gives.
+	/// </remarks>
+	[TestMethod]
+	public void The_Tracker_Decides_Staleness_Rather_Than_Home_Assistants_Own_Timestamp()
+	{
+		FakeHaContext fresh = Ha(lux: "5");
+		IlluminanceGate deadButFreshlyStamped = Build(
+			fresh, DarknessSource.Lux, staleAfter: TimeSpan.FromHours(2), lastSeen: new StubLastSeen(silent: true));
+
+		Assert.IsNull(deadButFreshlyStamped.ReadLux(),
+			"a restart had just re-stamped this sensor, but the tracker knows it stopped reporting");
+
+		FakeHaContext quiet = Ha(lux: "5");
+		_now = _now.AddDays(3);
+		IlluminanceGate aliveButStale = Build(
+			quiet, DarknessSource.Lux, staleAfter: TimeSpan.FromHours(2), lastSeen: new StubLastSeen(silent: false));
+
+		Assert.AreEqual(5, aliveButStale.ReadLux(),
+			"the timestamp is three days behind the clock, but the tracker has heard from it since");
 	}
 }

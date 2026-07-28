@@ -5,6 +5,7 @@ using System.Reactive.Subjects;
 
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.LastSeen;
 using AdaptiveLighting.Ha;
 
 using NetDaemon.HassModel.Entities;
@@ -40,6 +41,9 @@ public sealed class LightingOrchestrator : IDisposable
 	private readonly IStatePublisher _publisher;
 	private readonly INotifier _notifier;
 	private readonly ILoggerFactory _loggerFactory;
+
+	/// <summary>Passed to each area so its lux staleness survives a Home Assistant restart.</summary>
+	private readonly IEntityLastSeen? _lastSeen;
 	private readonly ILogger _logger;
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
@@ -60,6 +64,11 @@ public sealed class LightingOrchestrator : IDisposable
 	/// <param name="publisher">Where area snapshots go.</param>
 	/// <param name="notifier">How area failures reach a human.</param>
 	/// <param name="loggerFactory">Builds the loggers for every part of the engine.</param>
+	/// <param name="lastSeen">
+	///     Tracks when each entity was genuinely last heard from, across both a Home Assistant restart and an
+	///     engine restart. Optional: when absent the lux staleness rule falls back to Home Assistant's own
+	///     timestamps, which reset on its restart and cannot tell a dead sensor from a quiet one.
+	/// </param>
 	public LightingOrchestrator(
 		IHaContext ha,
 		IHaRegistry registry,
@@ -68,8 +77,10 @@ public sealed class LightingOrchestrator : IDisposable
 		ILightActuator actuator,
 		IStatePublisher publisher,
 		INotifier notifier,
-		ILoggerFactory loggerFactory)
+		ILoggerFactory loggerFactory,
+		IEntityLastSeen? lastSeen = null)
 	{
+		_lastSeen = lastSeen;
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_registry = registry ?? throw new ArgumentNullException(nameof(registry));
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
@@ -150,7 +161,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 		return new AreaController(
 			_ha, _scheduler, resolved, _config.Global, _config.Periods, circadian,
-			_actuator, _publisher, _house, _loggerFactory, areaId);
+			_actuator, _publisher, _house, _loggerFactory, areaId, _lastSeen);
 	}
 
 	private void LogDroppedPeriod(string areaName, DroppedPeriod drop)
