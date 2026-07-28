@@ -218,4 +218,30 @@ public sealed class HouseModeSyncTests
 
 		Assert.IsTrue(HouseModeSync.Compare(mode, live).Matches);
 	}
+
+	/// <summary>
+	///     <b>Adopting must not move the house's reset target.</b> <see cref="HouseModeOptionConfig.Kind"/> defaults
+	///     to <see cref="ModeKind.Normal"/>, so an option the helper offers and the document has never seen arrives
+	///     Normal — and a list can then hold several. The engine has always taken the first, which is the option
+	///     that was already there; what a house returns to when a mode ends must not change because somebody
+	///     accepted a new option into the list.
+	/// </summary>
+	/// <remarks>
+	///     Pinned here because the settings page reads exactly this: its "Normal — reset target" badge is now the
+	///     option <see cref="HouseModeConfig.NormalOption"/> returns and not merely any option whose kind is Normal,
+	///     which is what let it label two of them at once.
+	/// </remarks>
+	[TestMethod]
+	public void Adopting_A_New_Option_Leaves_The_Reset_Target_Where_It_Was()
+	{
+		HouseModeConfig mode = Cabin();
+
+		HouseModeSync.Adopt(mode, ["Normal", "Borte", "Sover", "Ferie"]);
+
+		HouseModeOptionConfig adopted = mode.OptionFor("Ferie")!;
+
+		Assert.AreEqual(ModeKind.Normal, adopted.Kind, "nothing is guessed from an option's wording, so it lands on the default");
+		Assert.AreEqual("Normal", mode.NormalOption?.Value, "but the reset target is still the option that already held it");
+		Assert.IsFalse(ReferenceEquals(adopted, mode.NormalOption), "so the newcomer is Normal without being the reset target");
+	}
 }

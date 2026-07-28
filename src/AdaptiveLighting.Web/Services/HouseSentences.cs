@@ -150,7 +150,7 @@ public static class HouseSentences
 		{
 			HouseModeOptionConfig option = houseMode.Options[index];
 
-			lines.Add(new ModeLine(Name(option), option.Kind, [Mode(option, index, periods)]));
+			lines.Add(new ModeLine(Name(option), option.Kind, [Mode(option, index, periods, ReferenceEquals(option, houseMode.NormalOption))]));
 		}
 
 		return lines;
@@ -195,7 +195,14 @@ public static class HouseSentences
 		return property.Length > 0;
 	}
 
-	private static Sentence Mode(HouseModeOptionConfig option, int index, IReadOnlyList<TimePeriodConfig> periods)
+	/// <param name="isResetTarget">
+	///     Whether this is the option <see cref="HouseModeConfig.NormalOption"/> returns — not merely one whose kind
+	///     is Normal. <see cref="HouseModeOptionConfig.Kind"/> defaults to <see cref="ModeKind.Normal"/>, so every
+	///     option adopted from the helper that the document had not seen before is Normal, and a list can hold
+	///     several. Only the first is the reset target; a sentence that promised the house returned to each of them
+	///     would state something that is true of at most one.
+	/// </param>
+	private static Sentence Mode(HouseModeOptionConfig option, int index, IReadOnlyList<TimePeriodConfig> periods, bool isResetTarget)
 	{
 		SentenceBuilder builder = SentenceBuilder.Start();
 
@@ -203,7 +210,9 @@ public static class HouseSentences
 		{
 			case ModeKind.Normal:
 				return builder
-					.Text("is everyday automatic lighting. The house returns here when another mode ends.")
+					.Text(isResetTarget
+						? "is everyday automatic lighting. The house returns here when another mode ends."
+						: "is everyday automatic lighting. It does nothing of its own — and the house returns to the first Normal mode above, not to this one.")
 					.Build();
 
 			case ModeKind.Sleep:

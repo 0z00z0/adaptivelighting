@@ -58,9 +58,15 @@
 					{
 						<span class="badge active-now" title="The house is in this mode right now.">active now</span>
 					}
-					@if (kind == ModeKind.Normal && option is not null)
+					@if (IsResetTarget(option))
 					{
 						<span class="badge ok" title="This option is the reset target.">Normal — reset target</span>
+					}
+					else if (kind == ModeKind.Normal && option is not null)
+					{
+						@* Normal, but not the reset target — the engine takes the first, and the badge has to say
+						   the same thing rather than promise a fallback this option will never be. *@
+						<span class="badge warn" title="Only the first Normal option is the reset target; this one has no behaviour of its own.">Normal — not the reset target</span>
 					}
 					else
 					{
@@ -329,6 +335,20 @@
 	private bool NoNormalOption =>
 		DisplayValues.Count > 0 && !HouseMode.Options.Any(o => o.Kind == ModeKind.Normal);
 
+	/// <summary>
+	///     Whether this option is <em>the</em> reset target, rather than merely one of the Normal ones.
+	/// </summary>
+	/// <remarks>
+	///     Reference equality against <see cref="HouseModeConfig.NormalOption"/>, so the badge and the engine can
+	///     never disagree about which option the house returns to. They used to: <see cref="ModeKind"/> defaults to
+	///     <see cref="ModeKind.Normal"/>, so every option adopted from the helper that this document had not seen
+	///     before arrived claiming to be the reset target, and a list could show two or three of them while the
+	///     engine had always taken the first. The validator warns on save, but a badge that is wrong on screen is
+	///     read long before a save is pressed.
+	/// </remarks>
+	private bool IsResetTarget(HouseModeOptionConfig? option) =>
+		option is not null && ReferenceEquals(option, HouseMode.NormalOption);
+
 	/// <summary>The values to render: the live options first, then any configured value HA no longer offers.</summary>
 	private List<string> DisplayValues
 	{
@@ -348,7 +368,19 @@
 		}
 	}
 
-	private bool IsLive(string value) => LiveOptions.Any(live => Eq(live, value));
+	/// <summary>
+	///     Whether the helper still offers this option — <c>true</c> whenever the question cannot be asked.
+	/// </summary>
+	/// <remarks>
+	///     <b>An empty <see cref="LiveOptions"/> is a Home Assistant that has not answered, not a helper with no
+	///     options.</b> Read as an answer it condemns every mode at once: a house with the connection down showed
+	///     each of its four options struck through as "removed from the helper in Home Assistant", each with a
+	///     Remove button, directly under a notice saying the two lists could not be compared. The same refusal
+	///     <see cref="HouseModeSync.Compare"/> makes, and for the same reason — nothing about the helper is knowable
+	///     until it speaks, so nothing about it is claimed.
+	/// </remarks>
+	private bool IsLive(string value) =>
+		LiveOptions.Count == 0 || LiveOptions.Any(live => Eq(live, value));
 
 	/// <summary>Whether the select currently stands on this option — drives the "active now" badge and accent edge.</summary>
 	private bool IsActive(string value) => ActiveValue is { Length: > 0 } && Eq(ActiveValue, value);

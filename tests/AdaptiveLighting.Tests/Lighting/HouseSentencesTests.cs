@@ -121,6 +121,32 @@ public sealed class HouseSentencesTests
 	}
 
 	/// <summary>
+	///     <b>Only one Normal option is told it is the one the house comes back to.</b> A list can hold several:
+	///     <see cref="HouseModeOptionConfig.Kind"/> defaults to <see cref="ModeKind.Normal"/>, so every option taken
+	///     from the dropdown helper that the document had not seen before arrives Normal. The engine returns to the
+	///     first; printing "the house returns here" under each of them states, of every one but that first, something
+	///     that will not happen.
+	/// </summary>
+	[TestMethod]
+	public void Only_The_First_Normal_Mode_Is_Called_The_One_The_House_Returns_To()
+	{
+		HouseModeConfig modes = new()
+		{
+			Entity = "input_select.husmodus",
+			Options =
+			[
+				new HouseModeOptionConfig { Value = "Hjemme", Kind = ModeKind.Normal },
+				new HouseModeOptionConfig { Value = "Ferie", Kind = ModeKind.Normal }
+			]
+		};
+
+		IReadOnlyList<ModeLine> lines = HouseSentences.Modes(modes, []);
+
+		StringAssert.Contains(Text(lines[0].Sentences.Single()), "The house returns here");
+		StringAssert.Contains(Text(lines[1].Sentences.Single()), "not to this one");
+	}
+
+	/// <summary>
 	///     The away mode is the one with everything in it: what arms it, what it does, and what ends it —
 	///     each clause built only when the document actually says so.
 	/// </summary>
