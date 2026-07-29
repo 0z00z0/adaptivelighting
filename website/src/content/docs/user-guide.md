@@ -121,15 +121,15 @@ The page has:
   dark.
 - **How this room behaves** — the room's settings as sentences with the values written into them:
 
-  > Lights when someone moves and it's darker than **1000 lx** — or the sun is below **3°**.
+  > Lights when someone moves and it's darker than **1000 lx**. After **10 min** without movement,
+  > dim to **50 %** for **30 s**, then off.
   >
-  > After **10 min** without movement, dim to **50 %** for **30 s**, then off.
-  >
-  > Hand changes hold for **2 h**; after a manual off, movement is ignored until the room is empty
-  > **10 min**.
+  > Manual changes hold for **2 h**; after somebody switches them off by hand, movement is ignored
+  > until the room has been empty **10 min**.
 
-  Tap any value to pick a different one from a short list. **All settings** opens the full set of
-  rows underneath, and says how many of them are this room's own rather than the house's.
+  Tap any value to pick a different one from a short list. **All settings** reveals the rest as five
+  folded sections — each names what it holds, and opens when you tap it — and says how many of the
+  settings are this room's own rather than the house's.
 - **In this room** — the lights and sensors that were found, as chips. The **×** on a chip leaves that
   entity out of this room, and the exclusions are listed so you can put one back. *Not right? Pick by
   hand* replaces the automatic choice for one list at a time.
@@ -145,14 +145,14 @@ The **Activity** page is the whole house's decisions, newest first.
 📷 [screenshot: Activity — the room filter, the category chips with their counts, and a
 "Nothing happened" row carrying its lux reading]
 
-Filter by room, and by category: *Movement*, *Light change*, *Illumination change*, *Hand changes*,
-*Nothing happened*, *House & modes*, and *Background tasks* — which starts hidden because it is the
-noisiest and says least.
+Filter by room, and by category: *Movement*, *Light change*, *Darkness*, *Manual changes*, *Nothing
+happened*, *Mode changes*, *House*, and *Background tasks* — which starts hidden because it is the
+noisiest and says least. The other seven start showing.
 
 *Nothing happened* is the one to reach for. It carries the reason the engine declined, with the
 evidence:
 
-> Too bright to switch the lights on · lux 86, dark below 40
+> Too bright to switch on · lux 86, dark below 40
 
 New entries are counted as they arrive but are not inserted under you; a button adds them when you
 are ready.
@@ -216,13 +216,15 @@ in different colours and neither has anything to save.
 
 **A light did not come on when I walked in.** Open the room and read *Right now — what the engine
 saw*, or filter the Activity page to that room and the *Nothing happened* category. The usual answer
-is that the room did not count as dark, and the row names the reading and the threshold. Either lower
-*Dark below* for that room, or set *How the room decides it's dark* to **Sun** or **Always dark**.
+is that the room did not count as dark, and the row names the reading and the threshold. Either raise
+*Dark below* for that room until the reading falls under it, or set *How the room decides it's dark*
+to **Sun** or **Always dark**.
 
-**The room has no light-level sensor and still would not light.** That is not the darkness gate — a
-room with no sensor counts as dark. Look for another reason in the same rows: the master switch, the
-room's own switch, an empty house, a guest scene, a sleeping house, or an entity named under *Blocked
-while on*.
+**The room has no light-level sensor and still would not light.** On *Sensor*, the default, that is
+not the darkness gate — a room with nothing to read counts as dark, whether it never had a sensor or
+its sensors have all stopped reporting. Look for another reason in the same rows: the master switch,
+the room's own switch, an empty house, a guest scene, a sleeping house, or an entity named under
+*Blocked while on*.
 
 **A room I expected has no lane.** It is switched off. The line under the board says how many are, and
 links to where you turn them back on.

@@ -30,7 +30,7 @@ stepping.
 master switch is on. A room reads it and then decides for itself.
 
 **Who made a change** is decided for every change to a light: the engine's own, or a person's. That
-is what makes your hand changes stick.
+is what makes your manual changes stick.
 
 ## When you walk into a room
 
@@ -46,11 +46,15 @@ is what makes your hand changes stick.
 
 ## How a room decides it is dark
 
-Each room reads either a light-level sensor, the sun's height, or both — that is the **How the room
-decides it's dark** setting, and out of the box it is *Either*, meaning dark when either says so.
+A room reads a light-level sensor, the sun's height, or both — that is the **How the room decides
+it's dark** setting. Out of the box it is *Sensor*: the room's own reading decides, and the sun is
+never consulted. *Sun* and *Either* are still there for a room that wants the sun.
 
-- **A room with no light-level sensor counts as dark**, and movement lights it. A gate with nothing
-  to read holds nothing back.
+- **A room with nothing to read counts as dark** wherever a sensor is consulted, and movement lights
+  it. That covers a room that has no light-level sensor and a room whose sensors have all stopped
+  reporting: a gate with nothing to read holds nothing back, and a flat battery is no reason to
+  leave a house unlit through a bright evening. Sensors that go quiet are named in the log, so you
+  find out.
 - **Several sensors in one room are averaged.** Sensors that are unavailable, unknown or silent for
   longer than two hours are dropped from the average first.
 - **A house-wide outdoor sensor is opt-in per room.** Name one under *Finding lights & sensors*, then
@@ -59,7 +63,7 @@ decides it's dark** setting, and out of the box it is *Either*, meaning dark whe
 - **The default threshold is 1000 lx**, because the reading is usually an outdoor one. A sensor that
   really does measure the room wants a much lower number on that room.
 
-Once a room has decided it is bright, it needs a little extra light before it counts as bright again,
+Once a room has decided it is dark, it needs a little extra light before it counts as bright again,
 so a reading sitting on the threshold cannot flap.
 
 ### Brightening with daylight

@@ -30,17 +30,21 @@ own. There are 21 of them.
 
 ### Movement & timing
 
-*How long the lights stay on, and what a hand change is worth.*
+*How long the lights stay on, and what stops or overrules them.*
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
 | **Lights stay on for** | After the last movement, how long the lights stay on before the warning dim. Longer for rooms where people sit still. | 10 min | `VacancyTimeoutSeconds` |
 | **Warning dim level** | How deep the warning dim is. 50 % is half the brightness the room was holding. | 50 % | `PreOffBrightnessFactor` |
 | **Warning dim lasts** | Before going out, the lights dim for this long. Any movement brings them straight back. | 30 s | `PreOffSeconds` |
-| **Hand changes hold for** | When someone adjusts a light by hand, their choice is left alone for this long. | 2 h | `OverrideDurationMinutes` |
-| **After a manual off, wait** | After someone turns the lights off by hand, movement won't turn them back on until the room has been empty this long. | 10 min | `VacancyResetMinutes` |
+| **Manual changes hold for** | When someone adjusts a light by hand, their choice is left alone for this long. | 2 h | `OverrideDurationMinutes` |
+| **After switching off by hand, wait** | After someone turns the lights off by hand, movement won't turn them back on until the room has been empty this long. | 10 min | `VacancyResetMinutes` |
 
 The warning dim must be shorter than the time the lights stay on.
+
+*Blocked while on* closes the section as well, though it is not one of the 21: it decides whether
+movement lights the room at all, but it is a list belonging to one room rather than a value with a
+house-wide baseline. It is described under [a room's own facts](#a-rooms-own-facts).
 
 ### Darkness
 
@@ -48,17 +52,23 @@ The warning dim must be shorter than the time the lights stay on.
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
-| **How the room decides it's dark** | Which signal decides the room is dark enough to light: **Sensor**, **Sun**, **Either** or **Always dark**. | Either | `Darkness` |
+| **How the room decides it's dark** | Which signal decides the room is dark enough to light: **Sensor**, **Sun**, **Either** or **Always dark**. | Sensor | `Darkness` |
 | **Dark below** | At or below this many lux the room counts as dark. Readings run from a few lux at night to tens of thousands at midday, so pick the decade before the number. | 1000 lx | `LuxThreshold` |
 | **Bright again above** | The extra light needed to count as bright again, so a sensor sitting on the threshold cannot flap. Scale it with the threshold. | 10 lx | `LuxHysteresis` |
-| **Dark when the sun is below** | Sun elevation below which the room counts as dark. Also the fallback when a room has a sensor that will not read. | 3° | `SunElevationThreshold` |
+| **Dark when the sun is below** | Sun elevation below which the room counts as dark. In degrees above the horizon: 0° is sunset, −6° is dusk. | 3° | `SunElevationThreshold` |
 
-*Dark below* and *Bright again above* are shown only when the room reads a sensor; *Dark when the sun
-is below* is hidden under **Always dark**.
+*Dark below* and *Bright again above* are shown under **Sensor** and **Either**, the two that read a
+sensor; *Dark when the sun is below* under **Sun** and **Either**, the two that read the sun.
 
-**Always dark** is for rooms with no daylight. **Sensor** falls back to the sun when a sensor exists
-and cannot be read. A room with **no** light-level sensor counts as dark whichever of these is set,
-because a gate with nothing to read holds nothing back.
+**Sensor**, the default, reads the room's own light-level sensor and nothing else. A room with
+nothing to read — one that has no sensor, or one whose sensors have all stopped reporting — counts
+as **dark**, so movement lights it: a gate with nothing to read holds nothing back, and a flat
+battery is no reason to leave a room unlit through a bright evening. A room whose sensors have gone
+quiet also says so once in the log, which is the only place you are told the hardware has failed.
+
+**Sun** reads sun elevation alone, so a room with no sensor is unaffected by having none. **Either**
+counts the room dark when the sensor says so or when the sun is low enough — which means a room with
+no sensor is always dark under it. **Always dark** is for rooms with no daylight.
 
 ### Brightness from daylight
 
@@ -108,7 +118,7 @@ These belong to one room and have no house-wide baseline. They live on the room'
 | Home Assistant area | Which area the room is. Everything else is found from it. | `AreaId` |
 | **Not right? Pick by hand → Lights / Motion sensors / Light-level sensor** | Each list you fill in replaces the automatic choice for that list alone, and ignores the labels. Leave empty to use whatever is found. | `Lights`, `MotionSensors`, `LuxSensor` |
 | The **×** on a found chip | Leaves one entity out of this room — a fridge's own light sensor, a hallway lamp filed under the wrong room. Listed afterwards so you can put it back. | `ExcludeEntities` |
-| **Blocked while on** | While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Offered from the whole house, since a blocker often belongs to no room. | `IgnoreWhenOn` |
+| **Blocked while on** | While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Offered from the whole house, since a blocker often belongs to no room. It closes the *Movement & timing* section under **All settings**, beside the timings it works with. | `IgnoreWhenOn` |
 | The room's switch, in its header | Whether the engine commands this room at all. A switched-off room is still watched and still reported. | `Enabled` |
 
 **File only:** `FollowOutdoorLux: true` makes a room read the house's outdoor light sensor when it has
@@ -199,7 +209,7 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 | **NetDaemon user id** | The Home Assistant user id owning this host's token. Optional; it sharpens "was that change us, or a person?". | none | `NetDaemonUserId` |
 | **Re-check the rooms every** | How often each room re-checks the time of day and the light outside. Once a minute is plenty. | 60 s | `CircadianTickSeconds` |
 | **Recognise own changes for** | How long the app's own commands are recognised as its own rather than as a person at a switch. | 8 s | `SelfEchoWindowSeconds` |
-| **Other automations count as manual** | Whether a change made by another automation counts as a hand change. On means your other automations win. | on | `TreatAutomationsAsManual` |
+| **Other automations count as manual changes** | Whether a change made by another automation counts as a manual change. On means your other automations win. | on | `TreatAutomationsAsManual` |
 | **Close enough — brightness / colour** | A light already this close to its target is left alone rather than told to fade to where it is. | 2 %, 50 K | `BrightnessTolerancePct`, `ColorTempToleranceKelvin` |
 
 ---
