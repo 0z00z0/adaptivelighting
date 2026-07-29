@@ -353,21 +353,33 @@ public static class RoomFacts
 	private static string Stamp(DateTimeOffset at, DateTimeOffset now) =>
 		$"{Ago(at, now)} · {at.ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture)}";
 
-	/// <summary>The levels the table reports, terse: the header's own line writes them out in prose instead.</summary>
+	/// <summary>
+	///     The levels the table reports, terse: the header's own line writes them out in prose instead.
+	/// </summary>
+	/// <remarks>
+	///     The warmth is named, not numbered. "2700 K" is a unit somebody has to already know to read, and this
+	///     table is the one surface on the page written for the person asking why a light did not come on rather
+	///     than for the person tuning it. The number is kept, in the hover — see <see cref="LightsTitle"/>.
+	/// </remarks>
 	private static string Reading(AreaSnapshot snapshot)
 	{
 		if (snapshot.BrightnessPct is not { } brightness)
 			return snapshot.LastCommandAt is null ? "not commanded yet" : "off";
 
 		return snapshot.ColorTempKelvin is { } kelvin
-			? $"{brightness:0} % · {kelvin} K"
+			? $"{brightness:0} % · {Warmth(kelvin)}"
 			: $"{brightness:0} %";
 	}
 
-	private static string LightsTitle(AreaSnapshot snapshot) =>
-		snapshot.BrightnessPct is null && snapshot.LastCommandAt is null
-			? "The engine has commanded nothing here yet, so it cannot say what the lights are doing."
+	private static string LightsTitle(AreaSnapshot snapshot)
+	{
+		if (snapshot.BrightnessPct is null && snapshot.LastCommandAt is null)
+			return "The engine has commanded nothing here yet, so it cannot say what the lights are doing.";
+
+		return snapshot.ColorTempKelvin is { } kelvin
+			? $"The levels the engine is holding these lights at — {kelvin} K."
 			: "The levels the engine is holding these lights at.";
+	}
 
 	private static string Levels(string prefix, AreaSnapshot snapshot, string suffix = "")
 	{
@@ -396,11 +408,15 @@ public static class RoomFacts
 	///     which source it consulted, and a reading assembled here would eventually disagree with the one the
 	///     engine acted on.
 	/// </remarks>
+	/// <remarks>
+	///     Lower case, like every other value in this column. Capitalising the answers to the one row phrased as a
+	///     question made them the only capitals in the table, which read as emphasis nobody had asked for.
+	/// </remarks>
 	private static string DarknessVerdict(AreaSnapshot snapshot) => snapshot.IsDark switch
 	{
-		true => "Yes",
-		false => "No — too bright",
-		null => "Not checked yet"
+		true => "yes",
+		false => "no — too bright",
+		null => "not checked yet"
 	};
 
 	private static string DarknessTitle(AreaSnapshot snapshot) => snapshot.IsDark is null

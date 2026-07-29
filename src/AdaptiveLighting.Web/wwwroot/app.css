@@ -4273,15 +4273,17 @@ button.mode-pill:disabled {
 	font-size: var(--text-sm);
 }
 
-/* 7.5rem, not 6.5: "If someone walks in" is the longest label and the question form is what makes the table
-   answerable at a glance, so the column is sized to the words rather than the words cut to the column. */
+/* 9.5rem, measured rather than guessed: the labels are uppercase with letter-spacing, and inside a 336px aside
+   the two paddings take 34px of the column. "Last movement" needs 110px of content, so anything under 9.5rem
+   wraps every label to two lines. Wrapping is left ON rather than forced off — "If someone walks in" needs
+   146px and is allowed the second line, because it appears only when a room is actually blocked. */
 .room-fact-table th {
 	text-align: left;
 	color: var(--muted);
 	font-weight: 600;
 	padding: 0.3rem var(--space-4) 0.3rem 1.15rem;
 	vertical-align: top;
-	width: 7.5rem;
+	width: 9.5rem;
 }
 
 .room-fact-table td {
@@ -4891,12 +4893,11 @@ button.mode-pill:disabled {
 		margin-left: 0;
 	}
 
-	/* Narrower here, and the labels are allowed to wrap onto two lines to get there — on a 390px screen a
-	   nowrap "If someone walks in" would take more than half the row and leave the answer nowhere to sit. */
+	/* Narrower here, and the longer labels take a second line rather than a third of the row: on a 390px screen
+	   the answer needs the space more than the question does. */
 	.room-fact-table th {
-		width: 6rem;
+		width: 7rem;
 		padding-left: 1rem;
-		white-space: normal;
 	}
 
 	.room-log .log-row {

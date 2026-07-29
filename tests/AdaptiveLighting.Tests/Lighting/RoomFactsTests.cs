@@ -102,18 +102,18 @@ public sealed class RoomFactsTests
 		IReadOnlyList<RoomFact> facts = RoomFacts.For(Report(isDark: false, darknessDetail: "lux 86, dark below 40"), Now);
 		RoomFact darkness = facts.Single(fact => fact.Label == "Dark enough?");
 
-		Assert.AreEqual("No — too bright", darkness.Value);
+		Assert.AreEqual("no — too bright", darkness.Value);
 		Assert.AreEqual("lux 86, dark below 40", darkness.Detail);
 
 		RoomFact lit = RoomFacts.For(Report(isDark: true, darknessDetail: "lux 4, dark below 40"), Now)
 			.Single(fact => fact.Label == "Dark enough?");
 
-		Assert.AreEqual("Yes", lit.Value);
+		Assert.AreEqual("yes", lit.Value);
 
 		// No reading published means no second line at all, rather than an empty one taking the space.
 		RoomFact bare = RoomFacts.For(Report(isDark: null), Now).Single(fact => fact.Label == "Dark enough?");
 
-		Assert.AreEqual("Not checked yet", bare.Value);
+		Assert.AreEqual("not checked yet", bare.Value);
 		Assert.IsNull(bare.Detail);
 	}
 
@@ -140,8 +140,13 @@ public sealed class RoomFactsTests
 
 		Assert.AreEqual("off", ValueOf(RoomFacts.For(Report(lastCommand: Now.AddHours(-1)), Now), "Lights"));
 
-		Assert.AreEqual("70 % · 2700 K",
-			ValueOf(RoomFacts.For(Report(state: AreaState.AutoActive, brightness: 70, kelvin: 2700, lastCommand: Now), Now), "Lights"));
+		// The warmth is named rather than numbered — "2700 K" is a unit you have to already know to read, and this
+		// table is written for the person asking why a light did not come on. The kelvin is kept in the hover.
+		RoomFact lit = RoomFacts.For(Report(state: AreaState.AutoActive, brightness: 70, kelvin: 2700, lastCommand: Now), Now)
+			.Single(fact => fact.Label == "Lights");
+
+		Assert.AreEqual("70 % · warm white", lit.Value);
+		StringAssert.Contains(lit.Title!, "2700 K");
 	}
 
 	// ===================== would movement light this room? =====================
