@@ -91,16 +91,22 @@ the now-line]
 
 Top to bottom:
 
-- **The house bar** — the master switch with its On/Off button, the house mode with buttons to change
-  it, and who is home.
+- **The house bar** — the house mode with buttons to change it, who is home, and at the end the
+  master switch that pauses everything. It sits last and stays quiet on purpose: it is touched twice
+  a year, and it speaks up — a line under it, a colour on the panel's edge, and a notice across the
+  page — the moment it is off or unreachable.
 - **The exception tray** — one line per room that is doing something other than following the
   schedule: a warning dim running, somebody's hand setting standing, a fault. When there is nothing,
   the tray is one sentence saying the rest are doing what the schedule says.
 - **The lanes** — one line per room on a shared time axis, grouped under floor headings, showing the
   last few hours behind a teal now-line and what is coming after it. A room behaving normally has an
   empty track, and in a large house the quiet rooms drop to chips rather than claiming a row.
-- **The decision log** — what happened, newest first, each line naming the room, what it did and why.
-  Room names link through to their pages.
+- **What's worth knowing** — the exceptions, newest first, each line naming the room, what it did and
+  why. Room names link through to their pages. Deliberately short: the lanes above have already drawn
+  every movement and every light that came on, so this list carries only what a picture cannot say —
+  somebody overriding the engine by hand, the engine declining to light a room and why, a change of
+  house mode, and the house emptying, filling or being switched off. The line under it counts the
+  everyday reports waiting on the Activity page.
 
 Rooms you have switched off get no lane. A line under the board says how many are hidden and where to
 turn them back on.
@@ -116,9 +122,11 @@ The page has:
 
 - **The header** — the room's name, what it is doing now, how long it has been doing it, and the
   room's own on/off switch.
-- **Right now — what the engine saw** — the readings behind the claim: the lights and their levels,
-  the last movement, the last command, how dark the room measured against the level it counts as
-  dark.
+- **Right now — what the engine saw** — the readings behind the claim, in the order you are likely to
+  want them. *Dark enough?* first, answered yes or no with the actual reading underneath it, because
+  that is what you came to find out. Then the lights and their levels, the last movement, the last
+  change, and the time of day the room is following. When something is stopping movement from
+  lighting the room, an *If someone walks in* row appears and says what.
 - **How this room behaves** — the room's settings as sentences with the values written into them:
 
   > Lights when someone moves and it's darker than **1000 lx**. After **10 min** without movement,

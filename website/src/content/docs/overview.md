@@ -109,7 +109,7 @@ You can turn that off.
 **People.** Presence comes from the `person` and `device_tracker` entities you name, or from everyone
 Home Assistant knows if you name nobody. When the last one leaves and stays gone for the debounce, the
 house counts as empty: the lights sweep off, except in rooms set to stay on. The first person back
-lights the rooms marked *Welcome home*, if it is dark.
+lights the rooms set to *light up when the first person comes home*, if it is dark.
 
 **House modes.** The house mode is a Home Assistant dropdown helper (`input_select`). Each of its
 options is tagged with one behaviour:

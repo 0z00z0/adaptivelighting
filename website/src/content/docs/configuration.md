@@ -100,7 +100,7 @@ sensor, or from the house's outdoor sensor when the room follows it.
 | **Gentle while the house sleeps** | Held to the night period's limits, so a 03:00 glass of water gets a dim light. | off | `RespectSleepMode` |
 | **Never comes on by itself while the house sleeps** | For the bedroom itself. The wall switch still works. | off | `SleepBlocksAutoOn` |
 | **Stays on when everyone leaves** | Porch and security lights are wanted precisely when nobody's home. | off | `SkipAwaySweep` |
-| **Welcome home** | Lights up when the first person arrives in the dark. | off | `WelcomeHome` |
+| **Lights up when the first person comes home** | Comes on to meet them if the house is dark, instead of waiting for a motion sensor. | off | `WelcomeHome` |
 
 ### Rarely needed
 
