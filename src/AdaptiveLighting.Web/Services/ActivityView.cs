@@ -997,14 +997,14 @@ public static class ActivityView
 		TransitionReason.Motion => snapshot.State switch
 		{
 			AreaState.AutoActive => Lit("Movement — lights on", snapshot),
-			AreaState.SuppressedOff => "Movement, but the lights are off by hand",
+			AreaState.SuppressedOff => "Movement, but the lights were switched off manually",
 			AreaState.OverriddenOn => "Movement while the manual levels stand",
 			_ => "Movement"
 		},
 		TransitionReason.VacancyTimeout => Lit("No movement — dimmed as a warning", snapshot),
 		TransitionReason.PreOffElapsed => "Dim warning unanswered — lights off",
-		TransitionReason.ManualOn => "Lights set by hand",
-		TransitionReason.ManualOff => "Lights switched off by hand",
+		TransitionReason.ManualOn => "Lights set manually",
+		TransitionReason.ManualOff => "Lights switched off manually",
 		TransitionReason.OverrideExpired => "The manual change ran its course",
 		TransitionReason.SuppressionLifted => "Quiet long enough — back on automatic",
 		TransitionReason.EveryoneLeft => "Everyone left the house",

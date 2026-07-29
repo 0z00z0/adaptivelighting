@@ -430,7 +430,7 @@ public sealed class ModeService
 			parts.Add($"at {time}");
 
 		if (parts.Count == 0)
-			return "stays until you switch back by hand";
+			return "stays until you switch the house back yourself";
 
 		// No Normal option → the engine has nothing to reset to and the trigger will not fire. Say so, so the card
 		// agrees with the engine's no-op rather than promising a reset that never happens.

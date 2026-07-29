@@ -120,7 +120,7 @@ public static class AreaSentences
 	///     the world, but "don't check" as an instruction to the engine.
 	/// </remarks>
 	public static IReadOnlyList<TokenChoice> DarknessChoices { get; } = TokenChoices.Of(
-		("the light sensor", nameof(DarknessSource.Lux)),
+		("the light-level sensor", nameof(DarknessSource.Lux)),
 		("the sun", nameof(DarknessSource.Sun)),
 		("either the sensor or the sun", nameof(DarknessSource.Either)),
 		("whatever the daylight", nameof(DarknessSource.Always)));
@@ -278,10 +278,10 @@ public static class AreaSentences
 				HandHoldChoices,
 				OriginOf(area, area?.OverrideDurationMinutes),
 				defaults.OverrideDurationMinutes * 60)
-			.Text("; after somebody switches them off by hand, movement is ignored until the room has been empty ")
+			.Text("; after somebody switches them off manually, movement is ignored until the room has been empty ")
 			.Duration(
 				nameof(AreaSettings.VacancyResetMinutes),
-				"After switching off by hand, wait",
+				"After switching off manually, wait",
 				effective.VacancyResetMinutes * 60,
 				HandOffWaitChoices,
 				OriginOf(area, area?.VacancyResetMinutes),

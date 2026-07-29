@@ -111,7 +111,7 @@ public static class RoomFacts
 				"These lights were already on when the engine started. They're managed now — their levels weren't touched.",
 			{ State: AreaState.AutoActive } => Levels("Lit at", snapshot),
 			{ State: AreaState.PreOff } => Levels("Dimmed to", snapshot, " as a warning"),
-			{ State: AreaState.OverriddenOn } => "Someone set these lights by hand — they're being left alone.",
+			{ State: AreaState.OverriddenOn } => "Someone set these lights manually — they're being left alone.",
 			{ State: AreaState.SuppressedOff } => "Someone switched these lights off. Movement is ignored for now.",
 			{ State: AreaState.SceneHold } => "A scene is holding this room. The engine stands back until the scene lets go.",
 			{ State: AreaState.Away, BrightnessPct: not null } => "Nobody home. This room keeps its lights on.",
@@ -327,7 +327,7 @@ public static class RoomFacts
 		AreaState.AutoActive => "the engine is holding these lights",
 		AreaState.PreOff => "dimmed as a warning, about to go dark",
 		AreaState.OverriddenOn => "somebody set these levels, so the engine stands back",
-		AreaState.SuppressedOff => "switched off at the wall, movement ignored for now",
+		AreaState.SuppressedOff => "switched off manually, movement ignored for now",
 		AreaState.SceneHold => "a scene owns this room until it lets go",
 		AreaState.Disabled => "this room is never commanded",
 		AreaState.AutoVacant => "no lights commanded, waiting for movement",
@@ -348,7 +348,7 @@ public static class RoomFacts
 
 	private static string LightsTitle(AreaSnapshot snapshot) =>
 		snapshot.BrightnessPct is null && snapshot.LastCommandAt is null
-			? "The engine has commanded nothing here yet, so it cannot say what the bulbs are doing."
+			? "The engine has commanded nothing here yet, so it cannot say what the lights are doing."
 			: "The levels the engine is holding these lights at.";
 
 	private static string Levels(string prefix, AreaSnapshot snapshot, string suffix = "")
