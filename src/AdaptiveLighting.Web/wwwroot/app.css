@@ -4309,6 +4309,13 @@ button.mode-pill:disabled {
 	line-height: 1.4;
 }
 
+/* The one cell whose value is a sentence, not a reading. Mono is right for "70 % · warm white" and wrong for
+   "The house is asleep — movement won't light the room", which in mono wrapped to three lines and became the
+   heaviest thing in a table meant to be scanned. */
+.room-fact-table td.fact-prose {
+	font-family: var(--font-sans);
+}
+
 .room-fact-table tr:last-child th,
 .room-fact-table tr:last-child td {
 	padding-bottom: 0.9rem;

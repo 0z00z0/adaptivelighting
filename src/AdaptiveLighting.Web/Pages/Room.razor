@@ -145,7 +145,7 @@ else
 						{
 							<tr>
 								<th scope="row">@fact.Label</th>
-								<td title="@fact.Title">
+								<td title="@fact.Title" class="@(fact.IsProse ? "fact-prose" : null)">
 									@fact.Value
 									@* The engine's own working, under the answer rather than welded onto the end
 									   of it — see RoomFact.Detail for the three-line wrap this replaced. *@

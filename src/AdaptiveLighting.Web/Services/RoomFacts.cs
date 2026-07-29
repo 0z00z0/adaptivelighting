@@ -12,6 +12,10 @@ namespace AdaptiveLighting.Web.Services;
 /// <param name="Detail">
 ///     The measurement behind the value, rendered as a quieter second line, or <c>null</c> when there is none.
 /// </param>
+/// <param name="IsProse">
+///     Whether <paramref name="Value"/> is a sentence rather than a reading, and so should not be set in the
+///     table's monospaced face.
+/// </param>
 /// <remarks>
 ///     <b>Why <paramref name="Detail"/> is a field and not just a longer <paramref name="Value"/>.</b> The
 ///     darkness row used to read <i>"dark enough — lux 4 (mean of 2 of 2 sensors), dark below 1000"</i> as one
@@ -20,7 +24,7 @@ namespace AdaptiveLighting.Web.Services;
 ///     the reading is what they need next, and only if the verdict surprised them. Splitting them lets the eye
 ///     take the first column of answers straight down and stop where it wants to.
 /// </remarks>
-public sealed record RoomFact(string Label, string Value, string? Title = null, string? Detail = null);
+public sealed record RoomFact(string Label, string Value, string? Title = null, string? Detail = null, bool IsProse = false);
 
 /// <summary>
 ///     What the room page says about a room right now: the present-tense line, what happens next, and the
@@ -94,10 +98,13 @@ public static class RoomFacts
 
 		if (AutoOnNote(snapshot) is { Length: > 0 } blocked)
 		{
+			// Prose, so it is not set in the readings column's monospaced face: this is the one row whose value is
+			// a whole sentence, and in mono it wrapped to three lines and outweighed everything around it.
 			facts.Add(new RoomFact(
 				"If someone walks in",
 				blocked,
-				"Whether walking in would switch these lights on, as the engine judged it when it reported."));
+				"Whether walking in would switch these lights on, as the engine judged it when it reported.",
+				IsProse: true));
 		}
 
 		facts.Add(new RoomFact("Lights", Reading(snapshot), LightsTitle(snapshot)));
