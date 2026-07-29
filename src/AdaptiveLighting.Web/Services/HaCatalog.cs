@@ -584,6 +584,44 @@ public sealed class HaCatalog
 		!string.IsNullOrWhiteSpace(entityId) && TryGetState(entityId) is not null;
 
 	/// <summary>
+	///     What a room's light-level sensors are reading right now, averaged, or <c>null</c> when none answers.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Averaged rather than chosen between, and falling back to the house's outdoor sensor only for a room
+	///         that asked to follow it — both are <see cref="IlluminanceGate"/>'s rules, so a reading shown beside a
+	///         curve is the reading the curve would be applied to.
+	///     </para>
+	///     <para>
+	///         <b>The one rule deliberately not copied is staleness.</b> The gate drops a sensor that has stopped
+	///         reporting, because it is deciding whether to light a room and a dead sensor must not vote. This is
+	///         labelling a chart with what the sensor last said, which stays true of the sensor either way; a marker
+	///         that vanished on a quiet afternoon would read as a broken chart rather than as a quiet sensor.
+	///     </para>
+	/// </remarks>
+	/// <param name="area">The room, already resolved, so this reads the same sensors the engine would.</param>
+	/// <param name="global">The globals, for the house's outdoor sensor.</param>
+	/// <returns>The reading in lux, or <c>null</c> when the room has no sensor that answers with a number.</returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public double? LuxIn(ResolvedArea area, GlobalConfig global)
+	{
+		ArgumentNullException.ThrowIfNull(area);
+		ArgumentNullException.ThrowIfNull(global);
+
+		IReadOnlyList<string> sensors = area.LuxSensors.Count > 0
+			? area.LuxSensors
+			: area.FollowOutdoorLux && global.OutdoorLuxSensor is { Length: > 0 } outdoor ? [outdoor] : [];
+
+		List<double> readings = [];
+
+		foreach (string entityId in sensors)
+			if (TryGetState(entityId).StateAsDouble() is { } lux && double.IsFinite(lux))
+				readings.Add(lux);
+
+		return readings.Count == 0 ? null : readings.Average();
+	}
+
+	/// <summary>
 	///     Runs the engine's own area resolver against <paramref name="area"/> as it stands in the editor.
 	/// </summary>
 	/// <param name="area">The area being edited. Not mutated.</param>
