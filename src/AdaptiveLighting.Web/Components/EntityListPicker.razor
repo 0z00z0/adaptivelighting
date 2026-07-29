@@ -39,11 +39,24 @@
 		}
 		else
 		{
+			@* Discovery's own answer first and unheaded, then everything else under a heading. The order is the
+			   claim: the first block is what this room resolves to today, and a household picking by hand is
+			   almost always reaching for one of those or for the bulbs inside one of them. An optgroup rather
+			   than a disabled option, so the browser renders it as a heading and a keyboard cannot land on it. *@
 			<select class="picker-select" @bind:get="string.Empty" @bind:set="OnPicked">
 				<option value="">@AddLabel</option>
 				@foreach (EntityOption option in Available)
 				{
 					<option value="@option.EntityId">@option.Label</option>
+				}
+				@if (AvailableOthers.Count > 0)
+				{
+					<optgroup label="@OthersLabel">
+						@foreach (EntityOption option in AvailableOthers)
+						{
+							<option value="@option.EntityId">@option.Label</option>
+						}
+					</optgroup>
 				}
 			</select>
 		}
@@ -71,6 +84,22 @@
 	/// <summary>The entities to offer, already filtered to the domains this field accepts.</summary>
 	[Parameter]
 	public IReadOnlyList<EntityOption> Options { get; set; } = [];
+
+	/// <summary>
+	///     Everything else the field could use, offered under <see cref="OthersLabel"/> below <see cref="Options"/>.
+	/// </summary>
+	/// <remarks>
+	///     Two lists rather than one sorted list, because the split is the information. <see cref="Options"/> is
+	///     what the room resolves to as it stands — a light group, most often — and this is what that answer
+	///     swallowed or a label kept out. Merged, the one entity worth picking would sit alphabetically among the
+	///     twenty it stands for.
+	/// </remarks>
+	[Parameter]
+	public IReadOnlyList<EntityOption> Others { get; set; } = [];
+
+	/// <summary>The heading above <see cref="Others"/>, in words the caller is in a position to be right about.</summary>
+	[Parameter]
+	public string OthersLabel { get; set; } = "Everything else";
 
 	/// <summary>What an empty list means for this field, in words.</summary>
 	[Parameter]
@@ -105,12 +134,16 @@
 	private string? _typed;
 	private bool _manual;
 
-	private bool HasOptions => Options.Count > 0;
+	private bool HasOptions => Options.Count > 0 || Others.Count > 0;
 
 	// Already-chosen entities are not offered again: adding the same light twice would have the engine
 	// command it twice per tick, and there is no reading of the config where that is what somebody meant.
-	private IEnumerable<EntityOption> Available =>
-		Options.Where(option => !Value.Contains(option.EntityId, StringComparer.Ordinal));
+	private IReadOnlyList<EntityOption> Available => Unpicked(Options);
+
+	private IReadOnlyList<EntityOption> AvailableOthers => Unpicked(Others);
+
+	private IReadOnlyList<EntityOption> Unpicked(IReadOnlyList<EntityOption> options) =>
+		[.. options.Where(option => !Value.Contains(option.EntityId, StringComparer.Ordinal))];
 
 	private string NameOf(string entityId) => NameResolver?.Invoke(entityId) ?? entityId;
 

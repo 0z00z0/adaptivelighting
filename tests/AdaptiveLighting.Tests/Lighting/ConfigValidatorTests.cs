@@ -3,12 +3,12 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     What the validator refuses outright, what it merely reports against one zone, and the difference.
+///     What the validator refuses outright, what it merely reports against one area, and the difference.
 /// </summary>
 /// <remarks>
 ///     The split is the whole design: a document-level problem means nobody thought about this config and the
 ///     app should show up dead in HA; a referential problem — an entity renamed under us — must cost that one
-///     zone rather than the house.
+///     area rather than the house.
 /// </remarks>
 [TestClass]
 public sealed class ConfigValidatorTests
@@ -16,7 +16,7 @@ public sealed class ConfigValidatorTests
 	private static AdaptiveLightingConfig Minimal() => new()
 	{
 		Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "night", Start = "22:30" }],
-		Zones = [new() { Name = "Stue", AreaId = "stue" }]
+		Areas = [new() { Name = "Stue", AreaId = "stue" }]
 	};
 
 	[TestMethod]
@@ -25,21 +25,81 @@ public sealed class ConfigValidatorTests
 		Assert.IsTrue(ConfigValidator.Validate(Minimal()).IsValid);
 	}
 
+	// ===================== the outdoor sensor stopped being a silent fallback =====================
+
+	/// <summary>
+	///     <b>A document can now mean something different from what it used to, and this is where it is told so.</b>
+	/// </summary>
+	/// <remarks>
+	///     The outdoor sensor used to be handed to every room that resolved no lux sensor of its own. It is now an
+	///     opt-in per room, so a document written under the old rule looks identical and behaves differently: the
+	///     rooms that used to gate on the outdoor reading now have none, and light on movement. A warning rather
+	///     than a migration — the validator is pure and cannot know which rooms will discover a sensor of their
+	///     own, and rewriting somebody's file to preserve a behaviour they were suffering under is not help.
+	/// </remarks>
 	[TestMethod]
-	public void An_Empty_Document_Fails_On_Periods_But_Only_Warns_On_Zones()
+	public void An_Outdoor_Sensor_No_Room_Follows_Is_Warned_About_As_A_Change_Of_Meaning()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "the document still runs — it just does something else than it did");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("no room follows it", StringComparison.Ordinal)),
+			"the one place an upgraded house is told what changed under it");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("FollowOutdoorLux", StringComparison.Ordinal)),
+			"and a warning without the name of the fix is a warning nobody can act on");
+	}
+
+	[TestMethod]
+	public void A_Room_That_Follows_The_Outdoor_Sensor_Silences_That_Warning()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+		config.Areas[0].FollowOutdoorLux = true;
+
+		Assert.IsFalse(
+			ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("no room follows it", StringComparison.Ordinal)));
+	}
+
+	/// <summary>The mirror case: a room following a sensor the house does not name has asked for nothing.</summary>
+	[TestMethod]
+	public void Following_An_Outdoor_Sensor_The_House_Does_Not_Name_Warns_Per_Room()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas[0].FollowOutdoorLux = true;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsTrue(result.Warnings.Any(w =>
+			w.Contains("Stue", StringComparison.Ordinal) && w.Contains("counts as dark", StringComparison.Ordinal)),
+			"the room believes itself gated and is not, which is worth naming the room over");
+	}
+
+	/// <summary>A document that names no outdoor sensor at all gains nothing from any of this.</summary>
+	[TestMethod]
+	public void A_Document_With_No_Outdoor_Sensor_Is_Untouched_By_The_Opt_In()
+	{
+		Assert.AreEqual(0, ConfigValidator.Validate(Minimal()).Warnings.Count);
+	}
+
+	[TestMethod]
+	public void An_Empty_Document_Fails_On_Periods_But_Only_Warns_On_Areas()
 	{
 		var result = ConfigValidator.Validate(new AdaptiveLightingConfig());
 
 		Assert.IsFalse(result.IsValid, "with no periods the engine could never pick a target");
 		Assert.IsTrue(result.Errors.Any(e => e.Contains("Periods", StringComparison.Ordinal)));
 
-		// Deliberately NOT an error. An empty zone list is where a new installation starts, before discovery has
+		// Deliberately NOT an error. An empty area list is where a new installation starts, before discovery has
 		// run - and where a household ends up after removing every room on purpose. The engine runs and commands
 		// nothing, which is a fine state to be in; refusing the document would stop the app and announce
 		// "document-level errors" to somebody whose only sin is not having configured anything yet.
-		Assert.IsFalse(result.Errors.Any(e => e.Contains("zones", StringComparison.OrdinalIgnoreCase)),
-			"an empty zone list is a warning, not a document error");
-		Assert.IsTrue(result.Warnings.Any(w => w.Contains("No zones yet", StringComparison.Ordinal)));
+		Assert.IsFalse(result.Errors.Any(e => e.Contains("areas", StringComparison.OrdinalIgnoreCase)),
+			"an empty area list is a warning, not a document error");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("No rooms yet", StringComparison.Ordinal)));
 	}
 
 	/// <summary>
@@ -141,13 +201,53 @@ public sealed class ConfigValidatorTests
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
 
+	// ===================== the include label =====================
+
+	/// <summary>
+	///     A warning, never an error. The filter fails closed one room at a time — each skipped room already says
+	///     its lights carry no such label — so the house degrades the ordinary way and the document stays saveable.
+	///     What no per-room message can say is that one typo at the top of the file is behind all of them.
+	/// </summary>
+	[TestMethod]
+	public void An_Include_Label_Nothing_Carries_Is_A_Warning_Not_An_Error()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.IncludeLabel = "adpative";   // the typo this warning exists for
+
+		ValidationResult result = ConfigValidator.Validate(config, labelsInUse: ["adaptive", "adaptive-exclude"]);
+
+		Assert.IsTrue(result.IsValid, "an unmatched include label must never stop the document being saved");
+		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("adpative", StringComparison.Ordinal)),
+			"the warning has to quote the label, because the label is the typo");
+	}
+
+	[TestMethod]
+	public void An_Include_Label_Something_Carries_Is_Silent()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.IncludeLabel = "adaptive";
+
+		ValidationResult result = ConfigValidator.Validate(config, labelsInUse: ["adaptive"]);
+
+		Assert.AreEqual(0, result.Warnings.Count);
+	}
+
+	[TestMethod]
+	public void No_Include_Label_Is_Never_Warned_About()
+	{
+		ValidationResult result = ConfigValidator.Validate(Minimal(), labelsInUse: []);
+
+		Assert.AreEqual(0, result.Warnings.Count,
+			"saying nothing is the default, not an omission — a house with no labels must hear nothing about them");
+	}
+
 	// ===================== settings =====================
 
 	[TestMethod]
 	public void A_PreOff_Longer_Than_The_Vacancy_Timeout_Is_Rejected()
 	{
 		var config = Minimal();
-		config.Defaults = new ZoneSettings { VacancyTimeoutSeconds = 20, PreOffSeconds = 30 };
+		config.Defaults = new AreaSettings { VacancyTimeoutSeconds = 20, PreOffSeconds = 30 };
 
 		var result = ConfigValidator.Validate(config);
 
@@ -165,10 +265,10 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void A_Zones_Own_Bad_Override_Is_Caught_Under_The_Zones_Name()
+	public void An_Areas_Own_Bad_Override_Is_Caught_Under_The_Areas_Name()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Stue", AreaId = "stue", PreOffBrightnessFactor = 4 }];
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", PreOffBrightnessFactor = 4 }];
 
 		var result = ConfigValidator.Validate(config);
 
@@ -176,13 +276,179 @@ public sealed class ConfigValidatorTests
 		StringAssert.Contains(result.ToString(), "Stue", "the household needs to know which room to go and fix");
 	}
 
-	// ===================== zones =====================
+	// ===================== the daylight brightness curve =====================
+
+	/// <summary>
+	///     Checked whether or not the feature is switched on, exactly as <c>LuxThreshold</c> is checked for an area
+	///     gating on the sun alone: an inverted pair of anchors is a mistake in the document, and it is no less a
+	///     mistake for being inert until somebody flips the switch.
+	/// </summary>
+	[TestMethod]
+	public void Inverted_Anchors_Are_Rejected_Even_With_The_Feature_Off()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessStartLux = 10000;
+		config.Defaults.LuxBrightnessFullLux = 100;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		Assert.IsTrue(result.Errors.Any(e => e.Contains("LuxBrightnessFullLux", StringComparison.Ordinal)));
+	}
 
 	[TestMethod]
-	public void Duplicate_Zone_Names_Are_Rejected()
+	public void Equal_Anchors_Are_Rejected()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessStartLux = 1000;
+		config.Defaults.LuxBrightnessFullLux = 1000;
+
+		Assert.IsFalse(ConfigValidator.Validate(config).IsValid, "equal anchors leave no range to interpolate across");
+	}
+
+	[TestMethod]
+	public void A_Start_Anchor_At_Or_Below_Zero_Is_Rejected()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessStartLux = 0;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		Assert.IsTrue(result.Errors.Any(e => e.Contains("log10", StringComparison.Ordinal)),
+			"the message must say why zero is impossible rather than merely disallowed");
+	}
+
+	[TestMethod]
+	public void A_Ceiling_Outside_The_Brightness_Range_Is_Rejected()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessMaxPct = 140;
+
+		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
+	}
+
+	[TestMethod]
+	public void A_Non_Positive_Gamma_Is_Rejected()
+	{
+		AdaptiveLightingConfig zero = Minimal();
+		zero.Defaults.LuxBrightnessGamma = 0;
+
+		AdaptiveLightingConfig negative = Minimal();
+		negative.Defaults.LuxBrightnessGamma = -1;
+
+		Assert.IsFalse(ConfigValidator.Validate(zero).IsValid, "pow(0, 0) is 1 — a zero exponent reads as full daylight in the dark");
+		Assert.IsFalse(ConfigValidator.Validate(negative).IsValid);
+	}
+
+	[TestMethod]
+	public void A_Rooms_Own_Bad_Curve_Is_Caught_Under_Its_Name()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas = [new() { Name = "Gang", AreaId = "gang", LuxBrightnessFullLux = 10 }];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		StringAssert.Contains(result.ToString(), "Gang", "the household needs to know which room to go and fix");
+	}
+
+	/// <summary>
+	///     Degrades rather than breaks — a room with no reading simply keeps the schedule's brightness — so it is a
+	///     warning. The validator is pure and cannot run discovery, so it must not refuse a document over a sensor
+	///     the room may well find at runtime.
+	/// </summary>
+	[TestMethod]
+	public void Switching_It_On_With_No_Lux_Sensor_Named_Anywhere_Only_Warns()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "no sensor is a room on the schedule alone, not a broken document");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)));
+	}
+
+	/// <summary>
+	///     A house-wide outdoor sensor answers the warning only once a room says it reads it.
+	/// </summary>
+	/// <remarks>
+	///     <b>This test's contract changed, and the name says how.</b> Naming the sensor used to be enough, because
+	///     it reached every sensorless room automatically. That fallback is gone — a room now opts in — and the
+	///     daylight curve reads whatever the darkness gate reads, so a house that names an outdoor sensor no room
+	///     follows feeds the curve nothing at all and the warning is still earned.
+	/// </remarks>
+	[TestMethod]
+	public void A_House_Wide_Outdoor_Sensor_Answers_That_Warning_Once_A_Room_Follows_It()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+
+		Assert.IsTrue(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
+			"the sensor is named but nothing reads it, so no room is guaranteed a reading");
+
+		config.Areas = [new() { Name = "Gang", AreaId = "gang", FollowOutdoorLux = true }];
+
+		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
+			"one outdoor sensor brightening the rooms that follow it is the case the feature was asked for");
+	}
+
+	[TestMethod]
+	public void A_Rooms_Own_Pinned_Sensor_Answers_It_Too()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", LuxSensor = "sensor.stue_lux" }];
+
+		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void A_Room_That_Opted_Out_Does_Not_Raise_The_Warning()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", LuxBrightnessEnabled = false }];
+
+		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
+			"the only room in the house switched it off, so nothing is waiting on a sensor");
+	}
+
+	[TestMethod]
+	public void On_But_With_A_Ceiling_Of_Zero_Warns_Without_Refusing()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Defaults.LuxBrightnessEnabled = true;
+		config.Defaults.LuxBrightnessMaxPct = 0;
+		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("never raise", StringComparison.Ordinal)));
+	}
+
+	/// <summary>The two live houses: a document that has never heard of the feature must gain neither error nor warning.</summary>
+	[TestMethod]
+	public void A_Document_That_Never_Heard_Of_The_Feature_Is_Untouched_By_It()
+	{
+		ValidationResult result = ConfigValidator.Validate(Minimal());
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsFalse(result.Warnings.Any(w => w.Contains("LuxBrightness", StringComparison.Ordinal)));
+		Assert.IsTrue(ConfigValidator.Validate(AdaptiveLightingConfig.CreateDefault()).IsValid,
+			"and the seed a fresh installation starts from still validates");
+	}
+
+	// ===================== areas =====================
+
+	[TestMethod]
+	public void Duplicate_Area_Names_Are_Rejected()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Z", AreaId = "a" }, new() { Name = "Z", AreaId = "b" }];
+		config.Areas = [new() { Name = "Z", AreaId = "a" }, new() { Name = "Z", AreaId = "b" }];
 
 		var result = ConfigValidator.Validate(config);
 
@@ -191,40 +457,40 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void A_Zone_With_Nothing_To_Resolve_Is_A_Zone_Error_Not_A_Document_Error()
+	public void An_Area_With_Nothing_To_Resolve_Is_An_Area_Error_Not_A_Document_Error()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Nowhere" }];
+		config.Areas = [new() { Name = "Nowhere" }];
 
 		var result = ConfigValidator.Validate(config);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(1, result.ZoneErrors.Count);
+		Assert.AreEqual(1, result.AreaErrors.Count);
 	}
 
 	[TestMethod]
-	public void An_Unknown_Area_Costs_The_Zone_And_Not_The_House()
+	public void An_Unknown_Area_Id_Costs_The_Area_And_Not_The_House()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Z", AreaId = "nope" }];
+		config.Areas = [new() { Name = "Z", AreaId = "nope" }];
 
 		var result = ConfigValidator.Validate(config, knownEntityIds: [], knownAreaIds: ["stue"]);
 
 		Assert.IsTrue(result.IsValid, "one renamed area must not take the whole house's lighting down");
-		Assert.AreEqual(1, result.ZoneErrors.Count);
-		StringAssert.Contains(result.ZoneErrors[0].Message, "stue", "and the message should name the ids that do exist");
+		Assert.AreEqual(1, result.AreaErrors.Count);
+		StringAssert.Contains(result.AreaErrors[0].Message, "stue", "and the message should name the ids that do exist");
 	}
 
 	[TestMethod]
-	public void An_Unknown_Entity_Costs_The_Zone_And_Not_The_House()
+	public void An_Unknown_Entity_Costs_The_Area_And_Not_The_House()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Z", AreaId = "stue", Lights = ["light.ghost"] }];
+		config.Areas = [new() { Name = "Z", AreaId = "stue", Lights = ["light.ghost"] }];
 
 		var result = ConfigValidator.Validate(config, knownEntityIds: ["light.real"], knownAreaIds: ["stue"]);
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(1, result.ZoneErrors.Count);
+		Assert.AreEqual(1, result.AreaErrors.Count);
 	}
 
 	[TestMethod]
@@ -237,14 +503,14 @@ public sealed class ConfigValidatorTests
 
 		var result = ConfigValidator.Validate(config, knownEntityIds: ["input_boolean.real"], knownAreaIds: ["stue"]);
 
-		Assert.IsFalse(result.IsValid, "a watched person entity that does not exist is the house's problem, not one zone's");
+		Assert.IsFalse(result.IsValid, "a watched person entity that does not exist is the house's problem, not one area's");
 	}
 
 	[TestMethod]
 	public void Referential_Checks_Are_Skipped_When_Nothing_Is_Known()
 	{
 		var config = Minimal();
-		config.Zones = [new() { Name = "Z", AreaId = "anything", Lights = ["light.whatever"] }];
+		config.Areas = [new() { Name = "Z", AreaId = "anything", Lights = ["light.whatever"] }];
 
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,
 			"a caller with no IHaContext gets the document checks and nothing it cannot answer");
@@ -501,25 +767,25 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void SleepClamp_MustResolveWhenLoadBearing()
 	{
-		// Load-bearing (a zone respects sleep), resolvable via the "night" period Minimal() carries → valid.
+		// Load-bearing (an area respects sleep), resolvable via the "night" period Minimal() carries → valid.
 		var resolvable = WithHouseMode();
-		resolvable.Zones[0].RespectSleepMode = true;
+		resolvable.Areas[0].RespectSleepMode = true;
 		Assert.IsTrue(ConfigValidator.Validate(resolvable).IsValid, "the 'night' period resolves the clamp");
 
 		// Load-bearing, but nothing resolves the clamp (no ClampPeriod, no SetsMode period, no 'night') → error.
 		var unresolvable = WithHouseMode();
-		unresolvable.Zones[0].RespectSleepMode = true;
+		unresolvable.Areas[0].RespectSleepMode = true;
 		unresolvable.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" }];
 		Assert.IsFalse(ConfigValidator.Validate(unresolvable).IsValid, "nothing resolves the clamp for a load-bearing sleep path");
 
-		// Not load-bearing (no zone respects sleep) → valid even though nothing resolves.
+		// Not load-bearing (no area respects sleep) → valid even though nothing resolves.
 		var notBearing = WithHouseMode();
 		notBearing.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" }];
 		Assert.IsTrue(ConfigValidator.Validate(notBearing).IsValid, "sleep is not load-bearing, so the missing clamp is inert");
 
 		// Load-bearing, resolvable via an explicit ClampPeriod → valid.
 		var viaClamp = WithHouseMode();
-		viaClamp.Zones[0].RespectSleepMode = true;
+		viaClamp.Areas[0].RespectSleepMode = true;
 		viaClamp.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "dim", Start = "22:00" }];
 		viaClamp.Global.HouseMode!.OptionFor("Sover")!.ClampPeriod = "dim";
 		Assert.IsTrue(ConfigValidator.Validate(viaClamp).IsValid, "an explicit ClampPeriod resolves the clamp");
@@ -588,11 +854,11 @@ public sealed class ConfigValidatorTests
 			    - Name: night
 			      Start: "22:30"
 			      MaxBrightnessPct: 30
-			  Zones:
+			  Areas:
 			    - Name: Stue
 			      AreaId: stue
 			      RespectSleepMode: true
-			""");
+			""").Config;
 
 		Assert.IsNull(config.Global.HouseMode, "no HouseMode block → property null");
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,

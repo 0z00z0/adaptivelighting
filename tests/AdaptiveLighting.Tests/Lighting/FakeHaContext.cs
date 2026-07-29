@@ -36,6 +36,17 @@ public sealed class FakeHaContext : IHaContext
 	public void SetState(string entityId, string state, Dictionary<string, object>? attributes = null, Context? context = null) =>
 		_states[entityId] = Build(entityId, state, attributes, context);
 
+	/// <summary>
+	///     Sets a state that Home Assistant last heard about at <paramref name="lastUpdated"/>.
+	/// </summary>
+	/// <remarks>
+	///     Only the staleness rule reads that timestamp, so every other fixture leaves it absent — which is also
+	///     what a state with no <c>last_updated</c> in its payload looks like, and is deliberately <i>not</i> read
+	///     as death.
+	/// </remarks>
+	public void SetStateReportedAt(string entityId, string state, DateTimeOffset lastUpdated, Dictionary<string, object>? attributes = null) =>
+		_states[entityId] = Build(entityId, state, attributes, context: null, lastUpdated);
+
 	/// <summary>Sets a state and pushes the change, exactly as Home Assistant would.</summary>
 	public void Trigger(string entityId, string newState, Dictionary<string, object>? attributes = null, Context? context = null)
 	{
@@ -45,13 +56,20 @@ public sealed class FakeHaContext : IHaContext
 		_changes.OnNext(new StateChange(new Entity(this, entityId), old, updated));
 	}
 
-	private static EntityState Build(string entityId, string state, Dictionary<string, object>? attributes, Context? context)
+	private static EntityState Build(
+		string entityId,
+		string state,
+		Dictionary<string, object>? attributes,
+		Context? context,
+		DateTimeOffset? lastUpdated = null)
 	{
 		var json = JsonSerializer.SerializeToElement(new
 		{
 			entity_id = entityId,
 			state,
 			attributes = attributes ?? [],
+			last_updated = lastUpdated,
+			last_changed = lastUpdated,
 			context = context is null ? null : new { id = context.Id, parent_id = context.ParentId, user_id = context.UserId }
 		});
 

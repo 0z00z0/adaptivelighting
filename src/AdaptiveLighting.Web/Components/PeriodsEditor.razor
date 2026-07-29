@@ -10,7 +10,7 @@
 	composes the engine's own grammar, and "min/max brightness" say what Floor and Cap never quite did. The
 	real explanations live behind each (i).
 
-	Each period is a collapsible card, like a zone: collapsed it is a header — the period's name, when it
+	Each period is a collapsible card, like an area: collapsed it is a header — the period's name, when it
 	starts (with the wall-clock time a sun-anchored start resolves to today), and its brightness/warmth at a
 	glance. Expanded, the full editor. Collapsed by default, because a schedule of five periods is read far
 	more often than any one of them is edited.
@@ -47,7 +47,7 @@
 							@onclick="() => Remove(position)" @onclick:stopPropagation="true">&times;</button>
 				</span>
 
-				<span class="zone-chevron" aria-hidden="true"></span>
+				<span class="area-chevron" aria-hidden="true"></span>
 			</summary>
 
 			<div class="field">
@@ -55,7 +55,10 @@
 				<div class="field-control">
 					<input type="text" class="cell wide" @bind="period.Name" @bind:event="oninput" placeholder="evening" />
 				</div>
-				<div class="field-help">The period's name, shown on the dashboard.</div>
+				<div class="field-help">
+					Shown on the dashboard. House modes refer to periods by this name, so renaming one here breaks
+					any mode that named it.
+				</div>
 			</div>
 
 			<div class="period-grid">
@@ -82,7 +85,10 @@
 							</InfoPopover>
 						</span>
 						<select class="cell wide" @bind:get="boundPeriod.SetsMode ?? string.Empty" @bind:set="@(value => SetMode(boundPeriod, value))">
-							<option value="">— leave the house mode unchanged</option>
+							@* Never open with the dash: a leading em dash reads as a separator or a greyed-out heading
+						   rather than as the option that is currently chosen. Same "(none — …)" form the pickers
+						   use, so every empty choice on the page is written one way. *@
+						<option value="">(none — leave the house mode unchanged)</option>
 							@foreach (string mode in HouseModeOptions)
 							{
 								<option value="@mode">@mode</option>
@@ -100,8 +106,9 @@
 					<span class="pfield-label">
 						Brightness
 						<InfoPopover Label="Brightness">
-							How bright the lights are during this period, as a percent.
-													</InfoPopover>
+							How bright every managed room is held during this period, as a percentage. The two limits
+							below clamp it, and a room set to brighten with daylight can be lifted above it.
+						</InfoPopover>
 					</span>
 					<PresetSelect Value="@period.BrightnessPct"
 								  ValueChanged="@(value => Set(() => period.BrightnessPct = value))"
@@ -113,8 +120,8 @@
 					<span class="pfield-label">
 						Colour temperature
 						<InfoPopover Label="Colour temperature">
-							How warm the light looks — low is candle-amber, high is daylight-white. The same scale
-							bulb boxes print.
+							How warm every managed room looks during this period, in kelvin — the scale bulb boxes
+							print. Low is candlelight, high is daylight; the list below names the familiar stops.
 						</InfoPopover>
 					</span>
 					<PresetSelect Value="@period.ColorTempKelvin"
@@ -127,8 +134,8 @@
 					<span class="pfield-label">
 						Min brightness
 						<InfoPopover Label="Min brightness">
-							Never dimmer than this during the period — so a night light can't fade to nothing. Leave
-							off for no limit.
+							Nothing goes dimmer than this during the period, however the brightness above is set or
+							how a room's warning dim would drop it. Off means no floor.
 						</InfoPopover>
 					</span>
 					<NullableNumber Value="@period.MinBrightnessPct"
@@ -141,8 +148,8 @@
 					<span class="pfield-label">
 						Max brightness
 						<InfoPopover Label="Max brightness">
-							Never brighter than this during the period — set it on the night period so nothing blinds
-							you at 03:00. Leave off for no limit.
+							Nothing goes brighter than this during the period. Set it on the night period so nothing
+							blinds you at 03:00 — it is also the ceiling sleep mode holds rooms to. Off means no cap.
 						</InfoPopover>
 					</span>
 					<NullableNumber Value="@period.MaxBrightnessPct"

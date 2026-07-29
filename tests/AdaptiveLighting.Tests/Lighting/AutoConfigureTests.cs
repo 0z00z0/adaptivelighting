@@ -12,31 +12,31 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class AutoConfigureTests
 {
-	private static ZoneConfig Role(string areaId)
+	private static AreaConfig Role(string areaId)
 	{
-		var zone = new ZoneConfig { AreaId = areaId };
-		ZoneAutoDiscovery.ApplyRole(zone);
-		return zone;
+		var area = new AreaConfig { AreaId = areaId };
+		AreaAutoDiscovery.ApplyRole(area);
+		return area;
 	}
 
 	[TestMethod]
 	public void A_Bedroom_Is_Held_To_Night_Levels_And_Never_Lights_Itself()
 	{
-		foreach (string area in new[] { "soverom", "sov_1", "soverom_samuel", "bedroom" })
+		foreach (string areaId in new[] { "soverom", "sov_1", "soverom_samuel", "bedroom" })
 		{
-			var zone = Role(area);
-			Assert.IsTrue(zone.RespectSleepMode, $"{area} should follow sleep mode");
-			Assert.IsTrue(zone.SleepBlocksAutoOn, $"{area} should not light itself while the house sleeps");
+			AreaConfig area = Role(areaId);
+			Assert.IsTrue(area.RespectSleepMode, $"{areaId} should follow sleep mode");
+			Assert.IsTrue(area.SleepBlocksAutoOn, $"{areaId} should not light itself while the house sleeps");
 		}
 	}
 
 	[TestMethod]
 	public void A_Bathroom_Dims_At_Night_But_Still_Lights()
 	{
-		var zone = Role("kjeller_bad");
+		var area = Role("kjeller_bad");
 
-		Assert.IsTrue(zone.RespectSleepMode);
-		Assert.IsNull(zone.SleepBlocksAutoOn, "a 03:00 trip must still get a light, just a dim one");
+		Assert.IsTrue(area.RespectSleepMode);
+		Assert.IsNull(area.SleepBlocksAutoOn, "a 03:00 trip must still get a light, just a dim one");
 	}
 
 	[TestMethod]
@@ -58,12 +58,12 @@ public sealed class AutoConfigureTests
 	[TestMethod]
 	public void An_Unrecognised_Room_Is_Left_Entirely_On_The_Defaults()
 	{
-		foreach (string area in new[] { "stue", "kontor", "lab", "utleieleilighet" })
+		foreach (string areaId in new[] { "stue", "kontor", "lab", "utleieleilighet" })
 		{
-			var zone = Role(area);
-			Assert.IsNull(zone.RespectSleepMode, $"{area} should keep following Defaults");
-			Assert.IsNull(zone.SkipAwaySweep, $"{area} should keep following Defaults");
-			Assert.IsNull(zone.WelcomeHome);
+			AreaConfig area = Role(areaId);
+			Assert.IsNull(area.RespectSleepMode, $"{areaId} should keep following Defaults");
+			Assert.IsNull(area.SkipAwaySweep, $"{areaId} should keep following Defaults");
+			Assert.IsNull(area.WelcomeHome);
 		}
 	}
 
@@ -113,6 +113,40 @@ public sealed class AutoConfigureTests
 	{
 		Assert.IsNull(HouseModeAutoDetect.Detect(
 			WithSelect("input_select.thermostat_profile", "Eco", "Comfort", "Boost"), NullLogger.Instance));
+	}
+
+	/// <summary>
+	///     An adopted select always changes what the house does, which is why detection has to stay narrow.
+	/// </summary>
+	/// <remarks>
+	///     Qualifying takes two different kinds, so an adopted select always carries at least one Sleep, Away or
+	///     Guest option: "everything classifies as Normal and nothing happens" is the one outcome adoption rules
+	///     out, not its worst case. A drying cupboard's <c>Inne / Ute</c> qualifies — <c>Ute</c> is Away vocabulary
+	///     and <c>Inne</c> matches nothing, so it falls to Normal — and while the select stands on <c>Ute</c> the
+	///     engine reads the whole house as empty. What adoption genuinely cannot do is <i>write</i>: it invents no
+	///     scene and no reset trigger, so nothing it adds can switch the select or apply a look.
+	/// </remarks>
+	[TestMethod]
+	public void An_Adopted_Select_Always_Carries_A_Kind_That_Changes_What_The_House_Does()
+	{
+		HouseModeConfig? detected = HouseModeAutoDetect.Detect(
+			WithSelect("input_select.torkeskap", "Inne", "Ute"), NullLogger.Instance);
+
+		Assert.IsNotNull(detected, "two kinds and a Normal is all it takes, whatever the dropdown is really for");
+		Assert.AreEqual(ModeKind.Away, detected.OptionFor("Ute")!.Kind);
+		Assert.IsTrue(
+			detected.Options.Any(option => option.Kind != ModeKind.Normal),
+			"an all-Normal select cannot be adopted, so adoption can never be inert");
+
+		// And the kind is not decoration: it is what every area reads as the state of the house.
+		Assert.AreEqual(
+			HouseMode.Away, new HouseState(true, ModeKind.Away, false).Mode,
+			"a full house standing on an adopted Away option is read as an empty one");
+
+		// The half that does hold, and the reason adoption is still worth doing.
+		Assert.IsTrue(
+			detected.Options.All(option => option.Scene is null && !option.HasResetTrigger),
+			"nothing adopted here can make the engine write the select or apply a scene");
 	}
 
 	/// <summary>Two plausible candidates is a choice for the household, not for this.</summary>

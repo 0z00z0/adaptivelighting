@@ -1,0 +1,79 @@
+@*
+	One setting in the detail view: what it is called, what it changes, where its value came from, and the
+	control that changes it.
+
+	The provenance line under the help is the row's real work. An amber dot beside the label says "this room
+	decided this"; the line under it offers the only road back — clearing the room's value so it follows the
+	house again, which is a different act from typing the house's current number in. A row with no dot says
+	"house setting" instead, so the two cases are one sentence apart rather than one blank apart.
+
+	The control is the caller's, because the row does not know whether the setting is a span, a proportion, a
+	choice or a switch. What the row owns is the shape they all sit in, so twenty-one settings read as one list.
+*@
+
+<div class="srow @(IsOwn ? "srow-own" : null)">
+	<div class="srow-text">
+		<div class="srow-label">
+			<span>@Label</span>
+			@if (IsOwn)
+			{
+				<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+			}
+		</div>
+
+		@if (Help is { Length: > 0 } help)
+		{
+			<div class="srow-help">@help</div>
+		}
+
+		@if (IsOwn && HouseText is { Length: > 0 } house)
+		{
+			<button type="button" class="srow-revert" @onclick="Reverted">Use house setting (@house)</button>
+		}
+		else if (HouseText is { Length: > 0 })
+		{
+			<span class="srow-inherit">house setting</span>
+		}
+	</div>
+
+	<div class="srow-control">@ChildContent</div>
+</div>
+
+@code {
+	/// <summary>The setting's name, in the words the sentences use for it.</summary>
+	[Parameter, EditorRequired]
+	public string Label { get; set; } = "";
+
+	/// <summary>One line on what it changes. Says what happens, not what the field is.</summary>
+	[Parameter]
+	public string? Help { get; set; }
+
+	/// <summary>Whether this room states its own value, which draws the amber dot and offers the road back.</summary>
+	[Parameter]
+	public bool IsOwn { get; set; }
+
+	/// <summary>
+	///     The house's value, already written, or <c>null</c> where there is no house above this setting.
+	/// </summary>
+	/// <remarks>
+	///     Naming the number in the button rather than saying "reset" is the difference between an action
+	///     somebody can predict and one they have to try. It is also the only place the house's value appears on
+	///     a page about one room.
+	/// </remarks>
+	[Parameter]
+	public string? HouseText { get; set; }
+
+	/// <summary>
+	///     Raised when the reader asks this setting to follow the house again.
+	/// </summary>
+	/// <remarks>
+	///     The handler must clear the room's property — not copy <see cref="HouseText"/>'s number into it — so
+	///     the room keeps following the house the next time the house changes.
+	/// </remarks>
+	[Parameter]
+	public EventCallback Reverted { get; set; }
+
+	/// <summary>The control that changes the value.</summary>
+	[Parameter, EditorRequired]
+	public RenderFragment? ChildContent { get; set; }
+}

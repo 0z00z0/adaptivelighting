@@ -3,7 +3,7 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Engine;
 
 /// <summary>
-///     The house-wide mode a zone reacts to. Derived from the flags on <see cref="HouseState"/> rather than set
+///     The house-wide mode an area reacts to. Derived from the flags on <see cref="HouseState"/> rather than set
 ///     independently, so the two can never disagree.
 /// </summary>
 public enum HouseMode
@@ -17,13 +17,13 @@ public enum HouseMode
 	/// <summary>Somebody is home and the house is asleep.</summary>
 	Sleep,
 
-	/// <summary>Somebody is home and guests are present. A guest option carrying a scene drives the zones into SceneHold; without a scene it is a dashboard flag only.</summary>
+	/// <summary>Somebody is home and guests are present. A guest option carrying a scene drives the areas into SceneHold; without a scene it is a dashboard flag only.</summary>
 	Guest
 }
 
 /// <summary>
-///     An immutable snapshot of everything house-wide a zone needs. The orchestrator owns the stream of these;
-///     zones only read them.
+///     An immutable snapshot of everything house-wide an area needs. The orchestrator owns the stream of these;
+///     areas only read them.
 /// </summary>
 /// <param name="IsAnyoneHome">Whether presence says the house is occupied.</param>
 /// <param name="ActiveKind">The kind of the option the select currently stands on (09 §3.1). <see cref="ModeKind.Normal"/> when unconfigured.</param>
@@ -36,7 +36,7 @@ public sealed record HouseState(
 	/// <summary>The raw current house-mode option string, or <c>null</c> when unconfigured / unknown / unavailable.</summary>
 	public string? ModeValue { get; init; }
 
-	/// <summary>The active option's <c>scene.*</c>, when its kind is Away/Guest and it names one; else <c>null</c>. Zones read whether a scene holds; the orchestrator uses the id.</summary>
+	/// <summary>The active option's <c>scene.*</c>, when its kind is Away/Guest and it names one; else <c>null</c>. Areas read whether a scene holds; the orchestrator uses the id.</summary>
 	public string? ActiveScene { get; init; }
 
 	/// <summary>The state the engine starts in, before presence and mode have reported.</summary>

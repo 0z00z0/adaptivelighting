@@ -37,7 +37,13 @@ public sealed class ModeMonitor : IDisposable
 	private readonly IScheduler _scheduler;
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
 	private readonly CircadianCalculator _circadian;
-	private readonly IReadOnlyCollection<string> _zoneMotionSensors;
+	private readonly IReadOnlyCollection<string> _areaMotionSensors;
+
+	/// <summary>
+	///     Where the period the engine is running in is written down, so the next start can tell whether a boundary
+	///     went by while it was stopped. <c>null</c> when nobody handed one over, which reads as "we do not know".
+	/// </summary>
+	private readonly ILastPeriodStore? _lastPeriod;
 
 	private readonly Subject<Unit> _changed = new();
 	private readonly CompositeDisposable _subscriptions = [];
@@ -57,6 +63,20 @@ public sealed class ModeMonitor : IDisposable
 	private string? _previousPeriodName;
 	private bool _started;
 
+	// Armed by Start and spent on the first tick that can read the select: the one chance a restart gets to notice
+	// that a boundary went by while it was stopped. Held open until the select answers, because after a Home
+	// Assistant restart an input_select can be unavailable for a while, and spending the chance on a value nobody
+	// could read would waste it exactly when it is most needed. See ApplyPeriodModeOnStart for why a restart is not
+	// simply treated as a period entry.
+	private bool _startPeriodModePending;
+
+	// What the previous run left on disk, read once in Start. Null means "we do not know" — a first run, a deleted
+	// file or a corrupt one — which is deliberately not the same as knowing a boundary was crossed.
+	private string? _periodAtLastRun;
+
+	// What this run believes is on disk now, so the file is written when the period changes and not on every tick.
+	private string? _persistedPeriodName;
+
 	/// <summary>Creates the mode brain.</summary>
 	/// <param name="ha">Source of state and state changes, and where <c>select_option</c> calls go.</param>
 	/// <param name="global">Supplies the select, the kill switch and the option kinds.</param>
@@ -64,9 +84,15 @@ public sealed class ModeMonitor : IDisposable
 	/// <param name="scheduler">The monitor's only clock: the evaluation tick and every grace/reset comparison.</param>
 	/// <param name="periods">The house-wide circadian table, for period-entry detection.</param>
 	/// <param name="sunTimes">Supplies the day's sun times on demand, for placing sun-anchored boundaries.</param>
-	/// <param name="zoneMotionSensors">
-	///     The union of every motion sensor configured across all zones. An option whose
+	/// <param name="areaMotionSensors">
+	///     The union of every motion sensor configured across all areas. An option whose
 	///     <see cref="HouseModeOptionConfig.ResetPresenceSensors"/> is empty resets on any of these (09 owner refinement).
+	/// </param>
+	/// <param name="lastPeriod">
+	///     Where the period this run is in is written down, so the next start can tell whether a boundary went by
+	///     while it was stopped — see <see cref="ApplyPeriodModeOnStart"/>. Optional: without one the monitor never
+	///     knows that a boundary was crossed during an outage, and therefore never re-applies a mode after a restart,
+	///     which is the behaviour every build before this one had.
 	/// </param>
 	public ModeMonitor(
 		IHaContext ha,
@@ -75,7 +101,8 @@ public sealed class ModeMonitor : IDisposable
 		IScheduler scheduler,
 		IReadOnlyList<TimePeriodConfig> periods,
 		Func<SunTimes> sunTimes,
-		IReadOnlyCollection<string> zoneMotionSensors)
+		IReadOnlyCollection<string> areaMotionSensors,
+		ILastPeriodStore? lastPeriod = null)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
@@ -83,7 +110,8 @@ public sealed class ModeMonitor : IDisposable
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
 		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
 		ArgumentNullException.ThrowIfNull(sunTimes);
-		_zoneMotionSensors = zoneMotionSensors ?? throw new ArgumentNullException(nameof(zoneMotionSensors));
+		_areaMotionSensors = areaMotionSensors ?? throw new ArgumentNullException(nameof(areaMotionSensors));
+		_lastPeriod = lastPeriod;
 
 		_circadian = new CircadianCalculator(periods, global, sunTimes);
 	}
@@ -165,8 +193,8 @@ public sealed class ModeMonitor : IDisposable
 	/// <summary>
 	///     The effective option's <c>scene.*</c> when it names one, whatever its kind. Applied once on entry by the
 	///     orchestrator. On Away/Guest the scene stands (they pause the engine); on Normal/Sleep the engine keeps
-	///     adjusting, so it is a one-shot the ordinary commands may soon override — the zone-pause logic that reads
-	///     this stays gated on <c>Mode == Away/Guest</c>, so a Normal/Sleep scene never pauses a zone.
+	///     adjusting, so it is a one-shot the ordinary commands may soon override — the area-pause logic that reads
+	///     this stays gated on <c>Mode == Away/Guest</c>, so a Normal/Sleep scene never pauses an area.
 	/// </summary>
 	public string? ActiveScene =>
 		EffectiveOption is { Scene: { Length: > 0 } scene } ? scene : null;
@@ -189,6 +217,13 @@ public sealed class ModeMonitor : IDisposable
 			_lastMotionAt = _scheduler.Now;
 			_previousTickAt = _scheduler.Now;
 			_previousPeriodName = _circadian.ActivePeriodName(_scheduler.Now);
+			_startPeriodModePending = true;
+
+			// Read once, here, rather than on the tick: the answer is about the run that ended, so a later read
+			// could only find what this run has since written over it. Reading a file under the gate is safe only
+			// because nothing can be holding it yet — the subscriptions and the tick are all created below.
+			_periodAtLastRun = ReadPeriodAtLastRun();
+			_persistedPeriodName = _periodAtLastRun;
 		}
 
 		if (_global.EffectiveKillSwitchEntity is { Length: > 0 } killSwitch)
@@ -235,12 +270,12 @@ public sealed class ModeMonitor : IDisposable
 		{
 			List<string> sensors = option.ResetPresenceSensors.Count > 0
 				? option.ResetPresenceSensors
-				: [.. _zoneMotionSensors];
+				: [.. _areaMotionSensors];
 
 			if (sensors.Count == 0)
 			{
 				_logger.LogWarning(
-					"Option '{Option}' resets on presence but no sensors resolve (empty list and no zone motion sensors); it will never reset on presence.",
+					"Option '{Option}' resets on presence but no sensors resolve (empty list and no area motion sensors); it will never reset on presence.",
 					option.Value);
 				continue;
 			}
@@ -298,13 +333,13 @@ public sealed class ModeMonitor : IDisposable
 		if (!houseMode.Options.Any(option => option.Kind != ModeKind.Normal && option.ActivateAfterNoMotionMinutes is > 0))
 			return;
 
-		if (_zoneMotionSensors.Count == 0)
+		if (_areaMotionSensors.Count == 0)
 		{
-			_logger.LogWarning("An option activates on no motion, but no zone motion sensors resolve; it can never fire.");
+			_logger.LogWarning("An option activates on no motion, but no area motion sensors resolve; it can never fire.");
 			return;
 		}
 
-		foreach (string sensor in _zoneMotionSensors)
+		foreach (string sensor in _areaMotionSensors)
 		{
 			_logger.LogInformation("Watching motion sensor {EntityId} for auto-away.", sensor);
 			_subscriptions.Add(_ha.Entity(sensor).WhenTurnsOn(_ => MarkMotion(), _logger));
@@ -322,7 +357,7 @@ public sealed class ModeMonitor : IDisposable
 	}
 
 	// Whether any watched motion sensor currently reads on — motion in progress, so the house is not idle.
-	private bool AnyMotionOn() => _zoneMotionSensors.Any(IsOn);
+	private bool AnyMotionOn() => _areaMotionSensors.Any(IsOn);
 
 	/// <summary>
 	///     Poll-based, on the tick: when the whole house has been motion-free for an option's configured span, switch
@@ -411,21 +446,38 @@ public sealed class ModeMonitor : IDisposable
 	{
 		DateTimeOffset now = _scheduler.Now, previousTickAt;
 		string? previousPeriodName;
+		bool startPending;
 
 		lock (_gate)
 		{
 			previousTickAt = _previousTickAt;
 			previousPeriodName = _previousPeriodName;
+			startPending = _startPeriodModePending;
 		}
 
 		HouseModeOptionConfig? activeOption = CurrentOption;
 		string? currentPeriodName = _circadian.ActivePeriodName(now);
 
 		// Period entry: the active period changed since the previous tick.
-		if (currentPeriodName is { Length: > 0 }
+		bool entered = currentPeriodName is { Length: > 0 }
 			&& previousPeriodName is { Length: > 0 }
-			&& !string.Equals(currentPeriodName, previousPeriodName, StringComparison.OrdinalIgnoreCase))
-			OnPeriodEntered(currentPeriodName, activeOption);
+			&& !string.Equals(currentPeriodName, previousPeriodName, StringComparison.OrdinalIgnoreCase);
+
+		if (entered)
+		{
+			OnPeriodEntered(currentPeriodName!, activeOption);
+			startPending = false;   // the entry has already had the say the restart rule would have had
+		}
+		else if (startPending && currentPeriodName is { Length: > 0 } && CurrentModeValue is { Length: > 0 })
+		{
+			ApplyPeriodModeOnStart(currentPeriodName);
+			startPending = false;
+		}
+
+		// Written after the decision above, never before it: the note is the only evidence that a boundary went by
+		// while the engine was down, and recording the new period first would erase it in the window where the
+		// process dies between the two.
+		RememberPeriod(currentPeriodName);
 
 		// Time reset: the input_datetime moment crossed since the last tick (and after activation).
 		EvaluateTimeReset(activeOption, now, previousTickAt);
@@ -437,6 +489,7 @@ public sealed class ModeMonitor : IDisposable
 		{
 			_previousTickAt = now;
 			_previousPeriodName = currentPeriodName;
+			_startPeriodModePending = startPending;
 		}
 	}
 
@@ -445,7 +498,9 @@ public sealed class ModeMonitor : IDisposable
 		TimePeriodConfig? period = _periods.FirstOrDefault(p => string.Equals(p.Name, periodName, StringComparison.OrdinalIgnoreCase));
 
 		// SetsMode: entering this period sets the select — once, at entry. A human override mid-period stands
-		// because the entry only fires on the tick that first sees the new period.
+		// because the entry only fires on the tick that first sees the new period. A boundary the engine was not
+		// running for never reaches here at all; ApplyPeriodModeOnStart is that case, detecting the crossing from
+		// the note the previous run left on disk instead of from a tick.
 		if (period?.SetsMode is { Length: > 0 } setsMode
 			&& _global.HouseMode?.Entity is { Length: > 0 } select
 			&& !string.Equals(CurrentModeValue, setsMode.Trim(), StringComparison.OrdinalIgnoreCase))
@@ -459,6 +514,138 @@ public sealed class ModeMonitor : IDisposable
 		if (activeOption is { Kind: not ModeKind.Normal, ResetOnPeriodStart: { Length: > 0 } resetPeriod }
 			&& string.Equals(resetPeriod.Trim(), periodName, StringComparison.OrdinalIgnoreCase))
 			Reset($"period '{periodName}' started");
+	}
+
+	/// <summary>
+	///     Applies the current period's <see cref="TimePeriodConfig.SetsMode"/>, once, on the first tick after
+	///     <see cref="Start"/> — and only when the period is not the one the previous run left off in.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Without this the mode simply did not follow the schedule.</b> The entry above is edge-triggered on
+	///         the tick that first sees a new period, so a boundary crossed while the engine was down was a boundary
+	///         nothing ever noticed: a house restarted at 23:30 stayed on its daytime mode until 23:00 came round
+	///         again. On a machine that is redeployed several times a day that is most nights.
+	///     </para>
+	///     <para>
+	///         <b>The question is whether a boundary went by, not whether the engine restarted.</b> Restarting
+	///         inside the period you were already in is not an event, and re-asserting a mode for it would silently
+	///         undo whatever a person chose an hour ago — every deploy, several times a day. Restarting <i>across</i>
+	///         a boundary is an event, and it is exactly the event the schedule exists to act on: night began, so
+	///         night's mode applies, whatever the select happens to read. That is why the standing mode is not
+	///         consulted here. It is the same rule <see cref="OnPeriodEntered"/> follows for a boundary the engine
+	///         watched arrive; all that differs is how the crossing is detected.
+	///     </para>
+	///     <para>
+	///         <b>Not knowing is not the same as knowing a boundary was crossed.</b> A first run, a deleted note and
+	///         a corrupt one all leave <see cref="_periodAtLastRun"/> null, and all three fall to doing nothing.
+	///         Inertia is the safe half: the cost is one missed re-application, after which the note exists and the
+	///         rule works; the cost of guessing the other way is a mode overwritten on no evidence at all, on a path
+	///         that a corrupt file could trigger on every single start.
+	///     </para>
+	///     <para>
+	///         <b>A restart is still a case of its own, not an entry.</b> Feeding it through
+	///         <see cref="OnPeriodEntered"/> would have been fewer lines and wrong: that path also fires the
+	///         period-start reset, so a restart across the named boundary would cancel a retained Away or Guest mode
+	///         as a side effect of a deploy, and a reset trigger that fires because somebody redeployed is not a
+	///         trigger at all.
+	///     </para>
+	/// </remarks>
+	/// <param name="periodName">The period the engine has started inside.</param>
+	private void ApplyPeriodModeOnStart(string periodName)
+	{
+		string? previousRun;
+		lock (_gate)
+			previousRun = _periodAtLastRun;
+
+		if (previousRun is not { Length: > 0 })
+		{
+			_logger.LogDebug(
+				"Started inside period '{Period}', but there is no note of which period the last run ended in; "
+				+ "assuming nothing and leaving the house mode alone.",
+				periodName);
+			return;
+		}
+
+		if (string.Equals(previousRun, periodName, StringComparison.OrdinalIgnoreCase))
+			return;   // same period as when we stopped: no boundary went by, so nothing to apply
+
+		TimePeriodConfig? period = _periods.FirstOrDefault(p => string.Equals(p.Name, periodName, StringComparison.OrdinalIgnoreCase));
+
+		if (period?.SetsMode is not { Length: > 0 } setsMode
+			|| _global.HouseMode?.Entity is not { Length: > 0 } select)
+			return;
+
+		if (string.Equals(CurrentModeValue, setsMode.Trim(), StringComparison.OrdinalIgnoreCase))
+			return;   // already standing where the period wants it
+
+		_logger.LogInformation(
+			"Period '{Period}' began while the engine was stopped (it was last running in '{Previous}'); setting {Select} to '{Mode}'.",
+			periodName, previousRun, select, setsMode);
+
+		_ha.CallService(SelectDomain, SelectOptionService,
+			new ServiceTarget { EntityIds = [select] }, new { option = setsMode.Trim() });
+	}
+
+	/// <summary>
+	///     Reads the previous run's period, treating any failure as "we do not know".
+	/// </summary>
+	/// <remarks>
+	///     <see cref="LastPeriodStore"/> already promises never to throw, and this catches anyway. The store is an
+	///     interface a host supplies, this runs inside <see cref="Start"/>, and a start that throws takes the engine
+	///     down with it — a blank line in a configuration file once did exactly that. A note nobody can read must be
+	///     inert, not fatal.
+	/// </remarks>
+	private string? ReadPeriodAtLastRun()
+	{
+		if (_lastPeriod is null)
+			return null;
+
+		try
+		{
+			return _lastPeriod.Load() is { Length: > 0 } period ? period : null;
+		}
+		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
+		{
+			_logger.LogWarning(exception, "Could not read which period the last run ended in; assuming nothing.");
+			return null;
+		}
+	}
+
+	/// <summary>
+	///     Writes the period now current, when it has changed since the last write.
+	/// </summary>
+	/// <remarks>
+	///     Only on a change, because that is a handful of writes a day rather than one per tick, and the file is
+	///     read exactly once per process. A null period — a circadian table with no placeable boundary at all — is
+	///     not written: it would replace a good note with a worse one, and the previous note stays true for longer.
+	/// </remarks>
+	/// <param name="periodName">The active period, or <c>null</c> when none resolved.</param>
+	private void RememberPeriod(string? periodName)
+	{
+		if (_lastPeriod is null || periodName is not { Length: > 0 })
+			return;
+
+		lock (_gate)
+		{
+			if (string.Equals(_persistedPeriodName, periodName, StringComparison.OrdinalIgnoreCase))
+				return;
+
+			// Recorded as attempted even when the write fails: a store that cannot write has already warned, and
+			// retrying it on every tick would turn one warning into one per minute for as long as the fault lasts.
+			_persistedPeriodName = periodName;
+		}
+
+		try
+		{
+			_lastPeriod.TrySave(periodName);
+		}
+		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
+		{
+			// Same reasoning as the read: losing the note costs one re-application after the next restart, and
+			// must never cost the tick it is written from.
+			_logger.LogWarning(exception, "Could not record that the engine is now in period '{Period}'.", periodName);
+		}
 	}
 
 	private void EvaluateTimeReset(HouseModeOptionConfig? activeOption, DateTimeOffset now, DateTimeOffset previousTickAt)

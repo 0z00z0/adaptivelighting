@@ -4,7 +4,7 @@ namespace AdaptiveLighting.Abstractions;
 
 /// <summary>
 ///     The engine's only way to change a light. Narrow on purpose: it keeps <c>light.turn_on</c> out of the
-///     state machine, and it means a zone test needs a recording fake rather than a whole HA fake.
+///     state machine, and it means an area test needs a recording fake rather than a whole HA fake.
 /// </summary>
 public interface ILightActuator
 {

@@ -3,7 +3,7 @@
 	the program.cs call to MapRazorComponents<App>() — a host adopts this by copying that call.
 *@
 @* No hard-coded theme: app.css defines a dark palette and a light override behind
-   prefers-color-scheme, so the page follows the device. *@
+   prefers-color-scheme, so a browser that has chosen nothing still follows the device. *@
 <!DOCTYPE html>
 <html lang="en">
 
@@ -12,8 +12,19 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<base href="/" />
 	<title>Adaptive lighting</title>
-	<link rel="stylesheet" href="_content/AdaptiveLighting.Web/app.css" />
+	@*
+		Both assets carry ?v=. Without it a browser that has app.css cached keeps using it after a deploy,
+		which is how a fixed layout stays broken on the one machine the house is actually read on — and it is
+		the deployed machine, so nobody sees it while developing. See Build below for what the token is.
+	*@
+	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Web/app.css?v={Build}")" />
 	<link rel="icon" type="image/svg+xml" href="_content/AdaptiveLighting.Web/favicon.svg" />
+	@*
+		Blocking, in <head>, above the body: the server paints this page, so a theme read after render arrives
+		one repaint too late. This puts data-theme on <html> before the body is parsed. data-themes is the
+		allow-list, so an id from a withdrawn theme falls back to the device rather than to no palette at all.
+	*@
+	<script src="@($"_content/AdaptiveLighting.Web/theme.js?v={Build}")" data-themes="@AppThemes.DataThemeIds"></script>
 	<HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
@@ -23,3 +34,37 @@
 </body>
 
 </html>
+
+@code {
+	/// <summary>
+	///     What this build is, as a short token to hang on the asset URLs.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Source Link stamps the informational version as <c>0.1.0-preview.1+&lt;commit sha&gt;</c>, so the
+	///         short sha after the <c>+</c> is a build identity that changes whenever the library is built from a
+	///         different commit — including a commit that only touched <c>app.css</c>. A version number alone
+	///         would not: it is bumped per release, and two deploys off the same preview would share a URL.
+	///     </para>
+	///     <para>
+	///         Computed once, statically, because it can never change while the process lives, and it is read on
+	///         every page render. A repository with no sha falls back to the bare version, which is still better
+	///         than no token at all.
+	///     </para>
+	/// </remarks>
+	private static readonly string Build = BuildToken();
+
+	private static string BuildToken()
+	{
+		string version = System.Reflection.CustomAttributeExtensions
+			.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(App).Assembly)
+			?.InformationalVersion
+			?? typeof(App).Assembly.GetName().Version?.ToString()
+			?? "0";
+
+		int plus = version.IndexOf('+');
+		string token = plus >= 0 ? version[(plus + 1)..] : version;
+
+		return token.Length > 12 ? token[..12] : token;
+	}
+}

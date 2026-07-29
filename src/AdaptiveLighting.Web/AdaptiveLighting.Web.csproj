@@ -6,7 +6,7 @@
 		<Nullable>enable</Nullable>
 		<RootNamespace>AdaptiveLighting.Web</RootNamespace>
 		<PackageId>AdaptiveLighting.Web</PackageId>
-		<Description>Blazor dashboard and configuration UI for the AdaptiveLighting NetDaemon library. Live per-room state, house modes and who's home, plus a full editor for zones, the circadian schedule and defaults that writes the YAML and rebuilds the running engine in place. Ships as a Razor Class Library; LAN-only and unauthenticated by design - read the security notes before exposing it.</Description>
+		<Description>Blazor dashboard and configuration UI for the AdaptiveLighting NetDaemon library. Live per-room state, house modes and who's home, plus a full editor for areas, the circadian schedule and defaults that writes the YAML and rebuilds the running engine in place. Ships as a Razor Class Library; LAN-only and unauthenticated by design - read the security notes before exposing it.</Description>
 		<AddRazorSupportForMvc>true</AddRazorSupportForMvc>
 		<GenerateDocumentationFile>false</GenerateDocumentationFile>
 	</PropertyGroup>
@@ -14,7 +14,7 @@
 	<ItemGroup>
 		<!--
 			The UI is a Razor Class Library so that any NetDaemon host can adopt it by copying the sample host's
-			program.cs and nothing else. It references AdaptiveLighting for the config schema and ZoneSnapshot,
+			program.cs and nothing else. It references AdaptiveLighting for the config schema and AreaSnapshot,
 			and it must never reference a generated type (Entities/HomeAssistantGenerated) — those are
 			per-host and would pin this library to one Home Assistant instance.
 		-->

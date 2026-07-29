@@ -6,8 +6,8 @@ namespace AdaptiveLighting.Configuration;
 /// </summary>
 /// <remarks>
 ///     The split is deliberate. Document-level problems mean nobody can have thought about this config, so the
-///     app throws and shows up dead in HA. Referential problems are one zone's business — an entity renamed in
-///     HA must cost that zone, not the house.
+///     app throws and shows up dead in HA. Referential problems are one area's business — an entity renamed in
+///     HA must cost that area, not the house.
 /// </remarks>
 public static class ConfigValidator
 {
@@ -31,27 +31,130 @@ public static class ConfigValidator
 	///     The live <c>options</c> of the configured house-mode select. When <c>null</c>, the live-option warnings
 	///     are skipped — same pattern as <paramref name="knownEntityIds"/>.
 	/// </param>
+	/// <param name="labelsInUse">
+	///     Every registry label that at least one entity carries, by id and by name — the same either-way matching
+	///     the resolver does. When <c>null</c>, the include-label warning is skipped, same pattern as
+	///     <paramref name="knownEntityIds"/>.
+	/// </param>
 	public static ValidationResult Validate(
 		AdaptiveLightingConfig config,
 		IReadOnlyCollection<string>? knownEntityIds = null,
 		IReadOnlyCollection<string>? knownAreaIds = null,
-		IReadOnlyCollection<string>? liveSelectOptions = null)
+		IReadOnlyCollection<string>? liveSelectOptions = null,
+		IReadOnlyCollection<string>? labelsInUse = null)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
 		ValidationResult result = new();
 
-		ValidateGlobal(config.Global, knownEntityIds, result);
+		ValidateGlobal(config.Global, knownEntityIds, labelsInUse, result);
 		ValidatePeriods(config.Periods, result);
 		ValidateHouseMode(config, knownEntityIds, liveSelectOptions, result);
 		ValidateSettings("Defaults", config.Defaults, result);
-		ValidateZones(config, knownEntityIds, knownAreaIds, result);
+		ValidateAreas(config, knownEntityIds, knownAreaIds, result);
+		ValidateOutdoorLuxOptIn(config, result);
+		ValidateLuxBrightnessSource(config, result);
 
 		return result;
 	}
 
-	private static void ValidateGlobal(GlobalConfig global, IReadOnlyCollection<string>? knownEntityIds, ValidationResult result)
+	/// <summary>
+	///     The house names an outdoor lux sensor, and no room asked to read it.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>This is a meaning change, said out loud, and it is the only place a document can be told about
+	///         it.</b> The outdoor sensor was once handed to every room that resolved no lux sensor of its own,
+	///         silently. It is now an opt-in per room (<see cref="AreaConfig.FollowOutdoorLux"/>), because one
+	///         shaded outdoor sensor reading several hundred lux through the day held off every sensorless room in
+	///         a house that was genuinely dark. A document written under the old rule looks identical under the
+	///         new one and means something different: rooms that used to gate on the outdoor reading now have no
+	///         reading, so the lux half of their gate stops refusing and they light on movement.
+	///     </para>
+	///     <para>
+	///         A warning rather than a migration, deliberately. The validator is pure and cannot run discovery, so
+	///         it cannot know which rooms will find a sensor of their own and are therefore unaffected; and
+	///         rewriting somebody's file to preserve a behaviour they may well have been suffering under is the
+	///         kind of help nobody asked for. The new behaviour is the intended one — better to light too early
+	///         than never — so this says what changed and how to put it back, room by room, and leaves the choice
+	///         where it belongs.
+	///     </para>
+	///     <para>
+	///         The mirror case is an area-level warning: a room that asked to follow an outdoor sensor the house
+	///         does not name has asked for nothing, and would sit there counting as dark while believing itself
+	///         gated.
+	///     </para>
+	/// </remarks>
+	private static void ValidateOutdoorLuxOptIn(AdaptiveLightingConfig config, ValidationResult result)
 	{
+		bool houseHasOne = config.Global.OutdoorLuxSensor is { Length: > 0 };
+		List<AreaConfig> following = [.. config.Areas.Where(area => area.FollowOutdoorLux == true)];
+
+		if (houseHasOne && following.Count == 0)
+			result.AddWarning(
+				"Global.OutdoorLuxSensor is set but no room follows it. It used to be applied automatically to every room "
+				+ "that found no light sensor of its own; that fallback is gone, so those rooms now have no lux reading and "
+				+ "count as dark — they will light on movement where they previously waited for the outdoor reading to drop. "
+				+ "Set FollowOutdoorLux on the rooms that should keep gating on it.");
+
+		if (!houseHasOne)
+			foreach (AreaConfig area in following)
+				result.AddWarning(
+					$"[{area.DisplayName}] FollowOutdoorLux is on but Global.OutdoorLuxSensor names no sensor, so the room "
+					+ "has no lux reading and counts as dark. Name the house's outdoor sensor, or give the room a LuxSensor.");
+	}
+
+	/// <summary>
+	///     The daylight brightness adjustment is switched on somewhere, but the document names no lux sensor at all.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         A warning, and only one, at document level. It degrades rather than breaks: a room with no reading
+	///         gets the schedule's brightness, which is what the whole house did before the feature existed. And the
+	///         validator is pure — it cannot run discovery — so it cannot know that a room will find an illuminance
+	///         sensor of its own at runtime. Erroring on something it cannot see would refuse a perfectly good
+	///         document.
+	///     </para>
+	///     <para>
+	///         What it <i>can</i> see is the case that motivates the feature: a hallway has no lux sensor, so the
+	///         reading has to come from <see cref="GlobalConfig.OutdoorLuxSensor"/> — and if no room pins one and
+	///         no room follows the house's, the switch is on and nothing anywhere is guaranteed to feed it. Said
+	///         once, at the top, in the same spirit as the include-label warning.
+	///     </para>
+	///     <para>
+	///         <b>Naming the outdoor sensor is no longer enough to satisfy this.</b> It used to be: the sensor was
+	///         handed to every room that had none. Now a room reads it only if it says so
+	///         (<see cref="AreaConfig.FollowOutdoorLux"/>), and the daylight curve reads whatever the darkness gate
+	///         reads — one sensor per room, one answer — so a house that names an outdoor sensor no room follows
+	///         feeds the curve nothing at all.
+	///     </para>
+	/// </remarks>
+	private static void ValidateLuxBrightnessSource(AdaptiveLightingConfig config, ValidationResult result)
+	{
+		bool someRoomHasAReading =
+			config.Areas.Any(area => area.LuxSensor is { Length: > 0 })
+			|| (config.Global.OutdoorLuxSensor is { Length: > 0 } && config.Areas.Any(area => area.FollowOutdoorLux == true));
+
+		if (someRoomHasAReading)
+			return;
+
+		if (!config.Areas.Any(area => area.Effective(config.Defaults).LuxBrightnessEnabled))
+			return;
+
+		result.AddWarning(
+			"LuxBrightnessEnabled is on for at least one room, but no room is guaranteed a lux reading: give those rooms "
+			+ "a LuxSensor, or set FollowOutdoorLux on them and name Global.OutdoorLuxSensor. Rooms that discover an "
+			+ "illuminance sensor of their own still follow the daylight; the rest keep the schedule's brightness.");
+	}
+
+	private static void ValidateGlobal(
+		GlobalConfig global,
+		IReadOnlyCollection<string>? knownEntityIds,
+		IReadOnlyCollection<string>? labelsInUse,
+		ValidationResult result)
+	{
+		ValidateIncludeLabel(global, labelsInUse, result);
+
 		if (global.AwayDebounceMinutes < 0)
 			result.AddError($"Global.AwayDebounceMinutes must not be negative (is {global.AwayDebounceMinutes}).");
 
@@ -93,15 +196,39 @@ public static class ConfigValidator
 				result.AddWarning($"The built-in master switch '{killSwitch}' is not known to Home Assistant yet; the state manager creates it at app start.");
 		}
 
-		// Outdoor lux sensor: the house-wide default lux source. It fails open — an unknown or non-sensor id just
-		// leaves zones without their own lux falling back to sun elevation — so both are warnings, not errors.
+		// Outdoor lux sensor: the reading offered to the rooms that ask for it. It fails open — an unknown or
+		// non-sensor id just leaves those rooms with no reading, which now means they count as dark rather than
+		// that they stop lighting — so both are warnings, not errors.
 		if (global.OutdoorLuxSensor is { Length: > 0 } outdoorLux)
 		{
 			if (outdoorLux.Domain() is not "sensor")
-				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not a sensor entity; zones without their own lux sensor will fall back to sun elevation.");
+				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not a sensor entity; the rooms that follow it have no lux reading and count as dark.");
 			else if (!knownEntityIds.Contains(outdoorLux))
-				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not known to Home Assistant; zones without their own lux sensor fall back to sun elevation until it appears.");
+				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not known to Home Assistant; the rooms that follow it count as dark until it appears.");
 		}
+	}
+
+	/// <summary>
+	///     The include label, when nothing in Home Assistant carries it.
+	/// </summary>
+	/// <remarks>
+	///     A warning and never an error, deliberately. The filter fails closed room by room — every room reports
+	///     that its lights carry no such label and is skipped — so the house degrades exactly as it does for any
+	///     other unresolvable room, and the document stays saveable. What the per-room messages cannot say is that
+	///     one typo at the top of the file is behind all of them, which is what this says once.
+	/// </remarks>
+	private static void ValidateIncludeLabel(
+		GlobalConfig global,
+		IReadOnlyCollection<string>? labelsInUse,
+		ValidationResult result)
+	{
+		if (labelsInUse is null || global.IncludeLabel is not { Length: > 0 } include)
+			return;
+
+		if (!labelsInUse.Contains(include, StringComparer.OrdinalIgnoreCase))
+			result.AddWarning(
+				$"Global.IncludeLabel is '{include}', which nothing in Home Assistant carries — with it set and unmatched, "
+				+ "no room finds a light to manage. Clear it to manage every light discovery finds, or label the lights in Home Assistant.");
 	}
 
 	private static IEnumerable<(string Label, string EntityId)> EnumerateGlobalEntities(GlobalConfig global)
@@ -360,14 +487,14 @@ public static class ConfigValidator
 		}
 	}
 
-	/// <summary>When any option is Sleep and any zone respects sleep mode, the §4.1 clamp chain must resolve to an existing period.</summary>
+	/// <summary>When any option is Sleep and any area respects sleep mode, the §4.1 clamp chain must resolve to an existing period.</summary>
 	private static void ValidateSleepPath(AdaptiveLightingConfig config, HouseModeConfig? houseMode, ValidationResult result)
 	{
 		List<HouseModeOptionConfig> sleepOptions = houseMode?.Options.Where(o => o.Kind == ModeKind.Sleep).ToList() ?? [];
 		if (sleepOptions.Count == 0)
 			return;
 
-		if (!config.Zones.Any(z => z.Effective(config.Defaults).RespectSleepMode))
+		if (!config.Areas.Any(z => z.Effective(config.Defaults).RespectSleepMode))
 			return;   // sleep is not load-bearing
 
 		foreach (HouseModeOptionConfig? option in sleepOptions)
@@ -378,7 +505,7 @@ public static class ConfigValidator
 
 			if (!resolves)
 				result.AddError(
-					$"Sleep option '{option.Value}' is load-bearing (a zone respects sleep) but no clamp period resolves: " +
+					$"Sleep option '{option.Value}' is load-bearing (an area respects sleep) but no clamp period resolves: " +
 					"set its ClampPeriod, have a period SetsMode this option, or add a period named 'night'.");
 		}
 	}
@@ -398,80 +525,80 @@ public static class ConfigValidator
 				result.AddWarning($"The select offers option '{live}', which nothing has classified — it behaves as Normal.");
 	}
 
-	private static void ValidateZones(
+	private static void ValidateAreas(
 		AdaptiveLightingConfig config,
 		IReadOnlyCollection<string>? knownEntityIds,
 		IReadOnlyCollection<string>? knownAreaIds,
 		ValidationResult result)
 	{
-		// A warning, not an error. An empty zone list is a legitimate state, not a broken document: it is what a
+		// A warning, not an error. An empty area list is a legitimate state, not a broken document: it is what a
 		// brand-new installation starts from before discovery has run, and what a household is left with after
 		// deliberately removing every room. The engine runs perfectly well managing nothing — it simply commands
 		// nothing — whereas refusing the document stops the whole app and greets a new owner with "the
 		// configuration has document-level errors", which is both alarming and untrue.
-		if (config.Zones.Count == 0)
+		if (config.Areas.Count == 0)
 		{
-			result.AddWarning("No zones yet — the engine is running but managing nothing. Add a room on the Configuration page.");
+			result.AddWarning("No rooms yet — adaptive lighting is running but managing nothing. Add a room under Configuration → Areas.");
 			return;
 		}
 
-		IEnumerable<string> duplicateZones = config.Zones
+		IEnumerable<string> duplicateAreas = config.Areas
 			.GroupBy(z => z.DisplayName, StringComparer.OrdinalIgnoreCase)
 			.Where(g => g.Count() > 1)
 			.Select(g => g.Key);
 
-		foreach (string? name in duplicateZones)
-			result.AddError($"Duplicate zone name '{name}'.");
+		foreach (string? name in duplicateAreas)
+			result.AddError($"Duplicate area name '{name}' — two rooms cannot share one name. Rename one of them.");
 
-		foreach (ZoneConfig zone in config.Zones)
+		foreach (AreaConfig area in config.Areas)
 		{
-			ValidateSettings(zone.DisplayName, zone.Effective(config.Defaults), result);
-			ValidateZoneReferences(zone, knownEntityIds, knownAreaIds, result);
+			ValidateSettings(area.DisplayName, area.Effective(config.Defaults), result);
+			ValidateAreaReferences(area, knownEntityIds, knownAreaIds, result);
 		}
 	}
 
-	private static void ValidateZoneReferences(
-		ZoneConfig zone,
+	private static void ValidateAreaReferences(
+		AreaConfig area,
 		IReadOnlyCollection<string>? knownEntityIds,
 		IReadOnlyCollection<string>? knownAreaIds,
 		ValidationResult result)
 	{
-		bool hasExplicitLights = zone.Lights is { Count: > 0 };
+		bool hasExplicitLights = area.Lights is { Count: > 0 };
 
-		if (string.IsNullOrWhiteSpace(zone.AreaId) && !hasExplicitLights)
+		if (string.IsNullOrWhiteSpace(area.AreaId) && !hasExplicitLights)
 		{
-			result.AddZoneError(zone.DisplayName, "Neither AreaId nor an explicit Lights list — nothing to resolve.");
+			result.AddAreaError(area.DisplayName, "This room names no Home Assistant area and lists no lights, so nothing can be found for it. Pick an area, or name its lights by hand.");
 			return;
 		}
 
-		if (knownAreaIds is not null && zone.AreaId is { Length: > 0 } areaId && !knownAreaIds.Contains(areaId))
-			result.AddZoneError(zone.DisplayName,
+		if (knownAreaIds is not null && area.AreaId is { Length: > 0 } areaId && !knownAreaIds.Contains(areaId))
+			result.AddAreaError(area.DisplayName,
 				$"AreaId '{areaId}' is not a registry area id. AreaId is the slug, not the display name. Known area ids: {string.Join(", ", knownAreaIds.Order(StringComparer.Ordinal))}.");
 
 		if (knownEntityIds is null)
 			return;
 
-		foreach (string entityId in EnumerateZoneEntities(zone))
+		foreach (string entityId in EnumerateAreaEntities(area))
 			if (!knownEntityIds.Contains(entityId))
-				result.AddZoneError(zone.DisplayName, $"Refers to '{entityId}', which Home Assistant does not know.");
+				result.AddAreaError(area.DisplayName, $"Names '{entityId}', which Home Assistant does not know. Check it for typos, or remove it.");
 	}
 
-	private static IEnumerable<string> EnumerateZoneEntities(ZoneConfig zone)
+	private static IEnumerable<string> EnumerateAreaEntities(AreaConfig area)
 	{
-		foreach (string light in zone.Lights ?? [])
+		foreach (string light in area.Lights ?? [])
 			yield return light;
 
-		foreach (string sensor in zone.MotionSensors ?? [])
+		foreach (string sensor in area.MotionSensors ?? [])
 			yield return sensor;
 
-		foreach (string blocker in zone.IgnoreWhenOn ?? [])
+		foreach (string blocker in area.IgnoreWhenOn ?? [])
 			yield return blocker;
 
-		if (zone.LuxSensor is { Length: > 0 } lux)
+		if (area.LuxSensor is { Length: > 0 } lux)
 			yield return lux;
 	}
 
-	private static void ValidateSettings(string scope, ZoneSettings settings, ValidationResult result)
+	private static void ValidateSettings(string scope, AreaSettings settings, ValidationResult result)
 	{
 		if (settings.VacancyTimeoutSeconds <= 0)
 			result.AddError($"[{scope}] VacancyTimeoutSeconds must be positive (is {settings.VacancyTimeoutSeconds}).");
@@ -497,6 +624,8 @@ public static class ConfigValidator
 		if (settings.LuxHysteresis < 0)
 			result.AddError($"[{scope}] LuxHysteresis must not be negative (is {settings.LuxHysteresis}).");
 
+		ValidateLuxBrightness(scope, settings, result);
+
 		if (settings.SunElevationThreshold is < MinSunElevationDegrees or > MaxSunElevationDegrees)
 			result.AddError($"[{scope}] SunElevationThreshold must be between {MinSunElevationDegrees} and {MaxSunElevationDegrees} degrees (is {settings.SunElevationThreshold}).");
 
@@ -508,5 +637,45 @@ public static class ConfigValidator
 
 		if (settings.NightTransitionSeconds < 0)
 			result.AddError($"[{scope}] NightTransitionSeconds must not be negative (is {settings.NightTransitionSeconds}).");
+	}
+
+	/// <summary>
+	///     The daylight brightness curve: two anchors, a ceiling and a shaping exponent.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Checked whether or not the feature is switched on, matching how <c>LuxThreshold</c> is checked for an
+	///         area gating on the sun alone: a number outside its range is a mistake in the document, and it is no
+	///         less a mistake for currently being inert — it would come alive the moment somebody flipped the
+	///         switch. Every default is valid, so a document that predates the feature passes untouched.
+	///     </para>
+	///     <para>
+	///         The engine survives all of these on its own (<c>LuxBrightnessCurve</c> makes a nonsensical curve
+	///         inert rather than dangerous), but that is a safety net, not a reason to accept the document. Silently
+	///         ignoring the curve an owner wrote is worse than telling them it cannot be read.
+	///     </para>
+	/// </remarks>
+	private static void ValidateLuxBrightness(string scope, AreaSettings settings, ValidationResult result)
+	{
+		// A logarithm needs a positive anchor. This is the one that would be genuinely undefined rather than merely
+		// odd, so it is checked before the ordering.
+		if (settings.LuxBrightnessStartLux <= 0)
+			result.AddError($"[{scope}] LuxBrightnessStartLux must be positive (is {settings.LuxBrightnessStartLux}) — the curve interpolates on log10(lux), which has no value at or below zero.");
+
+		// Covers inverted and equal in one: equal anchors leave no range to interpolate across.
+		if (settings.LuxBrightnessFullLux <= settings.LuxBrightnessStartLux)
+			result.AddError($"[{scope}] LuxBrightnessFullLux ({settings.LuxBrightnessFullLux}) must be above LuxBrightnessStartLux ({settings.LuxBrightnessStartLux}).");
+
+		if (settings.LuxBrightnessMaxPct is < MinBrightnessPct or > MaxBrightnessPct)
+			result.AddError($"[{scope}] LuxBrightnessMaxPct is {settings.LuxBrightnessMaxPct}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
+
+		// Zero is the dangerous one rather than merely the useless one: pow(0, 0) is 1, so a zero exponent reads as
+		// "full daylight level at any reading, including pitch dark" to anything that trusts the arithmetic.
+		if (settings.LuxBrightnessGamma <= 0)
+			result.AddError($"[{scope}] LuxBrightnessGamma must be positive (is {settings.LuxBrightnessGamma}); 1 is a straight line, above 1 holds the level back until it is properly bright.");
+
+		// On but unable to add anything: legal, inert, and almost certainly a switch flipped without a ceiling set.
+		if (settings.LuxBrightnessEnabled && settings.LuxBrightnessMaxPct <= MinBrightnessPct)
+			result.AddWarning($"[{scope}] LuxBrightnessEnabled is on but LuxBrightnessMaxPct is {settings.LuxBrightnessMaxPct}, so daylight can never raise the brightness above the schedule.");
 	}
 }

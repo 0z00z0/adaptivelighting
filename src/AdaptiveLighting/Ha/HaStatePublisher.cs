@@ -3,17 +3,17 @@ using AdaptiveLighting.Abstractions;
 namespace AdaptiveLighting.Ha;
 
 /// <summary>
-///     Publishes zone snapshots as Home Assistant events, and logs them.
+///     Publishes area snapshots as Home Assistant events, and logs them.
 /// </summary>
 /// <remarks>
 ///     An HA event is enough to build an automation or a dashboard on, and costs nothing when nobody listens.
-///     A per-zone MQTT entity would be friendlier to the HA UI and is the obvious next step — which is the
+///     A per-area MQTT entity would be friendlier to the HA UI and is the obvious next step — which is the
 ///     whole reason this sits behind <see cref="IStatePublisher"/> rather than inside the state machine.
 /// </remarks>
 public sealed class HaStatePublisher : IStatePublisher
 {
-	/// <summary>The event type zone snapshots are published under.</summary>
-	public const string EventType = "laget_lighting_zone";
+	/// <summary>The event type area snapshots are published under.</summary>
+	public const string EventType = "adaptive_lighting_area";
 
 	private readonly IHaContext _ha;
 	private readonly ILogger _logger;
@@ -28,22 +28,24 @@ public sealed class HaStatePublisher : IStatePublisher
 	}
 
 	/// <inheritdoc/>
-	public void Publish(ZoneSnapshot snapshot)
+	public void Publish(AreaSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 
 		_logger.LogInformation(
-			"Zone {Zone} is {State} ({Reason}); house {Mode}, dark {IsDark}, period {Period}, brightness {Brightness}, kelvin {Kelvin}.",
-			snapshot.ZoneName, snapshot.State, snapshot.Reason, snapshot.Mode, snapshot.IsDark,
+			"Area {Area} is {State} ({Reason}); house {Mode}, dark {IsDark}, period {Period}, brightness {Brightness}, kelvin {Kelvin}.",
+			snapshot.AreaName, snapshot.State, snapshot.Reason, snapshot.Mode, snapshot.IsDark,
 			snapshot.PeriodName, snapshot.BrightnessPct, snapshot.ColorTempKelvin);
 
-		// Called from inside a zone's lock, so a throw here would take the zone's thread with it. There is
+		// Called from inside an area's lock, so a throw here would take the area's thread with it. There is
 		// nothing useful to do about a failed event either way: the log line above already carries the news.
 		try
 		{
 			_ha.SendEvent(EventType, new
 			{
-				zone = snapshot.ZoneName,
+				area = snapshot.AreaName,
+				// Additive: a consumer that never learned about area_id keeps reading `area` exactly as before.
+				area_id = snapshot.AreaId,
 				state = snapshot.State.ToString(),
 				reason = snapshot.Reason.ToString(),
 				mode = snapshot.Mode.ToString(),
@@ -58,12 +60,16 @@ public sealed class HaStatePublisher : IStatePublisher
 				last_motion_at = snapshot.LastMotionAt,
 				next_change_at = snapshot.NextChangeAt,
 				next_change_from = snapshot.NextChangeFrom,
-				darkness_detail = snapshot.DarknessDetail
+				darkness_detail = snapshot.DarknessDetail,
+				// Additive, exactly as area_id was: a consumer that never learned about the auto-on gate reads
+				// every field it already knew unchanged, and sees them as absent rather than as "nothing blocks".
+				auto_on_blocked_by = snapshot.AutoOnBlockedBy?.ToString(),
+				auto_on_blocking_entity = snapshot.AutoOnBlockingEntity
 			});
 		}
 		catch (Exception exception)
 		{
-			_logger.LogWarning(exception, "Could not publish the snapshot for zone {Zone}.", snapshot.ZoneName);
+			_logger.LogWarning(exception, "Could not publish the snapshot for area {Area}.", snapshot.AreaName);
 		}
 	}
 }

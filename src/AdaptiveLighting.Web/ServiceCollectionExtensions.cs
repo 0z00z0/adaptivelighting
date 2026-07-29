@@ -1,4 +1,5 @@
 using AdaptiveLighting.Hosting;
+using AdaptiveLighting.LastSeen;
 using AdaptiveLighting.Web.Services;
 
 using Microsoft.Extensions.Configuration;
@@ -13,7 +14,7 @@ namespace AdaptiveLighting.Web;
 public static class ServiceCollectionExtensions
 {
 	/// <summary>
-	///     Adds the configuration store, the engine host, the zone snapshot cache and the per-circuit services.
+	///     Adds the configuration store, the engine host, the area snapshot cache and the per-circuit services.
 	/// </summary>
 	/// <remarks>
 	///     <para>
@@ -55,10 +56,19 @@ public static class ServiceCollectionExtensions
 		// single load of the configuration document.
 		services.AddSingleton<LightingEngineHost>();
 
-		// Singleton: the cache must accumulate zone snapshots from process start, not from the moment a
+		// After the store, because the last-seen cache derives its own file names from the document's path. Nothing
+		// consumes IEntityLastSeen yet; the cache has to be running and accumulating history before anything can,
+		// which is exactly why it is registered on its own rather than alongside a first consumer.
+		services.AddEntityLastSeen();
+
+		// Singleton, and registered before the cache that fills it: the activity page's history is the same
+		// stream the cards come from, kept in order and bounded, and it must survive every browser circuit.
+		services.AddSingleton<ActivityLog>();
+
+		// Singleton: the cache must accumulate area snapshots from process start, not from the moment a
 		// browser connected. Also registered as a hosted service so it subscribes exactly once.
-		services.AddSingleton<ZoneSnapshotCache>();
-		services.AddHostedService(provider => provider.GetRequiredService<ZoneSnapshotCache>());
+		services.AddSingleton<AreaSnapshotCache>();
+		services.AddHostedService(provider => provider.GetRequiredService<AreaSnapshotCache>());
 
 		// Scoped: these depend on IHaContext, which NetDaemon scopes. One per Blazor circuit is correct.
 		services.AddScoped<ModeService>();

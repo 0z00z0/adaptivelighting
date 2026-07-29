@@ -130,7 +130,7 @@ public sealed class HaAdapterTests
 	{
 		var ha = new FakeHaContext();
 
-		new HaNotifier(ha, NullLogger.Instance).Notify("Adaptive lighting: zones disabled", "<ul><li>x</li></ul>");
+		new HaNotifier(ha, NullLogger.Instance).Notify("Adaptive lighting: areas disabled", "<ul><li>x</li></ul>");
 
 		var call = ha.Calls.Single();
 		Assert.AreEqual("persistent_notification", call.Domain);
@@ -150,13 +150,13 @@ public sealed class HaAdapterTests
 	{
 		var ha = new FakeHaContext();
 		var when = new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
-		var snapshot = new ZoneSnapshot(
-			"Stue", ZoneState.AutoActive, TransitionReason.Motion, HouseMode.Home,
+		var snapshot = new AreaSnapshot(
+			"Stue", AreaState.AutoActive, TransitionReason.Motion, HouseMode.Home,
 			false, true, "evening", 70, 2700, when,
 			when, when, when + TimeSpan.FromMinutes(10), when);
 
 		new HaStatePublisher(ha, NullLogger.Instance).Publish(snapshot);
 
-		Assert.AreEqual("laget_lighting_zone", ha.SentEvents.Single().Type);
+		Assert.AreEqual("adaptive_lighting_area", ha.SentEvents.Single().Type);
 	}
 }

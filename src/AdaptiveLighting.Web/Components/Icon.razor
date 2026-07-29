@@ -1,0 +1,49 @@
+@*
+	One glyph from the sprite.
+
+	A component rather than four lines of hand-written SVG at each call site, because the four lines are
+	easy to get subtly wrong: an <svg> without focusable="false" is a tab stop in some browsers, and one
+	without either aria-hidden or a label is an unnamed graphic a screen reader stops on. Both defects are
+	invisible on screen.
+
+	Decorative by default. An icon beside its own label — which is nearly every icon in this UI — is
+	repetition to a screen reader, so it is hidden unless the caller says what it means, and a caller who
+	sets Label is stating that the glyph is carrying meaning nothing else on the page carries.
+*@
+
+<svg class="ic @Class"
+	 role="@(Label is { Length: > 0 } ? "img" : null)"
+	 aria-label="@(Label is { Length: > 0 } ? Label : null)"
+	 aria-hidden="@(Label is { Length: > 0 } ? null : "true")"
+	 focusable="false">
+	<use href="@($"#{Name}")" />
+</svg>
+
+@code {
+	/// <summary>
+	///     Which glyph, as a <see cref="Glyph"/> constant.
+	/// </summary>
+	/// <remarks>
+	///     A name the sprite does not define renders an empty box in silence — no exception, nothing in the
+	///     console. Passing a <see cref="Glyph"/> constant rather than a literal turns that into a compile error.
+	/// </remarks>
+	[Parameter, EditorRequired]
+	public string Name { get; set; } = "";
+
+	/// <summary>
+	///     Extra classes: <c>ic-sm</c>, <c>ic-lg</c>, <c>ic-head</c>, or a page's own.
+	/// </summary>
+	/// <remarks>
+	///     Size and colour are classes rather than parameters because both are the caller's context, not the
+	///     glyph's: the same mark is 22px in ink on a card head and 14px in violet on a chip, and it takes
+	///     whatever colour it lands in through <c>currentColor</c>.
+	/// </remarks>
+	[Parameter]
+	public string? Class { get; set; }
+
+	/// <summary>
+	///     What the glyph means, when it is the only thing saying it. Leave unset for an icon beside its label.
+	/// </summary>
+	[Parameter]
+	public string? Label { get; set; }
+}

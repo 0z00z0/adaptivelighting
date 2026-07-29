@@ -1,0 +1,118 @@
+@*
+	One Home Assistant label, chosen from the ones this house has made, stored as the label's name.
+
+	The name and not the id, deliberately: the registry matches either, the name is what somebody reading the
+	YAML recognises, and the shipped default "adaptive-exclude" is already a name. Storing ids would rewrite
+	every existing document into strings nobody can read.
+
+	Two states this field must get right, because most houses are in one of them:
+
+	  - The house has no labels at all. That is the common case, not a fault, so the field says how to make one
+	    rather than rendering an empty dropdown that reads as "something is broken".
+	  - The stored value matches no live label. It stays selected, always. A value must survive Home Assistant
+	    being briefly unreadable — the same rule the entity pickers already follow — and the shipped exclude
+	    default trips this in nearly every house, which is why the warning's words come from the caller: on the
+	    exclude field it is information, not alarm.
+*@
+
+<div class="picker">
+	@if (_manual || !HasOptions)
+	{
+		<input type="text"
+			   class="picker-text"
+			   placeholder="@Placeholder"
+			   value="@Value"
+			   @onchange="OnTyped" />
+	}
+	else
+	{
+		<select class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
+			<option value="">@NoneLabel</option>
+			@foreach (LabelOption option in Options)
+			{
+				<option value="@option.Name">@option.Name</option>
+			}
+			@if (IsUnlisted)
+			{
+				@* Never dropped: the stored value is the one thing this field must not lose. *@
+				<option value="@Value">@Value</option>
+			}
+		</select>
+	}
+
+	<button type="button" class="picker-mode" @onclick="ToggleMode" disabled="@(!HasOptions)">
+		@(_manual ? "Pick from list" : "Type a label")
+	</button>
+
+	@if (!HasOptions)
+	{
+		<span class="picker-note">@EmptyNote</span>
+	}
+	else if (IsUnlisted)
+	{
+		<span class="picker-note">@UnknownNote</span>
+	}
+</div>
+
+@code {
+	/// <summary>The configured label name, or <c>null</c>/empty for none.</summary>
+	[Parameter]
+	public string? Value { get; set; }
+
+	/// <summary>Raised with the new label name, or <c>null</c> when the operator chose none.</summary>
+	[Parameter]
+	public EventCallback<string?> ValueChanged { get; set; }
+
+	/// <summary>Every label Home Assistant knows. Empty is an ordinary answer, and drives the none-state.</summary>
+	[Parameter]
+	public IReadOnlyList<LabelOption> Options { get; set; } = [];
+
+	/// <summary>What the empty choice is called, phrased for what "no label" means to this particular field.</summary>
+	[Parameter]
+	public string NoneLabel { get; set; } = "(none)";
+
+	/// <summary>Example label shown in the free-text fallback.</summary>
+	[Parameter]
+	public string Placeholder { get; set; } = "adaptive";
+
+	/// <summary>
+	///     What to say when the house has made no labels at all. The default is the instruction from the copy
+	///     guide; a caller only overrides it to say something truer about its own field.
+	/// </summary>
+	[Parameter]
+	public string EmptyNote { get; set; } =
+		"You haven't created any labels in Home Assistant yet. Labels are made under Settings → Areas, labels & zones → Labels — create one there, then pick it here.";
+
+	/// <summary>
+	///     What to say when the stored value matches no live label.
+	/// </summary>
+	/// <remarks>
+	///     The caller's words, not this component's, because the same fact means different things per field. On
+	///     the exclude label the shipped default matches nothing in most houses and that is fine; on an include
+	///     filter it means no light is being managed, which is not.
+	/// </remarks>
+	[Parameter]
+	public string UnknownNote { get; set; } = "No label with this name exists in Home Assistant yet.";
+
+	private bool _manual;
+
+	private bool HasOptions => Options.Count > 0;
+
+	private bool IsUnlisted =>
+		Value is { Length: > 0 } && !Options.Any(option => string.Equals(option.Name, Value, StringComparison.OrdinalIgnoreCase));
+
+	private Task OnPicked(string picked) => Commit(picked);
+
+	private Task OnTyped(ChangeEventArgs args) => Commit(args.Value as string);
+
+	private void ToggleMode() => _manual = !_manual;
+
+	private Task Commit(string? raw)
+	{
+		// "" normalises to null at the edge, as the entity pickers do: the schema uses null for "not set", and a
+		// blank string would be a label nothing can carry.
+		string? value = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+		Value = value;
+		return ValueChanged.InvokeAsync(value);
+	}
+}

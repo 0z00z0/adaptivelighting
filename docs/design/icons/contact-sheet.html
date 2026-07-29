@@ -1,0 +1,384 @@
+<title>AdaptiveLighting — section icons</title>
+<style>
+  :root {
+    --page-bg: #f2f1ee;
+    --page-panel: #fbfaf8;
+    --page-line: #d9d7d0;
+    --page-text: #22252a;
+    --page-muted: #636b78;
+    --page-accent: #b4700f;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "JetBrains Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page-bg: #14161a;
+      --page-panel: #1c1f26;
+      --page-line: #2f3542;
+      --page-text: #e7eaf0;
+      --page-muted: #9aa3b2;
+      --page-accent: #f2b544;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page-bg: #14161a;
+    --page-panel: #1c1f26;
+    --page-line: #2f3542;
+    --page-text: #e7eaf0;
+    --page-muted: #9aa3b2;
+    --page-accent: #f2b544;
+  }
+  :root[data-theme="light"] {
+    --page-bg: #f2f1ee;
+    --page-panel: #fbfaf8;
+    --page-line: #d9d7d0;
+    --page-text: #22252a;
+    --page-muted: #636b78;
+    --page-accent: #b4700f;
+  }
+  body {
+    background: var(--page-bg);
+    color: var(--page-text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 32px 20px 64px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 21px; letter-spacing: -0.02em; margin: 0 0 4px; }
+  h1 .dim { color: var(--page-muted); font-weight: normal; }
+  .tagline { color: var(--page-muted); margin: 0 0 36px; }
+  .tagline::before { content: "// "; }
+  h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--page-accent); margin: 44px 0 6px;
+  }
+  h2::before { content: "[" attr(data-n) "] "; color: var(--page-muted); }
+  .note { color: var(--page-muted); font-size: 12.5px; margin: 0 0 16px; max-width: 72ch; }
+
+  /* fixed-ground swatches: these deliberately do NOT follow the page theme */
+  .ground { border: 1px solid var(--page-line); border-radius: 10px; padding: 14px 16px; }
+  .ground.dark  { background: #14161a; color: #e7eaf0; --swatch-line: #2f3542; --swatch-muted: #9aa3b2; --icon-accent: #f2b544; }
+  .ground.light { background: #f2f1ee; color: #22252a; --swatch-line: #d9d7d0; --swatch-muted: #636b78; --icon-accent: #b4700f; }
+  .ground .glabel { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--swatch-muted); margin-bottom: 10px; }
+
+  /* nav-rail simulation */
+  .rails { display: flex; gap: 16px; flex-wrap: wrap; }
+  .rail-ground { flex: 1 1 300px; }
+  .rail { display: flex; flex-direction: column; gap: 2px; width: max-content; min-width: 200px; }
+  .rail .item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 12px; border-radius: 8px; font-size: 13.5px;
+  }
+  .rail .item.brand { font-weight: bold; margin-bottom: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--swatch-line); border-radius: 0; }
+  .rail .item.active { background: rgba(127, 127, 127, 0.14); color: var(--icon-accent); }
+  .rail .item .ic { color: inherit; }
+
+  .ic { display: inline-block; vertical-align: middle; flex: none; }
+  .ic-14 { width: 14px; height: 14px; }
+  .ic-20 { width: 20px; height: 20px; }
+  .ic-28 { width: 28px; height: 28px; }
+  .ic-44 { width: 44px; height: 44px; }
+
+  /* catalogue cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: var(--page-panel); border: 1px solid var(--page-line); border-radius: 10px; padding: 14px 16px; }
+  .card h3 { margin: 0; font-size: 14px; }
+  .card .file { color: var(--page-muted); font-size: 11.5px; }
+  .card .ship { color: var(--page-accent); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; border: 1px solid currentColor; border-radius: 99px; padding: 1px 8px; margin-left: 6px; vertical-align: 1px; }
+  .card .why { color: var(--page-muted); font-size: 12.5px; margin: 6px 0 12px; }
+  .sizes { display: flex; gap: 10px; }
+  .sizes .ground { flex: 1; display: flex; align-items: center; gap: 14px; padding: 12px 14px; }
+  .sizes .ground .ic { color: inherit; }
+
+  /* section-header simulation */
+  .headers { display: flex; gap: 16px; flex-wrap: wrap; }
+  .headers .ground { flex: 1 1 300px; }
+  .fakehead { display: flex; align-items: center; gap: 12px; font-size: 19px; font-weight: bold; letter-spacing: -0.02em; margin: 6px 0; }
+  .fakehead .ic { color: var(--icon-accent); }
+
+  /* state chips */
+  .chips-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .chips-ground { flex: 1 1 300px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--swatch-line); border-radius: 99px;
+    padding: 3px 11px 3px 8px; font-size: 12.5px;
+  }
+  .ground.dark  .chip.machine { color: #7fb3d5; background: #16242e; }
+  .ground.dark  .chip.human   { color: #e9a33c; background: #2a2011; }
+  .ground.dark  .chip.idle    { color: #6f767c; background: #1d2125; }
+  .ground.light .chip.machine { color: #2c6e9b; background: #eaf2f8; }
+  .ground.light .chip.human   { color: #b4700f; background: #fbf2e3; }
+  .ground.light .chip.idle    { color: #8c8e84; background: #f0f0ee; }
+  .chip .ic { color: inherit; --icon-accent: currentColor; }
+
+  .mono-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .mono-row .ic { color: inherit; }
+  .small-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+  footer { margin-top: 56px; color: var(--page-muted); font-size: 12px; }
+  footer::before { content: "$ "; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="12" r="2.2" fill="var(--icon-accent, currentColor)" stroke="none"/><line x1="6.2" y1="12" x2="4.4" y2="12"/><line x1="7.4" y1="9.4" x2="6.1" y2="8.1"/><line x1="7.4" y1="14.6" x2="6.1" y2="15.9"/><path d="M14.6 8.4 A5.8 5.8 0 0 1 14.6 15.6"/><path d="M17.3 6.2 A9.3 9.3 0 0 1 17.3 17.8"/></symbol>
+    <symbol id="i-dashboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/><rect x="12.8" y="3.8" width="7.4" height="7.4" rx="1.7" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+    <symbol id="i-dashboard-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4.6 17.5 A8.2 8.2 0 1 1 19.4 17.5"/><line x1="12" y1="14.8" x2="16.2" y2="9.4" stroke="var(--icon-accent, currentColor)" stroke-width="1.8"/><circle cx="12" cy="14.8" r="1.7" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+    <symbol id="i-areas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="4" y="4.5" width="16" height="15" rx="1.6"/><line x1="13" y1="4.5" x2="13" y2="12"/><line x1="4" y1="12" x2="9.5" y2="12"/><circle cx="16.5" cy="8.2" r="1.9" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+    <symbol id="i-schedule" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3.5 18.5 C7.5 18.5 7.5 9.5 12 9.5 C16.5 9.5 16.5 18.5 20.5 18.5"/><circle cx="12" cy="5.2" r="1.9" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+    <symbol id="i-schedule-dial" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="7.8"/><line x1="12" y1="5.1" x2="12" y2="6.6"/><line x1="12" y1="17.4" x2="12" y2="18.9"/><line x1="5.1" y1="12" x2="6.6" y2="12"/><line x1="17.4" y1="12" x2="18.9" y2="12"/><line x1="12" y1="12" x2="15.2" y2="7.7" stroke="var(--icon-accent, currentColor)" stroke-width="1.8"/><circle cx="12" cy="12" r="1.4" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+    <symbol id="i-modes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="5.6"/><line x1="6.9" y1="6.9" x2="5.8" y2="5.8" stroke="var(--icon-accent, currentColor)"/><line x1="17.1" y1="6.9" x2="18.2" y2="5.8"/><line x1="6.9" y1="17.1" x2="5.8" y2="18.2"/><line x1="17.1" y1="17.1" x2="18.2" y2="18.2"/><line x1="12" y1="12" x2="8.7" y2="8.7" stroke="var(--icon-accent, currentColor)" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+    <symbol id="i-modes-segments" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3.5" y="9" width="17" height="6" rx="3"/><circle cx="7.4" cy="12" r="1.8" fill="var(--icon-accent, currentColor)" stroke="none"/><circle cx="10.6" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="13.8" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="17" cy="12" r="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.8 L12 4.3 L20 10.8"/><path d="M6.2 9.4 V19.5 H17.8 V9.4"/><line x1="12" y1="10.4" x2="12" y2="13.9" stroke="var(--icon-accent, currentColor)"/><path d="M14.2 11.9 A3 3 0 1 1 9.8 11.9" stroke="var(--icon-accent, currentColor)"/></symbol>
+    <symbol id="i-house-residents" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.8 L12 4.3 L20 10.8"/><path d="M6.2 9.4 V19.5 H17.8 V9.4"/><circle cx="12" cy="11.9" r="1.9" fill="var(--icon-accent, currentColor)" stroke="none"/><path d="M8.9 17.6 A3.1 3.1 0 0 1 15.1 17.6"/></symbol>
+    <symbol id="i-state-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.8 12 A6.8 6.8 0 1 1 15.4 6.1"/><path d="M12.6 6 L15.4 6.1 L14 3.5"/><circle cx="12" cy="12" r="2" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+    <symbol id="i-state-auto-letter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7.8"/><path d="M9.3 15.6 L12 8.4 L14.7 15.6" stroke="var(--icon-accent, currentColor)" stroke-width="1.8"/><line x1="10.4" y1="13.2" x2="13.6" y2="13.2" stroke="var(--icon-accent, currentColor)" stroke-width="1.8"/></symbol>
+    <symbol id="i-state-manual" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="7.4" r="3.1" fill="var(--icon-accent, currentColor)" stroke="none"/><path d="M5.4 19 A6.6 6.6 0 0 1 18.6 19"/></symbol>
+    <symbol id="i-state-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7.6"/><line x1="16.6" y1="6.6" x2="7.4" y2="17.4" stroke="var(--icon-accent, currentColor)"/></symbol>
+    <symbol id="i-state-off-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16.7 8.3 A6.6 6.6 0 1 1 7.3 8.3"/><line x1="12" y1="4.2" x2="12" y2="12.6" stroke="var(--icon-accent, currentColor)"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <h1>AdaptiveLighting <span class="dim">— section icons</span></h1>
+  <p class="tagline">two-tone glyphs in the 0z0 icon technique — 24×24, currentColor outline, --icon-accent fills. rooms are lit by movement, not by bulbs.</p>
+
+  <h2 data-n="0">Nav rail — in context, 20 px</h2>
+  <p class="note">The rail as the app draws it: icons inherit the item's text colour; the active item and the accent
+  dot pick up <code>--icon-accent</code> (the app's <code>--accent</code> token). Both grounds are the app's real palette.</p>
+  <div class="rails">
+    <div class="ground dark rail-ground">
+      <div class="glabel">dark — #14161a</div>
+      <nav class="rail">
+        <div class="item brand"><svg class="ic ic-20"><use href="#i-mark"/></svg>AdaptiveLighting</div>
+        <div class="item active"><svg class="ic ic-20"><use href="#i-dashboard"/></svg>Dashboard</div>
+        <div class="item"><svg class="ic ic-20"><use href="#i-areas"/></svg>Areas</div>
+        <div class="item"><svg class="ic ic-20"><use href="#i-schedule"/></svg>Schedule</div>
+        <div class="item"><svg class="ic ic-20"><use href="#i-modes"/></svg>House modes</div>
+        <div class="item"><svg class="ic ic-20"><use href="#i-house"/></svg>House</div>
+      </nav>
+    </div>
+    <div class="ground light rail-ground">
+      <div class="glabel">light — #f2f1ee</div>
+      <nav class="rail">
+        <div class="item brand"><svg class="ic ic-20"><use href="#i-mark"/></svg>AdaptiveLighting</div>
+        <div class="item active"><svg class="ic ic-20"><use href="#i-dashboard"/></svg>Dashboard</div>
+        <div class="item"><svg class="ic ic-20"><use href="#i-areas"/></svg>Areas</div>
+        <div class="item"><svg class="ic ic-20"><use href="#i-schedule"/></svg>Schedule</div>
+        <div class="item"><svg class="ic ic-20"><use href="#i-modes"/></svg>House modes</div>
+        <div class="item"><svg class="ic ic-20"><use href="#i-house"/></svg>House</div>
+      </nav>
+    </div>
+  </div>
+
+  <h2 data-n="1">Section headers — 28 px</h2>
+  <div class="headers">
+    <div class="ground dark">
+      <div class="glabel">dark</div>
+      <div class="fakehead"><svg class="ic ic-28"><use href="#i-areas"/></svg>Areas</div>
+      <div class="fakehead"><svg class="ic ic-28"><use href="#i-schedule"/></svg>Schedule</div>
+      <div class="fakehead"><svg class="ic ic-28"><use href="#i-modes"/></svg>House modes</div>
+    </div>
+    <div class="ground light">
+      <div class="glabel">light</div>
+      <div class="fakehead"><svg class="ic ic-28"><use href="#i-areas"/></svg>Areas</div>
+      <div class="fakehead"><svg class="ic ic-28"><use href="#i-schedule"/></svg>Schedule</div>
+      <div class="fakehead"><svg class="ic ic-28"><use href="#i-modes"/></svg>House modes</div>
+    </div>
+  </div>
+
+  <h2 data-n="2">Catalogue — every glyph, both grounds, 44 / 20 / 14 px</h2>
+  <p class="note">Where two metaphors were defensible, both are drawn; the one marked <b>ships</b> is the recommendation.</p>
+  <div class="cards">
+    <div class="card">
+      <h3>App mark <span class="ship">ships</span></h3>
+      <div class="file">app-mark.svg</div>
+      <p class="why">A point of light answering motion waves — the sensor arcs on the right, the lamp on the left. The whole product in one glyph, no bulb.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-mark"/></svg><svg class="ic ic-20"><use href="#i-mark"/></svg><svg class="ic ic-14"><use href="#i-mark"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-mark"/></svg><svg class="ic ic-20"><use href="#i-mark"/></svg><svg class="ic ic-14"><use href="#i-mark"/></svg></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Dashboard <span class="ship">ships</span></h3>
+      <div class="file">dashboard.svg</div>
+      <p class="why">Room tiles at a glance, one currently lit — which is literally what the dashboard shows.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-dashboard"/></svg><svg class="ic ic-20"><use href="#i-dashboard"/></svg><svg class="ic ic-14"><use href="#i-dashboard"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-dashboard"/></svg><svg class="ic ic-20"><use href="#i-dashboard"/></svg><svg class="ic ic-14"><use href="#i-dashboard"/></svg></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Dashboard — alternative</h3>
+      <div class="file">dashboard-alt-gauge.svg</div>
+      <p class="why">A gauge: "live reading". Honest, but it promises a single number, and the dashboard is a grid.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-dashboard-gauge"/></svg><svg class="ic ic-20"><use href="#i-dashboard-gauge"/></svg><svg class="ic ic-14"><use href="#i-dashboard-gauge"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-dashboard-gauge"/></svg><svg class="ic ic-20"><use href="#i-dashboard-gauge"/></svg><svg class="ic ic-14"><use href="#i-dashboard-gauge"/></svg></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Areas <span class="ship">ships</span></h3>
+      <div class="file">areas.svg</div>
+      <p class="why">A floor plan — three rooms, a door gap, and the light on in the top-right room. Rooms as places, not devices.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-areas"/></svg><svg class="ic ic-20"><use href="#i-areas"/></svg><svg class="ic ic-14"><use href="#i-areas"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-areas"/></svg><svg class="ic ic-20"><use href="#i-areas"/></svg><svg class="ic ic-14"><use href="#i-areas"/></svg></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Schedule <span class="ship">ships</span></h3>
+      <div class="file">schedule.svg</div>
+      <p class="why">The circadian curve itself — brightness rising to solar noon and falling away, sun at the top. It is the chart the page draws.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-schedule"/></svg><svg class="ic ic-20"><use href="#i-schedule"/></svg><svg class="ic ic-14"><use href="#i-schedule"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-schedule"/></svg><svg class="ic ic-20"><use href="#i-schedule"/></svg><svg class="ic ic-14"><use href="#i-schedule"/></svg></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Schedule — alternative</h3>
+      <div class="file">schedule-alt-dial.svg</div>
+      <p class="why">A 24-hour dial, hand at mid-afternoon. Reads "time" faster, but "clock" is weaker than "curve" for a page about brightness over the day.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-schedule-dial"/></svg><svg class="ic ic-20"><use href="#i-schedule-dial"/></svg><svg class="ic ic-14"><use href="#i-schedule-dial"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-schedule-dial"/></svg><svg class="ic ic-20"><use href="#i-schedule-dial"/></svg><svg class="ic ic-14"><use href="#i-schedule-dial"/></svg></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>House modes <span class="ship">ships</span></h3>
+      <div class="file">house-modes.svg</div>
+      <p class="why">A rotary selector: four positions, pointer on the active one. One mode at a time, chosen deliberately.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-modes"/></svg><svg class="ic ic-20"><use href="#i-modes"/></svg><svg class="ic ic-14"><use href="#i-modes"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-modes"/></svg><svg class="ic ic-20"><use href="#i-modes"/></svg><svg class="ic ic-14"><use href="#i-modes"/></svg></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>House modes — alternative</h3>
+      <div class="file">house-modes-alt-segments.svg</div>
+      <p class="why">A segmented switch, first position engaged. Also honest, but flatter — the dial has more character at header size.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-modes-segments"/></svg><svg class="ic ic-20"><use href="#i-modes-segments"/></svg><svg class="ic ic-14"><use href="#i-modes-segments"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-modes-segments"/></svg><svg class="ic ic-20"><use href="#i-modes-segments"/></svg><svg class="ic ic-14"><use href="#i-modes-segments"/></svg></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>House <span class="ship">ships</span></h3>
+      <div class="file">house.svg</div>
+      <p class="why">The house with its master switch inside — the installation you can turn on and off as a whole.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-house"/></svg><svg class="ic ic-20"><use href="#i-house"/></svg><svg class="ic ic-14"><use href="#i-house"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-house"/></svg><svg class="ic ic-20"><use href="#i-house"/></svg><svg class="ic ic-14"><use href="#i-house"/></svg></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>House — alternative</h3>
+      <div class="file">house-alt-residents.svg</div>
+      <p class="why">The house with a resident inside — "who lives here". Warmer; loses only because the master switch is the section's headline control.</p>
+      <div class="sizes">
+        <div class="ground dark"><svg class="ic ic-44"><use href="#i-house-residents"/></svg><svg class="ic ic-20"><use href="#i-house-residents"/></svg><svg class="ic ic-14"><use href="#i-house-residents"/></svg></div>
+        <div class="ground light"><svg class="ic ic-44"><use href="#i-house-residents"/></svg><svg class="ic ic-20"><use href="#i-house-residents"/></svg><svg class="ic ic-14"><use href="#i-house-residents"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 data-n="3">State glyphs — automatic / by hand / off</h2>
+  <p class="note">Today these states are colour-only. Each gets a shape so the chip still reads in greyscale:
+  a loop for the automation, a person for a hand override, a struck-out circle for off. Drawn at
+  stroke 2 (the library's favicon-cut instinct: bolder strokes below 16 px). The glyph inherits the
+  chip's semantic colour — shape and colour now carry the same message.</p>
+  <div class="chips-row">
+    <div class="ground dark chips-ground">
+      <div class="glabel">dark — 14 px, real chip colours</div>
+      <div class="chips">
+        <span class="chip machine"><svg class="ic ic-14"><use href="#i-state-auto"/></svg>automatic</span>
+        <span class="chip human"><svg class="ic ic-14"><use href="#i-state-manual"/></svg>set by hand</span>
+        <span class="chip idle"><svg class="ic ic-14"><use href="#i-state-off"/></svg>off</span>
+      </div>
+      <div class="glabel" style="margin-top:12px">alternatives</div>
+      <div class="chips">
+        <span class="chip machine"><svg class="ic ic-14"><use href="#i-state-auto-letter"/></svg>automatic (circled A)</span>
+        <span class="chip idle"><svg class="ic ic-14"><use href="#i-state-off-power"/></svg>off (power)</span>
+      </div>
+    </div>
+    <div class="ground light chips-ground">
+      <div class="glabel">light — 14 px, real chip colours</div>
+      <div class="chips">
+        <span class="chip machine"><svg class="ic ic-14"><use href="#i-state-auto"/></svg>automatic</span>
+        <span class="chip human"><svg class="ic ic-14"><use href="#i-state-manual"/></svg>set by hand</span>
+        <span class="chip idle"><svg class="ic ic-14"><use href="#i-state-off"/></svg>off</span>
+      </div>
+      <div class="glabel" style="margin-top:12px">alternatives</div>
+      <div class="chips">
+        <span class="chip machine"><svg class="ic ic-14"><use href="#i-state-auto-letter"/></svg>automatic (circled A)</span>
+        <span class="chip idle"><svg class="ic ic-14"><use href="#i-state-off-power"/></svg>off (power)</span>
+      </div>
+    </div>
+  </div>
+
+  <h2 data-n="4">Small-size proof — 14 px, whole set</h2>
+  <div class="rails">
+    <div class="ground dark rail-ground">
+      <div class="glabel">dark</div>
+      <div class="small-row">
+        <svg class="ic ic-14"><use href="#i-mark"/></svg>
+        <svg class="ic ic-14"><use href="#i-dashboard"/></svg>
+        <svg class="ic ic-14"><use href="#i-areas"/></svg>
+        <svg class="ic ic-14"><use href="#i-schedule"/></svg>
+        <svg class="ic ic-14"><use href="#i-modes"/></svg>
+        <svg class="ic ic-14"><use href="#i-house"/></svg>
+        <svg class="ic ic-14"><use href="#i-state-auto"/></svg>
+        <svg class="ic ic-14"><use href="#i-state-manual"/></svg>
+        <svg class="ic ic-14"><use href="#i-state-off"/></svg>
+      </div>
+    </div>
+    <div class="ground light rail-ground">
+      <div class="glabel">light</div>
+      <div class="small-row">
+        <svg class="ic ic-14"><use href="#i-mark"/></svg>
+        <svg class="ic ic-14"><use href="#i-dashboard"/></svg>
+        <svg class="ic ic-14"><use href="#i-areas"/></svg>
+        <svg class="ic ic-14"><use href="#i-schedule"/></svg>
+        <svg class="ic ic-14"><use href="#i-modes"/></svg>
+        <svg class="ic ic-14"><use href="#i-house"/></svg>
+        <svg class="ic ic-14"><use href="#i-state-auto"/></svg>
+        <svg class="ic ic-14"><use href="#i-state-manual"/></svg>
+        <svg class="ic ic-14"><use href="#i-state-off"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <h2 data-n="5">Monochrome fallback — no --icon-accent set</h2>
+  <p class="note">When nothing defines <code>--icon-accent</code> the accent shapes fall back to
+  <code>currentColor</code>: the two-tone collapses to one tone but every glyph stays legible,
+  because the accent is always a <em>filled</em> shape against a <em>stroked</em> outline.</p>
+  <div class="rails">
+    <div class="ground dark rail-ground" style="--icon-accent: currentColor">
+      <div class="glabel">dark, monochrome</div>
+      <div class="mono-row">
+        <svg class="ic ic-20"><use href="#i-mark"/></svg>
+        <svg class="ic ic-20"><use href="#i-dashboard"/></svg>
+        <svg class="ic ic-20"><use href="#i-areas"/></svg>
+        <svg class="ic ic-20"><use href="#i-schedule"/></svg>
+        <svg class="ic ic-20"><use href="#i-modes"/></svg>
+        <svg class="ic ic-20"><use href="#i-house"/></svg>
+      </div>
+    </div>
+    <div class="ground light rail-ground" style="--icon-accent: currentColor">
+      <div class="glabel">light, monochrome</div>
+      <div class="mono-row">
+        <svg class="ic ic-20"><use href="#i-mark"/></svg>
+        <svg class="ic ic-20"><use href="#i-dashboard"/></svg>
+        <svg class="ic ic-20"><use href="#i-areas"/></svg>
+        <svg class="ic ic-20"><use href="#i-schedule"/></svg>
+        <svg class="ic ic-20"><use href="#i-modes"/></svg>
+        <svg class="ic ic-20"><use href="#i-house"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <footer>echo "24×24 · stroke 1.7 (2 below 16 px) · currentColor + var(--icon-accent) · no gradients"</footer>
+</div>

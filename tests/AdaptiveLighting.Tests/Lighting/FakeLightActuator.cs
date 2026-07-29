@@ -29,14 +29,14 @@ public sealed class FakeLightActuator : ILightActuator
 	}
 }
 
-/// <summary>Records the zone snapshots the controller publishes.</summary>
+/// <summary>Records the area snapshots the controller publishes.</summary>
 public sealed class FakeStatePublisher : IStatePublisher
 {
 	/// <summary>Every snapshot, in order.</summary>
-	public List<ZoneSnapshot> Snapshots { get; } = [];
+	public List<AreaSnapshot> Snapshots { get; } = [];
 
 	/// <inheritdoc/>
-	public void Publish(ZoneSnapshot snapshot) => Snapshots.Add(snapshot);
+	public void Publish(AreaSnapshot snapshot) => Snapshots.Add(snapshot);
 }
 
 /// <summary>Records the notifications the engine would have shown the household.</summary>

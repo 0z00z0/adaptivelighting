@@ -19,7 +19,7 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class OverrideDetectorTests
 {
-	private const string Light = "light.zone";
+	private const string Light = "light.area";
 
 	private static (OverrideDetector Detector, TestScheduler Scheduler, FakeHaContext Ha) Build(Action<GlobalConfig>? tweak = null)
 	{

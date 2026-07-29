@@ -1,3 +1,4 @@
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
@@ -7,7 +8,7 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Web.Services;
 
 /// <summary>
-///     One area, as a picker offers it, labelled with what a zone on it would actually get.
+///     One area, as a picker offers it, labelled with what a room there would actually get.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -29,10 +30,16 @@ public sealed record AreaOption(string Id, string Name, int LightCount, int Moti
 	/// <summary>What the picker shows: the name a human knows, the slug they must never have to remember, and what they would get.</summary>
 	public string Label => $"{NameAndId} — {Counts}";
 
-	/// <summary>What a zone on this area resolves to, in words — the whole reason the label is worth reading.</summary>
-	public string Counts => $"{Pluralise(LightCount, "light")}, {MotionCount} motion, {LuxCount} lux";
+	/// <summary>What a room here resolves to, in words — the whole reason the label is worth reading.</summary>
+	/// <remarks>
+	///     The two sensor kinds are named the way the rest of the UI names them — "motion" and "light-level",
+	///     never "lux" — so the picker, the room page's gear list and the settings rows read as one vocabulary.
+	///     Counted rather than pluralised for the sensors, because "1 motion sensor, 2 light-level sensors" is
+	///     twice the width of the name it sits beside.
+	/// </remarks>
+	public string Counts => $"{Pluralise(LightCount, "light")}, {MotionCount} motion, {LuxCount} light-level";
 
-	/// <summary>Whether a zone on this area could run at all. An area with no lights is the common, silent mistake.</summary>
+	/// <summary>Whether a room here could run at all. An area with no lights is the common, silent mistake.</summary>
 	public bool HasLights => LightCount > 0;
 
 	/// <summary>Whether discovery would refuse this area for having more than one lux sensor to choose between.</summary>
@@ -73,11 +80,55 @@ public sealed record EntityOption(string EntityId, string FriendlyName, string? 
 }
 
 /// <summary>
-///     What discovery makes of a zone right now, for the editor to show before anything is saved.
+///     One registry label, as a picker offers it.
 /// </summary>
-/// <param name="Resolved">The resolved zone, or <c>null</c> when discovery fails.</param>
+/// <remarks>
+///     Both halves are carried because the two are used for different things: the id is the stable identity, the
+///     name is what the household typed and what the config stores (§6.6 — <c>LabelsOf</c> matches either, names
+///     are what a person reading the YAML recognises, and the shipped <c>adaptive-exclude</c> is already a name).
+/// </remarks>
+/// <param name="Id">The registry label id.</param>
+/// <param name="Name">The display name, and the value a label field stores.</param>
+public sealed record LabelOption(string Id, string Name);
+
+/// <summary>
+///     What discovery makes of an area right now, for the editor to show before anything is saved.
+/// </summary>
+/// <param name="Resolved">The resolved area, or <c>null</c> when discovery fails.</param>
 /// <param name="Error">Why discovery fails, in the resolver's own words.</param>
-public sealed record ZonePreview(ResolvedZone? Resolved, string? Error);
+public sealed record AreaPreview(ResolvedArea? Resolved, string? Error);
+
+/// <summary>
+///     A room's lights as the switch-on note needs them: the ones the engine will drive, and the ones the room
+///     holds at all.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Two sets, because the audit asks two different questions of them.</b> <see cref="Commanded"/> is
+///         what is judged, counted and named — the resolver's own answer, groups already preferred over their
+///         members, so nothing the engine will not touch is ever named. <see cref="InTheRoom"/> is only ever the
+///         sibling check's context, which <c>LightAudit.ReasonFor</c> documents as "every entity id in the same
+///         room" and which is a strictly wider thing.
+///     </para>
+///     <para>
+///         <b>The miss that made this a pair rather than a list.</b> The colour-channel rule flags
+///         <c>light.stue_vegglys_r</c> only when <c>light.stue_vegglys</c> is present, and the room reaches that
+///         lamp through the group <c>light.stue_alle</c> — so group preference had already removed the parent from
+///         the only list the audit was given, and a living room driving one lamp through a group while three
+///         channel entities fought it raised nothing at all. Those channels are real entities in the house this
+///         audit was commissioned for.
+///     </para>
+/// </remarks>
+/// <param name="Commanded">The lights the engine will drive, in the resolver's order.</param>
+/// <param name="InTheRoom">
+///     Every <c>light.*</c> entity Home Assistant lists in the room, plus the commanded ids — never narrower than
+///     <see cref="Commanded"/>, so a room with hand-picked lights and no area id is judged exactly as before.
+/// </param>
+public sealed record RoomLights(IReadOnlyList<LightUnderReview> Commanded, IReadOnlySet<string> InTheRoom)
+{
+	/// <summary>A room that resolves to nothing, and the answer when discovery cannot run at all.</summary>
+	public static RoomLights None { get; } = new([], new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+}
 
 /// <summary>
 ///     Turns the Home Assistant registry into things a person can pick from, and answers "what would discovery
@@ -91,9 +142,9 @@ public sealed record ZonePreview(ResolvedZone? Resolved, string? Error);
 ///         shows and store the ids the engine needs, without a human ever transcribing one.
 ///     </para>
 ///     <para>
-///         <b>Discovery preview is the real resolver, not a lookalike.</b> <see cref="PreviewZone"/> runs
-///         <see cref="ZoneEntityResolver"/> — the same class the engine runs at start-up — against the
-///         half-finished zone in the browser. If it says a zone resolves to three lights and a lux sensor, that
+///         <b>Discovery preview is the real resolver, not a lookalike.</b> <see cref="PreviewArea"/> runs
+///         <see cref="AreaEntityResolver"/> — the same class the engine runs at start-up — against the
+///         half-finished area in the browser. If it says an area resolves to three lights and a lux sensor, that
 ///         is what the engine will do with it, because it is the same code. A second implementation that
 ///         "showed roughly what discovery does" would drift, and would be believed while it drifted.
 ///     </para>
@@ -116,6 +167,7 @@ public sealed class HaCatalog
 	private readonly IHaRegistry _registry;
 	private readonly ILoggerFactory _loggerFactory;
 	private readonly ILogger<HaCatalog> _logger;
+	private readonly HaAreaRegistry _areas;
 
 	/// <summary>
 	///     Discovery answers for this load, by area id.
@@ -131,6 +183,13 @@ public sealed class HaCatalog
 	///         the document. A light assigned to an area in Home Assistant shows up on a page refresh, which is
 	///         the freshness this class already promised.
 	///     </para>
+	///     <para>
+	///         <b>Only answers go in here.</b> A discovery that threw is Home Assistant declining to answer, not an
+	///         answer of "nothing here", and it used to be cached as though it were one. Kestrel serves the moment
+	///         the process is up while NetDaemon connects afterwards — see <see cref="IsHomeAssistantReady"/> — so
+	///         any page opened during start-up asked at least once too early, and every area then read
+	///         "0 lights, 0 motion, 0 lux" for the whole circuit however long Home Assistant had since been up.
+	///     </para>
 	/// </remarks>
 	private readonly Dictionary<string, AreaDiscovery> _discoveries = new(StringComparer.Ordinal);
 
@@ -140,7 +199,7 @@ public sealed class HaCatalog
 	/// <summary>Creates the catalog.</summary>
 	/// <param name="ha">Reads entity state and attributes.</param>
 	/// <param name="registry">Reads areas, labels and entity registrations.</param>
-	/// <param name="loggerFactory">Builds the resolver's logger for <see cref="PreviewZone"/>.</param>
+	/// <param name="loggerFactory">Builds the resolver's logger for <see cref="PreviewArea"/>.</param>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public HaCatalog(IHaContext ha, IHaRegistry registry, ILoggerFactory loggerFactory)
 	{
@@ -148,7 +207,18 @@ public sealed class HaCatalog
 		_registry = registry ?? throw new ArgumentNullException(nameof(registry));
 		_loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 		_logger = loggerFactory.CreateLogger<HaCatalog>();
+		_areas = new HaAreaRegistry(_registry);
 	}
+
+	/// <summary>
+	///     The area registry as the engine sees it, for the things a page needs beyond pickers — floors, chiefly.
+	/// </summary>
+	/// <remarks>
+	///     Exposed rather than re-wrapped by each page so the settings list and the dashboard group rooms through
+	///     one object. The engine's own seam is deliberately the one handed out: a UI-only floor lookup would be a
+	///     second answer to a question the engine already answers.
+	/// </remarks>
+	public IAreaRegistry AreaRegistry => _areas;
 
 	/// <summary>
 	///     Whether Home Assistant answered the last question asked of it.
@@ -162,7 +232,7 @@ public sealed class HaCatalog
 	public bool IsHomeAssistantReady { get; private set; } = true;
 
 	/// <summary>
-	///     Every area the registry knows, by display name, each labelled with what a zone on it would resolve to.
+	///     Every area the registry knows, by display name, each labelled with what a room there would resolve to.
 	/// </summary>
 	/// <param name="global">The discovery conventions — labels and device classes — the counts must honour.</param>
 	/// <returns>The areas, ordered by display name. Empty when Home Assistant has not answered.</returns>
@@ -188,7 +258,7 @@ public sealed class HaCatalog
 
 	/// <summary>
 	///     The lights, motion sensors and illuminance sensors <paramref name="areaId"/> yields, for scoping the
-	///     pickers to the area the zone is actually about.
+	///     pickers to the area the room is actually about.
 	/// </summary>
 	/// <remarks>
 	///     These are discovery's own answers, so a ghost the engine excludes is not offered here either. That
@@ -215,6 +285,140 @@ public sealed class HaCatalog
 	}
 
 	/// <summary>
+	///     What the area holds <i>besides</i> what discovery settled on — the singles a group swallowed, and the
+	///     ones a label kept out.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Why a picker needs this at all.</b> <see cref="EntitiesInArea"/> is discovery's own answer, and
+	///         discovery is deliberately opinionated: a light group wins over the bulbs inside it, one entity wins
+	///         per Home Assistant device, and the include label keeps out anything the house has not marked. Every
+	///         one of those is right for deciding what the engine drives, and wrong for a picker whose whole purpose
+	///         is to overrule that decision. A living room reached through one group offered exactly one light to
+	///         pick from, so the fold that exists to say "discovery got this wrong" had nothing to offer instead.
+	///     </para>
+	///     <para>
+	///         <b>Derived by subtraction, never by re-deciding.</b> Group membership, device identity and the label
+	///         rules stay in <see cref="AreaEntityResolver"/>, where the engine reads them; this takes the registry's
+	///         own listing of the area and removes whatever discovery already claimed. A second opinion assembled
+	///         here would eventually disagree with the one the engine acts on, which is the drift this whole class
+	///         is built to avoid.
+	///     </para>
+	/// </remarks>
+	/// <param name="areaId">The area to look in. <c>null</c> or blank yields <see cref="AreaEntities.Empty"/>.</param>
+	/// <param name="global">The discovery conventions to honour, and the include label the filter reads.</param>
+	/// <param name="labelledOnly">
+	///     Whether to offer only what carries <see cref="GlobalConfig.IncludeLabel"/>. The everyday case, and a house
+	///     that configured no include label is offered everything either way — the engine's own rule, where saying
+	///     nothing has always meant "every light discovery finds".
+	/// </param>
+	/// <returns>What is left over, named the way Home Assistant names it.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="global"/> is <c>null</c>.</exception>
+	public AreaEntities OtherEntitiesInArea(string? areaId, GlobalConfig global, bool labelledOnly)
+	{
+		ArgumentNullException.ThrowIfNull(global);
+
+		if (string.IsNullOrWhiteSpace(areaId))
+			return AreaEntities.Empty;
+
+		AreaDiscovery discovered = Discover(areaId, global);
+		IReadOnlyList<string> inArea = EntitiesInAreaOrNone(areaId);
+
+		bool Offered(string entityId) =>
+			!labelledOnly
+			|| global.IncludeLabel is not { Length: > 0 } include
+			|| _areas.LabelsOf(entityId).Contains(include, StringComparer.OrdinalIgnoreCase);
+
+		IReadOnlyList<EntityOption> Rest(IReadOnlyList<string> claimed, Func<string, bool> qualifies)
+		{
+			HashSet<string> taken = new(claimed, StringComparer.Ordinal);
+
+			return Describe(
+			[
+				.. inArea
+					.Where(qualifies)
+					.Where(entityId => !taken.Contains(entityId))
+					.Where(Offered)
+					.Distinct(StringComparer.Ordinal)
+			]);
+		}
+
+		return new AreaEntities(
+			Rest(discovered.Lights, entityId => string.Equals(entityId.Domain(), "light", StringComparison.Ordinal)),
+			Rest(discovered.MotionSensors, entityId => string.Equals(entityId.Domain(), "binary_sensor", StringComparison.Ordinal)),
+			Rest(discovered.LuxSensors, entityId =>
+				string.Equals(entityId.Domain(), "sensor", StringComparison.Ordinal)
+				&& string.Equals(DeviceClassOf(entityId), global.IlluminanceDeviceClass, StringComparison.OrdinalIgnoreCase)));
+	}
+
+	/// <summary>
+	///     How many lights discovery finds in <paramref name="areaId"/>, without naming them.
+	/// </summary>
+	/// <remarks>
+	///     The dashboard's first-run state names every room with its light count, and it re-renders on the page's
+	///     one-second tick. <see cref="EntitiesInArea"/> answers the same question, but reads a friendly name and an
+	///     area for every entity to do it — per-second work for text nobody is reading. This is the cached count
+	///     and nothing else.
+	/// </remarks>
+	/// <param name="areaId">The area to count in. Blank or <c>null</c> yields 0 — there is nothing to discover in.</param>
+	/// <param name="global">The discovery conventions the count must honour.</param>
+	/// <returns>The number of lights, or 0 when Home Assistant has not answered.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="global"/> is <c>null</c>.</exception>
+	public int LightCountIn(string? areaId, GlobalConfig global)
+	{
+		ArgumentNullException.ThrowIfNull(global);
+
+		return string.IsNullOrWhiteSpace(areaId) ? 0 : Discover(areaId, global).Lights.Count;
+	}
+
+	/// <summary>
+	///     The lights <paramref name="area"/> would actually command, named the way Home Assistant names them, and
+	///     the wider set of lights the room holds for the audit's sibling check.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The commanded half is the resolver's own answer through <see cref="PreviewArea"/>, not a discovery
+	///         count: a room that pins its own light list bypasses discovery entirely, groups have already won over
+	///         their members, and the room's per-room exclusions have already been applied. A warning built on
+	///         anything looser would name lights the engine is not going to touch, which is a worse fault in a
+	///         warning than in a label. A room that cannot resolve — no motion sensor, say — yields nothing, because
+	///         it will command nothing.
+	///     </para>
+	///     <para>
+	///         <b>Which is exactly why the sibling set is carried beside it rather than folded into it.</b> Group
+	///         preference removes a lamp the room still drives <i>through</i> its group, and the colour-channel rule
+	///         needs to know the lamp is there — see <see cref="RoomLights"/>. Widening the commanded list to suit
+	///         the rule would have made the note's count and its list of names wrong, which is the fault this method
+	///         already refuses to commit.
+	///     </para>
+	/// </remarks>
+	/// <param name="area">The room, as it stands in the editor. Not mutated.</param>
+	/// <param name="defaults">The document's defaults, for the settings merge the resolver performs.</param>
+	/// <param name="global">The document's globals, which supply the discovery conventions.</param>
+	/// <returns>The room's lights. <see cref="RoomLights.None"/> when the room resolves to none.</returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public RoomLights LightsIn(AreaConfig area, AreaSettings defaults, GlobalConfig global)
+	{
+		ArgumentNullException.ThrowIfNull(area);
+		ArgumentNullException.ThrowIfNull(defaults);
+		ArgumentNullException.ThrowIfNull(global);
+
+		if (PreviewArea(area, defaults, global).Resolved is not { } resolved)
+			return RoomLights.None;
+
+		IReadOnlyList<LightUnderReview> commanded =
+			[.. resolved.Lights.Select(entityId => new LightUnderReview(entityId, FriendlyNameOf(entityId) ?? entityId))];
+
+		// Unioned rather than replaced, so the set is never narrower than the commanded list: a room configured
+		// with explicit lights and no area id has no registry listing to read, and must go on being judged against
+		// its own lights exactly as it was.
+		HashSet<string> inTheRoom = new(commanded.Select(light => light.EntityId), StringComparer.OrdinalIgnoreCase);
+		inTheRoom.UnionWith(LightEntitiesIn(area.AreaId));
+
+		return new RoomLights(commanded, inTheRoom);
+	}
+
+	/// <summary>
 	///     Drops the cached discovery answers, so the next question is put to Home Assistant afresh.
 	/// </summary>
 	/// <remarks>
@@ -237,6 +441,30 @@ public sealed class HaCatalog
 				.OfType<string>()
 				.Distinct(StringComparer.Ordinal)
 				.OrderBy(name => name, StringComparer.CurrentCulture)];
+		}
+		catch (InvalidOperationException)
+		{
+			IsHomeAssistantReady = false;
+			return [];
+		}
+	}
+
+	/// <summary>
+	///     Every registry label with both its id and its name, for the label pickers.
+	/// </summary>
+	/// <remarks>
+	///     Empty is a real answer, not a failure: most houses have never made a label. A picker built on this has
+	///     to render that case as instructions rather than as a dropdown with nothing in it (§5).
+	/// </remarks>
+	/// <returns>The labels, ordered by display name. Empty when the house has none or HA has not answered.</returns>
+	public IReadOnlyList<LabelOption> LabelOptions()
+	{
+		try
+		{
+			return [.. _registry.Labels
+				.Where(label => label.Id is { Length: > 0 })
+				.Select(label => new LabelOption(label.Id!, label.Name is { Length: > 0 } name ? name : label.Id!))
+				.OrderBy(option => option.Name, StringComparer.CurrentCulture)];
 		}
 		catch (InvalidOperationException)
 		{
@@ -356,29 +584,60 @@ public sealed class HaCatalog
 		!string.IsNullOrWhiteSpace(entityId) && TryGetState(entityId) is not null;
 
 	/// <summary>
-	///     Runs the engine's own zone resolver against <paramref name="zone"/> as it stands in the editor.
+	///     Runs the engine's own area resolver against <paramref name="area"/> as it stands in the editor.
 	/// </summary>
-	/// <param name="zone">The zone being edited. Not mutated.</param>
+	/// <param name="area">The area being edited. Not mutated.</param>
 	/// <param name="defaults">The document's defaults, for the settings merge.</param>
 	/// <param name="global">The document's globals, which supply the discovery conventions.</param>
 	/// <returns>What discovery finds, or why it cannot.</returns>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	public ZonePreview PreviewZone(ZoneConfig zone, ZoneSettings defaults, GlobalConfig global)
+	public AreaPreview PreviewArea(AreaConfig area, AreaSettings defaults, GlobalConfig global)
 	{
-		ArgumentNullException.ThrowIfNull(zone);
+		ArgumentNullException.ThrowIfNull(area);
 		ArgumentNullException.ThrowIfNull(defaults);
 		ArgumentNullException.ThrowIfNull(global);
 
 		try
 		{
-			return Resolver(global).TryResolve(zone, defaults, out ResolvedZone? resolved, out var error)
-				? new ZonePreview(resolved, null)
-				: new ZonePreview(null, error);
+			return Resolver(global).TryResolve(area, defaults, out ResolvedArea? resolved, out var error)
+				? new AreaPreview(resolved, null)
+				: new AreaPreview(null, error);
 		}
 		catch (InvalidOperationException)
 		{
 			IsHomeAssistantReady = false;
-			return new ZonePreview(null, "Home Assistant is not connected yet, so discovery cannot be previewed.");
+			return new AreaPreview(null, "Home Assistant is not connected yet, so discovery cannot be previewed.");
+		}
+	}
+
+	/// <summary>
+	///     Works out what setting <paramref name="scope"/> up again would do, against this house as it is now.
+	/// </summary>
+	/// <remarks>
+	///     A thin pass-through to <see cref="AreaSetupService.Plan"/> — the rules stay in the engine, so the dialog
+	///     describes the same rebuild the engine performs. What is added here is the connection: the resolver is
+	///     built from the document being edited, so a plan honours the labels and device classes on screen rather
+	///     than the ones last saved. A registry that cannot answer yields an empty plan rather than a half-read one;
+	///     the page refuses the button in that state and says why.
+	/// </remarks>
+	/// <param name="config">The document being edited. Not mutated.</param>
+	/// <param name="scope">The area ids ticked for rebuild.</param>
+	/// <returns>The plan, or an empty plan when Home Assistant is not answering.</returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public SetupPlan PlanSetup(AdaptiveLightingConfig config, IReadOnlyCollection<string> scope)
+	{
+		ArgumentNullException.ThrowIfNull(config);
+		ArgumentNullException.ThrowIfNull(scope);
+
+		try
+		{
+			return AreaSetupService.Plan(config, _areas, Resolver(config.Global), scope);
+		}
+		catch (InvalidOperationException exception)
+		{
+			IsHomeAssistantReady = false;
+			_logger.LogDebug(exception, "The registry is not available, so no setup plan can be made.");
+			return new SetupPlan([], [], []);
 		}
 	}
 
@@ -422,11 +681,51 @@ public sealed class HaCatalog
 		}
 	}
 
-	private ZoneEntityResolver Resolver(GlobalConfig global) => new(
+	private AreaEntityResolver Resolver(GlobalConfig global) => new(
 		_ha,
-		new HaAreaRegistry(_registry),
+		_areas,
 		global,
-		_loggerFactory.CreateLogger<ZoneEntityResolver>());
+		_loggerFactory.CreateLogger<AreaEntityResolver>());
+
+	/// <summary>
+	///     Every <c>light.*</c> entity Home Assistant lists in an area, unfiltered.
+	/// </summary>
+	/// <remarks>
+	///     The registry's own listing rather than discovery's, and that is the point: discovery has already
+	///     preferred groups over their members, which is what hid a colour channel's parent from the audit. This is
+	///     read only as the sibling check's context — nothing is ever named or counted from it — so a ghost row the
+	///     resolver would drop costs nothing here.
+	/// </remarks>
+	/// <param name="areaId">The area, or <c>null</c> for a room with no area to list.</param>
+	private IReadOnlyList<string> LightEntitiesIn(string? areaId) =>
+		[.. EntitiesInAreaOrNone(areaId).Where(entityId => string.Equals(entityId.Domain(), "light", StringComparison.Ordinal))];
+
+	/// <summary>
+	///     The registry's own listing of an area, or nothing when it cannot answer.
+	/// </summary>
+	/// <remarks>
+	///     Unfiltered by design — the callers want what the room <i>holds</i>, not what discovery would make of it,
+	///     and each applies its own test. A registry that has not connected yields an empty list rather than
+	///     throwing: both callers are drawing something that is honestly narrower without it, and neither is worth
+	///     failing a page for.
+	/// </remarks>
+	/// <param name="areaId">The area, or <c>null</c> for a room with no area to list.</param>
+	private IReadOnlyList<string> EntitiesInAreaOrNone(string? areaId)
+	{
+		if (string.IsNullOrWhiteSpace(areaId))
+			return [];
+
+		try
+		{
+			return _areas.EntitiesInArea(areaId);
+		}
+		catch (InvalidOperationException exception)
+		{
+			IsHomeAssistantReady = false;
+			_logger.LogDebug(exception, "The registry cannot list area {Area} yet, so the room is judged on what it already names.", areaId);
+			return [];
+		}
+	}
 
 	private AreaOption Option(string areaId, string name, GlobalConfig global)
 	{
@@ -459,7 +758,11 @@ public sealed class HaCatalog
 		{
 			IsHomeAssistantReady = false;
 			_logger.LogDebug(exception, "Discovery for area {Area} is not available yet.", areaId);
-			discovered = new AreaDiscovery([], [], []);
+
+			// Returned but never filed. Caching this would turn "Home Assistant has not answered yet" into a
+			// standing answer of "this area yields nothing", which is what the pickers and the first-run chips
+			// would then read for the rest of the circuit — see the field's own remarks.
+			return new AreaDiscovery([], [], []);
 		}
 
 		_discoveries[areaId] = discovered;
@@ -470,6 +773,7 @@ public sealed class HaCatalog
 	private static string SignatureOf(GlobalConfig global) => string.Join(
 		'\n',
 		global.ExcludeLabel,
+		global.IncludeLabel,
 		global.MotionLabel,
 		global.IlluminanceDeviceClass,
 		string.Join(',', global.EffectiveMotionDeviceClasses));

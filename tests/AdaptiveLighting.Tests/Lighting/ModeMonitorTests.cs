@@ -44,14 +44,44 @@ public sealed class ModeMonitorTests
 		new() { Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsMode = "Sover" }
 	];
 
-	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor);
+	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor, FakeLastPeriodStore LastPeriod);
+
+	/// <summary>
+	///     The note recording which period the last run ended in, in memory.
+	/// </summary>
+	/// <remarks>
+	///     <paramref name="recalled"/> is what the previous run left: <c>null</c> is a first run, a deleted note or a
+	///     corrupt one, which <see cref="LastPeriodStore"/> deliberately does not tell apart.
+	/// </remarks>
+	private sealed class FakeLastPeriodStore(string? recalled = null) : ILastPeriodStore
+	{
+		/// <summary>Every period written, in order, so "written once on a change" can be asserted.</summary>
+		public List<string> Saved { get; } = [];
+
+		public string? Load() => recalled;
+
+		public bool TrySave(string periodName)
+		{
+			Saved.Add(periodName);
+			return true;
+		}
+	}
+
+	/// <summary>A note that throws on both operations, standing in for any store a host might supply.</summary>
+	private sealed class ThrowingLastPeriodStore : ILastPeriodStore
+	{
+		public string? Load() => throw new InvalidOperationException("the note is unreadable");
+
+		public bool TrySave(string periodName) => throw new InvalidOperationException("the note cannot be written");
+	}
 
 	private static Rig Build(
 		GlobalConfig? global = null,
 		List<TimePeriodConfig>? periods = null,
 		IReadOnlyCollection<string>? motion = null,
 		DateTimeOffset? startAt = null,
-		Action<FakeHaContext>? seed = null)
+		Action<FakeHaContext>? seed = null,
+		ILastPeriodStore? lastPeriod = null)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo((startAt ?? Evening).Ticks);
@@ -60,11 +90,13 @@ public sealed class ModeMonitorTests
 		global ??= new GlobalConfig { CircadianTickSeconds = 60, HouseMode = Mode() };
 		seed?.Invoke(ha);
 
+		var note = lastPeriod as FakeLastPeriodStore ?? new FakeLastPeriodStore();
+
 		var monitor = new ModeMonitor(
 			ha, global, NullLogger.Instance, scheduler,
-			periods ?? Periods(), () => SunTimes.Unknown, motion ?? []);
+			periods ?? Periods(), () => SunTimes.Unknown, motion ?? [], lastPeriod ?? note);
 
-		return new Rig(ha, scheduler, monitor);
+		return new Rig(ha, scheduler, monitor, note);
 	}
 
 	private static Rig Started(
@@ -73,16 +105,20 @@ public sealed class ModeMonitorTests
 		IReadOnlyCollection<string>? motion = null,
 		DateTimeOffset? startAt = null,
 		string initialSelect = "Hjemme",
-		Action<FakeHaContext>? seed = null)
+		Action<FakeHaContext>? seed = null,
+		ILastPeriodStore? lastPeriod = null)
 	{
 		var rig = Build(global, periods, motion, startAt, ha =>
 		{
 			ha.SetState(Select, initialSelect);
 			seed?.Invoke(ha);
-		});
+		}, lastPeriod);
 		rig.Monitor.Start();
 		return rig;
 	}
+
+	/// <summary>The rig a restart test wants: a note saying the previous run ended in <paramref name="periodName"/>.</summary>
+	private static FakeLastPeriodStore EndedIn(string periodName) => new(periodName);
 
 	private static void Activate(Rig rig, string value) => rig.Ha.Trigger(Select, value);
 
@@ -210,6 +246,199 @@ public sealed class ModeMonitorTests
 		Advance(rig, TimeSpan.FromMinutes(45));    // stays in night (to ~00:15)
 
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "entry is edge-triggered; the override stands");
+	}
+
+	// ---- Restart across a period boundary ------------------------------------------------------
+
+	// 23:30 — half an hour into night, whose SetsMode is Sover. Every restart test starts here and varies only
+	// which period the note says the previous run ended in.
+	private static readonly DateTimeOffset HalfPastNight = new(2026, 1, 15, 23, 30, 0, TimeSpan.Zero);
+
+	/// <summary>
+	///     A boundary that went by while the engine was stopped applies the new period's mode on the first tick.
+	/// </summary>
+	/// <remarks>
+	///     The defect this pins: entry is edge-triggered, so a boundary crossed during an outage was a boundary
+	///     nothing ever noticed and the house kept its daytime mode until the same hour came round again. The note
+	///     says the last run ended in evening; it is night now, so night began while nothing was watching.
+	/// </remarks>
+	[TestMethod]
+	public void StartAfterABoundaryWentBy_AppliesSetsMode_OnTheFirstTick()
+	{
+		var rig = Started(startAt: HalfPastNight, initialSelect: "Hjemme", lastPeriod: EndedIn("evening"));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "nothing is written before the first tick");
+
+		Advance(rig, TimeSpan.FromMinutes(1));   // one tick, no boundary crossed while running
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "night began while the engine was down, so night's mode applies");
+	}
+
+	/// <summary>Once, not on every tick — the select's echo is asynchronous, so the flag has to be the guard.</summary>
+	[TestMethod]
+	public void StartAfterABoundaryWentBy_AppliesSetsMode_OnlyOnce()
+	{
+		var rig = Started(startAt: HalfPastNight, initialSelect: "Hjemme", lastPeriod: EndedIn("evening"));
+
+		Advance(rig, TimeSpan.FromMinutes(30));   // thirty ticks, still inside night
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "one call, however many ticks pass with HA silent");
+	}
+
+	/// <summary>
+	///     A boundary really did go by, so the new period's mode applies over whatever the select stands on.
+	/// </summary>
+	/// <remarks>
+	///     <b>This is the owner's rule, and it is not the cautious one.</b> An earlier draft wrote only over the
+	///     Normal option, on the ground that a restart cannot tell a deliberate Gjester from a stale one. He chose
+	///     the other trade: a crossed boundary is a real event and the schedule is entitled to act on it, exactly as
+	///     it would have done had the engine been running to watch the boundary arrive. The protection against
+	///     overruling a person is the boundary test itself, not the standing mode.
+	/// </remarks>
+	[TestMethod]
+	public void StartAfterABoundaryWentBy_AppliesSetsMode_OverANonNormalMode()
+	{
+		var rig = Started(startAt: HalfPastNight, initialSelect: "Gjester", lastPeriod: EndedIn("evening"));
+
+		Advance(rig, TimeSpan.FromMinutes(5));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "night began; night's mode wins over the standing option");
+	}
+
+	/// <summary>
+	///     Restarting inside the period you were already in changes nothing, and a mode set by hand survives.
+	/// </summary>
+	/// <remarks>
+	///     This is the case a deploy actually produces most of the time, several times a day. No boundary went by,
+	///     so there is no event to act on and re-asserting the period's mode would only undo somebody's choice.
+	/// </remarks>
+	[TestMethod]
+	public void StartInsideTheSamePeriod_LeavesAHandSetModeAlone()
+	{
+		var rig = Started(startAt: HalfPastNight, initialSelect: "Gjester", lastPeriod: EndedIn("night"));
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "same period as when it stopped: nothing happened to act on");
+	}
+
+	/// <summary>
+	///     With no note of the previous run, nothing is applied — not knowing is not knowing a boundary was crossed.
+	/// </summary>
+	/// <remarks>
+	///     A first run, a deleted note and a corrupt one are the same answer, and the safe half is inertia. The cost
+	///     is one missed re-application, after which the note exists; the cost of guessing the other way is a mode
+	///     overwritten on no evidence, on a path a corrupt file could trigger at every single start.
+	/// </remarks>
+	[TestMethod]
+	public void StartWithNoNoteOfThePreviousRun_AppliesNothing()
+	{
+		var rig = Started(startAt: HalfPastNight, initialSelect: "Hjemme", lastPeriod: new FakeLastPeriodStore());
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "nothing is assumed from an absent note");
+	}
+
+	/// <summary>A note that cannot be read or written is inert: it costs the behaviour, never the tick.</summary>
+	/// <remarks>
+	///     <see cref="LastPeriodStore"/> promises never to throw, and the monitor catches anyway — the store is an
+	///     interface a host supplies, and a throw out of <see cref="ModeMonitor.Start"/> or out of the tick would
+	///     take the engine with it. A blank line in a configuration file once did exactly that.
+	/// </remarks>
+	[TestMethod]
+	public void StartWithAnUnreadableNote_DoesNotThrow_AndAppliesNothing()
+	{
+		var rig = Started(startAt: HalfPastNight, initialSelect: "Hjemme", lastPeriod: new ThrowingLastPeriodStore());
+
+		Advance(rig, TimeSpan.FromMinutes(30));   // the write throws on every period change too
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "an unreadable note reads as 'we do not know'");
+	}
+
+	/// <summary>The period is written down when it changes, and not on every tick.</summary>
+	[TestMethod]
+	public void ThePeriodIsRecorded_OnceWhenItChanges()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 22, 55, 0, TimeSpan.Zero),
+			initialSelect: "Hjemme", lastPeriod: EndedIn("evening"));
+
+		Advance(rig, TimeSpan.FromMinutes(3));   // three ticks, all still in evening
+		CollectionAssert.AreEqual(Array.Empty<string>(), rig.LastPeriod.Saved,
+			"the note already says evening, so there is nothing to write");
+
+		Advance(rig, TimeSpan.FromMinutes(30));   // crosses 23:00 into night, then ticks on inside it
+		CollectionAssert.AreEqual(new[] { "night" }, rig.LastPeriod.Saved,
+			"one write on the change, and none for the ticks that follow it");
+	}
+
+	/// <summary>A period that sets no mode writes nothing, however the boundary was detected.</summary>
+	[TestMethod]
+	public void StartAfterABoundaryWentBy_WithoutSetsMode_WritesNothing()
+	{
+		// evening@18:00 carries no SetsMode; the note says the last run ended in morning.
+		var rig = Started(startAt: Evening, initialSelect: "Hjemme", lastPeriod: EndedIn("morning"));
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"));
+	}
+
+	/// <summary>
+	///     A restart is not an entry, and the period-start reset must not fire for one.
+	/// </summary>
+	/// <remarks>
+	///     Routing the restart through <see cref="ModeMonitor"/>'s entry path would have been fewer lines and would
+	///     have cancelled a retained Away or Guest mode as a side effect of a deploy. A reset trigger that fires
+	///     because somebody redeployed is not a trigger at all — asserted here with the boundary genuinely crossed,
+	///     so the mode is applied and only the reset is withheld.
+	/// </remarks>
+	[TestMethod]
+	public void StartAfterABoundaryWentBy_DoesNotFireThePeriodStartReset()
+	{
+		var mode = Mode();
+		mode.OptionFor("Borte")!.ResetOnPeriodStart = "night";
+		var global = new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+
+		var rig = Started(global, startAt: HalfPastNight, initialSelect: "Borte", lastPeriod: EndedIn("evening"));
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "the boundary went by, so night's mode is applied");
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "but the engine restarted mid-night; it did not enter night");
+	}
+
+	/// <summary>
+	///     An unreadable select does not spend the restart's one chance; the mode is applied when it answers.
+	/// </summary>
+	/// <remarks>
+	///     After a Home Assistant restart an <c>input_select</c> can read <c>unavailable</c> for a while, which is
+	///     exactly the moment this rule exists for. Spending the chance on a value nobody could read would waste it.
+	/// </remarks>
+	[TestMethod]
+	public void StartAfterABoundaryWentBy_WaitsForASelectThatIsNotAnsweringYet()
+	{
+		var rig = Started(startAt: HalfPastNight, initialSelect: "unavailable", lastPeriod: EndedIn("evening"));
+
+		Advance(rig, TimeSpan.FromMinutes(5));
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "nothing is written over a select that has not answered");
+
+		rig.Ha.SetState(Select, "Hjemme");
+		Advance(rig, TimeSpan.FromMinutes(1));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "once it answers, the boundary it missed is acted on");
+	}
+
+	/// <summary>A first tick that does cross a boundary is an ordinary entry, and is not doubled by the restart rule.</summary>
+	[TestMethod]
+	public void StartJustBeforeABoundary_EntersNormally_WithoutDoubleSetting()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 22, 59, 30, TimeSpan.Zero),
+			initialSelect: "Hjemme", lastPeriod: EndedIn("morning"));
+
+		Advance(rig, TimeSpan.FromMinutes(5));   // the first tick lands inside night, having crossed 23:00
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "entry did the work; the restart rule did not repeat it");
 	}
 
 	// ---- Period-start reset -------------------------------------------------------------------
@@ -372,7 +601,7 @@ public sealed class ModeMonitorTests
 	}
 
 	[TestMethod]
-	public void PresenceReset_EmptyList_UsesZoneMotionUnion()
+	public void PresenceReset_EmptyList_UsesAreaMotionUnion()
 	{
 		var rig = Started(AwayResetsOnPresence([]), periods: Periods(), motion: [Kjokken],
 			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Kjokken, "off"));
@@ -381,7 +610,7 @@ public sealed class ModeMonitorTests
 		Advance(rig, TimeSpan.FromMinutes(20));
 		rig.Ha.Trigger(Kjokken, "on");
 
-		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an empty sensor list resets on any zone motion sensor");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an empty sensor list resets on any area motion sensor");
 	}
 
 	// ---- Time reset ---------------------------------------------------------------------------

@@ -1,137 +1,115 @@
 ---
 title: "Example configuration"
-description: "A fully worked configuration, annotated."
+description: "What the configuration file looks like, annotated."
 ---
 
-The lighting web UI now owns `apps/AdaptiveLighting/AdaptiveLighting.yaml` on each host: it reads that
-file and writes it back. YamlDotNet has no way to preserve comments through a round trip, so the first
-time somebody presses **Save** in the browser, every comment in that file is gone.
+The Configuration page owns this file: it reads it and writes it back. Comments do not survive that
+round trip, so they live here instead. Hand-editing works, and the next save from the browser
+rewrites the file from scratch.
 
-The comments were the documentation, so they are preserved here instead, verbatim as they stood before
-the UI gained a write path. This page is the reference; the live file is now data.
+For what each setting does, see the [settings reference](/configuration/).
 
-Read [03-configuration.md](/configuration/) for the schema itself. This page is the annotated
-example — what a real document looks like and why each knob is set the way it is.
+## You probably do not need this
 
-The two differ usefully. **House's still has `REPLACE_ME` placeholders**: that is the shape a host ships
-in, and what the validator's error messages are written against. **Cabin's has real ids**, read
-from one instance's live registry — so it is the better read for what a filled-in document actually looks
-like.
+A fresh installation starts from a document naming **no entities at all** — no people, no rooms, no
+master switch, only a day/night curve — and then goes looking. Set-up finds your rooms, and every one
+it finds is switched off until you choose. Nothing below has to be typed.
 
-These are copies. The live files under `apps/AdaptiveLighting/` are now only the example that seeds
-each host's real, external document on first run (see
-the repository's issues #4); the document the engine reads lives at
-`AdaptiveLighting:ConfigPath`, outside the publish tree. Editing either file by hand configures
-nothing on a host that has already seeded.
+The two things you cannot do from the browser are `FollowOutdoorLux` on a room and
+`LuxSensorStaleAfterMinutes` on the house. Everything else is easier in the UI.
 
-## House — `House/apps/AdaptiveLighting/AdaptiveLighting.yaml`
+## A worked document
 
 ```yaml
-# ============================================================================
-#  Adaptive lighting — House (Bjørmoen 1B, the house host)
-# ============================================================================
-#
-#  THIS FILE DOES NOT WORK YET, ON PURPOSE.
-#
-#  Every id below that reads REPLACE_ME is a placeholder. They were left as
-#  placeholders deliberately: the person who wrote this file could not see
-#  the house host's entity registry, and an entity id that merely *looks* plausible
-#  would quietly command the wrong device at 03:00. A placeholder cannot.
-#
-#  As shipped, the app fails at startup:
-#    - Global.Persons / KillSwitchEntity / SleepModeEntity name entities HA
-#      does not know  ->  document-level errors  ->  the app throws, goes to
-#      ApplicationState.Error, and posts an HA persistent notification titled
-#      "Adaptive lighting: invalid configuration" listing every problem.
-#      The host and every other app keep running.
-#    - The zone AreaIds are not registry area ids  ->  zone-level errors. Those
-#      only skip the zone, and the notification lists ALL known area ids for
-#      this HA instance — which is the fastest way to fill this file in.
-#
-#  To adopt: start the host once, read the notification, replace every
-#  REPLACE_ME with a real id (or delete the setting where the feature is not
-#  wanted), restart. Delete the zones you do not have.
-#
-#  The top-level key MUST stay the fully qualified config class name — that is
-#  how IAppConfig<T> binds. The filename is irrelevant to binding.
-# ============================================================================
-
+# The top-level key must stay the fully qualified class name. The filename does not matter.
 AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 
-  # Label for logs and notifications only.
+  # A label for logs and notifications, so two houses can be told apart.
   ConfigName: "Adaptive lighting [House]"
 
   # --------------------------------------------------------------------------
-  #  Global — house-wide. Every entity named here must exist, or the app throws.
+  #  Global — the house. Every entity named here must exist in Home Assistant.
   # --------------------------------------------------------------------------
   Global:
 
-    # person.* / device_tracker.* watched for presence ("home" = home).
-    # An EMPTY list means "discover every person.* entity" — which is a valid
-    # and often better choice than listing them.
+    # Whose presence decides Home and Away. An EMPTY list means everyone Home
+    # Assistant knows, including people added later — usually the better choice.
+    # Set-up seeds this once so you can see who drives it.
     Persons:
-      - person.REPLACE_ME
+      - person.espen
 
-    # Gates the whole engine. Omit the setting entirely to disable the feature
-    # (engine then always enabled). KillSwitchActiveWhenOff: true (the default)
-    # reads this as an ENABLED flag — state "off" kills the engine. Set it to
-    # false if the entity is named as a true kill switch, where "on" kills.
-    KillSwitchEntity: input_boolean.REPLACE_ME_adaptive_lighting_enabled
+    # The master switch. Omit it entirely and this app's own enable switch is
+    # used, so there is always one. Left true, the entity reads as an ENABLED
+    # flag: state "off" pauses the engine. Set it false for an entity named as a
+    # true kill switch, where "on" pauses it.
+    KillSwitchEntity: input_boolean.adaptive_lighting_enabled
     KillSwitchActiveWhenOff: true
 
-    # Sleep mode. Omit to make sleep permanently inactive.
-    # Zones opt in per zone via RespectSleepMode / SleepBlocksAutoOn.
-    SleepModeEntity: input_boolean.REPLACE_ME_sleep_mode
-
-    # Guest mode is parsed and published now; behaviour is reserved for v2.
-    # Omit unless the entity exists — a placeholder here throws like any other.
-    # GuestModeEntity: input_boolean.REPLACE_ME_guest_mode
-
-    # HA user id owning this host's long-lived token. Optional: override
-    # detection works without it (command-expectation correlation is primary).
-    # Filling it in sharpens "was that change us, or a human?".
-    # Find it in HA: Settings -> People -> the user the token belongs to.
-    # NetDaemonUserId: ""
-
-    # How long everyone must be gone before the house counts as Away.
+    # How long everyone must be gone before rooms react to an empty house.
     AwayDebounceMinutes: 5
 
-    # How often an active zone re-evaluates its circadian target.
+    # How often each room re-checks the time of day and the light outside.
     CircadianTickSeconds: 60
 
-    # After a command, how long a state change on that light is still read as
-    # our own echo rather than as a human touching a switch.
+    # After a command, how long a change on that light still counts as our own
+    # echo rather than as a person at a switch.
     SelfEchoWindowSeconds: 8
 
-    # Whether a change carrying a parent context (another automation) counts as
-    # a manual override. true = other automations win over this engine.
+    # Whether a change made by another automation counts as a manual change.
+    # true means your other automations win.
     TreatAutomationsAsManual: true
 
-    # Blend circadian targets across period boundaries instead of stepping.
+    # Lights drift to the next period's level instead of stepping at the
+    # boundary. This is the Schedule section's "Blend between periods".
     SmoothTransitions: true
     BlendMinutes: 30
 
-    # The period whose caps a sleep-respecting zone is held to while asleep,
-    # whatever the clock says. Must match a name in Periods below.
-    SleepPeriodName: night
+    # The house's outdoor light sensor. Rooms read it only if they ask to, with
+    # FollowOutdoorLux — one shaded outdoor sensor reads hundreds of lux while
+    # the rooms behind it are dark. A room with no reading at all counts as dark
+    # and lights on movement.
+    # OutdoorLuxSensor: sensor.outdoor_illuminance
 
-    # Registry labels. Label an entity in HA with these to:
-    #   ExcludeLabel — never let the engine touch it (a lamp on a smart plug
-    #                  that must stay put, a light in an area you half-manage).
-    #   MotionLabel  — treat it as a motion source whatever its device class
-    #                  (mmWave sensors often report something odd).
+    # How long a LIGHT-LEVEL sensor may go without reporting before it stops
+    # counting toward a room's average. Zero or less switches the rule off.
+    # Illuminance only: a motion sensor that has said nothing for hours is a room
+    # nobody walked through, not a fault.
+    # LuxSensorStaleAfterMinutes: 120
+
+    # The house-mode select and what each option means. Set this up from the
+    # House modes section rather than by hand — set-up adopts an obvious
+    # input_select if it finds one.
+    # HouseMode:
+    #   Entity: input_select.husmodus
+    #   Options:
+    #     - Value: Hjemme
+    #       Kind: Normal
+    #     - Value: Borte
+    #       Kind: Away
+    #       Scene: scene.borte_belysning
+    #       ResetOnPresence: true
+    #       ResetPresenceGraceMinutes: 15
+    #       ActivateAfterNoMotionMinutes: 360
+    #     - Value: Sover
+    #       Kind: Sleep
+    #       ClampPeriod: night
+
+    # Labels — the "Finding lights & sensors" group.
+    #   ExcludeLabel — never let the app touch it.
+    #   IncludeLabel — manage ONLY lights carrying this label. Empty, the
+    #                  default, manages every light that is found. Lights only:
+    #                  filtering sensors too would make a half-labelled house
+    #                  deaf. Exclude always wins, and an explicit Lights list
+    #                  bypasses both.
+    #   MotionLabel  — treat it as a motion source whatever its device class.
     ExcludeLabel: adaptive-exclude
+    # IncludeLabel: room-light
     MotionLabel: adaptive-motion
 
-    # Discovery filters: which device classes qualify during area discovery.
-    #
-    # MotionDeviceClasses is empty by default, and empty means the built-in set
-    # [motion, occupancy, presence]. Listing classes here REPLACES that set
-    # rather than adding to it, so spell out every class you want — including
-    # the built-in ones you still need. (The default is empty rather than the
-    # three real values because the .NET configuration binder appends to a
-    # non-empty default instead of replacing it; an empty default is what makes
-    # this list behave the way the YAML reads.)
+    # Which device classes qualify during discovery. MotionDeviceClasses is
+    # empty by default, and empty means [motion, occupancy, presence]. Listing
+    # classes here REPLACES that set rather than adding to it, so spell out
+    # every class you want.
     # MotionDeviceClasses:
     #   - motion
     #   - occupancy
@@ -139,69 +117,91 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     #   - vibration
     IlluminanceDeviceClass: illuminance
 
-    # A light within these tolerances of the target is left alone, rather than
-    # being told to fade to where it already is on every tick.
+    # A light already this close to its target is left alone.
     BrightnessTolerancePct: 2
     ColorTempToleranceKelvin: 50
 
   # --------------------------------------------------------------------------
-  #  Defaults — the baseline for every zone. A zone overrides only what differs.
-  #  Every knob here has a nullable twin on a zone.
+  #  Defaults — what every room starts with. A room overrides only what differs,
+  #  and a room's own setting always wins.
   # --------------------------------------------------------------------------
   Defaults:
 
-    # Motion-free time before an active zone dims to its pre-off warning.
+    # "Lights stay on for": motion-free time before an active room dims to its
+    # warning level. Longer for rooms where people sit still.
     VacancyTimeoutSeconds: 600
 
-    # The pre-off warning: lights drop to PreOffBrightnessFactor of target for
-    # PreOffSeconds, and motion in that window cancels darkness. This is the
-    # "speak now" grace that stops the lights going out on a still reader.
-    # PreOffSeconds must be shorter than VacancyTimeoutSeconds.
+    # The warning dim: lights drop to this fraction of target for this long, and
+    # any movement brings them straight back. PreOffSeconds must be shorter than
+    # VacancyTimeoutSeconds.
     PreOffSeconds: 30
     PreOffBrightnessFactor: 0.5
 
-    # How long a manual change holds a zone before automatic control resumes.
+    # "Manual changes hold for": how long somebody's own setting is left alone.
     OverrideDurationMinutes: 120
 
-    # Motion-free time after a manual turn-off before suppression is lifted.
-    # Until then, motion is respected as "the human wanted it dark".
+    # "After switching off by hand, wait": how long a room must be still after
+    # somebody switches the lights off before movement can turn them back on.
     VacancyResetMinutes: 10
 
-    # Which signal decides the zone is dark enough to light:
-    #   Lux    — the lux sensor only (falls back to sun if none resolves)
-    #   Sun    — sun elevation only
-    #   Either — dark when either says so
-    #   Always — no daylight gate (rooms without windows)
-    Darkness: Either
-    LuxThreshold: 40
-    LuxHysteresis: 10          # extra lux needed to leave dark: stops flapping
-    SunElevationThreshold: 3.0 # degrees
+    # How a room decides it's dark. The UI calls Lux "Sensor".
+    #   Lux    — the room's light-level sensor and nothing else, and the
+    #            default. A room with no sensor, or whose sensors have all
+    #            stopped reporting, counts as dark and lights on movement: a
+    #            gate with nothing to read holds nothing back, and a flat
+    #            battery is no reason to leave a house unlit. The sun is never
+    #            consulted here.
+    #   Sun    — sun elevation only. No sensor is read, so a room with none is
+    #            unaffected by having none.
+    #   Either — dark when the sensor says so, or when the sun is low enough.
+    #            With no sensor the first half always says dark.
+    #   Always — no daylight gate, for rooms with no windows.
+    Darkness: Lux
+    LuxThreshold: 1000          # "Dark below". A daylight number: the reading is
+                                # usually an outdoor sensor.
+    LuxHysteresis: 10           # "Bright again above": extra light needed to
+                                # count as bright again.
+    SunElevationThreshold: 3.0  # "Dark when the sun is below", in degrees
     SunEntity: sun.sun
 
-    # Fade lengths. Long at night because eyes are dark-adapted; snappy by day.
+    # Brightening with daylight. Off by default; it only ever adds light, and
+    # the active period's own cap still binds.
+    LuxBrightnessEnabled: false
+    LuxBrightnessStartLux: 100      # at or below this, the schedule is used unchanged
+    LuxBrightnessFullLux: 10000     # at or above this, the room holds its ceiling
+    LuxBrightnessMaxPct: 100        # the brightness it is raised toward
+    LuxBrightnessGamma: 1.0         # 1 rises steadily; above 1 holds back
+
+    # Fades. Long at night because eyes are dark-adapted, snappy by day.
     DayTransitionSeconds: 1
     NightTransitionSeconds: 15
 
-    # Sleep/away/welcome behaviour — off by default, opted into per zone.
-    RespectSleepMode: false
-    SleepBlocksAutoOn: false
-    SkipAwaySweep: false
-    WelcomeHome: false
+    # Room behaviour — off by default, opted into per room.
+    RespectSleepMode: false    # "Gentle while the house sleeps"
+    SleepBlocksAutoOn: false   # "Never comes on by itself while the house sleeps"
+    SkipAwaySweep: false       # "Stays on when everyone leaves"
+    WelcomeHome: false         # lights on first arrival, when it's dark
 
-    # A disabled zone is still observed and published, just never commanded.
+    # A switched-off room is still watched and published, never commanded. The
+    # UI does not offer this as a default: switching a room on or off is a
+    # decision made on that room, and flipping it here would silently flip every
+    # room that never wrote a value of its own.
     Enabled: true
 
   # --------------------------------------------------------------------------
-  #  Periods — the house-wide circadian table.
-  #  A period runs from its Start until the next period begins. Start is either
-  #  a clock time ("06:00") or a sun event with an optional offset ("sunrise",
-  #  "sunset-01:00", "sunrise+00:45"). Quote clock times — bare 06:00 is a
-  #  YAML sexagesimal, not a string.
+  #  Periods — the day, house-wide. A period runs from its Start until the next
+  #  one begins. Start is a clock time ("06:30") or a sun event with an optional
+  #  offset ("sunrise", "sunset-01:00", "sunrise+00:45"). Quote clock times:
+  #  bare 06:30 is not a string in YAML.
+  #
+  #  Sun-anchored boundaries move with the seasons. Far north they swing hard,
+  #  and around midsummer or midwinter one can be unresolvable — a period that
+  #  cannot be placed is skipped, so keep at least one clock boundary.
   # --------------------------------------------------------------------------
   Periods:
 
     - Name: morning
-      Start: "06:00"
+      Start: "06:30"
       BrightnessPct: 60
       ColorTempKelvin: 3000
 
@@ -219,352 +219,112 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       Start: "22:30"
       BrightnessPct: 15
       ColorTempKelvin: 2200
-      # The night-light floor. MaxBrightnessPct caps EVERY command while this
-      # period is active — nobody gets 100% in the face at 03:00, whatever a
-      # welcome-home or a motion event asks for. MinBrightnessPct is the floor,
-      # and it also applies to the pre-off dim.
+      # MaxBrightnessPct caps EVERY command while this period runs — nobody gets
+      # 100 % in the face at 03:00, whatever a welcome-home or a motion event
+      # asks for. MinBrightnessPct is the floor, and it applies to the warning
+      # dim too.
       MaxBrightnessPct: 30
-      MinBrightnessPct: 5
+      # SetsMode switches the house to this mode option when the period starts.
+      # SetsMode: Sover
 
   # --------------------------------------------------------------------------
-  #  Zones — OPT-IN. An HA area that is not listed here is never touched.
+  #  Areas — opt-in. An area that is not listed here is never touched, and a
+  #  listed room with Enabled: false is watched but never commanded.
   #
-  #  In the common case a zone declares an AreaId and nothing else: lights,
-  #  motion sensors and the lux sensor are discovered from the area registry.
-  #  Discovery drops group members (the group wins) and anything labelled
-  #  adaptive-exclude. The explicit lists below are the escape hatch for when
-  #  HA's area assignments are wrong; each one fully replaces discovery for
-  #  that slot alone.
+  #  In the common case a room declares an AreaId and nothing else: its lights,
+  #  motion sensors and light-level sensors are found from the area registry.
+  #  Discovery prefers groups over their members, treats several entities on one
+  #  device as one fixture, and drops anything carrying the exclude label. The
+  #  explicit lists below are for when Home Assistant's area assignments are
+  #  wrong; each replaces discovery for that slot alone and bypasses the labels.
   #
-  #  AreaId is the registry area *id* (the slug, e.g. "stue"), NOT the display
-  #  name ("Stue"). Start the host once and read the notification: it lists
-  #  every known area id.
-  #
-  #  These five are worked examples of the shapes worth knowing. Replace the
-  #  AreaIds with real ones and delete the zones you do not have.
+  #  AreaId is the registry area *id* (the slug, "stue"), not the display name.
+  #  Leave Name out and the room is called whatever Home Assistant calls the
+  #  area, so a rename over there arrives here.
   # --------------------------------------------------------------------------
-  Zones:
+  Areas:
 
     # 1. The common case: discovery does everything.
-    - Name: Example living room
-      AreaId: REPLACE_ME_living_room_area_id
+    - AreaId: stue
+      Enabled: true
       RespectSleepMode: true
 
-    # 2. A room with no daylight, a long timeout, and something that must block
-    #    auto-on while it is on (a projector, a "do not disturb" flag).
-    - Name: Example media room
-      AreaId: REPLACE_ME_media_room_area_id
+    # 2. No daylight, a long timeout, and something that blocks auto-on while it
+    #    is on — a projector, a do-not-disturb flag.
+    - AreaId: kjeller_multimedia
+      Enabled: true
       Darkness: Always
       VacancyTimeoutSeconds: 1800
       IgnoreWhenOn:
-        - binary_sensor.REPLACE_ME_projector_is_on
+        - binary_sensor.projektor_er_pa
 
-    # 3. An entry zone: short timeout, lights up on first arrival when dark.
-    - Name: Example hallway
-      AreaId: REPLACE_ME_hallway_area_id
+    # 3. An entrance: short timeout, lights on first arrival when it's dark.
+    - AreaId: gang
+      Enabled: true
       WelcomeHome: true
       VacancyTimeoutSeconds: 120
 
-    # 4. A bedroom, and an explicit-override example: the mmWave sensor is not
-    #    in the area, so MotionSensors replaces motion discovery here. Lights
-    #    and lux are still discovered — only the listed slot is replaced.
-    - Name: Example bedroom
-      AreaId: REPLACE_ME_bedroom_area_id
+    # 4. A bedroom, with an explicit override: the mmWave sensor is not in the
+    #    area, so MotionSensors replaces motion discovery here. Lights and
+    #    light-level sensors are still discovered — only the listed slot is
+    #    replaced.
+    - Name: Bedroom          # a name of your own, when you want one
+      AreaId: soverom
+      Enabled: true
       RespectSleepMode: true
       SleepBlocksAutoOn: true
       MotionSensors:
-        - binary_sensor.REPLACE_ME_bedroom_mmwave_presence
+        - binary_sensor.soverom_mmwave_presence
 
-    # 5. Outdoors: opts out of the leaving sweep (security lights stay on when
-    #    the house empties), gated on the sun, and fully explicit — no area
-    #    needed when Lights is given.
-    - Name: Example outdoor
-      AreaId: REPLACE_ME_outdoor_area_id
+    # 5. A hallway with no sensor of its own that follows the weather: it gates
+    #    on the sun, and reads the house's outdoor sensor to lift its brightness
+    #    on a bright day. Naming Sun is the point of the entry — left at the
+    #    default a room with no sensor is simply always dark. FollowOutdoorLux
+    #    is file-only.
+    - AreaId: kjellergang
+      Enabled: true
+      Darkness: Sun
+      FollowOutdoorLux: true
+      LuxBrightnessEnabled: true
+
+    # 6. Outdoors: opts out of the leaving sweep, gated on the sun, and fully
+    #    explicit — no discovery is used for a slot you fill in. Found by set-up
+    #    but not switched on, so nothing out here is commanded. ExcludeEntities
+    #    keeps one entity out of discovery without listing every other by hand.
+    - AreaId: ute
+      Enabled: false
       SkipAwaySweep: true
       Darkness: Sun
       SunElevationThreshold: 1.0
       Lights:
-        - light.REPLACE_ME_outdoor_front
-      LuxSensor: sensor.REPLACE_ME_outdoor_illuminance
+        - light.outdoor_front
+      ExcludeEntities:
+        - sensor.vaerstasjon_illuminance
 ```
 
-## Cabin — `Cabin/apps/AdaptiveLighting/AdaptiveLighting.yaml`
+## Shapes worth knowing
 
-```yaml
-# ============================================================================
-#  Adaptive lighting — Cabin (the cabin, the cabin host)
-# ============================================================================
-#
-#  Filled in from one instance's live registry on 2026-07-17. Every id below was read
-#  from the running instance, not guessed — the placeholders this file shipped
-#  with did their job: the app started, validated, and named the real area ids
-#  back in a persistent notification.
-#
-#  Three zones, not four. The 'petterhaugen' area is deliberately NOT a zone:
-#  its only light is light.lys_alt ("Lys [alle]"), a group spanning the kitchen
-#  and the living room, and its motion sensor is binary_sensor.inne_bevegelse
-#  ("indoor motion"). It is a whole-house catch-all, not a room — a zone there
-#  would light the house on any indoor movement and fight Stue and Kjokken.
-#  Areas kjeller, sov1, terrasse and toalett have motion but no lights.
-#
-#  The top-level key MUST stay the fully qualified config class name — that is
-#  how IAppConfig<T> binds. The filename is irrelevant to binding.
-#
-#  Note: this file is the SEED. Once the Blazor config UI lands, the live config
-#  moves outside the publish tree (the deploy wipes and re-copies this folder),
-#  and the UI owns it from then on.
-# ============================================================================
+**A whole-house catch-all is not a room.** An area holding one "all lights" group and one "indoor
+motion" sensor covers the kitchen and the living room at once, so a room there would light half the
+house on any movement and fight the real rooms. Leave it out. Set-up will not propose it unless it has
+a motion sensor of its own; if it does, switch it off and leave it off.
 
-AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+**A room needs both halves.** An area with motion but no lights has nothing to offer, and one with
+lights but no way to sense people cannot do motion-driven lighting. Set-up skips both. Add them when
+they gain the missing half.
 
-  # Label for logs and notifications only.
-  ConfigName: "Adaptive lighting [Cabin]"
+**Explicit lists are for when the registry is wrong.** A room whose area also holds three unavailable
+test rigs is a good reason to list the real lights by hand. Everything else is better left to
+discovery, which stays true across a rename. Fixing the area assignment in Home Assistant is usually
+better than either.
 
-  # --------------------------------------------------------------------------
-  #  Global — house-wide. Every entity named here must exist, or the app throws.
-  # --------------------------------------------------------------------------
-  Global:
+## What refuses to save
 
-    # person.* / device_tracker.* watched for presence ("home" = home).
-    # Listed explicitly ON PURPOSE. An empty list means "discover every person.*",
-    # and the cabin host also knows person.b1_espen, person.b1_samuel, person.b1_leon and
-    # person.b1_faith — the Bjørmoen household. Discovery would make the cabin
-    # believe someone is home whenever anyone is home at the *other house*, and
-    # Away would never fire.
-    Persons:
-      - person.espen
-      - person.leon
-      - person.samuel
-      - person.faith
+Some problems stop the engine commanding anything and are listed on the Configuration page: no
+periods, a `Start` that cannot be parsed, two periods with the same name or the same start, duplicate
+room names, negative timeouts, a warning dim longer than the time the lights stay on, a value out of
+range.
 
-    # Kill switch and sleep mode are OMITTED, not forgotten: the cabin host has no such
-    # helpers (its only input_booleans are 'occupancy' and NetDaemon's own app
-    # switch), and naming an entity HA does not know is a document-level error
-    # that stops the app dead. Omitting a setting disables that feature cleanly.
-    #
-    # There is already a working kill switch for free: NetDaemon auto-creates
-    # input_boolean.netdaemon_laget_net_daemon_petterhaugen_adaptive_lighting_app,
-    # which disables the whole app. Purpose-built helpers are to be created by
-    # the engine itself via IMqttEntityManager (decided 2026-07-17, not built
-    # yet); wire KillSwitchEntity/SleepModeEntity to them when they exist.
-    # KillSwitchEntity: input_boolean.adaptive_lighting_enabled
-    # KillSwitchActiveWhenOff: true
-    # SleepModeEntity: input_boolean.sover
-
-    # Guest mode is parsed and published now; the behaviour it will gate
-    # (longer timeouts, less aggressive sweeps) is reserved for v2. A cabin is
-    # the obvious first customer, so the setting is shown — but it is commented
-    # out, because a placeholder here throws like any other id.
-    # GuestModeEntity: input_boolean.REPLACE_ME_guest_mode
-
-    # HA user id owning this host's long-lived token. Optional: override
-    # detection works without it (command-expectation correlation is primary).
-    # Filling it in sharpens "was that change us, or a human?".
-    # Find it in HA: Settings -> People -> the user the token belongs to.
-    # This is one instance's own user id — it is NOT the same value as House's.
-    # Read from the cabin host on 2026-07-17: the context.user_id HA recorded when
-    # NetDaemon created its own app switch, i.e. the token owner. Not a
-    # credential — an opaque id. It gives override detection a second,
-    # independent signal beyond command-expectation correlation.
-    NetDaemonUserId: "818195a0b0384602b3b4d100b2b5b337"
-
-    # How long everyone must be gone before the house counts as Away.
-    AwayDebounceMinutes: 5
-
-    # How often an active zone re-evaluates its circadian target.
-    CircadianTickSeconds: 60
-
-    # After a command, how long a state change on that light is still read as
-    # our own echo rather than as a human touching a switch.
-    SelfEchoWindowSeconds: 8
-
-    # Whether a change carrying a parent context (another automation) counts as
-    # a manual override. true = other automations win over this engine.
-    TreatAutomationsAsManual: true
-
-    # Blend circadian targets across period boundaries instead of stepping.
-    SmoothTransitions: true
-    BlendMinutes: 30
-
-    # The period whose caps a sleep-respecting zone is held to while asleep,
-    # whatever the clock says. Must match a name in Periods below.
-    SleepPeriodName: night
-
-    # Registry labels. Label an entity in HA with these to:
-    #   ExcludeLabel — never let the engine touch it (a lamp on a smart plug
-    #                  that must stay put, a light in an area you half-manage).
-    #   MotionLabel  — treat it as a motion source whatever its device class
-    #                  (mmWave sensors often report something odd).
-    ExcludeLabel: adaptive-exclude
-    MotionLabel: adaptive-motion
-
-    # Discovery filters: which device classes qualify during area discovery.
-    #
-    # MotionDeviceClasses is empty by default, and empty means the built-in set
-    # [motion, occupancy, presence]. Listing classes here REPLACES that set
-    # rather than adding to it, so spell out every class you want — including
-    # the built-in ones you still need. (The default is empty rather than the
-    # three real values because the .NET configuration binder appends to a
-    # non-empty default instead of replacing it; an empty default is what makes
-    # this list behave the way the YAML reads.)
-    # MotionDeviceClasses:
-    #   - motion
-    #   - occupancy
-    #   - presence
-    #   - vibration
-    IlluminanceDeviceClass: illuminance
-
-    # A light within these tolerances of the target is left alone, rather than
-    # being told to fade to where it already is on every tick.
-    BrightnessTolerancePct: 2
-    ColorTempToleranceKelvin: 50
-
-  # --------------------------------------------------------------------------
-  #  Defaults — the baseline for every zone. A zone overrides only what differs.
-  #  Every knob here has a nullable twin on a zone.
-  # --------------------------------------------------------------------------
-  Defaults:
-
-    # Motion-free time before an active zone dims to its pre-off warning.
-    VacancyTimeoutSeconds: 600
-
-    # The pre-off warning: lights drop to PreOffBrightnessFactor of target for
-    # PreOffSeconds, and motion in that window cancels darkness. This is the
-    # "speak now" grace that stops the lights going out on a still reader.
-    # PreOffSeconds must be shorter than VacancyTimeoutSeconds.
-    PreOffSeconds: 30
-    PreOffBrightnessFactor: 0.5
-
-    # How long a manual change holds a zone before automatic control resumes.
-    OverrideDurationMinutes: 120
-
-    # Motion-free time after a manual turn-off before suppression is lifted.
-    # Until then, motion is respected as "the human wanted it dark".
-    VacancyResetMinutes: 10
-
-    # Which signal decides the zone is dark enough to light:
-    #   Lux    — the lux sensor only (falls back to sun if none resolves)
-    #   Sun    — sun elevation only
-    #   Either — dark when either says so
-    #   Always — no daylight gate (rooms without windows)
-    Darkness: Either
-    LuxThreshold: 40
-    LuxHysteresis: 10          # extra lux needed to leave dark: stops flapping
-    SunElevationThreshold: 3.0 # degrees
-    SunEntity: sun.sun
-
-    # Fade lengths. Long at night because eyes are dark-adapted; snappy by day.
-    DayTransitionSeconds: 1
-    NightTransitionSeconds: 15
-
-    # Sleep/away/welcome behaviour — off by default, opted into per zone.
-    RespectSleepMode: false
-    SleepBlocksAutoOn: false
-    SkipAwaySweep: false
-    WelcomeHome: false
-
-    # A disabled zone is still observed and published, just never commanded.
-    Enabled: true
-
-  # --------------------------------------------------------------------------
-  #  Periods — the house-wide circadian table.
-  #  A period runs from its Start until the next period begins. Start is either
-  #  a clock time ("06:00") or a sun event with an optional offset ("sunrise",
-  #  "sunset-01:00", "sunrise+00:45"). Quote clock times — bare 06:00 is a
-  #  YAML sexagesimal, not a string.
-  #
-  #  Sun-anchored boundaries are read off SunEntity's next_rising/next_setting.
-  #  This far north those swing hard across the year, and around midsummer or
-  #  midwinter a sun boundary can be unresolvable — a period that cannot be
-  #  placed is skipped, so keep at least one fixed clock boundary (night, here)
-  #  as the backstop.
-  # --------------------------------------------------------------------------
-  Periods:
-
-    - Name: morning
-      Start: "06:00"
-      BrightnessPct: 60
-      ColorTempKelvin: 3000
-
-    - Name: day
-      Start: sunrise+00:45
-      BrightnessPct: 90
-      ColorTempKelvin: 4500
-
-    - Name: evening
-      Start: sunset-01:00
-      BrightnessPct: 70
-      ColorTempKelvin: 2700
-
-    - Name: night
-      Start: "22:30"
-      BrightnessPct: 15
-      ColorTempKelvin: 2200
-      # The night-light floor. MaxBrightnessPct caps EVERY command while this
-      # period is active — nobody gets 100% in the face at 03:00, whatever a
-      # welcome-home or a motion event asks for. MinBrightnessPct is the floor,
-      # and it also applies to the pre-off dim.
-      MaxBrightnessPct: 30
-      MinBrightnessPct: 5
-
-  # --------------------------------------------------------------------------
-  #  Zones — OPT-IN. An HA area that is not listed here is never touched.
-  #
-  #  In the common case a zone declares an AreaId and nothing else: lights,
-  #  motion sensors and the lux sensor are discovered from the area registry.
-  #  Discovery drops group members (the group wins) and anything labelled
-  #  adaptive-exclude. The explicit lists below are the escape hatch for when
-  #  HA's area assignments are wrong; each one fully replaces discovery for
-  #  that slot alone.
-  #
-  #  AreaId is the registry area *id* (the slug), NOT the display name. Start
-  #  the host once and read the notification: it lists every known area id.
-  #
-  #  These four are worked examples of the shapes worth knowing. Replace the
-  #  AreaIds with real ones and delete the zones you do not have.
-  # --------------------------------------------------------------------------
-  Zones:
-
-    # Stue. Lights are listed explicitly rather than discovered: the area also
-    # holds three esp_lightcontrol_test / esp_test_netdaemon lights, all
-    # currently unavailable, which are test rigs and not room lighting.
-    # light.livingroom_ceiling ("Stue - Taklys") is a group of the three real
-    # ceiling lights, so commanding it covers all of them — the engine keeps
-    # groups and drops their members, which is exactly the behaviour wanted here.
-    # MotionSensors is likewise explicit: the area exposes ten motion-class
-    # binary_sensors, but nine are ESP test devices; only the multisensor is real.
-    - Name: Stue
-      AreaId: stue
-      Lights:
-        - light.livingroom_ceiling
-      MotionSensors:
-        - binary_sensor.stue_multisensor_motion_detection
-      LuxSensor: sensor.stue_multisensor_illuminance
-
-    # Tilbygg (annex). Lights and motion come from discovery — both lights are
-    # real, and all three motion sensors are genuine. LuxSensor must be explicit:
-    # the area has two illuminance sensors, which the resolver treats as
-    # ambiguous and would refuse the zone over. annex_illuminance reports a
-    # value; tilbygg_bevegelse_shelly_m2_luminosity is unavailable.
-    - Name: Tilbygg
-      AreaId: tilbygg
-      LuxSensor: sensor.annex_illuminance
-
-    # Kjokken. Discovery finds light.kjokken_taklys and
-    # binary_sensor.kjokken_taklys_occupancy. No illuminance sensor in this area,
-    # so the daylight gate is sun elevation rather than the default Either —
-    # stated outright instead of relying on the lux-to-sun fallback.
-    - Name: Kjokken
-      AreaId: kjokken
-      Darkness: Sun
-
-    # NOT a zone: 'petterhaugen'. Its only light is light.lys_alt ("Lys [alle]"),
-    # a group of kjokken_taklys + livingroom_ceiling + wiz_rgbww_tunable_734b00 +
-    # stue_spisebord, and its motion sensor is binary_sensor.inne_bevegelse. It
-    # is a whole-house catch-all, so a zone here would command the kitchen and
-    # living room from one indoor motion sensor — and fight the Stue and Kjokken
-    # zones below it. Excluded deliberately.
-    #
-    # NOT zones: kjeller, sov1, terrasse, toalett. All have motion sensors but no
-    # lights, so there is nothing to control. Add them when they get lights.
-```
+Others only cost you one room: an `AreaId` that is not in the registry, an entity id Home Assistant
+does not know, a room that resolves no lights or no motion sensors. That room is skipped, the rest
+keep running, and the message names the real ids.

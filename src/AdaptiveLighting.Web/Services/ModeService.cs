@@ -33,8 +33,8 @@ public sealed record ModeToggle(
 /// <param name="ActivePeriodName">The period active at "now", or <c>null</c> when none can be placed.</param>
 /// <param name="PreviewBrightness">The active period's target brightness, or <c>null</c> when off / unresolved.</param>
 /// <param name="PreviewKelvin">The active period's target colour temperature, or <c>null</c> when off / unresolved.</param>
-/// <param name="IsOffPreview">Whether the swatch should read "dark": an Away mode pauses/sweeps the zones.</param>
-/// <param name="EffectSummary">What the mode does to the zones, in words — the away sweep, the sleep clamp, or the period in use.</param>
+/// <param name="IsOffPreview">Whether the swatch should read "dark": an Away mode pauses/sweeps the areas.</param>
+/// <param name="EffectSummary">What the mode does to the areas, in words — the away sweep, the sleep clamp, or the period in use.</param>
 public sealed record ModePreview(
 	string? ActivePeriodName,
 	double? PreviewBrightness,
@@ -116,6 +116,28 @@ public sealed record MasterSwitchView(
 /// <param name="IsHome">Whether the entity currently reads <c>home</c> — the same comparison the monitor makes.</param>
 /// <param name="IsAvailable">Whether Home Assistant knew the entity at all; <c>false</c> renders as "unknown", not "away".</param>
 public sealed record PersonView(string EntityId, string Name, bool IsHome, bool IsAvailable);
+
+/// <summary>
+///     One room as the dashboard reads it: how to recognise its live reports, whether the owner switched it on,
+///     and how many lights it would drive.
+/// </summary>
+/// <remarks>
+///     A projection rather than the <see cref="AreaConfig"/> itself. The document behind it is the cached copy
+///     every read on the page shares, and handing a page a mutable room would invite an edit outside the save
+///     pipeline that is deliberately the only write path. The dashboard only ever looks.
+/// </remarks>
+/// <param name="AreaId">
+///     The registry area id, or <c>null</c> for a room configured with explicit entities. This is how a live
+///     report is matched back to the room that produced it — ids survive a rename mid-session, names do not.
+/// </param>
+/// <param name="Name">The room's display name, which is also the fallback match for a report with no id.</param>
+/// <param name="IsEnabled">Its effective enablement, following the document's inheritance.</param>
+/// <param name="LightCount">
+///     How many lights the room would drive — the length of its own pinned list when it has one, discovery's
+///     answer otherwise. 0 when Home Assistant has not answered yet, which is why the first-run chips show a
+///     count only when there is one to show.
+/// </param>
+public sealed record RoomView(string? AreaId, string Name, bool IsEnabled, int LightCount);
 
 /// <summary>
 ///     Reads and flips the house mode entities named in the configuration document.
@@ -400,7 +422,7 @@ public sealed class ModeService
 		{
 			var where = option.ResetPresenceSensors.Count > 0
 				? $"{option.ResetPresenceSensors.Count} chosen {(option.ResetPresenceSensors.Count == 1 ? "sensor" : "sensors")}"
-				: "any zone's motion";
+				: "any room's motion";
 			parts.Add($"on presence ({where}, after {option.ResetPresenceGraceMinutes} min)");
 		}
 
@@ -408,7 +430,7 @@ public sealed class ModeService
 			parts.Add($"at {time}");
 
 		if (parts.Count == 0)
-			return "stays until you switch back by hand";
+			return "stays until you switch the house back yourself";
 
 		// No Normal option → the engine has nothing to reset to and the trigger will not fire. Say so, so the card
 		// agrees with the engine's no-op rather than promising a reset that never happens.
@@ -499,18 +521,58 @@ public sealed class ModeService
 	}
 
 	/// <summary>
+	///     The rooms the document names, in document order — read-only, for the dashboard.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Three questions on the dashboard need the document rather than the live reports: which cards to show
+	///         (only rooms the owner switched on), how many rooms are hidden (the footer's count), and whether the
+	///         house is waiting for its first choice (the first-run state). All three are about what the owner
+	///         decided, and a switched-off room a disconnected Home Assistant has never reported still counts.
+	///     </para>
+	///     <para>
+	///         Adds no write path and no second source of truth: the document is the same cached copy the rest of
+	///         this service reads, re-read only when the file changes on disk.
+	///     </para>
+	/// </remarks>
+	/// <returns>One entry per configured room, in the order the document lists them.</returns>
+	public IReadOnlyList<RoomView> GetRooms()
+	{
+		AdaptiveLightingConfig config = Config;
+
+		return
+		[
+			.. config.Areas.Select(area => new RoomView(
+				area.AreaId,
+				AreaNaming.DisplayName(area, _catalog.AreaRegistry),
+				AreaView.IsEnabled(area, config.Defaults),
+				LightCountOf(area, config.Global)))
+		];
+	}
+
+	/// <summary>
+	///     How many lights a room drives: its own list when it pins one, discovery's count otherwise.
+	/// </summary>
+	/// <remarks>
+	///     A pinned list replaces discovery for that room entirely (<c>AreaEntityResolver.TryResolve</c>), so
+	///     counting discovery's lights for a hand-picked room would name a number the engine will never use.
+	/// </remarks>
+	private int LightCountOf(AreaConfig area, GlobalConfig global) =>
+		area.Lights is { Count: > 0 } pinned ? pinned.Count : _catalog.LightCountIn(area.AreaId, global);
+
+	/// <summary>
 	///     What a mode would drive right now: the period active at <paramref name="now"/> on the one shared table,
-	///     that period's target, and what the mode does to the zones — all read-only.
+	///     that period's target, and what the mode does to the areas — all read-only.
 	/// </summary>
 	/// <remarks>
 	///     Pure with respect to time and Home Assistant: the instant and the day's sun times are arguments, and
 	///     the period maths is the engine's own <see cref="CircadianCalculator"/>, so this cannot drift from what
-	///     the engine would resolve for the same inputs. An Away mode pauses/sweeps the zones, so its swatch is
+	///     the engine would resolve for the same inputs. An Away mode pauses/sweeps the areas, so its swatch is
 	///     "dark" rather than a period colour; Sleep, Guest and Normal render the resolved period. The effect line's
-	///     counts honour each zone's overrides of <see cref="AdaptiveLightingConfig.Defaults"/> and count only
-	///     enabled zones, matching the engine's <c>IsEngineAllowed</c> gate.
+	///     counts honour each area's overrides of <see cref="AdaptiveLightingConfig.Defaults"/> and count only
+	///     enabled areas, matching the engine's <c>IsEngineAllowed</c> gate.
 	/// </remarks>
-	/// <param name="config">The bound document — the only source of periods, defaults and zones.</param>
+	/// <param name="config">The bound document — the only source of periods, defaults and areas.</param>
 	/// <param name="kind">The option's kind, which decides the swatch and the effect line.</param>
 	/// <param name="now">The instant to resolve the active period at.</param>
 	/// <param name="sun">The day's sun times, for placing sun-anchored boundaries.</param>
@@ -523,7 +585,7 @@ public sealed class ModeService
 		ArgumentNullException.ThrowIfNull(config);
 		ArgumentNullException.ThrowIfNull(sun);
 
-		// Away beats everything: the zones pause/sweep, so there is no period colour to resolve and the swatch is dark.
+		// Away beats everything: the areas pause/sweep, so there is no period colour to resolve and the swatch is dark.
 		if (kind == ModeKind.Away)
 			return BuildPreview(config, kind, null);
 
@@ -536,7 +598,7 @@ public sealed class ModeService
 	///     <see cref="ComputePreview"/> so the card loop can resolve the shared target once and reuse it across every
 	///     non-Away option — one CircadianCalculator per page, not one per card.
 	/// </summary>
-	/// <param name="config">The document, for the zone-effect counts.</param>
+	/// <param name="config">The document, for the area-effect counts.</param>
 	/// <param name="kind">The option's kind, which decides the swatch and the effect line.</param>
 	/// <param name="target">The resolved period target, or <c>null</c> for Away and when no period places.</param>
 	private static ModePreview BuildPreview(AdaptiveLightingConfig config, ModeKind kind, LightTarget? target)
@@ -562,20 +624,20 @@ public sealed class ModeService
 	/// <summary>The guest behaviour, in words: normal lighting runs (the panel appends the scene when one is set).</summary>
 	private static string GuestEffect(AdaptiveLightingConfig config)
 	{
-		var count = EnabledZoneSettings(config).Count();
+		var count = EnabledAreaSettings(config).Count();
 		return count == 0
 			? "guests over — normal lighting, once rooms are configured"
 			: "guests over — normal lighting";
 	}
 
-	/// <summary>The leaving sweep, counted over enabled zones honouring each zone's <c>SkipAwaySweep</c> override.</summary>
+	/// <summary>The leaving sweep, counted over enabled areas honouring each area's <c>SkipAwaySweep</c> override.</summary>
 	private static string AwayEffect(AdaptiveLightingConfig config)
 	{
-		var settings = EnabledZoneSettings(config).ToList();
+		var settings = EnabledAreaSettings(config).ToList();
 		if (settings.Count == 0)
 			return "turns everything off — no rooms configured yet";
 
-		var kept = settings.Count(zone => zone.SkipAwaySweep);
+		var kept = settings.Count(area => area.SkipAwaySweep);
 		var swept = settings.Count - kept;
 
 		return kept == 0
@@ -583,15 +645,15 @@ public sealed class ModeService
 			: $"turns {swept} of {settings.Count} rooms off, keeps {kept} on";
 	}
 
-	/// <summary>The sleep clamp, counted over enabled zones honouring <c>RespectSleepMode</c> / <c>SleepBlocksAutoOn</c>.</summary>
+	/// <summary>The sleep clamp, counted over enabled areas honouring <c>RespectSleepMode</c> / <c>SleepBlocksAutoOn</c>.</summary>
 	private static string SleepEffect(AdaptiveLightingConfig config)
 	{
-		var settings = EnabledZoneSettings(config).ToList();
+		var settings = EnabledAreaSettings(config).ToList();
 		if (settings.Count == 0)
 			return "night levels — no rooms configured yet";
 
-		var clamped = settings.Count(zone => zone.RespectSleepMode);
-		var blocked = settings.Count(zone => zone.SleepBlocksAutoOn);
+		var clamped = settings.Count(area => area.RespectSleepMode);
+		var blocked = settings.Count(area => area.SleepBlocksAutoOn);
 
 		var clause = clamped == 1 ? "night levels in 1 room" : $"night levels in {clamped} rooms";
 		return blocked == 0 ? clause : $"{clause}, {blocked} never turn on by themselves";
@@ -602,10 +664,10 @@ public sealed class ModeService
 			? $"everyday lighting — the \"{name}\" period right now"
 			: "everyday lighting";
 
-	/// <summary>The effective settings of every enabled zone: defaults merged with the zone's own overrides.</summary>
-	private static IEnumerable<ZoneSettings> EnabledZoneSettings(AdaptiveLightingConfig config) =>
-		config.Zones
-			.Select(zone => zone.Effective(config.Defaults))
+	/// <summary>The effective settings of every enabled area: defaults merged with the area's own overrides.</summary>
+	private static IEnumerable<AreaSettings> EnabledAreaSettings(AdaptiveLightingConfig config) =>
+		config.Areas
+			.Select(area => area.Effective(config.Defaults))
 			.Where(settings => settings.Enabled);
 
 	/// <summary>

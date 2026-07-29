@@ -8,13 +8,13 @@ public enum ModeKind
 	/// <summary>The baseline, and the single reset target. No special behaviour.</summary>
 	Normal,
 
-	/// <summary>Respecting zones clamp to a sleep-clamp period's caps; <see cref="ZoneSettings.SleepBlocksAutoOn"/> refuses auto-on.</summary>
+	/// <summary>Respecting areas clamp to a sleep-clamp period's caps; <see cref="AreaSettings.SleepBlocksAutoOn"/> refuses auto-on.</summary>
 	Sleep,
 
 	/// <summary>Applies a scene (or the classic sweep) and pauses the engine house-wide until a reset trigger fires.</summary>
 	Away,
 
-	/// <summary>Applies a scene and holds the zones; with no scene, a dashboard flag only.</summary>
+	/// <summary>Applies a scene and holds the areas; with no scene, a dashboard flag only.</summary>
 	Guest
 }
 
@@ -86,7 +86,7 @@ public class HouseModeOptionConfig
 	/// <summary><c>scene.*</c> applied on mode entry. Meaningful for <see cref="ModeKind.Away"/>/<see cref="ModeKind.Guest"/>; inert elsewhere.</summary>
 	public string? Scene { get; set; }
 
-	/// <summary>Sleep only: the period whose caps sleep-respecting zones clamp to. Optional — see <see cref="HouseModeConfig.SleepClampPeriodFor"/>.</summary>
+	/// <summary>Sleep only: the period whose caps sleep-respecting areas clamp to. Optional — see <see cref="HouseModeConfig.SleepClampPeriodFor"/>.</summary>
 	public string? ClampPeriod { get; set; }
 
 	/// <summary>Period name. When that period starts, reset to Normal. Only meaningful on a non-Normal option.</summary>
@@ -97,7 +97,7 @@ public class HouseModeOptionConfig
 
 	/// <summary>
 	///     The presence sensors whose turn-on resets this mode. <b>Empty means auto</b>: the union of every motion
-	///     sensor configured across all zones (09 owner refinement). A non-empty list is exactly those sensors —
+	///     sensor configured across all areas (09 owner refinement). A non-empty list is exactly those sensors —
 	///     <c>binary_sensor.*</c> and/or <c>person.*</c>.
 	/// </summary>
 	public List<string> ResetPresenceSensors { get; set; } = [];

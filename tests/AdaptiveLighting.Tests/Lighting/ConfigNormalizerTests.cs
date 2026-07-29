@@ -71,7 +71,7 @@ public sealed class ConfigNormalizerTests
 		{
 			Global = new GlobalConfig { HouseMode = mode },
 			Periods = [new() { Name = "day", Start = "07:00", SetsMode = "Dag" }, new() { Name = "night", Start = "22:30" }],
-			Zones = [new() { Name = "Stue", AreaId = "stue" }]
+			Areas = [new() { Name = "Stue", AreaId = "stue" }]
 		};
 
 		ConfigNormalizer.Normalize(config);

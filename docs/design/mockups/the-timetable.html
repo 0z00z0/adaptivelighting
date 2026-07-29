@@ -1,0 +1,551 @@
+<title>The Timetable — adaptive lighting concept</title>
+<style>
+/* ---------- tokens (drafting-paper light / dark-cockpit dark) ---------- */
+:root{
+  --bg:#EEF1F5; --panel:#FFFFFF; --panel2:#F5F7FA; --ink:#1B2331; --muted:#5D6B7E; --line:#D5DCE6;
+  --lane:#F2F5F9; --grid:#DEE4EC; --now:#0E7C8C; --amber:#B26A00; --amber-soft:#F4E3C6;
+  --violet:#5C4BC2; --violet-soft:#E4DFF7; --ok:#2F7A45; --chip:#E7ECF2;
+  --mono:ui-monospace,"Cascadia Mono","SF Mono",Consolas,monospace;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0C111C; --panel:#121927; --panel2:#161F30; --ink:#E4E9F2; --muted:#7C8798; --line:#22304A;
+  --lane:#101724; --grid:#1C2638; --now:#3ECBDE; --amber:#F0A32F; --amber-soft:#3A2E14;
+  --violet:#A99AF2; --violet-soft:#272041; --ok:#7FBF8E; --chip:#1D2739;
+}}
+:root[data-theme="dark"]{
+  --bg:#0C111C; --panel:#121927; --panel2:#161F30; --ink:#E4E9F2; --muted:#7C8798; --line:#22304A;
+  --lane:#101724; --grid:#1C2638; --now:#3ECBDE; --amber:#F0A32F; --amber-soft:#3A2E14;
+  --violet:#A99AF2; --violet-soft:#272041; --ok:#7FBF8E; --chip:#1D2739;
+}
+:root[data-theme="light"]{
+  --bg:#EEF1F5; --panel:#FFFFFF; --panel2:#F5F7FA; --ink:#1B2331; --muted:#5D6B7E; --line:#D5DCE6;
+  --lane:#F2F5F9; --grid:#DEE4EC; --now:#0E7C8C; --amber:#B26A00; --amber-soft:#F4E3C6;
+  --violet:#5C4BC2; --violet-soft:#E4DFF7; --ok:#2F7A45; --chip:#E7ECF2;
+}
+/* ---------- base ---------- */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px 140px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+a{color:var(--now)}
+h1,h2{margin:0}
+.num,.mono{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.hidden{display:none!important}
+:focus-visible{outline:2px solid var(--now);outline-offset:2px}
+.lab{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+/* ---------- header ---------- */
+header.hd{display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;padding:20px 0 6px}
+.hd .t{font-size:20px;font-weight:700;letter-spacing:.02em}
+.hd .clock{font-size:26px;font-weight:600}
+.hd .facts{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.hd .facts b{color:var(--ink);font-weight:600}
+.armed{font-size:12px;font-weight:700;letter-spacing:.1em;padding:3px 10px;border-radius:4px;
+  border:1px solid var(--ok);color:var(--ok)}
+.armed.off{border-color:var(--amber);color:var(--amber)}
+nav.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:10px 0 18px}
+nav.tabs a{padding:9px 16px;text-decoration:none;color:var(--muted);font-weight:600;font-size:14px;
+  border-bottom:2px solid transparent;margin-bottom:-1px}
+nav.tabs a.cur{color:var(--ink);border-bottom-color:var(--now)}
+nav.tabs .demo{font-size:10px;letter-spacing:.1em;text-transform:uppercase;opacity:.7}
+
+/* ---------- exception tray ---------- */
+.tray{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+.exc{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+  border-left:3px solid var(--amber);border-radius:8px;padding:8px 14px;font-size:13.5px;text-align:left}
+.exc.violet{border-left-color:var(--violet)}
+.exc b{font-weight:650}
+.exc .when{color:var(--muted);font-size:12.5px}
+.allquiet{color:var(--muted);font-size:13.5px}
+
+/* ---------- board ---------- */
+.board{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.scroll{overflow-x:auto}
+.tt{min-width:760px;position:relative}
+.axis{display:flex;border-bottom:1px solid var(--line);position:relative;height:30px;align-items:flex-end}
+.axis span{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--muted);bottom:6px;font-family:var(--mono)}
+.schedband{position:relative;height:26px;border-bottom:1px solid var(--line)}
+.schedband .seg{position:absolute;top:5px;bottom:5px;border-radius:3px;opacity:.85}
+.schedband .segl{position:absolute;top:4px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);padding-left:6px}
+.lanes{position:relative}
+.lane{display:flex;align-items:stretch;border-bottom:1px solid var(--grid);position:relative;height:44px}
+.lane:last-child{border-bottom:0}
+.lane .nm{position:sticky;left:0;z-index:3;width:130px;flex:none;display:flex;align-items:center;gap:8px;
+  padding:0 10px;background:var(--panel);border-right:1px solid var(--line);font-weight:600;font-size:13.5px}
+.lane .nm .st{width:8px;height:8px;border-radius:50%;background:var(--grid);flex:none}
+.lane .nm .st.on{background:var(--k,#FFB46B);box-shadow:0 0 6px var(--k,#FFB46B)}
+.lane .nm .st.hand{background:var(--violet)}
+.lane .nm .st.warn{background:var(--amber);animation:blink 1.1s step-end infinite}
+@keyframes blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.lane .nm .st.warn{animation:none}}
+.lane .tk{position:relative;flex:1;background:var(--lane)}
+.blk{position:absolute;top:9px;bottom:9px;border-radius:4px}
+.blk.on{background:var(--k,#FFB46B);opacity:.8}
+.blk.hand{background:var(--violet);opacity:.75}
+.blk.dim{background:var(--amber)}
+.blk.hatch{background:repeating-linear-gradient(45deg,var(--grid) 0 4px,transparent 4px 8px)}
+.mark{position:absolute;top:4px;bottom:4px;width:0;border-left:2px dotted var(--muted)}
+.mark i{position:absolute;left:4px;top:1px;font-style:normal;font-size:10.5px;color:var(--muted);white-space:nowrap;font-family:var(--mono)}
+.gridline{position:absolute;top:0;bottom:0;width:1px;background:var(--grid);z-index:0}
+.nowline{position:absolute;top:0;bottom:0;width:2px;background:var(--now);z-index:2;box-shadow:0 0 8px var(--now)}
+.nowtag{position:absolute;top:2px;transform:translateX(-50%);background:var(--now);color:var(--bg);
+  font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;z-index:4;font-family:var(--mono)}
+.lane .tk .blk,.lane .tk .mark{z-index:1}
+.lane.rowbtn:hover .tk{background:var(--panel2)}
+.boardfoot{display:flex;gap:18px;padding:10px 14px;font-size:12px;color:var(--muted);flex-wrap:wrap;border-top:1px solid var(--line)}
+.key{display:inline-flex;align-items:center;gap:6px}
+.key .k{width:14px;height:9px;border-radius:2px;display:inline-block}
+
+/* ---------- dossier ---------- */
+.back{display:inline-block;color:var(--muted);font-size:13px;font-weight:600;margin:2px 0 12px;text-decoration:none}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.dgrid{grid-template-columns:1fr}}
+.panelbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.panelbox h2{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+.facts-t{width:100%;border-collapse:collapse;font-size:13.5px}
+.facts-t th{text-align:left;color:var(--muted);font-weight:600;padding:5px 12px 5px 0;white-space:nowrap;vertical-align:top}
+.facts-t td{padding:5px 0;font-family:var(--mono);font-size:13px}
+.statehead{display:flex;align-items:center;gap:14px;margin:2px 0 14px;flex-wrap:wrap}
+.statehead h1{font-size:24px}
+.statepill{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:4px;background:var(--chip)}
+.statepill.hand{background:var(--violet-soft);color:var(--violet)}
+.statepill.warn{background:var(--amber-soft);color:var(--amber)}
+.log{list-style:none;margin:0;padding:0}
+.log li{display:flex;gap:12px;padding:7px 0;border-top:1px solid var(--grid);font-size:13.5px}
+.log li:first-child{border-top:0}
+.log .lt{font-family:var(--mono);font-size:12.5px;color:var(--muted);white-space:nowrap;padding-top:1px}
+.log .cause{color:var(--muted)}
+.log .hl{color:var(--amber)}
+
+/* ---------- rules as sentences ---------- */
+.rule{padding:12px 0;border-top:1px solid var(--grid);font-size:15px;line-height:2}
+.rule:first-of-type{border-top:0}
+.rule .why{display:block;font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:2px}
+.tok{display:inline-block;background:var(--chip);border:1px solid var(--line);border-radius:6px;
+  padding:1px 9px;font-family:var(--mono);font-size:13px;font-weight:600;cursor:pointer;margin:0 1px;white-space:nowrap}
+.tok:hover{border-color:var(--now)}
+.tok.ovr{border-color:var(--amber);color:var(--amber)}
+.tok.fixed{cursor:default;border-style:dashed;color:var(--muted)}
+.tok.fixed:hover{border-color:var(--line)}
+.inhnote{font-size:11.5px;color:var(--muted);margin-left:6px}
+
+/* ---------- schedule editor ---------- */
+.sched-t{width:100%;border-collapse:collapse;font-size:14px}
+.sched-t th{text-align:left;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  padding:4px 10px 8px 0;font-weight:700}
+.sched-t td{padding:7px 10px 7px 0;border-top:1px solid var(--grid)}
+.sched-t .pname{font-weight:650}
+.sw{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;margin-right:8px}
+
+/* ---------- pending drawer ---------- */
+.drawer{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:2px solid var(--now);
+  box-shadow:0 -8px 30px rgba(0,0,0,.25);z-index:50}
+.drawer .in{max-width:1080px;margin:0 auto;padding:12px 16px}
+.drawer .dt{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.drawer .dt .lab{color:var(--now)}
+.drawer ul{margin:6px 0 10px;padding:0;list-style:none;font-size:13.5px}
+.drawer li{padding:2px 0;font-family:var(--mono);font-size:12.5px}
+.drawer li .arrow{color:var(--amber)}
+.applybtn{background:var(--now);color:var(--bg);font-weight:700;padding:8px 18px;border-radius:6px}
+.discard{color:var(--muted);font-weight:600;font-size:13.5px}
+.applied{color:var(--ok);font-size:13px;font-weight:600}
+
+/* ---------- commissioning ---------- */
+.comm-t{width:100%;border-collapse:collapse;font-size:13.5px}
+.comm-t th{text-align:left;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+  padding:6px 12px 8px 0;font-weight:700;white-space:nowrap}
+.comm-t td{padding:8px 12px 8px 0;border-top:1px solid var(--grid);vertical-align:top}
+.comm-t .rn{font-weight:650}
+.comm-t code{font-family:var(--mono);font-size:12px;color:var(--muted);display:block}
+.verdict{font-size:12px;font-weight:700}
+.verdict.ok{color:var(--ok)}
+.verdict.warn{color:var(--amber)}
+.cbx{width:18px;height:18px;accent-color:var(--now)}
+.commitbtn{background:var(--now);color:var(--bg);font-weight:700;padding:10px 22px;border-radius:6px;margin:16px 0}
+.commitbtn:disabled{opacity:.4}
+.smallprint{font-size:12.5px;color:var(--muted)}
+
+/* ---------- popover menu ---------- */
+.pop{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  box-shadow:0 8px 30px rgba(0,0,0,.3);z-index:60;padding:4px;min-width:110px}
+.pop button{display:block;width:100%;text-align:left;padding:6px 12px;border-radius:5px;font-size:13.5px;font-family:var(--mono)}
+.pop button:hover{background:var(--chip)}
+.pop button.cur{color:var(--now);font-weight:700}
+</style>
+
+<div class="wrap">
+
+<header class="hd">
+  <span class="t">Petterhaugen · lighting</span>
+  <span class="clock num" id="clock">21:37</span>
+  <span class="facts">
+    <span>Period <b>Evening</b> → Night <b class="num">22:30</b></span>
+    <span>Mode <b>Hjemme</b></span>
+    <span>Home <b>Espen, Marte</b> · Jonas away</span>
+    <span>Dusk <b class="num">~22:05</b> (180 lx outside)</span>
+  </span>
+  <button class="armed" id="armed" title="The engine is commanding lights. Click to pause.">● RUNNING</button>
+</header>
+
+<nav class="tabs">
+  <a href="#/board" id="tab-board">Board</a>
+  <a href="#/rules" id="tab-rules">Schedule &amp; rules</a>
+  <a href="#/setup" id="tab-setup">Commissioning <span class="demo">first-run demo</span></a>
+</nav>
+
+<!-- ============================ BOARD ============================ -->
+<section id="route-board">
+  <div class="tray" id="tray"></div>
+
+  <div class="board"><div class="scroll"><div class="tt" id="tt">
+    <div class="axis" id="axis"></div>
+    <div class="schedband" id="schedband"></div>
+    <div class="lanes" id="lanes"></div>
+  </div></div>
+  <div class="boardfoot">
+    <span class="key"><span class="k" style="background:#FFB46B;opacity:.8"></span> lit by the engine (colour = actual warmth)</span>
+    <span class="key"><span class="k" style="background:var(--violet);opacity:.75"></span> set by hand</span>
+    <span class="key"><span class="k" style="background:var(--amber)"></span> warning dim</span>
+    <span class="key"><span class="k blk hatch" style="position:static"></span> paused</span>
+    <span class="key"><span style="border-left:2px dotted var(--muted);height:12px;display:inline-block"></span> what happens next</span>
+    <span style="flex:1"></span><span>Click a row for the room’s dossier</span>
+  </div>
+  </div>
+</section>
+
+<!-- ============================ DOSSIER ============================ -->
+<section id="route-room" class="hidden">
+  <a class="back" href="#/board">‹ Back to the board</a>
+  <div class="statehead">
+    <h1 id="d-name">Kjøkken</h1>
+    <span class="statepill" id="d-pill">set by hand</span>
+    <span class="smallprint num" id="d-since"></span>
+  </div>
+
+  <div class="dgrid">
+    <div class="panelbox">
+      <h2>Right now</h2>
+      <table class="facts-t" id="d-facts"></table>
+    </div>
+    <div class="panelbox">
+      <h2>What happened here</h2>
+      <ul class="log" id="d-log"></ul>
+    </div>
+    <div class="panelbox" style="grid-column:1/-1">
+      <h2>This room’s rules <span style="float:right;font-weight:600;letter-spacing:0;text-transform:none">amber = differs from the house</span></h2>
+      <div id="d-rules"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ RULES ============================ -->
+<section id="route-rules" class="hidden">
+  <div class="dgrid">
+    <div class="panelbox" style="grid-column:1/-1">
+      <h2>The day’s schedule — one for the whole house</h2>
+      <div class="scroll"><table class="sched-t" style="min-width:560px">
+        <thead><tr><th>Period</th><th>Starts</th><th>Brightness</th><th>Warmth</th><th>Ceiling</th></tr></thead>
+        <tbody id="schedrows"></tbody>
+      </table></div>
+      <p class="smallprint" style="margin:12px 0 0">Lights <span class="tok" data-id="blend" data-opts="step at the boundary|ease over 15 min|ease over 30 min|ease over 60 min">ease over 30 min</span> when one period hands over to the next. “sunset − 1:00” follows the sun through the year — tonight that is 20:45.</p>
+    </div>
+
+    <div class="panelbox">
+      <h2>House rules</h2>
+      <div class="rule">When the last person leaves and <span class="tok" data-id="awaydeb" data-opts="1 min|5 min|10 min|15 min">5 min</span> pass, sweep the lights off — except rooms marked <em>stays on</em> (Uteplass).
+        <span class="why">The debounce is what keeps a trip to the bin from blacking out the house.</span></div>
+      <div class="rule">When the first person comes home to a dark house, light the <span class="tok fixed">welcome rooms</span> (Gang) to the schedule’s level.</div>
+      <div class="rule">When somebody adjusts a light by hand, stand back from that room for <span class="tok" data-id="handhold" data-opts="30 min|1 h|2 h|4 h|until the room empties">2 h</span>.
+        <span class="why">A change from another automation counts as a hand too.</span></div>
+      <div class="rule">Only light a room that is dark: below <span class="tok" data-id="lux" data-opts="20 lx|40 lx|60 lx|100 lx">40 lx</span>, or the sun lower than <span class="tok" data-id="sunel" data-opts="0°|3°|6°">3°</span> — whichever says dark first.</div>
+    </div>
+
+    <div class="panelbox">
+      <h2>Mode rules</h2>
+      <div class="rule"><b>Borte</b> switches on by itself after the house is empty <span class="tok" data-id="autoaway" data-opts="2 h|4 h|6 h|never">6 h</span>, and back to <b>Hjemme</b> when someone arrives — ignoring the first <span class="tok" data-id="grace" data-opts="5 min|15 min|30 min">15 min</span> so your own leaving doesn’t cancel it.</div>
+      <div class="rule"><b>Natt</b> starts when the Night period begins and ends at <span class="tok" data-id="nightend" data-opts="06:00|06:30|07:00">06:30</span>. Bedrooms won’t auto-on; respecting rooms cap at Night’s ceiling (30 %).</div>
+      <div class="rule"><b>Gjester</b> applies scene <span class="tok fixed">Selskap</span> and holds every room until you switch back.
+        <span class="why">The mode itself lives in <span class="mono">input_select.husmodus</span> — wall panels and voice switch it too.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ COMMISSIONING ============================ -->
+<section id="route-setup" class="hidden">
+  <div class="panelbox" style="margin-bottom:16px">
+    <h2>Commissioning report — read from Home Assistant just now</h2>
+    <p style="margin:0 0 14px;font-size:14px">Discovery matched every room’s lights and sensors from the registry. <b>No room acts until you commission it</b> — tick the ones this system should run, then put it to work. Re-run discovery any time; your own choices are never overwritten.</p>
+    <div class="scroll"><table class="comm-t" style="min-width:680px">
+      <thead><tr><th></th><th>Room</th><th>Lights</th><th>Motion</th><th>Light level</th><th>Verdict</th></tr></thead>
+      <tbody id="commrows"></tbody>
+    </table></div>
+    <button class="commitbtn" id="commitbtn" disabled>Commission 0 rooms</button>
+    <p class="smallprint">Rooms left unticked stay listed here, untouched. The <span class="mono">adaptive-exclude</span> label hides gear from discovery entirely.</p>
+  </div>
+</section>
+
+</div>
+
+<div class="drawer hidden" id="drawer"><div class="in">
+  <div class="dt"><span class="lab">Pending changes</span><span class="smallprint">Nothing is live until you apply — the engine rebuilds in place, no restart.</span>
+    <span style="flex:1"></span>
+    <button class="discard" id="discardbtn">Discard</button>
+    <button class="applybtn" id="applybtn">Apply 0 changes</button></div>
+  <ul id="pendlist"></ul>
+</div></div>
+
+<script>
+/* ------------------------------ time helpers ------------------------------ */
+const W0=18, W1=24;                 // board window 18:00–24:00
+const X = h => ((h-W0)/(W1-W0)*100);
+let NOW = 21+37/60;                 // 21:37, ticks forward
+const hhmm = h => `${String(Math.floor(h)).padStart(2,'0')}:${String(Math.round(h%1*60)).padStart(2,'0')}`;
+const kelvinCss = k => {k=Math.min(6600,Math.max(1500,k))/100;
+  const g=Math.min(255,Math.max(0,Math.round(99.47*Math.log(k)-161.12)));
+  const b=Math.min(255,Math.max(0,Math.round(138.52*Math.log(k-10)-305.04)));
+  return `rgb(255,${g},${b})`};
+
+/* ------------------------------ board data ------------------------------ */
+/* blocks: [type, from, to(null=now)] · marks: [time, label] */
+const LANES=[
+ {id:'stue',nm:'Stue',dot:'on',k:2700,blocks:[['on',19.03,null]],marks:[[21.72,'21:43 dim'],[22.5,'22:30 → night 15 %']]},
+ {id:'kjokken',nm:'Kjøkken',dot:'hand',blocks:[['on',19.25,20.9],['hand',20.9,null]],marks:[[22.33,'22:20 auto resumes']]},
+ {id:'bad',nm:'Bad',dot:'warn',k:2700,blocks:[['on',21.25,21.61],['dim',21.61,null]],marks:[[21.635,'21:38 off']]},
+ {id:'gang',nm:'Gang',dot:'off',k:2700,blocks:[['on',18.68,18.74],['on',20.2,20.25]],marks:[]},
+ {id:'soverom',nm:'Soverom',dot:'off',blocks:[['on',20.52,21.03],['hatch',21.03,null]],marks:[[22.0,'listens again ~22:00']]},
+ {id:'barnerom',nm:'Barnerom',dot:'off',k:2700,blocks:[['on',19.78,20.33]],marks:[]},
+ {id:'kjellergang',nm:'Kjellergang',dot:'off',k:2700,blocks:[['on',19.97,20.02]],marks:[]},
+ {id:'vaskerom',nm:'Vaskerom',dot:'off',blocks:[],marks:[]},
+ {id:'garasje',nm:'Garasje',dot:'off',blocks:[['hatch',W0,null]],marks:[]},
+ {id:'uteplass',nm:'Uteplass',dot:'off',k:2200,blocks:[],marks:[[22.08,'~22:05 dark enough'],[22.5,'22:30 night']]},
+];
+function renderAxis(){
+  let a='';for(let h=W0;h<=W1;h++)a+=`<span style="left:${X(h)}%">${h===24?'00':h}:00</span>`;
+  document.getElementById('axis').innerHTML=a;
+}
+function renderSched(){
+  const segs=[['Day',18,20.75,kelvinCss(4500)],['Evening',20.75,22.5,kelvinCss(2700)],['Night',22.5,24,kelvinCss(2200)]];
+  document.getElementById('schedband').innerHTML=segs.map(([n,f,t,c])=>
+    `<div class="seg" style="left:${X(f)}%;width:${X(t)-X(f)}%;background:${c}"></div>
+     <div class="segl" style="left:${X(f)}%">${n}</div>`).join('');
+}
+function renderLanes(){
+  const grid=[];for(let h=W0+1;h<W1;h++)grid.push(`<div class="gridline" style="left:${X(h)}%"></div>`);
+  document.getElementById('lanes').innerHTML=LANES.map(l=>{
+    const blocks=l.blocks.map(([ty,f,t])=>{
+      const to=t??NOW;
+      const col=ty==='on'?`style="left:${X(f)}%;width:${Math.max(.4,X(to)-X(f))}%;--k:${kelvinCss(l.k||2700)}"`:
+        `style="left:${X(f)}%;width:${Math.max(.4,X(to)-X(f))}%"`;
+      return `<div class="blk ${ty}" ${col}></div>`}).join('');
+    const marks=l.marks.map(([tm,lb])=>`<div class="mark" style="left:${X(tm)}%"><i>${lb}</i></div>`).join('');
+    return `<div class="lane rowbtn" role="button" tabindex="0" aria-label="Open ${l.nm}" onclick="location.hash='#/room/${l.id}'"
+      onkeydown="if(event.key==='Enter')location.hash='#/room/${l.id}'">
+      <div class="nm"><span class="st ${l.dot}" style="--k:${kelvinCss(l.k||2700)}"></span>${l.nm}</div>
+      <div class="tk">${grid.join('')}${blocks}${marks}</div></div>`;
+  }).join('')+`<div class="nowline" style="left:calc(130px + (100% - 130px)*${(NOW-W0)/(W1-W0)})"></div>`
+   +`<div class="nowtag" style="left:calc(130px + (100% - 130px)*${(NOW-W0)/(W1-W0)})">${hhmm(NOW)}</div>`;
+}
+function renderTray(){
+  document.getElementById('tray').innerHTML=`
+   <button class="exc violet" onclick="location.hash='#/room/kjokken'"><span><b>Kjøkken</b> — set by hand at 20:54 · auto resumes <b class="num">22:20</b></span></button>
+   <button class="exc" onclick="location.hash='#/room/bad'"><span><b>Bad</b> — warning dim · off in <b class="num" id="badcnt">18 s</b> unless someone moves</span></button>
+   <button class="exc violet" onclick="location.hash='#/room/soverom'"><span><b>Soverom</b> — switched off by hand · movement ignored until empty 10 min</span></button>
+   <span class="allquiet" style="align-self:center">Everything else is doing what the timetable says.</span>`;
+}
+
+/* ------------------------------ dossier data ------------------------------ */
+const DOSSIER={
+ kjokken:{nm:'Kjøkken',pill:['set by hand','hand'],since:'since 20:54 (43 min)',
+  facts:[['State','OverriddenOn — the engine stands back'],['Lights','light.kjokken_benk · light.kjokken_tak — 100 %'],
+   ['Last motion','21:31:04 (6 min ago)'],['Last command','19:15:03 — 70 % · 2700 K'],
+   ['Darkness','dark — 9 lx < 40 lx (sensor.kjokken_lux)'],['Period','evening (70 % · 2700 K)'],['Mode','Hjemme']],
+  log:[['21:31:04','Motion','— noted, but the room is yours: no command'],
+   ['20:54:12','ManualOn','benkelys → 100 % from the wall dimmer <span class="hl">· standing back 2 h</span>'],
+   ['20:45:00','CircadianTick','evening began — retuned to 70 % · 2700 K'],
+   ['19:15:03','Motion','lit to 78 % · 3400 K (day, blending down)'],
+   ['19:14:58','Darkness','went dark: 36 lx crossed below 40 lx']],
+  rules:[
+   ['When someone moves and it’s darker than <span class="tok" data-id="kj-lux" data-opts="20 lx|40 lx|60 lx">40 lx</span>, light to the schedule’s level.',''],
+   ['After <span class="tok" data-id="kj-stay" data-opts="3 min|5 min|10 min|20 min|30 min">10 min</span> without movement, dim to <span class="tok" data-id="kj-dimlvl" data-opts="30 %|50 %|70 %">50 %</span> for <span class="tok" data-id="kj-dimwarn" data-opts="15 s|30 s|60 s">30 s</span>, then switch off.','The dim is the warning; moving during it brings the light straight back.'],
+   ['If somebody adjusts by hand, stand back for <span class="tok" data-id="kj-hold" data-opts="30 min|1 h|2 h|4 h">2 h</span>. <span class="inhnote">house rule</span>',''],
+   ['While the house sleeps: <span class="tok" data-id="kj-sleep" data-opts="behave normally|cap at night levels|never auto-on">behave normally</span>.','']]},
+ bad:{nm:'Bad',pill:['warning dim','warn'],since:'dimming since 21:36:48',
+  facts:[['State','PreOff — last call before lights out'],['Lights','light.bad_speil · light.bad_tak — 32 %'],
+   ['Last motion','21:26:40 (10 min ago)'],['Last command','21:36:48 — dim to 32 %'],
+   ['Darkness','dark — no window (Always)'],['Period','evening (70 % · 2700 K)'],['Mode','Hjemme']],
+  log:[['21:36:48','VacancyTimeout','no movement for 10 min — dimmed to half as a warning'],
+   ['21:26:40','Motion','held at 65 % · 2700 K'],['21:15:12','Motion','lit to 65 % · 2700 K'],
+   ['20:45:00','CircadianTick','evening began']],
+  rules:[
+   ['When someone moves, light to the schedule’s level — <span class="tok" data-id="bd-dark" data-opts="only when dark|whatever the daylight">whatever the daylight</span>. <span class="inhnote">no window here</span>',''],
+   ['After <span class="tok" data-id="bd-stay" data-opts="5 min|10 min|15 min">10 min</span> without movement, dim to <span class="tok" data-id="bd-dimlvl" data-opts="30 %|50 %">50 %</span> for <span class="tok" data-id="bd-dimwarn" data-opts="15 s|30 s|60 s">30 s</span>, then off.',''],
+   ['While the house sleeps: <span class="tok ovr" data-id="bd-sleep" data-opts="behave normally|cap at night levels|never auto-on">cap at night levels</span>.','A 03:00 visit gets 15 %, not a floodlight.']]},
+ stue:{nm:'Stue',pill:['lit · auto',''],since:'occupied since 19:02',
+  facts:[['State','AutoActive — holding the circadian target'],['Lights','light.stue_taklampe · light.stue_gulvlampe — 70 % · 2700 K'],
+   ['Last motion','21:35:11 (2 min ago)'],['Last command','20:45:00 — 70 % · 2700 K'],
+   ['Darkness','dark — 12 lx < 40 lx (sensor.stue_lux)'],['Period','evening (70 % · 2700 K)'],['Mode','Hjemme']],
+  log:[['21:35:11','Motion','vacancy clock restarted'],['20:45:00','CircadianTick','evening began — eased to 70 % · 2700 K over 30 min'],
+   ['19:02:36','Motion','lit to 88 % · 4300 K (day)'],['18:00:00','Startup','took the room as it was — lights off']],
+  rules:[
+   ['When someone moves and it’s darker than <span class="tok" data-id="st-lux" data-opts="20 lx|40 lx|60 lx">40 lx</span>, light to the schedule’s level.',''],
+   ['After <span class="tok ovr" data-id="st-stay" data-opts="10 min|20 min|30 min|45 min">20 min</span> without movement, dim to half for 30 s, then off.','Longer than the house’s 10 min — people sit still in here.'],
+   ['If somebody adjusts by hand, stand back for <span class="tok" data-id="st-hold" data-opts="1 h|2 h|4 h">2 h</span>. <span class="inhnote">house rule</span>','']]},
+ soverom:{nm:'Soverom',pill:['off by hand','hand'],since:'since 21:02',
+  facts:[['State','SuppressedOff — motion deliberately ignored'],['Lights','light.soverom_nattbord · light.soverom_tak — off'],
+   ['Last motion','21:29:50 (7 min ago)'],['Last command','20:31:18 — 70 % · 2700 K'],
+   ['Darkness','dark — sun below 3°'],['Period','evening'],['Mode','Hjemme']],
+  log:[['21:02:44','ManualOff','wall switch — <span class="hl">movement ignored until the room is empty 10 min</span>'],
+   ['20:31:18','Motion','lit to 70 % · 2700 K']],
+  rules:[
+   ['When someone moves and it’s dark, light to the schedule’s level.',''],
+   ['While the house sleeps: <span class="tok ovr" data-id="so-sleep" data-opts="behave normally|cap at night levels|never auto-on">never auto-on</span>.','The wall switch always works.'],
+   ['After a hand-off, ignore movement until the room has been empty <span class="tok" data-id="so-reset" data-opts="5 min|10 min|20 min">10 min</span>.','So nobody is plunged back into light while still in bed.']]},
+};
+['gang','barnerom','kjellergang','vaskerom','garasje','uteplass'].forEach(id=>{
+ const nm=LANES.find(l=>l.id===id).nm;
+ DOSSIER[id]??={nm,pill:[id==='garasje'?'paused':'watching',''],since:'',
+  facts:[['State',id==='garasje'?'Disabled — never commanded':'AutoVacant — off, watching'],
+   ['Lights',`light.${id}_tak — off`],['Last motion',id==='vaskerom'?'none since startup':'20:14:30'],
+   ['Darkness',id==='uteplass'?'too bright — 180 lx > 40 lx (sensor.ute_lux)':'dark'],
+   ['Period','evening'],['Mode','Hjemme']],
+  log:[['18:00:00','Startup','took the room as it was']],
+  rules:[['When someone moves and it’s dark, light to the schedule’s level.','']]};
+});
+function renderDossier(id){
+  const d=DOSSIER[id]||DOSSIER.kjokken;
+  document.getElementById('d-name').textContent=d.nm;
+  const p=document.getElementById('d-pill');p.textContent=d.pill[0];p.className='statepill '+d.pill[1];
+  document.getElementById('d-since').textContent=d.since;
+  document.getElementById('d-facts').innerHTML=d.facts.map(([k,v])=>`<tr><th>${k}</th><td>${v}</td></tr>`).join('');
+  document.getElementById('d-log').innerHTML=d.log.map(([t,r,s])=>
+    `<li><span class="lt">${t}</span><span><b>${r}</b> <span class="cause">${s}</span></span></li>`).join('');
+  document.getElementById('d-rules').innerHTML=d.rules.map(([s,w])=>
+    `<div class="rule">${s}${w?`<span class="why">${w}</span>`:''}</div>`).join('');
+}
+
+/* ------------------------------ schedule editor ------------------------------ */
+const SCHED=[['Morning','#FFBE7E','06:30','06:00|06:30|07:00','60 %','40 %|60 %|80 %','3000 K','2700 K|3000 K|3500 K','—',''],
+ ['Day','#FFE1CE','09:00','08:00|09:00|10:00','90 %','70 %|90 %|100 %','4500 K','4000 K|4500 K|5000 K','—',''],
+ ['Evening','#FFB46B','sunset − 1:00','sunset − 2:00|sunset − 1:00|sunset|20:00','70 %','50 %|70 %|85 %','2700 K','2400 K|2700 K|3000 K','—',''],
+ ['Night','#FF9E4A','22:30','22:00|22:30|23:00|23:30','15 %','5 %|10 %|15 %|25 %','2200 K','2000 K|2200 K|2500 K','max 30 %','max 20 %|max 30 %|max 50 %|no ceiling']];
+document.getElementById('schedrows').innerHTML=SCHED.map(([n,c,st,sto,b,bo,k,ko,cap,capo],i)=>
+ `<tr><td class="pname"><span class="sw" style="background:${c}"></span>${n}</td>
+  <td><span class="tok" data-id="p${i}s" data-opts="${sto}">${st}</span></td>
+  <td><span class="tok" data-id="p${i}b" data-opts="${bo}">${b}</span></td>
+  <td><span class="tok" data-id="p${i}k" data-opts="${ko}">${k}</span></td>
+  <td>${capo?`<span class="tok" data-id="p${i}c" data-opts="${capo}">${cap}</span>`:'—'}</td></tr>`).join('');
+
+/* ------------------------------ commissioning ------------------------------ */
+const COMM=[
+ ['Stue','2 · taklampe, gulvlampe','1 · stue_bevegelse','stue_lux','ok','Ready'],
+ ['Kjøkken','2 · benk, tak','1 · kjokken_bevegelse','kjokken_lux','ok','Ready'],
+ ['Gang','1 · gang_tak','1 · gang_bevegelse','—','ok','Ready — darkness judged by the sun'],
+ ['Bad','2 · speil, tak','1 · bad_bevegelse','—','ok','Ready — no window: set “Always dark”?'],
+ ['Soverom','2 · nattbord, tak','1 · soverom_bevegelse','—','ok','Ready'],
+ ['Kjellergang','1 · kjellergang_tak','1 · kjellergang_bevegelse','—','ok','Ready'],
+ ['Uteplass','2 · terrasse, stolpe','1 · uteplass_bevegelse','ute_lux','ok','Ready — consider “stays on when away”'],
+ ['Garasje','1 · garasje_tak','none found','—','warn','No motion sensor — would never auto-on'],
+];
+let commPicked=new Set();
+function renderComm(){
+  document.getElementById('commrows').innerHTML=COMM.map(([rn,li,mo,lx,vc,vt],i)=>
+   `<tr><td><input class="cbx" type="checkbox" aria-label="Commission ${rn}" ${commPicked.has(i)?'checked':''} onchange="togComm(${i})"></td>
+    <td class="rn">${rn}<code>area: ${rn.toLowerCase().replace('ø','o').replace('æ','a')}</code></td>
+    <td>${li}</td><td>${mo}</td><td>${lx}</td>
+    <td><span class="verdict ${vc}">${vt}</span></td></tr>`).join('');
+  const b=document.getElementById('commitbtn');
+  b.textContent=`Commission ${commPicked.size} room${commPicked.size===1?'':'s'}`;
+  b.disabled=!commPicked.size;
+}
+function togComm(i){commPicked.has(i)?commPicked.delete(i):commPicked.add(i);renderComm()}
+document.getElementById('commitbtn').onclick=()=>{
+  addPending('Commissioning',`${commPicked.size} rooms → running`,'');
+};
+
+/* ------------------------------ tokens & pending changes ------------------------------ */
+const pending=new Map(); let pop=null;
+document.addEventListener('click',e=>{
+  if(pop&&!pop.contains(e.target)){pop.remove();pop=null;}
+  const t=e.target.closest('.tok');
+  if(!t||t.classList.contains('fixed'))return;
+  if(pop){pop.remove();pop=null;}
+  const opts=t.dataset.opts.split('|');
+  pop=document.createElement('div');pop.className='pop';
+  pop.innerHTML=opts.map(o=>`<button class="${o===t.textContent?'cur':''}">${o}</button>`).join('');
+  document.body.appendChild(pop);
+  const r=t.getBoundingClientRect();
+  pop.style.left=Math.min(window.innerWidth-130,r.left+scrollX)+'px';
+  pop.style.top=(r.bottom+scrollY+4)+'px';
+  pop.querySelectorAll('button').forEach(b=>b.onclick=ev=>{
+    ev.stopPropagation();
+    const from=t.textContent,to=b.textContent;
+    if(from!==to){t.textContent=to;t.classList.add('ovr');
+      addPending(ruleContext(t),from,to);}
+    pop.remove();pop=null;
+  });
+});
+function ruleContext(t){
+  const box=t.closest('.panelbox, td, .smallprint');
+  if(t.closest('td')){const tr=t.closest('tr');return 'Schedule · '+tr.querySelector('.pname').textContent.trim();}
+  const room=document.getElementById('route-room').classList.contains('hidden')?'House':document.getElementById('d-name').textContent;
+  return room+' rule';
+}
+function addPending(ctx,from,to){
+  pending.set(ctx+'|'+from+'|'+to,{ctx,from,to});
+  renderPending();
+}
+function renderPending(){
+  const d=document.getElementById('drawer');
+  d.classList.toggle('hidden',!pending.size);
+  document.getElementById('applybtn').textContent=`Apply ${pending.size} change${pending.size===1?'':'s'}`;
+  document.getElementById('pendlist').innerHTML=[...pending.values()].map(p=>
+    `<li>${p.ctx}: ${p.from} <span class="arrow">→</span> ${p.to}</li>`).join('');
+}
+document.getElementById('applybtn').onclick=()=>{
+  const n=pending.size;pending.clear();renderPending();
+  const el=document.createElement('div');el.className='applied';
+  el.textContent=`✓ Applied ${n} change${n===1?'':'s'} at ${hhmm(NOW)} — engine rebuilt in place, config.yaml written (previous version kept).`;
+  el.style.cssText='position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:10px 18px;border-radius:8px;z-index:70';
+  document.body.appendChild(el);setTimeout(()=>el.remove(),4500);
+};
+document.getElementById('discardbtn').onclick=()=>{pending.clear();renderPending();};
+
+/* ------------------------------ armed toggle ------------------------------ */
+let armed=true;
+document.getElementById('armed').onclick=function(){
+  armed=!armed;this.classList.toggle('off',!armed);
+  this.textContent=armed?'● RUNNING':'◌ PAUSED';
+  this.title=armed?'The engine is commanding lights. Click to pause.':'Paused — observing only, commanding nothing. Click to resume.';
+};
+
+/* ------------------------------ router & clock ------------------------------ */
+function route(){
+  const h=location.hash||'#/board';
+  const m=h.match(/^#\/room\/(\w+)/);
+  document.getElementById('route-board').classList.toggle('hidden',!(h==='#/board'||h==='#'||h==='#/'));
+  document.getElementById('route-room').classList.toggle('hidden',!m);
+  document.getElementById('route-rules').classList.toggle('hidden',h!=='#/rules');
+  document.getElementById('route-setup').classList.toggle('hidden',h!=='#/setup');
+  document.getElementById('tab-board').classList.toggle('cur',h==='#/board'||h==='#'||h==='#/'||!!m);
+  document.getElementById('tab-rules').classList.toggle('cur',h==='#/rules');
+  document.getElementById('tab-setup').classList.toggle('cur',h==='#/setup');
+  if(m)renderDossier(m[1]);
+  window.scrollTo(0,0);
+}
+addEventListener('hashchange',route);
+let badLeft=18;
+setInterval(()=>{
+  NOW+=1/3600;
+  document.getElementById('clock').textContent=hhmm(NOW);
+  if(!document.getElementById('route-board').classList.contains('hidden')){
+    renderLanes();
+    badLeft=Math.max(0,badLeft-1);
+    const el=document.getElementById('badcnt');if(el)el.textContent=badLeft>0?badLeft+' s':'now';
+  }
+},1000);
+renderAxis();renderSched();renderLanes();renderTray();renderComm();route();
+</script>

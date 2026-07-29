@@ -1,8 +1,8 @@
 @*
 	A collapsible group of settings: a header that says what the section is for, a fold that keeps a long
-	page skimmable. The same <details> pattern as the zone folds, so the page opens and closes one way.
+	page skimmable. The same <details> pattern as the area folds, so the page opens and closes one way.
 
-	Collapsed by default, like the zone, period and house-mode folds: a settings page reads as a short list of
+	Collapsed by default, like the area, period and house-mode folds: a settings page reads as a short list of
 	named groups you open the one you came for, not a wall of every knob at once. The open attribute is decided
 	once, so Blazor's diff never overrides a fold a human toggled.
 *@
@@ -14,10 +14,10 @@
 		{
 			<span class="group-desc">@Description</span>
 		}
-		<span class="zone-chevron" aria-hidden="true"></span>
+		<span class="area-chevron" aria-hidden="true"></span>
 	</summary>
 
-	<div class="group-body">
+	<div class="group-body @(Flush ? "group-body-flush" : null)">
 		@ChildContent
 	</div>
 </details>
@@ -34,6 +34,14 @@
 	/// <summary>Whether the fold starts open. Defaults to collapsed; read once.</summary>
 	[Parameter]
 	public bool Open { get; set; }
+
+	/// <summary>
+	///     Drops the body's own padding, for content that already spans the fold edge to edge — a bar with its
+	///     own background, a block with a rule across it. Without this the content would be inset twice and the
+	///     bar would stop short of the fold's border, which reads as a mistake rather than as a nested box.
+	/// </summary>
+	[Parameter]
+	public bool Flush { get; set; }
 
 	/// <summary>The fields inside.</summary>
 	[Parameter, EditorRequired]

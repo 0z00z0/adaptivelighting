@@ -3,6 +3,7 @@ using System.Reactive.Concurrency;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
+using AdaptiveLighting.LastSeen;
 
 namespace AdaptiveLighting.Hosting;
 
@@ -25,7 +26,7 @@ public enum SaveStatus
 /// <param name="Status">What happened.</param>
 /// <param name="Validation">
 ///     The validator's verdict on the submitted document. On <see cref="SaveStatus.Rejected"/> this is why.
-///     On <see cref="SaveStatus.Saved"/> it may still carry zone errors: those cost a zone, not the save.
+///     On <see cref="SaveStatus.Saved"/> it may still carry area errors: those cost an area, not the save.
 /// </param>
 /// <param name="Message">A sentence for the operator. Never a restatement of <paramref name="Validation"/>.</param>
 public sealed record SaveResult(SaveStatus Status, ValidationResult Validation, string Message)
@@ -67,11 +68,25 @@ public sealed record SaveResult(SaveStatus Status, ValidationResult Validation, 
 /// </remarks>
 public sealed class LightingEngineHost : IDisposable
 {
-	private const string InvalidConfigTitle = "Adaptive lighting: invalid configuration";
+	private const string InvalidConfigTitle = "Adaptive lighting: the settings file has errors";
 
 	private readonly LightingConfigStore _store;
 	private readonly ILoggerFactory _loggerFactory;
 	private readonly ILogger<LightingEngineHost> _logger;
+
+	/// <summary>Handed to every area's illuminance gate, so a dead sensor is judged on evidence that survives a restart.</summary>
+	private readonly IEntityLastSeen? _lastSeen;
+
+	/// <summary>
+	///     Handed to the mode brain, so a period boundary that went by while the engine was stopped is not lost.
+	/// </summary>
+	/// <remarks>
+	///     Built here rather than injected, because its path comes from <see cref="LightingConfigStore.FilePath"/>
+	///     which this class already holds — so no host has to register anything to get the behaviour, and the file
+	///     lands beside the document wherever a host has put it. <c>null</c> if it could not even be constructed,
+	///     which costs the note and nothing else.
+	/// </remarks>
+	private readonly ILastPeriodStore? _lastPeriod;
 
 	// Every transition of the orchestrator goes through this. A save from one browser tab and a save from
 	// another must not interleave a Dispose with a Start.
@@ -86,12 +101,31 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>Creates the host. Nothing runs until <see cref="Attach"/> and <see cref="Reload"/>.</summary>
 	/// <param name="store">The configuration document, and the only file this host reads or writes.</param>
 	/// <param name="loggerFactory">Builds the loggers for every part of the engine.</param>
+	/// <param name="lastSeen">
+	///     Tracks when each entity was genuinely last heard from. Optional so a test can build a host without
+	///     one; when absent the gates fall back to Home Assistant's own timestamps, which reset on its restart.
+	/// </param>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory)
+	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen = null)
 	{
+		_lastSeen = lastSeen;
 		_store = store ?? throw new ArgumentNullException(nameof(store));
 		_loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 		_logger = loggerFactory.CreateLogger<LightingEngineHost>();
+
+		try
+		{
+			_lastPeriod = new LastPeriodStore(_store.FilePath, _loggerFactory.CreateLogger<LastPeriodStore>());
+		}
+		catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+		{
+			// A path this class cannot write beside is not a reason to have no engine. The store never throws once
+			// built; this covers only building it, and the cost of failing is one behaviour, not the house.
+			_logger.LogWarning(exception,
+				"Could not place the note recording which circadian period the engine is in, beside {Path}. A period's "
+				+ "house mode will be applied only at a boundary the engine is running to see.",
+				_store.FilePath);
+		}
 	}
 
 	/// <summary>The configuration file this host reads and writes.</summary>
@@ -114,8 +148,20 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>Whether an orchestrator is currently running.</summary>
 	public bool IsRunning => _orchestrator is not null;
 
-	/// <summary>How many zones resolved and are being commanded. Zero while faulted.</summary>
-	public int RunningZoneCount => _orchestrator?.Zones.Count ?? 0;
+	/// <summary>How many areas resolved and are being commanded. Zero while faulted.</summary>
+	public int RunningAreaCount => _orchestrator?.Areas.Count ?? 0;
+
+	/// <summary>
+	///     The bulbs more than one room commands, because Home Assistant has not put them in a room of their own,
+	///     as the running engine found them. Empty while faulted, and empty in the ordinary house.
+	/// </summary>
+	/// <remarks>
+	///     Forwarded rather than recomputed: the finding is made once, when the engine starts, because it is a fact
+	///     about the Home Assistant registry rather than about any tick. It surfaces here because this is the
+	///     singleton the browser holds, so a page can show the advice without a second opinion about which lights
+	///     the engine drives.
+	/// </remarks>
+	public IReadOnlyList<SuspectLight> SharedLights => _orchestrator?.SharedLights ?? [];
 
 	/// <summary>The validator's verdict from the last load, or <c>null</c> before the first one.</summary>
 	public ValidationResult? LastValidation { get; private set; }
@@ -131,7 +177,7 @@ public sealed class LightingEngineHost : IDisposable
 	///     <c>[NetDaemonApp]</c> bootstrap, which is the only thing the app model gives a live scope to.
 	/// </summary>
 	/// <param name="ha">The HA context the engine reads and commands through.</param>
-	/// <param name="registry">Source of areas and labels for zone discovery.</param>
+	/// <param name="registry">Source of areas and labels for area discovery.</param>
 	/// <param name="scheduler">The engine's only clock.</param>
 	/// <param name="defaultKillSwitchEntity">
 	///     The app's built-in enable switch (09 §7), from <see cref="NetDaemonAppSwitch.EntityIdFor"/>. Used in
@@ -165,7 +211,7 @@ public sealed class LightingEngineHost : IDisposable
 			_ha = null;
 			_registry = null;
 			_scheduler = null;
-			Fault = "The lighting app was stopped, so the engine has no Home Assistant connection.";
+			Fault = "The lighting app was switched off in Home Assistant, so nothing is connected to it.";
 		}
 	}
 
@@ -183,11 +229,11 @@ public sealed class LightingEngineHost : IDisposable
 	{
 		lock (_gate)
 		{
-			AdaptiveLightingConfig config;
+			DocumentReadResult read;
 
 			try
 			{
-				config = _store.Load();
+				read = _store.Read();
 			}
 			catch (LightingConfigException exception)
 			{
@@ -202,20 +248,65 @@ public sealed class LightingEngineHost : IDisposable
 				return new SaveResult(SaveStatus.Failed, unreadable, "The configuration file could not be read.");
 			}
 
-			ScheduleZoneDiscoveryIfNeeded(config);
+			AdaptiveLightingConfig config = read.Config;
+
+			if (read.UsedLegacyKeys)
+				RewriteInCurrentSchema(config);
+
+			ScheduleAreaDiscoveryIfNeeded(config);
 
 			return ApplyCore(config);
 		}
 	}
 
-	/// <summary>How long to let Home Assistant's state cache fill before discovering zones.</summary>
+	/// <summary>
+	///     Writes a document that loaded through the pre-2.0 key names straight back out in the current schema.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         On the first load rather than on the next save, and before the engine is built: a house that never
+	///         opens the web UI would otherwise keep a file only <c>LegacyKeys</c> can read, indefinitely, and the
+	///         translation table's job would quietly become permanent instead of transitional.
+	///     </para>
+	///     <para>
+	///         The write goes through <see cref="LightingConfigStore.Save"/> — which keeps the file it replaced at
+	///         <see cref="LightingConfigStore.BackupPath"/> — precisely so this needs no backup mechanism of its
+	///         own: the pre-migration document survives at the path the Configuration page already shows.
+	///     </para>
+	///     <para>
+	///         A failed write is a warning, not a fault. The document in memory is the same either way, so the
+	///         engine still starts on it; a read-only <c>/config</c> just means the translation happens again on
+	///         the next start, which is exactly what it is for.
+	///     </para>
+	/// </remarks>
+	private void RewriteInCurrentSchema(AdaptiveLightingConfig config)
+	{
+		try
+		{
+			_store.Save(config);
+
+			_logger.LogInformation(
+				"The configuration file used the pre-2.0 key names and has been rewritten in the current schema. "
+				+ "The file as it was is at {Backup}.",
+				_store.BackupPath);
+		}
+		catch (LightingConfigException exception)
+		{
+			_logger.LogWarning(
+				exception,
+				"Could not rewrite {Path} in the current schema. The engine is running on it either way; the old key names will be translated again on the next start.",
+				_store.FilePath);
+		}
+	}
+
+	/// <summary>How long to let Home Assistant's state cache fill before discovering areas.</summary>
 	/// <remarks>
 	///     Discovery used to run inline in <see cref="Reload"/>, and it was wrong: the reload happens immediately
 	///     after <see cref="Attach"/>, when NetDaemon has connected but its state cache is still filling. The
 	///     resolver drops any entity without a state — a registry row with no state is not a device — so an early
 	///     scan sees a partial house, proposes a partial set of rooms, and the once-only flag then locks that in.
 	///     Observed on a real installation: four rooms that plainly had lights and motion were missed because their
-	///     entities had not arrived yet. Waiting costs nothing — the zone list is empty either way — and is the
+	///     entities had not arrived yet. Waiting costs nothing — the area list is empty either way — and is the
 	///     difference between discovering a house and discovering whatever happened to load first.
 	/// </remarks>
 	private static readonly TimeSpan DiscoverySettle = TimeSpan.FromSeconds(30);
@@ -224,16 +315,16 @@ public sealed class LightingEngineHost : IDisposable
 	private bool _discoveryScheduled;
 
 	/// <summary>
-	///     Arms the one-time zone discovery: only when the document has no zones and has never been scanned.
+	///     Arms the one-time area discovery: only when the document has no areas and has never been scanned.
 	/// </summary>
 	/// <remarks>
 	///     Does nothing before <see cref="Attach"/> — the registry is the whole input — so the reload that follows
-	///     Attach is what arms it. The flag makes it once-only: a household that deliberately removes every zone
+	///     Attach is what arms it. The flag makes it once-only: a household that deliberately removes every area
 	///     must not find them grown back after a restart.
 	/// </remarks>
-	private void ScheduleZoneDiscoveryIfNeeded(AdaptiveLightingConfig config)
+	private void ScheduleAreaDiscoveryIfNeeded(AdaptiveLightingConfig config)
 	{
-		if (_discoveryScheduled || config.Global.ZonesAutoDiscovered || config.Zones.Count > 0)
+		if (_discoveryScheduled || config.Global.AreasAutoDiscovered || config.Areas.Count > 0)
 			return;
 
 		if (_ha is null || _registry is null || _scheduler is null)
@@ -241,14 +332,46 @@ public sealed class LightingEngineHost : IDisposable
 
 		_discoveryScheduled = true;
 		_logger.LogInformation(
-			"No zones configured yet — discovering from the Home Assistant area registry in {Seconds}s, once the state cache has filled.",
+			"No areas configured yet — discovering from the Home Assistant area registry in {Seconds}s, once the state cache has filled.",
 			DiscoverySettle.TotalSeconds);
 
-		_discovery = _scheduler.Schedule(DiscoverySettle, RunZoneDiscovery);
+		_discovery = _scheduler.Schedule(DiscoverySettle, RunAreaDiscovery);
 	}
 
-	/// <summary>Proposes zones from the area registry, saves them, and rebuilds on the result.</summary>
-	private void RunZoneDiscovery()
+	/// <summary>
+	///     The scheduled callback. Exists only to make sure nothing thrown by discovery reaches the scheduler.
+	/// </summary>
+	/// <remarks>
+	///     This runs on a timer thread half a minute after start-up, with no caller to catch anything: an exception
+	///     out of here is unobserved, and on a thread-pool scheduler an unobserved exception ends the process — the
+	///     whole Home Assistant host, not just the lighting engine. And it is not hypothetical. The settle delay is
+	///     a guess at how long Home Assistant needs; a house on a slow link can still be filling its registry when
+	///     the timer fires, and NetDaemon's registry throws <see cref="InvalidOperationException"/> until its first
+	///     connection completes — which <see cref="KnownAreaIds"/> and <see cref="LabelsInUse"/> in this same class
+	///     already catch for exactly that reason. Discovery finding nothing is a thing to log and try again next
+	///     start; it is never a reason to take the house down.
+	/// </remarks>
+	private void RunAreaDiscovery()
+	{
+		try
+		{
+			RunAreaDiscoveryCore();
+		}
+		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
+		{
+			_logger.LogWarning(
+				exception,
+				"Area discovery failed and was abandoned; the configuration is unchanged and the rooms will be proposed again on the next start.");
+		}
+	}
+
+	/// <summary>Proposes areas from the area registry, saves them, and rebuilds on the result.</summary>
+	/// <remarks>
+	///     The rules themselves live in <see cref="AreaSetupService"/>, so that a first run and the owner pressing
+	///     "Set up rooms again" are the same code observed twice. What is left here is the once-only part: re-read,
+	///     plan, apply, seed the people, set the flag, save.
+	/// </remarks>
+	private void RunAreaDiscoveryCore()
 	{
 		lock (_gate)
 		{
@@ -264,30 +387,36 @@ public sealed class LightingEngineHost : IDisposable
 			}
 			catch (LightingConfigException exception)
 			{
-				_logger.LogWarning(exception, "Could not read the configuration for zone discovery.");
+				_logger.LogWarning(exception, "Could not read the configuration for area discovery.");
 				return;
 			}
 
-			if (config.Global.ZonesAutoDiscovered || config.Zones.Count > 0)
+			if (config.Global.AreasAutoDiscovered || config.Areas.Count > 0)
 				return;
 
 			HaAreaRegistry areas = new(_registry);
-			ZoneEntityResolver resolver = new(
-				_ha, areas, config.Global, _loggerFactory.CreateLogger<ZoneEntityResolver>());
+			AreaEntityResolver resolver = new(
+				_ha, areas, config.Global, _loggerFactory.CreateLogger<AreaEntityResolver>());
 
-			IReadOnlyList<ZoneConfig> proposed = ZoneAutoDiscovery.Propose(areas, resolver);
+			// Nothing to rebuild: this path only runs on a document with no areas at all, so the scope is empty and
+			// the plan is entirely NewAreas. The re-run from the UI is the same call with rooms ticked.
+			SetupPlan plan = AreaSetupService.Plan(config, areas, resolver, []);
 
-			if (proposed.Count == 0)
+			if (plan.NewAreas.Count == 0)
 			{
 				// The flag deliberately stays unset. Finding nothing is far more likely to mean "asked too early"
 				// than "this house has no lit rooms", and looking again on the next start costs nothing.
 				_logger.LogInformation(
-					"No Home Assistant area has both a light and a motion sensor yet. Add rooms on the Configuration page, or restart to look again.");
+					"No Home Assistant area has both a light and a motion sensor yet. Add rooms under Configuration → Areas, or restart to look again.");
 				return;
 			}
 
-			config.Zones.AddRange(proposed);
-			config.Global.ZonesAutoDiscovered = true;
+			AreaSetupService.Apply(config, plan);
+			config.Global.AreasAutoDiscovered = true;
+
+			// Only at first setup, never on a re-run: a household that deliberately empties the list must find it
+			// still empty next start, the same one-way principle as the flag above.
+			IReadOnlyList<string> seeded = AreaSetupService.SeedPersons(config, _ha);
 
 			// The house mode is part of the same "look before asking" idea: most houses already have the dropdown,
 			// and only its meaning needs stating. Never overwrites one the household has already chosen.
@@ -300,16 +429,28 @@ public sealed class LightingEngineHost : IDisposable
 			}
 			catch (LightingConfigException exception)
 			{
-				// Zones was empty on the way in, so clearing restores exactly what was loaded.
-				config.Zones.Clear();
-				config.Global.ZonesAutoDiscovered = false;
-				_logger.LogWarning(exception, "Could not save the discovered zones; they will be proposed again on the next start.");
+				// Areas was empty on the way in, so clearing restores exactly what was loaded; the people list is
+				// only cleared when this run is what filled it, or a document that already named somebody would
+				// come out of a failed write having forgotten them.
+				config.Areas.Clear();
+
+				if (seeded.Count > 0)
+					config.Global.Persons.Clear();
+
+				config.Global.AreasAutoDiscovered = false;
+				_logger.LogWarning(exception, "Could not save the discovered areas; they will be proposed again on the next start.");
 				return;
 			}
 
 			_logger.LogInformation(
-				"Discovered {Count} zones from the area registry ({Areas}). Review them on the Configuration page — nothing else was touched.",
-				proposed.Count, string.Join(", ", proposed.Select(zone => zone.AreaId)));
+				"Discovered {Count} rooms from the area registry ({Areas}), all switched off. Choose which to switch on "
+				+ "under Configuration → Areas — no lights will change until you do.",
+				plan.NewAreas.Count, string.Join(", ", plan.NewAreas.Select(area => area.AreaId)));
+
+			if (seeded.Count > 0)
+				_logger.LogInformation(
+					"Home and Away will follow {Count} people ({Persons}). Change who under Configuration → House.",
+					seeded.Count, string.Join(", ", seeded));
 
 			ApplyCore(config);
 		}
@@ -320,8 +461,8 @@ public sealed class LightingEngineHost : IDisposable
 	/// </summary>
 	/// <remarks>
 	///     The order is the point: a document with document-level errors is refused <i>before</i> anything
-	///     reaches the disk, so a bad save cannot leave the host unable to start next time. Zone-level errors do
-	///     not refuse the save — a zone naming an entity Home Assistant has since renamed must cost that zone,
+	///     reaches the disk, so a bad save cannot leave the host unable to start next time. Area-level errors do
+	///     not refuse the save — an area naming an entity Home Assistant has since renamed must cost that area,
 	///     not the household's ability to fix the rest of the file.
 	/// </remarks>
 	/// <param name="config">The edited document.</param>
@@ -386,7 +527,7 @@ public sealed class LightingEngineHost : IDisposable
 		// leaves KillSwitchEntity unset. Never written back to the document.
 		config.Global.DefaultKillSwitchEntity = _defaultKillSwitchEntity;
 
-		return ConfigValidator.Validate(config, KnownEntityIds(), KnownAreaIds(), LiveSelectOptions(config.Global.HouseMode?.Entity));
+		return ConfigValidator.Validate(config, KnownEntityIds(), KnownAreaIds(), LiveSelectOptions(config.Global.HouseMode?.Entity), LabelsInUse());
 	}
 
 	/// <summary>Stops the engine and drops the Home Assistant connection.</summary>
@@ -409,19 +550,19 @@ public sealed class LightingEngineHost : IDisposable
 	private SaveResult ApplyCore(AdaptiveLightingConfig config)
 	{
 		_logger.LogInformation(
-			"Applying lighting configuration update: {Zones} zones, {Periods} periods, house-mode select {Select}.",
-			config.Zones.Count, config.Periods.Count, config.Global.HouseMode?.Entity ?? "(none)");
+			"Applying lighting configuration update: {Areas} areas, {Periods} periods, house-mode select {Select}.",
+			config.Areas.Count, config.Periods.Count, config.Global.HouseMode?.Entity ?? "(none)");
 
 		ValidationResult validation = Validate(config);
 		LastValidation = validation;
 
-		foreach (ZoneError zoneError in validation.ZoneErrors)
-			_logger.LogError("Zone {Zone} will not resolve: {Error}", zoneError.ZoneName, zoneError.Message);
+		foreach (AreaError areaError in validation.AreaErrors)
+			_logger.LogError("Area {Area} will not resolve: {Error}", areaError.AreaName, areaError.Message);
 
 		if (!validation.IsValid)
 		{
 			StopCore();
-			Fault = "The configuration on disk has document-level errors, so no engine is running.";
+			Fault = "The settings file has errors that stop the whole house, so nothing is running. Fix them under Configuration.";
 
 			_logger.LogError(
 				"Adaptive lighting configuration is invalid, engine stopped:{NewLine}{Validation}",
@@ -431,15 +572,15 @@ public sealed class LightingEngineHost : IDisposable
 			// failure nobody notices otherwise.
 			Notify(validation);
 
-			return new SaveResult(SaveStatus.Failed, validation, "Saved, but the engine cannot run this document.");
+			return new SaveResult(SaveStatus.Failed, validation, "Saved, but nothing can run on these settings.");
 		}
 
 		if (_ha is null || _registry is null || _scheduler is null)
 		{
-			Fault = "The lighting app has not started yet, so the engine has no Home Assistant connection.";
+			Fault = "The lighting app has not started yet, so nothing is connected to Home Assistant.";
 			_logger.LogWarning("Configuration is valid but no Home Assistant connection is attached; not starting.");
 
-			return new SaveResult(SaveStatus.Saved, validation, "Saved. The engine will start when the host connects to Home Assistant.");
+			return new SaveResult(SaveStatus.Saved, validation, "Saved. Rooms start being managed as soon as Home Assistant answers.");
 		}
 
 		StopCore();
@@ -454,7 +595,9 @@ public sealed class LightingEngineHost : IDisposable
 				new HaLightActuator(_ha, config.Global, _loggerFactory.CreateLogger<HaLightActuator>()),
 				new HaStatePublisher(_ha, _loggerFactory.CreateLogger<HaStatePublisher>()),
 				new HaNotifier(_ha, _loggerFactory.CreateLogger<HaNotifier>()),
-				_loggerFactory);
+				_loggerFactory,
+				_lastSeen,
+				_lastPeriod);
 
 			orchestrator.Start();
 
@@ -463,10 +606,10 @@ public sealed class LightingEngineHost : IDisposable
 			LastStartedUtc = DateTimeOffset.UtcNow;
 
 			_logger.LogInformation(
-				"Adaptive lighting is running: {Zones} of {Configured} zones resolved.",
-				orchestrator.Zones.Count, config.Zones.Count);
+				"Adaptive lighting is running: {Areas} of {Configured} areas resolved.",
+				orchestrator.Areas.Count, config.Areas.Count);
 
-			return new SaveResult(SaveStatus.Saved, validation, $"Engine rebuilt: {orchestrator.Zones.Count} of {config.Zones.Count} zones are running.");
+			return new SaveResult(SaveStatus.Saved, validation, $"Saved: {orchestrator.Areas.Count} of {config.Areas.Count} rooms are running.");
 		}
 		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
 		{
@@ -476,7 +619,7 @@ public sealed class LightingEngineHost : IDisposable
 				// is now caught (bar the two unrecoverable ones), logged with its stack trace, and reported as a
 				// failed save the operator can see.
 			StopCore();
-			Fault = $"The engine failed to start: {exception.Message}";
+			Fault = $"Adaptive lighting could not start: {exception.Message}";
 			_logger.LogError(exception, "The lighting engine failed to start.");
 
 			return new SaveResult(SaveStatus.Failed, validation, Fault);
@@ -536,6 +679,39 @@ public sealed class LightingEngineHost : IDisposable
 		}
 		catch (InvalidOperationException)
 		{
+			return null;
+		}
+	}
+
+	/// <summary>
+	///     Every label at least one entity carries, listed by id <i>and</i> by name, or <c>null</c> when the
+	///     registry cannot be read — which the validator reads as "skip the include-label check".
+	/// </summary>
+	/// <remarks>
+	///     Both forms, because <see cref="AdaptiveLighting.Extensions.RegistryExtensions.LabelsOf"/> matches either
+	///     way and the validator must not warn about a label the resolver would happily have found. Labels nobody
+	///     carries are left out on purpose: a label that exists in Home Assistant but is on no entity filters every
+	///     light out just as thoroughly as a typo, and that is precisely the case worth warning about.
+	/// </remarks>
+	private IReadOnlyCollection<string>? LabelsInUse()
+	{
+		if (_registry is null)
+			return null;
+
+		try
+		{
+			return
+			[
+				.. _registry.Labels
+					.Where(label => label.Entities.Any())
+					.SelectMany(label => new[] { label.Id, label.Name })
+					.OfType<string>()
+					.Where(value => value.Length > 0)
+			];
+		}
+		catch (InvalidOperationException)
+		{
+			// NetDaemon's registry throws until its first connection to HA completes.
 			return null;
 		}
 	}

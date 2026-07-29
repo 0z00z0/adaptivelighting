@@ -7,14 +7,15 @@ only if it's actually dark**. They dim as a warning before switching off, so the
 sitting still. Touch a switch and the automation backs off and leaves your setting alone for a while.
 When the house empties the lights sweep off; the first person home is met by the entry lights.
 
-There is a Blazor dashboard and configuration UI, so the whole thing is set up from a browser rather
-than by hand-editing YAML.
+There is a Blazor web UI — a board of room lanes on a shared time axis, a page per room, an activity
+log and a settings editor — so the whole thing is set up from a browser rather than by hand-editing
+YAML.
 
 ```
 ┌ AdaptiveLighting.Extensions ┐   host-agnostic HassModel helpers
 └──────────────┬──────────────┘
 ┌──────────────▼──────────────┐
-│      AdaptiveLighting       │   the engine: zones, schedule, modes
+│      AdaptiveLighting       │   the engine: areas, schedule, modes
 └──────────────┬──────────────┘
 ┌──────────────▼──────────────┐
 │    AdaptiveLighting.Web     │   Blazor dashboard + config editor (optional)
@@ -26,7 +27,7 @@ than by hand-editing YAML.
 ## ⚠️ Read this before exposing the UI
 
 **The web UI has no authentication of any kind.** Anyone who can reach its port can rewrite your
-lighting configuration and rebuild the running engine — disable every zone, point them at other lights,
+lighting configuration and rebuild the running engine — switch off every room, point it at other lights,
 or remove the night-time brightness cap.
 
 It is built for a **LAN-only** deployment, and that is the only context in which shipping it without a
@@ -41,8 +42,13 @@ reference `AdaptiveLighting.Web`; configure the YAML by hand and the engine runs
 
 ## Status
 
-**Preview.** The engine runs a real house and a real cabin, and is covered by 373 tests. The API and
-the configuration schema may still move before 1.0. Requires **.NET 10** and the **NetDaemon V6** add-on.
+**Preview.** The engine runs a real house and a real cabin, and is covered by 927 tests. The API and
+the configuration schema may still move. Requires **.NET 10** and the **NetDaemon V6** add-on.
+
+**2.0 renames zones to areas.** The types, the YAML and the UI all say *area* now, and the published
+Home Assistant event changed name with them. A configuration file written before 2.0 migrates itself
+on the first start; an HA automation listening for the old event does not. See
+[CHANGELOG.md](CHANGELOG.md) before upgrading.
 
 ## Install
 
@@ -98,15 +104,16 @@ app.UseAntiforgery();
 app.MapRazorComponents<AdaptiveLighting.Web.App>().AddInteractiveServerRenderMode();
 ```
 
-Start it once. Until the YAML names real entities the app reports an invalid configuration and posts a
-notification listing your actual area ids — then fill them in from the UI at `http://<host>:10000`.
+Start it once and leave it alone. Half a minute in, the engine reads Home Assistant's area registry and
+writes down every room that has both a light and a motion sensor — **all of them switched off**. No light
+changes until you open the UI at `http://<host>:10000` and choose which rooms to switch on.
 
 ## The mental model
 
 Four ideas carry the whole system:
 
-- **A zone** is a room the engine manages — usually one Home Assistant area. Zones are **opt-in**: an
-  area you don't list is never touched. Each runs its own state machine.
+- **An area** is a room the engine manages — one Home Assistant area. Rooms are **opt-in**: an area
+  you don't list, or have switched off, is never touched. Each runs its own state machine.
 - **A period** is a slice of the day with a target brightness and colour temperature. Periods are
   house-wide. Boundaries are clock times or sun events (`sunset-01:00`) and blend rather than step.
 - **The house** has shared state: who's home, which **house mode** is active (Normal / Sleep / Away /
@@ -121,16 +128,16 @@ one YAML file, in four layers, each narrowing the last:
 
 | Layer | What it sets |
 |---|---|
-| `Global` | House-wide: persons, master switch, house modes, outdoor lux sensor, override tuning |
-| `Defaults` | The baseline for every zone |
+| `Global` | House-wide: people, master switch, house modes, outdoor lux sensor, the discovery labels |
+| `Defaults` | The baseline every room starts with — **House → Every room starts with these** in the UI |
 | `Periods` | The circadian table: when each period starts, its brightness/colour, its caps |
-| `Zones` | Per room — overrides *only* what differs from `Defaults` |
+| `Areas` | Per room — overrides *only* what differs from `Defaults` |
 
-Most zones are three lines, because of **discovery**: give a zone an `AreaId` and its lights, motion
+Most rooms are three lines, because of **discovery**: give an area an `AreaId` and its lights, motion
 sensors and lux sensor are found from the Home Assistant area registry.
 
-Full documentation — the configuration reference, a worked example, the architecture and a user
-guide — is at **[adaptivelighting.netlify.app](https://adaptivelighting.netlify.app)** (source in
+Full documentation — how it works, how to use it, the settings reference and a worked example — is at
+**[adaptivelighting.netlify.app](https://adaptivelighting.netlify.app)** (source in
 [`website/`](website/)).
 
 ## Packages
