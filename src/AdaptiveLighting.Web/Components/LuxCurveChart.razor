@@ -328,11 +328,23 @@
 		return Raise(nameof(AreaSettings.LuxBrightnessStartLux), Math.Clamp(lux, StartSetting.Min, ceiling));
 	}
 
-	/// <summary>Moves the head of the curve, which is two settings: the reading it happens at, and how bright it is.</summary>
+	/// <summary>
+	///     Moves the head of the curve, which is two settings: the reading it happens at, and how bright it is.
+	/// </summary>
+	/// <remarks>
+	///     <b>The floor is held under the ceiling before clamping, because it can legitimately be above it.</b>
+	///     <c>LuxBrightnessStartLux</c> has no configured maximum and the validator only asks that full is above
+	///     start, so <c>{ StartLux: 120000, FullLux: 200000 }</c> is a document this app will happily save — direct
+	///     sunlight is around 100 000 lx. The floor derived from it then exceeds this axis's 100 000 ceiling, and
+	///     <c>Math.Clamp</c> throws when its minimum is above its maximum: an <c>ArgumentException</c> out of an
+	///     event handler, which takes the circuit down and puts "An unhandled error has occurred" across the page.
+	///     One arrow key on the handle was enough. <see cref="SetStartLux"/> cannot invert the same way.
+	/// </remarks>
 	private async Task SetFull(double lux, double brightnessPct)
 	{
-		double floor = Settings.LuxBrightnessStartLux + 1;
-		double bounded = Math.Clamp(lux, Math.Max(FullSetting.Min, floor), FullSetting.Max ?? LuxCurve.AxisMaxCeilingLux);
+		double ceiling = FullSetting.Max ?? LuxCurve.AxisMaxCeilingLux;
+		double floor = Math.Min(Math.Max(FullSetting.Min, Settings.LuxBrightnessStartLux + 1), ceiling);
+		double bounded = Math.Clamp(lux, floor, ceiling);
 
 		await Raise(nameof(AreaSettings.LuxBrightnessFullLux), bounded).ConfigureAwait(true);
 		await Raise(nameof(AreaSettings.LuxBrightnessMaxPct),

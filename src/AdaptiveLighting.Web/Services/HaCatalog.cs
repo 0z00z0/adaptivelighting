@@ -618,7 +618,23 @@ public sealed class HaCatalog
 			if (TryGetState(entityId).StateAsDouble() is { } lux && double.IsFinite(lux))
 				readings.Add(lux);
 
-		return readings.Count == 0 ? null : readings.Average();
+		if (readings.Count == 0)
+			return null;
+
+		// The GEOMETRIC mean, because that is what IlluminanceGate.AverageLux takes, and this number is shown
+		// beside a curve as the reading the curve is being applied to. An arithmetic mean is a different number
+		// on any room with more than one sensor, and the gap is not small: 10 lx and 10 000 lx average to 5 005
+		// arithmetically and to 316 geometrically, which on the default anchors is the difference between the
+		// caption promising 91 % and the engine commanding 55 %. Illuminance spans decades, so the mean that
+		// means anything is the one taken in log space.
+		List<double> positive = [.. readings.Where(lux => lux > 0)];
+
+		// Every sensor reading zero or less is a room that is genuinely pitch dark, not a room with no reading —
+		// the gate's rule, kept so the two agree at the bottom of the range as well as across it.
+		if (positive.Count == 0)
+			return 0;
+
+		return positive.Count == 1 ? positive[0] : Math.Exp(positive.Sum(Math.Log) / positive.Count);
 	}
 
 	/// <summary>

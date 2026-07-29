@@ -485,11 +485,15 @@ else
 	private IReadOnlyList<RoomView> _rooms = [];
 	private IReadOnlyList<ActivityEntry> _entries = [];
 
-	// The log summary, in two steps. _kept is what the Activity page's default categories leave — counted, because
-	// the footer has to say how many reports the filter is holding back. _logRows is those reports collapsed into
-	// rows and cut to the budget, which is therefore spent on rows somebody wants to read rather than on
-	// housekeeping. The lanes above go on reading _entries: the board draws what every room did, filtered or not.
+	// The log summary, in three counts. _kept is what SummaryCategories leaves — the exceptions this list carries.
+	// _reachable is the larger number the Activity page would draw on the same buffer, and the footer subtracts
+	// the two so "N everyday reports on the Activity page" is a promise the link can keep: counting against the
+	// raw buffer instead would include the background tasks that page hides too, and the start-up reports that
+	// reach no page at all. _logRows is _kept collapsed into rows and cut to the budget, which is therefore spent
+	// on rows somebody wants to read. The lanes above go on reading _entries: the board draws every room, filtered
+	// or not.
 	private int _kept;
+	private int _reachable;
 	private IReadOnlyList<ActivityRow> _logRows = [];
 
 	private IReadOnlyList<BoardLane> _lanes = [];
@@ -610,9 +614,14 @@ else
 		// The sift is the summary's alone. The lanes further up are drawn from every report the engine published,
 		// start-up included: that snapshot is where a lane's first block begins, and it is a state the board draws
 		// rather than a sentence the record reads.
-		IReadOnlyList<ActivityEntry> kept =
-			ActivityView.InCategories(ActivityView.Shown(_entries), ActivityView.SummaryCategories);
+		IReadOnlyList<ActivityEntry> shown = ActivityView.Shown(_entries);
+		IReadOnlyList<ActivityEntry> kept = ActivityView.InCategories(shown, ActivityView.SummaryCategories);
 
+		// What the Activity page would draw if you followed the link, NOT the raw buffer. The footer says the
+		// held-back reports are "on the Activity page", and that page opens on DefaultCategories — so counting
+		// against the buffer would promise reports that page also hides (background tasks) or never shows at all.
+		// A count that overstates what is behind a link is the same lie as a filter nobody is told about.
+		_reachable = ActivityView.InCategories(shown, ActivityView.DefaultCategories).Count;
 		_kept = kept.Count;
 		_logRows = ActivityView.Rows(kept, BoardView.LogPreview);
 
@@ -750,7 +759,7 @@ else
 			: "since adaptive lighting started";
 
 	/// <summary>What the log below is showing, what the filter is holding back, and the cap it is all held to.</summary>
-	private string LogFoot => BoardView.LogFoot(_entries.Count, _kept, _logRows.Count, ActivityLog.Capacity);
+	private string LogFoot => BoardView.LogFoot(_entries.Count, _reachable, _kept, _logRows.Count, ActivityLog.Capacity);
 
 	/// <summary>
 	///     The count in front of the nothing-important empty state, so it says how much is behind the link rather

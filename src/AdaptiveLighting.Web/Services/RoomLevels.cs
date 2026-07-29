@@ -130,7 +130,7 @@ public static class RoomLevels
 
 		foreach (TimePeriodConfig period in periods)
 		{
-			RoomLevelOverride? own = Find(room, period.Name);
+			RoomLevelOverride? own = Stated(room, period.Name);
 
 			rows.Add(new RoomLevelRow(
 				period.Name,
@@ -235,12 +235,28 @@ public static class RoomLevels
 	}
 
 	/// <summary>
-	///     This room's row for a period, or <c>null</c> when it has none.
+	///     The row this room's levels actually come from for a period — the first that states something — or
+	///     <c>null</c> when the room states nothing and follows the schedule.
 	/// </summary>
 	/// <remarks>
-	///     The first match wins. A hand-edited file may carry two rows for one period — the schema keeps the list
-	///     shape precisely so that stays a validation matter rather than a parse error — and reading the first is
-	///     what makes the surface stable rather than dependent on which row an edit happened to reach.
+	///     <b>Empty rows are skipped, because <c>CircadianCalculator.LevelsOf</c> skips them.</b> This is the read
+	///     path, and a read path that picks a different row from the engine's tells the owner their room is doing
+	///     something it is not. A hand-edited file with a cleared <c>Kveld</c> row above a real one at 8 % runs at
+	///     8 %; taking the first row regardless would show the schedule's level, mark it "the schedule's", and
+	///     offer no way to revert an override the page had decided did not exist. Only reachable on a hand-edited
+	///     file — the app's own save normalises empty rows away — which is exactly the file nothing else explains.
+	///     The same asymmetry, in the other direction, was a live defect in <c>ConfigValidator</c>.
+	/// </remarks>
+	private static RoomLevelOverride? Stated(AreaConfig? room, string period) =>
+		room?.Levels.FirstOrDefault(level => !level.IsEmpty && string.Equals(level.Period, period, ByName));
+
+	/// <summary>
+	///     This room's row for a period whatever it holds, or <c>null</c> when it has none.
+	/// </summary>
+	/// <remarks>
+	///     The write path's lookup, and deliberately <i>not</i> <see cref="Stated"/>: an edit must reuse a cleared
+	///     row that is already there rather than add a second one beside it, which would leave the file saying two
+	///     things about one period. Reading is the other question — see <see cref="Stated"/>.
 	/// </remarks>
 	private static RoomLevelOverride? Find(AreaConfig? room, string period) =>
 		room?.Levels.FirstOrDefault(level => string.Equals(level.Period, period, ByName));

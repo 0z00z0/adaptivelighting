@@ -2843,8 +2843,9 @@ select {
    about modes rather than glancing at one is standing.
 
    Three cells, hairline-separated, wrapping to a column on a narrow screen with no media query — auto-fit
-   collapses the track count by itself. The master switch is first and keeps the state colour on the panel's
-   own left edge, because it is the one control here that stops everything. */
+   collapses the track count by itself. The master switch is LAST: it is the one control here that stops
+   everything, and it is also the one touched twice a year, so it keeps the panel's edge colour for the two
+   states that are news and otherwise sits quietly at the end. */
 
 .housebar {
 	display: grid;
@@ -4294,12 +4295,16 @@ button.mode-pill:disabled {
 }
 
 /* The measurement under the answer: its own line, quieter, and NOT monospaced — it is a sentence about a
-   reading rather than a reading, and the mono face was what made it look like the thing to read first. */
+   reading rather than a reading, and the mono face was what made it look like the thing to read first.
+
+   --font-sans by name, NOT inherit: this span's parent is .room-fact-table td, which sets var(--mono), so
+   `inherit` resolved straight back to the face this rule exists to escape. (The idiom was borrowed from
+   .log-cat, where it works only because that element is a <button> and buttons do not inherit fonts.) */
 .fact-detail {
 	display: block;
 	margin-top: 0.1rem;
 	color: var(--muted);
-	font-family: inherit;
+	font-family: var(--font-sans);
 	font-size: var(--text-xs);
 	line-height: 1.4;
 }
@@ -5598,14 +5603,6 @@ h1[tabindex="-1"]:focus {
 	color: var(--muted);
 }
 
-/* The period's own floor or cap, said only when it actually bites. A row claiming 100 % under a night
-   period capped at 30 % would name a level the room never reaches. */
-.lvl-limit {
-	flex: 1 1 100%;
-	font-size: var(--text-xs);
-	color: var(--warn);
-}
-
 .lvl-cell {
 	display: flex;
 	flex-direction: column;
@@ -5794,20 +5791,6 @@ h1[tabindex="-1"]:focus {
 	stroke-linejoin: round;
 }
 
-/* The period's own ceiling. The daylight adjustment proposes and the period disposes, so a curve drawn
-   climbing through a cap the room can never pass would picture something that does not happen. */
-.luxc-cap {
-	stroke: var(--warn);
-	stroke-width: var(--stroke-hair);
-	stroke-dasharray: 5 4;
-}
-
-.luxc-cap-label {
-	fill: var(--warn);
-	font-family: var(--font-sans);
-	font-size: 9px;
-}
-
 /* The house's own reading, in the live-edge colour the board's now-line uses. */
 .luxc-now {
 	stroke: var(--now);
@@ -5861,10 +5844,6 @@ h1[tabindex="-1"]:focus {
 
 	.luxc-now-label {
 		font-size: 20px;
-	}
-
-	.luxc-cap-label {
-		font-size: 18px;
 	}
 
 	.luxc-decade {

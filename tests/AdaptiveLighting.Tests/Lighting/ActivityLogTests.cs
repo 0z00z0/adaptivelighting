@@ -1818,48 +1818,62 @@ public sealed class ActivityLogTests
 	///     oldest.
 	/// </summary>
 	/// <remarks>
-	///     "Everyday reports on the Activity page", not "background tasks hidden". Since the summary narrowed to
-	///     <see cref="ActivityView.SummaryCategories"/> the held-back pile is mostly movement and ordinary light
-	///     changes, so the old noun named the smallest part of it — and "hidden" described reports that are one tap
-	///     away as though they had been suppressed.
+	///     <para>
+	///         "Everyday reports on the Activity page", not "background tasks hidden". Since the summary narrowed
+	///         to <see cref="ActivityView.SummaryCategories"/> the held-back pile is mostly movement and ordinary
+	///         light changes, so the old noun named the smallest part of it — and "hidden" described reports that
+	///         are one tap away as though they had been suppressed.
+	///     </para>
+	///     <para>
+	///         <b>Which is why the count is taken against what that page would draw, not against the buffer.</b>
+	///         Naming a destination is a promise the link has to keep: the raw buffer also holds background tasks
+	///         the Activity page hides on open and start-up reports that reach no page at all, and counting those
+	///         in would send somebody to a page showing fewer rows than the sentence said were waiting.
+	///     </para>
 	/// </remarks>
 	[TestMethod]
-	public void The_Summarys_Footer_Says_How_Much_Is_Waiting_On_The_Activity_Page()
+	public void The_Summarys_Footer_Counts_Only_What_The_Activity_Page_Would_Draw()
 	{
-		Assert.AreEqual("nothing recorded yet", BoardView.LogFoot(0, 0, 0, ActivityLog.Capacity));
+		Assert.AreEqual("nothing recorded yet", BoardView.LogFoot(0, 0, 0, 0, ActivityLog.Capacity));
 
-		// Sixty-three reports drawn as eleven rows, because four house-wide events arrived from fourteen rooms
-		// each. Setting the two counts against each other — "newest 11 of 63" — invites a subtraction whose answer
-		// is fifty-two reports that were never left out.
-		string wholeThing = BoardView.LogFoot(137, 63, 11, ActivityLog.Capacity);
+		// 137 held, of which the Activity page would draw 137: nothing unreachable, so the whole remainder is
+		// waiting there. Sixty-three kept as eleven rows, because four house-wide events arrived from fourteen
+		// rooms each. Setting the two counts against each other — "newest 11 of 63" — invites a subtraction whose
+		// answer is fifty-two reports that were never left out.
+		string wholeThing = BoardView.LogFoot(137, 137, 63, 11, ActivityLog.Capacity);
 
 		StringAssert.Contains(wholeThing, "63 reports");
 		Assert.IsFalse(wholeThing.Contains("11", StringComparison.Ordinal),
 			"nothing was cut, so no row count is set against the report count");
 		StringAssert.Contains(wholeThing, "74 everyday reports on the Activity page");
 
-		string quiet = BoardView.LogFoot(40, 40, 8, ActivityLog.Capacity);
+		// The case that made this parameter necessary: 100 held, 5 dropped by Shown() and 30 background, so only
+		// 65 are actually reachable. Against the buffer the line would have claimed 92.
+		StringAssert.Contains(BoardView.LogFoot(100, 65, 8, 8, ActivityLog.Capacity),
+			"57 everyday reports on the Activity page");
+
+		string quiet = BoardView.LogFoot(40, 40, 40, 8, ActivityLog.Capacity);
 
 		StringAssert.Contains(quiet, "40 reports");
 		Assert.IsFalse(quiet.Contains("everyday", StringComparison.Ordinal),
 			"nothing was held back, so nothing is claimed to be");
 
 		// Out of room: the budget is spent, so the line says how many rows it drew and out of how many reports.
-		string cut = BoardView.LogFoot(600, 240, BoardView.LogPreview, ActivityLog.Capacity);
+		string cut = BoardView.LogFoot(600, 600, 240, BoardView.LogPreview, ActivityLog.Capacity);
 
 		StringAssert.Contains(cut, $"newest {BoardView.LogPreview} rows of 240 reports");
 		StringAssert.Contains(cut, "360 everyday reports on the Activity page");
 
-		StringAssert.Contains(BoardView.LogFoot(1, 1, 1, ActivityLog.Capacity), "1 report");
-		StringAssert.Contains(BoardView.LogFoot(3, 2, 2, ActivityLog.Capacity), "1 everyday report on the Activity page");
+		StringAssert.Contains(BoardView.LogFoot(1, 1, 1, 1, ActivityLog.Capacity), "1 report");
+		StringAssert.Contains(BoardView.LogFoot(3, 3, 2, 2, ActivityLog.Capacity), "1 everyday report on the Activity page");
 
-		string routineOnly = BoardView.LogFoot(71, 0, 0, ActivityLog.Capacity);
+		string routineOnly = BoardView.LogFoot(71, 71, 0, 0, ActivityLog.Capacity);
 
 		Assert.AreEqual("71 everyday reports on the Activity page", routineOnly,
 			"'0 reports' beside a count of held-back ones reads as a contradiction: the log plainly holds something");
 
 		StringAssert.Contains(
-			BoardView.LogFoot(ActivityLog.Capacity, 300, 12, ActivityLog.Capacity),
+			BoardView.LogFoot(ActivityLog.Capacity, ActivityLog.Capacity, 300, 12, ActivityLog.Capacity),
 			$"the most recent {ActivityLog.Capacity} are kept",
 			"a full buffer has started forgetting, and a reader who is not told will read the oldest row as the beginning");
 	}

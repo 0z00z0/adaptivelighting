@@ -613,15 +613,20 @@ public static class BoardView
 	///     </para>
 	/// </remarks>
 	/// <param name="held">Every report the log is holding, before any filter.</param>
+	/// <param name="reachable">
+	///     How many of them the Activity page would draw — the count the held-back number is taken from, because
+	///     the line names that page as where they are. Measuring against <paramref name="held"/> instead would
+	///     count the background tasks that page hides on open and the reports that reach no page at all.
+	/// </param>
 	/// <param name="kept">How many of them fall into the categories the summary shows.</param>
 	/// <param name="shown">How many rows the board actually drew.</param>
 	/// <param name="capacity">The log's cap, so the line can say when the oldest reports have started falling off.</param>
-	public static string LogFoot(int held, int kept, int shown, int capacity)
+	public static string LogFoot(int held, int reachable, int kept, int shown, int capacity)
 	{
 		if (held <= 0)
 			return "nothing recorded yet";
 
-		int hidden = Math.Max(0, held - kept);
+		int hidden = Math.Max(0, reachable - kept);
 
 		string lead = shown >= LogPreview
 			? $"newest {shown} rows of {Count(kept, "report")}"

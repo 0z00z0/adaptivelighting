@@ -24,6 +24,34 @@ public sealed class RoomLevelsTests
 
 	private static AreaConfig Room() => new() { AreaId = "kontor" };
 
+	/// <summary>
+	///     The card reads the row the engine reads: the first that states something, not simply the first.
+	/// </summary>
+	/// <remarks>
+	///     <b>The page and the engine disagreed on exactly this input.</b> <c>CircadianCalculator.LevelsOf</c>
+	///     skips empty rows before taking the first match; the card took the first row whatever it held. A
+	///     hand-edited file with a cleared row above a real one therefore ran at the real one's level while the
+	///     card showed the schedule's, labelled it "the schedule's", and offered no way to revert an override it
+	///     had decided did not exist. Only reachable on a hand-edited file — the app's own save normalises empty
+	///     rows away — which is the one file where nothing else would explain it.
+	/// </remarks>
+	[TestMethod]
+	public void A_Cleared_Row_Does_Not_Hide_The_Real_One_Below_It()
+	{
+		AreaConfig room = Room();
+		room.Levels =
+		[
+			new RoomLevelOverride { Period = "kveld" },
+			new RoomLevelOverride { Period = "kveld", BrightnessPct = 8 }
+		];
+
+		RoomLevelRow evening = RoomLevels.Rows(Day(), room).Single(row => row.Period == "kveld");
+
+		Assert.AreEqual(8, evening.BrightnessPct, "the engine runs this room at 8 %, so the card has to say 8 %");
+		Assert.AreEqual(LevelSource.Room, evening.Brightness,
+			"and has to call it the room's, or there is no control to undo it with");
+	}
+
 	/// <summary>A room that says nothing runs the schedule, and every row says so.</summary>
 	[TestMethod]
 	public void A_Room_With_No_Levels_Of_Its_Own_Shows_The_Schedule_Throughout()
