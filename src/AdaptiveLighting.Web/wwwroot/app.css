@@ -3829,6 +3829,45 @@ button.mode-pill:disabled {
 	white-space: nowrap;
 }
 
+/* ---- movement the room turned down ----
+   A refusal has no duration, so it is a tick rather than a stretch: the room was
+   dark before it and dark after, and a block would claim a state that never
+   existed. Solid where .lane-mark is dotted, and short rather than full height,
+   because the dotted full-height line already means "the future" on this lane and
+   a second one would read as a second prediction. The warn hue is the same one the
+   log's refusal rows carry, so the two surfaces name the cause in one colour.
+
+   The label only appears on hover or focus: fourteen rooms' refusals with their
+   reasons spelled out would be a wall of text across the board, and the reason is
+   also on the title for a reader who never hovers. */
+.lane-refusal {
+	position: absolute;
+	top: 25%;
+	bottom: 25%;
+	width: 0;
+	border-left: var(--stroke-mark) solid var(--warn);
+	pointer-events: auto;
+}
+
+.lane-refusal i {
+	position: absolute;
+	left: 5px;
+	top: 50%;
+	transform: translateY(-50%);
+	display: none;
+	font-style: normal;
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	color: var(--warn);
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+.lane-refusal:hover i,
+.lane-refusal:focus-visible i {
+	display: block;
+}
+
 /* ---- the now-line ----
    One line through the axis, the band and every lane. Below the sticky name
    column deliberately: scrolled far enough back it slides under the names
@@ -3944,6 +3983,15 @@ button.mode-pill:disabled {
 	height: 12px;
 	border-radius: 0;
 	border-left: var(--stroke-mark) dotted var(--muted);
+}
+
+/* Solid where the next-mark is dotted, and the same warn hue the tick itself carries — the key has to be
+   the mark, not an approximation of it, or a reader matching one to the other gets it wrong. */
+.board-swatch-refusal {
+	width: 0;
+	height: 12px;
+	border-radius: 0;
+	border-left: var(--stroke-mark) solid var(--warn);
 }
 
 .board-foot-end {

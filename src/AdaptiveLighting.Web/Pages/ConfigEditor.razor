@@ -785,6 +785,33 @@ else
 				   frightening. *@
 				<GroupFold Title="Finding lights &amp; sensors"
 						   Description="Which lights this app may manage, what counts as a sensor, and where the house reads the daylight.">
+					@*
+						Bulbs two rooms both command. The engine finds these as it builds and hangs them off
+						LightingEngineHost.SharedLights; the cause is always the same one, a light Home Assistant
+						has put in no room of its own that a group in each of two rooms reaches down to.
+
+						Shown here, once, rather than on each room's page. It is a fact about the house — and the
+						advice names both rooms, so a per-room copy would say the same sentence twice on two pages
+						while a reader fixes it in a third place, Home Assistant. This section is already where
+						"which lights count as a room's" is settled, which is exactly the question it raises.
+					*@
+					@if (Engine.SharedLights is { Count: > 0 } sharedLights)
+					{
+						<div class="notice warn">
+							<strong>
+								@(sharedLights.Count == 1
+									? "One light is commanded by two rooms at once."
+									: $"{sharedLights.Count} lights are commanded by two rooms at once.")
+							</strong>
+							<ul>
+								@foreach (SuspectLight shared in sharedLights)
+								{
+									<li><strong>@shared.Name</strong> &mdash; @shared.Reason <code>@shared.EntityId</code></li>
+								}
+							</ul>
+						</div>
+					}
+
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">Only manage lights with (label)
@@ -1403,6 +1430,10 @@ else
 		LoadCatalog();
 		Revalidate();
 		MarkClean();
+
+		// After the catalog, because it needs what discovery resolved; after MarkClean, because raising a note
+		// is not an edit and must not arm the save bar.
+		RaiseStandingNotes();
 	}
 
 	private void StartFromScratch()
@@ -1647,6 +1678,51 @@ else
 			RaiseSwitchOnNote(area);
 		else
 			_switchOnNotes.Remove(KeyOf(area));
+	}
+
+	/// <summary>
+	///     Raises the note for a room that is <b>already</b> on, when what it commands looks wrong.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>The note only ever fired on the press, so a room switched on last week never showed one.</b> The
+	///         audit that finds status LEDs and colour channels among a room's lamps ran exactly once, at the
+	///         moment somebody flipped the switch, and its answer was thrown away when the page closed. A house
+	///         set up before the audit existed — or before a lamp was added to a group — could never be told.
+	///     </para>
+	///     <para>
+	///         <b>The bar is higher here than on the press, and deliberately so.</b> Switching a room on raises a
+	///         note whenever the room commands more than one light, because "here is what you have just switched
+	///         on" is worth reading once. Opening the page is not a question, so a room that merely commands
+	///         several lamps says nothing: on this owner's house eight rooms follow the defaults, and eight
+	///         unprompted panels would be the page shouting on arrival. Only <see cref="SwitchOnNote.Suspicious"/>
+	///         — a light the audit actually doubts — earns the interruption.
+	///     </para>
+	///     <para>
+	///         Dismissal is remembered for the visit, exactly as on the press: reading one and moving on must not
+	///         bring it back on the next re-render.
+	///     </para>
+	/// </remarks>
+	private void RaiseStandingNotes()
+	{
+		foreach (AreaConfig area in _config.Areas)
+		{
+			if (!AreaView.IsEnabled(area, _config.Defaults))
+				continue;
+
+			string key = KeyOf(area);
+
+			if (_switchOnRead.Contains(key) || _switchOnNotes.ContainsKey(key))
+				continue;
+
+			SwitchOnNote? note = SwitchOnWarning.For(
+				RoomName(area),
+				Catalog.LightsIn(area, _config.Defaults, _config.Global),
+				_config.Global.IncludeLabel);
+
+			if (note is { Suspicious.Count: > 0 })
+				_switchOnNotes[key] = note;
+		}
 	}
 
 	// ===================== what switching a room on will command =====================

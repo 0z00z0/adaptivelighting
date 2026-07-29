@@ -267,6 +267,14 @@ else
 										<span class="blk blk-@block.Kind.ToString().ToLowerInvariant()"
 											  style="left: @Pct(block.LeftPct)%; width: @Pct(block.WidthPct)%@(block.Kelvin is { } kelvin ? $"; --blk: {KelvinColour.Css(kelvin)}" : null)"></span>
 									}
+									@* Movement the room turned down. Drawn after the blocks so a refusal inside a lit
+									   stretch is not painted over by it, and before the future mark, which is the
+									   only thing on the lane allowed to sit above everything else. *@
+									@foreach (LaneRefusal refusal in lane.Refusals ?? [])
+									{
+										<span class="lane-refusal" style="left: @Pct(refusal.LeftPct)%"
+											  title="@refusal.Label"><i>@refusal.Label</i></span>
+									}
 									@if (lane.Next is { } next)
 									{
 										<span class="lane-mark" style="left: @Pct(next.LeftPct)%"><i>@next.Label</i></span>
@@ -335,9 +343,12 @@ else
 			@if (_hasMarks)
 			{
 				<span class="board-key"><StateChip State="AreaState.AutoActive" Bare="true" Kelvin="2700" /><span class="board-swatch blk-lit" style="--blk: @KelvinColour.Css(2700)"></span> lit by the engine (colour = actual warmth)</span>
-				<span class="board-key"><StateChip State="AreaState.OverriddenOn" Bare="true" /><span class="board-swatch blk-hand"></span> set by hand</span>
+				<span class="board-key"><StateChip State="AreaState.OverriddenOn" Bare="true" /><span class="board-swatch blk-hand"></span> set manually</span>
 				<span class="board-key"><StateChip State="AreaState.PreOff" Bare="true" /><span class="board-swatch blk-dimming"></span> warning dim</span>
-				<span class="board-key"><StateChip State="AreaState.SuppressedOff" Bare="true" /><span class="board-swatch blk-held"></span> off by hand</span>
+				<span class="board-key"><StateChip State="AreaState.SuppressedOff" Bare="true" /><span class="board-swatch blk-held"></span> off manually</span>
+				@* The refusal tick has to be in the key or it is decoration: it is the only mark on the board
+				   that says something did NOT happen, which is not guessable from an amber line. *@
+				<span class="board-key"><span class="board-swatch board-swatch-refusal"></span> movement, but no &mdash; hover for why</span>
 				<span class="board-key"><span class="board-swatch board-swatch-next"></span> what happens next</span>
 			}
 			<span class="board-foot-end">Tap a room for its page</span>
@@ -591,7 +602,8 @@ else
 				snapshot.AreaId,
 				snapshot,
 				BoardView.Blocks(history, _window, _now),
-				BoardView.NextMark(snapshot, _window, _now)));
+				BoardView.NextMark(snapshot, _window, _now),
+				BoardView.Refusals(history, _window)));
 		}
 
 		_lanes = lanes;
