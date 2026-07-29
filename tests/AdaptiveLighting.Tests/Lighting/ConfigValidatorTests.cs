@@ -516,6 +516,140 @@ public sealed class ConfigValidatorTests
 			"a caller with no IHaContext gets the document checks and nothing it cannot answer");
 	}
 
+	// ===================== a room's own levels =====================
+
+	/// <summary>
+	///     A period name that matches nothing is a warning and the row survives — it is nearly always a rename,
+	///     and deleting somebody's levels on a rename is the worse failure by a distance.
+	/// </summary>
+	[TestMethod]
+	public void Levels_Naming_A_Missing_Period_Warn_And_Are_Never_Refused()
+	{
+		var config = Minimal();
+		config.Areas[0].Levels = [new() { Period = "kveld", BrightnessPct = 40 }];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "renaming a period is itself a save; refusing here would deadlock the file");
+		Assert.IsTrue(result.Warnings.Any(w =>
+			w.Contains("Stue", StringComparison.Ordinal) && w.Contains("kveld", StringComparison.Ordinal)),
+			"and the warning must name both the room and the period, or nobody can find the row");
+
+		Assert.AreEqual(1, config.Areas[0].Levels.Count, "the row is kept: the validator reports, it does not edit");
+	}
+
+	[TestMethod]
+	public void Two_Rows_For_One_Period_In_One_Room_Warn_And_The_First_Wins()
+	{
+		var config = Minimal();
+		config.Areas[0].Levels =
+		[
+			new() { Period = "night", BrightnessPct = 8 },
+			new() { Period = "night", BrightnessPct = 60 }
+		];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "the same non-blocking treatment two Normal house-mode rows get");
+		Assert.IsTrue(result.Warnings.Any(w =>
+			w.Contains("Stue", StringComparison.Ordinal)
+			&& w.Contains("night", StringComparison.Ordinal)
+			&& w.Contains("first", StringComparison.Ordinal)),
+			"a duplicate means the file says two things, and the reader has to be told which one runs");
+	}
+
+	[TestMethod]
+	public void A_Levels_Row_Naming_No_Period_At_All_Warns()
+	{
+		var config = Minimal();
+		config.Areas[0].Levels = [new() { BrightnessPct = 40 }];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("naming no period", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void A_Rooms_Brightness_Outside_The_Physical_Range_Is_A_Document_Error()
+	{
+		var config = Minimal();
+		config.Areas[0].Levels = [new() { Period = "night", BrightnessPct = 150 }];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid, "checked exactly as the schedule's own levels are — same range, same severity");
+		Assert.IsTrue(result.Errors.Any(e => e.Contains("BrightnessPct 150", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void A_Rooms_Colour_Temperature_Outside_A_Sane_Kelvin_Range_Is_A_Document_Error()
+	{
+		var config = Minimal();
+		config.Areas[0].Levels = [new() { Period = "night", ColorTempKelvin = 42 }];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		Assert.IsTrue(result.Errors.Any(e => e.Contains("ColorTempKelvin 42", StringComparison.Ordinal)));
+	}
+
+	/// <summary>An unreadable number is unreadable whether or not its period still exists.</summary>
+	[TestMethod]
+	public void A_Rooms_Out_Of_Range_Value_Is_Still_An_Error_When_Its_Period_Has_Been_Renamed()
+	{
+		var config = Minimal();
+		config.Areas[0].Levels = [new() { Period = "kveld", BrightnessPct = 150 }];
+
+		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
+	}
+
+	/// <summary>
+	///     A room asking past the period's ceiling is clamped at run time, and told so here — the one place that
+	///     trade can be acted on rather than merely suffered.
+	/// </summary>
+	[TestMethod]
+	public void A_Room_Asking_Past_The_Periods_Ceiling_Is_Warned_That_It_Will_Be_Held_To_It()
+	{
+		var config = Minimal();
+		config.Periods[1].MaxBrightnessPct = 30;
+		config.Areas[0].Levels = [new() { Period = "night", BrightnessPct = 80 }];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "clamped, not refused: the cap is nearer what the room asked for than the schedule is");
+		Assert.IsTrue(result.Warnings.Any(w =>
+			w.Contains("Stue", StringComparison.Ordinal) && w.Contains("ceiling", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void A_Room_Asking_Below_The_Periods_Floor_Is_Warned_That_It_Will_Be_Held_To_It()
+	{
+		var config = Minimal();
+		config.Periods[1].MinBrightnessPct = 5;
+		config.Areas[0].Levels = [new() { Period = "night", BrightnessPct = 1 }];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsTrue(result.Warnings.Any(w =>
+			w.Contains("Stue", StringComparison.Ordinal) && w.Contains("floor", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void Levels_Inside_Their_Periods_Caps_Say_Nothing_At_All()
+	{
+		var config = Minimal();
+		config.Periods[1].MinBrightnessPct = 5;
+		config.Periods[1].MaxBrightnessPct = 30;
+		config.Areas[0].Levels = [new() { Period = "night", BrightnessPct = 8, ColorTempKelvin = 2200 }];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(0, result.Warnings.Count, "the ordinary case is silent");
+	}
+
 	// ===================== rendering =====================
 
 	[TestMethod]

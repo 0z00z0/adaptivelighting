@@ -554,7 +554,106 @@ public static class ConfigValidator
 		{
 			ValidateSettings(area.DisplayName, area.Effective(config.Defaults), result);
 			ValidateAreaReferences(area, knownEntityIds, knownAreaIds, result);
+			ValidateRoomLevels(config.Periods, area, result);
 		}
+	}
+
+	/// <summary>
+	///     What one room runs instead of the schedule (<see cref="AreaConfig.Levels"/>).
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>A dangling period name is a warning and the row survives.</b> It is nearly always a rename, and
+	///         deleting somebody's levels on a rename is the worse failure by a distance — the row is inert until
+	///         the name matches something again, which is a state a human can look at and fix. Refusing the document
+	///         over it would be worse still: renaming a period is itself a save, so the file would deadlock.
+	///     </para>
+	///     <para>
+	///         <b>A value outside the physical range is an error.</b> That is not a rename, it is a number nobody
+	///         could have meant, and it is checked exactly as the schedule's own levels are — same range, same
+	///         severity. The editor writes these, so refusing the save is where it is cheapest to notice.
+	///     </para>
+	///     <para>
+	///         <b>A value the period's caps will bite is a warning, not a refusal.</b> The engine clamps it: the
+	///         house sets a ceiling deliberately and a room cannot escape it, but being held to the cap is nearer
+	///         what the room asked for than being dropped back to the schedule would be. This is the one place that
+	///         trade is said out loud, which is the whole reason it is a warning rather than silence.
+	///     </para>
+	/// </remarks>
+	private static void ValidateRoomLevels(List<TimePeriodConfig> periods, AreaConfig area, ValidationResult result)
+	{
+		HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+
+		foreach (RoomLevelOverride level in area.Levels ?? [])
+		{
+			ValidateRoomLevelRange(area, level, result);
+
+			if (level.Period is not { Length: > 0 } name || string.IsNullOrWhiteSpace(name))
+			{
+				result.AddWarning(
+					$"[{area.DisplayName}] has a levels row naming no period, so it replaces nothing. Name the period "
+					+ "it was written for, or remove the row.");
+				continue;
+			}
+
+			// First wins, matching the calculator and the house-mode Normal rows. Reported rather than silently
+			// resolved: two rows for one period means the file says two things, and the reader has to be told which.
+			if (!seen.Add(name))
+			{
+				result.AddWarning(
+					$"[{area.DisplayName}] has more than one levels row for period '{name}'; the first one wins and the "
+					+ "rest are ignored. Merge them into one row.");
+				continue;
+			}
+
+			TimePeriodConfig? period = periods.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+
+			if (period is null)
+			{
+				result.AddWarning(
+					$"[{area.DisplayName}] has levels for period '{name}', which matches no configured period — almost "
+					+ "always a period that has been renamed. The row is kept so the levels are not lost, but it does "
+					+ "nothing until it names a period that exists.");
+				continue;
+			}
+
+			WarnWhereTheCapsBite(area, level, period, result);
+		}
+	}
+
+	/// <summary>The physical ranges, checked whether or not the row's period resolves — a nonsense number is nonsense either way.</summary>
+	private static void ValidateRoomLevelRange(AreaConfig area, RoomLevelOverride level, ValidationResult result)
+	{
+		if (level.BrightnessPct is { } brightness && brightness is < MinBrightnessPct or > MaxBrightnessPct)
+			result.AddError(
+				$"[{area.DisplayName}] levels for period '{level.Period}' have BrightnessPct {brightness}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
+
+		if (level.ColorTempKelvin is { } kelvin && kelvin is < MinColorTempKelvin or > MaxColorTempKelvin)
+			result.AddError(
+				$"[{area.DisplayName}] levels for period '{level.Period}' have ColorTempKelvin {kelvin}, outside {MinColorTempKelvin}–{MaxColorTempKelvin}.");
+	}
+
+	/// <summary>Says at save time what the engine will do at run time to a room's brightness that lies outside its period's caps.</summary>
+	private static void WarnWhereTheCapsBite(
+		AreaConfig area,
+		RoomLevelOverride level,
+		TimePeriodConfig period,
+		ValidationResult result)
+	{
+		if (level.BrightnessPct is not { } brightness)
+			return;
+
+		if (period.MinBrightnessPct is { } floor && brightness < floor)
+			result.AddWarning(
+				$"[{area.DisplayName}] asks for {brightness} % during '{period.Name}', below that period's "
+				+ $"MinBrightnessPct of {floor} — the room is held to the floor. The period's caps still apply to a "
+				+ "room's own levels; raise the room's value, or lower the period's floor.");
+
+		if (period.MaxBrightnessPct is { } ceiling && brightness > ceiling)
+			result.AddWarning(
+				$"[{area.DisplayName}] asks for {brightness} % during '{period.Name}', above that period's "
+				+ $"MaxBrightnessPct of {ceiling} — the room is held to the ceiling. The period's caps still apply to "
+				+ "a room's own levels; lower the room's value, or raise the period's ceiling.");
 	}
 
 	private static void ValidateAreaReferences(

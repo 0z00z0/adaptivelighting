@@ -200,15 +200,17 @@ public sealed class AreaSetupServiceTests
 	// ===================== a rebuild =====================
 
 	/// <summary>
-	///     Exactly two things survive a rebuild, and both because they are not discovery's output: the room's
-	///     identity, and the owner's power switch. Re-tagging lights in HA must not silently switch a room on.
+	///     Exactly three things survive a rebuild, and all three because they are not discovery's output: the
+	///     room's identity, the owner's power switch, and the levels it runs instead of the schedule. Re-tagging
+	///     lights in HA must not silently switch a room on, nor undim a cellar corridor somebody dimmed on purpose.
 	/// </summary>
 	[TestMethod]
-	public void A_Ticked_Room_Is_Replaced_By_A_Fresh_Proposal_Keeping_Only_Its_Area_Id_And_Switch()
+	public void A_Ticked_Room_Is_Replaced_By_A_Fresh_Proposal_Keeping_Only_Its_Area_Id_Switch_And_Levels()
 	{
 		House house = Build("stue");
 		AreaConfig before = Rich("stue");
 		before.Enabled = true;
+		before.Levels = [new RoomLevelOverride { Period = "night", BrightnessPct = 8 }];
 
 		AdaptiveLightingConfig config = Document(before);
 
@@ -218,6 +220,8 @@ public sealed class AreaSetupServiceTests
 
 		Assert.AreEqual("stue", after.AreaId, "identity survives");
 		Assert.IsTrue(after.Enabled, "and so does the switch the owner threw");
+		Assert.AreEqual(8d, after.Levels.Single(level => level.Period == "night").BrightnessPct,
+			"and the levels the room chose: discovery has no opinion about them, so a rebuild cannot re-supply them");
 
 		Assert.IsNull(after.Name, "the custom name is gone");
 		Assert.IsNull(after.Lights, "and the hand-picked entities");
@@ -371,12 +375,15 @@ public sealed class AreaSetupServiceTests
 	{
 		House house = Build("stue");
 
-		// Everything a rebuild can take. AreaId and Enabled are the two it gives back, so they are not losses.
+		// Everything a rebuild can take. AreaId, Enabled and Levels are the three it gives back, so they are not
+		// losses — each because a fresh proposal has nothing to say about it, which is the test the exclusion
+		// list applies rather than a list of exceptions somebody found convenient.
 		IReadOnlyList<PropertyInfo> destructible =
 		[.. typeof(AreaConfig)
 			.GetProperties(BindingFlags.Public | BindingFlags.Instance)
 			.Where(property => property.CanWrite)
-			.Where(property => property.Name is not (nameof(AreaConfig.AreaId) or nameof(AreaConfig.Enabled)))];
+			.Where(property => property.Name is not
+				(nameof(AreaConfig.AreaId) or nameof(AreaConfig.Enabled) or nameof(AreaConfig.Levels)))];
 
 		AreaConfig before = new() { AreaId = "stue" };
 
@@ -653,7 +660,13 @@ public sealed class AreaSetupServiceTests
 		nameof(AreaConfig.ExcludeEntities),
 
 		// Survives the rebuild, so it is never one of the losses.
-		nameof(AreaConfig.Enabled)
+		nameof(AreaConfig.Enabled),
+
+		// What the room runs instead of the schedule, period by period. Not a setting in the sense this counts:
+		// the "n of 21" denominator is read off AreaSettings and Levels has no twin there, so counting it would
+		// let a room report overriding more settings than the model has — the same trap FollowOutdoorLux avoids.
+		// It also survives the rebuild, so it is not a loss either.
+		nameof(AreaConfig.Levels)
 	};
 
 	/// <summary>The per-room settings, taken from the model rather than listed, for the reason in the class remarks.</summary>

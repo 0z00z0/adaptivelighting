@@ -31,6 +31,7 @@ namespace AdaptiveLighting.Abstractions;
 /// <param name="AreaId">The HA registry area id this area was built from, or <c>null</c> when it was configured with explicit entity lists and no area. This is the stable join between a snapshot and the document that produced it: <paramref name="AreaName"/> is editable mid-session and an id is not, so a reader that matched on the name alone lost the area the moment somebody renamed a room. Excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/>: it identifies the area rather than describing its state, and cannot change without the area being rebuilt anyway.</param>
 /// <param name="AutoOnBlockedBy">Which gate would refuse to light this area for movement at this instant, <see cref="AutoOnBlock.None"/> when none would, or <c>null</c> from a build that predates the field. Two of the refusals — a sleeping house, and an <c>IgnoreWhenOn</c> entity that is on — leave the area in <see cref="AreaState.AutoVacant"/> looking exactly like an area that is merely waiting, so a reader holding only <paramref name="State"/> and <paramref name="IsDark"/> would confidently promise a light that will not come on. Descriptive, like <paramref name="DarknessDetail"/>: excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/>, so a television switching on does not by itself republish every area it blocks.</param>
 /// <param name="AutoOnBlockingEntity">The entity id holding auto-on off when <paramref name="AutoOnBlockedBy"/> is <see cref="AutoOnBlock.EntityOn"/>, and <c>null</c> otherwise. Named rather than counted: "something is on" leaves the reader hunting through the room, which is the dead end this field exists to end.</param>
+/// <param name="LevelsFromRoom">Which of this room's two levels it names for itself during <paramref name="PeriodName"/>, rather than taking from the schedule — <see cref="RoomLevels.None"/> for the overwhelming majority of rooms, and <c>null</c> from a build that predates the field. A statement about the period rather than about the standing command, exactly as <paramref name="PeriodName"/> is: a room card can say "this room runs the night at 8 %" whether or not the engine has commanded anything yet. Optional so every existing construction site — and every consumer of the published event — carries on unchanged, the same way <paramref name="AreaId"/> and <paramref name="AutoOnBlockedBy"/> were added.</param>
 public sealed record AreaSnapshot(
 	string AreaName,
 	AreaState State,
@@ -50,7 +51,8 @@ public sealed record AreaSnapshot(
 	string? DarknessDetail = null,
 	string? AreaId = null,
 	AutoOnBlock? AutoOnBlockedBy = null,
-	string? AutoOnBlockingEntity = null)
+	string? AutoOnBlockingEntity = null,
+	RoomLevels? LevelsFromRoom = null)
 {
 	/// <summary>
 	///     Whether <paramref name="other"/> says the same thing about the area as this snapshot does — the
@@ -88,6 +90,11 @@ public sealed record AreaSnapshot(
 	///         stricter rule than including the field here would have been, which is what makes the exclusion above
 	///         still the right trade.
 	///     </para>
+	///     <para>
+	///         <see cref="LevelsFromRoom"/> <i>is</i> compared, and costs nothing to compare: for a running area it
+	///         is a pure function of <see cref="PeriodName"/>, which is compared already, and the room's overrides
+	///         cannot change under a live controller — a save rebuilds every one of them.
+	///     </para>
 	/// </remarks>
 	/// <param name="other">The snapshot to compare against, typically the last one published for this area.</param>
 	/// <returns><c>true</c> when the two carry the same news; <c>false</c> when something worth publishing moved.</returns>
@@ -102,7 +109,8 @@ public sealed record AreaSnapshot(
 		Nullable.Equals(BrightnessPct, other.BrightnessPct) &&
 		ColorTempKelvin == other.ColorTempKelvin &&
 		Nullable.Equals(NextChangeAt, other.NextChangeAt) &&
-		Nullable.Equals(NextChangeFrom, other.NextChangeFrom);
+		Nullable.Equals(NextChangeFrom, other.NextChangeFrom) &&
+		Nullable.Equals(LevelsFromRoom, other.LevelsFromRoom);
 }
 
 /// <summary>

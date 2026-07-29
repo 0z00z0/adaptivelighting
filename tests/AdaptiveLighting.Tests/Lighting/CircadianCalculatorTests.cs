@@ -22,8 +22,11 @@ public sealed class CircadianCalculatorTests
 
 	private static DateTimeOffset At(int hour, int minute = 0) => new(2026, 1, 15, hour, minute, 0, TimeSpan.Zero);
 
-	private static CircadianCalculator Stepped(IReadOnlyList<TimePeriodConfig>? periods = null, SunTimes? sun = null) =>
-		new(periods ?? Table, new GlobalConfig { SmoothTransitions = false }, () => sun ?? SunTimes.Unknown);
+	private static CircadianCalculator Stepped(
+		IReadOnlyList<TimePeriodConfig>? periods = null,
+		SunTimes? sun = null,
+		IReadOnlyList<RoomLevelOverride>? levels = null) =>
+		new(periods ?? Table, new GlobalConfig { SmoothTransitions = false }, () => sun ?? SunTimes.Unknown, levels);
 
 	[TestMethod]
 	public void The_Active_Period_Is_The_Last_Boundary_At_Or_Before_Now()
@@ -183,8 +186,8 @@ public sealed class CircadianCalculatorTests
 
 	// ===================== blending =====================
 
-	private static CircadianCalculator Blended(int blendMinutes = 30) =>
-		new(Table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = blendMinutes }, () => SunTimes.Unknown);
+	private static CircadianCalculator Blended(int blendMinutes = 30, IReadOnlyList<RoomLevelOverride>? levels = null) =>
+		new(Table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = blendMinutes }, () => SunTimes.Unknown, levels);
 
 	[TestMethod]
 	public void Halfway_Through_The_Blend_The_Target_Is_Halfway_Between_The_Periods()
@@ -261,6 +264,223 @@ public sealed class CircadianCalculatorTests
 	public void GetPeriodTarget_Returns_Null_For_A_Period_That_Does_Not_Exist()
 	{
 		Assert.IsNull(Stepped().GetPeriodTarget("siesta"));
+	}
+
+	// ===================== a room's own levels =====================
+
+	[TestMethod]
+	public void A_Room_With_No_Levels_Runs_The_Schedule_Untouched()
+	{
+		var target = Stepped(levels: []).GetTarget(At(20))!;
+
+		Assert.AreEqual(70d, target.BrightnessPct);
+		Assert.AreEqual(2700, target.ColorTempKelvin);
+		Assert.AreEqual(RoomLevels.None, target.FromRoom, "which is what the overwhelming majority of rooms report");
+	}
+
+	[TestMethod]
+	public void A_Room_Replacing_Only_Brightness_Keeps_Inheriting_The_Schedules_Colour()
+	{
+		var levels = new List<RoomLevelOverride> { new() { Period = "evening", BrightnessPct = 40 } };
+
+		var target = Stepped(levels: levels).GetTarget(At(20))!;
+
+		Assert.AreEqual(40d, target.BrightnessPct);
+		Assert.AreEqual(2700, target.ColorTempKelvin,
+			"the two values are independent: a room that only wants to be dimmer still follows the schedule's warmth");
+		Assert.AreEqual(RoomLevels.Brightness, target.FromRoom);
+	}
+
+	[TestMethod]
+	public void A_Room_Replacing_Only_Colour_Keeps_Inheriting_The_Schedules_Brightness()
+	{
+		var levels = new List<RoomLevelOverride> { new() { Period = "evening", ColorTempKelvin = 4000 } };
+
+		var target = Stepped(levels: levels).GetTarget(At(20))!;
+
+		Assert.AreEqual(70d, target.BrightnessPct, "a workshop that cannot use 2700 K has said nothing about brightness");
+		Assert.AreEqual(4000, target.ColorTempKelvin);
+		Assert.AreEqual(RoomLevels.ColorTemp, target.FromRoom);
+	}
+
+	[TestMethod]
+	public void A_Room_Replacing_Both_Reports_Both()
+	{
+		var levels = new List<RoomLevelOverride> { new() { Period = "evening", BrightnessPct = 40, ColorTempKelvin = 4000 } };
+
+		var target = Stepped(levels: levels).GetTarget(At(20))!;
+
+		Assert.AreEqual(40d, target.BrightnessPct);
+		Assert.AreEqual(4000, target.ColorTempKelvin);
+		Assert.AreEqual(RoomLevels.Brightness | RoomLevels.ColorTemp, target.FromRoom);
+	}
+
+	/// <summary>Keyed by name, so the room's levels follow the period they were written about — and match it as every other period lookup does, ignoring case.</summary>
+	[TestMethod]
+	public void A_Rooms_Levels_Match_Their_Period_By_Name_Ignoring_Case()
+	{
+		var levels = new List<RoomLevelOverride> { new() { Period = "EVENING", BrightnessPct = 40 } };
+
+		Assert.AreEqual(40d, Stepped(levels: levels).GetTarget(At(20))!.BrightnessPct);
+	}
+
+	[TestMethod]
+	public void A_Rooms_Levels_Naming_No_Period_Change_Nothing_And_Cost_Nothing()
+	{
+		// Almost always a period that has been renamed. The validator reports it; here it is simply never matched.
+		var levels = new List<RoomLevelOverride> { new() { Period = "kveld", BrightnessPct = 40 } };
+
+		var target = Stepped(levels: levels).GetTarget(At(20))!;
+
+		Assert.AreEqual(70d, target.BrightnessPct, "the schedule's, exactly as a room with no levels at all gets");
+		Assert.AreEqual(RoomLevels.None, target.FromRoom);
+	}
+
+	[TestMethod]
+	public void The_First_Of_Two_Rows_For_One_Period_Wins()
+	{
+		var levels = new List<RoomLevelOverride>
+		{
+			new() { Period = "evening", BrightnessPct = 40 },
+			new() { Period = "evening", BrightnessPct = 90 }
+		};
+
+		Assert.AreEqual(40d, Stepped(levels: levels).GetTarget(At(20))!.BrightnessPct,
+			"first wins, matching the warning the validator raises about it");
+	}
+
+	/// <summary>An empty row must not shadow a later row that actually says something.</summary>
+	[TestMethod]
+	public void An_Empty_Row_Does_Not_Shadow_A_Later_Row_For_The_Same_Period()
+	{
+		var levels = new List<RoomLevelOverride>
+		{
+			new() { Period = "evening" },
+			new() { Period = "evening", BrightnessPct = 40 }
+		};
+
+		Assert.AreEqual(40d, Stepped(levels: levels).GetTarget(At(20))!.BrightnessPct);
+	}
+
+	// ===================== the period's caps still bind a room =====================
+
+	[TestMethod]
+	public void The_Periods_Ceiling_Clamps_A_Room_That_Asks_For_Too_Much()
+	{
+		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 100 } };
+
+		Assert.AreEqual(30d, Stepped(levels: levels).GetTarget(At(23))!.BrightnessPct,
+			"a room cannot escape a ceiling the house set deliberately — it is held to it, not refused");
+	}
+
+	[TestMethod]
+	public void The_Periods_Floor_Clamps_A_Room_That_Asks_For_Too_Little()
+	{
+		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 1 } };
+
+		Assert.AreEqual(5d, Stepped(levels: levels).GetTarget(At(23))!.BrightnessPct);
+	}
+
+	/// <summary>Held to the cap, not dropped back to the schedule: the cap is the nearer of the two to what the room asked for.</summary>
+	[TestMethod]
+	public void A_Clamped_Room_Level_Is_Still_The_Rooms_Level_Rather_Than_The_Schedules()
+	{
+		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 100 } };
+
+		var target = Stepped(levels: levels).GetTarget(At(23))!;
+
+		Assert.AreEqual(30d, target.BrightnessPct);
+		Assert.AreNotEqual(15d, target.BrightnessPct, "refusing the row would have handed back the schedule's 15");
+		Assert.AreEqual(RoomLevels.Brightness, target.FromRoom, "and the room is still the reason for the number");
+	}
+
+	// ===================== blending across a boundary a room owns one side of =====================
+
+	/// <summary>
+	///     <b>The part most likely to be quietly wrong.</b> What is interpolated must be the room's own two
+	///     endpoints, not the house's.
+	/// </summary>
+	/// <remarks>
+	///     Blending the house's endpoints and replacing the result afterwards would put a step exactly where the
+	///     blend exists to remove one: the room would run the house's level right up to the boundary and then jump.
+	/// </remarks>
+	[TestMethod]
+	public void A_Blend_Into_An_Overridden_Period_Arrives_At_The_Rooms_Level_Not_The_Houses()
+	{
+		// 18:15 is halfway through the 30-minute blend from day (90) into evening, which this room runs at 40.
+		var levels = new List<RoomLevelOverride> { new() { Period = "evening", BrightnessPct = 40 } };
+
+		var target = Blended(levels: levels).GetTarget(At(18, 15))!;
+
+		Assert.AreEqual("evening", target.PeriodName);
+		Assert.AreEqual(65, target.BrightnessPct, 0.001, "halfway from day's 90 to this room's 40");
+		Assert.AreNotEqual(80d, target.BrightnessPct, "80 is the house's blend — reaching it means the room was applied too late");
+	}
+
+	/// <summary>The other side of the same boundary: the period being left is read through the room too.</summary>
+	[TestMethod]
+	public void A_Blend_Out_Of_An_Overridden_Period_Departs_From_The_Rooms_Level()
+	{
+		// Day is this room's 30; evening is the house's 70. At 18:15 the blend is half of the way between them.
+		var levels = new List<RoomLevelOverride> { new() { Period = "day", BrightnessPct = 30 } };
+
+		var target = Blended(levels: levels).GetTarget(At(18, 15))!;
+
+		Assert.AreEqual("evening", target.PeriodName);
+		Assert.AreEqual(50, target.BrightnessPct, 0.001, "halfway from this room's 30 to evening's 70");
+		Assert.AreEqual(RoomLevels.None, target.FromRoom,
+			"the flag describes the period being arrived at, which this room does not override");
+	}
+
+	/// <summary>Independence survives the blend: an overridden brightness must not drag the colour off the house's curve.</summary>
+	[TestMethod]
+	public void A_Blend_Interpolates_The_Two_Values_Independently()
+	{
+		var levels = new List<RoomLevelOverride> { new() { Period = "evening", BrightnessPct = 40 } };
+
+		var target = Blended(levels: levels).GetTarget(At(18, 15))!;
+
+		Assert.AreEqual(3600, target.ColorTempKelvin, "halfway from 4500 to 2700, exactly as the house blends it");
+	}
+
+	[TestMethod]
+	public void A_Blend_Across_Midnight_Departs_From_The_Rooms_Wrapped_Level()
+	{
+		// 07:15 arrives at day from the wrapped night period, which this room runs at 5 rather than 15.
+		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 5 } };
+
+		Assert.AreEqual(47.5, Blended(levels: levels).GetTarget(At(7, 15))!.BrightnessPct, 0.001,
+			"halfway from this room's night of 5 to day's 90; the house's would be 52.5");
+	}
+
+	[TestMethod]
+	public void A_Blend_Into_A_Rooms_Level_Is_Still_Held_To_The_Arriving_Periods_Caps()
+	{
+		// 22:45 blends from evening's 70 toward this room's night of 1, and is only halfway — but night's floor is 5,
+		// and its ceiling of 30 bites first on the way down.
+		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 1 } };
+
+		Assert.AreEqual(30d, Blended(levels: levels).GetTarget(At(22, 45))!.BrightnessPct,
+			"the caps come from the period the name promises, whoever supplied the level under them");
+	}
+
+	// ===================== the sleep clamp reaches the room's night, not the house's =====================
+
+	/// <summary>
+	///     A room that runs the night dimmer than the house means it at 03:00 too. The sleep clamp reads its
+	///     ceiling off this, so a version that returned the house's night would hand the room a ceiling it had
+	///     already said was too bright.
+	/// </summary>
+	[TestMethod]
+	public void GetPeriodTarget_Reaches_The_Rooms_Levels_For_That_Period()
+	{
+		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 8 } };
+
+		var night = Stepped(levels: levels).GetPeriodTarget("night")!;
+
+		Assert.AreEqual(8d, night.BrightnessPct);
+		Assert.AreEqual(30d, night.MaxBrightnessPct, "the period's caps are the period's, whoever set the level");
+		Assert.AreEqual(RoomLevels.Brightness, night.FromRoom);
 	}
 
 	// ===================== ActivePeriodName =====================

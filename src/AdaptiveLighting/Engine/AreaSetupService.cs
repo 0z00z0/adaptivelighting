@@ -169,7 +169,13 @@ public static class AreaSetupService
 			if (existing.AreaId is not { Length: > 0 } areaId || !rebuilding.Contains(areaId))
 				continue;
 
-			AreaConfig fresh = new() { AreaId = areaId, Enabled = existing.Enabled };
+			// Levels survive for the same reason Enabled does: a rebuild re-runs discovery, and discovery has no
+			// opinion about what brightness a cellar corridor wants. Everything else this drops — the pinned
+			// entities, the tuned settings, the custom name — is something the fresh proposal supplies again;
+			// nothing supplies these, so dropping them would be destroying an answer rather than re-asking a
+			// question. That is also why they are counted by neither PinnedEntityCount nor OverrideCount: a
+			// rebuild does not cost them, so warning about them would be warning about nothing.
+			AreaConfig fresh = new() { AreaId = areaId, Enabled = existing.Enabled, Levels = existing.Levels };
 			AreaAutoDiscovery.ApplyRole(fresh);
 
 			config.Areas[index] = fresh;
@@ -267,7 +273,8 @@ public static class AreaSetupService
 	/// <remarks>
 	///     <para>
 	///         Spelled out rather than reflected over, so that a setting has to be named to be counted and the
-	///         list can be read against the model. <c>Enabled</c> is deliberately absent — it survives the rebuild.
+	///         list can be read against the model. <c>Enabled</c> and <c>Levels</c> are deliberately absent — both
+	///         survive the rebuild, so counting them would warn about a loss that does not happen.
 	///     </para>
 	///     <para>
 	///         <b>Public, and the only copy, because the previous arrangement drifted.</b> The editor kept its own

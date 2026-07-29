@@ -263,14 +263,19 @@ public static class LightingConfigDocument
 			}
 		}
 
-		// An area's own lists are nullable by design — null means "let discovery find them" — so only their
-		// contents are repaired, never their absence.
+		// An area's own entity lists are nullable by design — null means "let discovery find them" — so only their
+		// contents are repaired, never their absence. Levels is not one of those: the model says it is never null,
+		// so a bare `Levels:` assigning null over the initialiser would take the room down at build time, which is
+		// the one-blank-line failure this whole method exists for.
 		foreach (AreaConfig area in areas)
 		{
 			repaired |= DropBlanks(area.Lights);
 			repaired |= DropBlanks(area.MotionSensors);
 			repaired |= DropBlanks(area.IgnoreWhenOn);
 			repaired |= DropBlanks(area.ExcludeEntities);
+
+			repaired |= NullSafeList(area.Levels, out List<RoomLevelOverride> levels);
+			area.Levels = levels;
 		}
 
 		if (repaired)

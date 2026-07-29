@@ -63,7 +63,8 @@ public sealed class AreaControllerTests
 		Action<GlobalConfig>? tweakGlobal = null,
 		IReadOnlyList<string>? ignoreWhenOn = null,
 		Action<FakeHaContext>? seed = null,
-		IReadOnlyList<TimePeriodConfig>? periods = null)
+		IReadOnlyList<TimePeriodConfig>? periods = null,
+		IReadOnlyList<RoomLevelOverride>? levels = null)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -104,7 +105,7 @@ public sealed class AreaControllerTests
 
 		var controller = new AreaController(
 			ha, scheduler, area, global, table,
-			new CircadianCalculator(table, global, () => SunTimes.Unknown),
+			new CircadianCalculator(table, global, () => SunTimes.Unknown, levels),
 			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area");
 
 		controller.Start();
@@ -867,6 +868,66 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 
+	// ===================== a room's own levels =====================
+
+	/// <summary>
+	///     The room commands its own level, not the schedule's — end to end, through the controller rather than
+	///     against the calculator alone.
+	/// </summary>
+	[TestMethod]
+	public void Motion_Lights_The_Area_At_The_Rooms_Own_Level_Where_It_Has_One()
+	{
+		// The fixture's clock stands at 20:00, in evening — which the house runs at 70 % / 2700 K.
+		Fixture t = Build(levels: [new RoomLevelOverride { Period = "evening", BrightnessPct = 25 }]);
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 25, ColorTempKelvin: 2700 },
+			"the room's brightness, and the schedule's colour it never said anything about");
+	}
+
+	/// <summary>
+	///     And the snapshot says whose level it is, so a card can explain a room that looks wrong beside its
+	///     neighbours instead of leaving somebody to diff the YAML.
+	/// </summary>
+	[TestMethod]
+	public void The_Snapshot_Says_Which_Levels_This_Room_Names_For_Itself()
+	{
+		Fixture t = Build(levels: [new RoomLevelOverride { Period = "evening", BrightnessPct = 25 }]);
+
+		AreaSnapshot latest = t.Publisher.Snapshots[^1];
+
+		Assert.AreEqual("evening", latest.PeriodName);
+		Assert.AreEqual(RoomLevels.Brightness, latest.LevelsFromRoom,
+			"a statement about the period, so it holds before the engine has commanded anything");
+	}
+
+	[TestMethod]
+	public void A_Room_With_No_Levels_Publishes_None_Rather_Than_Nothing()
+	{
+		Fixture t = Build();
+
+		Assert.AreEqual(RoomLevels.None, t.Publisher.Snapshots[^1].LevelsFromRoom,
+			"null is reserved for a build that predates the field; a running engine always has an answer");
+	}
+
+	/// <summary>The flag follows the period, so crossing a boundary out of an overridden period clears it.</summary>
+	[TestMethod]
+	public void The_Snapshot_Flag_Follows_The_Period_Across_A_Boundary()
+	{
+		Fixture t = Build(levels: [new RoomLevelOverride { Period = "evening", BrightnessPct = 25 }]);
+
+		Assert.AreEqual(RoomLevels.Brightness, t.Publisher.Snapshots[^1].LevelsFromRoom);
+
+		// 20:00 + 2h35m is 22:35, five minutes into night — which this room does not override.
+		Advance(t, TimeSpan.FromMinutes(155));
+
+		AreaSnapshot latest = t.Publisher.Snapshots[^1];
+
+		Assert.AreEqual("night", latest.PeriodName);
+		Assert.AreEqual(RoomLevels.None, latest.LevelsFromRoom);
+	}
+
 	// ===================== circadian tick =====================
 
 	[TestMethod]
@@ -1475,6 +1536,44 @@ public sealed class AreaControllerTests
 
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70 },
 			"with no clamp period resolving, the respecting area is left on the plain evening target");
+	}
+
+	/// <summary>
+	///     The sleep clamp reaches for <i>this room's</i> night, not the house's — the one place a room's levels
+	///     become a ceiling rather than a target.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Somebody up at 03:00 in a room that runs the night at 4 % must get 4 %, not the house's 15. Reading
+	///         the house's night here would quietly hand the room a ceiling it had already said was too bright, and
+	///         the room would be brighter asleep than awake.
+	///     </para>
+	///     <para>
+	///         The clamp period carries no <c>MaxBrightnessPct</c> on purpose, because that is the case where its
+	///         <i>level</i> becomes the ceiling — which is the half a room can move. An explicit cap still wins over
+	///         it, for both the house and the room: a room cannot escape a ceiling the house set deliberately.
+	///     </para>
+	/// </remarks>
+	[TestMethod]
+	public void Sleep_RespectingArea_ClampsToItsOwnNightLevelRatherThanTheHouses()
+	{
+		var periods = new List<TimePeriodConfig>
+		{
+			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
+		};
+		var t = Build(
+			s => s.RespectSleepMode = true,
+			g => g.HouseMode = SoverMode(),
+			periods: periods,
+			levels: [new RoomLevelOverride { Period = "night", BrightnessPct = 4 }]);
+
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 4 },
+			"the clamp period's level is this room's 4, so 4 is the ceiling — the house's 15 never applies here");
 	}
 
 	// ===================== away-kind mode =====================

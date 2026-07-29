@@ -48,6 +48,14 @@ public static class ConfigNormalizer
 			&& houseMode.Options.Count == 0)
 			global.HouseMode = null;
 
+		// A levels row with neither value set says nothing at all, and an editor that draws a row per period
+		// produces one the moment somebody clears both fields. Dropped on save so the file records only the
+		// periods a room actually disagrees about — which is also what makes "this room has levels" a question the
+		// document can answer by looking. The engine ignores an empty row either way, so this is tidying, not a
+		// behaviour change, and it happens on save alone: a hand-edited file is never rewritten by booting.
+		foreach (AreaConfig area in config.Areas)
+			area.Levels.RemoveAll(level => level.IsEmpty);
+
 		return config;
 	}
 

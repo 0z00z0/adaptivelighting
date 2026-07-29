@@ -92,6 +92,55 @@ public sealed class ConfigNormalizerTests
 		Assert.IsNull(config.Global.HouseMode, "a never-adopted, empty HouseMode is dropped so the document stays clean");
 	}
 
+	// ===================== a room's own levels =====================
+
+	/// <summary>
+	///     A row with neither value set says nothing, and an editor that draws a row per period produces one the
+	///     moment somebody clears both fields. The engine ignores it either way, so this is tidying — but a file
+	///     nobody can read is how a room's levels stop being reviewable.
+	/// </summary>
+	[TestMethod]
+	public void Normalize_DropsLevelsRowsThatSayNothing()
+	{
+		var config = new AdaptiveLightingConfig
+		{
+			Areas =
+			[
+				new()
+				{
+					AreaId = "stue",
+					Levels =
+					[
+						new() { Period = "night", BrightnessPct = 8 },
+						new() { Period = "evening" },                    // drawn, then both fields cleared
+						new() { Period = "day", ColorTempKelvin = 4000 }
+					]
+				}
+			]
+		};
+
+		ConfigNormalizer.Normalize(config);
+
+		var periods = config.Areas[0].Levels.Select(level => level.Period).ToList();
+		CollectionAssert.AreEqual(new[] { "night", "day" }, periods,
+			"the rows that say something survive, in the order they were written");
+	}
+
+	/// <summary>A row naming no period but carrying a value is not empty, so it stays and the validator warns about it.</summary>
+	[TestMethod]
+	public void Normalize_KeepsALevelsRowThatCarriesAValue_EvenWithNoPeriod()
+	{
+		var config = new AdaptiveLightingConfig
+		{
+			Areas = [new() { AreaId = "stue", Levels = [new() { BrightnessPct = 40 }] }]
+		};
+
+		ConfigNormalizer.Normalize(config);
+
+		Assert.AreEqual(1, config.Areas[0].Levels.Count,
+			"dropping it would delete a number somebody typed; the validator names the missing period instead");
+	}
+
 	[TestMethod]
 	public void Normalize_KeepsHouseMode_WithEntityOrOptions()
 	{

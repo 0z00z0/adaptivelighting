@@ -53,11 +53,12 @@ public sealed class AreaController : IDisposable
 	private HouseState _house = HouseState.Initial;
 	private LightTarget? _lastTarget;
 
-	// The period name last resolved, and the instant it was resolved for. Snapshot reads this instead of calling
+	// The period last resolved, and the instant it was resolved for. Snapshot reads these instead of calling
 	// GetTarget again: OnTick/ApplyTarget resolve the target for _scheduler.Now, then publish at the same instant
-	// under the same lock, so the second resolution was pure re-work. Both fields are only touched under _gate.
+	// under the same lock, so the second resolution was pure re-work. All three fields are only touched under _gate.
 	private DateTimeOffset _resolvedPeriodAt;
 	private string? _resolvedPeriodName;
+	private RoomLevels _resolvedLevelsFromRoom;
 	private LightCommand? _lastCommand;
 	private DateTimeOffset? _lastCommandAt;
 	private DateTimeOffset? _lastMotionAt;
@@ -790,7 +791,7 @@ public sealed class AreaController : IDisposable
 	private LightTarget? ResolveTarget()
 	{
 		LightTarget? target = _circadian.GetTarget(_scheduler.Now);
-		CachePeriodName(_scheduler.Now, target?.PeriodName);
+		CacheResolvedPeriod(_scheduler.Now, target);
 		if (target is null)
 		{
 			_logger.LogWarning("{Area}: no circadian period resolves at {Now}; commanding nothing.", Name, _scheduler.Now);
@@ -974,6 +975,10 @@ public sealed class AreaController : IDisposable
 		// gate a report carries and the reading beside it are the same moment's answer.
 		AutoOnBlock blocked = AutoOnBlockNow(_lastDarkVerdict ?? false, out string? blocker);
 
+		// Resolved at the snapshot's own instant, so the period name and the "this room names its own levels here"
+		// flag beside it are the same moment's answer — the flag describes the period, not the standing command.
+		ResolvePeriodAt(_scheduler.Now);
+
 		return new AreaSnapshot(
 			Name,
 			_state,
@@ -981,7 +986,7 @@ public sealed class AreaController : IDisposable
 			_house.Mode,
 			_house.KillSwitchActive,
 			_lastDarkVerdict,
-			PeriodNameAt(_scheduler.Now),
+			_resolvedPeriodName,
 			standing?.BrightnessPct,
 			standing?.ColorTempKelvin,
 			_scheduler.Now,
@@ -993,22 +998,30 @@ public sealed class AreaController : IDisposable
 			_lastDarknessDetail,
 			_areaId,
 			blocked,
-			blocker);
+			blocker,
+			_resolvedLevelsFromRoom);
 	}
 
-	/// <summary>The period name for <paramref name="now"/>, resolving (and caching) it only if this instant is not the one already resolved.</summary>
-	private string? PeriodNameAt(DateTimeOffset now)
+	/// <summary>Resolves the period for <paramref name="now"/> — and caches it — only if this instant is not the one already resolved.</summary>
+	private void ResolvePeriodAt(DateTimeOffset now)
 	{
 		if (_resolvedPeriodAt != now)
-			CachePeriodName(now, _circadian.GetTarget(now)?.PeriodName);
-
-		return _resolvedPeriodName;
+			CacheResolvedPeriod(now, _circadian.GetTarget(now));
 	}
 
-	private void CachePeriodName(DateTimeOffset now, string? periodName)
+	/// <summary>
+	///     Records what <paramref name="target"/> said about the period at <paramref name="now"/>.
+	/// </summary>
+	/// <remarks>
+	///     The name and the room-levels flag are cached together because they are one answer from one resolution.
+	///     Splitting them would mean two <c>GetTarget</c> calls per snapshot, or worse, a second reading of the
+	///     room's overrides to work the flag out — which is exactly the duplicate the calculator exists to prevent.
+	/// </remarks>
+	private void CacheResolvedPeriod(DateTimeOffset now, LightTarget? target)
 	{
 		_resolvedPeriodAt = now;
-		_resolvedPeriodName = periodName;
+		_resolvedPeriodName = target?.PeriodName;
+		_resolvedLevelsFromRoom = target?.FromRoom ?? RoomLevels.None;
 	}
 
 	/// <summary>Unsubscribes and cancels every timer. The lights are left exactly as they are.</summary>

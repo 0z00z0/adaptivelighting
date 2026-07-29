@@ -403,6 +403,131 @@ public sealed class LightingConfigDocumentTests
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(@"\bMode:"));
 	}
 
+	// ===================== a room's own levels =====================
+
+	/// <summary>
+	///     Levels survive a write and a read: both values, only one, and a row for a period that no longer exists.
+	/// </summary>
+	/// <remarks>
+	///     Worth its own test rather than a line in the area round trip, because these are the first per-room rows
+	///     the schema has carried — every other per-room field is a scalar — and a list of objects is exactly the
+	///     shape a serialiser flattens quietly.
+	/// </remarks>
+	[TestMethod]
+	public void RoundTrip_PreservesARoomsLevels()
+	{
+		var original = Populated();
+		original.Areas[0].Levels =
+		[
+			new RoomLevelOverride { Period = "night", BrightnessPct = 8, ColorTempKelvin = 2000 },
+			new RoomLevelOverride { Period = "day", BrightnessPct = 55 },
+			new RoomLevelOverride { Period = "evening", ColorTempKelvin = 4000 },
+			new RoomLevelOverride { Period = "kveld", BrightnessPct = 40 }   // a renamed period: kept, not dropped
+		];
+
+		var reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
+
+		Assert.AreEqual(4, reloaded.Levels.Count, "the list replaces, it does not append or shrink");
+
+		Assert.AreEqual(8d, reloaded.Levels[0].BrightnessPct);
+		Assert.AreEqual(2000, reloaded.Levels[0].ColorTempKelvin);
+
+		Assert.AreEqual(55d, reloaded.Levels[1].BrightnessPct);
+		Assert.IsNull(reloaded.Levels[1].ColorTempKelvin,
+			"a value the room never set must come back unset — writing it as 0 would pin a colour nobody chose");
+
+		Assert.IsNull(reloaded.Levels[2].BrightnessPct);
+		Assert.AreEqual(4000, reloaded.Levels[2].ColorTempKelvin);
+
+		Assert.AreEqual("kveld", reloaded.Levels[3].Period, "a row naming no configured period survives the trip too");
+	}
+
+	/// <summary>IsEmpty is derived, so it must never reach the file and be read back as a value.</summary>
+	[TestMethod]
+	public void Serialize_DoesNotWriteTheDerivedIsEmptyFlag()
+	{
+		var config = Populated();
+		config.Areas[0].Levels = [new RoomLevelOverride { Period = "night", BrightnessPct = 8 }];
+
+		StringAssert.DoesNotMatch(
+			LightingConfigDocument.Serialize(config),
+			new System.Text.RegularExpressions.Regex("IsEmpty"));
+	}
+
+	/// <summary>
+	///     A document written before this feature existed has no <c>Levels</c> key, and must load as a room with no
+	///     levels rather than as anything else.
+	/// </summary>
+	/// <remarks>
+	///     Worth asserting because <c>IgnoreUnmatchedProperties</c> makes an unknown key silence rather than an
+	///     error — which cuts both ways, and the way it cuts here is that nothing would have told us if the key had
+	///     been misspelled in the model.
+	/// </remarks>
+	[TestMethod]
+	public void A_Document_With_No_Levels_Key_Loads_As_A_Room_That_Follows_The_Schedule()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			"""
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Periods:
+			    - Name: day
+			      Start: "07:00"
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			""");
+
+		Assert.IsFalse(read.UsedLegacyKeys, "a document that never had Levels is not a legacy document");
+		Assert.AreEqual(0, read.Config.Areas[0].Levels.Count, "no levels, not null and not a guess");
+		Assert.IsTrue(ConfigValidator.Validate(read.Config).IsValid);
+	}
+
+	/// <summary>
+	///     A bare <c>Levels:</c> assigns null over the model's initialiser, which would take the room's controller
+	///     down at build time — the same one-blank-line failure the structural repair exists for.
+	/// </summary>
+	[TestMethod]
+	public void A_Blank_Levels_Key_Is_Read_As_No_Levels_Rather_Than_Null()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			"""
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Periods:
+			    - Name: day
+			      Start: "07:00"
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			      Levels:
+			""");
+
+		Assert.IsNotNull(read.Config.Areas[0].Levels);
+		Assert.AreEqual(0, read.Config.Areas[0].Levels.Count);
+	}
+
+	/// <summary>And a bare <c>-</c> under it leaves a null element, which is dropped rather than read as a nameless row.</summary>
+	[TestMethod]
+	public void A_Blank_Levels_Entry_Is_Dropped_Rather_Than_Read_As_A_Nameless_Row()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			"""
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Periods:
+			    - Name: day
+			      Start: "07:00"
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			      Levels:
+			        -
+			        - Period: day
+			          BrightnessPct: 55
+			""");
+
+		Assert.AreEqual(1, read.Config.Areas[0].Levels.Count, "the punctuation goes, the row that says something stays");
+		Assert.AreEqual(55d, read.Config.Areas[0].Levels[0].BrightnessPct);
+	}
+
 	[TestMethod]
 	public void RoundTrip_WithHouseMode_RoundTripsLosslessly()
 	{

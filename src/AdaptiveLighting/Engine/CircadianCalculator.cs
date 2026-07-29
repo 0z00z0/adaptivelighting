@@ -3,6 +3,27 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Engine;
 
 /// <summary>
+///     Which of a target's two values the room replaced, rather than taking from the schedule.
+/// </summary>
+/// <remarks>
+///     Flags rather than a three-way choice because the two values are independent: a room that only wants to be
+///     dimmer goes on inheriting every later change to the schedule's colour, and a reader that could only say
+///     "this room has overrides" would have to guess which half it was looking at.
+/// </remarks>
+[Flags]
+public enum RoomLevels
+{
+	/// <summary>Neither: the schedule's own levels, which is what every room without an override runs.</summary>
+	None = 0,
+
+	/// <summary>The room named its own brightness for this period.</summary>
+	Brightness = 1,
+
+	/// <summary>The room named its own colour temperature for this period.</summary>
+	ColorTemp = 2
+}
+
+/// <summary>
 ///     What the lights should be right now, and the caps that bound anything derived from it.
 /// </summary>
 /// <param name="PeriodName">The circadian period this came from.</param>
@@ -10,12 +31,20 @@ namespace AdaptiveLighting.Engine;
 /// <param name="ColorTempKelvin">Target colour temperature.</param>
 /// <param name="MinBrightnessPct">The period's floor, or <c>null</c>. Callers deriving a dimmer level must respect it.</param>
 /// <param name="MaxBrightnessPct">The period's ceiling, or <c>null</c>.</param>
+/// <param name="FromRoom">
+///     Which of the two values above came from the room's own <see cref="AreaConfig.Levels"/> rather than from the
+///     schedule. Read from the active period alone, exactly as the caps are: it is the rule
+///     <paramref name="PeriodName"/> promises. Carried on the target rather than re-derived by whoever renders it,
+///     because a second reading of the room's overrides is how the board, the sentence and the lamp end up
+///     disagreeing about which of them is in charge.
+/// </param>
 public sealed record LightTarget(
 	string PeriodName,
 	double BrightnessPct,
 	int ColorTempKelvin,
 	double? MinBrightnessPct,
-	double? MaxBrightnessPct)
+	double? MaxBrightnessPct,
+	RoomLevels FromRoom = RoomLevels.None)
 {
 	/// <summary>Clamps <paramref name="brightnessPct"/> to this target's caps and to the physical 0–100 range.</summary>
 	public double Clamp(double brightnessPct)
@@ -46,20 +75,37 @@ public enum PeriodDropReason
 public sealed record DroppedPeriod(string PeriodName, string Start, PeriodDropReason Reason);
 
 /// <summary>
-///     Turns the configured period table into the target for a given instant.
+///     Turns the configured period table into the target for a given instant, for one room.
 /// </summary>
 /// <remarks>
-///     Pure with respect to time and I/O: the instant is an argument and the day's sun times arrive through an
-///     injected delegate, so a test supplies both and reads a deterministic answer. Nothing here reads a clock —
-///     and, deliberately, nothing here logs. Periods it cannot use are surfaced through <see cref="DroppedPeriods"/>
-///     and <see cref="PeriodDropped"/> for the constructing caller to log, rather than by taking an
-///     <c>ILogger</c> that would drag I/O into an otherwise pure evaluation.
+///     <para>
+///         Pure with respect to time and I/O: the instant is an argument and the day's sun times arrive through an
+///         injected delegate, so a test supplies both and reads a deterministic answer. Nothing here reads a clock —
+///         and, deliberately, nothing here logs. Periods it cannot use are surfaced through <see cref="DroppedPeriods"/>
+///         and <see cref="PeriodDropped"/> for the constructing caller to log, rather than by taking an
+///         <c>ILogger</c> that would drag I/O into an otherwise pure evaluation.
+///     </para>
+///     <para>
+///         <b>Room-scoped, not house-scoped.</b> One of these is built per area already, because the period table is
+///         house-wide but the sun entity is an area setting — so a room's own levels belong here too, and applying
+///         them anywhere else would be strictly worse. The reason is the blend: <see cref="GetTarget"/> interpolates
+///         between the two periods either side of a boundary, and a room that replaces one side and not the other
+///         has to arrive from <i>its</i> level rather than the house's. Replacing an already-blended value after the
+///         fact turns a smooth arrival into a step, and re-running the blend outside would mean a second copy of the
+///         boundary resolution. So <see cref="LevelsOf"/> is the single place a room's effective level is decided,
+///         and everything downstream reads what it returned.
+///     </para>
 /// </remarks>
 public sealed class CircadianCalculator
 {
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
 	private readonly GlobalConfig _global;
 	private readonly Func<SunTimes> _sunTimes;
+
+	// The room's overrides, indexed the way every other period-name lookup in the engine matches: by name,
+	// case-insensitively. First row wins on a duplicate, matching how the validator reports one (and how the
+	// house-mode Normal rows behave) — the alternative is a silent last-write-wins nobody can see in the file.
+	private readonly Dictionary<string, RoomLevelOverride> _roomLevels;
 
 	// The Start strings are parsed once here rather than on every GetTarget/ActivePeriodName call: the parse is
 	// pure over the period table, only the sun-anchor resolution depends on the day, so per tick we do just
@@ -95,11 +141,32 @@ public sealed class CircadianCalculator
 	///     and a long-lived calculator would otherwise go stale; a delegate rather than an <c>IHaContext</c>
 	///     because a test should not need one.
 	/// </param>
-	public CircadianCalculator(IReadOnlyList<TimePeriodConfig> periods, GlobalConfig global, Func<SunTimes> sunTimes)
+	/// <param name="roomLevels">
+	///     What one room runs instead of the schedule, period by period, or <c>null</c>/empty for a calculator that
+	///     answers for the house rather than for a room — which is what the configuration page's preview wants, and
+	///     what every existing caller gets by saying nothing. Rows naming no configured period are simply never
+	///     matched: the validator reports the rename, and dropping somebody's levels here would make that report the
+	///     only trace they ever existed.
+	/// </param>
+	public CircadianCalculator(
+		IReadOnlyList<TimePeriodConfig> periods,
+		GlobalConfig global,
+		Func<SunTimes> sunTimes,
+		IReadOnlyList<RoomLevelOverride>? roomLevels = null)
 	{
 		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_sunTimes = sunTimes ?? throw new ArgumentNullException(nameof(sunTimes));
+
+		Dictionary<string, RoomLevelOverride> levels = new(StringComparer.OrdinalIgnoreCase);
+
+		// An empty row says nothing, so it is not allowed to shadow a later row that does — the normaliser drops
+		// these on save, but a hand-edited file reaches here without ever passing through it.
+		foreach (RoomLevelOverride level in roomLevels ?? [])
+			if (level is { IsEmpty: false, Period: { Length: > 0 } period })
+				levels.TryAdd(period, level);
+
+		_roomLevels = levels;
 
 		List<(PeriodStart Start, TimePeriodConfig Period)> parsed = new(_periods.Count);
 		foreach (TimePeriodConfig period in _periods)
@@ -139,38 +206,97 @@ public sealed class CircadianCalculator
 		TimeOnly timeOfDay = TimeOnly.FromTimeSpan(now.TimeOfDay);
 		int index = ActiveIndex(boundaries, timeOfDay);
 		(TimeOnly Start, TimePeriodConfig Period) active = boundaries[index];
+		PeriodLevels arriving = LevelsOf(active.Period);
 
 		if (!_global.SmoothTransitions || _global.BlendMinutes <= 0 || boundaries.Count == 1)
-			return ToTarget(active.Period, active.Period.BrightnessPct, active.Period.ColorTempKelvin);
+			return ToTarget(active.Period, arriving);
 
 		(TimeOnly Start, TimePeriodConfig Period) previous = boundaries[(index - 1 + boundaries.Count) % boundaries.Count];
 		double blend = BlendFraction(active.Start, timeOfDay);
 
 		// Outside the window the boundary has already fully taken effect; inside it we are still arriving.
 		if (blend >= 1)
-			return ToTarget(active.Period, active.Period.BrightnessPct, active.Period.ColorTempKelvin);
+			return ToTarget(active.Period, arriving);
 
-		double brightness = Interpolate(previous.Period.BrightnessPct, active.Period.BrightnessPct, blend);
-		double kelvin = Interpolate(previous.Period.ColorTempKelvin, active.Period.ColorTempKelvin, blend);
+		// Both ends are read through LevelsOf, so what is interpolated is this room's own two levels rather than the
+		// house's. A room that replaces one side of a boundary and not the other therefore still arrives smoothly:
+		// blending the house's endpoints and replacing the result afterwards would put a step exactly where the
+		// blend exists to remove one.
+		PeriodLevels leaving = LevelsOf(previous.Period);
 
-		// The caps come from the active period alone: they are the rule the reported period name promises.
-		return ToTarget(active.Period, brightness, (int)Math.Round(kelvin));
+		double brightness = Interpolate(leaving.BrightnessPct, arriving.BrightnessPct, blend);
+		double kelvin = Interpolate(leaving.ColorTempKelvin, arriving.ColorTempKelvin, blend);
+
+		// The caps — and which values this room replaced — come from the active period alone: they are the rule the
+		// reported period name promises.
+		return ToTarget(active.Period, arriving with { BrightnessPct = brightness, ColorTempKelvin = (int)Math.Round(kelvin) });
 	}
 
 	/// <summary>
 	///     The raw target of the period called <paramref name="periodName"/>, ignoring the clock entirely, or
 	///     <c>null</c> when no such period exists. Sleep mode uses this to reach for the night rules at any hour.
 	/// </summary>
+	/// <remarks>
+	///     The room's own levels apply here too. A room that runs the night period dimmer than the house means it
+	///     when the sleep clamp reaches for that period at 03:00 — the clamp is "hold this room to its night rules",
+	///     and a version that read the house's night instead would quietly hand the room a ceiling it had already
+	///     said was too bright.
+	/// </remarks>
 	public LightTarget? GetPeriodTarget(string periodName)
 	{
 		TimePeriodConfig? period = _periods.FirstOrDefault(p => string.Equals(p.Name, periodName, StringComparison.OrdinalIgnoreCase));
-		return period is null ? null : ToTarget(period, period.BrightnessPct, period.ColorTempKelvin);
+		return period is null ? null : ToTarget(period, LevelsOf(period));
 	}
 
-	private static LightTarget ToTarget(TimePeriodConfig period, double brightnessPct, int kelvin)
+	/// <summary>
+	///     What <paramref name="period"/> runs at in this room: the schedule's levels, with whichever of the two the
+	///     room replaced put in their place.
+	/// </summary>
+	/// <remarks>
+	///     <b>The single place a room's effective level is decided.</b> The blend reads it for both of its endpoints,
+	///     <see cref="GetPeriodTarget"/> reads it for the sleep clamp, and <see cref="LightTarget.FromRoom"/> carries
+	///     the answer out so nothing downstream has to look at the room's overrides a second time. A replacement, not
+	///     an offset: a room asking for 8 % during a period the house later raises to 100 % still asks for 8 %.
+	/// </remarks>
+	private PeriodLevels LevelsOf(TimePeriodConfig period)
 	{
-		LightTarget target = new(period.Name, brightnessPct, kelvin, period.MinBrightnessPct, period.MaxBrightnessPct);
-		return target with { BrightnessPct = target.Clamp(brightnessPct) };
+		if (!_roomLevels.TryGetValue(period.Name, out RoomLevelOverride? level))
+			return new PeriodLevels(period.BrightnessPct, period.ColorTempKelvin, RoomLevels.None);
+
+		RoomLevels fromRoom =
+			(level.BrightnessPct is null ? RoomLevels.None : RoomLevels.Brightness)
+			| (level.ColorTempKelvin is null ? RoomLevels.None : RoomLevels.ColorTemp);
+
+		return new PeriodLevels(
+			level.BrightnessPct ?? period.BrightnessPct,
+			level.ColorTempKelvin ?? period.ColorTempKelvin,
+			fromRoom);
+	}
+
+	/// <summary>One period's levels as this room runs them, before the period's caps have had their say.</summary>
+	private readonly record struct PeriodLevels(double BrightnessPct, int ColorTempKelvin, RoomLevels FromRoom);
+
+	/// <summary>
+	///     Puts <paramref name="levels"/> under the period's caps and labels it with the period.
+	/// </summary>
+	/// <remarks>
+	///     A room's replacement passes through this exactly as the schedule's own value does, which is what makes
+	///     the caps binding on it: the house sets a ceiling deliberately, and a room asking past it is held to it
+	///     rather than refused. Refusing would drop the room back to the schedule's level — further from what it
+	///     asked for than the cap is — and it would do so at the one moment nobody is watching. The validator says
+	///     so at save time instead, where it can be acted on.
+	/// </remarks>
+	private static LightTarget ToTarget(TimePeriodConfig period, PeriodLevels levels)
+	{
+		LightTarget target = new(
+			period.Name,
+			levels.BrightnessPct,
+			levels.ColorTempKelvin,
+			period.MinBrightnessPct,
+			period.MaxBrightnessPct,
+			levels.FromRoom);
+
+		return target with { BrightnessPct = target.Clamp(levels.BrightnessPct) };
 	}
 
 	/// <summary>

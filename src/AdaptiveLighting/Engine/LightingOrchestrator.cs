@@ -163,7 +163,7 @@ public sealed class LightingOrchestrator : IDisposable
 			// list resets on any of these (09 owner refinement). Collected before the mode monitor is built.
 			_motionSensorUnion.UnionWith(resolved!.MotionSensors);
 			running.Add(resolved!);
-			_areas.Add(BuildArea(resolved!, areaConfig.AreaId));
+			_areas.Add(BuildArea(resolved!, areaConfig));
 		}
 
 		ReportSharedLights(running, resolver, registry);
@@ -254,14 +254,24 @@ public sealed class LightingOrchestrator : IDisposable
 		return assigned;
 	}
 
-	private AreaController BuildArea(ResolvedArea resolved, string? areaId)
+	/// <summary>
+	///     Builds one area's controller.
+	/// </summary>
+	/// <param name="resolved">The area with every entity reference turned into a concrete id.</param>
+	/// <param name="config">
+	///     The document row behind it, for the two things the resolver has no business resolving: the registry area
+	///     id, and the levels this room runs instead of the schedule.
+	/// </param>
+	private AreaController BuildArea(ResolvedArea resolved, AreaConfig config)
 	{
 		// One calculator per area: the periods are house-wide but the sun entity is an area setting, and a
-		// calculator that reads the wrong sun would place every boundary wrong.
+		// calculator that reads the wrong sun would place every boundary wrong. That it is already per-area is
+		// what makes it the right home for the room's own levels too — see CircadianCalculator's remarks.
 		CircadianCalculator circadian = new(
 			_config.Periods,
 			_config.Global,
-			() => ReadSunTimes(resolved.Settings.SunEntity));
+			() => ReadSunTimes(resolved.Settings.SunEntity),
+			config.Levels);
 
 		// Surface any period the calculator cannot use, so a dropped boundary is a logged warning rather than a
 		// silent hole the table wraps over — the failure behind an area "showing night at 04:16" when its
@@ -274,7 +284,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 		return new AreaController(
 			_ha, _scheduler, resolved, _config.Global, _config.Periods, circadian,
-			_actuator, _publisher, _house, _loggerFactory, areaId, _lastSeen);
+			_actuator, _publisher, _house, _loggerFactory, config.AreaId, _lastSeen);
 	}
 
 	private void LogDroppedPeriod(string areaName, DroppedPeriod drop)

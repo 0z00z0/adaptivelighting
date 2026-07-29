@@ -64,7 +64,10 @@ public sealed class HaStatePublisher : IStatePublisher
 				// Additive, exactly as area_id was: a consumer that never learned about the auto-on gate reads
 				// every field it already knew unchanged, and sees them as absent rather than as "nothing blocks".
 				auto_on_blocked_by = snapshot.AutoOnBlockedBy?.ToString(),
-				auto_on_blocking_entity = snapshot.AutoOnBlockingEntity
+				auto_on_blocking_entity = snapshot.AutoOnBlockingEntity,
+				// Additive again: which of this room's levels it names for itself during this period, absent on a
+				// consumer's side rather than reading as "none" if they never learned about it.
+				levels_from_room = snapshot.LevelsFromRoom?.ToString()
 			});
 		}
 		catch (Exception exception)
