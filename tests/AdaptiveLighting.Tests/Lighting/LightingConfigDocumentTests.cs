@@ -35,9 +35,7 @@ public sealed class LightingConfigDocumentTests
 			ExcludeLabel = "no-touch",
 			MotionLabel = "is-motion",
 			MotionDeviceClasses = ["motion", "vibration"],
-			IlluminanceDeviceClass = "illuminance",
-			BrightnessTolerancePct = 3.5,
-			ColorTempToleranceKelvin = 75
+			IlluminanceDeviceClass = "illuminance"
 		},
 		Defaults = new AreaSettings
 		{
@@ -126,8 +124,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(expected.MotionLabel, actual.MotionLabel);
 		CollectionAssert.AreEqual(expected.MotionDeviceClasses, actual.MotionDeviceClasses);
 		Assert.AreEqual(expected.IlluminanceDeviceClass, actual.IlluminanceDeviceClass);
-		Assert.AreEqual(expected.BrightnessTolerancePct, actual.BrightnessTolerancePct);
-		Assert.AreEqual(expected.ColorTempToleranceKelvin, actual.ColorTempToleranceKelvin);
 	}
 
 	[TestMethod]

@@ -916,8 +916,8 @@ public sealed class AreaController : IDisposable
 
 	private bool TargetsMatch(LightTarget left, LightTarget? right) =>
 		right is not null &&
-		Math.Abs(left.BrightnessPct - right.BrightnessPct) < _global.BrightnessTolerancePct &&
-		Math.Abs(left.ColorTempKelvin - right.ColorTempKelvin) < _global.ColorTempToleranceKelvin;
+		Math.Abs(left.BrightnessPct - right.BrightnessPct) < GlobalConfig.BrightnessTolerancePct &&
+		Math.Abs(left.ColorTempKelvin - right.ColorTempKelvin) < GlobalConfig.ColorTempToleranceKelvin;
 
 	private void Enter(AreaState state, TransitionReason reason)
 	{

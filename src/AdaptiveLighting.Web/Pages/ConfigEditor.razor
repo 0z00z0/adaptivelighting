@@ -1177,24 +1177,6 @@ else
 						</div>
 					</div>
 
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">Close enough
-								<InfoPopover Label="Close enough">
-									How far a light may sit from its target before the app corrects it: percentage points of
-									brightness, kelvin of colour. Raise them and small drifts are left alone; drop them to zero
-									and lights are re-commanded endlessly over differences no eye can see. 2 % and 50 K are
-									comfortable.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<span class="hint">brightness</span>
-							<input class="cell num" type="number" step="0.5" min="0" @bind="_config.Global.BrightnessTolerancePct" /> <span class="unit">%</span>
-							<span class="hint">colour</span>
-							<input class="cell num" type="number" step="10" min="0" @bind="_config.Global.ColorTempToleranceKelvin" /> <span class="unit">K</span>
-						</div>
-					</div>
 				</GroupFold>
 
 				@* Where the file lives and whether the engine is running: the two facts that explain why an edit here

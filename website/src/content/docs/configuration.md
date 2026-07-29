@@ -208,7 +208,6 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 | **Re-check the rooms every** | How often each room re-checks the time of day and the light outside. Once a minute is plenty. | 60 s | `CircadianTickSeconds` |
 | **Recognise own changes for** | How long the app's own commands are recognised as its own rather than as a person at a switch. | 8 s | `SelfEchoWindowSeconds` |
 | **Other automations count as manual changes** | Whether a change made by another automation counts as a manual change. On means your other automations win. | on | `TreatAutomationsAsManual` |
-| **Close enough — brightness / colour** | A light already this close to its target is left alone rather than told to fade to where it is. | 2 %, 50 K | `BrightnessTolerancePct`, `ColorTempToleranceKelvin` |
 
 ---
 

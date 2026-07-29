@@ -117,10 +117,6 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     #   - vibration
     IlluminanceDeviceClass: illuminance
 
-    # A light already this close to its target is left alone.
-    BrightnessTolerancePct: 2
-    ColorTempToleranceKelvin: 50
-
   # --------------------------------------------------------------------------
   #  Defaults — what every room starts with. A room overrides only what differs,
   #  and a room's own setting always wins.

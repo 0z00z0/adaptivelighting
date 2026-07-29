@@ -92,7 +92,7 @@ public sealed class HaLightActuator : ILightActuator
 			if (currentRaw is null)
 				return false;
 
-			if (Math.Abs((currentRaw.Value / MaxRawBrightness * 100) - wantedBrightness) > _global.BrightnessTolerancePct)
+			if (Math.Abs((currentRaw.Value / MaxRawBrightness * 100) - wantedBrightness) > GlobalConfig.BrightnessTolerancePct)
 				return false;
 		}
 
@@ -101,7 +101,7 @@ public sealed class HaLightActuator : ILightActuator
 			double? currentKelvin = state.AttrDouble(ColorTempAttribute);
 
 			// A light with no colour temperature cannot drift from one; only a mismatch counts.
-			if (currentKelvin is { } kelvin && Math.Abs(kelvin - wantedKelvin) > _global.ColorTempToleranceKelvin)
+			if (currentKelvin is { } kelvin && Math.Abs(kelvin - wantedKelvin) > GlobalConfig.ColorTempToleranceKelvin)
 				return false;
 		}
 

@@ -241,11 +241,26 @@ public class GlobalConfig
 	/// </remarks>
 	public int LuxSensorStaleAfterMinutes { get; set; } = 120;
 
-	/// <summary>Brightness difference below which a light is considered already at target, and no command is sent.</summary>
-	public double BrightnessTolerancePct { get; set; } = 2;
+	/// <summary>
+	///     Brightness difference below which a light counts as already at target, so no command is sent.
+	/// </summary>
+	/// <remarks>
+	///     A constant since the 2026-07 simplification, where it was a house setting nobody had ever changed. It
+	///     is not a preference: it exists because Home Assistant reports brightness as a 0–255 integer and this
+	///     application thinks in per cent, so a round trip lands a per cent or so off what was asked for. Two per
+	///     cent is wider than that rounding and narrower than anything an eye can see. A house that wanted a
+	///     different number would be describing a different bug.
+	/// </remarks>
+	public const double BrightnessTolerancePct = 2;
 
-	/// <summary>Colour temperature difference below which a light is considered already at target.</summary>
-	public int ColorTempToleranceKelvin { get; set; } = 50;
+	/// <summary>
+	///     Colour temperature difference below which a light counts as already at target.
+	/// </summary>
+	/// <remarks>
+	///     A constant, for the same reason and by the same argument as <see cref="BrightnessTolerancePct"/>. Fifty
+	///     kelvin is under two per cent at the warm end of the range and invisible at any point in it.
+	/// </remarks>
+	public const int ColorTempToleranceKelvin = 50;
 }
 
 /// <summary>

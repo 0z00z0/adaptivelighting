@@ -170,12 +170,6 @@ public static class ConfigValidator
 		// MotionDeviceClasses is deliberately not checked for emptiness: empty is the default and means
 		// GlobalConfig.DefaultMotionDeviceClasses. See the remarks on the property.
 
-		if (global.BrightnessTolerancePct < 0)
-			result.AddError($"Global.BrightnessTolerancePct must not be negative (is {global.BrightnessTolerancePct}).");
-
-		if (global.ColorTempToleranceKelvin < 0)
-			result.AddError($"Global.ColorTempToleranceKelvin must not be negative (is {global.ColorTempToleranceKelvin}).");
-
 		if (knownEntityIds is null)
 			return;
 
