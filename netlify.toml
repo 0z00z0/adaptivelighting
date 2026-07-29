@@ -20,3 +20,29 @@
   for = "/_astro/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# Two pages the site used to publish and no longer does. The 2.0 rewrite made this site user-facing
+# only: /architecture described the engine's internals and /web-ui duplicated what the app now
+# explains on its own screens. Both were live and are the kind of URL somebody keeps in a bookmark or
+# a forum reply, so they redirect to the surviving page that answers the same question rather than
+# becoming 404s on the day 2.0 lands. 301 because the move is permanent, and the splat forms catch
+# anchors and any deeper path.
+[[redirects]]
+  from = "/architecture"
+  to = "/overview/"
+  status = 301
+
+[[redirects]]
+  from = "/architecture/*"
+  to = "/overview/"
+  status = 301
+
+[[redirects]]
+  from = "/web-ui"
+  to = "/user-guide/"
+  status = 301
+
+[[redirects]]
+  from = "/web-ui/*"
+  to = "/user-guide/"
+  status = 301
