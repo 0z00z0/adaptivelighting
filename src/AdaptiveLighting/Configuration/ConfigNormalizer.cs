@@ -62,8 +62,15 @@ public static class ConfigNormalizer
 		// periods a room actually disagrees about — which is also what makes "this room has levels" a question the
 		// document can answer by looking. The engine ignores an empty row either way, so this is tidying, not a
 		// behaviour change, and it happens on save alone: a hand-edited file is never rewritten by booting.
+		// Repaired rather than dereferenced: Save normalises BEFORE it validates, and Save is public API of a
+		// published package. A caller handing in an AreaConfig whose Levels is null — or AreaSetupService.Apply
+		// carrying a null through from the area it rebuilt — would otherwise get an NullReferenceException out of
+		// the single documented write path, before any validation message could explain what was wrong.
 		foreach (AreaConfig area in config.Areas)
+		{
+			area.Levels ??= [];
 			area.Levels.RemoveAll(level => level.IsEmpty);
+		}
 
 		return config;
 	}

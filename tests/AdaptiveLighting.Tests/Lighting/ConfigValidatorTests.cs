@@ -550,6 +550,36 @@ public sealed class ConfigValidatorTests
 			"a duplicate means the file says two things, and the reader has to be told which one runs");
 	}
 
+	/// <summary>
+	///     A cleared row does not count as the row that won, because the calculator does not treat it as one.
+	/// </summary>
+	/// <remarks>
+	///     <b>The two sides used to contradict each other.</b> <c>CircadianCalculator.LevelsOf</c> skips empty rows
+	///     before taking the first match, so this room genuinely runs at 8 %; the validator counted the empty row
+	///     into <c>seen</c> and warned that "the first one wins and the rest are ignored", telling the reader the
+	///     room was following the schedule. Both behaviours were pinned by tests, in opposite directions.
+	///     <para>
+	///         Only reachable on a hand-edited file — <c>Save</c> normalises empty rows away before validating —
+	///         which is exactly the file whose owner has no other way to find out.
+	///     </para>
+	/// </remarks>
+	[TestMethod]
+	public void A_Cleared_Row_Does_Not_Shadow_The_Real_One_Below_It()
+	{
+		var config = Minimal();
+		config.Areas[0].Levels =
+		[
+			new() { Period = "night" },
+			new() { Period = "night", BrightnessPct = 8 }
+		];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsFalse(result.Warnings.Any(w => w.Contains("first", StringComparison.Ordinal)),
+			"the engine runs this room at 8 %, so a warning saying the first row wins would be a false statement");
+	}
+
 	[TestMethod]
 	public void A_Levels_Row_Naming_No_Period_At_All_Warns()
 	{

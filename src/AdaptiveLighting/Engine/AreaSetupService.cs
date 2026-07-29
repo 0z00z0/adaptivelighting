@@ -24,7 +24,7 @@ public sealed record SetupPlan(
 ///     One existing area's rebuild. The three counts are the three things a rebuild destroys — hand-picked
 ///     entities, changed settings, a custom name — which is exactly what the dialog lists.
 /// </summary>
-/// <param name="AreaId">The area being rebuilt. Its identity, and the one field that survives besides the switch.</param>
+/// <param name="AreaId">The area being rebuilt. Its identity, and one of the three fields a rebuild spares.</param>
 /// <param name="PinnedEntityCount">
 ///     How many entity choices the area has made by hand rather than discovering: explicit lights, motion sensors,
 ///     a lux sensor, a decision to follow the house's outdoor one, the blockers under <c>IgnoreWhenOn</c>, and the
@@ -130,11 +130,13 @@ public static class AreaSetupService
 	///     Carries <paramref name="plan"/> out on <paramref name="config"/>, in memory.
 	/// </summary>
 	/// <remarks>
-	///     A rebuilt area is <i>replaced</i> by a fresh proposal rather than edited: exactly two things survive,
-	///     and both because they are not discovery's output — <see cref="AreaConfig.AreaId"/>, the room's identity,
-	///     and <see cref="AreaConfig.Enabled"/>, the owner's power switch. Re-tagging lights in Home Assistant must
-	///     not silently switch a room off, or on. Everything else — the name, the pinned entity lists, the setting
-	///     overrides — is what the dialog warned about, and it goes.
+	///     A rebuilt area is <i>replaced</i> by a fresh proposal rather than edited: exactly three things survive,
+	///     each because it is not discovery's output — <see cref="AreaConfig.AreaId"/>, the room's identity,
+	///     <see cref="AreaConfig.Enabled"/>, the owner's power switch, and <see cref="AreaConfig.Levels"/>, the
+	///     brightness and warmth the owner set for this room by period. Re-tagging lights in Home Assistant must
+	///     not silently switch a room off, or on, and must not throw away levels that have nothing to do with which
+	///     bulbs were found. Everything else — the name, the pinned entity lists, the setting overrides — is what
+	///     the dialog warned about, and it goes.
 	///     <para>
 	///         Nothing is written and nothing is removed. Areas outside the plan keep their exact instance, so a
 	///         document that had no rebuilds serialises byte for byte as it was.

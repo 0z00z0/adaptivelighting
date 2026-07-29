@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Reactive;
 using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
@@ -59,7 +58,6 @@ public sealed class ModeMonitor : IDisposable
 	private DateTimeOffset _activatedAt;
 	private DateTimeOffset _lastMotionAt;
 	private bool _inactivityLatched;
-	private DateTimeOffset _previousTickAt;
 	private string? _previousPeriodName;
 	private bool _started;
 
@@ -215,7 +213,6 @@ public sealed class ModeMonitor : IDisposable
 			_started = true;
 			_activatedAt = _scheduler.Now;
 			_lastMotionAt = _scheduler.Now;
-			_previousTickAt = _scheduler.Now;
 			_previousPeriodName = _circadian.ActivePeriodName(_scheduler.Now);
 			_startPeriodModePending = true;
 
@@ -444,13 +441,12 @@ public sealed class ModeMonitor : IDisposable
 
 	private void OnTick()
 	{
-		DateTimeOffset now = _scheduler.Now, previousTickAt;
+		DateTimeOffset now = _scheduler.Now;
 		string? previousPeriodName;
 		bool startPending;
 
 		lock (_gate)
 		{
-			previousTickAt = _previousTickAt;
 			previousPeriodName = _previousPeriodName;
 			startPending = _startPeriodModePending;
 		}
@@ -485,7 +481,6 @@ public sealed class ModeMonitor : IDisposable
 
 		lock (_gate)
 		{
-			_previousTickAt = now;
 			_previousPeriodName = currentPeriodName;
 			_startPeriodModePending = startPending;
 		}

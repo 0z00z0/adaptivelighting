@@ -100,9 +100,9 @@ public sealed class IlluminanceGateTests
 	/// </summary>
 	/// <remarks>
 	///     The owner's rule in one test: use the light sensor where there is one, and where there is none always
-	///     light. The default was <see cref="DarknessSource.Lux"/>, whose sun half overruled a good reading at
-	///     dusk and put a sun clause into every explanation the gate wrote. Asserted at high noon, which is where
-	///     the two defaults disagree.
+	///     light. The default used to be <see cref="DarknessSource.Either"/>, whose sun half overruled a good
+	///     reading at dusk and put a sun clause into every explanation the gate wrote. Asserted at high noon, which
+	///     is where the two defaults disagree.
 	/// </remarks>
 	[TestMethod]
 	public void A_Room_That_Configures_Nothing_Gates_On_Lux_Alone()
@@ -210,9 +210,35 @@ public sealed class IlluminanceGateTests
 
 		Assert.IsTrue(Build(Ha(sunElevation: 30), DarknessSource.Lux, luxSensor: null).IsDarkEnough(),
 			"high noon, no sensor: the room still counts as dark rather than falling back to the sun");
+	}
 
-		Assert.IsTrue(Build(Ha(sunElevation: 30), DarknessSource.Lux, luxSensor: null).IsDarkEnough(),
-			"and Either is dark when either half says so, which the absent lux half now does");
+	/// <summary>
+	///     The retired <see cref="DarknessSource.Either"/> does not merely parse — it decides as
+	///     <see cref="DarknessSource.Lux"/> does, and consults no sun.
+	/// </summary>
+	/// <remarks>
+	///     <b>The gap this closes.</b> The retirement was covered by two document tests: that the name still parses
+	///     for either binder, and that a save rewrites it. Neither touches the gate. Delete
+	///     <c>or DarknessSource.Either</c> from the switch in <see cref="IlluminanceGate"/> and the whole suite
+	///     stays green while every such room falls to the default arm, holds its previous verdict and never changes
+	///     again — a room frozen dark or frozen light, forever, with nothing failing. Asserted at a sun elevation
+	///     the old behaviour would have answered differently, because that is the only place the two can be told
+	///     apart.
+	/// </remarks>
+	[TestMethod]
+	public void The_Retired_Either_Decides_As_Lux_And_Never_Asks_The_Sun()
+	{
+		// Sun well down, lux comfortably above the threshold. Either used to call this dark on the sun's word.
+		IlluminanceGate bright = Build(Ha(lux: "500", sunElevation: -6), DarknessSource.Either);
+
+		Assert.IsFalse(bright.IsDarkEnough(),
+			"the reading says bright, and Either now has no sun half to overrule it with");
+
+		Assert.IsFalse(bright.DarknessDetail().Contains("sun", StringComparison.OrdinalIgnoreCase),
+			"and the explanation names no sun either, or the room would be told a reason that did not apply");
+
+		Assert.IsTrue(Build(Ha(lux: "2", sunElevation: 30), DarknessSource.Either).IsDarkEnough(),
+			"a dark reading at high noon is still dark: the lux half is the only half");
 	}
 
 	/// <summary>

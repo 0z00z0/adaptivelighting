@@ -547,12 +547,6 @@ public static class ConfigValidator
 	///         could have meant, and it is checked exactly as the schedule's own levels are — same range, same
 	///         severity. The editor writes these, so refusing the save is where it is cheapest to notice.
 	///     </para>
-	///     <para>
-	///         <b>A value the period's caps will bite is a warning, not a refusal.</b> The engine clamps it: the
-	///         house sets a ceiling deliberately and a room cannot escape it, but being held to the cap is nearer
-	///         what the room asked for than being dropped back to the schedule would be. This is the one place that
-	///         trade is said out loud, which is the whole reason it is a warning rather than silence.
-	///     </para>
 	/// </remarks>
 	private static void ValidateRoomLevels(List<TimePeriodConfig> periods, AreaConfig area, ValidationResult result)
 	{
@@ -570,6 +564,15 @@ public static class ConfigValidator
 				continue;
 			}
 
+			// An empty row is not a claim, so it cannot be the row that "won". CircadianCalculator.LevelsOf skips
+			// these before it takes the first match, and counting them here made the warning say the opposite of
+			// what the engine does: a cleared row followed by a real one drew "the first one wins and the rest are
+			// ignored" while the room actually ran on the second. Only reachable on a hand-edited file — Save
+			// normalises empty rows away before validating — which is exactly the file whose reader has no other
+			// way to find out.
+			if (level.IsEmpty)
+				continue;
+
 			// First wins, matching the calculator and the house-mode Normal rows. Reported rather than silently
 			// resolved: two rows for one period means the file says two things, and the reader has to be told which.
 			if (!seen.Add(name))
@@ -580,17 +583,13 @@ public static class ConfigValidator
 				continue;
 			}
 
-			TimePeriodConfig? period = periods.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
-
-			if (period is null)
+			if (!periods.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
 			{
 				result.AddWarning(
 					$"[{area.DisplayName}] has levels for period '{name}', which matches no configured period — almost "
 					+ "always a period that has been renamed. The row is kept so the levels are not lost, but it does "
 					+ "nothing until it names a period that exists.");
-				continue;
 			}
-
 		}
 	}
 

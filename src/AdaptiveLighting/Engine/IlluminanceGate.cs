@@ -373,8 +373,9 @@ public sealed class IlluminanceGate
 	///         area had been told to gate on something real that was merely broken. The owner's rule overrules it: a
 	///         room with nothing to read is dark, whether it has nothing because it was given nothing or because what
 	///         it was given has died. Broken hardware is not a reason to leave a household unlit through a bright
-	///         midsummer evening. <see cref="DarknessSource.Either"/> still lets the sun answer, because somebody who
-	///         chose it asked for the sun.
+	///         midsummer evening. Nothing consults the sun on this path any more:
+	///         <see cref="DarknessSource.Either"/> is retired and reads as <see cref="DarknessSource.Lux"/>, so it
+	///         arrives here and is answered here like any other lux room.
 	///     </para>
 	/// </remarks>
 	private bool DarkBecauseNoLuxSensorIsReporting()

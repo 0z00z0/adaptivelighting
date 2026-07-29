@@ -119,6 +119,43 @@ public static class LightingConfigDocument
 			}
 		};
 
+	/// <summary>
+	///     Keys a document may still carry that no longer do anything, and the sentence each one earns in the log.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Silence is the wrong answer here, and it was the answer this project shipped.</b> Both binders
+	///         ignore an unknown key, so removing a setting is a parse-clean, log-clean, entirely invisible change
+	///         of behaviour — the house simply starts doing something else one night. That is a softer failure than
+	///         the <c>Either</c> crash and a worse one, because nothing at all points at it.
+	///     </para>
+	///     <para>
+	///         Concretely, and the reason this table exists: a night period written
+	///         <c>{ BrightnessPct: 15, MaxBrightnessPct: 30 }</c> — the shape the shipped default had — used to be
+	///         clamped to 30 % in sleep mode and is now clamped to 15 %. Half the light, no error, no warning,
+	///         nothing in the file to suggest it. Only a line in the log can close that gap.
+	///     </para>
+	///     <para>
+	///         The key is left in place rather than stripped: the binder ignores it either way, and rewriting
+	///         somebody's file as a side effect of reading it is what the load path exists not to do. The next save
+	///         from the browser drops it, as it drops every key the schema no longer has.
+	///     </para>
+	/// </remarks>
+	private static readonly Dictionary<string, string> RetiredKeys = new(StringComparer.OrdinalIgnoreCase)
+	{
+		["MaxBrightnessPct"] =
+			"per-period ceilings were removed, so this period no longer caps what it commands. Its BrightnessPct "
+			+ "is now the level it holds in sleep mode, where the ceiling used to be.",
+		["MinBrightnessPct"] =
+			"per-period floors were removed, so the pre-off warning dim is no longer held up by this value.",
+		["BrightnessTolerancePct"] =
+			"the brightness tolerance is now fixed and is no longer configurable per house.",
+		["ColorTempToleranceKelvin"] =
+			"the colour-temperature tolerance is now fixed and is no longer configurable per house.",
+		["ResetAtTime"] =
+			"ending a house mode at a time of day was removed; the mode now ends only where its own option says it does."
+	};
+
 	private const string Header =
 		"""
 		# ============================================================================
@@ -399,6 +436,18 @@ public static class LightingConfigDocument
 
 					if (child.Key is not YamlScalarNode { Value: { Length: > 0 } name })
 						continue;
+
+					// A key that still parses and no longer does anything. Said out loud rather than passed over —
+					// see RetiredKeys for the halved night light this exists to stop being invisible. Nothing is
+					// rewritten and `used` is deliberately not set: the document is unchanged, only the reader is
+					// better informed, and claiming a migration happened would send Reload writing the file back.
+					if (RetiredKeys.TryGetValue(name, out string? retired))
+					{
+						logger?.LogWarning(
+							"'{Setting}' is still set in the configuration, but it no longer does anything: {What} "
+							+ "Remove it, or save once from the browser and it will be dropped.",
+							name, retired);
+					}
 
 					// A retired VALUE, rewritten in place. Done before the key rename below because a key that is
 					// about to be renamed still carries the value under its old name at this point, and a setting

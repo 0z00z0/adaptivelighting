@@ -20,12 +20,19 @@ namespace AdaptiveLighting.Engine;
 ///     <para>
 ///         <b>Why it raises rather than replaces.</b> The output is the schedule's own brightness lifted toward
 ///         <see cref="AreaSettings.LuxBrightnessMaxPct"/>, never a level computed from the reading alone. So the
-///         circadian intent survives: the adjustment starts from whatever the period asked for, it can only ever
-///         add light, and the period's own floor and cap still clamp the result — a night period capped at 30 %
-///         cannot be defeated by a bright afternoon reading. An absolute curve, ignoring the schedule, would
-///         instead make the low anchor meaningless (the level at which it started to bite would drift with
-///         whatever the period happened to ask for) and would hand the same level to a room the schedule wanted
-///         dim and one it wanted bright.
+///         circadian intent survives: the adjustment starts from whatever the period asked for and it can only
+///         ever add light. An absolute curve, ignoring the schedule, would instead make the low anchor
+///         meaningless (the level at which it started to bite would drift with whatever the period happened to
+///         ask for) and would hand the same level to a room the schedule wanted dim and one it wanted bright.
+///     </para>
+///     <para>
+///         <b>The period no longer caps the result, and that is a change worth knowing about.</b> Per-period
+///         ceilings were removed in the 2026-07 simplification, so the only ceiling left is
+///         <see cref="AreaSettings.LuxBrightnessMaxPct"/> — this room's own, not the period's. A night period
+///         asking for 15 % in a room whose sensor reads 1 000 lx now lands near 58 %, where a period capped at
+///         30 % once held it. Sleep mode still clamps a room with <see cref="AreaSettings.RespectSleepMode"/>
+///         set; nothing else does. A room that wants a quiet night wants that setting, or a lower
+///         <see cref="AreaSettings.LuxBrightnessMaxPct"/>.
 ///     </para>
 ///     <para>
 ///         Pure and open-loop, in the same spirit as <see cref="IlluminanceGate"/>: the reading is an input,
@@ -70,8 +77,9 @@ public sealed class LuxBrightnessCurve
 
 		double raised = Raise(target.BrightnessPct, _readLux(), _settings);
 
-		// Clamp() re-applies the period's floor and cap, which is what keeps the period the authority: the daylight
-		// adjustment proposes, the period disposes.
+		// Clamp() is now only the physical 0–100 range: the period's floor and cap were removed with the rest of
+		// the per-period clamps, so this no longer holds the daylight adjustment to what the schedule asked for.
+		// LuxBrightnessMaxPct is the ceiling that remains, and it is the room's rather than the period's.
 		return target with { BrightnessPct = target.Clamp(raised) };
 	}
 

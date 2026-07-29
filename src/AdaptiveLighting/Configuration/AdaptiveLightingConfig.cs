@@ -437,13 +437,24 @@ public enum DarknessSource
 	///     answering — is simply dark, because a gate with nothing to read is not a gate; see
 	///     <see cref="Engine.IlluminanceGate"/>. The sun is never consulted on this setting.
 	/// </summary>
-	Lux,
+	Lux = 0,
 
 	/// <summary>Sun elevation only. No lux sensor is consulted, so a room with none is unaffected by having none.</summary>
-	Sun,
+	Sun = 1,
 
-	/// <summary>Always dark. For rooms without daylight.</summary>
-	Always,
+	/// <summary>
+	///     Always dark. For rooms without daylight.
+	/// </summary>
+	/// <remarks>
+	///     <b>3, not 2, and pinned explicitly.</b> Retiring <see cref="Either"/> left it declared last, which
+	///     silently renumbered this member from 3 to 2. Enum members are compile-time constants and are inlined
+	///     into consuming assemblies, so anything built against an earlier version of this package carries
+	///     <c>Always</c> baked in as 3 — which an unpinned enum would now read back as <see cref="Either"/>.
+	///     <c>Enum.Parse</c> also accepts the bare numeral, so <c>Darkness: 3</c> in a hand-written file has to keep
+	///     meaning what it meant. Written out rather than left to declaration order because declaration order is
+	///     exactly what changed.
+	/// </remarks>
+	Always = 3,
 
 	/// <summary>
 	///     <b>Retired. Behaves as <see cref="Lux"/>.</b> Kept only so a document that still names it can be read.
@@ -470,6 +481,10 @@ public enum DarknessSource
 	///         for the same reason, as the pre-2.0 <c>Zones:</c> key. There is no version at which removing it
 	///         becomes safe, because there is no way to prove no file still says it.
 	///     </para>
+	///     <para>
+	///         Keeps its original value 2 while being declared last, so the ordinals of the three live members are
+	///         untouched. See <see cref="Always"/> for why that matters.
+	///     </para>
 	/// </remarks>
-	Either
+	Either = 2
 }

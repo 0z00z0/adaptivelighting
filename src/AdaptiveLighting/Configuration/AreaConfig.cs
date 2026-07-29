@@ -49,8 +49,8 @@ public class AreaConfig
 	///         defaults. A room's own sensor still wins over the outdoor one, so this only ever fills a gap.
 	///     </para>
 	///     <para>
-	///         It composes with <see cref="AreaSettings.Darkness"/> rather than duplicating it. Under <c>Lux</c> or
-	///         <c>Either</c> it decides whether there is a lux verdict to have; under <c>Sun</c> or <c>Always</c>
+	///         It composes with <see cref="AreaSettings.Darkness"/> rather than duplicating it. Under <c>Lux</c>
+	///         it decides whether there is a lux verdict to have; under <c>Sun</c> or <c>Always</c>
 	///         darkness ignores lux entirely — but the reading is still taken, because
 	///         <see cref="AreaSettings.LuxBrightnessEnabled"/> follows the daylight whatever the gate consults, and
 	///         a hallway lit on motion at any hour whose <i>level</i> should follow the sun outside is precisely

@@ -35,7 +35,11 @@ public class TimePeriodConfig
 	// period's own target already does: a night row set to 15 % is the answer, and a second pair of numbers
 	// saying "and never above 20" was a rule about a rule. They also had to be threaded through every consumer —
 	// the sleep clamp, the daylight curve, a room's own levels — each of which had to remember to respect them.
-	// A stale key in an existing file is ignored on load, so nothing needs migrating.
+	// A stale key in an existing file still PARSES — both binders ignore what they do not know — but it no longer
+	// BEHAVES, and those are not the same thing. A night row written { BrightnessPct: 15, MaxBrightnessPct: 30 },
+	// which is the shape the shipped default had, was clamped to 30 % in sleep mode and is now clamped to 15 %.
+	// Half the light, with nothing in the file changed to suggest it. LightingConfigDocument.RetiredKeys exists to
+	// say so in the log on load, because that is the only place left where it can be said.
 }
 
 /// <summary>A sun event a period boundary can be anchored to.</summary>
