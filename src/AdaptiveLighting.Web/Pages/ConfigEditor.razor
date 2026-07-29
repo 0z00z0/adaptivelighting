@@ -196,23 +196,34 @@ else
 
 	<div class="config-layout">
 		@* On a desktop this is a rail beside the content; on a phone it collapses to a row of chips
-		   above it — a thumb finds a chip, not a cramped sidebar. *@
+		   above it — a thumb finds a chip, not a cramped sidebar.
+
+		   Each section carries its glyph here and again on its own header. That pair is the whole of the icon
+		   set's job on this page: the mark is what a section is recognised by before its label is read, and
+		   repeating it on the header confirms you arrived where you pressed. The room rows below stay text —
+		   §6.2 refused glyphs on rows, and seventeen rooms with a mark each is texture, not information. *@
 		<nav class="config-nav" aria-label="Configuration sections">
 			<button type="button" class="config-nav-link @(ActiveClass(Section.Areas))" @onclick="() => Show(Section.Areas)">
-				Areas <span class="config-nav-count">@_config.Areas.Count</span>
+				<Icon Name="@Glyph.Areas" Class="config-nav-icon" />
+				<span class="config-nav-text">Areas</span>
+				<span class="config-nav-count">@_config.Areas.Count</span>
 			</button>
 			<button type="button" class="config-nav-link @(ActiveClass(Section.Schedule))" @onclick="() => Show(Section.Schedule)">
-				Schedule <span class="config-nav-count">@_config.Periods.Count</span>
+				<Icon Name="@Glyph.Schedule" Class="config-nav-icon" />
+				<span class="config-nav-text">Schedule</span>
+				<span class="config-nav-count">@_config.Periods.Count</span>
 			</button>
 			<button type="button" class="config-nav-link @(ActiveClass(Section.HouseModes))" @onclick="() => Show(Section.HouseModes)">
-				House modes
+				<Icon Name="@Glyph.Modes" Class="config-nav-icon" />
+				<span class="config-nav-text">House modes</span>
 				@if (_houseModeOptionValues.Count > 0)
 				{
 					<span class="config-nav-count">@_houseModeOptionValues.Count</span>
 				}
 			</button>
 			<button type="button" class="config-nav-link @(ActiveClass(Section.House))" @onclick="() => Show(Section.House)">
-				House
+				<Icon Name="@Glyph.House" Class="config-nav-icon" />
+				<span class="config-nav-text">House</span>
 			</button>
 		</nav>
 
@@ -220,7 +231,7 @@ else
 			@if (_section == Section.Areas)
 			{
 				<header class="section-head">
-					<h2>Areas</h2>
+					<h2><Icon Name="@Glyph.Areas" Class="ic-head" />Areas</h2>
 					<p class="lede">
 						Rooms not listed here are never touched. Lights and sensors are found automatically from Home
 						Assistant's areas &mdash; open a room to see what was found and to change how it behaves.
@@ -390,15 +401,17 @@ else
 			else if (_section == Section.Schedule)
 			{
 				<header class="section-head">
-					<h2>Schedule</h2>
+					<h2><Icon Name="@Glyph.Schedule" Class="ic-head" />Schedule</h2>
 					<p class="lede">
 						How bright and how warm the lights are through the day. One schedule for the whole house.
 					</p>
 				</header>
 
+				@* No glyph on this card head: the section's own header now carries i-schedule, and the card
+				   begins about a hundred pixels under it. Two of one mark that close is the repetition §6.2
+				   refused, and of the two the header is the one the rail points at. *@
 				<section class="panel room-card house-card">
 					<div class="room-card-head">
-						<Icon Name="@Glyph.Schedule" Class="ic-head" />
 						<span class="room-card-title">Through the day</span>
 						<span class="room-card-note">one rhythm for the whole house</span>
 					</div>
@@ -430,7 +443,7 @@ else
 				   here is exactly the one that lived under Global — SetHouseModeEntity, the live-options catalog, and
 				   OnHouseModeOptionsChanged — moved verbatim. *@
 				<header class="section-head">
-					<h2>House modes</h2>
+					<h2><Icon Name="@Glyph.Modes" Class="ic-head" />House modes</h2>
 					<p class="lede">
 						The house mode lives in a Home Assistant dropdown helper. Pick the helper, then say what each
 						of its options means &mdash; Normal, Sleep, Away or Guest. You switch modes on the
@@ -527,9 +540,9 @@ else
 				   Assistant has rather than from a shortlist. *@
 				@if (_modeLines.Count > 0)
 				{
+					@* No glyph here either, for the reason above: i-modes is on the House modes header. *@
 					<section class="panel room-card house-card">
 						<div class="room-card-head">
-							<Icon Name="@Glyph.Modes" Class="ic-head" />
 							<span class="room-card-title">What each mode does</span>
 							<span class="room-card-note">@_config.Global.HouseMode?.Entity</span>
 						</div>
@@ -636,7 +649,7 @@ else
 					fold.
 				*@
 				<header class="section-head">
-					<h2>House</h2>
+					<h2><Icon Name="@Glyph.House" Class="ic-head" />House</h2>
 					<p class="lede">
 						The settings there is one of: what every room starts with, which lights count as a room's,
 						what this house is called, who lives in it, and the one switch that pauses everything.
