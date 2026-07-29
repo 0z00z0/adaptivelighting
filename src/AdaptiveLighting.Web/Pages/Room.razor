@@ -316,6 +316,27 @@ else
 										}
 									</SettingRow>
 								}
+
+								@* Not an overridable setting — it is a list of entities this room names, so it has no
+								   twin in the house's defaults and cannot be one of the rows above — but it is a
+								   movement rule: it decides whether movement lights the room at all. It used to sit
+								   with the entity pickers two folds below, filed by what it is made of rather than by
+								   what it does, so the one thing that stops a room lighting was nowhere near the
+								   timings that say how long it stays lit. *@
+								@if (string.Equals(current.Title, RoomSettings.MovementSection, StringComparison.Ordinal))
+								{
+									<SettingRow Label="Blocked while on"
+												Help="While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Offered from the whole house, since a blocker often belongs to no room.">
+										<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
+														  ValueChanged="@(value => SetList(value, list => room.IgnoreWhenOn = list))"
+														  Options="@_blockers"
+														  NameResolver="@Name"
+														  KnownResolver="@Catalog.Knows"
+														  EmptyLabel="Nothing blocks this room."
+														  AddLabel="Add a blocker…"
+														  Placeholder="binary_sensor.projector_is_on" />
+									</SettingRow>
+								}
 							</div>
 						}
 					</div>
@@ -446,13 +467,18 @@ else
 						</p>
 
 						@* --------------------------------------------------------------------------------------
-						   The lists offer this room's own entities, because a picker holding all 164 lights in the
-						   house buries the three real answers among status LEDs and colour channels — the same 34
-						   entities the switch-on note warns about, offered as things to pin by hand.
+						   Each list is offered in two blocks: what this room resolves to as it stands, then
+						   everything else it could use under a heading. The split is the information. Discovery
+						   prefers a light group over the bulbs inside it and keeps one entity per device, which is
+						   right for deciding what the engine drives and wrong for the fold that exists to overrule
+						   that decision — a living room reached through one group used to offer exactly one light to
+						   choose from, so "pick it by hand" had nothing to pick.
 
-						   A default, not a wall: this whole fold exists for the case where Home Assistant's area
-						   assignment is the thing that is wrong, so widening it is one tick away, and anything
-						   already chosen stays listed either way.
+						   Two controls narrow what the second block holds. The tick-box widens the whole thing to
+						   the house, for the case where Home Assistant's area assignment is what is wrong. The
+						   filter beside it is about the house's include label: the label the engine reads to decide
+						   which lights it will manage at all, so the everyday list says what the engine says. Naming
+						   an entity here overrules the label outright, which is exactly why All has to be reachable.
 						   -------------------------------------------------------------------------------------- *@
 						@if (room.AreaId is { Length: > 0 })
 						{
@@ -467,10 +493,31 @@ else
 							</div>
 						}
 
+						@if (LabelFilterApplies)
+						{
+							<div class="field">
+								<div class="field-control">
+									<div class="seg" role="group" aria-label="Which of this room's entities to offer">
+										<button type="button"
+												class="@(_labelledOnly ? "cur" : null)"
+												aria-pressed="@(_labelledOnly ? "true" : "false")"
+												@onclick="() => SetLabelFilter(true)">Labelled &ldquo;@IncludeLabel&rdquo;</button>
+										<button type="button"
+												class="@(_labelledOnly ? null : "cur")"
+												aria-pressed="@(_labelledOnly ? "false" : "true")"
+												@onclick="() => SetLabelFilter(false)">All</button>
+									</div>
+								</div>
+								<div class="field-help">@LabelNote</div>
+							</div>
+						}
+
 						<SettingRow Label="Lights" Help="Empty means every light found in this room. Name any here and only those are managed — nothing else in the room is touched, whatever labels it carries.">
 							<EntityListPicker Value="@(room.Lights ?? [])"
 											  ValueChanged="@(value => SetList(value, list => room.Lights = list))"
 											  Options="@_lightChoices"
+											  Others="@_lightOthers"
+											  OthersLabel="@OthersLabel"
 											  NameResolver="@Name"
 											  KnownResolver="@Catalog.Knows"
 											  EmptyLabel="Found in this room."
@@ -483,6 +530,8 @@ else
 							<EntityListPicker Value="@(room.MotionSensors ?? [])"
 											  ValueChanged="@(value => SetList(value, list => room.MotionSensors = list))"
 											  Options="@_motionChoices"
+											  Others="@_motionOthers"
+											  OthersLabel="@OthersLabel"
 											  NameResolver="@Name"
 											  KnownResolver="@Catalog.Knows"
 											  EmptyLabel="Found in this room."
@@ -495,24 +544,11 @@ else
 							<EntityPicker Value="@room.LuxSensor"
 										  ValueChanged="@(value => Set(() => room.LuxSensor = value))"
 										  Options="@_luxChoices"
+										  Others="@_luxOthers"
+										  OthersLabel="@OthersLabel"
 										  NoneLabel="(the one found in this room)"
 										  EmptyNote="@EmptyNote("light-level sensors")"
 										  Placeholder="sensor.example_illuminance" />
-						</SettingRow>
-
-						@* The one list that is not scoped, and it is a difference in kind rather than an oversight:
-						   a television is in this room, but a "do not disturb" flag is an input_boolean that belongs
-						   to no area at all, and a projector may sit in the room next door. Scoping this would hide
-						   the commonest blockers rather than the noisy ones. *@
-						<SettingRow Label="Blocked while on" Help="While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Offered from the whole house, since a blocker often belongs to no room.">
-							<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
-											  ValueChanged="@(value => SetList(value, list => room.IgnoreWhenOn = list))"
-											  Options="@_blockers"
-											  NameResolver="@Name"
-											  KnownResolver="@Catalog.Knows"
-											  EmptyLabel="Nothing blocks this room."
-											  AddLabel="Add a blocker…"
-											  Placeholder="binary_sensor.projector_is_on" />
 						</SettingRow>
 					</div>
 				}
@@ -563,20 +599,21 @@ else
 				<span class="room-card-note">newest first</span>
 			</div>
 
-			@if (RoomLog is { Count: > 0 } entries)
+			@if (RoomLog is { Count: > 0 } rows)
 			{
+				@* Built through ActivityView.Rows rather than a report at a time, so this card gets the same
+				   collapsing the timeline gets. It matters most here: six rows on one room's card, at dusk, were six
+				   copies of the same standing darkness verdict. *@
 				<ol class="log room-log">
-					@foreach (ActivityEntry entry in entries)
+					@foreach (ActivityRow row in rows)
 					{
-						ActivityLine line = ActivityView.Describe(entry.Snapshot);
-
-						<li class="log-row family-@AreaView.Family(entry.Snapshot.State)" @key="entry.Sequence">
+						<li class="log-row family-@AreaView.Family(row.Snapshot.State)" @key="row.Sequence">
 							<div class="log-when">
-								<time class="log-time" datetime="@entry.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(entry.At)</time>
+								<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(row.At)</time>
 							</div>
 							<div class="log-body">
-								<span class="log-what">@line.What</span>
-								@if (line.Why is { Length: > 0 } why)
+								<span class="log-what">@row.Line.What</span>
+								@if (row.Line.Why is { Length: > 0 } why)
 								{
 									<span class="log-why">@why</span>
 								}
@@ -642,7 +679,6 @@ else
 	private bool _pickersOpen;
 	private bool _setupOpen;
 	private bool _removing;
-	private readonly HashSet<string> _closedGroups = new(StringComparer.Ordinal);
 	private readonly HashSet<string> _openedGroups = new(StringComparer.Ordinal);
 
 	// Everything Home Assistant has, read once per document load. These are the pickers' fallback, not what they
@@ -654,13 +690,21 @@ else
 	private IReadOnlyList<EntityOption> _blockers = [];
 	private IReadOnlyList<EntityOption> _sunEntities = [];
 
-	// What the pick-by-hand lists offer: this room's own entities unless the reader has widened them. Rebuilt
-	// whenever the room changes rather than read in a getter — this page redraws once a second, and each of these
-	// reads a friendly name per entity.
+	// What the pick-by-hand lists offer: this room's own entities unless the reader has widened them, and beneath
+	// each of them everything else the room holds that discovery did not claim. Rebuilt whenever the room changes
+	// rather than read in a getter — this page redraws once a second, and each of these reads a friendly name per
+	// entity.
 	private IReadOnlyList<EntityOption> _lightChoices = [];
 	private IReadOnlyList<EntityOption> _motionChoices = [];
 	private IReadOnlyList<EntityOption> _luxChoices = [];
+	private IReadOnlyList<EntityOption> _lightOthers = [];
+	private IReadOnlyList<EntityOption> _motionOthers = [];
+	private IReadOnlyList<EntityOption> _luxOthers = [];
 	private bool _showAllEntities;
+
+	// Whether the second block of each list is held to the house's include label. On by default because that is
+	// the everyday case — it is the same rule the engine applies, so the short list and the running house agree.
+	private bool _labelledOnly = true;
 
 	private IDisposable? _subscription;
 	private IDisposable? _ticker;
@@ -770,7 +814,34 @@ else
 		_motionChoices = Scope(inArea.MotionSensors, _motionSensors, room.MotionSensors);
 		_luxChoices = Scope(inArea.LuxSensors, _luxSensors, room.LuxSensor is { Length: > 0 } lux ? [lux] : null);
 
+		// Only while the lists are scoped to the room. Widened to the house they already hold everything of their
+		// kind, so a second block would be a heading over nothing.
+		AreaEntities others = ScopeToArea
+			? Catalog.OtherEntitiesInArea(room.AreaId, _document.Global, _labelledOnly)
+			: AreaEntities.Empty;
+
+		_lightOthers = Beyond(others.Lights, _lightChoices);
+		_motionOthers = Beyond(others.MotionSensors, _motionChoices);
+		_luxOthers = Beyond(others.LuxSensors, _luxChoices);
+
 		ReadLiveState();
+	}
+
+	/// <summary>
+	///     Everything else, minus whatever the first block already offers.
+	/// </summary>
+	/// <remarks>
+	///     An entity this room has already been given by hand is carried into the first list by <see cref="Scope"/>
+	///     however discovery feels about it, and it is in the room, so it reaches the second list too. Listing it
+	///     twice would let one entity be picked from two places in one dropdown.
+	/// </remarks>
+	private static IReadOnlyList<EntityOption> Beyond(
+		IReadOnlyList<EntityOption> others,
+		IReadOnlyList<EntityOption> offered)
+	{
+		HashSet<string> already = new(offered.Select(option => option.EntityId), StringComparer.Ordinal);
+
+		return [.. others.Where(option => !already.Contains(option.EntityId))];
 	}
 
 	/// <summary>
@@ -826,6 +897,33 @@ else
 	private string ScopeNote => ScopeToArea
 		? "Showing what Home Assistant puts in this room. Anything you have already picked stays listed even if it is elsewhere."
 		: "Showing every one in the house.";
+
+	/// <summary>The heading over the second block of every list.</summary>
+	private const string OthersLabel = "Everything else in this room";
+
+	/// <summary>The house's include label, or empty when it manages every light it finds.</summary>
+	private string IncludeLabel => _document.Global.IncludeLabel ?? string.Empty;
+
+	/// <summary>
+	///     Whether the label filter is worth offering: only where there is a second block for it to narrow, and only
+	///     where the house has an include label at all. A house that set none manages every light it finds, so both
+	///     states of the control would show the same list.
+	/// </summary>
+	private bool LabelFilterApplies => ScopeToArea && IncludeLabel.Length > 0;
+
+	/// <summary>The line under the filter: what the second block of each list is holding right now.</summary>
+	private string LabelNote => _labelledOnly
+		? $"Everything else in this room that carries the “{IncludeLabel}” label — what adaptive lighting manages on its own."
+		: "Everything else in this room, labelled or not. Naming one here manages it whatever labels it carries.";
+
+	/// <summary>
+	///     Narrows or widens the second block. Changes what is offered, never what is configured, so nothing is saved.
+	/// </summary>
+	private void SetLabelFilter(bool labelledOnly)
+	{
+		_labelledOnly = labelledOnly;
+		Refresh();
+	}
 
 	/// <summary>
 	///     Why a picker has nothing to offer.
@@ -947,24 +1045,19 @@ else
 	}
 
 	/// <summary>
-	///     Whether a section is open. Sections carry their own default and a reader's toggle outranks it, so the
-	///     two rare sections stay folded until somebody wants them and stay open once they did.
+	///     Whether a section is open — which, until somebody opens one, is none of them.
 	/// </summary>
-	private bool IsOpen(RoomSettingGroup group) =>
-		group.StartsOpen ? !_closedGroups.Contains(group.Title) : _openedGroups.Contains(group.Title);
+	/// <remarks>
+	///     Every section arrives folded, so the five headings are what a reader meets when <i>All settings</i> is
+	///     revealed and the structure is legible before any of it has to be read. Opening one is a decision this
+	///     visit remembers and nothing here ever takes back.
+	/// </remarks>
+	private bool IsOpen(RoomSettingGroup group) => _openedGroups.Contains(group.Title);
 
 	private void Toggle(RoomSettingGroup group)
 	{
-		if (IsOpen(group))
-		{
-			_openedGroups.Remove(group.Title);
-			_closedGroups.Add(group.Title);
-		}
-		else
-		{
-			_closedGroups.Remove(group.Title);
+		if (!_openedGroups.Remove(group.Title))
 			_openedGroups.Add(group.Title);
-		}
 	}
 
 	/// <summary>How many of a section's settings this room states for itself — the badge on a folded section.</summary>
@@ -1393,26 +1486,34 @@ else
 			if (room.LuxSensor is { Length: > 0 })
 				parts.Add("a light-level sensor");
 
-			if (room.IgnoreWhenOn is { Count: > 0 } blockers)
-				parts.Add($"{blockers.Count} {(blockers.Count == 1 ? "blocker" : "blockers")}");
-
+			// Blockers are counted no longer: the list moved into Movement & timing, and a fold that says what is
+			// picked by hand may only count what is picked inside it.
 			return parts.Count == 0
 				? "nothing is picked by hand here"
 				: $"picked by hand: {string.Join(", ", parts)}";
 		}
 	}
 
-	private IReadOnlyList<ActivityEntry> RoomLog =>
-		_room is null ? [] : [.. ActivityView.InRoom(Log.Entries, RoomName).Take(LogRows)];
+	/// <summary>
+	///     This room's reports, sifted of the ones that are not events at all. The card and its footer both read
+	///     it, so the count under the list and the list itself are about one set of reports.
+	/// </summary>
+	private IReadOnlyList<ActivityEntry> RoomReports =>
+		_room is null ? [] : ActivityView.Shown(ActivityView.InRoom(Log.Entries, RoomName));
+
+	private IReadOnlyList<ActivityRow> RoomLog => ActivityView.Rows(RoomReports, LogRows);
 
 	private string LogFoot
 	{
 		get
 		{
-			int total = _room is null ? 0 : ActivityView.InRoom(Log.Entries, RoomName).Count;
+			int total = RoomReports.Count;
+			int shown = RoomLog.Count;
 
-			return total > LogRows
-				? $"The last {LogRows} of {total} reports from this room. The rest are on the Activity page."
+			// Only the budget earns the second sentence. A run that collapsed is still on this card — the row is the
+			// newest of it — so pointing at another page for "the rest" would send somebody after nothing.
+			return shown >= LogRows && total > shown
+				? $"The newest {shown} of {total} reports from this room. The rest are on the Activity page."
 				: "Everything this room has reported since the engine started.";
 		}
 	}

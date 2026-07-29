@@ -101,17 +101,30 @@ public enum ActivityCategory
 	/// </summary>
 	Illumination = 4,
 
-	/// <summary>Somebody set or switched these lights themselves, or a hand-set decision ran its course.</summary>
-	HandChange = 8,
+	/// <summary>Somebody set or switched these lights themselves, or a manual change ran its course.</summary>
+	ManualChange = 8,
 
 	/// <summary>The engine considered lighting the room and did not — and the row says why.</summary>
 	Declined = 16,
 
-	/// <summary>A mode switch, the house emptying or filling, or the master switch.</summary>
+	/// <summary>The house emptying or filling, or the master switch.</summary>
 	House = 32,
 
 	/// <summary>Housekeeping: rechecks, start-up, and a room switched on or off for automatic lighting.</summary>
-	Background = 64
+	Background = 64,
+
+	/// <summary>
+	///     The house moved to a different mode.
+	/// </summary>
+	/// <remarks>
+	///     Its own flag rather than a share of <see cref="House"/>, because the two are read for different
+	///     reasons: arriving, leaving and the master switch are things that happened <i>to</i> the house, and a
+	///     mode change is the one house-wide event somebody chose. Filed together, the chip that answers "when did
+	///     the house go to sleep" also carried every arrival and departure, which on a house with people coming and
+	///     going is the answer buried in the noise. Still a house-wide row — see <see cref="ActivityView.Rows"/> —
+	///     so one mode change is still one row however many rooms published it.
+	/// </remarks>
+	Mode = 128
 }
 
 /// <summary>
@@ -171,8 +184,9 @@ public static class ActivityView
 		ActivityCategory.Movement
 		| ActivityCategory.LightChange
 		| ActivityCategory.Illumination
-		| ActivityCategory.HandChange
+		| ActivityCategory.ManualChange
 		| ActivityCategory.Declined
+		| ActivityCategory.Mode
 		| ActivityCategory.House
 		| ActivityCategory.Background;
 
@@ -195,26 +209,27 @@ public static class ActivityView
 	///     The chips, in the order they are shown.
 	/// </summary>
 	/// <remarks>
-	///     The four the owner asked for lead, then the two that answer "why did nothing happen", then the house,
-	///     then the housekeeping — which is last because it is the one that starts switched off, and a control
-	///     that is off belongs at the end of a row rather than as a gap in the middle of one.
+	///     The four the owner asked for lead, then the two that answer "why did nothing happen", then the two that
+	///     are about the house rather than a room — the chosen change first, the ones that merely happened after it
+	///     — then the housekeeping, which is last because it is the one that starts switched off, and a control that
+	///     is off belongs at the end of a row rather than as a gap in the middle of one.
 	/// </remarks>
 	private static readonly CategoryName[] Catalogue =
 	[
 		new(ActivityCategory.Movement, "Movement", "A motion sensor reported."),
 		new(ActivityCategory.LightChange, "Light change",
-			"The engine commanded the lights: on, retuned to the time of day, dimmed as a warning, or off."),
+			"The engine commanded the lights: on, retuned, dimmed as a warning, or off."),
 		new(ActivityCategory.Illumination, "Darkness",
-			"How dark the room was measured to be, against the level it counts as dark."),
-		new(ActivityCategory.HandChange, "Hand changes",
-			"Somebody set or switched the lights themselves, and what happened when that ran its course."),
+			"How dark the room measured, against the level it counts as dark."),
+		new(ActivityCategory.ManualChange, "Manual changes",
+			"Somebody set or switched the lights themselves, and what happened when that ran out."),
 		new(ActivityCategory.Declined, "Nothing happened",
 			"The engine could have lit the room and did not — with the reason."),
-		new(ActivityCategory.House, "House & modes",
-			"Mode changes, the house emptying and filling, and the master switch."),
+		new(ActivityCategory.Mode, "Mode changes", "The house moved to a different mode."),
+		new(ActivityCategory.House, "House",
+			"The house emptying and filling, a guest scene, and the master switch."),
 		new(ActivityCategory.Background, "Background tasks",
-			"Rechecks, start-up, and rooms switched on or off for automatic lighting. Starts hidden: it is the "
-			+ "highest volume and the lowest signal.")
+			"Rechecks, start-up, and rooms switched on or off. Starts hidden — the highest volume, the lowest signal.")
 	];
 
 	/// <summary>
@@ -257,15 +272,11 @@ public static class ActivityView
 			return new ActivityLine(MovementRefusedBy(snapshot), RefusalDetail(snapshot));
 
 		if (snapshot.KillSwitchActive)
-			return new ActivityLine("Paused by the master switch", "No lights will change until it is turned back on.");
+			return new ActivityLine("Paused by the master switch", "No lights change until it's turned back on.");
 
 		// A quiet re-check that found the darkness verdict had moved. That verdict is the whole news, so it leads.
 		if (snapshot is { Reason: TransitionReason.CircadianTick, State: AreaState.AutoVacant, IsDark: { } dark })
-		{
-			return new ActivityLine(
-				dark ? DarkEnough(snapshot) : "Too bright to switch the lights on",
-				Reading(snapshot));
-		}
+			return new ActivityLine(dark ? DarkEnough(snapshot) : TooBright, Reading(snapshot));
 
 		return new ActivityLine(Headline(snapshot), Condition(snapshot));
 	}
@@ -327,6 +338,60 @@ public static class ActivityView
 		];
 	}
 
+	// ===================== what is not an event at all =====================
+
+	/// <summary>
+	///     Whether a report is worth a row at all.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         One rule, and it is about start-up. The engine publishes one report per room when it starts, and the
+	///         row for it reads "Started up — took the room as it was". Where the room had something to say for
+	///         itself the row says it underneath — <i>too bright to switch on, lux 4096 (mean of 2 of 2 sensors),
+	///         dark below 40</i> — and that is worth keeping: it is twice this month the answer to what a room saw
+	///         at boot. Where it did not, the row is the sentence and nothing else, which is not an event. It is the
+	///         engine saying it did nothing, once per room, at the top of every restart.
+	///     </para>
+	///     <para>
+	///         <b>Decided here rather than by publishing fewer snapshots.</b> The board's lanes, the room cards and
+	///         the room pages all read those per-area reports, and a start-up snapshot is where a lane's first block
+	///         begins. Dropping it at the source would answer a wording problem by losing data three other surfaces
+	///         are drawn from.
+	///     </para>
+	/// </remarks>
+	/// <param name="snapshot">The report to judge.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is <c>null</c>.</exception>
+	public static bool IsWorthShowing(AreaSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		// The master switch replaces a start-up row's words with a sentence about the whole house, and that one is
+		// news whatever else the report carries.
+		if (snapshot.Reason is not TransitionReason.Startup || snapshot.KillSwitchActive)
+			return true;
+
+		return Describe(snapshot).Why is { Length: > 0 };
+	}
+
+	/// <summary>
+	///     Only the reports worth a row, in the order they were given.
+	/// </summary>
+	/// <remarks>
+	///     Applied where a page reads the log for the <i>record</i> — the activity timeline, the dashboard's summary
+	///     and a room's own list — and deliberately not where the dashboard reads it for the board, whose lanes are
+	///     drawn from every report the engine published. Applied before the counts, so what the page says it is
+	///     holding and what it draws are one number.
+	/// </remarks>
+	/// <param name="entries">The entries to sift.</param>
+	/// <returns>The entries worth showing, in the order they were given.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="entries"/> is <c>null</c>.</exception>
+	public static IReadOnlyList<ActivityEntry> Shown(IEnumerable<ActivityEntry> entries)
+	{
+		ArgumentNullException.ThrowIfNull(entries);
+
+		return [.. entries.Where(entry => IsWorthShowing(entry.Snapshot))];
+	}
+
 	// ===================== the category filter =====================
 
 	/// <summary>
@@ -366,6 +431,14 @@ public static class ActivityView
 		if (snapshot.KillSwitchActive && !IsDeclinedMotion(snapshot))
 			return ActivityCategory.House;
 
+		// Start-up decided nothing: the engine took every room as it found it, and the condition under the row is a
+		// reading of what boot happened to walk into. Housekeeping outright, therefore, and never the darkness or
+		// refusal chips — those promise a room the engine has just made its mind up about, and a person who ticks
+		// them to find out why a light stayed off is not asking what the house looked like when the add-on started.
+		// The row is only drawn at all when it carries that condition; see IsWorthShowing.
+		if (snapshot.Reason is TransitionReason.Startup)
+			return ActivityCategory.Background;
+
 		ActivityCategory categories = ActivityCategory.None;
 
 		if (snapshot.Reason is TransitionReason.Motion)
@@ -381,13 +454,15 @@ public static class ActivityView
 			or TransitionReason.ManualOff
 			or TransitionReason.OverrideExpired
 			or TransitionReason.SuppressionLifted)
-			categories |= ActivityCategory.HandChange;
+			categories |= ActivityCategory.ManualChange;
 
 		if (WasDeclined(snapshot))
 			categories |= ActivityCategory.Declined;
 
-		if (snapshot.Reason is TransitionReason.HouseModeChanged
-			or TransitionReason.EveryoneLeft
+		if (snapshot.Reason is TransitionReason.HouseModeChanged)
+			categories |= ActivityCategory.Mode;
+
+		if (snapshot.Reason is TransitionReason.EveryoneLeft
 			or TransitionReason.FirstPersonArrived
 			or TransitionReason.SceneHold)
 			categories |= ActivityCategory.House;
@@ -400,8 +475,7 @@ public static class ActivityView
 		// Start-up and a room's own switch are housekeeping outright. A tick is housekeeping only when nothing
 		// above wanted it: the same reason carries the circadian re-aim and the dusk verdict, and those are the
 		// two rows this page exists for — miscounting either as background would hide them by default.
-		if (snapshot.Reason is TransitionReason.Startup
-			or TransitionReason.AdoptedAtStartup
+		if (snapshot.Reason is TransitionReason.AdoptedAtStartup
 			or TransitionReason.EnablementChanged
 			|| (snapshot.Reason is TransitionReason.CircadianTick && categories == ActivityCategory.None))
 			categories |= ActivityCategory.Background;
@@ -437,7 +511,7 @@ public static class ActivityView
 	/// <remarks>
 	///     Every category is always offered, including the ones holding nothing. A chip that vanished when its
 	///     count reached zero would take the reader's map of the page with it, and "this room has never reported
-	///     a hand change" is an answer worth being able to read.
+	///     a manual change" is an answer worth being able to read.
 	/// </remarks>
 	/// <param name="entries">The reports on offer — the ones the room filter left, so the counts describe the room.</param>
 	/// <param name="chosen">The categories that are switched on.</param>
@@ -527,7 +601,7 @@ public static class ActivityView
 		// off if nobody is.
 		TransitionReason.OverrideExpired => true,
 
-		// Start-up takes the room as it found it, a scene hold is the engine standing back, a hand change is
+		// Start-up takes the room as it found it, a scene hold is the engine standing back, a manual change is
 		// somebody else's command, a suppression lifting only stops ignoring movement, and switching a room on
 		// or off changes what the engine may do rather than what the lights are doing.
 		TransitionReason.Startup
@@ -666,23 +740,47 @@ public static class ActivityView
 	}
 
 	/// <summary>
-	///     Turns reports into the rows a page renders: one row per report, except that a run of house-wide reports
-	///     saying the same thing becomes a single row attributed to the house.
+	///     Whether the report is the standing darkness verdict a quiet re-check republishes on every tick.
+	/// </summary>
+	/// <remarks>
+	///     Not an event but a state, which is why it is collapsed. The engine re-checks each room on every tick and
+	///     publishes what it found, so a room that goes dark at dusk and stays dark says "dark enough now" once a
+	///     minute until dawn — which is what made the line meaningless to read. The verdict itself is still worth a
+	///     row; the four hundred repeats of it are not.
+	/// </remarks>
+	private static bool IsStandingVerdict(AreaSnapshot snapshot) =>
+		snapshot is { Reason: TransitionReason.CircadianTick, State: AreaState.AutoVacant, IsDark: not null }
+		&& !snapshot.KillSwitchActive;
+
+	/// <summary>
+	///     Turns reports into the rows a page renders: one row per report, except that a run of reports saying the
+	///     same thing becomes a single row carrying the newest of them.
 	/// </summary>
 	/// <remarks>
 	///     <para>
-	///         <b>The test for "the same thing" is the whole row, as the row will read.</b> Two reports collapse
-	///         only when both of their rendered lines match, so a row never says anything that was not in every
-	///         report behind it. Matching on the reason alone would have merged "the house changed mode to Home"
-	///         with "the house changed mode to Guests" — the mode is in the headline, and two modes are two events.
-	///         What the rendered line has already dropped by then is each room's private condition, which
-	///         <see cref="LineFor"/> explains.
+	///         <b>Two runs collapse, and they are the same idea read over different sequences.</b> House-wide
+	///         reports collapse over the whole record: one change of mode is published by every switched-on room,
+	///         so the run is consecutive and the row belongs to the house. The standing darkness verdict collapses
+	///         over <i>one room's own</i> reports: every room ticks in the same pass, so a room's repeats are never
+	///         adjacent in the record, and the other rooms' reports are stepped over rather than counted as
+	///         something happening in between. Either way the newest of the run is the row, which is what keeps the
+	///         reading on it current.
+	///     </para>
+	///     <para>
+	///         <b>What "the same thing" means differs between the two, and both are the honest test.</b> Two
+	///         house-wide reports collapse only when their whole rendered lines match, so the row never says
+	///         anything that was not in every report behind it; matching on the reason alone would have merged "the
+	///         house changed mode to Home" with "…to Guests". A darkness verdict is matched on its headline alone,
+	///         because the line underneath is the live reading and moves by a few lux every tick — requiring that to
+	///         match as well would collapse nothing at all, which is the defect rather than the fix.
 	///     </para>
 	///     <para>
 	///         Only a consecutive run collapses, never a scattered set. The record's order is the reader's account
 	///         of what followed what, and lifting a row out of the middle of it to join one further up would rewrite
 	///         that account — the two rows would have become one in a place where, on the evidence, something else
-	///         happened between them.
+	///         happened between them. For a room's verdict that means anything else <i>from that room</i> ends the
+	///         run: movement, a hand on a switch, a restart. The verdict then reads again below it, which is right —
+	///         something happened in that room, and the record says what the room looked like on either side of it.
 	///     </para>
 	///     <para>
 	///         <paramref name="limit"/> exists for the dashboard, which wants a dozen rows out of a buffer of five
@@ -703,33 +801,27 @@ public static class ActivityView
 			return [];
 
 		List<ActivityEntry> ordered = [.. entries];
+
+		// Swallowed by a run above them, and memoised words. A limited read builds a dozen rows out of five hundred
+		// reports once a second, so the line each report renders to is worked out at most once whichever run asks.
+		bool[] swallowed = new bool[ordered.Count];
+		ActivityLine?[] words = new ActivityLine?[ordered.Count];
 		List<ActivityRow> rows = [];
 
-		int index = 0;
-		while (index < ordered.Count)
+		for (int index = 0; index < ordered.Count; index++)
 		{
+			if (swallowed[index])
+				continue;
+
 			ActivityEntry head = ordered[index];
-			ActivityLine line = LineFor(head.Snapshot);
+			ActivityLine line = LineAt(index);
 			bool house = IsAboutTheHouse(head.Snapshot);
 			List<string> rooms = [head.AreaName];
 
-			index++;
-
-			// Absolute difference rather than a subtraction: the list is newest first by sequence, and a report
-			// whose timestamp disagrees with its position must not be swept in by an interval that went negative.
-			while (house
-				&& index < ordered.Count
-				&& IsAboutTheHouse(ordered[index].Snapshot)
-				&& (head.At - ordered[index].At).Duration() <= CollapseWindow
-				&& LineFor(ordered[index].Snapshot) == line)
-			{
-				string room = ordered[index].AreaName;
-
-				if (!rooms.Contains(room, StringComparer.OrdinalIgnoreCase))
-					rooms.Add(room);
-
-				index++;
-			}
+			if (house)
+				SwallowHouseRun(index, line, rooms);
+			else if (IsStandingVerdict(head.Snapshot))
+				SwallowRepeatedVerdict(index, line);
 
 			rows.Add(new ActivityRow(head, line, house, rooms));
 
@@ -738,6 +830,53 @@ public static class ActivityView
 		}
 
 		return rows;
+
+		ActivityLine LineAt(int at) => words[at] ??= LineFor(ordered[at].Snapshot);
+
+		void SwallowHouseRun(int from, ActivityLine line, List<string> rooms)
+		{
+			DateTimeOffset at = ordered[from].At;
+
+			for (int scan = from + 1; scan < ordered.Count; scan++)
+			{
+				// Absolute difference rather than a subtraction: the list is newest first by sequence, and a report
+				// whose timestamp disagrees with its position must not be swept in by an interval that went negative.
+				if (!IsAboutTheHouse(ordered[scan].Snapshot)
+					|| (at - ordered[scan].At).Duration() > CollapseWindow
+					|| LineAt(scan) != line)
+				{
+					return;
+				}
+
+				string room = ordered[scan].AreaName;
+
+				if (!rooms.Contains(room, StringComparer.OrdinalIgnoreCase))
+					rooms.Add(room);
+
+				swallowed[scan] = true;
+			}
+		}
+
+		void SwallowRepeatedVerdict(int from, ActivityLine line)
+		{
+			// Matched on the display name, as InRoom and the room filter are: the three have to agree about what
+			// "the same room" is, or a run would be assembled from rooms the filter would then not put together.
+			string room = ordered[from].AreaName;
+
+			for (int scan = from + 1; scan < ordered.Count; scan++)
+			{
+				if (!string.Equals(ordered[scan].AreaName, room, StringComparison.OrdinalIgnoreCase))
+					continue;
+
+				if (!IsStandingVerdict(ordered[scan].Snapshot)
+					|| !string.Equals(LineAt(scan).What, line.What, StringComparison.Ordinal))
+				{
+					return;
+				}
+
+				swallowed[scan] = true;
+			}
+		}
 	}
 
 	/// <summary>
@@ -832,38 +971,55 @@ public static class ActivityView
 	}
 
 	/// <summary>
+	///     What the room being too bright is called, in the one place it is written down.
+	/// </summary>
+	/// <remarks>
+	///     It reads as the headline when the verdict is the news and as the condition under someone else's headline,
+	///     and it used to be worded twice — "too bright to switch the lights on" above, "too bright to switch on"
+	///     below. One condition, one sentence; the shorter one, because the second place it appears is already
+	///     under a line that has said what happened.
+	/// </remarks>
+	private const string TooBright = "Too bright to switch on";
+
+	/// <summary>
 	///     The event itself, from the engine's own reason for publishing.
 	/// </summary>
+	/// <remarks>
+	///     Written to be read at a glance down a twelve-row summary, so each line carries the event and stops. What
+	///     a line may not trade for brevity is precision: which room, which gate and which measured number are the
+	///     whole reason somebody opened the page, and a shorter line that is vaguer about them is worse than a long
+	///     one.
+	/// </remarks>
 	private static string Headline(AreaSnapshot snapshot) => snapshot.Reason switch
 	{
-		TransitionReason.Startup => "Started up and took the room as it was",
-		TransitionReason.AdoptedAtStartup => "Started up and found these lights already on",
+		TransitionReason.Startup => "Started up — took the room as it was",
+		TransitionReason.AdoptedAtStartup => "Started up — these lights were already on",
 		TransitionReason.Motion => snapshot.State switch
 		{
 			AreaState.AutoActive => Lit("Movement — lights on", snapshot),
-			AreaState.SuppressedOff => "Movement, but these lights were switched off by hand",
-			AreaState.OverriddenOn => "Movement while the hand-set levels stand",
+			AreaState.SuppressedOff => "Movement, but the lights are off by hand",
+			AreaState.OverriddenOn => "Movement while the manual levels stand",
 			_ => "Movement"
 		},
-		TransitionReason.VacancyTimeout => Lit("No movement for a while — dimmed as a warning", snapshot),
-		TransitionReason.PreOffElapsed => "Nobody answered the dim warning, so the lights went off",
-		TransitionReason.ManualOn => "Someone set the lights by hand",
-		TransitionReason.ManualOff => "Someone switched the lights off by hand",
-		TransitionReason.OverrideExpired => "The hand-set levels ran their course",
-		TransitionReason.SuppressionLifted => "Quiet long enough — back under automatic control",
-		TransitionReason.EveryoneLeft => "The last person left the house",
-		TransitionReason.FirstPersonArrived => "The first person came home",
+		TransitionReason.VacancyTimeout => Lit("No movement — dimmed as a warning", snapshot),
+		TransitionReason.PreOffElapsed => "Dim warning unanswered — lights off",
+		TransitionReason.ManualOn => "Lights set by hand",
+		TransitionReason.ManualOff => "Lights switched off by hand",
+		TransitionReason.OverrideExpired => "The manual change ran its course",
+		TransitionReason.SuppressionLifted => "Quiet long enough — back on automatic",
+		TransitionReason.EveryoneLeft => "Everyone left the house",
+		TransitionReason.FirstPersonArrived => "First person home",
 		TransitionReason.EnablementChanged => snapshot.State == AreaState.Disabled
-			? "Automatic lighting was switched off for this room"
-			: "Automatic lighting was switched on for this room",
+			? "Automatic lighting switched off here"
+			: "Automatic lighting switched on here",
 		TransitionReason.CircadianTick => snapshot.State == AreaState.AutoActive
-			? Lit("Retuned the lights to the time of day", snapshot)
+			? Lit("Retuned to the time of day", snapshot)
 			: "Rechecked the room",
 		TransitionReason.HouseModeChanged => snapshot.HouseModeValue is { Length: > 0 } value
-			? $"The house changed mode to {value}"
+			? $"Mode changed to {value}"
 			: "The house changed mode",
 		TransitionReason.SceneHold => snapshot.State == AreaState.SceneHold
-			? "A guest scene took this room over"
+			? "A guest scene has this room"
 			: "The guest scene let this room go",
 		_ => snapshot.Reason.ToString()
 	};
@@ -885,8 +1041,8 @@ public static class ActivityView
 	/// </remarks>
 	private static string? Condition(AreaSnapshot snapshot) => snapshot.State switch
 	{
-		AreaState.Disabled => "Automatic lighting is switched off for this room.",
-		AreaState.Away => "Nobody home — the room waits for the first arrival.",
+		AreaState.Disabled => "Automatic lighting is off here.",
+		AreaState.Away => "Nobody home — waiting for the first arrival.",
 
 		// Through DarkEnough rather than worded again, so the chip, this row and the dusk row it sits above all
 		// say one thing about one condition.
@@ -894,9 +1050,9 @@ public static class ActivityView
 
 		AreaState.AutoVacant when snapshot.IsDark is false =>
 			Reading(snapshot) is { Length: > 0 } reading
-				? $"Too bright to switch on — {reading}"
-				: "Too bright to switch on.",
-		AreaState.AutoVacant when snapshot.IsDark is null => "Darkness hasn't been checked here yet.",
+				? $"{TooBright} — {reading}"
+				: $"{TooBright}.",
+		AreaState.AutoVacant when snapshot.IsDark is null => "Darkness not checked here yet.",
 		_ => null
 	};
 
@@ -922,11 +1078,11 @@ public static class ActivityView
 	/// </remarks>
 	private static string DarkEnough(AreaSnapshot snapshot) => snapshot.AutoOnBlockedBy switch
 	{
-		AutoOnBlock.Sleep => "Dark enough now, but the house is asleep — movement will not switch the lights on",
+		AutoOnBlock.Sleep => "Dark enough, but the house is asleep — movement won't light the room",
 		AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
-			? $"Dark enough now, but {blocker} is on — movement will not switch the lights on"
-			: "Dark enough now, but something here is on — movement will not switch the lights on",
-		_ => "Dark enough now — movement will switch the lights on"
+			? $"Dark enough, but {blocker} is on — movement won't light the room"
+			: "Dark enough, but something here is on — movement won't light the room",
+		_ => "Dark enough — movement will light the room"
 	};
 
 	/// <summary>
@@ -956,14 +1112,14 @@ public static class ActivityView
 	private static string MovementRefusedBy(AreaSnapshot snapshot) => snapshot.AutoOnBlockedBy switch
 	{
 		AutoOnBlock.KillSwitch => "Movement, but the master switch is off",
-		AutoOnBlock.Disabled => "Movement, but automatic lighting is switched off for this room",
-		AutoOnBlock.Away => "Movement, but the house is away — the room waits for the first arrival",
+		AutoOnBlock.Disabled => "Movement, but automatic lighting is off here",
+		AutoOnBlock.Away => "Movement, but nobody is home yet",
 		AutoOnBlock.SceneHold => "Movement, but a guest scene has this room",
-		AutoOnBlock.Sleep => "Movement, but the house is asleep and this room does not light itself while it is",
+		AutoOnBlock.Sleep => "Movement, but the house is asleep and this room stays dark",
 		AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
 			? $"Movement, but {blocker} is on"
 			: "Movement, but something here is on",
-		AutoOnBlock.NotDark => "Movement, but the room is bright enough already",
+		AutoOnBlock.NotDark => "Movement, but the room is bright enough",
 
 		// Unreachable while IsDeclinedMotion guards this: None and null are both excluded there. Worded rather
 		// than thrown, because a row that says less is a better failure than a page that does not render.

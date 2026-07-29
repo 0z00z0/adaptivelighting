@@ -354,7 +354,7 @@ else
 
 		It is a SUMMARY, so it shows what the Activity page shows when you open it: the same default category set,
 		read from ActivityView rather than restated here, which means the housekeeping stays off it. Twelve rows of
-		"Rechecked the room · automatic lighting is switched off for this room" is a summary of nothing, and the
+		"Rechecked the room · automatic lighting is off here" is a summary of nothing, and the
 		twelve-row budget is spent after the filter rather than before it — twelve rows worth reading, not twelve
 		of which nine are noise. The chips that switch the categories deliberately do not appear here: the filtering
 		control belongs on the page the link at the foot already goes to.
@@ -550,10 +550,17 @@ else
 		_nowPercent = Math.Clamp(_window.PercentAt(_now), 0, 100);
 		_entries = Log.Entries;
 
-		// The summary's own two steps, in the order the Activity page applies them: the categories it opens with,
-		// then the collapse into rows, then the budget. Limited rather than collapsed whole — the buffer holds five
-		// hundred reports and this runs once a second, and a dozen rows is all the markup below can use.
-		IReadOnlyList<ActivityEntry> kept = ActivityView.InCategories(_entries, ActivityView.DefaultCategories);
+		// The summary's own steps, in the order the Activity page applies them: the reports worth a row at all, then
+		// the categories it opens with, then the collapse into rows, then the budget. Limited rather than collapsed
+		// whole — the buffer holds five hundred reports and this runs once a second, and a dozen rows is all the
+		// markup below can use.
+		//
+		// The sift is the summary's alone. The lanes further up are drawn from every report the engine published,
+		// start-up included: that snapshot is where a lane's first block begins, and it is a state the board draws
+		// rather than a sentence the record reads.
+		IReadOnlyList<ActivityEntry> kept =
+			ActivityView.InCategories(ActivityView.Shown(_entries), ActivityView.DefaultCategories);
+
 		_kept = kept.Count;
 		_logRows = ActivityView.Rows(kept, BoardView.LogPreview);
 

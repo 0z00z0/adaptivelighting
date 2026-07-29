@@ -238,6 +238,11 @@ else
 	private IReadOnlyList<ActivityFilterChip> _chips = [];
 	private string _room = ActivityView.AllRooms;
 	private ActivityCategory _categories = ActivityView.DefaultCategories;
+
+	// How many reports the buffer was holding when it was last read, before the non-events were sifted out. Only
+	// the footer wants it, and only to say whether the buffer has started dropping its oldest.
+	private int _recorded;
+
 	private long _shownThrough;
 	private IDisposable? _subscription;
 
@@ -267,15 +272,24 @@ else
 	///     Draws everything the log is holding and moves the read mark to the newest report.
 	/// </summary>
 	/// <remarks>
-	///     One <see cref="ActivityLog.Read"/>, never the two properties in turn: a report landing between two
-	///     separately-locked reads would be marked as shown while being absent from the list that was shown, and
-	///     nothing would offer it again until the next report happened to arrive.
+	///     <para>
+	///         One <see cref="ActivityLog.Read"/>, never the two properties in turn: a report landing between two
+	///         separately-locked reads would be marked as shown while being absent from the list that was shown, and
+	///         nothing would offer it again until the next report happened to arrive.
+	///     </para>
+	///     <para>
+	///         Sifted through <see cref="ActivityView.Shown"/> the moment it is read, so the counts, the chips, the
+	///         hidden note and the timeline are all about one set of reports. What the buffer actually holds is kept
+	///         beside it for the footer, which is the one line whose job is to say when reports have started falling
+	///         off the end.
+	///     </para>
 	/// </remarks>
 	private void ShowNew()
 	{
 		ActivityTimeline timeline = Log.Read();
 
-		_entries = timeline.Entries;
+		_recorded = timeline.Entries.Count;
+		_entries = ActivityView.Shown(timeline.Entries);
 		_shownThrough = timeline.Newest;
 
 		ApplyFilter();
@@ -348,7 +362,7 @@ else
 			string held = _entries.Count == 1 ? "1 report" : $"{_entries.Count} reports";
 			string shown = _visible.Count == _entries.Count ? held : $"{_visible.Count} of {held}";
 
-			return _entries.Count < ActivityLog.Capacity
+			return _recorded < ActivityLog.Capacity
 				? $"Showing {shown} since adaptive lighting started."
 				: $"Showing {shown}. Only the most recent {ActivityLog.Capacity} are kept; older ones have been dropped.";
 		}

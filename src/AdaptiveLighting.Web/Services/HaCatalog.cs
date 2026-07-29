@@ -285,6 +285,73 @@ public sealed class HaCatalog
 	}
 
 	/// <summary>
+	///     What the area holds <i>besides</i> what discovery settled on — the singles a group swallowed, and the
+	///     ones a label kept out.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Why a picker needs this at all.</b> <see cref="EntitiesInArea"/> is discovery's own answer, and
+	///         discovery is deliberately opinionated: a light group wins over the bulbs inside it, one entity wins
+	///         per Home Assistant device, and the include label keeps out anything the house has not marked. Every
+	///         one of those is right for deciding what the engine drives, and wrong for a picker whose whole purpose
+	///         is to overrule that decision. A living room reached through one group offered exactly one light to
+	///         pick from, so the fold that exists to say "discovery got this wrong" had nothing to offer instead.
+	///     </para>
+	///     <para>
+	///         <b>Derived by subtraction, never by re-deciding.</b> Group membership, device identity and the label
+	///         rules stay in <see cref="AreaEntityResolver"/>, where the engine reads them; this takes the registry's
+	///         own listing of the area and removes whatever discovery already claimed. A second opinion assembled
+	///         here would eventually disagree with the one the engine acts on, which is the drift this whole class
+	///         is built to avoid.
+	///     </para>
+	/// </remarks>
+	/// <param name="areaId">The area to look in. <c>null</c> or blank yields <see cref="AreaEntities.Empty"/>.</param>
+	/// <param name="global">The discovery conventions to honour, and the include label the filter reads.</param>
+	/// <param name="labelledOnly">
+	///     Whether to offer only what carries <see cref="GlobalConfig.IncludeLabel"/>. The everyday case, and a house
+	///     that configured no include label is offered everything either way — the engine's own rule, where saying
+	///     nothing has always meant "every light discovery finds".
+	/// </param>
+	/// <returns>What is left over, named the way Home Assistant names it.</returns>
+	/// <exception cref="ArgumentNullException"><paramref name="global"/> is <c>null</c>.</exception>
+	public AreaEntities OtherEntitiesInArea(string? areaId, GlobalConfig global, bool labelledOnly)
+	{
+		ArgumentNullException.ThrowIfNull(global);
+
+		if (string.IsNullOrWhiteSpace(areaId))
+			return AreaEntities.Empty;
+
+		AreaDiscovery discovered = Discover(areaId, global);
+		IReadOnlyList<string> inArea = EntitiesInAreaOrNone(areaId);
+
+		bool Offered(string entityId) =>
+			!labelledOnly
+			|| global.IncludeLabel is not { Length: > 0 } include
+			|| _areas.LabelsOf(entityId).Contains(include, StringComparer.OrdinalIgnoreCase);
+
+		IReadOnlyList<EntityOption> Rest(IReadOnlyList<string> claimed, Func<string, bool> qualifies)
+		{
+			HashSet<string> taken = new(claimed, StringComparer.Ordinal);
+
+			return Describe(
+			[
+				.. inArea
+					.Where(qualifies)
+					.Where(entityId => !taken.Contains(entityId))
+					.Where(Offered)
+					.Distinct(StringComparer.Ordinal)
+			]);
+		}
+
+		return new AreaEntities(
+			Rest(discovered.Lights, entityId => string.Equals(entityId.Domain(), "light", StringComparison.Ordinal)),
+			Rest(discovered.MotionSensors, entityId => string.Equals(entityId.Domain(), "binary_sensor", StringComparison.Ordinal)),
+			Rest(discovered.LuxSensors, entityId =>
+				string.Equals(entityId.Domain(), "sensor", StringComparison.Ordinal)
+				&& string.Equals(DeviceClassOf(entityId), global.IlluminanceDeviceClass, StringComparison.OrdinalIgnoreCase)));
+	}
+
+	/// <summary>
 	///     How many lights discovery finds in <paramref name="areaId"/>, without naming them.
 	/// </summary>
 	/// <remarks>
@@ -630,19 +697,32 @@ public sealed class HaCatalog
 	///     resolver would drop costs nothing here.
 	/// </remarks>
 	/// <param name="areaId">The area, or <c>null</c> for a room with no area to list.</param>
-	private IReadOnlyList<string> LightEntitiesIn(string? areaId)
+	private IReadOnlyList<string> LightEntitiesIn(string? areaId) =>
+		[.. EntitiesInAreaOrNone(areaId).Where(entityId => string.Equals(entityId.Domain(), "light", StringComparison.Ordinal))];
+
+	/// <summary>
+	///     The registry's own listing of an area, or nothing when it cannot answer.
+	/// </summary>
+	/// <remarks>
+	///     Unfiltered by design — the callers want what the room <i>holds</i>, not what discovery would make of it,
+	///     and each applies its own test. A registry that has not connected yields an empty list rather than
+	///     throwing: both callers are drawing something that is honestly narrower without it, and neither is worth
+	///     failing a page for.
+	/// </remarks>
+	/// <param name="areaId">The area, or <c>null</c> for a room with no area to list.</param>
+	private IReadOnlyList<string> EntitiesInAreaOrNone(string? areaId)
 	{
 		if (string.IsNullOrWhiteSpace(areaId))
 			return [];
 
 		try
 		{
-			return [.. _areas.EntitiesInArea(areaId).Where(entityId => string.Equals(entityId.Domain(), "light", StringComparison.Ordinal))];
+			return _areas.EntitiesInArea(areaId);
 		}
 		catch (InvalidOperationException exception)
 		{
 			IsHomeAssistantReady = false;
-			_logger.LogDebug(exception, "The registry cannot list area {Area} yet, so the light audit judges the room alone.", areaId);
+			_logger.LogDebug(exception, "The registry cannot list area {Area} yet, so the room is judged on what it already names.", areaId);
 			return [];
 		}
 	}

@@ -225,10 +225,10 @@ public static class RoomFacts
 
 		return snapshot.AutoOnBlockedBy switch
 		{
-			AutoOnBlock.Sleep => "The house is asleep — movement will not switch the lights on.",
+			AutoOnBlock.Sleep => "The house is asleep — movement won't light the room.",
 			AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
-				? $"{blocker} is on — movement will not switch the lights on."
-				: "Something here is on — movement will not switch the lights on.",
+				? $"{blocker} is on — movement won't light the room."
+				: "Something here is on — movement won't light the room.",
 			_ => null
 		};
 	}

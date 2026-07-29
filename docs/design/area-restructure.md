@@ -173,7 +173,7 @@ the same labels, so the two places a setting appears use identical words.
 | `VacancyTimeoutSeconds` | Movement & timing | **Lights stay on for** | "After the last movement, how long the lights stay on before the warning dim. Longer for rooms where people sit still." |
 | `PreOffSeconds` | Movement & timing | **Warning dim lasts** | "Before going out, lights dim for this long. Any movement brings them straight back." |
 | `PreOffBrightnessFactor` | Movement & timing | **Warning dim level** | "How deep the warning dim is. 0.5 means half the current brightness." |
-| `OverrideDurationMinutes` | Movement & timing | **Hand changes hold for** | "When someone adjusts a light by hand, their choice is left alone for this long." |
+| `OverrideDurationMinutes` | Movement & timing | **Manual changes hold for** | "When someone adjusts a light by hand, their choice is left alone for this long." |
 | `VacancyResetMinutes` | Movement & timing | **After a manual off, wait** | "After someone turns the lights off by hand, movement won't turn them back on until the room has been empty this long." |
 | `Darkness` | Darkness | **How a room decides it's dark** | current dropdown copy is good |
 | `LuxThreshold` | Darkness | **Dark below** | "At or below this many lux the room counts as dark." |
@@ -423,7 +423,7 @@ In `RunZoneDiscovery` (moving to `AreaSetupService`, §6.4):
 | "Add a zone" | **Add a room** | Areas |
 | "Vacancy timeout" | **Lights stay on for** | All rooms + per-room |
 | "Pre-off warning" / "Pre-off brightness" | **Warning dim lasts** / **Warning dim level** | 〃 |
-| "Override holds for" | **Hand changes hold for** | 〃 |
+| "Override holds for" | **Manual changes hold for** | 〃 |
 | "Vacancy reset" | **After a manual off, wait** | 〃 |
 | "Darkness source" | **How a room decides it's dark** | 〃 |
 | "Lux threshold" | **Dark below** | 〃 |

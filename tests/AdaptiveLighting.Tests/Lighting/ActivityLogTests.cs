@@ -395,7 +395,7 @@ public sealed class ActivityLogTests
 			isDark: false,
 			darknessDetail: "lux 86, dark below 40"));
 
-		Assert.AreEqual("Too bright to switch the lights on", line.What);
+		Assert.AreEqual("Too bright to switch on", line.What);
 		Assert.AreEqual("lux 86, dark below 40", line.Why);
 	}
 
@@ -410,7 +410,7 @@ public sealed class ActivityLogTests
 			isDark: true,
 			darknessDetail: "lux 12, dark below 40"));
 
-		Assert.AreEqual("Dark enough now — movement will switch the lights on", line.What);
+		Assert.AreEqual("Dark enough — movement will light the room", line.What);
 		Assert.AreEqual("lux 12, dark below 40", line.Why);
 	}
 
@@ -434,7 +434,7 @@ public sealed class ActivityLogTests
 			autoOnBlockedBy: AutoOnBlock.Sleep));
 
 		Assert.AreEqual(
-			"Dark enough now, but the house is asleep — movement will not switch the lights on",
+			"Dark enough, but the house is asleep — movement won't light the room",
 			line.What);
 		Assert.AreEqual("lux 12, dark below 40", line.Why,
 			"the reading is still the measurement the verdict was reached on");
@@ -458,7 +458,7 @@ public sealed class ActivityLogTests
 			autoOnBlockingEntity: "media_player.stue_tv"));
 
 		Assert.AreEqual(
-			"Dark enough now, but media_player.stue_tv is on — movement will not switch the lights on",
+			"Dark enough, but media_player.stue_tv is on — movement won't light the room",
 			line.What);
 		Assert.AreEqual("lux 12, dark below 40", line.Why);
 	}
@@ -471,7 +471,7 @@ public sealed class ActivityLogTests
 	[TestMethod]
 	public void An_Open_Gate_And_An_Older_Report_Both_Keep_The_Original_Words()
 	{
-		const string Promise = "Dark enough now — movement will switch the lights on";
+		const string Promise = "Dark enough — movement will light the room";
 
 		Assert.AreEqual(Promise, ActivityView.Describe(Report(
 			"Stue", AreaState.AutoVacant, TransitionReason.CircadianTick,
@@ -497,7 +497,7 @@ public sealed class ActivityLogTests
 			isDark: false,
 			darknessDetail: "lux 86, dark below 40"));
 
-		Assert.AreEqual("Quiet long enough — back under automatic control", line.What);
+		Assert.AreEqual("Quiet long enough — back on automatic", line.What);
 		Assert.AreEqual("Too bright to switch on — lux 86, dark below 40", line.Why);
 	}
 
@@ -523,8 +523,8 @@ public sealed class ActivityLogTests
 	{
 		ActivityLine line = ActivityView.Describe(Report("Stue", AreaState.AutoVacant, TransitionReason.Startup));
 
-		Assert.AreEqual("Started up and took the room as it was", line.What);
-		Assert.AreEqual("Darkness hasn't been checked here yet.", line.Why);
+		Assert.AreEqual("Started up — took the room as it was", line.What);
+		Assert.AreEqual("Darkness not checked here yet.", line.Why);
 	}
 
 	/// <summary>Movement that lit a room names the levels it was lit at — what happened, not which field moved.</summary>
@@ -564,7 +564,7 @@ public sealed class ActivityLogTests
 	public void House_Events_Read_As_House_Events()
 	{
 		Assert.AreEqual(
-			"The house changed mode to Sover",
+			"Mode changed to Sover",
 			ActivityView.Describe(Report(
 				"Stue",
 				AreaState.AutoVacant,
@@ -579,8 +579,8 @@ public sealed class ActivityLogTests
 			TransitionReason.EveryoneLeft,
 			mode: HouseMode.Away));
 
-		Assert.AreEqual("The last person left the house", empty.What);
-		Assert.AreEqual("Nobody home — the room waits for the first arrival.", empty.Why);
+		Assert.AreEqual("Everyone left the house", empty.What);
+		Assert.AreEqual("Nobody home — waiting for the first arrival.", empty.Why);
 	}
 
 	/// <summary>
@@ -598,7 +598,7 @@ public sealed class ActivityLogTests
 			killSwitch: true));
 
 		Assert.AreEqual("Paused by the master switch", line.What);
-		Assert.AreEqual("No lights will change until it is turned back on.", line.Why);
+		Assert.AreEqual("No lights change until it's turned back on.", line.Why);
 	}
 
 	/// <summary>A room switched off in the document says so, and says it as the room's own setting.</summary>
@@ -610,8 +610,8 @@ public sealed class ActivityLogTests
 			AreaState.Disabled,
 			TransitionReason.EnablementChanged));
 
-		Assert.AreEqual("Automatic lighting was switched off for this room", line.What);
-		Assert.AreEqual("Automatic lighting is switched off for this room.", line.Why);
+		Assert.AreEqual("Automatic lighting switched off here", line.What);
+		Assert.AreEqual("Automatic lighting is off here.", line.Why);
 	}
 
 	// ===================== movement the engine turned down =====================
@@ -628,19 +628,19 @@ public sealed class ActivityLogTests
 	[TestMethod]
 	public void A_Refused_Movement_Names_The_Gate_That_Refused_It()
 	{
-		Assert.AreEqual("Movement, but the room is bright enough already",
+		Assert.AreEqual("Movement, but the room is bright enough",
 			Declined(AutoOnBlock.NotDark, isDark: false).What);
 
-		Assert.AreEqual("Movement, but the house is asleep and this room does not light itself while it is",
+		Assert.AreEqual("Movement, but the house is asleep and this room stays dark",
 			Declined(AutoOnBlock.Sleep).What);
 
 		Assert.AreEqual("Movement, but media_player.stue_tv is on",
 			Declined(AutoOnBlock.EntityOn, blocker: "media_player.stue_tv").What);
 
-		Assert.AreEqual("Movement, but automatic lighting is switched off for this room",
+		Assert.AreEqual("Movement, but automatic lighting is off here",
 			Declined(AutoOnBlock.Disabled, state: AreaState.Disabled).What);
 
-		Assert.AreEqual("Movement, but the house is away — the room waits for the first arrival",
+		Assert.AreEqual("Movement, but nobody is home yet",
 			Declined(AutoOnBlock.Away, state: AreaState.Away).What);
 
 		Assert.AreEqual("Movement, but a guest scene has this room",
@@ -907,30 +907,98 @@ public sealed class ActivityLogTests
 		AreaSnapshot switchedOff = Report("Stue", AreaState.Disabled, TransitionReason.EnablementChanged);
 
 		Assert.IsTrue(Has(ActivityCategory.Background, switchedOff));
-		Assert.AreEqual("Automatic lighting was switched off for this room", ActivityView.Describe(switchedOff).What);
+		Assert.AreEqual("Automatic lighting switched off here", ActivityView.Describe(switchedOff).What);
 
 		Assert.IsTrue(Has(ActivityCategory.Background, Report("Stue", AreaState.AutoVacant, TransitionReason.Startup)));
 		Assert.IsTrue(Has(ActivityCategory.Background, Report("Stue", AreaState.AutoActive, TransitionReason.AdoptedAtStartup)));
 	}
 
+	// ===================== the two fates of a start-up row =====================
+
 	/// <summary>
-	///     A hand change is somebody else's command, and so is its ending — which is why the override running out
-	///     is both a hand change and a light change, and a suppression lifting is only the first.
+	///     <b>A start-up row that says nothing is not shown at all.</b> The engine publishes one per room when it
+	///     starts, and where the room had nothing to report the row is "started up, took the room as it was" and
+	///     no more — the engine saying it did nothing, once per room, at the top of every restart.
 	/// </summary>
 	[TestMethod]
-	public void Hand_Changes_Cover_A_Persons_Decision_And_Its_Ending()
+	public void A_Start_Up_Row_With_Nothing_Under_It_Is_Not_A_Row()
 	{
-		Assert.IsTrue(Has(ActivityCategory.HandChange, Report("Stue", AreaState.OverriddenOn, TransitionReason.ManualOn)));
-		Assert.IsTrue(Has(ActivityCategory.HandChange, Report("Stue", AreaState.SuppressedOff, TransitionReason.ManualOff)));
-		Assert.IsTrue(Has(ActivityCategory.HandChange, Report("Stue", AreaState.AutoVacant, TransitionReason.SuppressionLifted)));
+		AreaSnapshot bare = Report("Stue", AreaState.AutoVacant, TransitionReason.Startup, isDark: true);
+
+		Assert.IsNull(ActivityView.Describe(bare).Why, "the fixture has to be the bare case, or this proves nothing");
+		Assert.IsFalse(ActivityView.IsWorthShowing(bare));
+
+		Assert.AreEqual(0, ActivityView.Shown([Entry(1, bare)]).Count);
+	}
+
+	/// <summary>
+	///     <b>A start-up row that carries a reading stays — in Background.</b> "Too bright to switch on, lux 4096,
+	///     dark below 40" is twice this month the answer to what a room saw at boot, so it is kept; and it is
+	///     housekeeping rather than a refusal, because the engine had decided nothing yet. Filing it under the
+	///     darkness or refusal chips would put the state of the house at boot among the rows about what the engine
+	///     just chose to do.
+	/// </summary>
+	[TestMethod]
+	public void A_Start_Up_Row_That_Carries_A_Reading_Stays_And_Is_Background_Only()
+	{
+		AreaSnapshot measured = Report(
+			"Stue", AreaState.AutoVacant, TransitionReason.Startup,
+			isDark: false, darknessDetail: "lux 4096 (mean of 2 of 2 sensors), dark below 40");
+
+		ActivityLine line = ActivityView.Describe(measured);
+
+		Assert.AreEqual("Started up — took the room as it was", line.What);
+		Assert.AreEqual("Too bright to switch on — lux 4096 (mean of 2 of 2 sensors), dark below 40", line.Why);
+
+		Assert.IsTrue(ActivityView.IsWorthShowing(measured));
+		Assert.AreEqual(1, ActivityView.Shown([Entry(1, measured)]).Count);
+
+		Assert.AreEqual(ActivityCategory.Background, ActivityView.Categorise(measured));
+	}
+
+	/// <summary>
+	///     The sift is about start-up and nothing else. A row with no second line is the ordinary shape of most
+	///     events — movement that lit a room says everything in one line — and dropping those would empty the page.
+	/// </summary>
+	[TestMethod]
+	public void Only_Start_Up_Rows_Are_Ever_Dropped()
+	{
+		foreach (TransitionReason reason in Enum.GetValues<TransitionReason>())
+		{
+			foreach (AreaState state in Enum.GetValues<AreaState>())
+			{
+				AreaSnapshot snapshot = Report("Stue", state, reason, isDark: true);
+
+				Assert.IsTrue(
+					reason is TransitionReason.Startup || ActivityView.IsWorthShowing(snapshot),
+					$"{reason} in {state} is an event and must reach the page");
+			}
+		}
+
+		Assert.IsTrue(
+			ActivityView.IsWorthShowing(Report(
+				"Stue", AreaState.AutoVacant, TransitionReason.Startup, isDark: true, killSwitch: true)),
+			"the master switch replaces the row with a sentence about the whole house, which is news at any time");
+	}
+
+	/// <summary>
+	///     A manual change is somebody else's command, and so is its ending — which is why the override running out
+	///     is both a manual change and a light change, and a suppression lifting is only the first.
+	/// </summary>
+	[TestMethod]
+	public void Manual_Changes_Cover_A_Persons_Decision_And_Its_Ending()
+	{
+		Assert.IsTrue(Has(ActivityCategory.ManualChange, Report("Stue", AreaState.OverriddenOn, TransitionReason.ManualOn)));
+		Assert.IsTrue(Has(ActivityCategory.ManualChange, Report("Stue", AreaState.SuppressedOff, TransitionReason.ManualOff)));
+		Assert.IsTrue(Has(ActivityCategory.ManualChange, Report("Stue", AreaState.AutoVacant, TransitionReason.SuppressionLifted)));
 
 		AreaSnapshot expired = Report("Stue", AreaState.AutoVacant, TransitionReason.OverrideExpired);
 
-		Assert.IsTrue(Has(ActivityCategory.HandChange, expired));
+		Assert.IsTrue(Has(ActivityCategory.ManualChange, expired));
 		Assert.IsTrue(Has(ActivityCategory.LightChange, expired),
 			"an override running out hands the room back by commanding it, either way it lands");
 
-		Assert.IsFalse(Has(ActivityCategory.HandChange, Report("Stue", AreaState.AutoActive, TransitionReason.Motion)),
+		Assert.IsFalse(Has(ActivityCategory.ManualChange, Report("Stue", AreaState.AutoActive, TransitionReason.Motion)),
 			"the engine acting on movement is not somebody's hand");
 	}
 
@@ -987,7 +1055,11 @@ public sealed class ActivityLogTests
 				isDark: true, darknessDetail: "lux 12, dark below 40",
 				mode: HouseMode.Sleep, autoOnBlockedBy: AutoOnBlock.Sleep);
 
-			Assert.IsTrue(Has(ActivityCategory.Declined, asleep), $"{reason}: the block is a refusal in every report");
+			// Start-up is the one report that refused nothing: the engine had not decided anything yet, it had only
+			// walked into the house. Its row is filed under background alone and says what boot found, which is the
+			// second assertion below and is exactly as true for it as for every other reason.
+			if (reason is not TransitionReason.Startup)
+				Assert.IsTrue(Has(ActivityCategory.Declined, asleep), $"{reason}: the block is a refusal in every report");
 
 			ActivityLine line = ActivityView.Describe(asleep);
 
@@ -1002,7 +1074,7 @@ public sealed class ActivityLogTests
 			isDark: true, autoOnBlockedBy: AutoOnBlock.EntityOn, autoOnBlockingEntity: "media_player.stue_tv");
 
 		Assert.AreEqual(
-			"Dark enough now, but media_player.stue_tv is on — movement will not switch the lights on.",
+			"Dark enough, but media_player.stue_tv is on — movement won't light the room.",
 			ActivityView.Describe(television).Why,
 			"named rather than alluded to, in the same words the dusk row and the board's tray use");
 	}
@@ -1040,7 +1112,6 @@ public sealed class ActivityLogTests
 	[TestMethod]
 	public void House_Events_And_The_Master_Switch_Share_One_Chip()
 	{
-		Assert.IsTrue(Has(ActivityCategory.House, Report("Stue", AreaState.AutoVacant, TransitionReason.HouseModeChanged)));
 		Assert.IsTrue(Has(ActivityCategory.House, Report("Stue", AreaState.Away, TransitionReason.EveryoneLeft)));
 		Assert.IsTrue(Has(ActivityCategory.House, Report("Stue", AreaState.AutoVacant, TransitionReason.FirstPersonArrived)));
 		Assert.IsTrue(Has(ActivityCategory.House, Report("Stue", AreaState.SceneHold, TransitionReason.SceneHold)));
@@ -1051,6 +1122,69 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(ActivityCategory.House, ActivityView.Categorise(paused));
 		Assert.AreEqual("Paused by the master switch", ActivityView.Describe(paused).What,
 			"the row says nothing about darkness or a room's own switch, so it is filed under neither");
+	}
+
+	/// <summary>
+	///     <b>A mode change is its own chip.</b> It used to share one with arriving, leaving and the master switch,
+	///     so somebody asking when the house went to sleep read every coming and going of the day to find out. Its
+	///     own flag, and nothing else moved into it.
+	/// </summary>
+	[TestMethod]
+	public void A_Mode_Change_Has_A_Chip_Of_Its_Own()
+	{
+		AreaSnapshot mode = Report("Stue", AreaState.AutoVacant, TransitionReason.HouseModeChanged);
+
+		Assert.IsTrue(Has(ActivityCategory.Mode, mode));
+		Assert.IsFalse(Has(ActivityCategory.House, mode),
+			"the chip it left has to stop offering it, or the split bought nothing");
+
+		foreach (TransitionReason reason in Enum.GetValues<TransitionReason>())
+		{
+			if (reason is TransitionReason.HouseModeChanged)
+				continue;
+
+			foreach (AreaState state in Enum.GetValues<AreaState>())
+			{
+				Assert.IsFalse(
+					Has(ActivityCategory.Mode, Report("Stue", state, reason, isDark: true)),
+					$"{reason} in {state} is not a change of mode, and the chip must hold only what its name says");
+			}
+		}
+	}
+
+	/// <summary>
+	///     The new chip opens switched on. Background is still the only one that does not — every other category is
+	///     a decision the engine made or refused, and a page about decisions that opened with one of them hidden
+	///     would be answering a question nobody asked it.
+	/// </summary>
+	[TestMethod]
+	public void The_Mode_Chip_Opens_Switched_On()
+	{
+		Assert.AreEqual(ActivityCategory.Mode, ActivityView.DefaultCategories & ActivityCategory.Mode);
+		Assert.AreEqual(ActivityCategory.Mode, ActivityView.AllCategories & ActivityCategory.Mode);
+	}
+
+	/// <summary>
+	///     A mode change is still a house-wide row, so one change is still one row however many rooms published it.
+	///     Splitting the chip must not split the collapsing with it — that defect is what <see cref="ActivityView.Rows"/>
+	///     was written for.
+	/// </summary>
+	[TestMethod]
+	public void Splitting_The_Chip_Leaves_A_Mode_Change_House_Wide()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(3, Mode("Kontor", "Sover", Noon.AddSeconds(1))),
+			Entry(2, Mode("Stue", "Sover", Noon.AddSeconds(1))),
+			Entry(1, Mode("Bad", "Sover", Noon.AddSeconds(1)))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(
+			ActivityView.InCategories(entries, ActivityView.DefaultCategories));
+
+		Assert.AreEqual(1, rows.Count);
+		Assert.IsTrue(rows[0].IsAboutTheHouse);
+		Assert.AreEqual(3, rows[0].Rooms.Count);
 	}
 
 	/// <summary>
@@ -1088,7 +1222,7 @@ public sealed class ActivityLogTests
 
 		CollectionAssert.AreEqual(
 			new long[] { 4, 2 },
-			ActivityView.InCategories(entries, ActivityCategory.Movement | ActivityCategory.HandChange)
+			ActivityView.InCategories(entries, ActivityCategory.Movement | ActivityCategory.ManualChange)
 				.Select(entry => entry.Sequence).ToArray());
 
 		CollectionAssert.AreEqual(
@@ -1130,7 +1264,7 @@ public sealed class ActivityLogTests
 	/// <summary>
 	///     Every category is always on offer, counted over the reports the room filter left — so choosing one room
 	///     re-reads every chip, which is what makes the pair of filters legible as a pair. A category holding
-	///     nothing keeps its chip: "this room has never reported a hand change" is an answer.
+	///     nothing keeps its chip: "this room has never reported a manual change" is an answer.
 	/// </summary>
 	[TestMethod]
 	public void Chips_Count_What_The_Chosen_Room_Did()
@@ -1144,16 +1278,16 @@ public sealed class ActivityLogTests
 
 		IReadOnlyList<ActivityFilterChip> whole = ActivityView.Chips(entries, ActivityView.DefaultCategories);
 
-		Assert.AreEqual(7, whole.Count, "every category is offered, whatever the timeline happens to hold");
+		Assert.AreEqual(8, whole.Count, "every category is offered, whatever the timeline happens to hold");
 		Assert.AreEqual(2, Chip(whole, ActivityCategory.Movement).Count);
-		Assert.AreEqual(1, Chip(whole, ActivityCategory.HandChange).Count);
+		Assert.AreEqual(1, Chip(whole, ActivityCategory.ManualChange).Count);
 		Assert.AreEqual(0, Chip(whole, ActivityCategory.House).Count);
 
 		IReadOnlyList<ActivityFilterChip> stue =
 			ActivityView.Chips(ActivityView.InRoom(entries, "Stue"), ActivityView.DefaultCategories);
 
 		Assert.AreEqual(2, Chip(stue, ActivityCategory.Movement).Count);
-		Assert.AreEqual(0, Chip(stue, ActivityCategory.HandChange).Count,
+		Assert.AreEqual(0, Chip(stue, ActivityCategory.ManualChange).Count,
 			"the counts follow the room, or the two filters would each describe a different timeline");
 
 		foreach (ActivityFilterChip chip in whole)
@@ -1220,7 +1354,7 @@ public sealed class ActivityLogTests
 		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
 
 		Assert.AreEqual(1, rows.Count, "four reports of one event are one row");
-		Assert.AreEqual("The house changed mode to Home", rows[0].Line.What);
+		Assert.AreEqual("Mode changed to Home", rows[0].Line.What);
 		Assert.IsTrue(rows[0].IsAboutTheHouse);
 		Assert.IsNull(rows[0].Room, "no room did this, so the row names none");
 		Assert.AreEqual(4, rows[0].Rooms.Count);
@@ -1248,7 +1382,7 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
-	///     Rooms keep their own rows. Movement, a hand change and a light going off are things one room did, and a
+	///     Rooms keep their own rows. Movement, a manual change and a light going off are things one room did, and a
 	///     record that pooled them would have answered the reported defect by inventing a worse one.
 	/// </summary>
 	[TestMethod]
@@ -1320,8 +1454,8 @@ public sealed class ActivityLogTests
 		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
 
 		Assert.AreEqual(2, rows.Count);
-		Assert.AreEqual("The house changed mode to Home", rows[0].Line.What);
-		Assert.AreEqual("The house changed mode to Guests", rows[1].Line.What);
+		Assert.AreEqual("Mode changed to Home", rows[0].Line.What);
+		Assert.AreEqual("Mode changed to Guests", rows[1].Line.What);
 		Assert.AreEqual(2, rows[0].Rooms.Count);
 		Assert.AreEqual(2, rows[1].Rooms.Count);
 	}
@@ -1344,7 +1478,7 @@ public sealed class ActivityLogTests
 		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
 
 		Assert.AreEqual(1, rows.Count, "one mode change, whatever each room happened to be doing when it landed");
-		Assert.AreEqual("The house changed mode to Home", rows[0].Line.What);
+		Assert.AreEqual("Mode changed to Home", rows[0].Line.What);
 		Assert.IsNull(rows[0].Line.Why, "a room's own verdict has no room to belong to on this row");
 		Assert.AreEqual(2, rows[0].Rooms.Count);
 
@@ -1370,7 +1504,7 @@ public sealed class ActivityLogTests
 
 		Assert.AreEqual(1, rows.Count);
 		Assert.AreEqual("Paused by the master switch", rows[0].Line.What);
-		StringAssert.Contains(rows[0].Line.Why, "until it is turned back on");
+		StringAssert.Contains(rows[0].Line.Why, "until it's turned back on");
 	}
 
 	/// <summary>
@@ -1442,6 +1576,133 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(2, rows.Count);
 		Assert.AreEqual(4, rows[1].Rooms.Count, "the run is finished before the budget is honoured");
 		Assert.AreEqual(0, ActivityView.Rows(entries, 0).Count);
+	}
+
+	// ===================== the standing darkness verdict =====================
+
+	/// <summary>
+	///     <b>The verdict is shown when it changes and not once a minute after that.</b> The engine re-checks every
+	///     room on every tick and republishes what it found, so a room dark from dusk to dawn said "dark enough"
+	///     four hundred times — which is what made the line meaningless to read. One row per spell, carrying the
+	///     newest of the run so the reading on it is current.
+	/// </summary>
+	[TestMethod]
+	public void A_Room_That_Stays_Dark_Says_So_Once()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(3, Dusk("Stue", dark: true, "lux 9, dark below 40", Noon.AddMinutes(2))),
+			Entry(2, Dusk("Stue", dark: true, "lux 11, dark below 40", Noon.AddMinutes(1))),
+			Entry(1, Dusk("Stue", dark: true, "lux 12, dark below 40", Noon))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(1, rows.Count, "the room became dark once; the rest is the same fact re-measured");
+		Assert.AreEqual(3, rows[0].Sequence, "the newest of the run, so the reading under it is the current one");
+		Assert.AreEqual("lux 9, dark below 40", rows[0].Line.Why,
+			"matching on the whole line would collapse nothing at all — the reading moves every tick");
+	}
+
+	/// <summary>
+	///     A verdict that moved is a new row. Dark, then bright again, then dark reads as three rows, because those
+	///     are three things the room did — and the flip is precisely what somebody comes to this page to find.
+	/// </summary>
+	[TestMethod]
+	public void A_Verdict_That_Changes_Starts_A_New_Row()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(4, Dusk("Stue", dark: true, "lux 8, dark below 40", Noon.AddMinutes(3))),
+			Entry(3, Dusk("Stue", dark: false, "lux 96, dark below 40", Noon.AddMinutes(2))),
+			Entry(2, Dusk("Stue", dark: false, "lux 120, dark below 40", Noon.AddMinutes(1))),
+			Entry(1, Dusk("Stue", dark: true, "lux 12, dark below 40", Noon))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(3, rows.Count);
+		Assert.AreEqual("Dark enough — movement will light the room", rows[0].Line.What);
+		Assert.AreEqual("Too bright to switch on", rows[1].Line.What);
+		Assert.AreEqual("Dark enough — movement will light the room", rows[2].Line.What);
+	}
+
+	/// <summary>
+	///     <b>The run is the room's own, not the record's.</b> Every room is re-checked in the same pass, so a room's
+	///     repeats are never next to each other — a rule that only collapsed adjacent rows would collapse nothing in
+	///     a house with more than one room, which is every house.
+	/// </summary>
+	[TestMethod]
+	public void Other_Rooms_Between_The_Repeats_Do_Not_End_The_Run()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(4, Dusk("Stue", dark: true, "lux 9, dark below 40", Noon.AddMinutes(1))),
+			Entry(3, Dusk("Bad", dark: true, "lux 7, dark below 40", Noon.AddMinutes(1))),
+			Entry(2, Dusk("Stue", dark: true, "lux 12, dark below 40", Noon)),
+			Entry(1, Dusk("Bad", dark: true, "lux 10, dark below 40", Noon))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(2, rows.Count, "two rooms went dark; each says so once");
+		CollectionAssert.AreEqual(new[] { "Stue", "Bad" }, rows.Select(row => row.Room).ToArray());
+	}
+
+	/// <summary>
+	///     Anything else the room did ends the run. The record's order is the account of what followed what, and a
+	///     verdict either side of a movement is the room as it stood before and after something happened in it.
+	/// </summary>
+	[TestMethod]
+	public void Something_Happening_In_The_Room_Ends_The_Run()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(3, Dusk("Stue", dark: true, "lux 9, dark below 40", Noon.AddMinutes(2))),
+			Entry(2, Report("Stue", AreaState.AutoActive, TransitionReason.Motion, at: Noon.AddMinutes(1), isDark: true)),
+			Entry(1, Dusk("Stue", dark: true, "lux 12, dark below 40", Noon))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(3, rows.Count);
+		Assert.AreEqual("Movement — lights on", rows[1].Line.What);
+	}
+
+	/// <summary>
+	///     The block is part of the verdict, so a room that was merely dark and then dark-but-blocked reads as two
+	///     rows. That change is the whole answer to "why did the bedroom stay dark tonight".
+	/// </summary>
+	[TestMethod]
+	public void A_Block_Appearing_Is_A_New_Verdict()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(2, Report(
+				"Soverom", AreaState.AutoVacant, TransitionReason.CircadianTick, at: Noon.AddMinutes(1),
+				isDark: true, darknessDetail: "lux 9, dark below 40", autoOnBlockedBy: AutoOnBlock.Sleep)),
+			Entry(1, Dusk("Soverom", dark: true, "lux 12, dark below 40", Noon))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(2, rows.Count);
+		Assert.AreEqual("Dark enough, but the house is asleep — movement won't light the room", rows[0].Line.What);
+		Assert.AreEqual("Dark enough — movement will light the room", rows[1].Line.What);
+	}
+
+	/// <summary>One quiet re-check of a room whose darkness has never been measured states no verdict to collapse.</summary>
+	[TestMethod]
+	public void An_Unmeasured_Recheck_Is_Not_A_Verdict()
+	{
+		ActivityEntry[] entries =
+		[
+			Entry(2, Report("Stue", AreaState.AutoVacant, TransitionReason.CircadianTick, at: Noon.AddMinutes(1))),
+			Entry(1, Report("Stue", AreaState.AutoVacant, TransitionReason.CircadianTick, at: Noon))
+		];
+
+		Assert.AreEqual(2, ActivityView.Rows(entries).Count,
+			"'Rechecked the room' is housekeeping and hidden by default; collapsing it would hide it twice");
 	}
 
 	// ===================== what the dashboard's summary shows =====================
@@ -1561,6 +1822,10 @@ public sealed class ActivityLogTests
 
 	private static AreaSnapshot Mode(string area, string value, DateTimeOffset at) =>
 		Report(area, AreaState.AutoVacant, TransitionReason.HouseModeChanged, at: at, houseModeValue: value);
+
+	/// <summary>One quiet re-check that reached a darkness verdict — the report a house publishes once a minute.</summary>
+	private static AreaSnapshot Dusk(string area, bool dark, string detail, DateTimeOffset at) =>
+		Report(area, AreaState.AutoVacant, TransitionReason.CircadianTick, at: at, isDark: dark, darknessDetail: detail);
 
 	private static bool Has(ActivityCategory category, AreaSnapshot snapshot) =>
 		(ActivityView.Categorise(snapshot) & category) != ActivityCategory.None;

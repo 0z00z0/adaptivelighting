@@ -102,14 +102,17 @@ public sealed record TypedNumber(double? Value, string? Refusal);
 /// <summary>
 ///     One named section of the detail view: the unit a person navigates by.
 /// </summary>
+/// <remarks>
+///     Every section starts folded, and there is deliberately no per-section say in it. Sections used to carry a
+///     <c>StartsOpen</c> flag that all but one set, so revealing <i>All settings</i> unrolled four sections at once
+///     and the structure — the thing that makes twenty-one settings findable — was several screens of controls
+///     rather than five headings. Shut, the headings are what a reader meets, and the one they want is one tap
+///     away. Their notes are what make that work, which is why every section has to have one.
+/// </remarks>
 /// <param name="Title">What the section is called.</param>
-/// <param name="Note">One line naming what is inside, so a collapsed section still says what it holds.</param>
+/// <param name="Note">One line naming what is inside, so a folded section still says what it holds.</param>
 /// <param name="Settings">Its settings, in reading order.</param>
-/// <param name="StartsOpen">
-///     Whether it is open when the detail view is first revealed. The rare sections start closed — the design's
-///     one sanctioned answer to a long page is to put the rare things behind a fold.
-/// </param>
-public sealed record RoomSettingGroup(string Title, string Note, IReadOnlyList<RoomSetting> Settings, bool StartsOpen);
+public sealed record RoomSettingGroup(string Title, string Note, IReadOnlyList<RoomSetting> Settings);
 
 /// <summary>
 ///     The model of the settings one room can override: which they are, what they are called, how they are
@@ -192,6 +195,18 @@ public static class RoomSettings
 	public const double MaxLux = 65535;
 
 	/// <summary>
+	///     What the movement section is called, named once so the page can find it.
+	/// </summary>
+	/// <remarks>
+	///     The room page appends one control to this section that is not an overridable setting and so cannot be a
+	///     <see cref="RoomSetting"/>: <i>Blocked while on</i>, which is a per-room list of entities rather than a
+	///     value inherited from the house. It is a movement rule — it decides whether movement lights the room — and
+	///     was filed with the entity pickers, several folds away from the timings it belongs beside. Matching the
+	///     section by a constant rather than by a literal is what stops a rename quietly dropping it.
+	/// </remarks>
+	public const string MovementSection = "Movement & timing";
+
+	/// <summary>
 	///     Every setting a room can state for itself, derived from the schema.
 	/// </summary>
 	/// <remarks>
@@ -227,14 +242,14 @@ public static class RoomSettings
 	///     <para>
 	///         A section is what a person navigates by. Somebody looking for "how long the lights stay on" is
 	///         thinking about movement and time, not about which of twenty-one rows it is, so the sections are
-	///         named after what they change and the rare two start closed.
+	///         named after what they change and every one of them starts folded.
 	///     </para>
 	/// </remarks>
 	public static IReadOnlyList<RoomSettingGroup> Groups { get; } =
 	[
 		new RoomSettingGroup(
-			"Movement & timing",
-			"How long the lights stay on, and what a hand change is worth",
+			MovementSection,
+			"How long the lights stay on, and what stops or overrules them",
 			[
 				new RoomSetting(
 					nameof(AreaSettings.VacancyTimeoutSeconds),
@@ -253,7 +268,7 @@ public static class RoomSettings
 					RoomControl.Seconds, Step: 5, Min: 0),
 				new RoomSetting(
 					nameof(AreaSettings.OverrideDurationMinutes),
-					"Hand changes hold for",
+					"Manual changes hold for",
 					"How long a light somebody set by hand is left alone before the room takes it back. Zero hands it back at the next re-check.",
 					RoomControl.Minutes, Step: 15, Min: 0),
 				new RoomSetting(
@@ -261,8 +276,7 @@ public static class RoomSettings
 					"After switching off by hand, wait",
 					"How long the room must stay empty before movement lights it again. Without it, switching the lights off and walking out turns them straight back on.",
 					RoomControl.Minutes, Step: 5, Min: 0)
-			],
-			StartsOpen: true),
+			]),
 
 		new RoomSettingGroup(
 			"Darkness",
@@ -271,7 +285,7 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.Darkness),
 					"How the room decides it's dark",
-					"What has to say dark before movement lights the room. Always dark skips the check, for a windowless room.",
+					"What has to say dark before movement lights the room. A room on Sensor with nothing to read counts as dark. Always dark skips the check, for a windowless room.",
 					RoomControl.Choice),
 				new RoomSetting(
 					nameof(AreaSettings.LuxThreshold),
@@ -288,11 +302,14 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.SunElevationThreshold),
 					"Dark when the sun is below",
-					"How high the sun may stand and the room still count as dark, in degrees above the horizon. 0° is sunset, −6° is dusk. Also what a room falls back on when its light-level sensor says nothing.",
+					"How high the sun may stand and the room still count as dark, in degrees above the horizon. 0° is sunset, −6° is dusk.",
 					RoomControl.Number, Unit: "°", Step: 1, Min: -90, Max: 90,
-					AppliesWhen: settings => settings.Darkness is not DarknessSource.Always)
-			],
-			StartsOpen: true),
+
+					// Only the two rules that actually read the sun. It used to be drawn for a Sensor room as well,
+					// because a room whose lux sensors said nothing fell back to the sun — that fallback is gone, and
+					// such a room now simply counts as dark, so the row would have been a control that changed nothing.
+					AppliesWhen: settings => settings.Darkness is DarknessSource.Sun or DarknessSource.Either)
+			]),
 
 		new RoomSettingGroup(
 			"Brightness from daylight",
@@ -327,8 +344,7 @@ public static class RoomSettings
 					"How the climb between the two levels is shaped. 1 rises steadily; above 1 holds back until it is properly bright out; below 1 lifts the room as soon as the light outside starts climbing.",
 					RoomControl.Number, Step: 0.1, Min: 0.1, Max: 5,
 					AppliesWhen: settings => settings.LuxBrightnessEnabled)
-			],
-			StartsOpen: true),
+			]),
 
 		new RoomSettingGroup(
 			"Room behaviour",
@@ -354,8 +370,7 @@ public static class RoomSettings
 					"Welcome home",
 					"This room lights the moment the first person arrives, if it is dark — no waiting for a motion sensor to catch them.",
 					RoomControl.Flag)
-			],
-			StartsOpen: true),
+			]),
 
 		new RoomSettingGroup(
 			"Rarely needed",
@@ -376,8 +391,7 @@ public static class RoomSettings
 					"Sun entity",
 					"Which entity the sun's height is read from. A house has exactly one, so there is normally no reason to change this.",
 					RoomControl.Entity)
-			],
-			StartsOpen: false)
+			])
 	];
 
 	/// <summary>
@@ -631,6 +645,12 @@ public static class RoomSettings
 	}
 
 	/// <summary>The value of the one enum-valued setting, following the room's inheritance.</summary>
+	/// <remarks>
+	///     The last resort is the house's own value, never a rule named again here. It is unreachable in practice —
+	///     the house's property is not nullable, so the pattern above always matches — but a literal written into it
+	///     would be a second copy of a default that has already moved once, and a second copy is how the two come to
+	///     disagree.
+	/// </remarks>
 	/// <param name="room">The room, or <c>null</c> to read the house's own value.</param>
 	/// <param name="defaults">The document's all-rooms settings.</param>
 	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
@@ -639,7 +659,7 @@ public static class RoomSettings
 	{
 		ArgumentNullException.ThrowIfNull(defaults);
 
-		return Effective(room, defaults, key) is DarknessSource source ? source : DarknessSource.Either;
+		return Effective(room, defaults, key) is DarknessSource source ? source : defaults.Darkness;
 	}
 
 	/// <summary>What a darkness rule is called on a segment.</summary>
