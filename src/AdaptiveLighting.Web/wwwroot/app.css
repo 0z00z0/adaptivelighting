@@ -5509,3 +5509,340 @@ h1[tabindex="-1"]:focus {
 		display: none;
 	}
 }
+
+/* ==================================================================================================
+   THE LEVELS CARD — what this room is set to, period by period, and how daylight lifts it.
+   Room.razor · LevelsEditor.razor · LuxCurveChart.razor
+
+   PROMINENT WITHOUT BEING LOUD. This is the first settings surface on the page and it never folds,
+   because it answers the question a room page is opened for. But on most of seventeen rooms it will
+   have nothing to report, so nominal is grey: an inherited value is drawn in --muted, carries no
+   mark, and the card's head carries no count. The only ink a following room spends is the warmth
+   swatches, and those are data. Everything amber is something somebody chose — the dark-cockpit rule
+   applied to a settings group rather than to a board.
+   ============================================================================================== */
+
+.room-levels-card .room-card-head {
+	flex-wrap: wrap;
+}
+
+.lvl-lede {
+	padding-top: 0;
+	padding-bottom: 0.5rem;
+}
+
+/* ---- one period ----
+   A grid and not a table: four columns of controls do not fit 390px, and a settings row whose last
+   control lives behind a horizontal scrollbar is one nobody finds. Stacked on a phone, three columns
+   from the width at which two preset dropdowns and their labels stop crowding each other. */
+.lvl {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: var(--space-2) var(--space-4);
+	padding: 0.7rem 1.15rem;
+	border-top: var(--rule-inner);
+	border-left: var(--stroke-mark) solid transparent;
+}
+
+@media (min-width: 780px) {
+	.lvl {
+		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr) minmax(11rem, 1fr);
+		align-items: start;
+	}
+}
+
+/* The row that is actually running, marked the way the schedule editor marks its active card — the
+   same accent edge, so "this is the one in force" reads identically on both pages. */
+.lvl-now {
+	border-left-color: var(--accent);
+	background: var(--panel-2);
+}
+
+.lvl-when {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 0.3rem 0.45rem;
+	min-width: 0;
+}
+
+.lvl-name {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.lvl-start {
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* The period's own floor or cap, said only when it actually bites. A row claiming 100 % under a night
+   period capped at 30 % would name a level the room never reaches. */
+.lvl-limit {
+	flex: 1 1 100%;
+	font-size: var(--text-xs);
+	color: var(--warn);
+}
+
+.lvl-cell {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.25rem;
+	min-width: 0;
+}
+
+.lvl-cell-head {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	min-height: 1rem;
+}
+
+.lvl-cell-label {
+	font-size: var(--text-xs);
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* Muted while the schedule decides it, solid once the room does — the same fact the amber dot beside
+   the label carries, said again where the eye is when it opens the list. The stepper's readout already
+   works this way; this is that rule reaching a dropdown. */
+.lvl-cell:not(.lvl-set) .preset-select,
+.lvl-cell:not(.lvl-set) .cell.num {
+	color: var(--muted);
+}
+
+.lvl-inherit {
+	font-size: var(--text-xs);
+	color: var(--muted);
+}
+
+/* Brass, because it is a thing you press, and it names the number it goes back to so the act can be
+   predicted rather than tried — the same wording contract .srow-revert keeps. */
+.lvl-revert {
+	background: none;
+	border: 0;
+	padding: 0;
+	font-size: var(--text-xs);
+	font-weight: 650;
+	color: var(--accent);
+	text-align: left;
+}
+
+.lvl-revert:hover:not(:disabled) {
+	text-decoration: underline;
+	border-color: transparent;
+}
+
+/* The actual warmth, not only its number: 2700 K and 4500 K are two different rooms, and a column of
+   four-digit numbers is the one form in which that difference is invisible.
+
+   --kelvin-weight / --kelvin-shade are the same pair the state chip's glyph uses, and they are needed for
+   the same reason: a Kelvin colour is rgb(255, g, b), so above about 4000 K it is very nearly white —
+   correct as light, and all but invisible as a filled block on a pale panel. Measured at 4500 K in the
+   light theme, where the swatch had disappeared entirely. Dark takes the colour as it comes. */
+.lvl-swatch {
+	width: 22px;
+	height: 10px;
+	border-radius: 2px;
+	flex: 0 0 auto;
+	background: color-mix(in srgb, var(--lvl-kelvin, var(--machine)) var(--kelvin-weight), var(--kelvin-shade));
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent);
+}
+
+/* ---- a period that no longer exists ----
+   Kept by the schema because a missing period is nearly always a rename in progress. Shown here, and
+   removable, because kept silently it is baggage that springs back the day the name returns. */
+.lvl-orphan {
+	background: var(--warn-bg);
+}
+
+.lvl-orphan .lvl-start {
+	color: var(--warn);
+}
+
+.lvl-orphan-value {
+	font-family: var(--mono);
+	font-size: var(--text-md);
+}
+
+.lvl-drop {
+	font-size: var(--text-sm);
+	padding: 0.2rem 0.55rem;
+	color: var(--warn);
+	border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+}
+
+/* ---- the daylight half ---- */
+
+.lvl-daylight {
+	border-top: var(--rule);
+	padding: 0.7rem 1.15rem 0.9rem;
+}
+
+.lvl-daylight-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+}
+
+.lvl-daylight-title {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.lvl-daylight .room-card-foot {
+	padding: 0.5rem 0 0;
+}
+
+/* ---- the curve ----
+   Hand-built inline SVG, themed with the page's own tokens: no chart library, no CDN, nothing fetched.
+   The line is drawn in the accent because the line IS the control here — the same reason CurveGlyph's
+   path is — and in the same 2px mark weight the board's now-line uses. */
+.luxc {
+	margin-top: var(--space-3);
+}
+
+.luxc-plot {
+	position: relative;
+}
+
+.luxc-svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	overflow: visible;
+}
+
+/* What a finger actually touches, laid over the plot area by LuxCurve.SurfaceStyle so the drawing and
+   the target cannot disagree about where the plot is.
+
+   touch-action: none is not a nicety — without it a touch drag scrolls the page and the chart never
+   moves, which is the whole feature gone on the device most likely to be holding it. */
+.luxc-surface {
+	position: absolute;
+	touch-action: none;
+	cursor: crosshair;
+}
+
+.luxc-dragging .luxc-surface {
+	cursor: grabbing;
+}
+
+.luxc-field {
+	fill: var(--lane);
+}
+
+.luxc-grid {
+	stroke: var(--grid);
+	stroke-width: var(--stroke-hair);
+}
+
+.luxc-axis {
+	fill: var(--muted);
+	font-family: var(--font-sans);
+	font-size: 10px;
+}
+
+.luxc-decade {
+	fill: var(--muted);
+	font-family: var(--font-sans);
+	font-size: 9px;
+	opacity: 0.72;
+}
+
+.luxc-line {
+	fill: none;
+	stroke: var(--accent);
+	stroke-width: var(--stroke-mark);
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* The period's own ceiling. The daylight adjustment proposes and the period disposes, so a curve drawn
+   climbing through a cap the room can never pass would picture something that does not happen. */
+.luxc-cap {
+	stroke: var(--warn);
+	stroke-width: var(--stroke-hair);
+	stroke-dasharray: 5 4;
+}
+
+.luxc-cap-label {
+	fill: var(--warn);
+	font-family: var(--font-sans);
+	font-size: 9px;
+}
+
+/* The house's own reading, in the live-edge colour the board's now-line uses. */
+.luxc-now {
+	stroke: var(--now);
+	stroke-width: var(--stroke-mark);
+	opacity: 0.75;
+}
+
+.luxc-now-dot {
+	fill: var(--now);
+}
+
+.luxc-now-label {
+	fill: var(--now);
+	font-family: var(--font-sans);
+	font-size: 10px;
+	font-weight: 650;
+}
+
+.luxc-handle {
+	fill: var(--panel);
+	stroke: var(--accent);
+	stroke-width: var(--stroke-mark);
+	cursor: grab;
+}
+
+.luxc-handle:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.luxc-held {
+	fill: var(--accent);
+}
+
+.luxc-caption {
+	margin: var(--space-2) 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted);
+	line-height: 1.45;
+}
+
+/* On a phone the chart is about a third of its desktop size, and everything inside it scales with the
+   viewBox — so ten user units of type land as under six real pixels. These sizes are user units, chosen to
+   come out at roughly the size they have on a desktop; measured at 390x844, where the first attempt was
+   legible only when zoomed into the screenshot. The decade words go: they are a gloss on labels that are
+   already there, and the room is wanted for the labels themselves. */
+@media (max-width: 560px) {
+	.luxc-axis {
+		font-size: 20px;
+	}
+
+	.luxc-now-label {
+		font-size: 20px;
+	}
+
+	.luxc-cap-label {
+		font-size: 18px;
+	}
+
+	.luxc-decade {
+		display: none;
+	}
+
+	/* Geometry properties, so a handle that is a fair mark at full size is still one at a third of it. What a
+	   finger actually hits is .luxc-surface, which is the whole plot. */
+	.luxc-handle {
+		r: 12;
+		stroke-width: 3.5;
+	}
+}

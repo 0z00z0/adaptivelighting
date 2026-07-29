@@ -1,0 +1,224 @@
+@*
+	What this room is set to, period by period — and where each of those values came from.
+
+	The schedule is the house's description of the day, and until now every room ran it unaltered. A cellar
+	corridor at the living room's 100 % is glare; a workshop at the evening's 2700 K is unusable. This is one
+	room disagreeing, in one period, about one of the two values — and, just as importantly, it is where a
+	reader sees that the room is *not* disagreeing, which is the answer for most rooms most of the time.
+
+	QUIET UNTIL SOMETHING IS DECIDED. Every row is drawn for every period, because the question "what does this
+	room run in the evening?" has an answer whether or not the room has an opinion — but a value the schedule
+	decides is drawn muted and unmarked, so a room that follows the house everywhere is four grey rows and no
+	colour at all. What is loud is exactly what somebody chose: the amber dot the settings rows already use for
+	"this room's own", and beneath it the only road back.
+
+	A ROW IS NOT WRITTEN UNTIL IT SAYS SOMETHING. Drawing four rows must not write four rows: that would pin
+	values nobody chose and the schedule would stop reaching this room. RoomLevels creates a row on the first
+	value set and drops it again when the last one is cleared.
+
+	It writes nothing to disk. Edits mutate the document the page holds and the page saves, exactly as the
+	period editor does.
+*@
+
+<div class="levels">
+	@if (Periods.Count == 0)
+	{
+		<div class="empty">
+			The schedule has no periods yet, so there is nothing for this room to agree or disagree with.
+			<a href="config?section=schedule">Set the day up</a> first.
+		</div>
+	}
+
+	@foreach (RoomLevelRow row in RoomLevels.Rows(Periods, Room))
+	{
+		RoomLevelRow current = row;
+		bool isNow = string.Equals(current.Period, ActivePeriod, StringComparison.OrdinalIgnoreCase);
+
+		<div class="lvl @(current.IsOwn ? "lvl-own" : null) @(isNow ? "lvl-now" : null)" @key="current.Period">
+			<div class="lvl-when">
+				<span class="lvl-name">@PeriodName(current.Period)</span>
+				@if (isNow)
+				{
+					<span class="badge active-now" title="This period is in force right now.">now</span>
+				}
+				<span class="lvl-start">@StartOf(current.Period)</span>
+				@if (current.Limit is { Length: > 0 } limit)
+				{
+					<span class="lvl-limit">@limit</span>
+				}
+			</div>
+
+			<div class="lvl-cell @(current.Brightness == LevelSource.Room ? "lvl-set" : null)">
+				<span class="lvl-cell-head">
+					<span class="lvl-cell-label">Brightness</span>
+					@if (current.Brightness == LevelSource.Room)
+					{
+						<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+					}
+				</span>
+
+				<PresetSelect Value="@current.BrightnessPct"
+							  ValueChanged="@(value => SetBrightness(current.Period, value))"
+							  Options="@Presets.BrightnessPct"
+							  Unit="%" Min="0" Max="100" />
+
+				@if (current.Brightness == LevelSource.Room)
+				{
+					<button type="button" class="lvl-revert" @onclick="() => ClearBrightness(current.Period)">
+						Follow the schedule (@TokenFormat.Percent(ScheduleBrightness(current.Period)))
+					</button>
+				}
+				else
+				{
+					<span class="lvl-inherit">the schedule's</span>
+				}
+			</div>
+
+			<div class="lvl-cell @(current.Colour == LevelSource.Room ? "lvl-set" : null)">
+				<span class="lvl-cell-head">
+					<span class="lvl-cell-label">Warmth</span>
+					@*
+						The colour itself, not only its number: 2700 K and 4500 K are two different rooms, and a
+						table of four-digit numbers is the one form in which that difference is invisible. The same
+						conversion the state chip and the board use, so no two surfaces disagree about a warmth.
+					*@
+					<span class="lvl-swatch" style="@Swatch(current.ColorTempKelvin)" title="@($"{current.ColorTempKelvin} K")" aria-hidden="true"></span>
+					@if (current.Colour == LevelSource.Room)
+					{
+						<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+					}
+				</span>
+
+				<PresetSelect Value="@current.ColorTempKelvin"
+							  ValueChanged="@(value => SetColour(current.Period, value))"
+							  Options="@Presets.ColorTempKelvin"
+							  Unit="K" Min="1000" Max="10000" Step="50" />
+
+				@if (current.Colour == LevelSource.Room)
+				{
+					<button type="button" class="lvl-revert" @onclick="() => ClearColour(current.Period)">
+						Follow the schedule (@ScheduleKelvin(current.Period) K)
+					</button>
+				}
+				else
+				{
+					<span class="lvl-inherit">the schedule's</span>
+				}
+			</div>
+		</div>
+	}
+
+	@*
+		Rows this room wrote for a period that no longer exists. The schema keeps them rather than dropping them
+		because a missing period is nearly always a rename in progress, and deleting somebody's levels on a rename
+		is the worse failure — but kept silently they would be invisible baggage that reappears the moment the name
+		comes back. So they are shown, named, and removable, and offer no controls: there is no period to edit
+		against.
+	*@
+	@foreach (RoomLevelOrphan orphan in RoomLevels.Orphans(Periods, Room))
+	{
+		RoomLevelOrphan current = orphan;
+
+		<div class="lvl lvl-orphan" @key="@($"orphan:{current.Period}")">
+			<div class="lvl-when">
+				<span class="lvl-name">@current.Name</span>
+				<span class="lvl-start">no period is called this any more</span>
+			</div>
+
+			<div class="lvl-cell lvl-orphan-says">
+				<span class="lvl-cell-label">This room still pins</span>
+				<span class="lvl-orphan-value">@current.Says</span>
+			</div>
+
+			<div class="lvl-cell">
+				<span class="lvl-cell-label">Kept in case it was renamed</span>
+				<button type="button" class="lvl-drop" @onclick="() => Drop(current.Period)">Remove it</button>
+			</div>
+		</div>
+	}
+</div>
+
+@code {
+	/// <summary>The document's period list. Read, never edited here — the schedule belongs to the House pages.</summary>
+	[Parameter, EditorRequired]
+	public List<TimePeriodConfig> Periods { get; set; } = [];
+
+	/// <summary>The room being edited, in place.</summary>
+	[Parameter, EditorRequired]
+	public AreaConfig Room { get; set; } = new();
+
+	/// <summary>The period in force right now, so the row that is actually running says so. <c>null</c> when none is.</summary>
+	[Parameter]
+	public string? ActivePeriod { get; set; }
+
+	/// <summary>Raised after any change, so the page can re-validate and start its save timer.</summary>
+	[Parameter]
+	public EventCallback Changed { get; set; }
+
+	/// <summary>An unnamed period still needs a label; it is the same placeholder the schedule editor uses.</summary>
+	private static string PeriodName(string name) => name is { Length: > 0 } ? name : "unnamed period";
+
+	/// <summary>When the period starts, in the engine's own reading of its Start string.</summary>
+	private string StartOf(string name) =>
+		Periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase)) is { } found
+			? PeriodStartText.Describe(found.Start) ?? "start not set"
+			: string.Empty;
+
+	private double ScheduleBrightness(string name) =>
+		Periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase))?.BrightnessPct ?? 0;
+
+	private int ScheduleKelvin(string name) =>
+		Periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase))?.ColorTempKelvin ?? 0;
+
+	/// <summary>
+	///     The swatch's fill.
+	/// </summary>
+	/// <remarks>
+	///     A custom property rather than a background outright, so the stylesheet decides how a warmth is painted
+	///     in each theme — the same arrangement the board's blocks use. <see cref="KelvinColour.Css"/> writes its
+	///     own invariant integers, so nothing here can render a Norwegian decimal comma into a colour function.
+	/// </remarks>
+	private static string Swatch(int kelvin) => $"--lvl-kelvin: {KelvinColour.Css(kelvin)}";
+
+	private Task SetBrightness(string period, double value)
+	{
+		RoomLevels.SetBrightness(Room, period, value);
+
+		return Changed.InvokeAsync();
+	}
+
+	private Task ClearBrightness(string period)
+	{
+		RoomLevels.SetBrightness(Room, period, null);
+
+		return Changed.InvokeAsync();
+	}
+
+	/// <summary>
+	///     Colour temperature is a whole number of kelvin in the schema, and the preset control carries a double.
+	/// </summary>
+	/// <remarks>
+	///     Rounded rather than truncated, for the reason the settings rows round: a value entered as 2699.6 is
+	///     2700 to everyone who typed it, and truncation would file it as 2699 where nothing on the page shows it.
+	/// </remarks>
+	private Task SetColour(string period, double value)
+	{
+		RoomLevels.SetColorTemp(Room, period, (int)Math.Round(value, MidpointRounding.AwayFromZero));
+
+		return Changed.InvokeAsync();
+	}
+
+	private Task ClearColour(string period)
+	{
+		RoomLevels.SetColorTemp(Room, period, null);
+
+		return Changed.InvokeAsync();
+	}
+
+	private Task Drop(string period)
+	{
+		RoomLevels.Remove(Room, period);
+
+		return Changed.InvokeAsync();
+	}
+}

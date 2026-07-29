@@ -30,6 +30,13 @@
 
 <body>
 	<Routes @rendermode="InteractiveServer" />
+	@*
+		At the end of the body, not in <head>: unlike theme.js this decides nothing about the first paint, and a
+		second blocking request there would delay every page for a chart that appears on one. Versioned all the
+		same — a cached copy of the drag helper against a newer component is the same class of bug as a stale
+		stylesheet, and just as invisible on the machine it was developed on.
+	*@
+	<script src="@($"_content/AdaptiveLighting.Web/lux-curve.js?v={Build}")"></script>
 	<script src="_framework/blazor.web.js"></script>
 </body>
 

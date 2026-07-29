@@ -208,30 +208,20 @@
 	protected override void OnParametersSet() => _activePeriod = ResolveActivePeriod();
 
 	/// <summary>
-	///     The period in force at the current wall-clock time: the one whose start is the most recent at or before
-	///     now. When every start is still ahead of now (the small hours, before the first boundary), the period with
-	///     the latest start is in force — it began yesterday and wrapped past midnight. Sun-anchored starts resolve
-	///     against <c>sun.sun</c> exactly as the header's <see cref="StartSummary"/> does, so the running order can
-	///     differ from the list order. Periods whose start is blank or unparseable can never be "now".
+	///     The period in force at the current wall-clock time. Sun-anchored starts resolve against <c>sun.sun</c>
+	///     exactly as the header's <see cref="StartSummary"/> does, so the running order can differ from the list
+	///     order.
 	/// </summary>
+	/// <remarks>
+	///     The rule itself is <see cref="Schedule.InForceAt"/>'s, because the room page asks the same question of
+	///     the same list — which period is this room running right now — and two copies of "the latest start at or
+	///     before now, wrapping past midnight" would be believed while they drifted.
+	/// </remarks>
 	private TimePeriodConfig? ResolveActivePeriod()
 	{
 		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
-		SunTimes sun = new SunTimes(sunrise, sunset);
-		TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
 
-		List<(TimePeriodConfig Period, TimeOnly Start)> resolved = [];
-		foreach (TimePeriodConfig period in Periods)
-			if (PeriodStart.TryParse(period.Start, out PeriodStart? parsed) && parsed is not null
-				&& parsed.Resolve(sun) is { } start)
-				resolved.Add((period, start));
-
-		if (resolved.Count == 0)
-			return null;
-
-		List<(TimePeriodConfig Period, TimeOnly Start)> started = [.. resolved.Where(entry => entry.Start <= now)];
-		IEnumerable<(TimePeriodConfig Period, TimeOnly Start)> pool = started.Count > 0 ? started : resolved;
-		return pool.OrderBy(entry => entry.Start).Last().Period;
+		return Schedule.InForceAt(Periods, new SunTimes(sunrise, sunset), TimeOnly.FromDateTime(DateTime.Now));
 	}
 
 	/// <summary>The collapsed header's name: the period's own, or a placeholder for an unnamed row.</summary>

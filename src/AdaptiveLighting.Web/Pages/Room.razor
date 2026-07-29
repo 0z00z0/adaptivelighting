@@ -192,6 +192,70 @@ else
 	}
 
 	@* --------------------------------------------------------------------------------------------------
+	   The levels, first and open.
+
+	   "Make this the most prominent settings group" — and prominent has to mean *first and legible*, not
+	   loud, because on most of seventeen rooms it will have nothing to report. So it is placed above the
+	   sentences and never folded, and everything inside it is drawn in the inherited weight until somebody
+	   decides otherwise: a room that follows the house is four grey rows, no dots, no count, no colour but
+	   the warmth swatches, which are data. What is loud is exactly what was chosen.
+
+	   Two things live here because they are one question — how bright is this room, and why. The table
+	   answers it for the time of day; the curve answers it for the weather.
+	   -------------------------------------------------------------------------------------------------- *@
+	<section class="panel room-card room-levels-card">
+		<div class="room-card-head">
+			<span class="room-card-title">Brightness &amp; warmth</span>
+			@if (RoomLevels.OwnCount(_document.Periods, room) is > 0 and int chosen)
+			{
+				<span class="sgroup-count" title="Periods this room sets for itself">@chosen</span>
+			}
+			<span class="room-save @SaveClass" role="status">@SaveLine</span>
+		</div>
+
+		<p class="room-card-foot lvl-lede">@LevelsLede</p>
+
+		<LevelsEditor Periods="@_document.Periods"
+					  Room="@room"
+					  ActivePeriod="@ActivePeriodName"
+					  Changed="@MarkDirty" />
+
+		@* The daylight half. Off, it is one line and a switch — a chart of a rule that is not running is a
+		   picture of nothing, and the dark-cockpit rule says the quiet case gets no ink. *@
+		<div class="lvl-daylight">
+			<div class="lvl-daylight-head">
+				<span class="lvl-daylight-title">Brighten with daylight</span>
+				<button type="button"
+						class="switch @(BrightensWithDaylight ? "on" : null)"
+						role="switch"
+						aria-checked="@(BrightensWithDaylight ? "true" : "false")"
+						aria-label="Brighten with daylight"
+						@onclick="() => SetFlag(nameof(AreaSettings.LuxBrightnessEnabled), !BrightensWithDaylight)">
+					<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+					<span class="switch-word">@(BrightensWithDaylight ? "on" : "off")</span>
+				</button>
+			</div>
+
+			@if (BrightensWithDaylight)
+			{
+				<LuxCurveChart Settings="@Effective"
+							   BaseBrightnessPct="@DaylightBasePct"
+							   PeriodName="@ActivePeriodName"
+							   CapPct="@ActivePeriodCap"
+							   Reading="@LiveLux"
+							   Changed="@OnCurveEdited" />
+			}
+			else
+			{
+				<p class="room-card-foot">
+					This room holds the schedule's brightness whatever the weather. Switched on, a bright day lifts
+					it above the schedule so it doesn't read as gloomy against a bright window.
+				</p>
+			}
+		</div>
+	</section>
+
+	@* --------------------------------------------------------------------------------------------------
 	   How this room behaves: the sentences, then the same settings again in named sections.
 	   -------------------------------------------------------------------------------------------------- *@
 	<section class="panel room-card">
@@ -663,6 +727,12 @@ else
 	private AreaSnapshot? _snapshot;
 	private DateTimeOffset _now = DateTimeOffset.Now;
 
+	// The period in force and what this room's sensors read, both re-derived on the same beat as the live state
+	// rather than in a getter: this page renders once a second and again on every frame of a chart drag, and each
+	// of these parses the schedule or reads Home Assistant.
+	private TimePeriodConfig? _activePeriod;
+	private double? _liveLux;
+
 	private ValidationResult? _validation;
 	private SaveResult? _failure;
 	private bool _dirty;
@@ -950,7 +1020,92 @@ else
 				snapshot.AreaId is { Length: > 0 } areaId && string.Equals(areaId, room.AreaId, StringComparison.Ordinal))
 			?? Cache.Snapshots.FirstOrDefault(snapshot =>
 				string.Equals(snapshot.AreaName, RoomName, StringComparison.OrdinalIgnoreCase));
+
+		// Resolved here rather than taken from the snapshot's PeriodName, because the levels table has to be right
+		// for a room that has never reported — a switched-off room, or one the engine has not reached yet — and
+		// because a stale snapshot would leave the "now" badge on last night's period.
+		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
+		_activePeriod = Schedule.InForceAt(_document.Periods, new SunTimes(sunrise, sunset), TimeOnly.FromDateTime(_now.LocalDateTime));
+
+		_liveLux = _preview.Resolved is { } resolved ? Catalog.LuxIn(resolved, _document.Global) : null;
 	}
+
+	// ===================== the levels card =====================
+
+	/// <summary>The line under the card's head: how much of the schedule this room has taken over, in words.</summary>
+	private string LevelsLede
+	{
+		get
+		{
+			if (_room is not { } room)
+				return string.Empty;
+
+			int periods = _document.Periods.Count;
+			int chosen = RoomLevels.OwnCount(_document.Periods, room);
+			int orphaned = RoomLevels.Orphans(_document.Periods, room).Count;
+
+			// The orphans are said apart from the count, never folded into it: they are not among the periods on
+			// screen, and a card reading "1 of 4 periods are this room's own" over four unmarked rows sends
+			// somebody hunting for a dot that is not there.
+			string kept = orphaned switch
+			{
+				0 => string.Empty,
+				1 => " One more is kept from a period the schedule no longer has.",
+				_ => $" {orphaned} more are kept from periods the schedule no longer has."
+			};
+
+			if (chosen == 0)
+			{
+				return periods == 0
+					? "Nothing to follow yet — the schedule has no periods." + kept
+					: "Every period follows the house's schedule. Change one here and only this room changes." + kept;
+			}
+
+			return $"{chosen} of {periods} {(periods == 1 ? "period is" : "periods are")} this room's own; the rest follow the schedule." + kept;
+		}
+	}
+
+	/// <summary>The period in force right now, by name, or <c>null</c> when none resolves.</summary>
+	private string? ActivePeriodName => _activePeriod?.Name;
+
+	/// <summary>That period's own ceiling, which the daylight curve cannot climb through.</summary>
+	private double? ActivePeriodCap => _activePeriod?.MaxBrightnessPct;
+
+	private bool BrightensWithDaylight => Effective.LuxBrightnessEnabled;
+
+	/// <summary>
+	///     The level the daylight curve rises from: what this room runs during the period in force.
+	/// </summary>
+	/// <remarks>
+	///     The room's own value where it has one, so the chart and the table above it cannot disagree about what
+	///     the room is doing at this hour. With no period resolved there is nothing concrete to rise from, and the
+	///     schema's own starting point is the honest stand-in.
+	/// </remarks>
+	private double DaylightBasePct
+	{
+		get
+		{
+			if (_activePeriod is not { } period)
+				return _document.Defaults.LuxBrightnessMaxPct;
+
+			return RoomLevels.Rows(_document.Periods, _room)
+				.FirstOrDefault(row => string.Equals(row.Period, period.Name, StringComparison.OrdinalIgnoreCase))
+				?.BrightnessPct ?? period.BrightnessPct;
+		}
+	}
+
+	/// <summary>What this room's light-level sensors read, for the marker on the curve.</summary>
+	private double? LiveLux => _liveLux;
+
+	/// <summary>
+	///     Applies one setting a drag or an arrow key changed.
+	/// </summary>
+	/// <remarks>
+	///     Straight through <see cref="RoomSettings.SetShown"/> and the page's own debounced save, which is what
+	///     keeps a dragged number and a typed one the same edit: the chart cannot reach a value the stepper would
+	///     refuse, and neither of them writes anything itself.
+	/// </remarks>
+	private Task OnCurveEdited(CurveEdit edit) => SetNumber(edit.Key, edit.Value);
 
 	/// <summary>
 	///     What this room is called, everywhere on this page.
