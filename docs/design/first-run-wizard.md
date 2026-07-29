@@ -7,6 +7,12 @@ what it shows, what it asks, what skipping it means, what it looks like on a 390
 costs. The mock-up is [`mockups/first-run.html`](mockups/first-run.html); the questions only the owner can
 answer are in [`first-run-wizard-questions.md`](first-run-wizard-questions.md).
 
+The four questions the questionnaire kept for the owner are answered (2026-07-29) and folded in below:
+blink ships, on request, on impostor cards and room rows (§2.7 specifies the verb); the row unfold ships
+read-only through the real token machinery, with editing kept as a deferred switch rather than a rejected
+idea (§2.5); a half-finished wizard is lost on close (§4); and the sensor sheet ships whole — races and
+the band (§2.4).
+
 One sentence of premise, because everything follows from it: **by the time anyone sees this surface,
 discovery has already done its half.** The engine's first start proposed every qualifying room switched
 off (`AreaAutoDiscovery`), seeded the people from Home Assistant's own `person.*` entities
@@ -133,8 +139,8 @@ light from `LightAudit.Review` across the proposed rooms, one card per suspect, 
 
 The reason is `LightAudit`'s own sentence, verbatim — evidence beside the name, never a rule id — and the
 choice is one tap. Excluding stages the id into that room's `ExcludeEntities`; nothing anywhere is
-written. A *blink* button on each card, if the owner approves it (question 1), pulses the entity once so
-"is this a light or a router LED" is answered by the ceiling rather than by the naming convention.
+written. A *blink* button on each card pulses the entity once (§2.7), so "is this a light or a router
+LED" is answered by the ceiling rather than by the naming convention.
 
 All suspects start **kept**. `LightAudit`'s own doctrine — *advice, never a filter; the household knows
 its own house and this does not* — decides the default posture: the wizard points, the human excludes.
@@ -187,10 +193,22 @@ per proposed room:
   and the role guesses (*"bedroom manners"*, *"welcomes you home"*, *"stays on when everyone leaves"*) as
   quiet chips. **A row with nothing to say says "Ready", muted** — one word, not a green celebration
   seventeen times; the approved report's ok-coloured verdict column survives only where the verdict works.
-- **Tapping a row** (not its switch) unfolds the room in place: its four behaviour sentences read-only
-  (`AreaSentences.ForArea` over the proposed config — the role guess *is* the fourth sentence, so
-  "bedroom manners" explains itself), its gear as chips with entity ids, and its suspects if any. The
-  sentence conversation, hired at the row level.
+- **Tapping a row** (not its switch) unfolds the room in place: its four behaviour sentences read-only,
+  its gear as chips with entity ids, and its suspects if any. The sentence conversation, hired at the row
+  level. **Read-only is the owner's decision, with a condition that shapes the build**: *"keep editable
+  as a future option after I see it in action."* So the unfold renders through the real token machinery —
+  `SentenceView` over `AreaSentences.ForArea(proposal, defaults)` with `Editable="false"` — never a
+  flattening of the sentences to prose. The tokens are already the right objects, and turning editing on
+  later is a switch, not a rewrite: flip `Editable`, wire `Edited`/`Reverted` into per-room overrides on
+  `CommissioningDraft`, and set the popovers' `Note` to the commit promise. What must *not* happen then
+  is the wizard growing its own sentence projection or its own apply path — the sentences stay
+  `AreaSentences`, the staging stays the draft, the write stays the commit's one `Save` — or the wizard
+  becomes a second room editor that drifts from the real one. Deferred with that cost named, not
+  rejected. The role guess *is* the fourth sentence either way, so "bedroom manners" explains itself.
+- **A blink control on the row** (§2.7): at the end of the notes column on a desk, at the end of the
+  phone's meta line — styled as the ghost button it is, not as a verdict chip. It pulses the room's
+  resolved lights once, so "which room is *gang*" is answered by the hallway lighting up rather than by
+  the slug. Row tap and blink tap are distinct targets; blinking never unfolds.
 - **Under the table, the near-miss line:** *"Bod and Teknisk rom have lights but nothing that senses
   movement, so they sit this out — give them a motion sensor in Home Assistant and press Set up rooms
   again."* Discovery's strict rule (a light **and** a motion sensor) made these rooms invisible; one muted
@@ -234,6 +252,49 @@ There is no partial commit and no second transaction. Rooms left off are switche
 Switched-off rooms — which gains the same verdict chips this table uses, so the late rooms keep their
 evidence (small addition, costed below).
 
+### 2.7 The blink verb — the one engine change, specified
+
+Settled by the owner: blink ships, on request only, on impostor cards (one entity) and on room rows (the
+room's resolved lights). The promise adjusts by exactly this much: *nothing changes by itself until
+commit* — the one thing the wizard ever touches is the light you ask it to point at, in the second you
+ask. The verb is `Pulse(entityId)` on the engine host; a room row calls it once per resolved light.
+
+**The sequence, and what it restores.** The whole pulse runs server-side as one short engine-owned
+sequence — the browser fires it and forgets it:
+
+1. Read the entity's live state. `unavailable` or `unknown`: refuse quietly — there is nothing to point
+   at, and a command would go nowhere. (This is also the wifi-drop guard: an entity that cannot answer is
+   never commanded, so the pulse cannot manufacture the disappearing-light transition that was once read
+   as a hand at a switch.)
+2. A light that is **off**: `turn_on` at a fixed modest level — 60 %, neutral warmth — for the pulse's
+   ~800 ms; restore is `turn_off`. A light that is **on** (a lit status LED, a lamp somebody left
+   burning): capture its brightness and colour from step 1, `turn_off` for the ~800 ms; restore is
+   `turn_on` with exactly the captured values.
+3. **Compare before restoring.** Immediately before the restore, read the entity again: if its state no
+   longer matches what the pulse commanded, somebody or something real intervened mid-pulse — a wall
+   switch, another automation — and the restore yields, leaving the newer state standing. The pulse must
+   never overwrite a hand, even to put things back.
+4. **A browser disconnect changes nothing.** The sequence lives in the host, not the circuit: the draft
+   dies with a closed tab (§4), but a pulse in flight still completes its restore, because half a pulse
+   is a changed house and the draft-loss rule only ever applies to unwritten *answers*.
+
+**Why echo suppression is load-bearing, not hygiene.** It would be tempting to argue nothing is watching
+during the wizard — every room is off — but that is false in the code: controllers are built for
+switched-off rooms too, and `Enabled` gates *acting*, per tick, inside `AreaController.IsEngineAllowed`,
+not construction. Something is always observing state changes. So every command the pulse issues — the
+flash **and** the restore — goes through the engine's own command path and registers the same
+self-recognition the orchestrator's commands get: the self-echo window (`SelfEchoWindowSeconds` plus the
+command's transition) and the `NetDaemonUserId` context `OverrideDetector` checks. A pulse the engine
+could not attribute to itself would be booked as a person acting — the exact bug class this project has
+already shipped once, when a light dropping off wifi read as somebody flipping a switch — and a pulse
+mistaken for a hand would hold a room for two hours. The verb therefore cannot be a raw `light.turn_on`
+from the web layer; it must be the engine speaking in its own voice.
+
+**The guard.** The verb refuses entities belonging to switched-on rooms. During the wizard that is
+vacuously true — the wizard renders only while every room is off — but the guard makes it a property of
+the verb rather than of the caller: commissioning-only by construction, and lifting it for a future
+room-page "which lamp is this" is a deliberate decision, not an accident.
+
 ---
 
 ## 3. The graphic devices, each tied to its step
@@ -245,7 +306,7 @@ evidence (small addition, costed below).
 | Person chips with live presence dots | identity sheet | the tracker shown working, not claimed; the parked car convicts itself |
 | Mode sentences, read-only | mode sheet | `HouseSentences.Modes` — the owner's own dropdown read back in English |
 | Evidence cards | impostor sheet | `LightAudit`'s reason sentences verbatim, beside the name they accuse |
-| Blink to identify | impostor sheet, roll-call rows | pending question 1; the only device that touches the house |
+| Blink to identify | impostor sheet, roll-call rows | settled: on request only — the one device that touches the house, specified in §2.7 |
 | Live sensor race | sensor sheet | snapshots already flow; cover a sensor and watch it fall |
 | The lux band | sensor sheet | log scale, reference points, live room dots, one draggable token — lx taught wordlessly |
 | Verdict chips in state colours | roll-call | evidence on the row, not prose under it; "Ready" muted, silence on the phone |
@@ -267,13 +328,15 @@ discovery wrote at first start (all rooms off), and it is not touched again unti
 `Save`. There is no per-sheet write, no autosave, no shadow copy in the browser. Two consequences, both
 deliberate and one of them a question for the owner:
 
-- A browser refresh or a closed tab loses unsaved answers. Blazor Server's reconnect covers the phone
-  locking or the tab backgrounding mid-wizard; a genuine close costs at most two minutes of re-answering
-  four short sheets. The alternative — persisting a draft — is a second place configuration lives and a
-  second thing that can disagree with the document, which is the exact class of bug the single write path
-  exists to prevent. (Question 3 offers the owner the localStorage variant with its cost stated.)
-- The promise *"nothing changes until the commit button"* is true of the house **and** of the document.
-  The one candidate exception is the blink verb, which is question 1 precisely because it bends this.
+- A browser refresh or a closed tab loses unsaved answers — **settled by the owner**. Blazor Server's
+  reconnect covers the phone locking or the tab backgrounding mid-wizard; a genuine close costs at most
+  two minutes of re-answering four short sheets. The alternative — persisting a draft — is a second place
+  configuration lives and a second thing that can disagree with the document, which is the exact class of
+  bug the single write path exists to prevent. One carve-out follows from §2.7: a pulse in flight
+  completes its restore whatever the browser does, because it is house state, not an answer.
+- The promise *"nothing changes until the commit button"* is true of the document without exception, and
+  true of the house with exactly one, named where it happens: the blink verb touches the one light you
+  ask it to point at, in the second you ask (§2.7).
 
 ## 5. Deliberately not in the wizard
 
@@ -285,8 +348,9 @@ deliberate and one of them a question for the owner:
   create one would offer what exists. Wiring a *custom* entity stays on House › Master switch.
 - **Label names and device classes.** The impostor sheet applies exclusions without ever naming the
   exclude label; the strings live under Finding lights & sensors.
-- **Per-room tuning.** Row-unfold is read-only (pending question 2). The room page is the tuner's home;
-  the wizard is the commissioner's.
+- **Per-room tuning.** Row-unfold ships read-only; the room page is the tuner's home, the wizard the
+  commissioner's. Deferred, not rejected: the owner wants the editable unfold kept open as a future
+  option, and §2.5 says what makes that a switch rather than a rewrite.
 - **Mode remapping.** Confirm or detach only; option-by-option editing is the House tab's mode card.
 - **The day-after debrief.** Resolved out on measured grounds: the debrief needs last night's history the
   morning after, and history reaches back to engine start only (`ui-design-c.md` §7 — a restart wipes the
@@ -310,7 +374,7 @@ deliberate and one of them a question for the owner:
 
 ## 7. Cost, per step
 
-Sized against what ships. The engine changes **at most once** (blink, if approved); everything else is
+Sized against what ships. The engine changes **exactly once** (the blink verb, §2.7); everything else is
 Web-project work over existing projections, and the save path is untouched.
 
 | Step | Reuses (exists today) | New | Size |
@@ -321,11 +385,11 @@ Web-project work over existing projections, and the save path is untouched.
 | Mode sheet | `HouseSentences.Modes`, `SentenceView Editable=false` | keep/detach buttons, staging | small — hours |
 | Impostor sheet | `LightAudit.Review`, `SwitchOnWarning` wording precedent | `ImpostorSheet.razor`; suspects-across-rooms projection (pure, tested) | medium-small — a day |
 | Sensor sheet | live reads via `IHaContext`, 1 s tick precedent, `TokenChoices` | `LuxBandScale.cs` (pure log-scale maths, tested like `CurvePath`), `LuxBand.razor`, race tiles | medium — 1–2 days |
-| Roll-call | `FloorGrouping`, `.floor-head`/`.floor-bulk`, `.switch`, `AreaSentences.ForArea` + `SentenceView` for unfold, gear-chip styling, `HaCatalog` | `CommissioningReport.razor`; `CommissioningVerdicts.cs` (pure verdict projection, tested — the near-miss line included) | **the largest** — days |
+| Roll-call | `FloorGrouping`, `.floor-head`/`.floor-bulk`, `.switch`, `AreaSentences.ForArea` + `SentenceView Editable=false` for unfold, gear-chip styling, `HaCatalog` | `CommissioningReport.razor`; `CommissioningVerdicts.cs` (pure verdict projection, tested — the near-miss line included); the row blink control | **the largest** — days |
 | Commit | `LightingEngineHost.Save`, toast | `CommissioningDraft.cs` (pure staging record: apply-to-document, tested); sticky-bar CSS | medium-small — a day |
 | Epilogue | the live board (C4) | nothing | free |
 | Switched-off rooms verdicts | House section, `CommissioningVerdicts` | chip rendering there | small — hours |
-| Blink (question 1) | `ILightActuator` | one engine verb (pulse + restore), a host entry point, a guard against firing on enabled rooms | medium, **the only engine change** |
+| Blink | `ILightActuator`, the self-echo registration the orchestrator's commands already get | `Pulse(entityId)` per §2.7: the server-side sequence, compare-before-restore, the enabled-room guard | medium, **the only engine change** |
 
 Everything pure is testable without a render harness, which is the repo's rule: the verdicts, the draft,
 the identity sentence, the band scale each get the same treatment `AreaSentences` and `CurvePath` already
@@ -346,3 +410,17 @@ have.
   the mock-up shows every step at 390 px.
 - **"Ready" is quiet.** Muted word on desktop, silence on the phone. Seventeen green verdicts would be the
   reassurance dashboard sneaking back in through the one door the design guards.
+
+## 9. Settled by the owner (2026-07-29)
+
+The questionnaire's four questions came back answered; the choices are recorded beside their options in
+[`first-run-wizard-questions.md`](first-run-wizard-questions.md) and are folded into the sections above:
+
+- **Blink: on request**, on impostor cards and room rows. §2.7 specifies the verb — the off/on
+  behaviour, what restores, compare-before-restore, the server-side sequence that survives a browser
+  disconnect, and the self-echo registration that keeps a pulse from ever being booked as a hand.
+- **The unfold: read-only, editable kept open.** Rendered through `SentenceView Editable=false` so the
+  future editable variant is a switch, not a rewrite — §2.5 names what would then need to exist and the
+  one discipline that keeps the wizard from becoming a second room editor.
+- **Draft: lost on close** (§4), with the §2.7 carve-out that a pulse in flight still restores.
+- **Sensor sheet: whole** — races and the band (§2.4).

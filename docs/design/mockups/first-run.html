@@ -203,6 +203,10 @@ header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0
 .blinkbtn{border:1px solid var(--line);border-radius:var(--radius-control);padding:.2rem .6rem;font-size:var(--text-sm);color:var(--muted);flex:none}
 .blinkbtn:hover{border-color:var(--accent);color:var(--accent)}
 .suspect.blinking{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+/* The row's blink control (settled question 1): a ghost button at the end of the notes line —
+   bordered where the verdict chips are filled, so it reads as pressable, not as a verdict. */
+.rowblink{margin-left:auto;padding:.1rem .5rem;font-size:var(--text-xs)}
+.comm-row.blinking{outline:2px solid var(--accent);outline-offset:-2px}
 .keepex{display:flex;gap:3px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-control);padding:3px;flex:none}
 .keepex button{padding:.25rem .7rem;border-radius:5px;font-size:var(--text-sm);font-weight:600;color:var(--muted)}
 .keepex button.cur{background:var(--panel);color:var(--text);border:1px solid var(--line)}
@@ -448,9 +452,8 @@ header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0
 		<span class="note">4 of 29 lights look like something other than room lighting</span></div>
 	<div class="sheet-body">
 		<div class="suspects">
-			<!-- Reasons are LightAudit's own sentences, verbatim. The blink button is the recommended
-			     variant of open question 1; if the owner declines, the button is simply absent and
-			     nothing else on this sheet moves. -->
+			<!-- Reasons are LightAudit's own sentences, verbatim. The blink button is settled (owner,
+			     2026-07-29): a pulse on request, engine-side, restored — first-run-wizard.md §2.7. -->
 			<div class="suspect excluded" id="sus-1">
 				<div class="who"><span class="nm">Stue AP status <span class="room">· Stue</span></span>
 					<code>light.stue_ap_status_led</code>
@@ -551,19 +554,19 @@ header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0
 			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Kjellerstue" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Kjellerstue<code>kjellerstue</code></span>
 			<span class="c"><b>2</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-ready">Ready</span></span>
+			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-ready">Ready</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Kjellergang" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Kjellergang<code>kjellergang</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Vaskerom" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Vaskerom<code>vaskerom</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-ready">Ready</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-ready">Ready</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 	</div>
 
@@ -576,19 +579,19 @@ header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0
 			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Gang nede" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Gang nede<code>gang_nede</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Bad nede" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Bad nede<code>bad_nede</code></span>
 			<span class="c"><b>2</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-chip info">gentle at night</span></span>
+			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-chip info">gentle at night</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Gjesterom" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Gjesterom<code>gjesterom</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-ready">Ready</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-ready">Ready</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 	</div>
 
@@ -601,31 +604,31 @@ header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0
 			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Stue" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Stue<code>stue</code></span>
 			<span class="c"><b>5</b></span><span class="c"><b>2</b></span><span class="c lx"><b>12 lx</b></span>
-			<span class="notes meta"><span class="cnt">5 lights · 2 motion</span><span class="note-chip warn">2 of 5 lights look like something else</span></span>
+			<span class="notes meta"><span class="cnt">5 lights · 2 motion</span><span class="note-chip warn">2 of 5 lights look like something else</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Kjøkken" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Kjøkken<code>kjokken</code></span>
 			<span class="c"><b>3</b></span><span class="c"><b>1</b></span><span class="c lx"><b>9 lx</b></span>
-			<span class="notes meta"><span class="cnt">3 lights · 1 motion</span><span class="note-chip warn">1 of 3 lights looks like something else</span></span>
+			<span class="notes meta"><span class="cnt">3 lights · 1 motion</span><span class="note-chip warn">1 of 3 lights looks like something else</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Gang" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Gang<code>gang</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Kontor" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Kontor<code>kontor</code></span>
 			<span class="c"><b>3</b></span><span class="c"><b>1</b></span><span class="c lx"><b>28 lx</b></span>
-			<span class="notes meta"><span class="cnt">3 lights · 1 motion</span><span class="note-chip warn">1 of 3 lights looks like something else</span><span class="note-chip info">reads the average of 2 sensors</span></span>
+			<span class="notes meta"><span class="cnt">3 lights · 1 motion</span><span class="note-chip warn">1 of 3 lights looks like something else</span><span class="note-chip info">reads the average of 2 sensors</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Toalett" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Toalett<code>toalett</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">gentle at night</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">gentle at night</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 	</div>
 
@@ -638,13 +641,14 @@ header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0
 			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Soverom" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Soverom<code>soverom</code></span>
 			<span class="c"><b>2</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-chip info">bedroom manners</span></span>
+			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-chip info">bedroom manners</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<!-- The row unfold: the room's behaviour as its own read-only sentences (AreaSentences over the
 		     proposal), the guessed flags visible as the fourth sentence, and the gear as chips. Shown
 		     open here for Soverom; in the product a tap on the row (not the switch) opens it.
-		     Open question 2 decides whether these values ever become editable tokens; recommended is
-		     read-only, exactly as drawn. -->
+		     Settled (owner, 2026-07-29): ships read-only, but rendered through SentenceView's token
+		     machinery with Editable=false — so the deferred editable variant is a switch, not a
+		     rewrite. The bold values below stand for .tok-static tokens, not flattened prose. -->
 		<div class="comm-unfold">
 			<div class="sentences">
 				<p class="sentence">Lights when someone moves and it's darker than <b class="tok-static">1 000 lx</b> — or the sun is below <b class="tok-static">3°</b>. After <b class="tok-static">10 min</b> without movement, dim to <b class="tok-static">50 %</b> for <b class="tok-static">30 s</b>, then off.</p>
@@ -661,13 +665,13 @@ header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0
 			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Barnerom" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Barnerom<code>barnerom</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-ready">Ready</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-ready">Ready</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Bad oppe" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Bad oppe<code>bad_oppe</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">gentle at night</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">gentle at night</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 	</div>
 
@@ -680,7 +684,7 @@ header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0
 			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Garasje" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Garasje<code>garasje</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">stays on when everyone leaves</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">stays on when everyone leaves</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 	</div>
 
@@ -693,13 +697,13 @@ header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0
 			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Uteplass" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Uteplass<code>uteplass</code></span>
 			<span class="c"><b>2</b></span><span class="c"><b>1</b></span><span class="c lx"><b>180 lx</b></span>
-			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-chip info">stays on when everyone leaves</span></span>
+			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-chip info">stays on when everyone leaves</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 		<div class="comm-row" onclick="unfold(this,event)">
 			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Inngang" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
 			<span class="rn">Inngang<code>inngang</code></span>
 			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
-			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span></span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span><button class="blinkbtn rowblink" onclick="blinkRow(event,this)" title="Pulse this room's lights once">blink</button></span>
 		</div>
 	</div>
 
@@ -802,6 +806,9 @@ function keep(id,btn){const s=document.getElementById(id);s.classList.remove('ex
 function exclude(id,btn){const s=document.getElementById(id);s.classList.add('excluded');setKX(btn);suspectStatus();}
 function setKX(btn){btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.toggle('cur',b===btn));}
 function blink(id){const s=document.getElementById(id);s.classList.add('blinking');setTimeout(()=>s.classList.remove('blinking'),900);}
+/* A row's blink pulses the whole room's lights (one Pulse per resolved light in the product). It must
+   never also unfold the row, so the tap stops here. */
+function blinkRow(ev,btn){ev.stopPropagation();const row=btn.closest('.comm-row');row.classList.add('blinking');setTimeout(()=>row.classList.remove('blinking'),900);}
 
 /* mode sheet */
 function modeKept(btn){btn.closest('.sheet-body').querySelector('.smallprint').textContent='Kept. The house reads Husmodus; remapping lives under House.';}
