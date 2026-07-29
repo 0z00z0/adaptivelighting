@@ -145,7 +145,15 @@ else
 						{
 							<tr>
 								<th scope="row">@fact.Label</th>
-								<td title="@fact.Title">@fact.Value</td>
+								<td title="@fact.Title">
+									@fact.Value
+									@* The engine's own working, under the answer rather than welded onto the end
+									   of it — see RoomFact.Detail for the three-line wrap this replaced. *@
+									@if (fact.Detail is { Length: > 0 } detail)
+									{
+										<span class="fact-detail">@detail</span>
+									}
+								</td>
 							</tr>
 						}
 					</tbody>

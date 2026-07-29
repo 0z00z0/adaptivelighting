@@ -7,9 +7,20 @@ namespace AdaptiveLighting.Web.Services;
 ///     One line of the room page's evidence table.
 /// </summary>
 /// <param name="Label">What the fact is called, down the left.</param>
-/// <param name="Value">The reading itself.</param>
+/// <param name="Value">The reading itself — short enough to be read at a glance.</param>
 /// <param name="Title">A fuller explanation for the hover, or <c>null</c> when the value speaks for itself.</param>
-public sealed record RoomFact(string Label, string Value, string? Title = null);
+/// <param name="Detail">
+///     The measurement behind the value, rendered as a quieter second line, or <c>null</c> when there is none.
+/// </param>
+/// <remarks>
+///     <b>Why <paramref name="Detail"/> is a field and not just a longer <paramref name="Value"/>.</b> The
+///     darkness row used to read <i>"dark enough — lux 4 (mean of 2 of 2 sensors), dark below 1000"</i> as one
+///     string: a two-word answer and its whole working, in one monospaced run that wrapped across three lines on
+///     a phone and buried the answer in the middle of it. The verdict is what somebody scanning the table needs;
+///     the reading is what they need next, and only if the verdict surprised them. Splitting them lets the eye
+///     take the first column of answers straight down and stop where it wants to.
+/// </remarks>
+public sealed record RoomFact(string Label, string Value, string? Title = null, string? Detail = null);
 
 /// <summary>
 ///     What the room page says about a room right now: the present-tense line, what happens next, and the
@@ -40,9 +51,23 @@ public static class RoomFacts
 	///     What the engine saw, as the table the design calls <i>Right now — what the engine saw</i>.
 	/// </summary>
 	/// <remarks>
-	///     The master-switch row appears only when the switch is off, and appears first: while it is off the
-	///     engine commands nothing, and a table that reported a state and a period without saying so would send
-	///     somebody hunting a room-level fault that is not there.
+	///     <para>
+	///         <b>Ordered by the question that brought somebody here</b>, which is almost always "why is this room
+	///         dark". So darkness leads, then whether walking in would change that, and only then the readings that
+	///         are merely context. It used to open with State and Lights — true, but an answer to a question
+	///         nobody had, sitting above the one they did.
+	///     </para>
+	///     <para>
+	///         <b>There is no State row.</b> The page header carries the state chip and the headline sentence an
+	///         inch above this table, so a row reading "watching — no lights commanded, waiting for movement" was
+	///         the third telling of one fact on one screen. Dropping it is the single biggest thing that made the
+	///         table scannable.
+	///     </para>
+	///     <para>
+	///         The master-switch row appears only when the switch is off, and outranks even darkness: while it is
+	///         off the engine commands nothing anywhere, and a table that answered "is it dark enough" without
+	///         saying so would send somebody hunting a room-level fault that is not there.
+	///     </para>
 	/// </remarks>
 	/// <param name="snapshot">The room's most recent report.</param>
 	/// <param name="now">The reader's present, for the relative ages.</param>
@@ -61,30 +86,33 @@ public static class RoomFacts
 				"Adaptive lighting is switched off for the whole house."));
 		}
 
-		facts.Add(new RoomFact("State", StateWord(snapshot.State), snapshot.State.ToString()));
-		facts.Add(new RoomFact("Lights", Reading(snapshot), LightsTitle(snapshot)));
-
-		facts.Add(snapshot.LastMotionAt is { } motion
-			? new RoomFact("Last motion", $"{Clock(motion)} · {Ago(motion, now)}", $"Motion was last seen at {Clock(motion)}.")
-			: new RoomFact("Last motion", "none seen", "No motion has been reported since the engine started."));
-
-		facts.Add(snapshot.LastCommandAt is { } command
-			? new RoomFact("Last command", $"{Clock(command)} · {Ago(command, now)}", "The last time the engine changed these lights.")
-			: new RoomFact("Last command", "none yet", "The engine has not changed these lights since it started."));
-
-		facts.Add(new RoomFact("Darkness", Darkness(snapshot), DarknessTitle(snapshot)));
+		facts.Add(new RoomFact(
+			"Dark enough?",
+			DarknessVerdict(snapshot),
+			DarknessTitle(snapshot),
+			snapshot.DarknessDetail is { Length: > 0 } detail ? detail : null));
 
 		if (AutoOnNote(snapshot) is { Length: > 0 } blocked)
 		{
 			facts.Add(new RoomFact(
-				"Movement now",
+				"If someone walks in",
 				blocked,
 				"Whether walking in would switch these lights on, as the engine judged it when it reported."));
 		}
 
+		facts.Add(new RoomFact("Lights", Reading(snapshot), LightsTitle(snapshot)));
+
+		facts.Add(snapshot.LastMotionAt is { } motion
+			? new RoomFact("Last movement", Stamp(motion, now), $"Movement was last seen at {Clock(motion)}.")
+			: new RoomFact("Last movement", "none seen", "No movement has been reported since the engine started."));
+
+		facts.Add(snapshot.LastCommandAt is { } command
+			? new RoomFact("Last changed", Stamp(command, now), $"The engine last changed these lights at {Clock(command)}.")
+			: new RoomFact("Last changed", "not yet", "The engine has not changed these lights since it started."));
+
 		facts.Add(new RoomFact(
-			"Period",
-			snapshot.PeriodName is { Length: > 0 } period ? period : "no period",
+			"Time of day",
+			snapshot.PeriodName is { Length: > 0 } period ? period : "nothing scheduled",
 			"The schedule period this room is in. It sets brightness and warmth."));
 
 		return facts;
@@ -314,26 +342,16 @@ public static class RoomFacts
 	}
 
 	/// <summary>
-	///     The state row: the word every surface uses for it, plus what that word means for this room.
+	///     A past moment as the table writes it: how long ago first, the clock time second.
 	/// </summary>
 	/// <remarks>
-	///     The word comes from <see cref="StateGlyph"/> rather than from a second list here, so the chip in the
-	///     header and the row in the table can never name one state two ways.
+	///     Ago-first because "2 min ago" is the fact and "17:42" is the corroboration — reversed, the eye had to
+	///     cross a timestamp it did not want to reach the number it did. Seconds are dropped: this table is read
+	///     to the nearest minute, and <c>17:42:10</c> asks to be compared digit by digit with the row below it.
+	///     <see cref="Clock"/> keeps its seconds for the log rows, where two entries can share a minute.
 	/// </remarks>
-	private static string StateWord(AreaState state) => $"{StateGlyph.For(state).Word} — {Gloss(state)}";
-
-	private static string Gloss(AreaState state) => state switch
-	{
-		AreaState.AutoActive => "the engine is holding these lights",
-		AreaState.PreOff => "dimmed as a warning, about to go dark",
-		AreaState.OverriddenOn => "somebody set these levels, so the engine stands back",
-		AreaState.SuppressedOff => "switched off manually, movement ignored for now",
-		AreaState.SceneHold => "a scene owns this room until it lets go",
-		AreaState.Disabled => "this room is never commanded",
-		AreaState.AutoVacant => "no lights commanded, waiting for movement",
-		AreaState.Away => "the house is empty",
-		_ => state.ToString()
-	};
+	private static string Stamp(DateTimeOffset at, DateTimeOffset now) =>
+		$"{Ago(at, now)} · {at.ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture)}";
 
 	/// <summary>The levels the table reports, terse: the header's own line writes them out in prose instead.</summary>
 	private static string Reading(AreaSnapshot snapshot)
@@ -370,23 +388,20 @@ public static class RoomFacts
 	};
 
 	/// <summary>
-	///     The darkness verdict with the engine's own reading behind it.
+	///     The darkness verdict alone, as the answer to the row's question.
 	/// </summary>
 	/// <remarks>
-	///     The detail is passed through, never rebuilt: the gate is the only thing that knows which source it
-	///     consulted, and a reading assembled here would eventually disagree with the one the engine acted on.
+	///     The engine's reading no longer joins it here — it travels as <see cref="RoomFact.Detail"/> and is drawn
+	///     as a quieter second line. Still passed through and never rebuilt: the gate is the only thing that knows
+	///     which source it consulted, and a reading assembled here would eventually disagree with the one the
+	///     engine acted on.
 	/// </remarks>
-	private static string Darkness(AreaSnapshot snapshot)
+	private static string DarknessVerdict(AreaSnapshot snapshot) => snapshot.IsDark switch
 	{
-		string verdict = snapshot.IsDark switch
-		{
-			true => "dark enough",
-			false => "too light",
-			null => "not checked yet"
-		};
-
-		return snapshot.DarknessDetail is { Length: > 0 } detail ? $"{verdict} — {detail}" : verdict;
-	}
+		true => "Yes",
+		false => "No — too bright",
+		null => "Not checked yet"
+	};
 
 	private static string DarknessTitle(AreaSnapshot snapshot) => snapshot.IsDark is null
 		? "Darkness hasn't been checked here yet."

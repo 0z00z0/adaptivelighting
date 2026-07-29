@@ -366,8 +366,8 @@ public static class RoomSettings
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.WelcomeHome),
-					"Welcome home",
-					"This room lights the moment the first person arrives, if it is dark — no waiting for a motion sensor to catch them.",
+					"Lights up when the first person comes home",
+					"If the house is dark when somebody arrives, this room comes on to meet them instead of waiting for a motion sensor to catch them.",
 					RoomControl.Flag)
 			]),
 

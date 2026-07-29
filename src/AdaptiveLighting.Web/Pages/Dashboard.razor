@@ -48,29 +48,53 @@
 	and offer two controls. Side by side in one panel they cost roughly a third of that and say the same things,
 	because almost all of the height was a second line under each fact restating what the fact already said.
 
-	What survives whole is the master switch: it is leftmost, it keeps the state colour on its edge and its own
-	large On/Off button, and it keeps a line under it whenever there is news — paused, or unreachable. Only the
-	"everything is fine" line went, into the button's own hover, because a permanent sentence saying nothing is
-	wrong is exactly the reassurance budget this design refuses to spend. The mode's meaning line went the same
-	way and to a better home: the House tab now says in full what each mode does.
+	THE MASTER SWITCH IS DELIBERATELY QUIET, and was not always. It used to lead the strip with the state colour
+	on the panel's edge, a large On/Off button, and a bold word beside that button repeating what the button
+	already said. Three prominence devices for a control whose whole job is to sit still: it is touched perhaps
+	twice a year, while the mode and who's home are read every day. So it moved to the end, lost the duplicate
+	word, and now uses the same small track-and-knob switch as a room's own power switch — one control language
+	across the app rather than one per page.
+
+	What it did NOT lose is any way of shouting when it matters. The note under it stays for paused and
+	unreachable, the panel edge still takes a colour for those two, and the full-width notice below the strip
+	still says in a sentence that nothing will change. Only the "everything is fine" green went — a permanent
+	reassurance that nothing is wrong is exactly the budget this design refuses to spend, which is the same rule
+	the note line has always followed.
 
 	All three read on the same ticker; only the master switch and the mode act, and both through ModeService's
 	existing config-resolved calls. Nothing here touches the document.
 *@
 <div class="housebar">
+	<HouseModePanel HouseMode="_houseMode" Message="@_modeMessage" Confirmation="@_modeConfirmation" OnSelect="SelectMode" />
+	<WhoIsHomePanel People="_people" />
+
 	@if (_masterSwitch is { } master)
 	{
 		<div class="housebar-cell housebar-master @MasterClass(master)">
 			<span class="housebar-lab">Adaptive lighting</span>
 			<div class="housebar-main">
-				<span class="housebar-value">@MasterStateWord(master)</span>
-				<button type="button"
-						class="toggle @(master is { IsAvailable: true, AdaptiveLightingOn: true } ? "on" : "")"
-						disabled="@(!master.IsAvailable || !master.Toggle.CanToggle)"
-						title="@MasterTitle(master)"
-						@onclick="ToggleMaster">
-					@(master.IsAvailable ? master.AdaptiveLightingOn ? "On" : "Off" : "?")
-				</button>
+				@if (master.IsAvailable)
+				{
+					@* The room switch's markup, aria included, rather than a second switch of its own: a house
+					   whose controls each look slightly different is a house you have to learn twice. *@
+					<button type="button"
+							class="switch @(master.AdaptiveLightingOn ? "on" : null)"
+							role="switch"
+							aria-checked="@(master.AdaptiveLightingOn ? "true" : "false")"
+							aria-label="Adaptive lighting for the whole house"
+							disabled="@(!master.Toggle.CanToggle)"
+							title="@MasterTitle(master)"
+							@onclick="ToggleMaster">
+						<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+						<span class="switch-word">@(master.AdaptiveLightingOn ? "on" : "off")</span>
+					</button>
+				}
+				else
+				{
+					@* No switch at all when Home Assistant cannot say which way it is set. A switch drawn in a
+					   guessed position is worse than an admitted gap — the note underneath says what happened. *@
+					<span class="housebar-value unknown" title="@MasterTitle(master)">unknown</span>
+				}
 			</div>
 			@if (MasterNote(master) is { Length: > 0 } note)
 			{
@@ -78,9 +102,6 @@
 			}
 		</div>
 	}
-
-	<HouseModePanel HouseMode="_houseMode" Message="@_modeMessage" Confirmation="@_modeConfirmation" OnSelect="SelectMode" />
-	<WhoIsHomePanel People="_people" />
 </div>
 
 @if (_snapshots.Any(area => area.KillSwitchActive))
@@ -376,15 +397,18 @@ else
 		The log. The same reports the lanes are drawn from, in words, with the reading that decided each one —
 		which is what somebody arriving with "why didn't that light come on" is actually here for.
 
-		It is a SUMMARY, so it shows what the Activity page shows when you open it: the same default category set,
-		read from ActivityView rather than restated here, which means the housekeeping stays off it. Twelve rows of
-		"Rechecked the room · automatic lighting is off here" is a summary of nothing, and the
-		twelve-row budget is spent after the filter rather than before it — twelve rows worth reading, not twelve
-		of which nine are noise. The chips that switch the categories deliberately do not appear here: the filtering
-		control belongs on the page the link at the foot already goes to.
+		It is a SUMMARY, and since the simplification pass a much stricter one: ActivityView.SummaryCategories, not
+		the Activity page's opening set. The board an inch above has already DRAWN the routine — every lit block and
+		the movement that lit it is a mark on a lane — so carrying those in words underneath spent the whole
+		twelve-row budget restating the picture, and the one report somebody needed fell off the bottom. What is
+		left is the four kinds the lanes cannot draw: somebody overrode the engine, the engine declined and only
+		prose says why, the house changed mode, and the house emptied, filled or was switched off.
+
+		The budget is spent after the filter rather than before it, and the chips that switch the categories
+		deliberately do not appear here: the filtering control belongs on the page the link at the foot goes to.
 	*@
 	<div class="board-loghead">
-		<h2 class="board-title">Activity &mdash; every decision, newest first</h2>
+		<h2 class="board-title">What's worth knowing &mdash; newest first</h2>
 		<span class="board-since">@LogFoot</span>
 	</div>
 
@@ -402,15 +426,16 @@ else
 	else if (_logRows.Count == 0)
 	{
 		@*
-			Everything held is housekeeping — the state the filter makes possible and the one it must not let look
-			like an empty log. Reports exist, they are simply not the kind this summary carries, and the way to
-			them is one tap.
+			Everything held is routine — the state the filter makes possible and the one it must not let look like
+			an empty log. Reports exist, they are simply not the kind this summary carries, and the way to them is
+			one tap. It is also the NORMAL state of a working house for hours at a stretch, which is why it reads
+			as reassurance rather than as a fault.
 		*@
 		<div class="empty">
-			<strong>Nothing but background tasks so far.</strong>
+			<strong>Nothing important has happened yet.</strong>
 			<p>
-				@BackgroundOnlyLine Rechecks and start-up are kept off this summary, so it stays a summary &mdash;
-				<a href="activity">Activity</a> shows them.
+				@BackgroundOnlyLine Movement, re-checks and everyday light changes are kept on the
+				<a href="activity">Activity</a> page, so this list stays short.
 			</p>
 		</div>
 	}
@@ -574,16 +599,19 @@ else
 		_nowPercent = Math.Clamp(_window.PercentAt(_now), 0, 100);
 		_entries = Log.Entries;
 
-		// The summary's own steps, in the order the Activity page applies them: the reports worth a row at all, then
-		// the categories it opens with, then the collapse into rows, then the budget. Limited rather than collapsed
-		// whole — the buffer holds five hundred reports and this runs once a second, and a dozen rows is all the
-		// markup below can use.
+		// The summary's own steps: the reports worth a row at all, then the four categories the board above cannot
+		// draw, then the collapse into rows, then the budget. Limited rather than collapsed whole — the buffer holds
+		// five hundred reports and this runs once a second, and a dozen rows is all the markup below can use.
+		//
+		// SummaryCategories, not DefaultCategories: this list is read under the board, and the board has already
+		// drawn every movement and every lit block. See ActivityView.SummaryCategories for why the Activity page
+		// keeps the wider set.
 		//
 		// The sift is the summary's alone. The lanes further up are drawn from every report the engine published,
 		// start-up included: that snapshot is where a lane's first block begins, and it is a state the board draws
 		// rather than a sentence the record reads.
 		IReadOnlyList<ActivityEntry> kept =
-			ActivityView.InCategories(ActivityView.Shown(_entries), ActivityView.DefaultCategories);
+			ActivityView.InCategories(ActivityView.Shown(_entries), ActivityView.SummaryCategories);
 
 		_kept = kept.Count;
 		_logRows = ActivityView.Rows(kept, BoardView.LogPreview);
@@ -725,12 +753,17 @@ else
 	private string LogFoot => BoardView.LogFoot(_entries.Count, _kept, _logRows.Count, ActivityLog.Capacity);
 
 	/// <summary>
-	///     The count in front of the housekeeping-only empty state, so it says how much is behind the link rather
+	///     The count in front of the nothing-important empty state, so it says how much is behind the link rather
 	///     than merely that something is.
 	/// </summary>
+	/// <remarks>
+	///     "Routine" rather than "background task" since the summary narrowed to
+	///     <see cref="ActivityView.SummaryCategories"/>: what is held back is now mostly movement and ordinary
+	///     light changes, and the old noun described the smallest part of it.
+	/// </remarks>
 	private string BackgroundOnlyLine => _entries.Count == 1
-		? "The one report so far is a background task."
-		: $"All {_entries.Count} reports so far are background tasks.";
+		? "The one report so far is routine."
+		: $"All {_entries.Count} reports so far are routine.";
 
 	/// <summary>
 	///     What stands where a room name would: the house, and how many rooms a collapsed row came from.
@@ -806,21 +839,26 @@ else
 		ReadHouseState();
 	}
 
+	/// <summary>
+	///     Which of the three master states the cell is in, for the panel-edge colour.
+	/// </summary>
+	/// <remarks>
+	///     Still emitted for all three even though only two now colour anything: the <c>on</c> class is what the
+	///     <c>:has()</c> rule matches to deliberately leave the edge neutral, and dropping it would make "switched
+	///     on" and "no master switch element at all" the same selector.
+	/// </remarks>
 	private static string MasterClass(MasterSwitchView master) =>
 		!master.IsAvailable ? "unknown" : master.AdaptiveLightingOn ? "on" : "off";
-
-	private static string MasterStateWord(MasterSwitchView master) =>
-		!master.IsAvailable ? "unknown" : master.AdaptiveLightingOn ? "On" : "Off";
 
 	/// <summary>
 	///     The line under the master switch, or <c>null</c> while there is nothing to say.
 	/// </summary>
 	/// <remarks>
-	///     Only news earns a line. "Lights adjust automatically" restates the word beside it and the colour on its
-	///     edge, and a permanent sentence saying nothing is wrong is precisely the reassurance this design refuses
-	///     to buy with the board's own space; it lives in the button's hover instead. The other two states keep
-	///     theirs, because paused and unreachable are the two a reader has to be told about — and paused is the one
-	///     place the control's real consequence can be spelled out.
+	///     Only news earns a line. "Lights adjust automatically" restates the switch beside it, and a permanent
+	///     sentence saying nothing is wrong is precisely the reassurance this design refuses to buy with the
+	///     board's own space; it lives in the switch's hover instead. The other two states keep theirs, because
+	///     paused and unreachable are the two a reader has to be told about — and paused is the one place the
+	///     control's real consequence can be spelled out.
 	/// </remarks>
 	private static string? MasterNote(MasterSwitchView master)
 	{

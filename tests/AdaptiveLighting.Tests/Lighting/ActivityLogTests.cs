@@ -1775,12 +1775,56 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
+	///     The dashboard's summary carries only what the board above it cannot draw, and the Activity page keeps
+	///     the wider set.
+	/// </summary>
+	/// <remarks>
+	///     Asserted as membership rather than as an equal constant, so that adding a category to the enum forces a
+	///     decision about which side of this line it falls on instead of silently joining the summary.
+	/// </remarks>
+	[TestMethod]
+	public void The_Summary_Carries_Only_What_The_Board_Cannot_Draw()
+	{
+		foreach (ActivityCategory carried in new[]
+		{
+			ActivityCategory.ManualChange, ActivityCategory.Declined, ActivityCategory.Mode, ActivityCategory.House
+		})
+		{
+			Assert.AreNotEqual(ActivityCategory.None, ActivityView.SummaryCategories & carried,
+				$"{carried} is something the lanes cannot draw, so the summary has to say it in words");
+		}
+
+		foreach (ActivityCategory drawn in new[]
+		{
+			ActivityCategory.Movement, ActivityCategory.LightChange,
+			ActivityCategory.Illumination, ActivityCategory.Background
+		})
+		{
+			Assert.AreEqual(ActivityCategory.None, ActivityView.SummaryCategories & drawn,
+				$"the board above already shows {drawn}; repeating it in words spends the whole row budget");
+		}
+
+		// The narrowing is the summary's alone — the page the footer links to must still open on the wide set, or
+		// the reports the summary stopped carrying would have nowhere to be read.
+		Assert.AreNotEqual(ActivityCategory.None, ActivityView.DefaultCategories & ActivityCategory.Movement);
+		Assert.AreNotEqual(ActivityCategory.None, ActivityView.DefaultCategories & ActivityCategory.LightChange);
+		Assert.AreNotEqual(ActivityCategory.None, ActivityView.DefaultCategories & ActivityCategory.Illumination);
+	}
+
+	/// <summary>
 	///     A filter nobody is told about is indistinguishable from reports that were never recorded, which is the
 	///     one failure this project treats as worse than showing too much. So the summary's footer counts what it
-	///     is holding back, and says when the buffer has started dropping the oldest.
+	///     is holding back, names it for what it now mostly is, and says when the buffer has started dropping the
+	///     oldest.
 	/// </summary>
+	/// <remarks>
+	///     "Everyday reports on the Activity page", not "background tasks hidden". Since the summary narrowed to
+	///     <see cref="ActivityView.SummaryCategories"/> the held-back pile is mostly movement and ordinary light
+	///     changes, so the old noun named the smallest part of it — and "hidden" described reports that are one tap
+	///     away as though they had been suppressed.
+	/// </remarks>
 	[TestMethod]
-	public void The_Summarys_Footer_Owns_Up_To_What_It_Is_Hiding()
+	public void The_Summarys_Footer_Says_How_Much_Is_Waiting_On_The_Activity_Page()
 	{
 		Assert.AreEqual("nothing recorded yet", BoardView.LogFoot(0, 0, 0, ActivityLog.Capacity));
 
@@ -1792,27 +1836,27 @@ public sealed class ActivityLogTests
 		StringAssert.Contains(wholeThing, "63 reports");
 		Assert.IsFalse(wholeThing.Contains("11", StringComparison.Ordinal),
 			"nothing was cut, so no row count is set against the report count");
-		StringAssert.Contains(wholeThing, "74 background tasks hidden");
+		StringAssert.Contains(wholeThing, "74 everyday reports on the Activity page");
 
 		string quiet = BoardView.LogFoot(40, 40, 8, ActivityLog.Capacity);
 
 		StringAssert.Contains(quiet, "40 reports");
-		Assert.IsFalse(quiet.Contains("background", StringComparison.Ordinal),
-			"nothing was hidden, so nothing is claimed to be");
+		Assert.IsFalse(quiet.Contains("everyday", StringComparison.Ordinal),
+			"nothing was held back, so nothing is claimed to be");
 
 		// Out of room: the budget is spent, so the line says how many rows it drew and out of how many reports.
 		string cut = BoardView.LogFoot(600, 240, BoardView.LogPreview, ActivityLog.Capacity);
 
 		StringAssert.Contains(cut, $"newest {BoardView.LogPreview} rows of 240 reports");
-		StringAssert.Contains(cut, "360 background tasks hidden");
+		StringAssert.Contains(cut, "360 everyday reports on the Activity page");
 
 		StringAssert.Contains(BoardView.LogFoot(1, 1, 1, ActivityLog.Capacity), "1 report");
-		StringAssert.Contains(BoardView.LogFoot(3, 2, 2, ActivityLog.Capacity), "1 background task hidden");
+		StringAssert.Contains(BoardView.LogFoot(3, 2, 2, ActivityLog.Capacity), "1 everyday report on the Activity page");
 
-		string housekeepingOnly = BoardView.LogFoot(71, 0, 0, ActivityLog.Capacity);
+		string routineOnly = BoardView.LogFoot(71, 0, 0, ActivityLog.Capacity);
 
-		Assert.AreEqual("71 background tasks hidden", housekeepingOnly,
-			"'0 reports' beside a count of hidden ones reads as a contradiction: the log plainly holds something");
+		Assert.AreEqual("71 everyday reports on the Activity page", routineOnly,
+			"'0 reports' beside a count of held-back ones reads as a contradiction: the log plainly holds something");
 
 		StringAssert.Contains(
 			BoardView.LogFoot(ActivityLog.Capacity, 300, 12, ActivityLog.Capacity),

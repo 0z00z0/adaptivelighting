@@ -595,10 +595,10 @@ public static class BoardView
 	/// </summary>
 	/// <remarks>
 	///     <para>
-	///         The summary shows the categories the Activity page opens with, which means it deliberately drops the
-	///         housekeeping: rechecks, start-up, and rooms switched on or off. That is the whole point of the
-	///         filter — a dozen rows of "Rechecked the room · automatic lighting is off here" is a
-	///         summary of nothing — but a filter nobody is told about is indistinguishable from reports that were
+	///         The summary shows <see cref="ActivityView.SummaryCategories"/>, which is a good deal less than the
+	///         Activity page opens with: the routine — movement, ordinary light changes, darkness readings and the
+	///         housekeeping — is left out, because the board directly above has already drawn it. That is the whole
+	///         point of the filter, but a filter nobody is told about is indistinguishable from reports that were
 	///         never recorded, which is the one failure this project treats as worse than showing too much. So the
 	///         hidden ones are counted here, and the link beneath the log is where they can be read.
 	///     </para>
@@ -629,11 +629,15 @@ public static class BoardView
 
 		// "0 reports" beside a count of hidden ones reads as a contradiction — the log plainly has something in it.
 		// When the filter has taken everything, the hidden count is the whole answer.
+		//
+		// "everyday", not "background task": since the summary narrowed to SummaryCategories the held-back pile is
+		// mostly movement and ordinary light changes, and naming it after the one small category it used to be
+		// would undercount what the Activity page has waiting.
 		if (hidden > 0)
 		{
 			lead = kept == 0
-				? $"{Count(hidden, "background task")} hidden"
-				: $"{lead} — {Count(hidden, "background task")} hidden";
+				? $"{Count(hidden, "everyday report")} on the Activity page"
+				: $"{lead} — {Count(hidden, "everyday report")} on the Activity page";
 		}
 
 		return held >= capacity

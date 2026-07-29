@@ -2858,7 +2858,10 @@ select {
 	margin-bottom: var(--space-4);
 }
 
-.housebar:has(.housebar-master.on) { border-left-color: var(--ok); }
+/* Only the two states that are news colour the edge. A green bar across the whole strip whenever nothing is
+   wrong is the same permanent reassurance the note line already refuses to print, and it made the master the
+   loudest thing on a board that is about rooms. Switched on therefore looks like any other panel. */
+.housebar:has(.housebar-master.on) { border-left-color: var(--line); }
 .housebar:has(.housebar-master.off) { border-left-color: var(--idle); }
 .housebar:has(.housebar-master.unknown) { border-left-color: var(--warn); }
 
@@ -2921,8 +2924,11 @@ select {
 .housebar-note.ok { color: var(--ok); }
 .housebar-note.bad { color: var(--bad); }
 
-.housebar-master .toggle {
-	margin-left: auto;
+/* The master's switch is the room switch at the same size, not a scaled-up one: it is the same kind of control
+   and reads as such. Left-aligned with the cell, because margin-left:auto pushed the old button to the far edge
+   of a third of the strip and made a small control look like a big one by sitting alone. */
+.housebar-master .switch {
+	padding-left: 0;
 }
 
 /* One row of chips, not one row per person: a household of three cost three rows to say three words. */
@@ -4267,14 +4273,15 @@ button.mode-pill:disabled {
 	font-size: var(--text-sm);
 }
 
+/* 7.5rem, not 6.5: "If someone walks in" is the longest label and the question form is what makes the table
+   answerable at a glance, so the column is sized to the words rather than the words cut to the column. */
 .room-fact-table th {
 	text-align: left;
 	color: var(--muted);
 	font-weight: 600;
 	padding: 0.3rem var(--space-4) 0.3rem 1.15rem;
-	white-space: nowrap;
 	vertical-align: top;
-	width: 6.5rem;
+	width: 7.5rem;
 }
 
 .room-fact-table td {
@@ -4282,6 +4289,17 @@ button.mode-pill:disabled {
 	font-family: var(--mono);
 	font-size: var(--text-sm);
 	line-height: 1.5;
+}
+
+/* The measurement under the answer: its own line, quieter, and NOT monospaced — it is a sentence about a
+   reading rather than a reading, and the mono face was what made it look like the thing to read first. */
+.fact-detail {
+	display: block;
+	margin-top: 0.1rem;
+	color: var(--muted);
+	font-family: inherit;
+	font-size: var(--text-xs);
+	line-height: 1.4;
 }
 
 .room-fact-table tr:last-child th,
@@ -4873,9 +4891,12 @@ button.mode-pill:disabled {
 		margin-left: 0;
 	}
 
+	/* Narrower here, and the labels are allowed to wrap onto two lines to get there — on a 390px screen a
+	   nowrap "If someone walks in" would take more than half the row and leave the answer nowhere to sit. */
 	.room-fact-table th {
-		width: 5.5rem;
+		width: 6rem;
 		padding-left: 1rem;
+		white-space: normal;
 	}
 
 	.room-log .log-row {

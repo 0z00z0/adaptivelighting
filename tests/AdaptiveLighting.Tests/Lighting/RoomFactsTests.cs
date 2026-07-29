@@ -62,14 +62,20 @@ public sealed class RoomFactsTests
 
 	// ===================== the table =====================
 
-	/// <summary>The six readings the design names, in the order it names them.</summary>
+	/// <summary>
+	///     The readings, ordered by the question that brought somebody to the page — darkness first, context after.
+	/// </summary>
+	/// <remarks>
+	///     There is deliberately no State row: the header's state chip and headline sentence sit an inch above this
+	///     table, and a third telling of the same fact is what made the table unscannable.
+	/// </remarks>
 	[TestMethod]
-	public void The_Table_Carries_What_The_Engine_Saw()
+	public void The_Table_Leads_With_Darkness_And_Never_Repeats_The_State_Chip()
 	{
 		IReadOnlyList<RoomFact> facts = RoomFacts.For(Report(), Now);
 
 		CollectionAssert.AreEqual(
-			new[] { "State", "Lights", "Last motion", "Last command", "Darkness", "Period" },
+			new[] { "Dark enough?", "Lights", "Last movement", "Last changed", "Time of day" },
 			facts.Select(fact => fact.Label).ToArray());
 	}
 
@@ -87,18 +93,40 @@ public sealed class RoomFactsTests
 	}
 
 	/// <summary>
-	///     The darkness row carries the engine's own reading, not a second opinion. The gate is the only thing
-	///     that knows which source it consulted.
+	///     The darkness row answers in two words and carries the engine's own reading beneath, not welded onto the
+	///     end of the answer. The gate is still the only thing that knows which source it consulted.
 	/// </summary>
 	[TestMethod]
-	public void Darkness_Carries_The_Engines_Own_Reading()
+	public void Darkness_Answers_First_And_Shows_The_Engines_Reading_Beneath()
 	{
 		IReadOnlyList<RoomFact> facts = RoomFacts.For(Report(isDark: false, darknessDetail: "lux 86, dark below 40"), Now);
+		RoomFact darkness = facts.Single(fact => fact.Label == "Dark enough?");
 
-		Assert.AreEqual("too light — lux 86, dark below 40", ValueOf(facts, "Darkness"));
+		Assert.AreEqual("No — too bright", darkness.Value);
+		Assert.AreEqual("lux 86, dark below 40", darkness.Detail);
 
-		IReadOnlyList<RoomFact> bare = RoomFacts.For(Report(isDark: null), Now);
-		Assert.AreEqual("not checked yet", ValueOf(bare, "Darkness"));
+		RoomFact lit = RoomFacts.For(Report(isDark: true, darknessDetail: "lux 4, dark below 40"), Now)
+			.Single(fact => fact.Label == "Dark enough?");
+
+		Assert.AreEqual("Yes", lit.Value);
+
+		// No reading published means no second line at all, rather than an empty one taking the space.
+		RoomFact bare = RoomFacts.For(Report(isDark: null), Now).Single(fact => fact.Label == "Dark enough?");
+
+		Assert.AreEqual("Not checked yet", bare.Value);
+		Assert.IsNull(bare.Detail);
+	}
+
+	/// <summary>
+	///     Times read ago-first without seconds: the age is the fact, the clock is the corroboration, and this
+	///     table is read to the nearest minute.
+	/// </summary>
+	[TestMethod]
+	public void A_Stamp_Leads_With_The_Age_And_Drops_The_Seconds()
+	{
+		IReadOnlyList<RoomFact> facts = RoomFacts.For(Report(lastMotion: Now.AddMinutes(-2).AddSeconds(-10)), Now);
+
+		Assert.AreEqual("2 min ago · 21:37", ValueOf(facts, "Last movement"));
 	}
 
 	/// <summary>
@@ -131,7 +159,7 @@ public sealed class RoomFactsTests
 		Assert.AreEqual("The house is asleep — movement won't light the room.", RoomFacts.AutoOnNote(asleep));
 		Assert.AreEqual("The house is asleep — movement won't light the room.", RoomFacts.NextLine(asleep, Now));
 
-		StringAssert.Contains(ValueOf(RoomFacts.For(asleep, Now), "Movement now"), "won't light the room");
+		StringAssert.Contains(ValueOf(RoomFacts.For(asleep, Now), "If someone walks in"), "won't light the room");
 	}
 
 	/// <summary>
@@ -159,7 +187,7 @@ public sealed class RoomFactsTests
 		AreaSnapshot older = Report(blockedBy: null);
 
 		Assert.IsNull(RoomFacts.AutoOnNote(older));
-		Assert.IsFalse(RoomFacts.For(older, Now).Any(fact => fact.Label == "Movement now"));
+		Assert.IsFalse(RoomFacts.For(older, Now).Any(fact => fact.Label == "If someone walks in"));
 		Assert.AreEqual("Movement in the dark turns the lights on.", RoomFacts.NextLine(older, Now));
 	}
 

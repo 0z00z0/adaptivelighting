@@ -202,6 +202,35 @@ public static class ActivityView
 	/// </remarks>
 	public const ActivityCategory DefaultCategories = AllCategories & ~ActivityCategory.Background;
 
+	/// <summary>
+	///     What the dashboard's summary carries: the exceptions, not the routine.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Stricter than <see cref="DefaultCategories"/> because it is read in a different place. The summary
+	///         sits directly under the board, and the board has already <i>drawn</i> the routine — every lit block,
+	///         every movement that lit one, is a mark on a lane an inch above. Repeating those in words underneath
+	///         spends all twelve rows saying what the picture said, and the one report somebody actually needed
+	///         falls off the bottom.
+	///     </para>
+	///     <para>
+	///         So four categories, each one something the lanes cannot draw: somebody overrode the engine, the
+	///         engine declined to light a room and only prose can say why, the house changed mode, or the house
+	///         emptied, filled or was switched off. <see cref="ActivityCategory.Movement"/>,
+	///         <see cref="ActivityCategory.LightChange"/> and <see cref="ActivityCategory.Illumination"/> are out
+	///         because the board is a better answer to them than a sentence is.
+	///     </para>
+	///     <para>
+	///         Nothing is lost by it: the Activity page still opens on <see cref="DefaultCategories"/>, and the
+	///         summary's footer says how many reports it is holding back and links there.
+	///     </para>
+	/// </remarks>
+	public const ActivityCategory SummaryCategories =
+		ActivityCategory.ManualChange
+		| ActivityCategory.Declined
+		| ActivityCategory.Mode
+		| ActivityCategory.House;
+
 	/// <summary>A category's fixed half: what it is called, and one line on what falls into it.</summary>
 	private sealed record CategoryName(ActivityCategory Category, string Label, string Title);
 
