@@ -17,7 +17,7 @@ public sealed class CircadianCalculatorTests
 	[
 		new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
 		new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30, MinBrightnessPct = 5 }
+		new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
 	];
 
 	private static DateTimeOffset At(int hour, int minute = 0) => new(2026, 1, 15, hour, minute, 0, TimeSpan.Zero);
@@ -27,6 +27,20 @@ public sealed class CircadianCalculatorTests
 		SunTimes? sun = null,
 		IReadOnlyList<RoomLevelOverride>? levels = null) =>
 		new(periods ?? Table, new GlobalConfig { SmoothTransitions = false }, () => sun ?? SunTimes.Unknown, levels);
+
+	/// <summary>
+	///     What is left of the clamp once a period's configurable floor and ceiling are gone: the physical bound.
+	///     A lamp cannot be set to 140 % or to -5, and that is not a preference anybody may configure away.
+	/// </summary>
+	[TestMethod]
+	public void Clamp_Honours_The_Physical_Range_And_Nothing_Else()
+	{
+		var target = Stepped().GetTarget(At(23))!;
+
+		Assert.AreEqual(100d, target.Clamp(140));
+		Assert.AreEqual(0d, target.Clamp(-5));
+		Assert.AreEqual(15d, target.Clamp(15), "and anything a lamp can actually do passes through untouched");
+	}
 
 	[TestMethod]
 	public void The_Active_Period_Is_The_Last_Boundary_At_Or_Before_Now()
@@ -58,37 +72,8 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual(2700, target.ColorTempKelvin);
 	}
 
-	[TestMethod]
-	public void The_Night_Ceiling_Clamps_A_Period_That_Asks_For_Too_Much()
-	{
-		var greedyNight = new List<TimePeriodConfig>
-		{
-			new() { Name = "night", Start = "22:30", BrightnessPct = 100, ColorTempKelvin = 2200, MaxBrightnessPct = 30 }
-		};
 
-		var target = Stepped(greedyNight).GetTarget(At(23))!;
 
-		Assert.AreEqual(30d, target.BrightnessPct, "nobody gets 100% in the face at 03:00, even if the table says so");
-	}
-
-	[TestMethod]
-	public void Clamp_Honours_Both_Caps_And_The_Physical_Range()
-	{
-		var target = Stepped().GetTarget(At(23))!;   // night: floor 5, ceiling 30
-
-		Assert.AreEqual(30d, target.Clamp(80));
-		Assert.AreEqual(5d, target.Clamp(1), "the floor is what keeps the pre-off dim legal at night");
-		Assert.AreEqual(15d, target.Clamp(15));
-	}
-
-	[TestMethod]
-	public void An_Uncapped_Period_Clamps_Only_To_Zero_And_A_Hundred()
-	{
-		var target = Stepped().GetTarget(At(20))!;   // evening: no caps
-
-		Assert.AreEqual(100d, target.Clamp(150));
-		Assert.AreEqual(0d, target.Clamp(-10));
-	}
 
 	[TestMethod]
 	public void An_Empty_Table_Resolves_Nothing_Rather_Than_Guessing()
@@ -226,15 +211,6 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual(52.5, target.BrightnessPct, 0.001);
 	}
 
-	[TestMethod]
-	public void A_Blend_Is_Still_Held_To_The_Arriving_Periods_Caps()
-	{
-		// 22:45 blends from evening's 70 toward night's 15 and is only halfway there — but night's ceiling is 30.
-		var target = Blended().GetTarget(At(22, 45))!;
-
-		Assert.AreEqual("night", target.PeriodName);
-		Assert.AreEqual(30d, target.BrightnessPct, "the caps come from the period the name promises");
-	}
 
 	[TestMethod]
 	public void Blending_Off_Steps_Cleanly_At_The_Boundary()
@@ -257,7 +233,6 @@ public sealed class CircadianCalculatorTests
 
 		Assert.AreEqual("night", night.PeriodName);
 		Assert.AreEqual(15d, night.BrightnessPct);
-		Assert.AreEqual(30d, night.MaxBrightnessPct);
 	}
 
 	[TestMethod]
@@ -364,35 +339,8 @@ public sealed class CircadianCalculatorTests
 
 	// ===================== the period's caps still bind a room =====================
 
-	[TestMethod]
-	public void The_Periods_Ceiling_Clamps_A_Room_That_Asks_For_Too_Much()
-	{
-		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 100 } };
 
-		Assert.AreEqual(30d, Stepped(levels: levels).GetTarget(At(23))!.BrightnessPct,
-			"a room cannot escape a ceiling the house set deliberately — it is held to it, not refused");
-	}
 
-	[TestMethod]
-	public void The_Periods_Floor_Clamps_A_Room_That_Asks_For_Too_Little()
-	{
-		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 1 } };
-
-		Assert.AreEqual(5d, Stepped(levels: levels).GetTarget(At(23))!.BrightnessPct);
-	}
-
-	/// <summary>Held to the cap, not dropped back to the schedule: the cap is the nearer of the two to what the room asked for.</summary>
-	[TestMethod]
-	public void A_Clamped_Room_Level_Is_Still_The_Rooms_Level_Rather_Than_The_Schedules()
-	{
-		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 100 } };
-
-		var target = Stepped(levels: levels).GetTarget(At(23))!;
-
-		Assert.AreEqual(30d, target.BrightnessPct);
-		Assert.AreNotEqual(15d, target.BrightnessPct, "refusing the row would have handed back the schedule's 15");
-		Assert.AreEqual(RoomLevelSource.Brightness, target.FromRoom, "and the room is still the reason for the number");
-	}
 
 	// ===================== blending across a boundary a room owns one side of =====================
 
@@ -453,16 +401,6 @@ public sealed class CircadianCalculatorTests
 			"halfway from this room's night of 5 to day's 90; the house's would be 52.5");
 	}
 
-	[TestMethod]
-	public void A_Blend_Into_A_Rooms_Level_Is_Still_Held_To_The_Arriving_Periods_Caps()
-	{
-		// 22:45 blends from evening's 70 toward this room's night of 1, and is only halfway — but night's floor is 5,
-		// and its ceiling of 30 bites first on the way down.
-		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 1 } };
-
-		Assert.AreEqual(30d, Blended(levels: levels).GetTarget(At(22, 45))!.BrightnessPct,
-			"the caps come from the period the name promises, whoever supplied the level under them");
-	}
 
 	// ===================== the sleep clamp reaches the room's night, not the house's =====================
 
@@ -479,7 +417,6 @@ public sealed class CircadianCalculatorTests
 		var night = Stepped(levels: levels).GetPeriodTarget("night")!;
 
 		Assert.AreEqual(8d, night.BrightnessPct);
-		Assert.AreEqual(30d, night.MaxBrightnessPct, "the period's caps are the period's, whoever set the level");
 		Assert.AreEqual(RoomLevelSource.Brightness, night.FromRoom);
 	}
 

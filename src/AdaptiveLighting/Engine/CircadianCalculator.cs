@@ -27,31 +27,30 @@ public enum RoomLevelSource
 ///     What the lights should be right now, and the caps that bound anything derived from it.
 /// </summary>
 /// <param name="PeriodName">The circadian period this came from.</param>
-/// <param name="BrightnessPct">Target brightness, already clamped to the period's caps.</param>
+/// <param name="BrightnessPct">Target brightness.</param>
 /// <param name="ColorTempKelvin">Target colour temperature.</param>
-/// <param name="MinBrightnessPct">The period's floor, or <c>null</c>. Callers deriving a dimmer level must respect it.</param>
-/// <param name="MaxBrightnessPct">The period's ceiling, or <c>null</c>.</param>
 /// <param name="FromRoom">
 ///     Which of the two values above came from the room's own <see cref="AreaConfig.Levels"/> rather than from the
-///     schedule. Read from the active period alone, exactly as the caps are: it is the rule
-///     <paramref name="PeriodName"/> promises. Carried on the target rather than re-derived by whoever renders it,
-///     because a second reading of the room's overrides is how the board, the sentence and the lamp end up
-///     disagreeing about which of them is in charge.
+///     schedule. Read from the active period alone: it is the rule <paramref name="PeriodName"/> promises. Carried
+///     on the target rather than re-derived by whoever renders it, because a second reading of the room's
+///     overrides is how the board, the sentence and the lamp end up disagreeing about which is in charge.
 /// </param>
 public sealed record LightTarget(
 	string PeriodName,
 	double BrightnessPct,
 	int ColorTempKelvin,
-	double? MinBrightnessPct,
-	double? MaxBrightnessPct,
 	RoomLevelSource FromRoom = RoomLevelSource.None)
 {
-	/// <summary>Clamps <paramref name="brightnessPct"/> to this target's caps and to the physical 0–100 range.</summary>
-	public double Clamp(double brightnessPct)
-	{
-		double clamped = Math.Clamp(brightnessPct, MinBrightnessPct ?? 0, MaxBrightnessPct ?? 100);
-		return Math.Clamp(clamped, 0, 100);
-	}
+	/// <summary>
+	///     Holds <paramref name="brightnessPct"/> to what a lamp can actually be set to.
+	/// </summary>
+	/// <remarks>
+	///     Once this also applied the period's own floor and ceiling. Those were removed in the 2026-07
+	///     simplification — a period's target is already the answer to "how bright at this hour", and a second
+	///     pair of numbers qualifying it was a rule about a rule. What is left is the physical bound, which is
+	///     not a preference and cannot be configured away.
+	/// </remarks>
+	public double Clamp(double brightnessPct) => Math.Clamp(brightnessPct, 0, 100);
 }
 
 /// <summary>Why a configured period could not be placed in the circadian table.</summary>
@@ -273,28 +272,20 @@ public sealed class CircadianCalculator
 			fromRoom);
 	}
 
-	/// <summary>One period's levels as this room runs them, before the period's caps have had their say.</summary>
+	/// <summary>One period's levels as this room runs them.</summary>
 	private readonly record struct PeriodLevels(double BrightnessPct, int ColorTempKelvin, RoomLevelSource FromRoom);
 
 	/// <summary>
-	///     Puts <paramref name="levels"/> under the period's caps and labels it with the period.
+	///     Labels <paramref name="levels"/> with the period it came from, and holds it to what a lamp can be set to.
 	/// </summary>
 	/// <remarks>
-	///     A room's replacement passes through this exactly as the schedule's own value does, which is what makes
-	///     the caps binding on it: the house sets a ceiling deliberately, and a room asking past it is held to it
-	///     rather than refused. Refusing would drop the room back to the schedule's level — further from what it
-	///     asked for than the cap is — and it would do so at the one moment nobody is watching. The validator says
-	///     so at save time instead, where it can be acted on.
+	///     A room's own replacement passes through here exactly as the schedule's value does, so there is one
+	///     path and one answer. The clamp is the physical 0–100 bound only — the period's configurable floor and
+	///     ceiling were removed in the 2026-07 simplification, and a room's value now stands as written.
 	/// </remarks>
 	private static LightTarget ToTarget(TimePeriodConfig period, PeriodLevels levels)
 	{
-		LightTarget target = new(
-			period.Name,
-			levels.BrightnessPct,
-			levels.ColorTempKelvin,
-			period.MinBrightnessPct,
-			period.MaxBrightnessPct,
-			levels.FromRoom);
+		LightTarget target = new(period.Name, levels.BrightnessPct, levels.ColorTempKelvin, levels.FromRoom);
 
 		return target with { BrightnessPct = target.Clamp(levels.BrightnessPct) };
 	}

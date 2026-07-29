@@ -132,10 +132,6 @@
 	[Parameter]
 	public string? PeriodName { get; set; }
 
-	/// <summary>That period's own ceiling, drawn as the line the curve cannot cross, or <c>null</c> when it sets none.</summary>
-	[Parameter]
-	public double? CapPct { get; set; }
-
 	/// <summary>The room's light-level reading right now, or <c>null</c> when it has no sensor that answers.</summary>
 	[Parameter]
 	public double? Reading { get; set; }
@@ -455,20 +451,6 @@
 
 			if (DecadeWord(lux) is { Length: > 0 } word)
 				svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 29)}\" text-anchor=\"{anchor}\" class=\"luxc-decade{thin}\">{Escape(word)}</text>");
-		}
-
-		// The period's own ceiling. The daylight adjustment proposes and the period disposes, so a curve drawn
-		// climbing through a cap the room can never pass would be a picture of something that does not happen.
-		if (CapPct is { } cap && cap < 100)
-		{
-			string y = LuxCurve.Num(LuxCurve.Y(cap));
-
-			svg.Append($"<line x1=\"0\" y1=\"{y}\" x2=\"{LuxCurve.Num(LuxCurve.PlotWidth)}\" y2=\"{y}\" class=\"luxc-cap\" />");
-
-			// Labelled at the left, where the curve is always at its lowest: the line only ever climbs, so the
-			// right-hand end is exactly where it meets the ceiling. Measured — at the right the words sat on top
-			// of the curve in both themes.
-			svg.Append($"<text x=\"4\" y=\"{LuxCurve.Num(LuxCurve.Y(cap) - 5)}\" text-anchor=\"start\" class=\"luxc-cap-label\">this period's ceiling</text>");
 		}
 
 		// The house's own number, standing on the curve. A curve read in the abstract is a shape; a curve with

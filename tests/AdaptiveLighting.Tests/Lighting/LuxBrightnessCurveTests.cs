@@ -31,9 +31,9 @@ public sealed class LuxBrightnessCurveTests
 			LuxBrightnessGamma = gamma
 		};
 
-	/// <summary>A target as the circadian calculator would hand one over, caps included.</summary>
-	private static LightTarget Target(double brightnessPct, double? floor = null, double? cap = null) =>
-		new("evening", brightnessPct, 2700, floor, cap);
+	/// <summary>A target as the circadian calculator would hand one over.</summary>
+	private static LightTarget Target(double brightnessPct) =>
+		new("evening", brightnessPct, 2700);
 
 	private static LuxBrightnessCurve For(AreaSettings settings, double? lux) => new(settings, () => lux);
 
@@ -237,27 +237,7 @@ public sealed class LuxBrightnessCurveTests
 
 	// ===================== the period keeps the last word =====================
 
-	/// <summary>
-	///     The rule that makes the feature safe to switch on: a night period capped at 30 % stays capped at 30 %,
-	///     whatever the sky is doing. The adjustment proposes; the period disposes.
-	/// </summary>
-	[TestMethod]
-	public void The_Periods_Cap_Beats_A_Bright_Reading()
-	{
-		LightTarget capped = For(Curve(), lux: 20000).Apply(Target(15, cap: 30));
 
-		Assert.AreEqual(30d, capped.BrightnessPct);
-		Assert.AreEqual(30d, capped.MaxBrightnessPct, "and the cap itself travels on, untouched");
-	}
-
-	[TestMethod]
-	public void The_Periods_Floor_Still_Binds()
-	{
-		LightTarget floored = For(Curve(maxPct: 10), lux: 20000).Apply(Target(60, floor: 50));
-
-		Assert.AreEqual(60d, floored.BrightnessPct, "a ceiling below the floor cannot pull the room under it");
-		Assert.AreEqual(50d, floored.MinBrightnessPct);
-	}
 
 	[TestMethod]
 	public void The_Result_Stays_Inside_The_Physical_Range()
@@ -271,12 +251,10 @@ public sealed class LuxBrightnessCurveTests
 	[TestMethod]
 	public void Everything_Else_About_The_Target_Survives_The_Adjustment()
 	{
-		LightTarget raised = For(Curve(), lux: 1000).Apply(Target(40, floor: 10, cap: 95));
+		LightTarget raised = For(Curve(), lux: 1000).Apply(Target(40));
 
 		Assert.AreEqual("evening", raised.PeriodName);
 		Assert.AreEqual(2700, raised.ColorTempKelvin);
-		Assert.AreEqual(10d, raised.MinBrightnessPct);
-		Assert.AreEqual(95d, raised.MaxBrightnessPct);
 		Assert.AreEqual(70, raised.BrightnessPct, 1e-9);
 	}
 
@@ -290,7 +268,7 @@ public sealed class LuxBrightnessCurveTests
 	[TestMethod]
 	public void A_Disabled_Curve_Returns_The_Target_Untouched()
 	{
-		LightTarget scheduled = Target(40, floor: 10, cap: 95);
+		LightTarget scheduled = Target(40);
 		LightTarget result = For(Curve(enabled: false), lux: 50000).Apply(scheduled);
 
 		Assert.AreSame(scheduled, result, "not an equal target — the same one, having gone nowhere near the maths");

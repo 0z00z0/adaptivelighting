@@ -95,7 +95,7 @@ public sealed class AreaControllerTests
 		{
 			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30 }
+			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
 
 		var area = new ResolvedArea("Test", settings, [Light], [Motion], [Lux], ignoreWhenOn ?? []);
@@ -765,7 +765,7 @@ public sealed class AreaControllerTests
 	}
 
 	[TestMethod]
-	public void RespectSleepMode_Clamps_The_Evening_Target_To_The_Night_Ceiling()
+	public void RespectSleepMode_Holds_The_Evening_Target_To_The_Night_Level()
 	{
 		// Sover is Sleep-kind with no ClampPeriod; SleepClampPeriodFor falls back to the period named "night" (09 §4.1).
 		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode());
@@ -773,8 +773,8 @@ public sealed class AreaControllerTests
 
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 30 },
-			"20:00 says 70%, but a sleeping house gets night's 30% ceiling whatever the clock says");
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 15 },
+			"20:00 says 70%, but a sleeping house is held to night's own 15% whatever the clock says");
 	}
 
 	[TestMethod]
@@ -787,7 +787,8 @@ public sealed class AreaControllerTests
 
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
-		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 30 });
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 15 },
+			"the sleeping house is held to the night period's own level");
 	}
 
 	// ===================== what the snapshot says about auto-on =====================
@@ -1508,16 +1509,16 @@ public sealed class AreaControllerTests
 		var periods = new List<TimePeriodConfig>
 		{
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "dim", Start = "22:00", BrightnessPct = 5, ColorTempKelvin = 2000, MaxBrightnessPct = 8 },
-			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30 }
+			new() { Name = "dim", Start = "22:00", BrightnessPct = 5, ColorTempKelvin = 2000 },
+			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
 		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
 		t.Ha.Trigger(Motion, "on");
 
-		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 8 },
-			"the explicit ClampPeriod 'dim' (ceiling 8) drives the clamp, not the 'night' fallback");
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
+			"the explicit ClampPeriod 'dim' (its own 5 %) drives the clamp, not the 'night' fallback");
 	}
 
 	[TestMethod]

@@ -95,7 +95,7 @@ public sealed class LuxBrightnessControllerTests
 		[
 			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, MaxBrightnessPct = 30 }
+			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		];
 
 		ResolvedArea area = new(
@@ -256,33 +256,6 @@ public sealed class LuxBrightnessControllerTests
 
 	// ===================== what still outranks it =====================
 
-	/// <summary>
-	///     The period's cap is the rule that stops 100 % at 03:00, and a bright sensor must not be able to defeat
-	///     it. Night runs from 22:30 at 15 % capped to 30 %.
-	/// </summary>
-	[TestMethod]
-	public void The_Periods_Cap_Beats_A_Bright_Reading()
-	{
-		Fixture area = Build(
-			settings =>
-			{
-				settings.LuxBrightnessEnabled = true;
-
-				// Long enough that the area is still occupied when the clock reaches the night period: this test is
-				// about the cap, not about the vacancy timer beating it there.
-				settings.VacancyTimeoutSeconds = (int)TimeSpan.FromHours(4).TotalSeconds;
-			},
-			lux: "20000");
-
-		CommandedOnMotion(area);
-		area.Actuator.Clear();
-
-		// Into the night period, which caps at 30.
-		area.Scheduler.AdvanceBy(TimeSpan.FromHours(3).Ticks);
-
-		Assert.AreEqual(30d, area.Actuator.Last?.BrightnessPct,
-			"the daylight adjustment proposes; the period disposes");
-	}
 
 	/// <summary>
 	///     Sleep is the stronger of the two statements. An afternoon nap under a bright sky must land on the night
@@ -304,7 +277,7 @@ public sealed class LuxBrightnessControllerTests
 
 		area.House.OnNext(new HouseState(true, ModeKind.Sleep, false) { ModeValue = "Sover" });
 
-		Assert.AreEqual(30d, area.Actuator.Last?.BrightnessPct, "and asleep, the night period's cap takes it back");
+		Assert.AreEqual(15d, area.Actuator.Last?.BrightnessPct, "and asleep, the night period's own level takes it back");
 	}
 
 	/// <summary>

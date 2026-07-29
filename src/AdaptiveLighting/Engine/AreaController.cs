@@ -824,14 +824,11 @@ public sealed class AreaController : IDisposable
 			return target;
 		}
 
-		double ceiling = sleepPeriod.MaxBrightnessPct ?? sleepPeriod.BrightnessPct;
-		LightTarget capped = target with
-		{
-			MinBrightnessPct = sleepPeriod.MinBrightnessPct,
-			MaxBrightnessPct = sleepPeriod.MaxBrightnessPct
-		};
-
-		return capped with { BrightnessPct = capped.Clamp(Math.Min(target.BrightnessPct, ceiling)) };
+		// The clamp period's own brightness is the ceiling. It used to be that period's MaxBrightnessPct with its
+		// brightness as a fallback; the caps were removed in the 2026-07 simplification and the fallback was
+		// always the honest reading anyway — "hold this room to what the night is set to" is what a sleeping
+		// house means, and it needed no second number to say it.
+		return target with { BrightnessPct = target.Clamp(Math.Min(target.BrightnessPct, sleepPeriod.BrightnessPct)) };
 	}
 
 	private void ApplyTarget(TransitionReason reason, double brightnessFactor = 1.0)

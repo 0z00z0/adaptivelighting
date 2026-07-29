@@ -30,11 +30,12 @@ public class TimePeriodConfig
 	/// <summary>Target colour temperature for this period.</summary>
 	public int ColorTempKelvin { get; set; } = 3500;
 
-	/// <summary>Ceiling applied to every command while this period is active. This is the rule that stops 100% at 03:00.</summary>
-	public double? MaxBrightnessPct { get; set; }
-
-	/// <summary>Floor applied to every command while this period is active, including the pre-off dim.</summary>
-	public double? MinBrightnessPct { get; set; }
+	// A period used to carry a floor and a ceiling as well as a target — MinBrightnessPct and MaxBrightnessPct,
+	// removed in the 2026-07 simplification. They existed to stop 100 % at three in the morning, which the
+	// period's own target already does: a night row set to 15 % is the answer, and a second pair of numbers
+	// saying "and never above 20" was a rule about a rule. They also had to be threaded through every consumer —
+	// the sleep clamp, the daylight curve, a room's own levels — each of which had to remember to respect them.
+	// A stale key in an existing file is ignored on load, so nothing needs migrating.
 }
 
 /// <summary>A sun event a period boundary can be anchored to.</summary>

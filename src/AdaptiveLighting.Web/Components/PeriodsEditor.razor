@@ -130,33 +130,6 @@
 								  Unit="K" Min="1000" Max="10000" Step="50" />
 				</div>
 
-				<div class="pfield">
-					<span class="pfield-label">
-						Min brightness
-						<InfoPopover Label="Min brightness">
-							Nothing goes dimmer than this during the period, however the brightness above is set or
-							how a room's warning dim would drop it. Off means no floor.
-						</InfoPopover>
-					</span>
-					<NullableNumber Value="@period.MinBrightnessPct"
-									ValueChanged="@(value => Set(() => period.MinBrightnessPct = value))"
-									Presets="@Presets.BrightnessPct"
-									Seed="5" Placeholder="no lower limit" />
-				</div>
-
-				<div class="pfield">
-					<span class="pfield-label">
-						Max brightness
-						<InfoPopover Label="Max brightness">
-							Nothing goes brighter than this during the period. Set it on the night period so nothing
-							blinds you at 03:00 — it is also the ceiling sleep mode holds rooms to. Off means no cap.
-						</InfoPopover>
-					</span>
-					<NullableNumber Value="@period.MaxBrightnessPct"
-									ValueChanged="@(value => Set(() => period.MaxBrightnessPct = value))"
-									Presets="@Presets.BrightnessPct"
-									Seed="30" Placeholder="no upper limit" />
-				</div>
 			</div>
 		</details>
 	}

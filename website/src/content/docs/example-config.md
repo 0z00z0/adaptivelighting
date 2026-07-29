@@ -219,11 +219,9 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       Start: "22:30"
       BrightnessPct: 15
       ColorTempKelvin: 2200
-      # MaxBrightnessPct caps EVERY command while this period runs — nobody gets
-      # 100 % in the face at 03:00, whatever a welcome-home or a motion event
-      # asks for. MinBrightnessPct is the floor, and it applies to the warning
-      # dim too.
-      MaxBrightnessPct: 30
+      # BrightnessPct above is the whole answer for this period — 15 % is what
+      # a room runs at night, and nobody gets 100 % in the face at 03:00
+      # because the night row says 15, not because a second number forbids it.
       # SetsMode switches the house to this mode option when the period starts.
       # SetsMode: Sover
 

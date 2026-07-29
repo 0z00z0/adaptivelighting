@@ -241,7 +241,6 @@ else
 				<LuxCurveChart Settings="@Effective"
 							   BaseBrightnessPct="@DaylightBasePct"
 							   PeriodName="@ActivePeriodName"
-							   CapPct="@ActivePeriodCap"
 							   Reading="@LiveLux"
 							   Changed="@OnCurveEdited" />
 			}
@@ -1067,9 +1066,6 @@ else
 
 	/// <summary>The period in force right now, by name, or <c>null</c> when none resolves.</summary>
 	private string? ActivePeriodName => _activePeriod?.Name;
-
-	/// <summary>That period's own ceiling, which the daylight curve cannot climb through.</summary>
-	private double? ActivePeriodCap => _activePeriod?.MaxBrightnessPct;
 
 	private bool BrightensWithDaylight => Effective.LuxBrightnessEnabled;
 

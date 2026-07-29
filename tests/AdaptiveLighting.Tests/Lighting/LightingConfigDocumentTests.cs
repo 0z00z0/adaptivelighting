@@ -66,8 +66,7 @@ public sealed class LightingConfigDocumentTests
 			new TimePeriodConfig { Name = "evening", Start = "sunset-01:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
 			new TimePeriodConfig
 			{
-				Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200,
-				MaxBrightnessPct = 30, MinBrightnessPct = 5
+				Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200
 			}
 		],
 		Areas =
@@ -252,8 +251,6 @@ public sealed class LightingConfigDocumentTests
 			Assert.AreEqual(original.Periods[index].Start, actual[index].Start);
 			Assert.AreEqual(original.Periods[index].BrightnessPct, actual[index].BrightnessPct);
 			Assert.AreEqual(original.Periods[index].ColorTempKelvin, actual[index].ColorTempKelvin);
-			Assert.AreEqual(original.Periods[index].MinBrightnessPct, actual[index].MinBrightnessPct);
-			Assert.AreEqual(original.Periods[index].MaxBrightnessPct, actual[index].MaxBrightnessPct);
 		}
 	}
 
@@ -605,7 +602,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual("person.REPLACE_ME", config.Global.Persons.Single());
 		Assert.AreEqual(DarknessSource.Either, config.Defaults.Darkness);
 		Assert.AreEqual("22:30", config.Periods.Single().Start);
-		Assert.AreEqual(30, config.Periods.Single().MaxBrightnessPct);
 		Assert.AreEqual("REPLACE_ME_living_room_area_id", config.Areas.Single().AreaId);
 		Assert.IsTrue(config.Areas.Single().RespectSleepMode);
 	}
@@ -698,7 +694,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(DarknessSource.Sun, read.Config.Defaults.Darkness);
 		Assert.AreEqual(2, read.Config.Periods.Count);
 		Assert.AreEqual("22:30", read.Config.Periods[1].Start);
-		Assert.AreEqual(30, read.Config.Periods[1].MaxBrightnessPct);
 	}
 
 	/// <summary>The flag is about the file, not about the schema: a current document must not claim to have been translated.</summary>

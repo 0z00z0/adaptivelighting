@@ -19,7 +19,7 @@ public sealed class RoomLevelsTests
 		new TimePeriodConfig { Name = "morgen", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 2700 },
 		new TimePeriodConfig { Name = "dag", Start = "09:00", BrightnessPct = 100, ColorTempKelvin = 4500 },
 		new TimePeriodConfig { Name = "kveld", Start = "sunset", BrightnessPct = 70, ColorTempKelvin = 2700 },
-		new TimePeriodConfig { Name = "natt", Start = "23:00", BrightnessPct = 30, ColorTempKelvin = 2200, MaxBrightnessPct = 20 }
+		new TimePeriodConfig { Name = "natt", Start = "23:00", BrightnessPct = 30, ColorTempKelvin = 2200 }
 	];
 
 	private static AreaConfig Room() => new() { AreaId = "kontor" };
@@ -201,42 +201,7 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(3000, stored.ColorTempKelvin);
 	}
 
-	/// <summary>
-	///     A row says when the period's own limits would hold the room somewhere else.
-	/// </summary>
-	/// <remarks>
-	///     The period's caps still apply on top of a room's replacement, so a row naming 60 % under a night period
-	///     capped at 20 % would name a level the room never reaches.
-	/// </remarks>
-	[TestMethod]
-	public void A_Row_Says_When_The_Periods_Own_Cap_Holds_It_Lower()
-	{
-		AreaConfig room = Room();
-		RoomLevels.SetBrightness(room, "natt", 60);
 
-		RoomLevelRow capped = RoomLevels.Rows(Day(), room).Single(r => r.Period == "natt");
-
-		Assert.IsNotNull(capped.Limit);
-		Assert.IsTrue(capped.Limit!.Contains("20", StringComparison.Ordinal), "and names the ceiling that holds it");
-
-		RoomLevels.SetBrightness(room, "natt", 10);
-
-		Assert.IsNull(RoomLevels.Rows(Day(), room).Single(r => r.Period == "natt").Limit,
-			"a level under the cap is not held by it, so nothing is said");
-	}
-
-	/// <summary>A floor is reported the same way, and only when it bites.</summary>
-	[TestMethod]
-	public void A_Row_Says_When_The_Periods_Own_Floor_Lifts_It()
-	{
-		List<TimePeriodConfig> day = Day();
-		day[0].MinBrightnessPct = 40;
-
-		AreaConfig room = Room();
-		RoomLevels.SetBrightness(room, "morgen", 5);
-
-		Assert.IsTrue(RoomLevels.Rows(day, room).Single(r => r.Period == "morgen").Limit!.Contains("40", StringComparison.Ordinal));
-	}
 
 	/// <summary>An empty row already in the file is neither counted nor reported as an orphan.</summary>
 	[TestMethod]

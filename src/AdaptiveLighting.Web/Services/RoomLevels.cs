@@ -26,42 +26,21 @@ public enum LevelSource
 /// <param name="Brightness">Who decided it.</param>
 /// <param name="ColorTempKelvin">The white this room runs during the period.</param>
 /// <param name="Colour">Who decided it.</param>
-/// <param name="FloorPct">The period's own floor, or <c>null</c> when it sets none.</param>
-/// <param name="CapPct">The period's own ceiling, or <c>null</c> when it sets none.</param>
+/// <remarks>
+///     This once carried the period's own floor and ceiling as well, and a <c>Limit</c> line saying what they
+///     would do to the brightness above — a room set to 100 % under a night capped at 30 % ran at 30, and the row
+///     had to say so or name a level the room never reached. The caps were removed in the 2026-07 simplification,
+///     so the brightness in this row is now simply what the room runs.
+/// </remarks>
 public sealed record RoomLevelRow(
 	string Period,
 	double BrightnessPct,
 	LevelSource Brightness,
 	int ColorTempKelvin,
-	LevelSource Colour,
-	double? FloorPct,
-	double? CapPct)
+	LevelSource Colour)
 {
 	/// <summary>Whether this room states anything at all for this period — what draws the row's mark.</summary>
 	public bool IsOwn => Brightness == LevelSource.Room || Colour == LevelSource.Room;
-
-	/// <summary>
-	///     What the period's own limits do to the brightness above, or <c>null</c> when they leave it alone.
-	/// </summary>
-	/// <remarks>
-	///     A restatement of the period's own floor and cap rather than a prediction: <see cref="TimePeriodConfig"/>
-	///     applies both to every command while the period is active, so a room set to 100 % under a night period
-	///     capped at 30 % runs at 30. Without this line the row would confidently name a level the room never
-	///     reaches — which is exactly the failure a per-room table is worth having in order to avoid.
-	/// </remarks>
-	public string? Limit
-	{
-		get
-		{
-			if (CapPct is { } cap && BrightnessPct > cap)
-				return $"this period holds everything to {TokenFormat.Percent(cap)}";
-
-			if (FloorPct is { } floor && BrightnessPct < floor)
-				return $"this period lifts everything to {TokenFormat.Percent(floor)}";
-
-			return null;
-		}
-	}
 }
 
 /// <summary>
@@ -158,9 +137,7 @@ public static class RoomLevels
 				own?.BrightnessPct ?? period.BrightnessPct,
 				own?.BrightnessPct is not null ? LevelSource.Room : LevelSource.Schedule,
 				own?.ColorTempKelvin ?? period.ColorTempKelvin,
-				own?.ColorTempKelvin is not null ? LevelSource.Room : LevelSource.Schedule,
-				period.MinBrightnessPct,
-				period.MaxBrightnessPct));
+				own?.ColorTempKelvin is not null ? LevelSource.Room : LevelSource.Schedule));
 		}
 
 		return rows;

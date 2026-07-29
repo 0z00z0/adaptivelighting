@@ -137,8 +137,6 @@ A period runs from its start until the next period begins.
 | **Starts** | A clock time (`22:30`) or a sun event with an optional offset (`sunrise`, `sunset-01:00`, `sunrise+00:45`). | `Start` |
 | **Brightness** | The target brightness while this period runs. | `BrightnessPct` |
 | **Colour temperature** | The target warmth, in kelvin. | `ColorTempKelvin` |
-| **Max brightness** | Caps every command while this period runs, whatever asks — including welcome-home. This is what stops 100 % at 03:00. | `MaxBrightnessPct` |
-| **Min brightness** | A floor on every command, including the warning dim. | `MinBrightnessPct` |
 | **Also switches house mode to** | When this period starts, switch the house to this mode option. | `SetsMode` |
 | **Blend between periods** / **Blend over** | Lights drift to the next period's level instead of stepping at the boundary. | `SmoothTransitions`, `BlendMinutes` (default on, 30 min) |
 

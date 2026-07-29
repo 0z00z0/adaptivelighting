@@ -296,15 +296,6 @@ public static class ConfigValidator
 
 		if (period.ColorTempKelvin is < MinColorTempKelvin or > MaxColorTempKelvin)
 			result.AddError($"Period '{period.Name}' has ColorTempKelvin {period.ColorTempKelvin}, outside {MinColorTempKelvin}–{MaxColorTempKelvin}.");
-
-		if (period.MinBrightnessPct is { } min && min is < MinBrightnessPct or > MaxBrightnessPct)
-			result.AddError($"Period '{period.Name}' has MinBrightnessPct {min}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
-
-		if (period.MaxBrightnessPct is { } max && max is < MinBrightnessPct or > MaxBrightnessPct)
-			result.AddError($"Period '{period.Name}' has MaxBrightnessPct {max}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
-
-		if (period.MinBrightnessPct is { } floor && period.MaxBrightnessPct is { } ceiling && floor > ceiling)
-			result.AddError($"Period '{period.Name}' has MinBrightnessPct {floor} above MaxBrightnessPct {ceiling}.");
 	}
 
 	/// <summary>
@@ -617,7 +608,6 @@ public static class ConfigValidator
 				continue;
 			}
 
-			WarnWhereTheCapsBite(area, level, period, result);
 		}
 	}
 
@@ -633,28 +623,6 @@ public static class ConfigValidator
 				$"[{area.DisplayName}] levels for period '{level.Period}' have ColorTempKelvin {kelvin}, outside {MinColorTempKelvin}–{MaxColorTempKelvin}.");
 	}
 
-	/// <summary>Says at save time what the engine will do at run time to a room's brightness that lies outside its period's caps.</summary>
-	private static void WarnWhereTheCapsBite(
-		AreaConfig area,
-		RoomLevelOverride level,
-		TimePeriodConfig period,
-		ValidationResult result)
-	{
-		if (level.BrightnessPct is not { } brightness)
-			return;
-
-		if (period.MinBrightnessPct is { } floor && brightness < floor)
-			result.AddWarning(
-				$"[{area.DisplayName}] asks for {brightness} % during '{period.Name}', below that period's "
-				+ $"MinBrightnessPct of {floor} — the room is held to the floor. The period's caps still apply to a "
-				+ "room's own levels; raise the room's value, or lower the period's floor.");
-
-		if (period.MaxBrightnessPct is { } ceiling && brightness > ceiling)
-			result.AddWarning(
-				$"[{area.DisplayName}] asks for {brightness} % during '{period.Name}', above that period's "
-				+ $"MaxBrightnessPct of {ceiling} — the room is held to the ceiling. The period's caps still apply to "
-				+ "a room's own levels; lower the room's value, or raise the period's ceiling.");
-	}
 
 	private static void ValidateAreaReferences(
 		AreaConfig area,

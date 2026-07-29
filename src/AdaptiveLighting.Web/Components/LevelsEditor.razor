@@ -42,10 +42,6 @@
 					<span class="badge active-now" title="This period is in force right now.">now</span>
 				}
 				<span class="lvl-start">@StartOf(current.Period)</span>
-				@if (current.Limit is { Length: > 0 } limit)
-				{
-					<span class="lvl-limit">@limit</span>
-				}
 			</div>
 
 			<div class="lvl-cell @(current.Brightness == LevelSource.Room ? "lvl-set" : null)">

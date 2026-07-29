@@ -192,14 +192,6 @@ public sealed class ConfigValidatorTests
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
 
-	[TestMethod]
-	public void A_Floor_Above_Its_Ceiling_Is_Rejected()
-	{
-		var config = Minimal();
-		config.Periods = [new() { Name = "d", Start = "07:00", MinBrightnessPct = 80, MaxBrightnessPct = 20 }];
-
-		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
-	}
 
 	// ===================== the include label =====================
 
@@ -604,51 +596,8 @@ public sealed class ConfigValidatorTests
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
 
-	/// <summary>
-	///     A room asking past the period's ceiling is clamped at run time, and told so here — the one place that
-	///     trade can be acted on rather than merely suffered.
-	/// </summary>
-	[TestMethod]
-	public void A_Room_Asking_Past_The_Periods_Ceiling_Is_Warned_That_It_Will_Be_Held_To_It()
-	{
-		var config = Minimal();
-		config.Periods[1].MaxBrightnessPct = 30;
-		config.Areas[0].Levels = [new() { Period = "night", BrightnessPct = 80 }];
 
-		var result = ConfigValidator.Validate(config);
 
-		Assert.IsTrue(result.IsValid, "clamped, not refused: the cap is nearer what the room asked for than the schedule is");
-		Assert.IsTrue(result.Warnings.Any(w =>
-			w.Contains("Stue", StringComparison.Ordinal) && w.Contains("ceiling", StringComparison.Ordinal)));
-	}
-
-	[TestMethod]
-	public void A_Room_Asking_Below_The_Periods_Floor_Is_Warned_That_It_Will_Be_Held_To_It()
-	{
-		var config = Minimal();
-		config.Periods[1].MinBrightnessPct = 5;
-		config.Areas[0].Levels = [new() { Period = "night", BrightnessPct = 1 }];
-
-		var result = ConfigValidator.Validate(config);
-
-		Assert.IsTrue(result.IsValid);
-		Assert.IsTrue(result.Warnings.Any(w =>
-			w.Contains("Stue", StringComparison.Ordinal) && w.Contains("floor", StringComparison.Ordinal)));
-	}
-
-	[TestMethod]
-	public void Levels_Inside_Their_Periods_Caps_Say_Nothing_At_All()
-	{
-		var config = Minimal();
-		config.Periods[1].MinBrightnessPct = 5;
-		config.Periods[1].MaxBrightnessPct = 30;
-		config.Areas[0].Levels = [new() { Period = "night", BrightnessPct = 8, ColorTempKelvin = 2200 }];
-
-		var result = ConfigValidator.Validate(config);
-
-		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(0, result.Warnings.Count, "the ordinary case is silent");
-	}
 
 	// ===================== rendering =====================
 
