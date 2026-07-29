@@ -1,6 +1,7 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
 
@@ -95,5 +96,135 @@ public sealed class LightingOrchestratorTests
 
 		Assert.AreEqual(1, t.Actuator.Scenes.Count, "leaving the scene mode for Normal applies nothing new");
 		CollectionAssert.DoesNotContain(t.Actuator.Scenes, "scene.normal");
+	}
+
+	// ===================== a light two rooms both command =====================
+
+	/// <summary>
+	///     Start-up looks across the rooms once and says what it found: two rooms commanding one light, named as
+	///     advice a page can render and as a single warning in the log. Once per light per run — this is a fact
+	///     about the Home Assistant registry, so re-deciding it on the clock would be per-tick work for an answer
+	///     that cannot have moved.
+	/// </summary>
+	[TestMethod]
+	public void Two_Rooms_Commanding_One_Light_Are_Reported_Once_At_Start_Up()
+	{
+		FakeHaContext ha = new();
+		ha.SetState("light.stue_taklys", "off");
+		ha.SetState("light.kjokken_taklys", "off");
+		ha.SetState("light.benklys", "off", new() { ["friendly_name"] = "Benklys" });
+		ha.SetState("binary_sensor.stue_m", "off");
+		ha.SetState("binary_sensor.kjokken_m", "off");
+
+		// Both rooms name the shared light by hand, which is the same end state a shared group reaches: the registry
+		// here knows no areas at all, so nothing in the house has a room of its own.
+		AdaptiveLightingConfig config = new()
+		{
+			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }],
+			Areas =
+			[
+				new AreaConfig
+				{
+					Name = "Stue",
+					Lights = ["light.stue_taklys", "light.benklys"],
+					MotionSensors = ["binary_sensor.stue_m"]
+				},
+				new AreaConfig
+				{
+					Name = "Kjøkken",
+					Lights = ["light.kjokken_taklys", "light.benklys"],
+					MotionSensors = ["binary_sensor.kjokken_m"]
+				}
+			]
+		};
+
+		RecordingLoggerFactory logs = new();
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		LightingOrchestrator orchestrator = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			new FakeLightActuator(), new FakeStatePublisher(), new FakeNotifier(), logs);
+
+		orchestrator.Start();
+
+		Assert.AreEqual(1, orchestrator.SharedLights.Count, "one light is shared, so there is one thing to say");
+		Assert.AreEqual("light.benklys", orchestrator.SharedLights[0].EntityId);
+		Assert.AreEqual("Benklys", orchestrator.SharedLights[0].Name, "named as the household named it");
+		StringAssert.Contains(orchestrator.SharedLights[0].Reason, "Stue");
+		StringAssert.Contains(orchestrator.SharedLights[0].Reason, "Kjøkken");
+
+		Assert.AreEqual(1, logs.Warnings.Count(warning => warning.Contains("light.benklys", StringComparison.Ordinal)),
+			"one warning per light per run, not one per room and not one per tick");
+	}
+
+	/// <summary>A house whose rooms share nothing says nothing, which is the ordinary case.</summary>
+	[TestMethod]
+	public void Rooms_With_Their_Own_Lights_Report_No_Sharing()
+	{
+		FakeHaContext ha = new();
+		ha.SetState("light.stue_taklys", "off");
+		ha.SetState("light.kjokken_taklys", "off");
+		ha.SetState("binary_sensor.stue_m", "off");
+		ha.SetState("binary_sensor.kjokken_m", "off");
+
+		AdaptiveLightingConfig config = new()
+		{
+			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }],
+			Areas =
+			[
+				new AreaConfig { Name = "Stue", Lights = ["light.stue_taklys"], MotionSensors = ["binary_sensor.stue_m"] },
+				new AreaConfig { Name = "Kjøkken", Lights = ["light.kjokken_taklys"], MotionSensors = ["binary_sensor.kjokken_m"] }
+			]
+		};
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		LightingOrchestrator orchestrator = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			new FakeLightActuator(), new FakeStatePublisher(), new FakeNotifier(), NullLoggerFactory.Instance);
+
+		orchestrator.Start();
+
+		Assert.AreEqual(0, orchestrator.SharedLights.Count);
+	}
+
+	/// <summary>
+	///     Captures the warnings the engine writes, because "and it says so out loud" is half of what the shared-light
+	///     finding is for — the household never opens the log unless something is wrong, so the line has to be there
+	///     when they do, and exactly once.
+	/// </summary>
+	private sealed class RecordingLoggerFactory : ILoggerFactory
+	{
+		private readonly List<string> _warnings = [];
+
+		public IReadOnlyList<string> Warnings => _warnings;
+
+		public ILogger CreateLogger(string categoryName) => new Recorder(_warnings);
+
+		public void AddProvider(ILoggerProvider provider) { }
+
+		public void Dispose() { }
+
+		private sealed class Recorder(List<string> warnings) : ILogger
+		{
+			public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+			public bool IsEnabled(LogLevel logLevel) => true;
+
+			public void Log<TState>(
+				LogLevel logLevel,
+				EventId eventId,
+				TState state,
+				Exception? exception,
+				Func<TState, Exception?, string> formatter)
+			{
+				ArgumentNullException.ThrowIfNull(formatter);
+
+				if (logLevel >= LogLevel.Warning)
+					warnings.Add(formatter(state, exception));
+			}
+		}
 	}
 }

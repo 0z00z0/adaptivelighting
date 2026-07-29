@@ -151,6 +151,18 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>How many areas resolved and are being commanded. Zero while faulted.</summary>
 	public int RunningAreaCount => _orchestrator?.Areas.Count ?? 0;
 
+	/// <summary>
+	///     The bulbs more than one room commands, because Home Assistant has not put them in a room of their own,
+	///     as the running engine found them. Empty while faulted, and empty in the ordinary house.
+	/// </summary>
+	/// <remarks>
+	///     Forwarded rather than recomputed: the finding is made once, when the engine starts, because it is a fact
+	///     about the Home Assistant registry rather than about any tick. It surfaces here because this is the
+	///     singleton the browser holds, so a page can show the advice without a second opinion about which lights
+	///     the engine drives.
+	/// </remarks>
+	public IReadOnlyList<SuspectLight> SharedLights => _orchestrator?.SharedLights ?? [];
+
 	/// <summary>The validator's verdict from the last load, or <c>null</c> before the first one.</summary>
 	public ValidationResult? LastValidation { get; private set; }
 

@@ -1419,6 +1419,106 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.DoesNotContain(found.MotionSensors.ToArray(), "binary_sensor.door");
 	}
 
+	// ===================== a bulb that belongs to no room =====================
+
+	/// <summary>
+	///     <b>The gap the cross-area clip cannot close, reproduced on the real path.</b> Two rooms, each with its
+	///     own light group, and one bulb in both groups that Home Assistant has put in neither room. Nothing here
+	///     fires: the bulb is not foreign to either area, because it is not anybody's, so both rooms keep their own
+	///     group and both end up commanding it. The two rooms settle on two different ids, which is why the sharing
+	///     is only visible once each id is followed down to the bulbs it stands for.
+	/// </summary>
+	[TestMethod]
+	public void A_Bulb_With_No_Room_Of_Its_Own_Is_Commanded_By_Both_Groups_That_Hold_It()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.stue_alle", "binary_sensor.stue_m"];
+		registry.Areas["kjokken"] = ["light.kjokken_alle", "binary_sensor.kjokken_m"];
+		registry.Names["stue"] = "Stue";
+		registry.Names["kjokken"] = "Kjøkken";
+
+		// The bulb over the counter between the two rooms, in both groups and in no area.
+		ha.SetState("light.stue_alle", "off", new() { ["entity_id"] = new[] { "light.stue_taklys", "light.benklys" } });
+		ha.SetState("light.kjokken_alle", "off", new() { ["entity_id"] = new[] { "light.kjokken_taklys", "light.benklys" } });
+		ha.SetState("light.stue_taklys", "off");
+		ha.SetState("light.kjokken_taklys", "off");
+		ha.SetState("light.benklys", "off", new() { ["friendly_name"] = "Benklys" });
+		ha.SetState("binary_sensor.stue_m", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.kjokken_m", "off", new() { ["device_class"] = "motion" });
+
+		RecordingLogger logger = new();
+		AreaEntityResolver resolver = Resolver(ha, registry, logger: logger);
+
+		resolver.TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? stue, out string? stueError);
+		resolver.TryResolve(new AreaConfig { AreaId = "kjokken" }, new AreaSettings(), out ResolvedArea? kjokken, out _);
+
+		Assert.IsNotNull(stue, stueError);
+		CollectionAssert.AreEqual(new[] { "light.stue_alle" }, stue.Lights.ToArray(), "each room keeps its own group");
+		CollectionAssert.AreEqual(new[] { "light.kjokken_alle" }, kjokken!.Lights.ToArray());
+		Assert.AreEqual(0, logger.Warnings.Count, "no per-area rule has anything to say — that is the whole gap");
+
+		// What the orchestrator does at start-up: follow each room's ids down to the bulbs, then compare.
+		IReadOnlyList<SuspectLight> shared = LightAudit.SharedBetweenRooms(
+			[BulbsOf("Stue", stue, resolver, ha), BulbsOf("Kjøkken", kjokken, resolver, ha)],
+			entityId => registry.Areas.Values.Any(area => area.Contains(entityId, StringComparer.Ordinal)));
+
+		Assert.AreEqual(1, shared.Count, "one bulb is shared, so there is one thing to say");
+		Assert.AreEqual("light.benklys", shared[0].EntityId);
+		Assert.AreEqual("Benklys", shared[0].Name, "named as the household named it, not by its slug");
+		StringAssert.Contains(shared[0].Reason, "Stue");
+		StringAssert.Contains(shared[0].Reason, "Kjøkken");
+	}
+
+	/// <summary>
+	///     The same two rooms, with the bulb filed under one of them. Nothing is raised here, because this is the
+	///     case the cross-area clip already owns — and it does own it: the living room drops its reaching group.
+	/// </summary>
+	[TestMethod]
+	public void A_Bulb_Filed_Under_One_Of_The_Rooms_Is_Not_This_Rules_Business()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		registry.Areas["stue"] = ["light.stue_alle", "light.stue_taklys", "binary_sensor.stue_m"];
+		registry.Areas["kjokken"] = ["light.kjokken_alle", "light.benklys", "binary_sensor.kjokken_m"];
+
+		ha.SetState("light.stue_alle", "off", new() { ["entity_id"] = new[] { "light.stue_taklys", "light.benklys" } });
+		ha.SetState("light.kjokken_alle", "off", new() { ["entity_id"] = new[] { "light.benklys" } });
+		ha.SetState("light.stue_taklys", "off");
+		ha.SetState("light.benklys", "off");
+		ha.SetState("binary_sensor.stue_m", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("binary_sensor.kjokken_m", "off", new() { ["device_class"] = "motion" });
+
+		AreaEntityResolver resolver = Resolver(ha, registry);
+
+		resolver.TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? stue, out _);
+		resolver.TryResolve(new AreaConfig { AreaId = "kjokken" }, new AreaSettings(), out ResolvedArea? kjokken, out _);
+
+		IReadOnlyList<SuspectLight> shared = LightAudit.SharedBetweenRooms(
+			[BulbsOf("Stue", stue!, resolver, ha), BulbsOf("Kjøkken", kjokken!, resolver, ha)],
+			entityId => registry.Areas.Values.Any(area => area.Contains(entityId, StringComparer.Ordinal)));
+
+		Assert.AreEqual(0, shared.Count, "the kitchen's bulb is the kitchen's, and the clip already said so");
+	}
+
+	/// <summary>
+	///     What the orchestrator hands the audit: a room, and every bulb its resolved lights stand for, each named
+	///     the way Home Assistant names it. Mirrors <c>LightingOrchestrator.BulbsOf</c>, which is the only caller
+	///     in the engine.
+	/// </summary>
+	private static RoomUnderReview BulbsOf(string room, ResolvedArea area, AreaEntityResolver resolver, FakeHaContext ha)
+	{
+		List<LightUnderReview> bulbs = [];
+		HashSet<string> seen = new(StringComparer.Ordinal);
+
+		foreach (string entityId in area.Lights)
+			foreach (string bulb in resolver.LeavesOf(entityId))
+				if (seen.Add(bulb))
+					bulbs.Add(new LightUnderReview(bulb, ha.AttrString(bulb, "friendly_name") ?? bulb));
+
+		return new RoomUnderReview(room, bulbs);
+	}
+
 	[TestMethod]
 	public void DiscoverArea_Yields_Nothing_For_An_Area_The_Registry_Does_Not_Know()
 	{

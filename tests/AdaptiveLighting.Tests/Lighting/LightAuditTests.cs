@@ -185,6 +185,106 @@ public sealed class LightAuditTests
 			suspects.Select(suspect => suspect.EntityId).ToArray());
 	}
 
+	// ===================== a bulb two rooms both command =====================
+
+	private static RoomUnderReview Room(string name, params string[] entityIds) =>
+		new(name, [.. entityIds.Select(entityId => Light(entityId))]);
+
+	/// <summary>Nothing in the house has an area of its own — the case every assertion below turns on.</summary>
+	private static bool Homeless(string entityId) => false;
+
+	/// <summary>
+	///     <b>The finding, and it is one finding.</b> Two rooms both command the bulb, so the advice names both and
+	///     is raised once — a household reading it needs to know which two rooms are fighting, which is precisely
+	///     what one entry per room would leave out of each half.
+	/// </summary>
+	[TestMethod]
+	public void A_Bulb_Two_Rooms_Command_Earns_One_Piece_Of_Advice_Naming_Both()
+	{
+		IReadOnlyList<SuspectLight> shared = LightAudit.SharedBetweenRooms(
+			[
+				Room("Stue", "light.stue_taklys", "light.benklys"),
+				Room("Kjøkken", "light.kjokken_taklys", "light.benklys")
+			],
+			Homeless);
+
+		Assert.AreEqual(1, shared.Count, "one bulb is shared, so there is one thing to say");
+		Assert.AreEqual("light.benklys", shared[0].EntityId);
+		StringAssert.Contains(shared[0].Reason, "Stue");
+		StringAssert.Contains(shared[0].Reason, "Kjøkken");
+	}
+
+	/// <summary>
+	///     The advice names the fix in the household's terms and nothing else. Nobody wrote their light groups
+	///     thinking about overlap, so a sentence about group topology is one nobody can act on.
+	/// </summary>
+	[TestMethod]
+	public void The_Advice_Says_To_Give_The_Bulb_An_Area_And_Nothing_About_Groups()
+	{
+		IReadOnlyList<SuspectLight> shared = LightAudit.SharedBetweenRooms(
+			[Room("Bad", "light.speil"), Room("Gang", "light.speil")], Homeless);
+
+		string reason = shared[0].Reason;
+		string[] jargon = ["group", "resolver", "discovery", "member", "overlap"];
+
+		StringAssert.Contains(reason, "area");
+		Assert.IsTrue(char.IsLower(reason[0]), "the reason is read after the name, so it runs on from it");
+
+		foreach (string word in jargon)
+			Assert.IsFalse(
+				reason.Contains(word, StringComparison.OrdinalIgnoreCase),
+				$"the household never wrote their groups thinking about {word}, so the advice must not either");
+	}
+
+	/// <summary>
+	///     Three rooms is the same finding with a longer list, not three findings — and the list reads as a
+	///     sentence rather than as a dump.
+	/// </summary>
+	[TestMethod]
+	public void Three_Rooms_Sharing_A_Bulb_Are_All_Named_In_One_Piece_Of_Advice()
+	{
+		IReadOnlyList<SuspectLight> shared = LightAudit.SharedBetweenRooms(
+			[Room("Bad", "light.speil"), Room("Gang", "light.speil"), Room("Stue", "light.speil")], Homeless);
+
+		Assert.AreEqual(1, shared.Count);
+		StringAssert.Contains(shared[0].Reason, "Bad, Gang and Stue");
+	}
+
+	/// <summary>
+	///     A bulb Home Assistant <i>has</i> put in a room is somebody else's problem: that is the case the resolver's
+	///     own cross-area clip already catches and warns about, and saying it twice in two vocabularies is how a
+	///     reader ends up believing they are two different faults.
+	/// </summary>
+	[TestMethod]
+	public void A_Bulb_With_A_Room_Of_Its_Own_Is_Left_To_The_Cross_Area_Rule()
+	{
+		IReadOnlyList<SuspectLight> shared = LightAudit.SharedBetweenRooms(
+			[Room("Stue", "light.benklys"), Room("Kjøkken", "light.benklys")],
+			entityId => string.Equals(entityId, "light.benklys", StringComparison.Ordinal));
+
+		Assert.AreEqual(0, shared.Count);
+	}
+
+	/// <summary>One room reaching the same bulb twice — through its group and again on its own — is one room.</summary>
+	[TestMethod]
+	public void A_Bulb_Reached_Twice_By_One_Room_Is_Not_Shared()
+	{
+		IReadOnlyList<SuspectLight> shared = LightAudit.SharedBetweenRooms(
+			[new RoomUnderReview("Stue", [Light("light.benklys"), Light("light.benklys")])], Homeless);
+
+		Assert.AreEqual(0, shared.Count, "one room commanding it twice is still one room");
+	}
+
+	/// <summary>The ordinary house, where every room has its own lamps and there is nothing to say.</summary>
+	[TestMethod]
+	public void Rooms_That_Share_Nothing_Raise_Nothing()
+	{
+		IReadOnlyList<SuspectLight> shared = LightAudit.SharedBetweenRooms(
+			[Room("Stue", "light.stue_taklys"), Room("Kjøkken", "light.kjokken_taklys")], Homeless);
+
+		Assert.AreEqual(0, shared.Count);
+	}
+
 	/// <summary>Every reason is a sentence a person can weigh, because weighing it is all they can do.</summary>
 	[TestMethod]
 	public void Every_Reason_Reads_As_Words()

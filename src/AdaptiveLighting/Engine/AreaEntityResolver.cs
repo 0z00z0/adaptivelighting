@@ -684,8 +684,18 @@ public sealed class AreaEntityResolver
 	///         everything it reaches — which lets the widest one win and the rest fold into it, exactly as a healthy
 	///         nest does.
 	///     </para>
+	///     <para>
+	///         <b>Public because "what will this area actually command?" is asked from outside too.</b> The
+	///         cross-room audit compares what two areas command, and two areas reaching one bulb through two
+	///         different groups settle on two different ids — so comparing the resolved lists finds nothing and the
+	///         comparison has to be made down here. It stays a question about one entity, asked one at a time, so
+	///         nothing about the per-area resolver reaches sideways; a second copy of this walk in the caller is
+	///         what would drift.
+	///     </para>
 	/// </remarks>
-	private IReadOnlySet<string> LeavesOf(string entityId)
+	/// <param name="entityId">The entity to follow. A plain one stands for itself.</param>
+	/// <returns>The leaves, never empty.</returns>
+	public IReadOnlySet<string> LeavesOf(string entityId)
 	{
 		HashSet<string> bulbs = new(StringComparer.Ordinal);
 		HashSet<string> seen = new(StringComparer.Ordinal) { entityId };
