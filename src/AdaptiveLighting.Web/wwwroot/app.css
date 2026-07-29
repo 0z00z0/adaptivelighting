@@ -3837,16 +3837,26 @@ button.mode-pill:disabled {
    a second one would read as a second prediction. The warn hue is the same one the
    log's refusal rows carry, so the two surfaces name the cause in one colour.
 
-   The label only appears on hover or focus: fourteen rooms' refusals with their
-   reasons spelled out would be a wall of text across the board, and the reason is
-   also on the title for a reader who never hovers. */
+   The label only appears on hover: fourteen rooms' refusals with their reasons
+   spelled out would be a wall of text across the board, and the reason is also on
+   the title for a reader who never hovers.
+
+   Hover is the whole of it, deliberately not "hover or focus". The mark lives
+   inside the room's link and is not focusable, so a :focus-visible rule here
+   matched nothing while reading as though keyboard access were handled. Giving it
+   a tab stop of its own would put one stop per refusal inside a single link, which
+   is worse than the log rows that already carry every reason in full. */
+/* Full height rather than inset, so the tick always breaks out of any block it lands on and meets the lane's
+   own background top and bottom. Inset it was --warn drawn inside a filled span — measured 1.06:1 against the
+   hand violet, and 1.00:1 where a refusal fell inside the minimum-width overhang of a PreOff block, which is
+   not low contrast but invisible. The outline covers the part that still overlaps. */
 .lane-refusal {
 	position: absolute;
-	top: 25%;
-	bottom: 25%;
+	top: 0;
+	bottom: 0;
 	width: 0;
 	border-left: var(--stroke-mark) solid var(--warn);
-	pointer-events: auto;
+	outline: 1px solid var(--panel);
 }
 
 .lane-refusal i {
@@ -3855,16 +3865,29 @@ button.mode-pill:disabled {
 	top: 50%;
 	transform: translateY(-50%);
 	display: none;
+	padding: 1px 4px;
+	border-radius: var(--radius-sm, 3px);
+
+	/* The label is read over whatever the lane is drawing, so it carries its own ground rather than trusting
+	   the track to be empty behind it. */
+	background: var(--panel);
 	font-style: normal;
 	font-family: var(--mono);
 	font-size: var(--text-xs);
 	color: var(--warn);
 	white-space: nowrap;
 	pointer-events: none;
+	z-index: 1;
 }
 
-.lane-refusal:hover i,
-.lane-refusal:focus-visible i {
+/* A refusal in the right-hand third would be cut off by the track's overflow, so its label opens leftwards
+   instead. The clip is silent — no ellipsis — so a reason mid-word was simply lost. */
+.lane-refusal.lane-refusal-late i {
+	left: auto;
+	right: 5px;
+}
+
+.lane-refusal:hover i {
 	display: block;
 }
 

@@ -102,6 +102,38 @@ public sealed class AreaNamingTests
 		Assert.AreEqual("bod", AreaNaming.DisplayName(new AreaConfig { AreaId = "bod" }, registry));
 	}
 
+	// ===================== a name made only of spaces =====================
+
+	/// <summary>
+	///     Whitespace is not a name, at any step of the order.
+	/// </summary>
+	/// <remarks>
+	///     Only the length was tested before, so a hand-edited <c>Name: "  "</c> outranked both the registry and the
+	///     id and every surface labelled the room with two spaces. It also reached <c>SwitchOnWarning.For</c>, whose
+	///     <c>ThrowIfNullOrWhiteSpace</c> faulted the settings page while it loaded — the page somebody would have
+	///     fixed the name on. Each step now falls through to the next, ending at the caller's placeholder.
+	/// </remarks>
+	[TestMethod]
+	public void A_Name_Of_Only_Spaces_Does_Not_Name_The_Room()
+	{
+		FakeAreaRegistry registry = Registry();
+		registry.Names["bod"] = " ";
+
+		Assert.AreEqual(
+			"Kjeller - Bad",
+			AreaNaming.DisplayName(new AreaConfig { AreaId = "kjeller_bad", Name = "  " }, registry),
+			"a stated name of spaces must lose to the registry");
+
+		Assert.AreEqual(
+			"bod",
+			AreaNaming.DisplayName(new AreaConfig { AreaId = "bod" }, registry),
+			"a registry name of spaces must lose to the id");
+
+		Assert.IsNull(
+			AreaNaming.Resolve(new AreaConfig { AreaId = "   ", Name = "\t" }, registry),
+			"nothing readable anywhere leaves the caller's own placeholder");
+	}
+
 	/// <summary>A registry that answers by callback works the same way — that is how the re-setup panel asks.</summary>
 	[TestMethod]
 	public void A_Name_Source_Works_The_Same_As_A_Registry()

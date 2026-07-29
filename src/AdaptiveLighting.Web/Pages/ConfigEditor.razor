@@ -784,7 +784,8 @@ else
 				   than an Areas one. Folded because it is read once and then forgotten, not because it is
 				   frightening. *@
 				<GroupFold Title="Finding lights &amp; sensors"
-						   Description="Which lights this app may manage, what counts as a sensor, and where the house reads the daylight.">
+						   Description="Which lights this app may manage, what counts as a sensor, and where the house reads the daylight."
+						   Open="@(Engine.SharedLights.Count > 0)">
 					@*
 						Bulbs two rooms both command. The engine finds these as it builds and hangs them off
 						LightingEngineHost.SharedLights; the cause is always the same one, a light Home Assistant
@@ -794,19 +795,29 @@ else
 						advice names both rooms, so a per-room copy would say the same sentence twice on two pages
 						while a reader fixes it in a third place, Home Assistant. This section is already where
 						"which lights count as a room's" is settled, which is exactly the question it raises.
+
+						The fold opens itself when there is one. Folded is right for a section read once and then
+						forgotten; it is not right for a warning, and a warning inside a closed drawer is shown to
+						nobody — least of all to somebody who by definition does not know to go looking for it.
+
+						Said as "more than one room", not "two": the engine flags a bulb from two claimants upward,
+						and the reason beneath names all of them.
 					*@
 					@if (Engine.SharedLights is { Count: > 0 } sharedLights)
 					{
 						<div class="notice warn">
 							<strong>
 								@(sharedLights.Count == 1
-									? "One light is commanded by two rooms at once."
-									: $"{sharedLights.Count} lights are commanded by two rooms at once.")
+									? "One light is commanded by more than one room."
+									: $"{sharedLights.Count} lights are commanded by more than one room.")
 							</strong>
 							<ul>
 								@foreach (SuspectLight shared in sharedLights)
 								{
-									<li><strong>@shared.Name</strong> &mdash; @shared.Reason <code>@shared.EntityId</code></li>
+									@* Id beside the name, as SwitchOnNoteView orders it — the reason is a full
+									   sentence ending in advice, and an entity id trailing after it reads as
+									   part of that advice. *@
+									<li><strong>@shared.Name</strong> <code>@shared.EntityId</code> &mdash; @shared.Reason</li>
 								}
 							</ul>
 						</div>
@@ -1681,7 +1692,8 @@ else
 	}
 
 	/// <summary>
-	///     Raises the note for a room that is <b>already</b> on, when what it commands looks wrong.
+	///     Rebuilds every standing note: the note for a room that is <b>already</b> on, when what it commands
+	///     looks wrong.
 	/// </summary>
 	/// <remarks>
 	///     <para>
@@ -1695,16 +1707,26 @@ else
 	///         note whenever the room commands more than one light, because "here is what you have just switched
 	///         on" is worth reading once. Opening the page is not a question, so a room that merely commands
 	///         several lamps says nothing: on this owner's house eight rooms follow the defaults, and eight
-	///         unprompted panels would be the page shouting on arrival. Only <see cref="SwitchOnNote.Suspicious"/>
-	///         — a light the audit actually doubts — earns the interruption.
+	///         unprompted panels would be the page shouting on arrival. Only a note that is a
+	///         <see cref="SwitchOnNote.IsWarning"/> — a light the audit actually doubts — earns the interruption.
 	///     </para>
 	///     <para>
-	///         Dismissal is remembered for the visit, exactly as on the press: reading one and moving on must not
-	///         bring it back on the next re-render.
+	///         <b>It clears first, and every path that re-reads the document calls it.</b> A note describes the
+	///         document as it was when the note was raised, so one held across a re-read is a claim about a file
+	///         that is no longer open: pressing <i>Discard changes</i> after switching a room on left "Stue is on,
+	///         and will command 3 lights" sitting under a switch the discard had just put back to off, and saving
+	///         the fix for a note went on showing the count the fix had just changed. Rebuilding is also what makes
+	///         a save that <i>creates</i> a suspicion say so.
+	///     </para>
+	///     <para>
+	///         Dismissal survives the rebuild, exactly as on the press: <see cref="_switchOnRead"/> is the reader's
+	///         own decision about this visit, and re-reading a file is not them changing their mind.
 	///     </para>
 	/// </remarks>
 	private void RaiseStandingNotes()
 	{
+		_switchOnNotes.Clear();
+
 		foreach (AreaConfig area in _config.Areas)
 		{
 			if (!AreaView.IsEnabled(area, _config.Defaults))
@@ -1712,18 +1734,27 @@ else
 
 			string key = KeyOf(area);
 
-			if (_switchOnRead.Contains(key) || _switchOnNotes.ContainsKey(key))
+			if (_switchOnRead.Contains(key))
 				continue;
 
-			SwitchOnNote? note = SwitchOnWarning.For(
-				RoomName(area),
-				Catalog.LightsIn(area, _config.Defaults, _config.Global),
-				_config.Global.IncludeLabel);
-
-			if (note is { Suspicious.Count: > 0 })
+			if (NoteFor(area) is { IsWarning: true } note)
 				_switchOnNotes[key] = note;
 		}
 	}
+
+	/// <summary>
+	///     What this room's switch has to say for itself, or <c>null</c> when there is nothing worth saying.
+	/// </summary>
+	/// <remarks>
+	///     One place, because the standing pass and the press ask the same question of the same room and differ
+	///     only in which answers they bother the reader with. Two copies of the argument list would drift on the
+	///     first change to how a room's lights are resolved, and the two surfaces would then disagree about a
+	///     house neither of them can be wrong about separately.
+	/// </remarks>
+	private SwitchOnNote? NoteFor(AreaConfig area) => SwitchOnWarning.For(
+		RoomName(area),
+		Catalog.LightsIn(area, _config.Defaults, _config.Global),
+		_config.Global.IncludeLabel);
 
 	// ===================== what switching a room on will command =====================
 
@@ -1750,12 +1781,7 @@ else
 		if (_switchOnRead.Contains(key))
 			return;
 
-		SwitchOnNote? note = SwitchOnWarning.For(
-			RoomName(area),
-			Catalog.LightsIn(area, _config.Defaults, _config.Global),
-			_config.Global.IncludeLabel);
-
-		if (note is not null)
+		if (NoteFor(area) is { } note)
 			_switchOnNotes[key] = note;
 	}
 
@@ -1864,11 +1890,33 @@ else
 	///     away. A room with no Home Assistant area has no page, so it would otherwise be unreachable and
 	///     unremovable — old documents that list entities explicitly and name no area are exactly that case.
 	/// </remarks>
+	/// <summary>
+	///     Takes a room out of the document, and with it every note that was keyed by where a room sits.
+	/// </summary>
+	/// <remarks>
+	///     <see cref="KeyOf"/> falls back to the row's position for a room with no area id, and a removal has just
+	///     moved every row after this one. Left alone, the survivor that slid into the removed row's index would
+	///     render the removed room's note — its name, its lights — under its own name, and a dismissal recorded
+	///     against a position would silence whichever room landed there. Positions cannot be re-keyed, so they go;
+	///     the notes for rooms that do have an area id are unaffected, because an id does not move.
+	/// </remarks>
 	private void RemoveArea(AreaConfig area)
 	{
 		_config.Areas.Remove(area);
+		ForgetPositionalNotes();
 		Revalidate();
 	}
+
+	/// <summary>Drops every note and dismissal keyed by a row's position rather than by an area id.</summary>
+	private void ForgetPositionalNotes()
+	{
+		foreach (string key in _switchOnNotes.Keys.Where(IsPositional).ToList())
+			_switchOnNotes.Remove(key);
+
+		_switchOnRead.RemoveWhere(IsPositional);
+	}
+
+	private static bool IsPositional(string key) => key.StartsWith('#');
 
 	// ===================== the all-rooms settings =====================
 
@@ -2129,6 +2177,10 @@ else
 				LoadCatalog();
 				Revalidate();
 				MarkClean();
+
+				// The saved document is a different house from the one the notes describe — that is the whole
+				// point of having saved. Same order and same reason as in Reload().
+				RaiseStandingNotes();
 			}
 		}
 		catch (LightingConfigException exception)

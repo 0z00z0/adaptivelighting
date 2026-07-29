@@ -35,10 +35,19 @@ public static class AreaNaming
 	///     What names this room, or <c>null</c> when nothing does.
 	/// </summary>
 	/// <remarks>
-	///     The order is the whole rule: a <see cref="AreaConfig.Name"/> in the document is the owner overruling
-	///     Home Assistant and always wins; the registry's own name comes next; the area id is the last thing that
-	///     is still a fact. <c>null</c> means the caller's own placeholder applies — the house tab says "New room"
-	///     where the engine says "(unnamed area)", and neither should have to know about the other.
+	///     <para>
+	///         The order is the whole rule: a <see cref="AreaConfig.Name"/> in the document is the owner overruling
+	///         Home Assistant and always wins; the registry's own name comes next; the area id is the last thing
+	///         that is still a fact. <c>null</c> means the caller's own placeholder applies — the house tab says
+	///         "New room" where the engine says "(unnamed area)", and neither should have to know about the other.
+	///     </para>
+	///     <para>
+	///         <b>Whitespace is not a name.</b> Each step used to test only <c>Length &gt; 0</c>, so a hand-edited
+	///         <c>Name: "  "</c> won outright and every surface labelled the room with two spaces. Worse, it reached
+	///         <c>SwitchOnWarning.For</c>, whose <c>ThrowIfNullOrWhiteSpace</c> then faulted the settings page on
+	///         load — before it could render the row somebody would fix the name on. Falling through instead lands
+	///         on the id, then on the caller's placeholder, which is what an unnamed room was always meant to get.
+	///     </para>
 	/// </remarks>
 	/// <param name="area">The room, from the document.</param>
 	/// <param name="registryName">
@@ -50,13 +59,13 @@ public static class AreaNaming
 	{
 		ArgumentNullException.ThrowIfNull(area);
 
-		if (area.Name is { Length: > 0 } stated)
+		if (Named(area.Name) is { } stated)
 			return stated;
 
-		if (area.AreaId is not { Length: > 0 } areaId)
+		if (Named(area.AreaId) is not { } areaId)
 			return null;
 
-		return registryName?.Invoke(areaId) is { Length: > 0 } registered ? registered : areaId;
+		return Named(registryName?.Invoke(areaId)) ?? areaId;
 	}
 
 	/// <inheritdoc cref="Resolve(AreaConfig, Func{string, string?})"/>
@@ -93,18 +102,21 @@ public static class AreaNaming
 	/// <param name="areaId">The area id to name.</param>
 	public static string? OfArea(IAreaRegistry? registry, string? areaId)
 	{
-		if (registry is null || areaId is not { Length: > 0 })
+		if (registry is null || Named(areaId) is not { } asked)
 			return null;
 
 		try
 		{
-			return registry.NameOf(areaId) is { Length: > 0 } name ? name : null;
+			return Named(registry.NameOf(asked));
 		}
 		catch (InvalidOperationException)
 		{
 			return null;
 		}
 	}
+
+	/// <summary>A candidate that actually names something, or <c>null</c> so the next step in the order gets its turn.</summary>
+	private static string? Named(string? candidate) => string.IsNullOrWhiteSpace(candidate) ? null : candidate;
 
 	private static Func<string, string?>? NameSource(IAreaRegistry? registry) =>
 		registry is null ? null : areaId => OfArea(registry, areaId);

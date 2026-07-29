@@ -464,18 +464,16 @@ public sealed class BoardViewTests
 	}
 
 	/// <summary>
-	///     Every gate names itself. A mark that said only "turned down" would send the reader to the log for the
-	///     one word the board had room to carry.
+	///     Every gate that is about <em>this room</em> names itself on its mark. A mark saying only "turned down"
+	///     would send the reader to the log for the one word the board had room to carry.
 	/// </summary>
 	[TestMethod]
-	public void Each_Gate_Names_Itself_On_The_Mark()
+	public void Each_Room_Level_Gate_Names_Itself_On_The_Mark()
 	{
 		(AutoOnBlock Block, string Expected)[] cases =
 		[
 			(AutoOnBlock.NotDark, "too bright"),
 			(AutoOnBlock.Sleep, "the house is asleep"),
-			(AutoOnBlock.KillSwitch, "the master switch is off"),
-			(AutoOnBlock.Away, "nobody home yet"),
 			(AutoOnBlock.Disabled, "automatic lighting is off here"),
 			(AutoOnBlock.SceneHold, "a guest scene has this room")
 		];
@@ -493,6 +491,32 @@ public sealed class BoardViewTests
 	}
 
 	/// <summary>
+	///     <b>The master switch and an empty house get no mark at all.</b> They turn every room down at once, so
+	///     drawing them per room gave all seventeen lanes the same tick — and because a refusal makes a lane
+	///     un-quiet, the quiet shelf emptied and every room claimed a row. Seventeen lanes repeating one house
+	///     fact is exactly the wall <see cref="BoardLane.IsQuiet"/> exists to prevent, and it is the same rule
+	///     <see cref="BoardView.IsException"/> already applies to the tray above.
+	/// </summary>
+	/// <remarks>
+	///     Both are still refusals and both still have their row in the log with their reason. This is a
+	///     judgement about which of them earns a mark, not a second opinion about what a refusal is.
+	/// </remarks>
+	[TestMethod]
+	public void A_House_Wide_Refusal_Is_Not_Drawn_On_Every_Lane()
+	{
+		BoardWindow window = Window();
+
+		Assert.AreEqual(0, BoardView.Refusals([Refused(1, At(20), AutoOnBlock.KillSwitch)], window).Count,
+			"the house bar already says the master switch is off, once, at the top");
+
+		Assert.AreEqual(0, BoardView.Refusals([Refused(1, At(20), AutoOnBlock.Away)], window).Count,
+			"an empty house is announced house-wide too");
+
+		Assert.AreEqual(1, BoardView.Refusals([Refused(1, At(20), AutoOnBlock.NotDark)], window).Count,
+			"a room's own darkness is nobody else's business, and still marked");
+	}
+
+	/// <summary>
 	///     Movement the room acted on is not a refusal, and neither is a report that carries no gate. The board
 	///     asks <see cref="ActivityView.IsDeclinedMotion"/> rather than a copy of it, so the mark and the row it
 	///     sends a reader to can never disagree about what was turned down.
@@ -507,12 +531,24 @@ public sealed class BoardViewTests
 	}
 
 	/// <summary>
-	///     Refusals outside the board's window are not drawn, and two at the same instant are one mark — stacked
-	///     on a single pixel they read as one mark drawn badly rather than as two events, and both rows are still
-	///     in the log.
+	///     Refusals outside the board's window are not drawn, and two too close to be told apart are one mark —
+	///     whatever turned each of them down.
 	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The gap is deliberately measured on screen rather than on the clock, and deliberately ignores the
+	///         gate. Reports minutes apart are perfectly meaningful and still land inside a pixel of each other on
+	///         a phone; two ticks a pixel apart cannot be told apart by a reader even when they mean different
+	///         things, and keeping the second buys an unreadable mark while stealing the first one's hover.
+	///     </para>
+	///     <para>
+	///         The case that forced it: the suppressed-off path republishes on <i>every</i> movement rather than
+	///         once per change of gate, so a bedroom sensor re-firing under a hand-set off drew dozens of ticks
+	///         as one continuous amber smear. Every one of them is still a row in the log.
+	///     </para>
+	/// </remarks>
 	[TestMethod]
-	public void Marks_Stay_Inside_The_Window_And_Do_Not_Stack()
+	public void Marks_Stay_Inside_The_Window_And_Never_Land_On_Top_Of_Each_Other()
 	{
 		BoardWindow window = Window();
 
@@ -522,7 +558,19 @@ public sealed class BoardViewTests
 			[Refused(1, At(20), AutoOnBlock.NotDark), Refused(2, At(20), AutoOnBlock.Sleep)],
 			window);
 
-		Assert.AreEqual(1, together.Count);
+		Assert.AreEqual(1, together.Count, "the same instant, even for different reasons");
+
+		// A minute apart on a seven-hour board is a quarter of a per cent — under a pixel on a phone.
+		Assert.AreEqual(
+			1,
+			BoardView.Refusals([Refused(1, At(20), AutoOnBlock.Sleep), Refused(2, At(20, 1), AutoOnBlock.Sleep)], window).Count,
+			"a re-firing sensor is one mark, not a smear");
+
+		// Half an hour is seven per cent, and plainly two events.
+		Assert.AreEqual(
+			2,
+			BoardView.Refusals([Refused(1, At(20), AutoOnBlock.Sleep), Refused(2, At(20, 30), AutoOnBlock.Sleep)], window).Count,
+			"far enough apart to be read as two");
 	}
 
 	/// <summary>

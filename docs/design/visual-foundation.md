@@ -200,8 +200,8 @@ it is tested rather than screenshotted, and so no surface can name a state diffe
 |---|---|---|---|
 | `AutoActive` | loop | `--machine`, or the room's own Kelvin | lit · auto |
 | `PreOff` | **draining ring** | `--warn`, blinking | warning dim |
-| `OverriddenOn` | person | `--human` | set by hand |
-| `SuppressedOff` | person | `--human` | off by hand |
+| `OverriddenOn` | person | `--human` | set manually |
+| `SuppressedOff` | person | `--human` | off manually |
 | `SceneHold` | person | `--human` | held by a scene |
 | `Disabled` | struck circle | `--idle` | switched off |
 | `AutoVacant` | **no shape — a dot** | `--idle` | watching |

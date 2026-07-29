@@ -269,11 +269,20 @@ else
 									}
 									@* Movement the room turned down. Drawn after the blocks so a refusal inside a lit
 									   stretch is not painted over by it, and before the future mark, which is the
-									   only thing on the lane allowed to sit above everything else. *@
+									   only thing on the lane allowed to sit above everything else.
+
+									   aria-hidden because the mark is inside the room's link. Its <i> is display:none
+									   and so out of the tree already, but the title is not: without this the link's
+									   accessible name is built from it, and a room with four refusals announced as
+									   "Kjøkken 17:12 movement, too bright 17:40 movement, …" — a name that grows
+									   through the evening. The reasons are in the log rows, which are readable. *@
 									@foreach (LaneRefusal refusal in lane.Refusals ?? [])
 									{
-										<span class="lane-refusal" style="left: @Pct(refusal.LeftPct)%"
-											  title="@refusal.Label"><i>@refusal.Label</i></span>
+										@* Past two thirds across, the label opens leftwards: the track clips its overflow
+										   silently, so a reason near the right edge was cut mid-word with no ellipsis. *@
+										<span class="lane-refusal @(refusal.LeftPct > 66 ? "lane-refusal-late" : null)"
+											  style="left: @Pct(refusal.LeftPct)%"
+											  title="@refusal.Label" aria-hidden="true"><i>@refusal.Label</i></span>
 									}
 									@if (lane.Next is { } next)
 									{
@@ -607,7 +616,10 @@ else
 		}
 
 		_lanes = lanes;
-		_hasMarks = lanes.Any(lane => lane.Blocks.Count > 0 || lane.Next is not null);
+		// Refusals count. They are the one mark a lane can carry while it has no block and nothing armed — a room
+		// that turned movement down did exactly nothing else — so without them the key hides on precisely the
+		// board the refusal tick was drawn for, and an amber tick nobody can decode is decoration.
+		_hasMarks = lanes.Any(lane => lane.Blocks.Count > 0 || lane.Next is not null || lane.Refusals is { Count: > 0 });
 		_exceptions = BoardView.Exceptions(visible);
 
 		(IReadOnlyList<BoardLane> _, IReadOnlyList<BoardLane> quiet) = BoardView.Partition(lanes);

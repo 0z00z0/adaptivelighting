@@ -207,6 +207,17 @@ public static class BoardView
 	/// <summary>The narrowest a block may be drawn, so a five-second visit is still a mark and not a hairline.</summary>
 	private const double MinBlockPct = 0.4;
 
+	/// <summary>
+	///     How far apart two refusals for the same reason must be before both are drawn.
+	/// </summary>
+	/// <remarks>
+	///     One per cent of a seven-hour board is about four minutes, and on a 320 px phone track it is a little
+	///     over three pixels — enough for two 2 px ticks to read as two. Chosen in <i>screen</i> terms rather than
+	///     clock terms because the fault it answers is visual: reports minutes apart are perfectly meaningful, they
+	///     simply cannot be drawn apart at this scale, and every one of them is still a row in the log.
+	/// </remarks>
+	private const double MinMarkGapPct = 1.0;
+
 	/// <summary>The narrowest band segment that gets its name written in it.</summary>
 	private const double MinLabelledBandPct = 9;
 
@@ -316,28 +327,59 @@ public static class BoardView
 		ArgumentNullException.ThrowIfNull(window);
 
 		List<LaneRefusal> marks = [];
-		DateTimeOffset? previous = null;
+		double? previousPercent = null;
 
 		foreach (ActivityEntry entry in entries
 			.Where(entry => ActivityView.IsDeclinedMotion(entry.Snapshot))
+			.Where(entry => IsAboutThisRoom(entry.Snapshot))
 			.Where(entry => entry.At >= window.Start && entry.At <= window.End)
 			.OrderBy(entry => entry.At)
 			.ThenBy(entry => entry.Sequence))
 		{
-			// Two reports at the same instant would stack two marks on one pixel, which reads as one mark drawn
-			// badly rather than as two events. The engine can publish a pair when a second gate closes in the
-			// same tick, and the row for each is still in the log.
-			if (previous == entry.At)
+			double percent = Math.Clamp(window.PercentAt(entry.At), 0, 100);
+
+			// Close enough that the two ticks would touch, whatever turned each one down. The engine publishes
+			// once per CHANGE of gate on the ordinary path, but the suppressed-off path republishes on every
+			// movement — a bedroom sensor re-firing under a hand-set off produces dozens of reports minutes
+			// apart, which at a phone's scale land inside a pixel of one another and paint a continuous smear.
+			//
+			// Deliberately not keyed on the gate. Two marks a pixel apart cannot be told apart by a reader even
+			// when they mean different things, so keeping the second buys an unreadable tick and loses the
+			// first's hover to it. Every report is still its own row in the log, with its own reason.
+			if (previousPercent is { } last && percent - last < MinMarkGapPct)
 				continue;
 
-			previous = entry.At;
-			marks.Add(new LaneRefusal(
-				Math.Clamp(window.PercentAt(entry.At), 0, 100),
-				$"{Clock(entry.At)} movement, {ActivityView.RefusalReason(entry.Snapshot)}"));
+			previousPercent = percent;
+			marks.Add(new LaneRefusal(percent, $"{Clock(entry.At)} movement, {ActivityView.RefusalReason(entry.Snapshot)}"));
 		}
 
 		return marks;
 	}
+
+	/// <summary>
+	///     Whether a refusal is this room's own business, or the house's — already said once, above the lanes.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Without this the board becomes the wall it was built to avoid.</b> The master switch and an empty
+	///         house turn every room down at once, so a night with the switch off gave all seventeen lanes the same
+	///         tick reading "the master switch is off" — and since a refusal makes a lane un-quiet, the quiet shelf
+	///         emptied and every room claimed a row. Seventeen lanes repeating one house fact is precisely what
+	///         <see cref="BoardLane.IsQuiet"/> exists to prevent.
+	///     </para>
+	///     <para>
+	///         It is the same rule <see cref="IsException"/> already applies to the tray, for the same reason
+	///         recorded there: these conditions are announced house-wide, and repeating them once per room buries
+	///         the rooms that need reading. The house bar says the switch is off in one place, at the top.
+	///     </para>
+	///     <para>
+	///         This is a judgement about which refusals earn a <i>mark</i>, not a second opinion about what a
+	///         refusal is — <see cref="ActivityView.IsDeclinedMotion"/> remains the only answer to that, and every
+	///         one of these still has its row in the log with its reason.
+	///     </para>
+	/// </remarks>
+	private static bool IsAboutThisRoom(AreaSnapshot snapshot) =>
+		snapshot.AutoOnBlockedBy is not (AutoOnBlock.KillSwitch or AutoOnBlock.Away);
 
 	/// <summary>
 	///     The one dotted mark ahead of the now-line: when this room's armed timer fires, and what it will do.
