@@ -479,8 +479,6 @@ public sealed class ModeMonitor : IDisposable
 		// process dies between the two.
 		RememberPeriod(currentPeriodName);
 
-		// Time reset: the input_datetime moment crossed since the last tick (and after activation).
-		EvaluateTimeReset(activeOption, now, previousTickAt);
 
 		// Auto-away: switch TO an option once the house has been motion-free for its configured span.
 		EvaluateInactivityActivation(now);
@@ -648,51 +646,7 @@ public sealed class ModeMonitor : IDisposable
 		}
 	}
 
-	private void EvaluateTimeReset(HouseModeOptionConfig? activeOption, DateTimeOffset now, DateTimeOffset previousTickAt)
-	{
-		if (activeOption is not { Kind: not ModeKind.Normal, ResetAtTime: { Length: > 0 } entity })
-			return;
 
-		if (ResolveResetMoment(entity, now) is not { } moment)
-			return;
-
-		DateTimeOffset activatedAt;
-		lock (_gate)
-			activatedAt = _activatedAt;
-
-		// Poll-based: fire when the moment lies between the later of (activation, previous tick) and now.
-		DateTimeOffset lowerBound = activatedAt > previousTickAt ? activatedAt : previousTickAt;
-		if (moment > lowerBound && moment <= now)
-			Reset($"time {entity} passed");
-	}
-
-	/// <summary>
-	///     The wall-clock instant an <c>input_datetime</c> names, in <paramref name="now"/>'s frame. A date+time
-	///     helper is that timestamp; a time-only helper is a daily reset, resolved to its most recent occurrence at
-	///     or before <paramref name="now"/>.
-	/// </summary>
-	private DateTimeOffset? ResolveResetMoment(string entityId, DateTimeOffset now)
-	{
-		if (_ha.GetState(entityId).AsUsableState() is not { } text)
-			return null;
-
-		if (DateTime.TryParseExact(text, ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-dd HH:mm"],
-				CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime dateTime))
-			return new DateTimeOffset(dateTime, now.Offset);
-
-		if (TimeOnly.TryParseExact(text, ["HH:mm:ss", "HH:mm"], CultureInfo.InvariantCulture, DateTimeStyles.None, out TimeOnly timeOnly))
-		{
-			// A time-only helper is a daily reset. Resolve it to the most recent occurrence at or before `now`, not
-			// to now.Date's occurrence: a tick that straddles midnight would otherwise place yesterday's 23:59 a full
-			// day ahead (tomorrow's now.Date), so the window (previousTick, now] never contains it and the reset is
-			// silently skipped.
-			DateTimeOffset candidate = new(now.Date.Add(timeOnly.ToTimeSpan()), now.Offset);
-			return candidate > now ? candidate.AddDays(-1) : candidate;
-		}
-
-		_logger.LogWarning("Reset time {Entity} reports '{Value}', which is not a parseable input_datetime.", entityId, text);
-		return null;
-	}
 
 	/// <summary>Returns the select to the single Normal option, logging which trigger fired. No-op when no Normal resolves.</summary>
 	private void Reset(string trigger)

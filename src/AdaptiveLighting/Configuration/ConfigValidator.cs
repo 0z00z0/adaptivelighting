@@ -437,17 +437,6 @@ public static class ConfigValidator
 				result.AddWarning($"HouseMode option '{option.Value}' is Normal but sets ActivateAfterNoMotionMinutes; a Normal option is the reset target, so it is inert.");
 		}
 
-		// ResetAtTime accepts any date/time-bearing entity: input_datetime, the time/datetime helper domains, and a
-		// sensor (whose device_class the pure validator cannot see — a timestamp/date sensor is the intended case;
-		// a value that will not parse is caught at runtime by ResolveResetMoment). Anything else is a document error.
-		if (option.ResetAtTime is { Length: > 0 } resetAt)
-		{
-			if (resetAt.Domain() is not ("input_datetime" or "time" or "datetime" or "sensor"))
-				result.AddError($"HouseMode option '{option.Value}' ResetAtTime '{resetAt}' is not a date or time entity (input_datetime, time, datetime, or a timestamp/date sensor).");
-			else if (knownEntityIds is not null && !knownEntityIds.Contains(resetAt))
-				result.AddError($"HouseMode option '{option.Value}' ResetAtTime '{resetAt}' is not known to Home Assistant.");
-		}
-
 		// ActivateWhileOn: the engine reads these as on/off, so only input_boolean, switch and binary_sensor can
 		// force the mode — any other domain is inert and warned; an id HA does not know is an error. Mirrors the
 		// presence-sensor rules below.

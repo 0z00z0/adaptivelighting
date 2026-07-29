@@ -271,9 +271,6 @@ public static class HouseSentences
 		if (option.ResetOnPeriodStart is { Length: > 0 } period)
 			others.Add($"when the {period} period starts");
 
-		if (option.ResetAtTime is { Length: > 0 } at)
-			others.Add($"when {at} comes round");
-
 		if (!presence && others.Count == 0)
 		{
 			builder.Text(" until you switch the house back yourself");

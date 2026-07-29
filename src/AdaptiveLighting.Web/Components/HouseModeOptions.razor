@@ -253,17 +253,6 @@
 								}
 							</div>
 
-							<div class="housemode-field">
-								<span class="housemode-field-label">Reset at a time</span>
-								<EntityPicker Value="@boundOption.ResetAtTime"
-											  ValueChanged="@(v => SetField(boundOption, () => boundOption.ResetAtTime = v))"
-											  Options="@DateTimes"
-											  NameResolver="@NameResolver"
-											  KnownResolver="@KnownResolver"
-											  NoneLabel="(none)"
-											  EmptyNote="@EmptyNote("No date or time entities found — create an input_datetime helper, or type an id.")"
-											  Placeholder="input_datetime.gjester_slutt" />
-							</div>
 						</div>
 					</div>
 				}
@@ -427,11 +416,9 @@
 		return hours > 0 && rest > 0 ? $"{hours}h {rest}m" : hours > 0 ? $"{hours}h" : $"{rest}m";
 	}
 
-	/// <summary>How many of the three reset triggers this option has set — for the collapsed header's hint.</summary>
+	/// <summary>How many of the two reset triggers this option has set — for the collapsed header's hint.</summary>
 	private static int ResetTriggerCount(HouseModeOptionConfig option) =>
-		(option.ResetOnPeriodStart is { Length: > 0 } ? 1 : 0)
-		+ (option.ResetOnPresence ? 1 : 0)
-		+ (option.ResetAtTime is { Length: > 0 } ? 1 : 0);
+		(option.ResetOnPeriodStart is { Length: > 0 } ? 1 : 0) + (option.ResetOnPresence ? 1 : 0);
 
 	private HouseModeOptionConfig? Find(string value) =>
 		HouseMode.Options.FirstOrDefault(option => Eq(option.Value, value));
@@ -475,7 +462,6 @@
 			option.ResetOnPeriodStart = null;
 			option.ResetOnPresence = false;
 			option.ResetPresenceSensors = [];
-			option.ResetAtTime = null;
 			option.ActivateWhileOn = [];
 			option.ActivateAfterNoMotionMinutes = null;
 

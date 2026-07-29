@@ -793,26 +793,6 @@ public sealed class ConfigValidatorTests
 			"it warns that the sensor's presence will not reset the mode");
 	}
 
-	[TestMethod]
-	public void ResetAtTime_MustBeADateOrTimeEntity_AndKnown()
-	{
-		var wrongDomain = WithHouseMode();
-		wrongDomain.Global.HouseMode!.OptionFor("Borte")!.ResetAtTime = "light.clock";
-		Assert.IsFalse(ConfigValidator.Validate(wrongDomain).IsValid, "ResetAtTime must name a date or time entity");
-
-		// Broadened beyond input_datetime: the time/datetime helper domains and timestamp/date sensors all qualify.
-		foreach (var id in new[] { "input_datetime.slutt", "time.slutt", "datetime.slutt", "sensor.next_alarm" })
-		{
-			var accepted = WithHouseMode();
-			accepted.Global.HouseMode!.OptionFor("Borte")!.ResetAtTime = id;
-			Assert.IsTrue(ConfigValidator.Validate(accepted).IsValid, $"'{id}' is a valid ResetAtTime entity");
-		}
-
-		var unknown = WithHouseMode();
-		unknown.Global.HouseMode!.OptionFor("Borte")!.ResetAtTime = "input_datetime.ghost";
-		Assert.IsFalse(ConfigValidator.Validate(unknown, knownEntityIds: ["input_select.husmodus"]).IsValid,
-			"a ResetAtTime HA does not know is an error");
-	}
 
 	[TestMethod]
 	public void ActivateWhileOn_WrongDomainWarns_UnknownErrors_ValidAccepted()

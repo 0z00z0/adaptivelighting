@@ -224,14 +224,18 @@ public sealed class HouseSentencesTests
 					Kind = ModeKind.Sleep,
 					ClampPeriod = "Night",
 					ResetOnPeriodStart = "Morning",
-					ResetAtTime = "input_datetime.morgen"
+					ResetOnPresence = true,
 				}
 			]
 		};
 
+		// Two endings, joined with a comma and a conjunction rather than listed — the point of the test. The
+		// third ending, a datetime helper, was cut in the 2026-07 simplification; the grammar it exercised is
+		// the same one these two still go through.
 		StringAssert.Contains(
 			Text(HouseSentences.Modes(modes, []).Single().Sentences.Single()),
-			"It ends when the Morning period starts, and when input_datetime.morgen comes round.");
+			"It ends when someone comes home — ignoring the first 15 min so your own leaving does not cancel it, "
+			+ "or when the Morning period starts.");
 	}
 
 	/// <summary>An option the document left blank still gets a line, with a stand-in rather than an empty bold.</summary>

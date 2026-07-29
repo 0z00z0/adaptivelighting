@@ -20,7 +20,6 @@ public sealed class ModeMonitorTests
 	private const string Kjokken = "binary_sensor.kjokken_bevegelse";
 	private const string Person = "person.alex";
 	private const string Tracker = "device_tracker.alex_phone";
-	private const string ResetTime = "input_datetime.slutt";
 	private const string SleepToggle = "input_boolean.sover";
 	private const string GuestToggle = "input_boolean.gjest";
 	private static readonly DateTimeOffset Evening = new(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
@@ -611,67 +610,6 @@ public sealed class ModeMonitorTests
 		rig.Ha.Trigger(Kjokken, "on");
 
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an empty sensor list resets on any area motion sensor");
-	}
-
-	// ---- Time reset ---------------------------------------------------------------------------
-
-	private static GlobalConfig GuestResetsAtTime()
-	{
-		var mode = Mode();
-		mode.OptionFor("Gjester")!.ResetAtTime = ResetTime;
-		return new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
-	}
-
-	[TestMethod]
-	public void TimeReset_MomentAfterActivation_Resets()
-	{
-		var rig = Started(GuestResetsAtTime(), startAt: Evening, initialSelect: "Hjemme",
-			seed: ha => ha.SetState(ResetTime, "2026-01-15 21:00:00"));
-		Activate(rig, "Gjester");
-
-		Advance(rig, TimeSpan.FromMinutes(61));   // past 21:00
-
-		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"));
-	}
-
-	[TestMethod]
-	public void TimeReset_MomentBeforeActivation_NeverResets()
-	{
-		var rig = Started(GuestResetsAtTime(), startAt: Evening, initialSelect: "Hjemme",
-			seed: ha => ha.SetState(ResetTime, "2026-01-15 19:00:00"));   // already past at 20:00
-		Activate(rig, "Gjester");
-
-		Advance(rig, TimeSpan.FromHours(3));
-
-		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "a moment before activation never fires");
-	}
-
-	[TestMethod]
-	public void TimeReset_TimeOnlyHelper_ResetsAtNextDailyOccurrence()
-	{
-		var rig = Started(GuestResetsAtTime(), startAt: Evening, initialSelect: "Hjemme",
-			seed: ha => ha.SetState(ResetTime, "21:00:00"));   // time-only: daily at 21:00
-		Activate(rig, "Gjester");
-
-		Advance(rig, TimeSpan.FromMinutes(61));
-
-		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"));
-	}
-
-	[TestMethod]
-	public void TimeReset_TimeOnly_FiresAcrossMidnight()
-	{
-		// Start just before midnight so the tick that catches the 23:59:59 reset has already rolled into the next
-		// day. Resolving the daily moment against now.Date would place it a full day ahead and silently skip it.
-		var start = new DateTimeOffset(2026, 1, 15, 23, 58, 30, TimeSpan.Zero);
-		var rig = Started(GuestResetsAtTime(), startAt: start, initialSelect: "Hjemme",
-			seed: ha => ha.SetState(ResetTime, "23:59:59"));
-		Activate(rig, "Gjester");
-
-		Advance(rig, TimeSpan.FromMinutes(3));   // ticks cross 00:00
-
-		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"),
-			"a time-only reset just before midnight fires even as the date rolls over");
 	}
 
 	// ---- ActivateWhileOn overlay --------------------------------------------------------------

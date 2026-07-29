@@ -105,9 +105,6 @@ public class HouseModeOptionConfig
 	/// <summary>Presence events within this many minutes of the mode being set are ignored (you leaving must not cancel your own Borte).</summary>
 	public int ResetPresenceGraceMinutes { get; set; } = 15;
 
-	/// <summary>An <c>input_datetime.*</c>. When its moment passes (after activation), reset to Normal. Time-only helpers mean "daily at that time".</summary>
-	public string? ResetAtTime { get; set; }
-
 	/// <summary>
 	///     Boolean-ish entities that force this option to be the effective house mode while any of them is on
 	///     (generalises the removed legacy sleep switch). While any listed entity is on, this option wins over the
@@ -134,8 +131,5 @@ public class HouseModeOptionConfig
 	///     consistently inert rather than half-armed.
 	/// </remarks>
 	[YamlIgnore]
-	public bool HasResetTrigger =>
-		ResetOnPeriodStart is { Length: > 0 }
-		|| ResetOnPresence
-		|| ResetAtTime is { Length: > 0 };
+	public bool HasResetTrigger => ResetOnPeriodStart is { Length: > 0 } || ResetOnPresence;
 }

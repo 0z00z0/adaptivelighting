@@ -426,9 +426,6 @@ public sealed class ModeService
 			parts.Add($"on presence ({where}, after {option.ResetPresenceGraceMinutes} min)");
 		}
 
-		if (Blank(option?.ResetAtTime) is { } time)
-			parts.Add($"at {time}");
-
 		if (parts.Count == 0)
 			return "stays until you switch the house back yourself";
 

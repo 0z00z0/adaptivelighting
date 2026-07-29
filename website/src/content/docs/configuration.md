@@ -161,7 +161,6 @@ option is then tagged here.
 | **Activate when no movement for** | Switch to this option once the whole house has had no movement for this long. Non-Normal options only. | `ActivateAfterNoMotionMinutes` |
 | **Reset when a period starts** | Back to Normal when the named period begins. | `ResetOnPeriodStart` |
 | **Reset on presence**, and its **grace** | Back to Normal when somebody moves. An empty sensor list means every motion sensor in the house. The grace ignores presence for that long after the mode is set, so walking out of the door does not cancel the mode you set on your way. | `ResetOnPresence`, `ResetPresenceSensors`, `ResetPresenceGraceMinutes` (default 15 min) |
-| **Reset at a time** | An `input_datetime.*`. When its moment passes, back to Normal. A time-only helper means daily. | `ResetAtTime` |
 
 Reset triggers combine: any of them can be set, and the first to happen wins. Leave them all unset to
 switch back by hand.
