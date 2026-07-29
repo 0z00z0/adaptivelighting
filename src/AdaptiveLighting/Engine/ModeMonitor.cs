@@ -57,6 +57,13 @@ public sealed class ModeMonitor : IDisposable
 	private string? _previousPeriodName;
 	private bool _started;
 
+	// Armed by Start and spent on the first tick that can read the select: the one chance a restart gets to notice
+	// that the period it woke up inside sets a mode. Held open until the select answers, because after a Home
+	// Assistant restart an input_select can be unavailable for a while, and spending the chance on a value nobody
+	// could read would waste it exactly when it is most needed. See ApplyPeriodModeOnStart for why a restart is not
+	// simply treated as a period entry.
+	private bool _startPeriodModePending;
+
 	/// <summary>Creates the mode brain.</summary>
 	/// <param name="ha">Source of state and state changes, and where <c>select_option</c> calls go.</param>
 	/// <param name="global">Supplies the select, the kill switch and the option kinds.</param>
@@ -189,6 +196,7 @@ public sealed class ModeMonitor : IDisposable
 			_lastMotionAt = _scheduler.Now;
 			_previousTickAt = _scheduler.Now;
 			_previousPeriodName = _circadian.ActivePeriodName(_scheduler.Now);
+			_startPeriodModePending = true;
 		}
 
 		if (_global.EffectiveKillSwitchEntity is { Length: > 0 } killSwitch)
@@ -411,21 +419,33 @@ public sealed class ModeMonitor : IDisposable
 	{
 		DateTimeOffset now = _scheduler.Now, previousTickAt;
 		string? previousPeriodName;
+		bool startPending;
 
 		lock (_gate)
 		{
 			previousTickAt = _previousTickAt;
 			previousPeriodName = _previousPeriodName;
+			startPending = _startPeriodModePending;
 		}
 
 		HouseModeOptionConfig? activeOption = CurrentOption;
 		string? currentPeriodName = _circadian.ActivePeriodName(now);
 
 		// Period entry: the active period changed since the previous tick.
-		if (currentPeriodName is { Length: > 0 }
+		bool entered = currentPeriodName is { Length: > 0 }
 			&& previousPeriodName is { Length: > 0 }
-			&& !string.Equals(currentPeriodName, previousPeriodName, StringComparison.OrdinalIgnoreCase))
-			OnPeriodEntered(currentPeriodName, activeOption);
+			&& !string.Equals(currentPeriodName, previousPeriodName, StringComparison.OrdinalIgnoreCase);
+
+		if (entered)
+		{
+			OnPeriodEntered(currentPeriodName!, activeOption);
+			startPending = false;   // the entry has already had the say the restart rule would have had
+		}
+		else if (startPending && currentPeriodName is { Length: > 0 } && CurrentModeValue is { Length: > 0 })
+		{
+			ApplyPeriodModeOnStart(currentPeriodName);
+			startPending = false;
+		}
 
 		// Time reset: the input_datetime moment crossed since the last tick (and after activation).
 		EvaluateTimeReset(activeOption, now, previousTickAt);
@@ -437,6 +457,7 @@ public sealed class ModeMonitor : IDisposable
 		{
 			_previousTickAt = now;
 			_previousPeriodName = currentPeriodName;
+			_startPeriodModePending = startPending;
 		}
 	}
 
@@ -445,7 +466,8 @@ public sealed class ModeMonitor : IDisposable
 		TimePeriodConfig? period = _periods.FirstOrDefault(p => string.Equals(p.Name, periodName, StringComparison.OrdinalIgnoreCase));
 
 		// SetsMode: entering this period sets the select — once, at entry. A human override mid-period stands
-		// because the entry only fires on the tick that first sees the new period.
+		// because the entry only fires on the tick that first sees the new period. A boundary the engine was not
+		// running for never reaches here at all; ApplyPeriodModeOnStart is that case, under a stricter rule.
 		if (period?.SetsMode is { Length: > 0 } setsMode
 			&& _global.HouseMode?.Entity is { Length: > 0 } select
 			&& !string.Equals(CurrentModeValue, setsMode.Trim(), StringComparison.OrdinalIgnoreCase))
@@ -459,6 +481,62 @@ public sealed class ModeMonitor : IDisposable
 		if (activeOption is { Kind: not ModeKind.Normal, ResetOnPeriodStart: { Length: > 0 } resetPeriod }
 			&& string.Equals(resetPeriod.Trim(), periodName, StringComparison.OrdinalIgnoreCase))
 			Reset($"period '{periodName}' started");
+	}
+
+	/// <summary>
+	///     Applies the <see cref="TimePeriodConfig.SetsMode"/> of the period the engine <i>woke up inside</i>, once,
+	///     on the first tick after <see cref="Start"/> — and only over the Normal option.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Without this the mode simply did not follow the schedule.</b> The entry above is edge-triggered on
+	///         the tick that first sees a new period, so a boundary crossed while the engine was down was a boundary
+	///         nothing ever noticed: a house restarted at 23:30 stayed on its daytime mode until 23:00 came round
+	///         again. On a machine that is redeployed several times a day that is most nights.
+	///     </para>
+	///     <para>
+	///         <b>A restart is a case of its own, not an entry.</b> Feeding it through
+	///         <see cref="OnPeriodEntered"/> would have been fewer lines and wrong twice over. That path also fires
+	///         the period-start reset, so every deploy inside the named period would silently cancel a retained
+	///         Away or Guest mode — a restart crossed no boundary, and a reset trigger that fires because somebody
+	///         redeployed is not a trigger at all. And the entry path deliberately overwrites whatever the select
+	///         stands on, which is safe for a boundary the engine watched arrive and unsafe for one it did not.
+	///     </para>
+	///     <para>
+	///         <b>Only over Normal, which is the half of the decision that can be taken without asking.</b> After a
+	///         restart the select's value carries no history: "Gjester, chosen by hand an hour ago" and "Gjester,
+	///         left over from last week" are the same string. Standing on Normal is the one reading with no such
+	///         ambiguity — nobody has chosen anything, so nothing is being overruled. Anything else stands, which
+	///         costs a night's Sover in the case where the human had in fact chosen Normal-then-something and wanted
+	///         the period to win. Whether a restart should re-assert the period's mode over a tagged option too is
+	///         the owner's call, not this method's.
+	///     </para>
+	/// </remarks>
+	private void ApplyPeriodModeOnStart(string periodName)
+	{
+		TimePeriodConfig? period = _periods.FirstOrDefault(p => string.Equals(p.Name, periodName, StringComparison.OrdinalIgnoreCase));
+
+		if (period?.SetsMode is not { Length: > 0 } setsMode
+			|| _global.HouseMode is not { Entity: { Length: > 0 } select } houseMode)
+			return;
+
+		if (string.Equals(CurrentModeValue, setsMode.Trim(), StringComparison.OrdinalIgnoreCase))
+			return;   // already standing where the period wants it
+
+		// A value no option classifies lands here too. ActiveKind reads such a value as Normal, which is right for
+		// deciding how to light a room and wrong for deciding whether to overwrite it: nobody knows what it means,
+		// so nobody should be writing over it on a guess.
+		if (houseMode.NormalOption is not { } normal || !ReferenceEquals(CurrentOption, normal))
+		{
+			_logger.LogDebug(
+				"Started inside period '{Period}', which sets '{Mode}', but {Select} stands on '{Current}' rather than Normal; leaving it.",
+				periodName, setsMode, select, CurrentModeValue ?? "nothing readable");
+			return;
+		}
+
+		_logger.LogInformation("Started inside period '{Period}'; setting {Select} to '{Mode}'.", periodName, select, setsMode);
+		_ha.CallService(SelectDomain, SelectOptionService,
+			new ServiceTarget { EntityIds = [select] }, new { option = setsMode.Trim() });
 	}
 
 	private void EvaluateTimeReset(HouseModeOptionConfig? activeOption, DateTimeOffset now, DateTimeOffset previousTickAt)

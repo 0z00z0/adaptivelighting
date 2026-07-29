@@ -269,8 +269,25 @@ public class AreaSettings
 	/// <summary>Motion-free time after a manual turn-off before the suppression is lifted.</summary>
 	public int VacancyResetMinutes { get; set; } = 10;
 
-	/// <summary>Which signal decides whether the area is dark enough to light.</summary>
-	public DarknessSource Darkness { get; set; } = DarknessSource.Either;
+	/// <summary>
+	///     Which signal decides whether the area is dark enough to light.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b><see cref="DarknessSource.Lux"/>, moved from <see cref="DarknessSource.Either"/>.</b> The owner's
+	///         rule is one sentence: use the light sensor where there is one, and where there is none always light.
+	///         <see cref="DarknessSource.Lux"/> is that sentence exactly — a room with no sensor, or with none still
+	///         reporting, counts as dark (<see cref="Engine.IlluminanceGate"/>), and a room with a working sensor is
+	///         decided by it alone.
+	///     </para>
+	///     <para>
+	///         <see cref="DarknessSource.Either"/> could not say it. Its sun half overrides a perfectly good reading
+	///         the moment the sun drops, so a bright room lights at dusk, and it dragged a sun clause into every
+	///         explanation the gate wrote whether or not the sun had decided anything. It remains available for a
+	///         house that wants the sun; it is no longer what a house gets without asking.
+	///     </para>
+	/// </remarks>
+	public DarknessSource Darkness { get; set; } = DarknessSource.Lux;
 
 	/// <summary>
 	///     Lux below which the area counts as dark.
@@ -401,8 +418,9 @@ public class AreaSettings
 public enum DarknessSource
 {
 	/// <summary>
-	///     Lux only. A room whose sensor cannot be read falls back to the sun; a room with no lux sensor at all is
-	///     simply dark, because a gate with nothing to read is not a gate — see <see cref="Engine.IlluminanceGate"/>.
+	///     Lux only, and the default. A room with no lux sensor at all — and one whose sensors have all stopped
+	///     answering — is simply dark, because a gate with nothing to read is not a gate; see
+	///     <see cref="Engine.IlluminanceGate"/>. The sun is never consulted on this setting.
 	/// </summary>
 	Lux,
 
@@ -411,7 +429,9 @@ public enum DarknessSource
 
 	/// <summary>
 	///     Dark when either the lux sensor or the sun says so. With no lux sensor the lux half says dark, so this
-	///     behaves as <see cref="Always"/> until the room is given a reading to gate on.
+	///     behaves as <see cref="Always"/> until the room is given a reading to gate on. It was the default until the
+	///     sun half was found overruling readings that had already settled the question; choosing it now is choosing
+	///     the sun.
 	/// </summary>
 	Either,
 

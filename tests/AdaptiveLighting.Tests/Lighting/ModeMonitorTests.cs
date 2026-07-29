@@ -212,6 +212,124 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "entry is edge-triggered; the override stands");
 	}
 
+	// ---- Restart inside a SetsMode period ------------------------------------------------------
+
+	/// <summary>
+	///     Starting inside a period that sets a mode applies it on the first tick, without waiting for the next
+	///     boundary.
+	/// </summary>
+	/// <remarks>
+	///     The defect this pins: entry is edge-triggered, so a boundary crossed while the engine was down was a
+	///     boundary nothing ever noticed and the house kept its daytime mode until the same hour came round again.
+	///     Started at 23:30, half an hour inside night, with the select still on Hjemme.
+	/// </remarks>
+	[TestMethod]
+	public void StartInsidePeriod_AppliesSetsMode_OnTheFirstTick()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 23, 30, 0, TimeSpan.Zero), initialSelect: "Hjemme");
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "nothing is written before the first tick");
+
+		Advance(rig, TimeSpan.FromMinutes(1));   // one tick, no boundary crossed
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "the period the engine woke up inside sets the mode");
+	}
+
+	/// <summary>Once, not on every tick — the select's echo is asynchronous, so the flag has to be the guard.</summary>
+	[TestMethod]
+	public void StartInsidePeriod_AppliesSetsMode_OnlyOnce()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 23, 30, 0, TimeSpan.Zero), initialSelect: "Hjemme");
+
+		Advance(rig, TimeSpan.FromMinutes(30));   // thirty ticks, still inside night
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "one call, however many ticks pass with HA silent");
+	}
+
+	/// <summary>
+	///     A mode somebody chose is not overwritten by a restart, because a restart cannot tell a choice from a
+	///     leftover.
+	/// </summary>
+	/// <remarks>
+	///     After a restart the select's value carries no history: "Gjester, set by hand an hour ago" and "Gjester,
+	///     left over from last week" are the same string. Only the Normal option is unambiguous — nobody has chosen
+	///     anything — so only Normal is written over.
+	/// </remarks>
+	[TestMethod]
+	public void StartInsidePeriod_DoesNotOverwriteANonNormalMode()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 23, 30, 0, TimeSpan.Zero), initialSelect: "Gjester");
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "a guest evening survives a deploy");
+	}
+
+	/// <summary>A period that sets no mode writes nothing, and a house started outside one is untouched.</summary>
+	[TestMethod]
+	public void StartInsidePeriod_WithoutSetsMode_WritesNothing()
+	{
+		var rig = Started(startAt: Evening, initialSelect: "Hjemme");   // evening@18:00 carries no SetsMode
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"));
+	}
+
+	/// <summary>
+	///     A restart is not an entry, and the period-start reset must not fire for one.
+	/// </summary>
+	/// <remarks>
+	///     Routing the restart through <see cref="ModeMonitor"/>'s entry path would have been fewer lines and would
+	///     have cancelled a retained Away or Guest mode on every deploy inside the named period. A reset trigger that
+	///     fires because somebody redeployed is not a trigger at all.
+	/// </remarks>
+	[TestMethod]
+	public void StartInsidePeriod_DoesNotFireThePeriodStartReset()
+	{
+		var mode = Mode();
+		mode.OptionFor("Borte")!.ResetOnPeriodStart = "night";
+		var global = new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+
+		var rig = Started(global, startAt: new DateTimeOffset(2026, 1, 15, 23, 30, 0, TimeSpan.Zero), initialSelect: "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "the engine restarted mid-night; it did not enter night");
+	}
+
+	/// <summary>
+	///     An unreadable select does not spend the restart's one chance; the mode is applied when it answers.
+	/// </summary>
+	/// <remarks>
+	///     After a Home Assistant restart an <c>input_select</c> can read <c>unavailable</c> for a while, which is
+	///     exactly the moment this rule exists for. Spending the chance on a value nobody could read would waste it.
+	/// </remarks>
+	[TestMethod]
+	public void StartInsidePeriod_WaitsForASelectThatIsNotAnsweringYet()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 23, 30, 0, TimeSpan.Zero), initialSelect: "unavailable");
+
+		Advance(rig, TimeSpan.FromMinutes(5));
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "nothing is written over a select that has not answered");
+
+		rig.Ha.SetState(Select, "Hjemme");
+		Advance(rig, TimeSpan.FromMinutes(1));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "once it answers, the period it woke up inside sets the mode");
+	}
+
+	/// <summary>A first tick that does cross a boundary is an ordinary entry, and is not doubled by the restart rule.</summary>
+	[TestMethod]
+	public void StartJustBeforeABoundary_EntersNormally_WithoutDoubleSetting()
+	{
+		var rig = Started(startAt: new DateTimeOffset(2026, 1, 15, 22, 59, 30, TimeSpan.Zero), initialSelect: "Hjemme");
+
+		Advance(rig, TimeSpan.FromMinutes(5));   // the first tick lands inside night, having crossed 23:00
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "entry did the work; the restart rule did not repeat it");
+	}
+
 	// ---- Period-start reset -------------------------------------------------------------------
 
 	[TestMethod]

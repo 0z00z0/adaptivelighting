@@ -19,6 +19,7 @@ public sealed class IlluminanceGate
 {
 	private const string ElevationAttribute = "elevation";
 	private const string NoSensorDetail = "no light sensor here, so the room counts as dark";
+	private const string NoReadingDetail = "no light sensor here is still reporting, so the room counts as dark";
 
 	private readonly IHaContext _ha;
 	private readonly IReadOnlyList<string> _luxEntityIds;
@@ -53,6 +54,13 @@ public sealed class IlluminanceGate
 	private int _lastLuxUsed;
 	private int _lastLuxOffered;
 	private double? _lastElevation;
+
+	// Which half of an Either verdict settled it, recorded rather than re-derived: hysteresis means a lux reading
+	// cannot afterwards be re-tested against the threshold and give the same answer, and the || short-circuits the
+	// sun away entirely on the path where lux decided. Written on every path through IsDarkByEither, and read by
+	// nothing else, so no other source can leave a stale opinion behind.
+	private bool _eitherLuxSaidDark;
+	private bool _eitherSunSaidDark;
 
 	/// <summary>
 	///     Creates a gate for one area.
@@ -112,8 +120,8 @@ public sealed class IlluminanceGate
 			{
 				DarknessSource.Always => true,
 				DarknessSource.Sun => IsSunDown(),
-				DarknessSource.Either => (EvaluateLux() ?? false) || IsSunDown(),
-				DarknessSource.Lux => EvaluateLux() ?? FallBackToSun(),
+				DarknessSource.Either => IsDarkByEither(),
+				DarknessSource.Lux => EvaluateLux() ?? DarkBecauseNoLuxSensorIsReporting(),
 				_ => _isDark
 			};
 
@@ -135,10 +143,51 @@ public sealed class IlluminanceGate
 		// dark is the absence itself rather than anything the sun is doing.
 		DarknessSource.Lux or DarknessSource.Either when HasNoLuxSensor => NoSensorDetail,
 
-		DarknessSource.Lux => _lastLux is { } lux ? LuxDetail(lux) : $"no lux reading — {SunDetail()}",
-		DarknessSource.Either => _lastLux is { } lux ? $"{LuxDetail(lux)}; {SunDetail()}" : SunDetail(),
+		DarknessSource.Lux => _lastLux is { } lux ? LuxDetail(lux) : NoReadingDetail,
+		DarknessSource.Either => EitherDetail(),
 		_ => "unknown darkness source"
 	};
+
+	/// <summary>
+	///     What settled an <see cref="DarknessSource.Either"/> verdict, and nothing that did not.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The three cases come straight out of <see cref="IsDarkByEither"/>, which is <c>lux-is-dark</c>
+	///         <c>||</c> <c>sun-is-down</c> and therefore not symmetrical. <b>Lux said dark:</b> it short-circuited
+	///         the sun, so there is no sun reading of this verdict to report and the elevation printed beside it
+	///         would be a number from some earlier tick, offered as though it had voted. <b>Lux said bright and the
+	///         sun said dark:</b> the sun carried it alone, and the lux reading is precisely the one that failed to
+	///         settle it. <b>Neither said dark:</b> this is the single outcome both halves had to agree on — either
+	///         of them saying dark would have flipped it — so both readings are the explanation and both are printed.
+	///     </para>
+	///     <para>
+	///         A half that produced no number is dropped rather than described. "no sun elevation from sun.sun" says
+	///         what was missing, not what was decided, and appended to a lux reading it read as a second opinion
+	///         where there had been no first one. Only when neither half read anything at all is the absence itself
+	///         the whole of the answer, and then it is said plainly.
+	///     </para>
+	/// </remarks>
+	private string EitherDetail()
+	{
+		if (_eitherLuxSaidDark)
+			return _lastLux is { } dark ? LuxDetail(dark) : NoSensorDetail;
+
+		if (_eitherSunSaidDark)
+			return SunDetail();
+
+		List<string> readings = [];
+
+		if (_lastLux is { } bright)
+			readings.Add(LuxDetail(bright));
+
+		if (_lastElevation is not null)
+			readings.Add(SunDetail());
+
+		return readings.Count > 0
+			? string.Join("; ", readings)
+			: $"no lux reading, and no sun elevation from {_settings.SunEntity}";
+	}
 
 	/// <summary>Whether the area resolved no lux sensor at all, as opposed to sensors that will not read.</summary>
 	private bool HasNoLuxSensor => _luxEntityIds.Count == 0;
@@ -305,10 +354,11 @@ public sealed class IlluminanceGate
 	///         a sensor id like any other.
 	///     </para>
 	///     <para>
-	///         Sensors that <i>exist</i> and will not read are deliberately not the same case: the area was told to
-	///         gate on something real that is merely broken, so the verdict stays absent and the caller decides
-	///         (<see cref="DarknessSource.Lux"/> falls back to the sun; <see cref="DarknessSource.Either"/> lets
-	///         the sun answer alone). Collapsing the two would turn every Zigbee dropout into a lit room.
+	///         Sensors that <i>exist</i> and will not read still return <c>null</c> rather than <c>true</c>, so the
+	///         caller decides what an absent verdict means: <see cref="DarknessSource.Lux"/> now reads it as dark, the
+	///         same as having no sensor (<see cref="DarkBecauseNoLuxSensorIsReporting"/>), while
+	///         <see cref="DarknessSource.Either"/> lets the sun answer alone. The two cases stay distinguishable here
+	///         because only one of them is worth warning a household about.
 	///     </para>
 	///     <para>
 	///         Hysteresis is applied about the configured threshold: it takes <c>LuxThreshold</c> to become dark but
@@ -355,26 +405,60 @@ public sealed class IlluminanceGate
 	}
 
 	/// <summary>
-	///     Every one of the area's lux sensors is dead or silent, so the sun answers instead.
+	///     <see cref="DarknessSource.Either"/>: dark when the lux reading says so, and otherwise when the sun does.
 	/// </summary>
 	/// <remarks>
-	///     A warning, and the one place a household is told its hardware has failed. It is worth distinguishing
-	///     from the ordinary no-sensor case: a room that never had a sensor is a supported arrangement, whereas a
-	///     room whose sensors have all stopped answering is somebody's battery, radio or integration.
+	///     Written out rather than left as <c>(EvaluateLux() ?? false) || IsSunDown()</c> so that the short-circuit is
+	///     both visible and recorded. When lux settles it the sun is never read at all, and
+	///     <see cref="EitherDetail"/> has to know that to avoid reporting an elevation nobody consulted.
 	/// </remarks>
-	private bool FallBackToSun()
+	private bool IsDarkByEither()
+	{
+		_eitherLuxSaidDark = EvaluateLux() ?? false;
+
+		if (_eitherLuxSaidDark)
+		{
+			_eitherSunSaidDark = false;
+			return true;
+		}
+
+		_eitherSunSaidDark = IsSunDown();
+		return _eitherSunSaidDark;
+	}
+
+	/// <summary>
+	///     Every one of the area's lux sensors is dead or silent, which counts as dark — the same verdict as a room
+	///     that never had one — and warns once on the way past.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The two cases are still worth telling apart, and the warning is now the whole of what tells them
+	///         apart: a room that never had a sensor is a supported arrangement, whereas a room whose sensors have
+	///         all stopped answering is somebody's battery, radio or integration, and nobody discovers that unless
+	///         they are told. That reasoning is why this method exists at all.
+	///     </para>
+	///     <para>
+	///         What changed is what follows from it. This used to hand the verdict to the sun, on the ground that the
+	///         area had been told to gate on something real that was merely broken. The owner's rule overrules it: a
+	///         room with nothing to read is dark, whether it has nothing because it was given nothing or because what
+	///         it was given has died. Broken hardware is not a reason to leave a household unlit through a bright
+	///         midsummer evening. <see cref="DarknessSource.Either"/> still lets the sun answer, because somebody who
+	///         chose it asked for the sun.
+	///     </para>
+	/// </remarks>
+	private bool DarkBecauseNoLuxSensorIsReporting()
 	{
 		if (!_warnedAboutUnreadableLuxSensors)
 		{
 			_warnedAboutUnreadableLuxSensors = true;
 			_logger.LogWarning(
 				"Darkness source is Lux and the area has {Count} lux sensor(s) ({Sensors}), but none of them is reporting a "
-				+ "usable number — unavailable, unknown, or silent for longer than the staleness window. Falling back to sun "
-				+ "elevation from {SunEntity}.",
-				_luxEntityIds.Count, string.Join(", ", _luxEntityIds), _settings.SunEntity);
+				+ "usable number — unavailable, unknown, or silent for longer than the staleness window. The area counts as "
+				+ "dark until one of them answers again, so movement will light it.",
+				_luxEntityIds.Count, string.Join(", ", _luxEntityIds));
 		}
 
-		return IsSunDown();
+		return true;
 	}
 
 	/// <summary>

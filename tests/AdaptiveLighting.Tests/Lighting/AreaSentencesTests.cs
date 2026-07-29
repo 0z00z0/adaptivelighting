@@ -37,9 +37,15 @@ public sealed class AreaSentencesTests
 	///     A room that overrides nothing reads exactly as the design writes it.
 	/// </summary>
 	/// <remarks>
-	///     Asserted on the whole sentence rather than on the tokens inside it, because the prose between the
-	///     values is the part that makes them mean something: "dim to 50 % for 30 s" and "dim to 30 s for 50 %"
-	///     contain the same tokens.
+	///     <para>
+	///         Asserted on the whole sentence rather than on the tokens inside it, because the prose between the
+	///         values is the part that makes them mean something: "dim to 50 % for 30 s" and "dim to 30 s for 50 %"
+	///         contain the same tokens.
+	///     </para>
+	///     <para>
+	///         The sun clause is gone because the default darkness source moved from Either to Lux: a room that
+	///         configures nothing is now decided by its light sensor alone, and by nothing at all when it has none.
+	///     </para>
 	/// </remarks>
 	[TestMethod]
 	public void An_Untouched_Room_Reads_As_The_Design_Writes_It()
@@ -49,7 +55,7 @@ public sealed class AreaSentencesTests
 		Assert.AreEqual(2, sentences.Count, "movement and hands; no flags are on");
 
 		Assert.AreEqual(
-			"Lights when someone moves and it's darker than 1000 lx — or the sun is below 3°. " +
+			"Lights when someone moves and it's darker than 1000 lx. " +
 			"After 10 min without movement, dim to 50 % for 30 s, then off.",
 			sentences[0].PlainText);
 

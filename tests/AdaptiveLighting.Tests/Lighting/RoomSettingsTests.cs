@@ -244,7 +244,8 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual("1000 lx", RoomSettings.Describe(room, House, nameof(AreaSettings.LuxThreshold)));
 		Assert.AreEqual("3°", RoomSettings.Describe(room, House, nameof(AreaSettings.SunElevationThreshold)));
 		Assert.AreEqual("no", RoomSettings.Describe(room, House, nameof(AreaSettings.WelcomeHome)));
-		Assert.AreEqual("Either", RoomSettings.Describe(room, House, nameof(AreaSettings.Darkness)));
+		Assert.AreEqual("Sensor", RoomSettings.Describe(room, House, nameof(AreaSettings.Darkness)),
+			"the default darkness source is Lux, which the vocabulary calls Sensor");
 		Assert.AreEqual("sun.sun", RoomSettings.Describe(room, House, nameof(AreaSettings.SunEntity)));
 	}
 
