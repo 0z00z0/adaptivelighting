@@ -332,18 +332,30 @@
 	///     Moves the head of the curve, which is two settings: the reading it happens at, and how bright it is.
 	/// </summary>
 	/// <remarks>
-	///     <b>The floor is held under the ceiling before clamping, because it can legitimately be above it.</b>
-	///     <c>LuxBrightnessStartLux</c> has no configured maximum and the validator only asks that full is above
-	///     start, so <c>{ StartLux: 120000, FullLux: 200000 }</c> is a document this app will happily save — direct
-	///     sunlight is around 100 000 lx. The floor derived from it then exceeds this axis's 100 000 ceiling, and
+	///     <b>The CEILING gives way to the floor, never the other way round.</b> <c>LuxBrightnessStartLux</c> has no
+	///     configured maximum and the validator only asks that full is above start, so
+	///     <c>{ StartLux: 120000, FullLux: 200000 }</c> is a document this app will happily save — direct sunlight
+	///     is around 100 000 lx. The floor derived from it then exceeds this axis's 100 000 ceiling, and
 	///     <c>Math.Clamp</c> throws when its minimum is above its maximum: an <c>ArgumentException</c> out of an
-	///     event handler, which takes the circuit down and puts "An unhandled error has occurred" across the page.
-	///     One arrow key on the handle was enough. <see cref="SetStartLux"/> cannot invert the same way.
+	///     event handler, which takes the circuit down. One arrow key on the handle was enough.
+	///     <para>
+	///         Lowering the floor to meet the ceiling also stops the throw, and is worse. It would rewrite
+	///         <c>FullLux</c> from 200 000 down to 100 000 — <i>below the start anchor</i> — as a side effect of a
+	///         keypress that asked to change brightness only. The validator then refuses every subsequent save, so
+	///         the page sits on a permanent "Not saved" banner with its state diverged from disk, and nothing on
+	///         screen says an arrow key destroyed an anchor. A crash is loud; that is silent and unrecoverable
+	///         without knowing what happened.
+	///     </para>
+	///     <para>
+	///         So the axis ceiling yields instead. The two anchors can never cross, no value the owner did not
+	///         touch is rewritten, and <c>Math.Clamp</c> always has a valid range. <see cref="SetStartLux"/> cannot
+	///         invert the same way — its <c>Math.Max</c> only ever raises.
+	///     </para>
 	/// </remarks>
 	private async Task SetFull(double lux, double brightnessPct)
 	{
-		double ceiling = FullSetting.Max ?? LuxCurve.AxisMaxCeilingLux;
-		double floor = Math.Min(Math.Max(FullSetting.Min, Settings.LuxBrightnessStartLux + 1), ceiling);
+		double floor = Math.Max(FullSetting.Min, Settings.LuxBrightnessStartLux + 1);
+		double ceiling = Math.Max(FullSetting.Max ?? LuxCurve.AxisMaxCeilingLux, floor);
 		double bounded = Math.Clamp(lux, floor, ceiling);
 
 		await Raise(nameof(AreaSettings.LuxBrightnessFullLux), bounded).ConfigureAwait(true);

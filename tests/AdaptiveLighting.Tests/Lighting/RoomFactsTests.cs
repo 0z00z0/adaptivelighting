@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Web.Services;
@@ -121,12 +123,21 @@ public sealed class RoomFactsTests
 	///     Times read ago-first without seconds: the age is the fact, the clock is the corroboration, and this
 	///     table is read to the nearest minute.
 	/// </summary>
+	/// <remarks>
+	///     <b>The clock half is asserted by shape, not by value.</b> <c>RoomFacts.Stamp</c> renders through
+	///     <c>ToLocalTime()</c>, so pinning "21:37" passed on a Europe/Oslo machine and failed on the UTC build
+	///     agent with "19:37" — a red CI that said nothing about the behaviour under test. Both halves of the name
+	///     are still checked exactly: the age leads, and the time carries no seconds.
+	/// </remarks>
 	[TestMethod]
 	public void A_Stamp_Leads_With_The_Age_And_Drops_The_Seconds()
 	{
 		IReadOnlyList<RoomFact> facts = RoomFacts.For(Report(lastMotion: Now.AddMinutes(-2).AddSeconds(-10)), Now);
+		string stamp = ValueOf(facts, "Last movement");
 
-		Assert.AreEqual("2 min ago · 21:37", ValueOf(facts, "Last movement"));
+		StringAssert.StartsWith(stamp, "2 min ago · ", "the age is the fact, so it comes first");
+		StringAssert.Matches(stamp, new Regex(@"^2 min ago · \d{2}:\d{2}$"),
+			"hours and minutes only — 17:42:10 asks to be compared digit by digit with the row below it");
 	}
 
 	/// <summary>

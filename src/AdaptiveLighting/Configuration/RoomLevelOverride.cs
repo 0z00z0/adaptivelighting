@@ -21,9 +21,15 @@ namespace AdaptiveLighting.Configuration;
 ///     <para>
 ///         <b>It replaces, it does not offset.</b> An offset is the tempting shape — "Kontor, always +10 %" — and
 ///         it reads well until the schedule moves: a +10 % on a period raised to 100 % is a room asking for 110,
-///         and the answer has to be invented. A replacement is what it looks like, survives any edit to the row it
-///         overrides, and the period's own caps still apply on top, so a room cannot escape a ceiling the house
-///         set deliberately.
+///         and the answer has to be invented. A replacement is what it looks like, and it survives any edit to the
+///         row it overrides.
+///     </para>
+///     <para>
+///         <b>Nothing holds it down but physics and sleep mode.</b> This used to say the period's own caps applied
+///         on top, so a room could not escape a ceiling the house set deliberately. Per-period floors and ceilings
+///         were cut in the 2026-07 simplification and that is no longer true: what remains is the 0–100 clamp and,
+///         for a room with <see cref="AreaSettings.RespectSleepMode"/> set, the sleep clamp. A room that writes
+///         <c>{ Period: natt, BrightnessPct: 100 }</c> gets 100 % at three in the morning.
 ///     </para>
 /// </remarks>
 public class RoomLevelOverride

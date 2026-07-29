@@ -93,8 +93,8 @@ Top to bottom:
 
 - **The house bar** — the house mode with buttons to change it, who is home, and at the end the
   master switch that pauses everything. It sits last and stays quiet on purpose: it is touched twice
-  a year, and it speaks up — a line under it, a colour on the panel's edge, and a notice across the
-  page — the moment it is off or unreachable.
+  a year. It speaks up the moment anything is wrong — a line under it and a colour on the panel's
+  edge whether it is off or unreachable, and when it is off, a notice across the page as well.
 - **The exception tray** — one line per room that is doing something other than following the
   schedule: a warning dim running, somebody's hand setting standing, a fault. When there is nothing,
   the tray is one sentence saying the rest are doing what the schedule says.

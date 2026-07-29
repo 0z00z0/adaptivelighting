@@ -766,13 +766,20 @@ else
 	///     than merely that something is.
 	/// </summary>
 	/// <remarks>
-	///     "Routine" rather than "background task" since the summary narrowed to
-	///     <see cref="ActivityView.SummaryCategories"/>: what is held back is now mostly movement and ordinary
-	///     light changes, and the old noun described the smallest part of it.
+	///     <para>
+	///         "Routine" rather than "background task" since the summary narrowed to
+	///         <see cref="ActivityView.SummaryCategories"/>: what is held back is now mostly movement and ordinary
+	///         light changes, and the old noun described the smallest part of it.
+	///     </para>
+	///     <para>
+	///         Counted off <c>_reachable</c> like the footer, not off the raw buffer. The two render together
+	///         whenever this empty state shows, and counting them differently put "400 everyday reports on the
+	///         Activity page" one inch above "All 500 reports so far are routine" — two totals for one pile.
+	///     </para>
 	/// </remarks>
-	private string BackgroundOnlyLine => _entries.Count == 1
+	private string BackgroundOnlyLine => _reachable == 1
 		? "The one report so far is routine."
-		: $"All {_entries.Count} reports so far are routine.";
+		: $"All {_reachable} reports so far are routine.";
 
 	/// <summary>
 	///     What stands where a room name would: the house, and how many rooms a collapsed row came from.

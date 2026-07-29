@@ -261,10 +261,24 @@ public static class RoomLevels
 	private static RoomLevelOverride? Find(AreaConfig? room, string period) =>
 		room?.Levels.FirstOrDefault(level => string.Equals(level.Period, period, ByName));
 
-	/// <summary>Applies one change to the room's row for a period, creating it and dropping it as needed.</summary>
+	/// <summary>
+	///     Applies one change to the room's row for a period, creating it and dropping it as needed.
+	/// </summary>
+	/// <remarks>
+	///     <b>Edits the row the page is showing, falling back to any row at all.</b> <see cref="Stated"/> first,
+	///     because splitting the read path off from <see cref="Find"/> without doing the same here left the editor
+	///     writing to a row it was not displaying: given a cleared <c>Kveld</c> row above a real one, "follow the
+	///     schedule" cleared the already-empty row and appeared to do nothing, and setting a brightness wrote into
+	///     the empty row — which then became the first non-empty one and silently took over from the real row,
+	///     dropping a colour override the owner never touched.
+	///     <para>
+	///         <see cref="Find"/> still backs it up, so an edit to a period whose only row is empty reuses that row
+	///         rather than adding a second beside it.
+	///     </para>
+	/// </remarks>
 	private static void Edit(AreaConfig room, string period, Action<RoomLevelOverride> change)
 	{
-		RoomLevelOverride? level = Find(room, period);
+		RoomLevelOverride? level = Stated(room, period) ?? Find(room, period);
 
 		if (level is null)
 		{

@@ -363,7 +363,7 @@ public class AreaSettings
 
 	/// <summary>
 	///     The illuminance at which the adjustment is fully applied. At or above it the area holds
-	///     <see cref="LuxBrightnessMaxPct"/>, subject to the active period's own cap.
+	///     <see cref="LuxBrightnessMaxPct"/>, which since the caps cut is the only ceiling there is.
 	/// </summary>
 	/// <remarks>
 	///     The default of 10 000 lx is a bright overcast day outdoors, two decades above the start anchor. Direct

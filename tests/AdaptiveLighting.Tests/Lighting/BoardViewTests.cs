@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
@@ -448,18 +450,28 @@ public sealed class BoardViewTests
 	///     down was pixel-identical to the lane of a room nobody entered. Those are exactly the two cases somebody
 	///     opens the board to tell apart.
 	/// </summary>
+	/// <remarks>
+	///     The label is checked against the instant's own local projection rather than against the literal
+	///     "20:30". <see cref="BoardView.Clock"/> renders through <c>ToLocalTime()</c>, so the literal held on a
+	///     Europe/Oslo machine and failed on the UTC build agent with "18:30" — red CI saying nothing about the
+	///     behaviour under test. What the test is really for still holds exactly: one mark, placed where the
+	///     refusal happened, carrying <i>that</i> instant's time and the reason.
+	/// </remarks>
 	[TestMethod]
 	public void A_Refused_Movement_Is_Marked_Where_It_Happened()
 	{
+		DateTimeOffset refusedAt = At(20, 30);
+
 		IReadOnlyList<LaneRefusal> marks = BoardView.Refusals(
-			[Refused(1, At(20, 30), AutoOnBlock.NotDark)],
+			[Refused(1, refusedAt, AutoOnBlock.NotDark)],
 			Window());
 
 		Assert.AreEqual(1, marks.Count);
 
-		// 20:30 is three and a half hours into a seven-hour board.
+		// 20:30 is three and a half hours into a seven-hour board. The placement is an offset-independent
+		// comparison of two instants, so it means the same thing in every zone.
 		Assert.AreEqual(50, marks[0].LeftPct, 0.01);
-		StringAssert.Contains(marks[0].Label, "20:30");
+		StringAssert.Contains(marks[0].Label, refusedAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture));
 		StringAssert.Contains(marks[0].Label, "too bright");
 	}
 

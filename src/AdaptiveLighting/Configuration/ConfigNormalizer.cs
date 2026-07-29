@@ -62,10 +62,11 @@ public static class ConfigNormalizer
 		// periods a room actually disagrees about — which is also what makes "this room has levels" a question the
 		// document can answer by looking. The engine ignores an empty row either way, so this is tidying, not a
 		// behaviour change, and it happens on save alone: a hand-edited file is never rewritten by booting.
-		// Repaired rather than dereferenced: Save normalises BEFORE it validates, and Save is public API of a
-		// published package. A caller handing in an AreaConfig whose Levels is null — or AreaSetupService.Apply
-		// carrying a null through from the area it rebuilt — would otherwise get an NullReferenceException out of
-		// the single documented write path, before any validation message could explain what was wrong.
+		// Repaired rather than dereferenced, because Levels is the one collection here a caller can plausibly hand
+		// in null: AreaSetupService.Apply carries it through from the area it rebuilt. The rest of this method
+		// dereferences Areas, Periods and HouseMode.Options unguarded and deliberately — those are structural, the
+		// deserialiser repairs them, and a null there means a caller built an AdaptiveLightingConfig by hand and
+		// skipped its initialisers. This guard is not a general null-safety policy for Save; it is one field.
 		foreach (AreaConfig area in config.Areas)
 		{
 			area.Levels ??= [];

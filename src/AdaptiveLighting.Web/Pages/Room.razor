@@ -1086,22 +1086,30 @@ else
 	///         what the room is doing at this hour.
 	///     </para>
 	///     <para>
-	///         <b>With no period resolved it falls back to the schedule's first row, not to
-	///         <c>LuxBrightnessMaxPct</c>.</b> That setting is the curve's <i>ceiling</i>: handing it back as the
-	///         base makes the two ends equal, so the headroom disappears, the shape handle vanishes and the curve
-	///         draws as a dead flat line under a caption reading "from 100 %, this room climbs to 100 %". No period
-	///         resolves during polar night on an all-sun-anchored schedule, which in this house is a week in
-	///         December rather than a hypothetical.
+	///         <b>With no period resolved it falls back to the first row, not to <c>LuxBrightnessMaxPct</c>.</b>
+	///         That setting is the curve's <i>ceiling</i>: handing it back as the base makes the two ends equal, so
+	///         the headroom disappears, the shape handle vanishes and the curve draws as a dead flat line under a
+	///         caption reading "from 100 %, this room climbs to 100 %". No period resolves during polar night on an
+	///         all-sun-anchored schedule, which in this house is a week in December rather than a hypothetical.
+	///     </para>
+	///     <para>
+	///         <b>Both branches read through <see cref="RoomLevels.Rows"/>, and that is the whole point.</b> Taking
+	///         the fallback straight off <c>_document.Periods</c> reads the schedule's number and skips the room's
+	///         own override — so a room that sets its first period to 20 % showed 20 % in the levels table and
+	///         "From 100 %" on the chart eight pixels below it. <c>Rows</c> preserves the document's order, so the
+	///         first row is the same period either way.
 	///     </para>
 	/// </remarks>
 	private double DaylightBasePct
 	{
 		get
 		{
-			if (_activePeriod is not { } period)
-				return _document.Periods.FirstOrDefault()?.BrightnessPct ?? DefaultDaylightBasePct;
+			IReadOnlyList<RoomLevelRow> rows = RoomLevels.Rows(_document.Periods, _room);
 
-			return RoomLevels.Rows(_document.Periods, _room)
+			if (_activePeriod is not { } period)
+				return rows.FirstOrDefault()?.BrightnessPct ?? DefaultDaylightBasePct;
+
+			return rows
 				.FirstOrDefault(row => string.Equals(row.Period, period.Name, StringComparison.OrdinalIgnoreCase))
 				?.BrightnessPct ?? period.BrightnessPct;
 		}

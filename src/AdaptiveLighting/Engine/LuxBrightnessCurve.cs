@@ -91,8 +91,10 @@ public sealed class LuxBrightnessCurve
 	/// <param name="lux">The reading, or <c>null</c> when no sensor resolved.</param>
 	/// <param name="settings">The curve.</param>
 	/// <returns>
-	///     A brightness at or above <paramref name="scheduleBrightnessPct"/>. Not clamped to the period's caps —
-	///     that is <see cref="Apply"/>'s job, and callers holding a <see cref="LightTarget"/> must use it.
+	///     A brightness at or above <paramref name="scheduleBrightnessPct"/>, and at or below
+	///     <see cref="AreaSettings.LuxBrightnessMaxPct"/> — the room's own ceiling, which since the caps cut is the
+	///     only one there is. Callers holding a <see cref="LightTarget"/> should still go through
+	///     <see cref="Apply"/>, but be clear about what that adds: the physical 0–100 clamp, not a period's cap.
 	/// </returns>
 	public static double Raise(double scheduleBrightnessPct, double? lux, AreaSettings settings)
 	{

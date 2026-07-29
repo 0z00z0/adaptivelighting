@@ -234,6 +234,14 @@ public sealed class IlluminanceGateTests
 		Assert.IsFalse(bright.IsDarkEnough(),
 			"the reading says bright, and Either now has no sun half to overrule it with");
 
+		// Pinned POSITIVELY, not just as "says nothing about the sun". DarknessDetail has its own Either arm, and
+		// deleting that one alone drops the room to "unknown darkness source" — which also contains no "sun", so a
+		// negative assertion stays green while every such room's explanation goes to nonsense forever.
+		StringAssert.Contains(bright.DarknessDetail(), "lux 500",
+			"the reading itself, which is what Lux's explanation carries");
+		StringAssert.Contains(bright.DarknessDetail(), "dark below 40",
+			"and the threshold it was compared against");
+
 		Assert.IsFalse(bright.DarknessDetail().Contains("sun", StringComparison.OrdinalIgnoreCase),
 			"and the explanation names no sun either, or the room would be told a reason that did not apply");
 
