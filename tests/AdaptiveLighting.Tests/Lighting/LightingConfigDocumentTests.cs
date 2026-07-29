@@ -679,6 +679,51 @@ public sealed class LightingConfigDocumentTests
 	///     It becomes <c>Lux</c>, not <c>Sun</c>: the lux half was the part doing the work, and a room with no
 	///     sensor counts as dark under both, so nothing that was lighting stops.
 	/// </remarks>
+	/// <summary>
+	///     <b>The retired name still parses, and this is the test that was missing.</b>
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Deleting the enum member took a live house's dashboard down with
+	///         <c>FormatException: Either is not a valid value for DarknessSource</c>. The document reader had a
+	///         translation pre-pass; NetDaemon's own configuration binder, which reads the app's YAML into the same
+	///         type, does not and cannot be given one. Only one of the two readers was covered.
+	///     </para>
+	///     <para>
+	///         So the member survives as a name. This asserts the property of it that matters to <i>any</i> binder:
+	///         the string parses. Nothing here goes through <c>LightingConfigDocument</c>, deliberately — that is
+	///         the reader that was already safe.
+	///     </para>
+	/// </remarks>
+	[TestMethod]
+	public void The_Retired_Either_Still_Parses_For_Any_Binder()
+	{
+		Assert.IsTrue(Enum.TryParse("Either", ignoreCase: true, out DarknessSource parsed),
+			"a binder that meets this string must not throw — NetDaemon's does exactly this");
+		Assert.AreEqual(DarknessSource.Either, parsed);
+	}
+
+	/// <summary>
+	///     And having parsed, it leaves on the next save: the member is a migration, not a second name for Lux.
+	/// </summary>
+	[TestMethod]
+	public void A_Saved_Document_Stops_Saying_Either()
+	{
+		AdaptiveLightingConfig config = new();
+		config.Defaults.Darkness = DarknessSource.Either;
+		config.Areas.Add(new AreaConfig { Name = "Stue", AreaId = "stue", Darkness = DarknessSource.Either });
+		config.Areas.Add(new AreaConfig { Name = "Bod", AreaId = "bod", Darkness = DarknessSource.Always });
+
+		AdaptiveLightingConfig normalised = ConfigNormalizer.Normalize(config);
+
+		Assert.AreEqual(DarknessSource.Lux, normalised.Defaults.Darkness);
+		Assert.AreEqual(DarknessSource.Lux, normalised.Areas[0].Darkness);
+		Assert.AreEqual(DarknessSource.Always, normalised.Areas[1].Darkness, "and a value that still exists is untouched");
+
+		Assert.IsFalse(LightingConfigDocument.Serialize(normalised).Contains("Either", StringComparison.Ordinal),
+			"the written file must not carry the retired name forward");
+	}
+
 	[TestMethod]
 	public void A_Room_Still_Set_To_The_Retired_Either_Loads_As_Sensor()
 	{

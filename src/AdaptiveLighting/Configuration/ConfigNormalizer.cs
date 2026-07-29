@@ -24,6 +24,15 @@ public static class ConfigNormalizer
 
 		GlobalConfig global = config.Global;
 
+		// The retired Either reads as Lux everywhere the engine acts on it; written out as Lux, it stops being
+		// read as anything. This is what makes the member a migration rather than a permanent second name for the
+		// same rule — a file passes through here on its first save and never says Either again.
+		if (config.Defaults.Darkness is DarknessSource.Either)
+			config.Defaults.Darkness = DarknessSource.Lux;
+
+		foreach (AreaConfig retiring in config.Areas.Where(area => area.Darkness is DarknessSource.Either))
+			retiring.Darkness = DarknessSource.Lux;
+
 		// Drop pure-default option rows (Kind: Normal, no scene/clamp/reset) EXCEPT the designated Normal row, so
 		// the document stays minimal but the single reset target stays explicit (09 §6). A row a period's SetsMode
 		// names is kept whatever it carries: dropping it would leave that SetsMode pointing at no option, which the

@@ -120,7 +120,10 @@ public sealed class IlluminanceGate
 			{
 				DarknessSource.Always => true,
 				DarknessSource.Sun => IsSunDown(),
-				DarknessSource.Lux => EvaluateLux() ?? DarkBecauseNoLuxSensorIsReporting(),
+
+				// Either is retired and reads as Lux — see DarknessSource.Either for why the name still parses.
+				// Named here rather than left to the default arm, which would hold the previous verdict forever.
+				DarknessSource.Lux or DarknessSource.Either => EvaluateLux() ?? DarkBecauseNoLuxSensorIsReporting(),
 				_ => _isDark
 			};
 
@@ -140,9 +143,9 @@ public sealed class IlluminanceGate
 
 		// Ahead of the readings: with no sensor there is no reading to report, and the reason the room counts as
 		// dark is the absence itself rather than anything the sun is doing.
-		DarknessSource.Lux when HasNoLuxSensor => NoSensorDetail,
+		DarknessSource.Lux or DarknessSource.Either when HasNoLuxSensor => NoSensorDetail,
 
-		DarknessSource.Lux => _lastLux is { } lux ? LuxDetail(lux) : NoReadingDetail,
+		DarknessSource.Lux or DarknessSource.Either => _lastLux is { } lux ? LuxDetail(lux) : NoReadingDetail,
 		_ => "unknown darkness source"
 	};
 

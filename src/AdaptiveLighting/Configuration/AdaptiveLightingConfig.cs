@@ -442,12 +442,34 @@ public enum DarknessSource
 	/// <summary>Sun elevation only. No lux sensor is consulted, so a room with none is unaffected by having none.</summary>
 	Sun,
 
-	// Either — dark when the lux sensor OR the sun said so — was removed in the 2026-07 simplification. Its sun
-	// half could call a room dark while the room's own sensor read a bright afternoon, which is unpredictable in
-	// the plainest sense: two answers, and the one that wins is the one you were not looking at. A document that
-	// still says Either is translated to Lux on load — see LightingConfigDocument.LegacyValues, and note that an
-	// unknown enum VALUE fails to parse where an unknown key is merely ignored.
-
 	/// <summary>Always dark. For rooms without daylight.</summary>
-	Always
+	Always,
+
+	/// <summary>
+	///     <b>Retired. Behaves as <see cref="Lux"/>.</b> Kept only so a document that still names it can be read.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         It meant "dark when the lux sensor <i>or</i> the sun says so", and it was removed in the 2026-07
+	///         simplification because its sun half could call a room dark while the room's own sensor read a bright
+	///         afternoon: two answers, and the one that won was the one you were not looking at.
+	///     </para>
+	///     <para>
+	///         <b>The name has to survive even though the behaviour does not.</b> An unknown key in a document is
+	///         silence — <c>IgnoreUnmatchedProperties</c> passes over it — but an unknown enum <i>value</i> is a
+	///         parse failure, and this type is bound by two readers, not one:
+	///         <see cref="LightingConfigDocument"/> for the engine's own file, and NetDaemon's configuration binder
+	///         for the app's YAML. Only the first can be given a translation pre-pass. Deleting the member took a
+	///         live house's dashboard down with
+	///         <c>FormatException: Either is not a valid value for DarknessSource</c>, and would have done the same
+	///         to anybody upgrading the package.
+	///     </para>
+	///     <para>
+	///         So it parses, it reads as <see cref="Lux"/> wherever the engine acts on it, the editor does not
+	///         offer it, and <see cref="ConfigNormalizer"/> rewrites it on the next save — the same treatment, and
+	///         for the same reason, as the pre-2.0 <c>Zones:</c> key. There is no version at which removing it
+	///         becomes safe, because there is no way to prove no file still says it.
+	///     </para>
+	/// </remarks>
+	Either
 }
