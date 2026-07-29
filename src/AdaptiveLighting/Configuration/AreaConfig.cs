@@ -97,6 +97,23 @@ public class AreaConfig
 	/// <inheritdoc cref="AreaSettings.Darkness"/>
 	public DarknessSource? Darkness { get; set; }
 
+	/// <summary>
+	///     What this room does instead of the schedule, period by period. Empty means it follows the schedule
+	///     everywhere, which is the overwhelming majority of rooms.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         A list rather than a dictionary keyed by period, because YAML round-trips a list of named rows
+	///         legibly and a hand-edited file with two rows for one period is then a validation warning rather
+	///         than a parse error — the same reason the periods themselves are a list.
+	///     </para>
+	///     <para>
+	///         A room names only the periods it disagrees about. Writing all four out because the editor drew all
+	///         four would pin values the owner never chose, and the schedule would stop reaching this room.
+	///     </para>
+	/// </remarks>
+	public List<RoomLevelOverride> Levels { get; set; } = [];
+
 	/// <inheritdoc cref="AreaSettings.LuxThreshold"/>
 	public double? LuxThreshold { get; set; }
 
