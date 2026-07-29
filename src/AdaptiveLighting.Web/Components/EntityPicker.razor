@@ -22,11 +22,22 @@
 	}
 	else
 	{
+		@* Discovery's own answer first and unheaded, then everything else under a heading — the same two-block
+		   order the list picker uses, so a light and a light-level sensor are chosen the same way. *@
 		<select class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
 			<option value="">@NoneLabel</option>
 			@foreach (EntityOption option in Options)
 			{
 				<option value="@option.EntityId">@option.Label</option>
+			}
+			@if (Others.Count > 0)
+			{
+				<optgroup label="@OthersLabel">
+					@foreach (EntityOption option in Others)
+					{
+						<option value="@option.EntityId">@option.Label</option>
+					}
+				</optgroup>
 			}
 			@if (IsUnlisted)
 			{
@@ -64,6 +75,20 @@
 	[Parameter]
 	public IReadOnlyList<EntityOption> Options { get; set; } = [];
 
+	/// <summary>
+	///     Everything else the field could use, offered under <see cref="OthersLabel"/> below <see cref="Options"/>.
+	/// </summary>
+	/// <remarks>
+	///     Kept apart from <see cref="Options"/> because the split is the information: the first block is what the
+	///     room resolves to as it stands, the second is what that answer swallowed or a label kept out.
+	/// </remarks>
+	[Parameter]
+	public IReadOnlyList<EntityOption> Others { get; set; } = [];
+
+	/// <summary>The heading above <see cref="Others"/>, in words the caller is in a position to be right about.</summary>
+	[Parameter]
+	public string OthersLabel { get; set; } = "Everything else";
+
 	/// <summary>What the empty choice is called, phrased for what "none" means to this particular field.</summary>
 	[Parameter]
 	public string NoneLabel { get; set; } = "(none)";
@@ -94,10 +119,11 @@
 
 	private bool _manual;
 
-	private bool HasOptions => Options.Count > 0;
+	private bool HasOptions => Options.Count > 0 || Others.Count > 0;
 
 	private bool IsUnlisted =>
-		Value is { Length: > 0 } && !Options.Any(option => string.Equals(option.EntityId, Value, StringComparison.Ordinal));
+		Value is { Length: > 0 }
+		&& !Options.Concat(Others).Any(option => string.Equals(option.EntityId, Value, StringComparison.Ordinal));
 
 	/// <summary>Whether an out-of-list value is genuinely unknown to Home Assistant, not merely filtered out of this field's domain.</summary>
 	private bool IsUnknown => IsUnlisted && !(KnownResolver?.Invoke(Value!) ?? false);

@@ -77,17 +77,30 @@ public sealed class RoomSettingsTests
 	}
 
 	/// <summary>
-	///     The rare sections start folded. This is the design's one sanctioned answer to a long page, and a
-	///     regression here is a page that arrives twice as tall as it should.
+	///     No section carries a say in whether it starts open, because none of them does. Four of the five used to,
+	///     so revealing <i>All settings</i> unrolled four sections at once and the structure — the thing that makes
+	///     twenty-one settings findable — was several screens of controls rather than five headings.
 	/// </summary>
 	[TestMethod]
-	public void The_Rare_Section_Starts_Folded_And_The_Common_Ones_Do_Not()
+	public void A_Section_Has_No_Say_In_Whether_It_Starts_Open()
 	{
-		Assert.IsFalse(RoomSettings.Groups.Single(group => group.Title == "Rarely needed").StartsOpen);
+		Assert.IsNull(
+			typeof(RoomSettingGroup).GetProperty("StartsOpen"),
+			"a flag every section sets the same way is a default the pages should not each have to read");
+	}
 
-		Assert.IsTrue(RoomSettings.Groups.Single(group => group.Title == "Movement & timing").StartsOpen);
-		Assert.IsTrue(RoomSettings.Groups.Single(group => group.Title == "Darkness").StartsOpen);
-		Assert.IsTrue(RoomSettings.Groups.Single(group => group.Title == "Room behaviour").StartsOpen);
+	/// <summary>
+	///     The movement section is named once. The room page appends <i>Blocked while on</i> to it — a movement rule
+	///     that is a list of entities rather than an overridable setting, so it cannot be a <see cref="RoomSetting"/>
+	///     and has to be matched by title — and a rename that missed the page would drop the control silently.
+	/// </summary>
+	[TestMethod]
+	public void The_Movement_Section_Is_Named_Once()
+	{
+		Assert.AreEqual(
+			1,
+			RoomSettings.Groups.Count(group => string.Equals(group.Title, RoomSettings.MovementSection, StringComparison.Ordinal)),
+			"the constant the room page matches on has to name exactly one section");
 	}
 
 	/// <summary>Every section says what is in it, so a folded one is still readable.</summary>
@@ -436,6 +449,12 @@ public sealed class RoomSettingsTests
 	///     attention, still invites the tap and still has to explain itself; the row comes back on the same tap
 	///     that turns its gate on.
 	/// </summary>
+	/// <remarks>
+	///     The sun threshold is drawn for the two rules that read the sun, and for neither of the two that do not.
+	///     It used to be drawn for a Sensor room as well, because a room whose lux sensors said nothing fell back to
+	///     the sun; that fallback is gone — such a room now counts as dark — so the row would be a control that
+	///     changes nothing, which is exactly what this rule exists to keep off the page.
+	/// </remarks>
 	[TestMethod]
 	public void A_Setting_That_Cannot_Take_Effect_Is_Not_Drawn()
 	{
@@ -447,13 +466,37 @@ public sealed class RoomSettingsTests
 			"a room that gates on the sun has no lux threshold to set");
 		Assert.IsTrue(luxThreshold.AppliesTo(new AreaSettings { Darkness = DarknessSource.Either }));
 
+		Assert.IsTrue(sunBelow.AppliesTo(new AreaSettings { Darkness = DarknessSource.Sun }));
+		Assert.IsTrue(sunBelow.AppliesTo(new AreaSettings { Darkness = DarknessSource.Either }));
+
 		Assert.IsFalse(sunBelow.AppliesTo(new AreaSettings { Darkness = DarknessSource.Always }),
 			"a windowless room consults neither signal");
-		Assert.IsTrue(sunBelow.AppliesTo(new AreaSettings { Darkness = DarknessSource.Lux }),
-			"the sun is still the fallback for a room whose lux sensor never resolves");
+		Assert.IsFalse(sunBelow.AppliesTo(new AreaSettings { Darkness = DarknessSource.Lux }),
+			"a sensor room with nothing to read counts as dark; it no longer falls back to the sun");
 
 		Assert.IsFalse(startLux.AppliesTo(new AreaSettings { LuxBrightnessEnabled = false }));
 		Assert.IsTrue(startLux.AppliesTo(new AreaSettings { LuxBrightnessEnabled = true }));
+	}
+
+	/// <summary>
+	///     No help line still promises the sun as a fallback for a room whose light-level sensors say nothing. That
+	///     fallback is gone, and a help line that outlives the behaviour it describes is worse than none — this is
+	///     the sentence a reader consults precisely when a room is behaving unexpectedly in the dark.
+	/// </summary>
+	[TestMethod]
+	public void No_Help_Line_Still_Promises_The_Sun_As_A_Fallback()
+	{
+		foreach (RoomSetting setting in AllSettings)
+		{
+			Assert.IsFalse(
+				setting.Help.Contains("falls back", StringComparison.OrdinalIgnoreCase),
+				$"{setting.Key} still describes a fallback the engine no longer has");
+		}
+
+		StringAssert.Contains(
+			Setting(nameof(AreaSettings.Darkness)).Help,
+			"counts as dark",
+			"the reader who can no longer see the sun row has to learn what a sensor room does with nothing to read");
 	}
 
 	/// <summary>A setting with no gate is always drawn.</summary>

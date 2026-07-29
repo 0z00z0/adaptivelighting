@@ -146,7 +146,7 @@ sentences, generated from exactly these settings:
 |---|---|
 | *"Lights when someone moves and it's darker than **40 lx** — or the sun is below **3°**."* (variants for sensor-only, sun-only, and "whatever the daylight") | `Darkness`, `LuxThreshold`, `SunElevationThreshold` |
 | *"After **10 min** without movement, dim to **50 %** for **30 s**, then off."* | `VacancyTimeoutSeconds`, `PreOffBrightnessFactor`, `PreOffSeconds` |
-| *"Hand changes hold for **2 h**; after a manual off, movement is ignored until the room is empty **10 min**."* | `OverrideDurationMinutes`, `VacancyResetMinutes` |
+| *"Manual changes hold for **2 h**; after a manual off, movement is ignored until the room is empty **10 min**."* | `OverrideDurationMinutes`, `VacancyResetMinutes` |
 | *"This room is gentle while the house sleeps, and welcomes the first person home."* — rendered **only when a flag is on**; a room with no flags gets no fourth sentence | `RespectSleepMode`, `SleepBlocksAutoOn`, `SkipAwaySweep`, `WelcomeHome`, `IgnoreWhenOn` |
 
 Rules of the layer:
@@ -165,12 +165,12 @@ Rules of the layer:
 **Layer 2 — All settings** (the *show more* reveal, same card). The complete per-room inventory as
 rows in A's style — label, help line, control, inherit tag or override dot with reset. Grouped:
 
-- **Movement & timing** — Lights stay on for · Warning dim level · Warning dim lasts · Hand changes
-  hold for · After a manual off, wait
+- **Movement & timing** — Lights stay on for · Warning dim level · Warning dim lasts · Manual changes
+  hold for · After a manual off, wait · Blocked while on
 - **Darkness** — How the room decides it's dark · Dark below (+ extra light to count as bright
   again) · Dark when the sun is below
 - **Behaviour** — Gentle while the house sleeps · Never auto-on while the house sleeps · Stays on
-  when everyone leaves · Welcome home · Blocked while on
+  when everyone leaves · Welcome home
 - **Rarely needed** — Fade up/down over · Sun entity
 - **Room identity** — Name · Home Assistant area
 - **In this room** (its own card, always visible below) — the discovered gear as chips, with *Pick
@@ -221,7 +221,7 @@ Every row of `area-restructure.md` §3, placed. ("Sentence + row" means it appea
 | `VacancyTimeoutSeconds` | sentence + row (*Lights stay on for*) |
 | `PreOffSeconds` | sentence + row (*Warning dim lasts*) |
 | `PreOffBrightnessFactor` | sentence + row (*Warning dim level*) |
-| `OverrideDurationMinutes` | sentence + row (*Hand changes hold for*) |
+| `OverrideDurationMinutes` | sentence + row (*Manual changes hold for*) |
 | `VacancyResetMinutes` | sentence + row (*After a manual off, wait*) |
 | `Darkness` | sentence variant + row (*How the room decides it's dark*) |
 | `LuxThreshold` / `LuxHysteresis` | sentence + row / row (*Dark below*, *extra light…*) |

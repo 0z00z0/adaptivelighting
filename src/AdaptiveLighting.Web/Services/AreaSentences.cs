@@ -37,7 +37,7 @@ public static class AreaSentences
 	public static IReadOnlyList<TokenChoice> DimForChoices { get; } =
 		TokenChoices.Durations(10, 20, 30, 60, 120);
 
-	/// <summary>The shortlist offered for how long a hand change holds the room.</summary>
+	/// <summary>The shortlist offered for how long a manual change holds the room.</summary>
 	public static IReadOnlyList<TokenChoice> HandHoldChoices { get; } =
 		TokenChoices.DurationsInMinutes(30, 60, 120, 240, 480);
 
@@ -270,10 +270,10 @@ public static class AreaSentences
 
 	/// <summary>The second sentence: what happens when a person overrules the engine at the wall.</summary>
 	private static Sentence Hands(AreaConfig? area, AreaSettings defaults, AreaSettings effective) =>
-		SentenceBuilder.Start("Hand changes hold for ")
+		SentenceBuilder.Start("Manual changes hold for ")
 			.Duration(
 				nameof(AreaSettings.OverrideDurationMinutes),
-				"Hand changes hold for",
+				"Manual changes hold for",
 				effective.OverrideDurationMinutes * 60,
 				HandHoldChoices,
 				OriginOf(area, area?.OverrideDurationMinutes),

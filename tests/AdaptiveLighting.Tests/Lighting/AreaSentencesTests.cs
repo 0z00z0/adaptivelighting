@@ -54,7 +54,7 @@ public sealed class AreaSentencesTests
 			sentences[0].PlainText);
 
 		Assert.AreEqual(
-			"Hand changes hold for 2 h; after somebody switches them off by hand, movement is ignored until the "
+			"Manual changes hold for 2 h; after somebody switches them off by hand, movement is ignored until the "
 			+ "room has been empty 10 min.",
 			sentences[1].PlainText);
 	}

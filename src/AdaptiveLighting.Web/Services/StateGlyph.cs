@@ -63,7 +63,7 @@ public static class StateGlyph
 		AreaState.SuppressedOff => new StateMark(Glyph.StateManual, "state-human", "off by hand", false),
 
 		// A scene holding the room is a person's decision too — somebody put the house in a guest mode and
-		// chose the look. The engine is standing back for the same reason it stands back after a hand change,
+		// chose the look. The engine is standing back for the same reason it stands back after a manual change,
 		// so it takes the same shape and colour, and the word says which kind of decision it was.
 		AreaState.SceneHold => new StateMark(Glyph.StateManual, "state-human", "held by a scene", false),
 

@@ -4868,7 +4868,7 @@ button.mode-pill:disabled {
 }
 
 /* A category with nothing in it stays on the page and stays pressable — "this
-   room has never reported a hand change" is an answer, and a chip that vanished
+   room has never reported a manual change" is an answer, and a chip that vanished
    at zero would take the reader's map of the page with it. */
 .log-cat.empty {
 	opacity: 0.6;

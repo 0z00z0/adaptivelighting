@@ -402,10 +402,10 @@ public static class BoardView
 		if (IsBlockedFromLighting(snapshot))
 		{
 			return snapshot.AutoOnBlockedBy is AutoOnBlock.Sleep
-				? "dark enough, but the house is asleep — movement will not switch the lights on"
+				? "dark enough, but the house is asleep — movement won't light the room"
 				: snapshot.AutoOnBlockingEntity is { Length: > 0 } blocking
-					? $"dark enough, but {blocking} is on — movement will not switch the lights on"
-					: "dark enough, but something here is on — movement will not switch the lights on";
+					? $"dark enough, but {blocking} is on — movement won't light the room"
+					: "dark enough, but something here is on — movement won't light the room";
 		}
 
 		return snapshot.State switch
@@ -463,7 +463,7 @@ public static class BoardView
 	///     <para>
 	///         The summary shows the categories the Activity page opens with, which means it deliberately drops the
 	///         housekeeping: rechecks, start-up, and rooms switched on or off. That is the whole point of the
-	///         filter — a dozen rows of "Rechecked the room · automatic lighting is switched off for this room" is a
+	///         filter — a dozen rows of "Rechecked the room · automatic lighting is off here" is a
 	///         summary of nothing — but a filter nobody is told about is indistinguishable from reports that were
 	///         never recorded, which is the one failure this project treats as worse than showing too much. So the
 	///         hidden ones are counted here, and the link beneath the log is where they can be read.

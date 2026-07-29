@@ -128,10 +128,10 @@ public sealed class RoomFactsTests
 	{
 		AreaSnapshot asleep = Report(blockedBy: AutoOnBlock.Sleep);
 
-		Assert.AreEqual("The house is asleep — movement will not switch the lights on.", RoomFacts.AutoOnNote(asleep));
-		Assert.AreEqual("The house is asleep — movement will not switch the lights on.", RoomFacts.NextLine(asleep, Now));
+		Assert.AreEqual("The house is asleep — movement won't light the room.", RoomFacts.AutoOnNote(asleep));
+		Assert.AreEqual("The house is asleep — movement won't light the room.", RoomFacts.NextLine(asleep, Now));
 
-		StringAssert.Contains(ValueOf(RoomFacts.For(asleep, Now), "Movement now"), "will not switch the lights on");
+		StringAssert.Contains(ValueOf(RoomFacts.For(asleep, Now), "Movement now"), "won't light the room");
 	}
 
 	/// <summary>
@@ -143,7 +143,7 @@ public sealed class RoomFactsTests
 	{
 		AreaSnapshot blocked = Report(blockedBy: AutoOnBlock.EntityOn, blockingEntity: "media_player.tv");
 
-		Assert.AreEqual("media_player.tv is on — movement will not switch the lights on.", RoomFacts.AutoOnNote(blocked));
+		Assert.AreEqual("media_player.tv is on — movement won't light the room.", RoomFacts.AutoOnNote(blocked));
 
 		AreaSnapshot unnamed = Report(blockedBy: AutoOnBlock.EntityOn);
 		StringAssert.StartsWith(RoomFacts.AutoOnNote(unnamed)!, "Something here is on");

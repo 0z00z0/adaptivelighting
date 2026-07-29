@@ -1067,7 +1067,7 @@ else
 							@if (string.IsNullOrWhiteSpace(_config.Global.NetDaemonUserId))
 							{
 								<span class="badge">not set</span>
-								<span class="hint">hand changes are told apart by timing alone.</span>
+								<span class="hint">manual changes are told apart by timing alone.</span>
 							}
 							else
 							{
@@ -1101,7 +1101,7 @@ else
 								<InfoPopover Label="Recognise own changes for">
 									A light that changes within this many seconds of one of the app's own commands is read as
 									the echo of that command, not as somebody at a switch. Too short and the app mistakes
-									itself for a person and backs off; too long and a real hand change is ignored. 8 s suits
+									itself for a person and backs off; too long and a real manual change is ignored. 8 s suits
 									most houses.
 								</InfoPopover>
 							</label>
@@ -1113,16 +1113,16 @@ else
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Other automations count as hand changes
-								<InfoPopover Label="Other automations count as hand changes">
-									Ticked, a light another automation changes is treated as a hand change: this app stands
-									back for as long as <em>Hand changes hold for</em> says. Unticked, it corrects the light on
+							<label class="field-label">Other automations count as manual changes
+								<InfoPopover Label="Other automations count as manual changes">
+									Ticked, a light another automation changes is treated as a manual change: this app stands
+									back for as long as <em>Manual changes hold for</em> says. Unticked, it corrects the light on
 									the next re-check and keeps winning.
 								</InfoPopover>
 							</label>
 						</div>
 						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Global.TreatAutomationsAsManual" /> a change from another automation counts as a hand change</label>
+							<label><input type="checkbox" @bind="_config.Global.TreatAutomationsAsManual" /> a change from another automation counts as a manual change</label>
 						</div>
 					</div>
 
@@ -1298,7 +1298,6 @@ else
 
 	// The all-rooms detail view: revealed on demand, and the sections a reader has opened or closed inside it.
 	private bool _showAllRooms;
-	private readonly HashSet<string> _closedGroups = new(StringComparer.Ordinal);
 	private readonly HashSet<string> _openedGroups = new(StringComparer.Ordinal);
 
 	/// <summary>
@@ -1785,24 +1784,18 @@ else
 	// ===================== the all-rooms settings =====================
 
 	/// <summary>
-	///     Whether a section of the detail view is open. Sections carry their own default and a reader's toggle
-	///     outranks it, so the rare sections stay folded until somebody wants them and stay open once they did.
+	///     Whether a section of the detail view is open — which, until somebody opens one, is none of them.
 	/// </summary>
-	private bool IsOpen(RoomSettingGroup group) =>
-		group.StartsOpen ? !_closedGroups.Contains(group.Title) : _openedGroups.Contains(group.Title);
+	/// <remarks>
+	///     The same rule the room page's <i>All settings</i> follows, and for the same reason: folded, the headings
+	///     are what a reader meets, and the structure is legible before any of it has to be read.
+	/// </remarks>
+	private bool IsOpen(RoomSettingGroup group) => _openedGroups.Contains(group.Title);
 
 	private void Toggle(RoomSettingGroup group)
 	{
-		if (IsOpen(group))
-		{
-			_openedGroups.Remove(group.Title);
-			_closedGroups.Add(group.Title);
-		}
-		else
-		{
-			_closedGroups.Remove(group.Title);
+		if (!_openedGroups.Remove(group.Title))
 			_openedGroups.Add(group.Title);
-		}
 	}
 
 	private bool IsCurrentChoice(string key, TokenChoice choice) =>

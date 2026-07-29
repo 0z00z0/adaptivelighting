@@ -240,7 +240,7 @@ changing it are the same act.**
 > Lights when someone moves and it's darker than `40 lx` — or the sun is below `3°`. After `10 min` without
 > movement, dim to `50 %` for `30 s`, then off.
 >
-> Hand changes hold for `2 h`; after a manual off, movement is ignored until the room is empty `10 min`.
+> Manual changes hold for `2 h`; after a manual off, movement is ignored until the room is empty `10 min`.
 
 ### Using it
 
