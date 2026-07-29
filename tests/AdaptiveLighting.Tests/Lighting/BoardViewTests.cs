@@ -24,6 +24,17 @@ public sealed class BoardViewTests
 {
 	private static readonly DateTimeOffset Now = new(2026, 7, 27, 21, 37, 0, TimeSpan.FromHours(2));
 
+	/// <summary>
+	///     The house's own time zone, named rather than inherited from the machine.
+	/// </summary>
+	/// <remarks>
+	///     The band turns a period's wall-clock <c>Start</c> into an instant, which cannot be done without a zone.
+	///     Every band test therefore says which one, so the numbers below mean the same thing on a build agent in
+	///     UTC as on the owner's laptop — and so the two clock-change tests can be about Norway's actual
+	///     transitions, which is where this is visible twice a year.
+	/// </remarks>
+	private static readonly TimeZoneInfo Oslo = TimeZoneInfo.FindSystemTimeZoneById("Europe/Oslo");
+
 	/// <summary>The board's own window at <see cref="Now"/>: 17:00 to midnight, seven whole hours.</summary>
 	private static BoardWindow Window() => BoardWindow.Around(Now, BoardView.LookBack, BoardView.LookAhead);
 
@@ -455,7 +466,7 @@ public sealed class BoardViewTests
 
 		string line = BoardView.ExceptionLine(Report(AreaState.OverriddenOn, nextChangeAt: resumes), Now);
 
-		StringAssert.Contains(line, "set by hand");
+		StringAssert.Contains(line, "set manually");
 		StringAssert.Contains(line, BoardView.Clock(resumes));
 	}
 
@@ -565,7 +576,8 @@ public sealed class BoardViewTests
 				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
 			],
 			SunTimes.Unknown,
-			Window());
+			Window(),
+			Oslo);
 
 		CollectionAssert.AreEqual(new[] { "Day", "Evening", "Night" }, band.Select(segment => segment.Name).ToArray());
 		Assert.AreEqual(0, band[0].LeftPct, 1e-9, "the day period was already running when the board began");
@@ -586,7 +598,8 @@ public sealed class BoardViewTests
 				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
 			],
 			SunTimes.Unknown,
-			Window());
+			Window(),
+			Oslo);
 
 		Assert.IsTrue(band.All(segment => segment.Name == "Night"), "polar night left only the fixed boundary");
 	}
@@ -598,7 +611,8 @@ public sealed class BoardViewTests
 		IReadOnlyList<BandSegment> band = BoardView.Band(
 			[new TimePeriodConfig { Name = "Broken", Start = "half past whenever", ColorTempKelvin = 2700 }],
 			SunTimes.Unknown,
-			Window());
+			Window(),
+			Oslo);
 
 		Assert.AreEqual(0, band.Count);
 	}
@@ -616,11 +630,81 @@ public sealed class BoardViewTests
 				new TimePeriodConfig { Name = "Small hours", Start = "01:00", ColorTempKelvin = 2200 }
 			],
 			SunTimes.Unknown,
-			Window());
+			Window(),
+			Oslo);
 
 		Assert.AreEqual(2, band.Count);
 		Assert.AreEqual("Small hours", band[0].Name, "the board opens inside the previous night's period");
 		Assert.AreEqual("Evening", band[1].Name);
+	}
+
+	// ===================== the schedule band across a clock change =====================
+
+	/// <summary>
+	///     <b>Spring forward.</b> Norway's clocks jump from 02:00 to 03:00 on 29 March 2026, so the six hours the
+	///     board shows are not all the same distance from UTC. The band used to place every boundary at whatever
+	///     offset the window happened to open on, which put a boundary on the far side of the change an hour out.
+	/// </summary>
+	/// <remarks>
+	///     The board opens at 00:00 winter time and runs six hours to 06:00 summer time. "01:30" is still winter
+	///     time, so it belongs ninety minutes in — a quarter of the way along. Placed at the window's own summer
+	///     offset it landed at 8.3%, an hour early.
+	/// </remarks>
+	[TestMethod]
+	public void A_Boundary_Before_The_Spring_Change_Keeps_Its_Wall_Clock_Time()
+	{
+		// 05:00 summer time, two hours after the clocks moved: the window reaches back across the change.
+		BoardWindow window = BoardWindow.Around(
+			new DateTimeOffset(2026, 3, 29, 5, 0, 0, TimeSpan.FromHours(2)), BoardView.LookBack, BoardView.LookAhead);
+
+		IReadOnlyList<BandSegment> band = BoardView.Band(
+			[
+				new TimePeriodConfig { Name = "Night", Start = "00:00", ColorTempKelvin = 2200 },
+				new TimePeriodConfig { Name = "Small hours", Start = "01:30", ColorTempKelvin = 2500 },
+				new TimePeriodConfig { Name = "Morning", Start = "05:00", ColorTempKelvin = 4300 }
+			],
+			SunTimes.Unknown,
+			window,
+			Oslo);
+
+		CollectionAssert.AreEqual(
+			new[] { "Night", "Small hours", "Morning" }, band.Select(segment => segment.Name).ToArray());
+
+		Assert.AreEqual(100.0 * 1.5 / 6, band[1].LeftPct, 1e-6, "01:30 is winter time, ninety minutes into the board");
+		Assert.AreEqual(100.0 * 4 / 6, band[2].LeftPct, 1e-6, "05:00 is summer time, four hours into the board");
+	}
+
+	/// <summary>
+	///     <b>Fall back.</b> On 25 October 2026 the clocks go from 03:00 back to 02:00, and the same fault appears
+	///     with the sign reversed: a boundary before the change belongs an hour <i>earlier</i> on the board than the
+	///     window's winter offset put it.
+	/// </summary>
+	/// <remarks>
+	///     The board opens at 01:00 summer time and runs six hours to 06:00 winter time. "01:30" is thirty minutes
+	///     in; the old arithmetic drew it at a quarter of the way along.
+	/// </remarks>
+	[TestMethod]
+	public void A_Boundary_Before_The_Autumn_Change_Keeps_Its_Wall_Clock_Time()
+	{
+		// 04:00 winter time, two hours after the clocks went back.
+		BoardWindow window = BoardWindow.Around(
+			new DateTimeOffset(2026, 10, 25, 4, 0, 0, TimeSpan.FromHours(1)), BoardView.LookBack, BoardView.LookAhead);
+
+		IReadOnlyList<BandSegment> band = BoardView.Band(
+			[
+				new TimePeriodConfig { Name = "Night", Start = "00:00", ColorTempKelvin = 2200 },
+				new TimePeriodConfig { Name = "Small hours", Start = "01:30", ColorTempKelvin = 2500 },
+				new TimePeriodConfig { Name = "Morning", Start = "04:00", ColorTempKelvin = 4300 }
+			],
+			SunTimes.Unknown,
+			window,
+			Oslo);
+
+		CollectionAssert.AreEqual(
+			new[] { "Night", "Small hours", "Morning" }, band.Select(segment => segment.Name).ToArray());
+
+		Assert.AreEqual(100.0 * 0.5 / 6, band[1].LeftPct, 1e-6, "01:30 is summer time, half an hour into the board");
+		Assert.AreEqual(100.0 * 4 / 6, band[2].LeftPct, 1e-6, "04:00 is winter time, four hours into the board");
 	}
 
 	/// <summary>A sliver of a period is drawn but not named: the name would be wider than the segment it labels.</summary>

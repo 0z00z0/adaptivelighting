@@ -22,6 +22,19 @@ public sealed record LightUnderReview(string EntityId, string Name);
 public sealed record SuspectLight(string EntityId, string Name, string Reason);
 
 /// <summary>
+///     One room as the cross-room half of the audit reads it: what it is called, and every bulb it ends up
+///     commanding.
+/// </summary>
+/// <param name="Room">The room's display name — what the advice will call it, so it must be the name a person knows.</param>
+/// <param name="Lights">
+///     The bulbs the room actually commands, with light groups already followed down to their members — not the
+///     ids <see cref="AreaEntityResolver"/> settled on. The difference is the whole case: two rooms reaching one
+///     bulb through two different groups settle on two different ids and have nothing in common to compare, while
+///     the bulb underneath is commanded by both.
+/// </param>
+public sealed record RoomUnderReview(string Room, IReadOnlyList<LightUnderReview> Lights);
+
+/// <summary>
 ///     Looks over the lights a room would command and points at the ones that are probably not room lighting.
 /// </summary>
 /// <remarks>
@@ -164,6 +177,105 @@ public static class LightAudit
 
 		return null;
 	}
+
+	/// <summary>
+	///     The bulbs more than one room will command, because Home Assistant has not put them in a room at all.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>The gap the per-area rules cannot see.</b> <see cref="AreaEntityResolver"/> drops a light group
+	///         that reaches into <i>another</i> area, and settles overlapping groups against each other within one
+	///         area. Neither catches a bulb that belongs to no area: it is not foreign to either room, because it is
+	///         not anybody's, so both rooms resolve it through their own group and both command it. What follows is
+	///         two rooms setting each other's brightness and each switching the other's lamp off on its own vacancy
+	///         timer.
+	///     </para>
+	///     <para>
+	///         <b>Advice, and only advice — the same doctrine as the rest of this class.</b> The engine goes on
+	///         commanding the bulb from both rooms, because the alternative is choosing a room for it and leaving
+	///         the other one dark, and a bulb dropped from a room is a worse fault than a bulb commanded twice. So
+	///         this says so, loudly, and names the one thing the household can do about it.
+	///     </para>
+	///     <para>
+	///         One entry per bulb, never one per room: the finding is that <i>these</i> rooms share <i>this</i>
+	///         light, and saying it once in both rooms' words is a fact, while saying it once per room is the same
+	///         fact twice with half of it missing each time.
+	///     </para>
+	/// </remarks>
+	/// <param name="rooms">
+	///     Every room the engine is running, with the bulbs each commands. A room listed twice, or a bulb a room
+	///     reaches by two routes, counts once — the question is how many <i>rooms</i> command it.
+	/// </param>
+	/// <param name="hasOwnArea">
+	///     Whether Home Assistant has put the entity in an area of its own. Asked only about bulbs that already
+	///     failed the cheap test, because answering it means a sweep of the registry and the ordinary house has no
+	///     shared bulb to spend one on.
+	/// </param>
+	/// <returns>
+	///     One entry per shared bulb, in the order the rooms named them. Empty in the ordinary house, which is the
+	///     usual answer.
+	/// </returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public static IReadOnlyList<SuspectLight> SharedBetweenRooms(
+		IReadOnlyList<RoomUnderReview> rooms,
+		Func<string, bool> hasOwnArea)
+	{
+		ArgumentNullException.ThrowIfNull(rooms);
+		ArgumentNullException.ThrowIfNull(hasOwnArea);
+
+		Dictionary<string, (LightUnderReview Light, List<string> Rooms)> commanded = new(StringComparer.Ordinal);
+		List<string> order = [];
+
+		foreach (RoomUnderReview room in rooms)
+			foreach (LightUnderReview light in room.Lights)
+			{
+				if (!commanded.TryGetValue(light.EntityId, out (LightUnderReview Light, List<string> Rooms) seen))
+				{
+					commanded[light.EntityId] = seen = (light, []);
+					order.Add(light.EntityId);
+				}
+
+				// One room holding the same bulb twice — through a group and again on its own — is one room.
+				if (!seen.Rooms.Contains(room.Room, StringComparer.Ordinal))
+					seen.Rooms.Add(room.Room);
+			}
+
+		List<SuspectLight> shared = [];
+
+		foreach (string entityId in order)
+		{
+			(LightUnderReview light, List<string> claimants) = commanded[entityId];
+
+			if (claimants.Count < 2 || hasOwnArea(entityId))
+				continue;
+
+			shared.Add(new SuspectLight(entityId, light.Name, SharedReason(claimants)));
+		}
+
+		return shared;
+	}
+
+	/// <summary>
+	///     Why a bulb is being flagged, and what to do, in the household's own terms.
+	/// </summary>
+	/// <remarks>
+	///     Says nothing about light groups, overlap or how discovery reached the bulb. Nobody wrote their groups
+	///     thinking about any of that, and a sentence about topology is one nobody can act on; a sentence about
+	///     giving a light a room is one they can act on in Home Assistant in ten seconds. Lower case and no full
+	///     stop, because every reason in this class is read as the second half of a line that begins with the
+	///     light's own name.
+	/// </remarks>
+	private static string SharedReason(IReadOnlyList<string> rooms) =>
+		$"commanded by {Join(rooms)} at once, because Home Assistant has not put it in a room of its own — "
+		+ "give it an area there and only that room will switch it on and off";
+
+	/// <summary>"a and b", "a, b and c" — a list of rooms somebody reads rather than parses.</summary>
+	private static string Join(IReadOnlyList<string> names) => names.Count switch
+	{
+		1 => names[0],
+		2 => $"{names[0]} and {names[1]}",
+		_ => $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}"
+	};
 
 	/// <summary>
 	///     The entity id this one is a colour channel of, when that entity is in the room too; <c>null</c> otherwise.

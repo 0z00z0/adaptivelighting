@@ -415,12 +415,12 @@ public static class BoardView
 				: "warning dim — the lights go out shortly unless someone moves",
 
 			AreaState.OverriddenOn => snapshot.NextChangeAt is { } resumes
-				? $"set by hand — automatic control returns at {Clock(resumes)}"
-				: "set by hand — the engine stands back until somebody resumes it",
+				? $"set manually — automatic control returns at {Clock(resumes)}"
+				: "set manually — the engine stands back until somebody resumes it",
 
 			AreaState.SuppressedOff => snapshot.NextChangeAt is { } listens
-				? $"off by hand — movement is ignored until {Clock(listens)}"
-				: "off by hand — movement is ignored until the room has been empty long enough",
+				? $"off manually — movement is ignored until {Clock(listens)}"
+				: "off manually — movement is ignored until the room has been empty long enough",
 
 			AreaState.SceneHold => "held by a scene — the engine stands back until the house leaves this mode",
 
@@ -523,6 +523,15 @@ public static class BoardView
 	///         table the engine is actually running.
 	///     </para>
 	///     <para>
+	///         <b>Each boundary is placed through the zone, never at the window's own offset.</b> A period's
+	///         <c>Start</c> is a wall-clock time, and the offset that turns it into an instant is the one in force
+	///         on <i>its</i> day — which is not the window's twice a year. Reading the offset off
+	///         <c>window.Start</c> put every boundary on the far side of a clock change exactly an hour out, in
+	///         whichever direction the clocks had moved, on the two Sundays a year the household would most notice.
+	///         The window itself is untouched: it is a span of absolute time, so its width, its ticks and
+	///         <c>PercentAt</c> stay right through a change of its own accord.
+	///     </para>
+	///     <para>
 	///         One day's sun times are used for all three days. Over a six-hour window that is a difference of a
 	///         couple of minutes at the edges, and the band is context rather than a claim about a boundary.
 	///     </para>
@@ -530,13 +539,30 @@ public static class BoardView
 	/// <param name="periods">The configured circadian table.</param>
 	/// <param name="sun">The day's sun times, for the sun-anchored boundaries.</param>
 	/// <param name="window">The board's window.</param>
+	/// <param name="zone">
+	///     The household's time zone, which is what turns a period's wall-clock <c>Start</c> into an instant.
+	///     Defaults to <see cref="TimeZoneInfo.Local"/> — the same premise the rest of this class makes with
+	///     <c>ToLocalTime</c> — and is named explicitly only by tests, which must not depend on the machine they
+	///     run on.
+	/// </param>
 	/// <returns>The segments, left to right. Empty when no period can be placed.</returns>
 	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	public static IReadOnlyList<BandSegment> Band(IReadOnlyList<TimePeriodConfig> periods, SunTimes sun, BoardWindow window)
+	public static IReadOnlyList<BandSegment> Band(
+		IReadOnlyList<TimePeriodConfig> periods,
+		SunTimes sun,
+		BoardWindow window,
+		TimeZoneInfo? zone = null)
 	{
 		ArgumentNullException.ThrowIfNull(periods);
 		ArgumentNullException.ThrowIfNull(sun);
 		ArgumentNullException.ThrowIfNull(window);
+
+		TimeZoneInfo local = zone ?? TimeZoneInfo.Local;
+
+		// The day the window opens on, as the household's clock reads it. Taken through the zone rather than off
+		// window.Start.Date: the window carries the offset it was built at, which on the morning of a clock change
+		// names the wrong hour and can name the wrong day with it.
+		DateTime firstDay = TimeZoneInfo.ConvertTime(window.Start, local).Date;
 
 		List<(DateTimeOffset At, TimePeriodConfig Period)> boundaries = [];
 
@@ -546,7 +572,7 @@ public static class BoardView
 				continue;
 
 			for (int day = -1; day <= 1; day++)
-				boundaries.Add((new DateTimeOffset(window.Start.Date.AddDays(day) + time.ToTimeSpan(), window.Start.Offset), period));
+				boundaries.Add((Instant(firstDay.AddDays(day) + time.ToTimeSpan(), local), period));
 		}
 
 		if (boundaries.Count == 0)
@@ -574,6 +600,19 @@ public static class BoardView
 
 		return segments;
 	}
+
+	/// <summary>
+	///     The instant a wall-clock time falls at in <paramref name="zone"/>.
+	/// </summary>
+	/// <remarks>
+	///     The two hours a year that have no single answer are left to <see cref="TimeZoneInfo.GetUtcOffset(DateTime)"/>,
+	///     which reads both as standard time: a boundary inside the hour the clocks skip is drawn where that clock
+	///     lands, and one inside the hour lived twice is drawn on its second pass. Both are defensible readings of a
+	///     wall-clock time the household's own clock never showed once, and either way it is one boundary on one day
+	///     — where the fault this replaces moved <i>every</i> boundary on the far side of the change.
+	/// </remarks>
+	private static DateTimeOffset Instant(DateTime wallClock, TimeZoneInfo zone) =>
+		new(wallClock, zone.GetUtcOffset(wallClock));
 
 	/// <summary>Whether a band segment is wide enough to carry its own name without the name outgrowing it.</summary>
 	/// <param name="segment">The segment.</param>

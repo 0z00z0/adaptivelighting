@@ -32,6 +32,7 @@ public sealed class LightingOrchestrator : IDisposable
 {
 	private const string NextRisingAttribute = "next_rising";
 	private const string NextSettingAttribute = "next_setting";
+	private const string FriendlyNameAttribute = "friendly_name";
 
 	private readonly IHaContext _ha;
 	private readonly IHaRegistry _registry;
@@ -51,6 +52,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
 	private readonly List<AreaController> _areas = [];
+	private readonly List<SuspectLight> _sharedLights = [];
 	private readonly HashSet<string> _motionSensorUnion = new(StringComparer.OrdinalIgnoreCase);
 	private readonly CompositeDisposable _subscriptions = [];
 
@@ -107,6 +109,25 @@ public sealed class LightingOrchestrator : IDisposable
 	public IReadOnlyList<AreaController> Areas => _areas;
 
 	/// <summary>
+	///     The bulbs more than one room commands, because Home Assistant has not put them in a room of their own.
+	///     Empty in the ordinary house.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Settled once, in <see cref="Start"/>, and never touched again. This is a fact about the Home
+	///         Assistant registry, not about any tick: nothing a room does from one minute to the next can change
+	///         which area a light is filed under, so re-deciding it on the clock would be per-tick work for an
+	///         answer that cannot have moved. It changes when somebody edits the registry, and the engine is rebuilt
+	///         when they do.
+	///     </para>
+	///     <para>
+	///         Held as advice rather than acted on. <see cref="LightAudit.SharedBetweenRooms"/> records why the
+	///         engine goes on commanding the bulb from both rooms; this is the list the household is shown.
+	///     </para>
+	/// </remarks>
+	public IReadOnlyList<SuspectLight> SharedLights => _sharedLights;
+
+	/// <summary>
 	///     Resolves the areas and starts the engine. Areas that fail to resolve are skipped and reported in one
 	///     notification: an entity renamed in HA costs that room, not the house.
 	/// </summary>
@@ -120,12 +141,14 @@ public sealed class LightingOrchestrator : IDisposable
 		_logger.LogInformation("Starting adaptive lighting: {ConfigName}, {AreaCount} areas configured.",
 			_config.ConfigName ?? "(unnamed)", _config.Areas.Count);
 
+		HaAreaRegistry registry = new(_registry);
 		AreaEntityResolver resolver = new(
 			_ha,
-			new HaAreaRegistry(_registry),
+			registry,
 			_config.Global,
 			_loggerFactory.CreateLogger<AreaEntityResolver>());
 		List<string> failures = new();
+		List<ResolvedArea> running = [];
 
 		foreach (AreaConfig areaConfig in _config.Areas)
 		{
@@ -139,9 +162,11 @@ public sealed class LightingOrchestrator : IDisposable
 			// The union of every area's motion sensors: an option that resets on presence with no explicit sensor
 			// list resets on any of these (09 owner refinement). Collected before the mode monitor is built.
 			_motionSensorUnion.UnionWith(resolved!.MotionSensors);
+			running.Add(resolved!);
 			_areas.Add(BuildArea(resolved!, areaConfig.AreaId));
 		}
 
+		ReportSharedLights(running, resolver, registry);
 		StartHouseMonitors();
 
 		foreach (AreaController area in _areas)
@@ -149,6 +174,84 @@ public sealed class LightingOrchestrator : IDisposable
 
 		PublishHouseState();
 		ReportFailures(failures);
+	}
+
+	/// <summary>
+	///     Every bulb an area will actually put a command on, named the way Home Assistant names it.
+	/// </summary>
+	/// <remarks>
+	///     The resolver's own list is what the area <i>holds</i>; a light group in it stands for the bulbs inside,
+	///     and it is the bulbs that get commanded. Two rooms sharing a bulb through two different groups hold
+	///     nothing in common, so following each id down to its leaves is the only way the sharing is visible at all
+	///     — see <see cref="LightAudit.SharedBetweenRooms"/>.
+	/// </remarks>
+	private RoomUnderReview BulbsOf(ResolvedArea area, AreaEntityResolver resolver)
+	{
+		List<LightUnderReview> bulbs = [];
+		HashSet<string> seen = new(StringComparer.Ordinal);
+
+		foreach (string entityId in area.Lights)
+			foreach (string bulb in resolver.LeavesOf(entityId))
+				if (seen.Add(bulb))
+					bulbs.Add(new LightUnderReview(bulb, _ha.AttrString(bulb, FriendlyNameAttribute) ?? bulb));
+
+		return new RoomUnderReview(area.Name, bulbs);
+	}
+
+	/// <summary>
+	///     Finds the bulbs two rooms will both be commanding, and says so once for each.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Once per start, never per tick: which area a light belongs to is a registry fact, and the engine is
+	///         rebuilt whenever the household changes one. So the warning is loud rather than frequent — a line per
+	///         bulb in the log a household reads when something is wrong, and the same advice held on
+	///         <see cref="SharedLights"/> for the surfaces that render it.
+	///     </para>
+	///     <para>
+	///         Every failure here is swallowed on purpose. This is advice about the house, arriving after every room
+	///         has already been resolved and built; a registry that stopped answering between the two must cost the
+	///         advice and not the lighting.
+	///     </para>
+	/// </remarks>
+	/// <param name="running">Every room that resolved and is about to be commanded.</param>
+	/// <param name="resolver">Follows each room's lights down to the bulbs they stand for.</param>
+	/// <param name="registry">Where "has Home Assistant put this light in a room?" is answered.</param>
+	private void ReportSharedLights(IReadOnlyList<ResolvedArea> running, AreaEntityResolver resolver, IAreaRegistry registry)
+	{
+		try
+		{
+			// Swept on first use and once. It is a pass over every area in the house, and the ordinary house has no
+			// bulb reaching two rooms to spend one on — so the audit asks only about the bulbs that got that far.
+			HashSet<string>? assigned = null;
+
+			bool HasOwnArea(string entityId) => (assigned ??= EntitiesWithAnArea(registry)).Contains(entityId);
+
+			_sharedLights.AddRange(LightAudit.SharedBetweenRooms(
+				[.. running.Select(area => BulbsOf(area, resolver))], HasOwnArea));
+		}
+		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
+		{
+			_logger.LogDebug(exception, "Could not check whether any light is commanded by two rooms at once.");
+			return;
+		}
+
+		foreach (SuspectLight shared in _sharedLights)
+			_logger.LogWarning(
+				"Light '{Light}' ({EntityId}) is {Reason}. Until then both rooms set its brightness, and whichever "
+				+ "empties first switches it off on somebody standing in the other.",
+				shared.Name, shared.EntityId, shared.Reason);
+	}
+
+	/// <summary>Every entity Home Assistant has actually filed under an area. One pass over the house.</summary>
+	private static HashSet<string> EntitiesWithAnArea(IAreaRegistry registry)
+	{
+		HashSet<string> assigned = new(StringComparer.Ordinal);
+
+		foreach (string areaId in registry.AreaIds)
+			assigned.UnionWith(registry.EntitiesInArea(areaId));
+
+		return assigned;
 	}
 
 	private AreaController BuildArea(ResolvedArea resolved, string? areaId)
