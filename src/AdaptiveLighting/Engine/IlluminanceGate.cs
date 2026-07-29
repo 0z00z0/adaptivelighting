@@ -55,13 +55,6 @@ public sealed class IlluminanceGate
 	private int _lastLuxOffered;
 	private double? _lastElevation;
 
-	// Which half settled the verdict, recorded rather than re-derived: hysteresis means a lux reading
-	// cannot afterwards be re-tested against the threshold and give the same answer, and the || short-circuits the
-	// sun away entirely on the path where lux decided. Written on every path through IsDarkByEither, and read by
-	// nothing else, so no other source can leave a stale opinion behind.
-	private bool _eitherLuxSaidDark;
-	private bool _eitherSunSaidDark;
-
 	/// <summary>
 	///     Creates a gate for one area.
 	/// </summary>
