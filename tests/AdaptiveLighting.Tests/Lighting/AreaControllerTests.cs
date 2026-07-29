@@ -898,7 +898,7 @@ public sealed class AreaControllerTests
 		AreaSnapshot latest = t.Publisher.Snapshots[^1];
 
 		Assert.AreEqual("evening", latest.PeriodName);
-		Assert.AreEqual(RoomLevels.Brightness, latest.LevelsFromRoom,
+		Assert.AreEqual(RoomLevelSource.Brightness, latest.LevelsFromRoom,
 			"a statement about the period, so it holds before the engine has commanded anything");
 	}
 
@@ -907,7 +907,7 @@ public sealed class AreaControllerTests
 	{
 		Fixture t = Build();
 
-		Assert.AreEqual(RoomLevels.None, t.Publisher.Snapshots[^1].LevelsFromRoom,
+		Assert.AreEqual(RoomLevelSource.None, t.Publisher.Snapshots[^1].LevelsFromRoom,
 			"null is reserved for a build that predates the field; a running engine always has an answer");
 	}
 
@@ -917,7 +917,7 @@ public sealed class AreaControllerTests
 	{
 		Fixture t = Build(levels: [new RoomLevelOverride { Period = "evening", BrightnessPct = 25 }]);
 
-		Assert.AreEqual(RoomLevels.Brightness, t.Publisher.Snapshots[^1].LevelsFromRoom);
+		Assert.AreEqual(RoomLevelSource.Brightness, t.Publisher.Snapshots[^1].LevelsFromRoom);
 
 		// 20:00 + 2h35m is 22:35, five minutes into night — which this room does not override.
 		Advance(t, TimeSpan.FromMinutes(155));
@@ -925,7 +925,7 @@ public sealed class AreaControllerTests
 		AreaSnapshot latest = t.Publisher.Snapshots[^1];
 
 		Assert.AreEqual("night", latest.PeriodName);
-		Assert.AreEqual(RoomLevels.None, latest.LevelsFromRoom);
+		Assert.AreEqual(RoomLevelSource.None, latest.LevelsFromRoom);
 	}
 
 	// ===================== circadian tick =====================

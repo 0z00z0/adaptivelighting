@@ -275,7 +275,7 @@ public sealed class CircadianCalculatorTests
 
 		Assert.AreEqual(70d, target.BrightnessPct);
 		Assert.AreEqual(2700, target.ColorTempKelvin);
-		Assert.AreEqual(RoomLevels.None, target.FromRoom, "which is what the overwhelming majority of rooms report");
+		Assert.AreEqual(RoomLevelSource.None, target.FromRoom, "which is what the overwhelming majority of rooms report");
 	}
 
 	[TestMethod]
@@ -288,7 +288,7 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual(40d, target.BrightnessPct);
 		Assert.AreEqual(2700, target.ColorTempKelvin,
 			"the two values are independent: a room that only wants to be dimmer still follows the schedule's warmth");
-		Assert.AreEqual(RoomLevels.Brightness, target.FromRoom);
+		Assert.AreEqual(RoomLevelSource.Brightness, target.FromRoom);
 	}
 
 	[TestMethod]
@@ -300,7 +300,7 @@ public sealed class CircadianCalculatorTests
 
 		Assert.AreEqual(70d, target.BrightnessPct, "a workshop that cannot use 2700 K has said nothing about brightness");
 		Assert.AreEqual(4000, target.ColorTempKelvin);
-		Assert.AreEqual(RoomLevels.ColorTemp, target.FromRoom);
+		Assert.AreEqual(RoomLevelSource.ColorTemp, target.FromRoom);
 	}
 
 	[TestMethod]
@@ -312,7 +312,7 @@ public sealed class CircadianCalculatorTests
 
 		Assert.AreEqual(40d, target.BrightnessPct);
 		Assert.AreEqual(4000, target.ColorTempKelvin);
-		Assert.AreEqual(RoomLevels.Brightness | RoomLevels.ColorTemp, target.FromRoom);
+		Assert.AreEqual(RoomLevelSource.Brightness | RoomLevelSource.ColorTemp, target.FromRoom);
 	}
 
 	/// <summary>Keyed by name, so the room's levels follow the period they were written about — and match it as every other period lookup does, ignoring case.</summary>
@@ -333,7 +333,7 @@ public sealed class CircadianCalculatorTests
 		var target = Stepped(levels: levels).GetTarget(At(20))!;
 
 		Assert.AreEqual(70d, target.BrightnessPct, "the schedule's, exactly as a room with no levels at all gets");
-		Assert.AreEqual(RoomLevels.None, target.FromRoom);
+		Assert.AreEqual(RoomLevelSource.None, target.FromRoom);
 	}
 
 	[TestMethod]
@@ -391,7 +391,7 @@ public sealed class CircadianCalculatorTests
 
 		Assert.AreEqual(30d, target.BrightnessPct);
 		Assert.AreNotEqual(15d, target.BrightnessPct, "refusing the row would have handed back the schedule's 15");
-		Assert.AreEqual(RoomLevels.Brightness, target.FromRoom, "and the room is still the reason for the number");
+		Assert.AreEqual(RoomLevelSource.Brightness, target.FromRoom, "and the room is still the reason for the number");
 	}
 
 	// ===================== blending across a boundary a room owns one side of =====================
@@ -428,7 +428,7 @@ public sealed class CircadianCalculatorTests
 
 		Assert.AreEqual("evening", target.PeriodName);
 		Assert.AreEqual(50, target.BrightnessPct, 0.001, "halfway from this room's 30 to evening's 70");
-		Assert.AreEqual(RoomLevels.None, target.FromRoom,
+		Assert.AreEqual(RoomLevelSource.None, target.FromRoom,
 			"the flag describes the period being arrived at, which this room does not override");
 	}
 
@@ -480,7 +480,7 @@ public sealed class CircadianCalculatorTests
 
 		Assert.AreEqual(8d, night.BrightnessPct);
 		Assert.AreEqual(30d, night.MaxBrightnessPct, "the period's caps are the period's, whoever set the level");
-		Assert.AreEqual(RoomLevels.Brightness, night.FromRoom);
+		Assert.AreEqual(RoomLevelSource.Brightness, night.FromRoom);
 	}
 
 	// ===================== ActivePeriodName =====================

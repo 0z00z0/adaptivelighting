@@ -58,7 +58,7 @@ public sealed class AreaController : IDisposable
 	// under the same lock, so the second resolution was pure re-work. All three fields are only touched under _gate.
 	private DateTimeOffset _resolvedPeriodAt;
 	private string? _resolvedPeriodName;
-	private RoomLevels _resolvedLevelsFromRoom;
+	private RoomLevelSource _resolvedLevelsFromRoom;
 	private LightCommand? _lastCommand;
 	private DateTimeOffset? _lastCommandAt;
 	private DateTimeOffset? _lastMotionAt;
@@ -1021,7 +1021,7 @@ public sealed class AreaController : IDisposable
 	{
 		_resolvedPeriodAt = now;
 		_resolvedPeriodName = target?.PeriodName;
-		_resolvedLevelsFromRoom = target?.FromRoom ?? RoomLevels.None;
+		_resolvedLevelsFromRoom = target?.FromRoom ?? RoomLevelSource.None;
 	}
 
 	/// <summary>Unsubscribes and cancels every timer. The lights are left exactly as they are.</summary>

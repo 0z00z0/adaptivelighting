@@ -11,7 +11,7 @@ namespace AdaptiveLighting.Engine;
 ///     "this room has overrides" would have to guess which half it was looking at.
 /// </remarks>
 [Flags]
-public enum RoomLevels
+public enum RoomLevelSource
 {
 	/// <summary>Neither: the schedule's own levels, which is what every room without an override runs.</summary>
 	None = 0,
@@ -44,7 +44,7 @@ public sealed record LightTarget(
 	int ColorTempKelvin,
 	double? MinBrightnessPct,
 	double? MaxBrightnessPct,
-	RoomLevels FromRoom = RoomLevels.None)
+	RoomLevelSource FromRoom = RoomLevelSource.None)
 {
 	/// <summary>Clamps <paramref name="brightnessPct"/> to this target's caps and to the physical 0–100 range.</summary>
 	public double Clamp(double brightnessPct)
@@ -261,11 +261,11 @@ public sealed class CircadianCalculator
 	private PeriodLevels LevelsOf(TimePeriodConfig period)
 	{
 		if (!_roomLevels.TryGetValue(period.Name, out RoomLevelOverride? level))
-			return new PeriodLevels(period.BrightnessPct, period.ColorTempKelvin, RoomLevels.None);
+			return new PeriodLevels(period.BrightnessPct, period.ColorTempKelvin, RoomLevelSource.None);
 
-		RoomLevels fromRoom =
-			(level.BrightnessPct is null ? RoomLevels.None : RoomLevels.Brightness)
-			| (level.ColorTempKelvin is null ? RoomLevels.None : RoomLevels.ColorTemp);
+		RoomLevelSource fromRoom =
+			(level.BrightnessPct is null ? RoomLevelSource.None : RoomLevelSource.Brightness)
+			| (level.ColorTempKelvin is null ? RoomLevelSource.None : RoomLevelSource.ColorTemp);
 
 		return new PeriodLevels(
 			level.BrightnessPct ?? period.BrightnessPct,
@@ -274,7 +274,7 @@ public sealed class CircadianCalculator
 	}
 
 	/// <summary>One period's levels as this room runs them, before the period's caps have had their say.</summary>
-	private readonly record struct PeriodLevels(double BrightnessPct, int ColorTempKelvin, RoomLevels FromRoom);
+	private readonly record struct PeriodLevels(double BrightnessPct, int ColorTempKelvin, RoomLevelSource FromRoom);
 
 	/// <summary>
 	///     Puts <paramref name="levels"/> under the period's caps and labels it with the period.
