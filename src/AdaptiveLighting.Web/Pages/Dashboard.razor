@@ -184,9 +184,13 @@ else
 		<span class="tray-quiet">@BoardView.QuietRoomsLine(_lanes.Count, _exceptions.Count)</span>
 	</div>
 
+	@* The board's own mark. i-lanes exists precisely for this heading: ui-design-c §6.2 refused both drawn
+	   dashboard glyphs — a tile grid and a gauge are the wrong metaphor for a surface that is a timeline —
+	   and commissioned three unequal tracks cut by a now-line instead, which is this board in miniature. It
+	   is the only heading on the page, so nothing repeats it. *@
 	<section class="board">
 		<div class="board-head">
-			<h2 class="board-title">Timeline</h2>
+			<h2 class="board-title"><Icon Name="@Glyph.Lanes" Class="ic-head" />Timeline</h2>
 			<span class="board-span">@BoardView.Clock(_window.Start) &rarr; @BoardView.Clock(_window.End)</span>
 			<span class="board-since">@SinceLine</span>
 		</div>

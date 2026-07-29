@@ -85,7 +85,10 @@
 							</InfoPopover>
 						</span>
 						<select class="cell wide" @bind:get="boundPeriod.SetsMode ?? string.Empty" @bind:set="@(value => SetMode(boundPeriod, value))">
-							<option value="">— leave the house mode unchanged</option>
+							@* Never open with the dash: a leading em dash reads as a separator or a greyed-out heading
+						   rather than as the option that is currently chosen. Same "(none — …)" form the pickers
+						   use, so every empty choice on the page is written one way. *@
+						<option value="">(none — leave the house mode unchanged)</option>
 							@foreach (string mode in HouseModeOptions)
 							{
 								<option value="@mode">@mode</option>
