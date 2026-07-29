@@ -441,11 +441,20 @@
 			// is simply cut off in any screenshot of the chart alone.
 			string anchor = index == 0 ? "start" : index == decades.Count - 1 ? "end" : "middle";
 
+			// Every decade keeps its gridline, but a narrow card cannot label all six: measured at 390 px,
+			// "10000 lx" and "100000 lx" ran together into one unreadable word. Alternate labels are marked so
+			// the stylesheet can drop them there — it has to be CSS, because this SVG is built on the server
+			// against a fixed viewBox and knows nothing about the viewport it will land in.
+			//
+			// Counted from the RIGHT so the top decade always survives: it is the one that says how far the
+			// axis reaches, and losing it leaves the curve looking like it stopped somewhere else.
+			string thin = (decades.Count - 1 - index) % 2 == 1 ? " luxc-thin" : string.Empty;
+
 			svg.Append($"<line x1=\"{x}\" y1=\"0\" x2=\"{x}\" y2=\"{LuxCurve.Num(LuxCurve.PlotHeight)}\" class=\"luxc-grid\" />");
-			svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 16)}\" text-anchor=\"{anchor}\" class=\"luxc-axis\">{Escape(LuxCurve.Lux(lux))}</text>");
+			svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 16)}\" text-anchor=\"{anchor}\" class=\"luxc-axis{thin}\">{Escape(LuxCurve.Lux(lux))}</text>");
 
 			if (DecadeWord(lux) is { Length: > 0 } word)
-				svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 29)}\" text-anchor=\"{anchor}\" class=\"luxc-decade\">{Escape(word)}</text>");
+				svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 29)}\" text-anchor=\"{anchor}\" class=\"luxc-decade{thin}\">{Escape(word)}</text>");
 		}
 
 		// The period's own ceiling. The daylight adjustment proposes and the period disposes, so a curve drawn

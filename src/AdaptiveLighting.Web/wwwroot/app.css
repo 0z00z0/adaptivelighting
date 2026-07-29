@@ -5747,6 +5747,16 @@ h1[tabindex="-1"]:focus {
 	font-size: 10px;
 }
 
+/* Six decades will not fit across a phone: measured at 390 px, "10000 lx" and "100000 lx" ran together into
+   one word. Alternate labels are marked in the markup, counted from the right so the top decade survives, and
+   dropped here. The gridlines stay, so the decades the labels no longer name are still marked. */
+@media (max-width: 44rem) {
+	.luxc-axis.luxc-thin,
+	.luxc-decade.luxc-thin {
+		display: none;
+	}
+}
+
 .luxc-decade {
 	fill: var(--muted);
 	font-family: var(--font-sans);
