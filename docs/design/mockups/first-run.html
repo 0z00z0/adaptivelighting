@@ -1,0 +1,848 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- viewport meta is a deliberate addition over the-workshop.html: this mock-up's brief includes the
+     390px phone rendering, and without the tag a phone lies about its own width. -->
+<title>First run — the commissioning board</title>
+<style>
+/* ============================================================================
+   TOKENS — copied from src/AdaptiveLighting.Web/wwwroot/app.css, real names.
+   (the-workshop.html predates the token rename; this file uses the shipped
+   names: --text not --ink, --panel-2 not --panel2, --*-bg not --*-soft.)
+   ============================================================================ */
+:root{
+	--bg:#141610; --panel:#1c1e16; --panel-2:#22251b; --chip:#262a1e; --lane:#181a12; --glow-track:#2c2f22;
+	--line:#33362a; --grid:#262921;
+	--text:#eaeadf; --muted:#9a9c8a; --accent-ink:#221a05;
+	--accent:#e2ae45;
+	--machine:#e8a24a; --machine-bg:#2e2412; --kelvin-weight:100%; --kelvin-shade:transparent;
+	--human:#a99af2; --human-bg:#2a2447; --warn:#efa23b; --warn-bg:#3a2d12;
+	--ok:#8fbf7a; --ok-bg:#1e2a18; --bad:#e07a5f; --bad-bg:#33201a;
+	--idle:#7c7f6d; --idle-bg:#20231a; --now:#5fc2ac; --info:#7fb3d5;
+	--icon-accent:var(--accent);
+	--shadow-float:0 1px 2px rgba(0,0,0,.35),0 8px 24px rgba(0,0,0,.35);
+	color-scheme:dark;
+}
+@media (prefers-color-scheme:light){:root{
+	--bg:#eeefe9; --panel:#ffffff; --panel-2:#f6f6f1; --chip:#ebede2; --lane:#f3f4ee; --glow-track:#e4e5da;
+	--line:#d9dcce; --grid:#e2e4d8;
+	--text:#23261f; --muted:#6e7365; --accent-ink:#ffffff;
+	--accent:#8f6c15;
+	--machine:#8a5214; --machine-bg:#f6ecdb; --kelvin-weight:45%; --kelvin-shade:#23261f;
+	--human:#6553c4; --human-bg:#e9e5f8; --warn:#b26a00; --warn-bg:#f4e4c6;
+	--ok:#3e7a46; --ok-bg:#e6efe4; --bad:#a8402f; --bad-bg:#f6e3df;
+	--idle:#8a8d7d; --idle-bg:#f0f1ea; --now:#2e6e62; --info:#2c6e9b;
+	--icon-accent:var(--accent);
+	--shadow-float:0 1px 2px rgba(35,38,31,.05),0 5px 18px rgba(35,38,31,.12);
+	color-scheme:light;
+}}
+:root[data-theme="dark"]{
+	--bg:#141610; --panel:#1c1e16; --panel-2:#22251b; --chip:#262a1e; --lane:#181a12; --glow-track:#2c2f22;
+	--line:#33362a; --grid:#262921;
+	--text:#eaeadf; --muted:#9a9c8a; --accent-ink:#221a05;
+	--accent:#e2ae45;
+	--machine:#e8a24a; --machine-bg:#2e2412; --kelvin-weight:100%; --kelvin-shade:transparent;
+	--human:#a99af2; --human-bg:#2a2447; --warn:#efa23b; --warn-bg:#3a2d12;
+	--ok:#8fbf7a; --ok-bg:#1e2a18; --bad:#e07a5f; --bad-bg:#33201a;
+	--idle:#7c7f6d; --idle-bg:#20231a; --now:#5fc2ac; --info:#7fb3d5;
+	--icon-accent:var(--accent);
+	--shadow-float:0 1px 2px rgba(0,0,0,.35),0 8px 24px rgba(0,0,0,.35);
+	color-scheme:dark;
+}
+:root[data-theme="light"]{
+	--bg:#eeefe9; --panel:#ffffff; --panel-2:#f6f6f1; --chip:#ebede2; --lane:#f3f4ee; --glow-track:#e4e5da;
+	--line:#d9dcce; --grid:#e2e4d8;
+	--text:#23261f; --muted:#6e7365; --accent-ink:#ffffff;
+	--accent:#8f6c15;
+	--machine:#8a5214; --machine-bg:#f6ecdb; --kelvin-weight:45%; --kelvin-shade:#23261f;
+	--human:#6553c4; --human-bg:#e9e5f8; --warn:#b26a00; --warn-bg:#f4e4c6;
+	--ok:#3e7a46; --ok-bg:#e6efe4; --bad:#a8402f; --bad-bg:#f6e3df;
+	--idle:#8a8d7d; --idle-bg:#f0f1ea; --now:#2e6e62; --info:#2c6e9b;
+	--icon-accent:var(--accent);
+	--shadow-float:0 1px 2px rgba(35,38,31,.05),0 5px 18px rgba(35,38,31,.12);
+	color-scheme:light;
+}
+:root{
+	--radius-panel:8px; --radius-control:7px; --radius-chip:6px; --radius-switch:999px; --radius:var(--radius-panel);
+	--stroke-hair:1px; --stroke-control:1.5px; --stroke-mark:2px;
+	--rule:1px solid var(--line); --rule-inner:1px solid var(--grid);
+	--space-1:4px; --space-2:6px; --space-3:8px; --space-4:12px; --space-5:16px; --space-6:24px;
+	--font-sans:Seravek,"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
+	--mono:"Cascadia Mono",ui-monospace,"Cascadia Code",Consolas,monospace;
+	--text-xs:11px; --text-sm:12.5px; --text-md:13.5px; --text-base:15px; --text-lg:19px; --text-xl:24px;
+	--label-track:0.14em;
+}
+
+/* ---- base ---- */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px 90px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+a{color:var(--accent)}
+h1,h2,h3{margin:0;text-wrap:balance}
+.num,.mono{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.hidden{display:none!important}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.lab{font-size:var(--text-xs);font-weight:700;letter-spacing:var(--label-track);text-transform:uppercase;color:var(--muted)}
+.smallprint{font-size:var(--text-sm);color:var(--muted)}
+
+/* ---- icons (real sprite technique: currentColor outline + one accent) ---- */
+.ic{width:18px;height:18px;flex:none;display:block}
+.stw{display:inline-grid;place-items:center;width:15px;height:15px;flex:none;--icon-accent:currentColor}
+.stw .ic{width:15px;height:15px}
+.state-blink{animation:state-blink 1.1s step-end infinite}
+@keyframes state-blink{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.state-blink{animation:none}}
+.state-dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:0 0 auto;opacity:.75}
+
+/* ---- demo chrome (NOT part of the product) ---- */
+.demo-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px dashed var(--line);border-radius:var(--radius-panel);
+	padding:6px 12px;margin:12px 0;font-size:var(--text-sm);color:var(--muted)}
+.demo-bar button{border:1px solid var(--line);border-radius:var(--radius-control);padding:2px 10px;font-size:var(--text-sm);color:var(--muted)}
+.demo-bar button.cur{color:var(--accent);border-color:var(--accent)}
+.demo-note{font-size:var(--text-xs);color:var(--muted);font-style:italic}
+
+/* ---- header ---- */
+header.hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 0 4px}
+.hd .mark{width:24px;height:24px;color:var(--text)}
+.hd .t{font-size:var(--text-lg);font-weight:700}
+.hd .sub{font-size:var(--text-sm);color:var(--muted)}
+.runbtn{margin-left:auto;font-size:12px;font-weight:700;letter-spacing:.1em;padding:3px 10px;border-radius:4px;
+	border:1px solid var(--ok);color:var(--ok);font-family:var(--mono)}
+
+/* ---- the onboarding surface (real class: the awaiting-room-choice panel) ---- */
+.onboarding{background:var(--panel);border:var(--rule);border-radius:var(--radius);padding:1.2rem 1.35rem;margin:10px 0 16px}
+.onboarding-lead{margin:0;font-size:1.02rem;color:var(--text);max-width:64ch}
+
+/* ---- findings strip (new: comm-*) ---- */
+.comm-strip{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 4px}
+.comm-fact{background:var(--panel-2);border:var(--rule);border-radius:var(--radius-chip);padding:8px 16px;min-width:86px;text-align:center}
+.comm-fact .n{font-size:var(--text-xl);font-weight:650;font-family:var(--mono);font-variant-numeric:tabular-nums;line-height:1.15}
+.comm-fact .w{font-size:var(--text-xs);font-weight:700;letter-spacing:var(--label-track);text-transform:uppercase;color:var(--muted)}
+.comm-fact.mode{display:flex;align-items:center;gap:9px;text-align:left;min-width:0}
+.comm-fact.mode .ic{width:18px;height:18px;color:var(--muted)}
+.comm-fact.mode .n{font-size:var(--text-base);font-family:var(--font-sans)}
+.comm-fact.mode .w{letter-spacing:.08em}
+
+/* ---- the checklist (new: comm-*) ---- */
+.comm-list{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+.comm-item{display:flex;flex-direction:column;gap:1px;align-items:flex-start;background:var(--panel);border:var(--rule);
+	border-left:3px solid var(--line);border-radius:var(--radius-control);padding:7px 13px;text-align:left;min-width:150px}
+.comm-item .ti{font-weight:650;font-size:var(--text-md)}
+.comm-item .st{font-size:var(--text-sm);color:var(--muted)}
+.comm-item.done{border-left-color:var(--ok)}
+.comm-item.done .st{color:var(--ok)}
+.comm-item.todo{border-left-color:var(--accent)}
+.comm-item.warn{border-left-color:var(--warn)}
+.comm-item.warn .st{color:var(--warn)}
+.comm-item.opt{border-left-color:var(--line)}
+.comm-item:hover{border-color:var(--accent);border-left-width:3px}
+
+/* ---- a question sheet ---- */
+.panel{background:var(--panel);border:var(--rule);border-radius:var(--radius);padding:0;margin:12px 0;overflow:visible}
+.sheet-head{display:flex;align-items:baseline;gap:10px;padding:12px 18px 2px;flex-wrap:wrap}
+.sheet-head .note{font-size:var(--text-sm);color:var(--muted);margin-left:auto}
+.sheet-body{padding:4px 18px 14px}
+
+/* ---- sentences (real classes) ---- */
+.sentences{display:flex;flex-direction:column}
+.sentence{margin:0;padding:.6rem 0;border-top:var(--rule-inner);font-size:var(--text-base);line-height:1.9}
+.sentence:first-child{border-top:0}
+.tok{display:inline-flex;align-items:center;gap:.3rem;background:var(--chip);border:var(--stroke-hair) solid var(--line);
+	border-radius:var(--radius-chip);padding:.05rem .45rem;margin:0 1px;font-family:var(--mono);font-size:var(--text-md);
+	font-weight:600;color:inherit;line-height:1.7;white-space:nowrap;cursor:pointer;vertical-align:baseline}
+.tok:hover,.tok[aria-expanded="true"]{border-color:var(--accent);color:var(--accent)}
+.tok-static{font-weight:650;font-variant-numeric:tabular-nums}
+.tok-own-dot{width:6px;height:6px;border-radius:50%;background:var(--warn);flex:0 0 auto}
+.tok-host{position:relative;display:inline-block}
+.tok-pop{position:absolute;z-index:70;left:0;top:calc(100% + 4px);min-width:10rem;max-width:min(16rem,80vw);background:var(--panel);
+	border:var(--rule);border-radius:var(--radius-panel);box-shadow:var(--shadow-float);padding:4px;text-align:left;white-space:normal;line-height:1.5}
+.tok-pop button{display:block;width:100%;text-align:left;border-radius:var(--radius-chip);padding:.3rem .6rem;font-family:var(--mono);font-size:var(--text-md);color:var(--text)}
+.tok-pop button:hover{background:var(--chip)}
+.tok-pop button.cur{color:var(--accent);font-weight:700}
+.tok-pop input{width:100%;background:var(--panel-2);border:var(--stroke-control) solid var(--line);border-radius:var(--radius-chip);
+	color:var(--text);font:inherit;font-family:var(--mono);padding:.3rem .5rem;margin:.15rem 0}
+.tok-pop-note{display:block;padding:.3rem .6rem .35rem;font-size:var(--text-xs);line-height:1.45;color:var(--muted);font-family:var(--font-sans)}
+@media (max-width:560px){
+	.tok-pop{position:fixed;left:.75rem;right:.75rem;top:auto;bottom:.75rem;max-width:none;min-width:0}
+	.tok-pop button{padding:.55rem .7rem}
+}
+.sentence-legend{display:flex;align-items:center;gap:.35rem;margin:.15rem 0 0;font-size:var(--text-sm);color:var(--muted)}
+
+/* ---- person chips (real classes) ---- */
+.people-row{display:flex;gap:var(--space-2);flex-wrap:wrap;padding:4px 0 2px}
+.person-chip{display:inline-flex;align-items:center;gap:.35rem;background:var(--chip);border:1px solid transparent;
+	border-radius:var(--radius-chip);padding:.15rem .45rem;font-size:var(--text-sm);cursor:pointer}
+.person-chip-name{font-weight:550}
+.person-chip-state{color:var(--muted);font-size:var(--text-xs)}
+.person-chip.home .person-chip-state{color:var(--ok)}
+.person-dot{flex:none;width:.7rem;height:.7rem;border-radius:50%;border:1px solid var(--muted);background:transparent}
+.person-dot.home{background:var(--ok);border-color:var(--ok)}
+.person-chip.out{opacity:.55;background:none;border-color:var(--line)}
+.person-chip.out .person-chip-name{text-decoration:line-through}
+.person-chip:hover{border-color:var(--accent)}
+
+/* ---- mode sheet ---- */
+.mode-name{font-weight:650}
+.sheet-actions{display:flex;gap:10px;padding:10px 0 2px;flex-wrap:wrap}
+.sheet-actions button{border:var(--stroke-control) solid var(--line);border-radius:var(--radius-control);padding:.35rem .9rem;
+	font-size:var(--text-md);font-weight:600}
+.sheet-actions button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+/* ---- impostor cards ---- */
+.suspects{display:flex;flex-direction:column}
+.suspect{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:var(--rule-inner)}
+.suspect:first-child{border-top:0}
+.suspect .who{flex:1;min-width:0}
+.suspect .who .nm{font-weight:650;font-size:var(--text-md)}
+.suspect .who .nm .room{color:var(--muted);font-weight:500}
+.suspect .who code{display:block;font-family:var(--mono);font-size:var(--text-xs);color:var(--muted);margin:1px 0 2px;overflow-wrap:anywhere}
+.suspect .why{font-size:var(--text-sm);color:var(--warn)}
+.suspect.excluded .why{color:var(--muted)}
+.suspect.excluded .who .nm{text-decoration:line-through;color:var(--muted)}
+.blinkbtn{border:1px solid var(--line);border-radius:var(--radius-control);padding:.2rem .6rem;font-size:var(--text-sm);color:var(--muted);flex:none}
+.blinkbtn:hover{border-color:var(--accent);color:var(--accent)}
+.suspect.blinking{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.keepex{display:flex;gap:3px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-control);padding:3px;flex:none}
+.keepex button{padding:.25rem .7rem;border-radius:5px;font-size:var(--text-sm);font-weight:600;color:var(--muted)}
+.keepex button.cur{background:var(--panel);color:var(--text);border:1px solid var(--line)}
+
+/* ---- sensor sheet ---- */
+.race{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:6px 0 2px}
+.race .room{font-weight:650;font-size:var(--text-md);min-width:70px}
+.race-tile{background:var(--panel-2);border:var(--stroke-control) solid var(--line);border-radius:var(--radius-control);
+	padding:8px 14px;min-width:120px;cursor:pointer;text-align:left}
+.race-tile:hover{border-color:var(--accent)}
+.race-tile .rn{font-size:var(--text-sm);color:var(--muted)}
+.race-tile .rv{font-size:var(--text-lg);font-weight:650;font-family:var(--mono)}
+.race-avg{font-size:var(--text-sm);color:var(--muted)}
+.race-avg b{color:var(--text)}
+.scrollx{overflow-x:auto}
+.luxband{width:100%;height:auto;display:block;margin:8px 0 0}
+.luxband text{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}
+.luxband .refword{font-family:var(--font-sans);font-size:10px}
+.luxband .roomlbl{fill:var(--text);font-size:10px}
+
+/* ---- the roll-call ---- */
+.floor{position:relative}
+.floor-head{display:flex;align-items:baseline;gap:.75rem;margin:1.1rem 0 .35rem;position:sticky;top:0;z-index:5;
+	background:var(--bg);padding:.3rem 0 .2rem}
+.floor-name{font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.floor-bulk{margin-left:auto;color:var(--accent);font-size:.8rem}
+.floor-bulk:hover{text-decoration:underline}
+.comm-t{background:var(--panel);border:var(--rule);border-radius:var(--radius-panel);overflow:hidden}
+.comm-row{display:grid;grid-template-columns:56px minmax(130px,1.4fr) 64px 64px 88px 2fr;gap:0 10px;align-items:center;
+	padding:7px 14px;border-top:var(--rule-inner);cursor:pointer}
+.comm-row:first-child{border-top:0}
+.comm-row:hover{background:var(--panel-2)}
+.comm-row .rn{font-weight:650;font-size:var(--text-md);min-width:0}
+.comm-row .rn code{display:block;font-family:var(--mono);font-size:var(--text-xs);color:var(--muted);font-weight:400}
+.comm-row .c{font-family:var(--mono);font-size:var(--text-sm);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.comm-row .c b{color:var(--text);font-weight:600}
+.comm-cols{display:grid;grid-template-columns:56px minmax(130px,1.4fr) 64px 64px 88px 2fr;gap:0 10px;padding:8px 14px 4px}
+.comm-cols span{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.comm-cols .c{text-align:right}
+.notes{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-start}
+.note-chip{display:inline-flex;align-items:center;gap:.3rem;border-radius:var(--radius-chip);padding:.05rem .5rem;
+	font-size:var(--text-xs);font-weight:600;white-space:nowrap}
+.note-chip.warn{background:var(--warn-bg);color:var(--warn)}
+.note-chip.info{background:var(--idle-bg);color:var(--info)}
+.note-ready{font-size:var(--text-xs);color:var(--muted);opacity:.7}
+
+/* the room switch (real classes) */
+.switch{display:inline-flex;align-items:center;gap:.45rem;flex:0 0 auto;border-radius:var(--radius-control);
+	padding:.1rem .2rem;color:var(--muted);font-size:.76rem}
+.switch-track{position:relative;width:34px;height:18px;flex:0 0 auto;border:1px solid var(--line);
+	border-radius:var(--radius-switch);background:var(--panel-2);transition:background .15s ease,border-color .15s ease}
+.switch-knob{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--muted);
+	transition:transform .15s ease,background .15s ease}
+.switch.on .switch-track{background:color-mix(in srgb,var(--ok) 28%,var(--panel-2));border-color:var(--ok)}
+.switch.on .switch-knob{background:var(--ok);transform:translateX(16px)}
+@media (prefers-reduced-motion:reduce){.switch-track,.switch-knob{transition:none}}
+
+/* the row unfold */
+.comm-unfold{grid-column:1 / -1;border-top:var(--rule-inner);background:var(--panel-2);padding:4px 14px 10px;cursor:default}
+.comm-unfold .sentence{font-size:var(--text-md);line-height:1.8;padding:.45rem 0}
+.room-gear{display:flex;flex-wrap:wrap;gap:var(--space-2);padding:.5rem 0 .1rem}
+.gchip{display:inline-flex;align-items:center;gap:.4rem;background:var(--chip);border-radius:var(--radius-chip);
+	border-left:3px solid var(--line);padding:.25rem .45rem .25rem .5rem;font-size:var(--text-sm);max-width:100%}
+.gchip-light{border-left-color:var(--machine)}
+.gchip-motion{border-left-color:var(--now)}
+.gchip-lux{border-left-color:var(--info)}
+.gchip .chip-id{font-size:var(--text-xs);color:var(--muted);font-family:var(--mono)}
+
+.nearmiss{margin:10px 2px 0;font-size:var(--text-sm);color:var(--muted);max-width:72ch}
+
+/* ---- commit. Everything is in flow on a desk; the phone block below makes ONLY the
+        button bar sticky within the pick zone, so a thumb never scrolls seventeen rows
+        to find it and the promise text never squats on the viewport. ---- */
+#pickzone{position:relative}
+.commit-copy{padding:10px 0 0;margin-top:6px;border-top:var(--rule-inner)}
+.commit-promise{margin:0;font-size:var(--text-md)}
+.commit-bar{padding:8px 0}
+.bigbtn{display:inline-block;background:var(--accent);color:var(--accent-ink);border-radius:var(--radius-panel);
+	padding:11px 22px;font-size:var(--text-base);font-weight:700}
+.bigbtn:disabled{opacity:.4;cursor:default}
+.commit-after .smallprint{display:block;margin-top:2px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:14px 2px 0;padding-top:10px}
+.legend .key{display:inline-flex;align-items:center;gap:6px;font-size:var(--text-sm);color:var(--muted)}
+.legend .stw{--icon-accent:currentColor}
+
+/* ---- the epilogue board (real board classes, empty tracks) ---- */
+.board{background:var(--panel);border:var(--rule);border-radius:var(--radius-panel);overflow:hidden}
+.board-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--space-4);padding:var(--space-4) var(--space-5) var(--space-3)}
+.board-title{margin:0;font-size:var(--text-xs);font-weight:700;letter-spacing:var(--label-track);text-transform:uppercase;color:var(--muted)}
+.board-since{margin-left:auto;font-size:var(--text-sm);color:var(--muted)}
+.board-floor{display:flex;align-items:center;height:22px;background:var(--panel-2);border-bottom:var(--rule-inner)}
+.board-floor-name{padding:0 .5rem;font-size:var(--text-xs);font-weight:700;letter-spacing:var(--label-track);text-transform:uppercase;color:var(--muted)}
+.lane{display:grid;grid-template-columns:128px 1fr;height:34px;border-bottom:var(--rule-inner)}
+.lane-name{display:flex;align-items:center;gap:.4rem;padding:0 .5rem;font-size:var(--text-md);font-weight:600;border-right:var(--rule)}
+.board-track{position:relative;background:var(--lane)}
+.board-now{position:absolute;top:0;bottom:0;width:var(--stroke-mark);background:var(--now);right:18%}
+.allquiet{color:var(--muted);font-size:var(--text-md);padding:10px 16px;border-top:var(--rule)}
+
+/* ============================================================================
+   PHONE — the 390px rendering. One column; rows fold to two lines; "Ready"
+   goes silent; the commit bar is already sticky.
+   ============================================================================ */
+@media (max-width:560px){
+	.wrap{padding:0 10px 90px}
+	.comm-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+	.comm-fact{min-width:0;padding:7px 8px}
+	.comm-fact .n{font-size:20px}
+	.comm-fact.mode{grid-column:1 / -1}
+	.comm-list{flex-direction:column}
+	.comm-item{width:100%;min-width:0}
+	.comm-cols{display:none}
+	.comm-row{grid-template-columns:44px 1fr auto;grid-template-areas:"sw name lx" "sw meta meta";gap:1px 8px;padding:8px 10px}
+	.comm-row .sw{grid-area:sw}
+	.comm-row .rn{grid-area:name}
+	.comm-row .rn code{display:none}
+	.comm-row .c{display:none}
+	.comm-row .c.lx{display:block;grid-area:lx;font-size:var(--text-sm)}
+	.comm-row .meta{grid-area:meta;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+	.comm-row .meta .cnt{font-size:var(--text-xs);color:var(--muted);font-family:var(--mono)}
+	.note-ready{display:none}
+	.floor-head{top:0}
+	.suspect{flex-wrap:wrap}
+	.suspect .who{flex:1 1 100%}
+	.race .room{min-width:0;flex:1 1 100%}
+	.race-tile{flex:1 1 40%;min-width:0}
+	/* Shrunk to 390px the band's lettering falls below legibility, so it keeps its size and
+	   scrolls sideways instead — the same accepted phone compromise the board makes. */
+	.scrollx .luxband{min-width:660px}
+	.lane{grid-template-columns:104px 1fr}
+	.lane-name{font-size:var(--text-sm)}
+	.commit-bar{position:sticky;bottom:0;z-index:20;background:var(--bg);border-top:var(--rule-inner);padding:8px 0}
+	.bigbtn{display:block;width:100%;text-align:center}
+}
+/* desktop: the columns already carry the counts, so the phone's meta line keeps only its chips */
+@media (min-width:561px){
+	.comm-row .meta .cnt{display:none}
+	.comm-row .notes{min-width:0}
+}
+</style>
+
+<!-- Real sprite symbols, copied from Components/IconSprite.razor. -->
+<svg style="display:none" aria-hidden="true"><defs>
+	<symbol id="i-app" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="12" r="2.2" fill="var(--icon-accent, currentColor)" stroke="none"/><line x1="6.2" y1="12" x2="4.4" y2="12"/><line x1="7.4" y1="9.4" x2="6.1" y2="8.1"/><line x1="7.4" y1="14.6" x2="6.1" y2="15.9"/><path d="M14.6 8.4 A5.8 5.8 0 0 1 14.6 15.6"/><path d="M17.3 6.2 A9.3 9.3 0 0 1 17.3 17.8"/></symbol>
+	<symbol id="i-modes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="5.6"/><line x1="6.9" y1="6.9" x2="5.8" y2="5.8" stroke="var(--icon-accent, currentColor)"/><line x1="17.1" y1="6.9" x2="18.2" y2="5.8"/><line x1="6.9" y1="17.1" x2="5.8" y2="18.2"/><line x1="17.1" y1="17.1" x2="18.2" y2="18.2"/><line x1="12" y1="12" x2="8.7" y2="8.7" stroke="var(--icon-accent, currentColor)" stroke-width="1.8"/><circle cx="12" cy="12" r="1.3" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+	<symbol id="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.8 12 A6.8 6.8 0 1 1 15.4 6.1"/><path d="M12.6 6 L15.4 6.1 L14 3.5"/><circle cx="12" cy="12" r="2" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+	<symbol id="i-manual" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="7.4" r="3.1" fill="var(--icon-accent, currentColor)" stroke="none"/><path d="M5.4 19 A6.6 6.6 0 0 1 18.6 19"/></symbol>
+	<symbol id="i-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7.6"/><line x1="16.6" y1="6.6" x2="7.4" y2="17.4" stroke="var(--icon-accent, currentColor)"/></symbol>
+	<symbol id="i-dimming" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7.6"/><path d="M12 12 L12 5.6 A6.4 6.4 0 0 1 18.4 12 Z" fill="var(--icon-accent, currentColor)" stroke="none"/></symbol>
+</defs></svg>
+
+<div class="wrap">
+
+<div class="demo-bar">
+	<span>Mock-up controls — not part of the product:</span>
+	<button data-set-theme="" class="cur">System</button>
+	<button data-set-theme="light">Light</button>
+	<button data-set-theme="dark">Dark</button>
+	<span class="demo-note">In the product one question sheet opens at a time; here every sheet is open so one scroll shows every step.</span>
+</div>
+
+<header class="hd">
+	<svg class="ic mark" role="img" aria-label="Adaptive lighting"><use href="#i-app"/></svg>
+	<span class="t">B1 · lighting</span>
+	<span class="sub">no rooms switched on yet</span>
+	<button class="runbtn" title="The engine is running and watching — it commands nothing until a room is switched on.">● RUNNING</button>
+</header>
+
+<!-- ======================= THE OPENING SENTENCE (approved §5.4 wording) ======================= -->
+<div class="onboarding">
+	<p class="onboarding-lead"><b>Found 17 rooms</b>, their lights and sensors already matched up.
+	Nothing in the house changes until the one button at the bottom — start with a hallway, it's the
+	easiest room to trust.</p>
+
+	<!-- Findings strip: orientation in five numbers. Glyphless on purpose (§6.2: glyphs mark sections,
+	     counts stay text); the one glyph marks the one chip that is a fact rather than a count. -->
+	<div class="comm-strip" role="list" aria-label="What was found">
+		<div class="comm-fact" role="listitem"><div class="n">17</div><div class="w">rooms</div></div>
+		<div class="comm-fact" role="listitem"><div class="n">29</div><div class="w">lights</div></div>
+		<div class="comm-fact" role="listitem"><div class="n">18</div><div class="w">motion</div></div>
+		<div class="comm-fact" role="listitem"><div class="n">5</div><div class="w">light-level</div></div>
+		<div class="comm-fact" role="listitem"><div class="n">3</div><div class="w">people</div></div>
+		<div class="comm-fact mode" role="listitem"><svg class="ic"><use href="#i-modes"/></svg>
+			<div><div class="n">Husmodus</div><div class="w">house mode · adopted</div></div></div>
+	</div>
+
+	<!-- The checklist. Status lines are data summaries, never visited-flags; an item with no work
+	     (no adopted mode, no suspects, one sensor per room) does not render at all. -->
+	<div class="comm-list">
+		<button class="comm-item done" onclick="document.getElementById('sheet-identity').scrollIntoView({behavior:'smooth'})">
+			<span class="ti">Name it &amp; who lives here</span><span class="st">B1 · Espen, Nora · empty after 5 min</span></button>
+		<button class="comm-item todo" onclick="document.getElementById('sheet-mode').scrollIntoView({behavior:'smooth'})">
+			<span class="ti">House mode</span><span class="st">Husmodus — 4 options to check</span></button>
+		<button class="comm-item warn" id="chk-impostors" onclick="document.getElementById('sheet-impostors').scrollIntoView({behavior:'smooth'})">
+			<span class="ti">Impostors</span><span class="st" id="chk-impostors-st">2 excluded · 2 kept</span></button>
+		<button class="comm-item opt" onclick="document.getElementById('sheet-sensors').scrollIntoView({behavior:'smooth'})">
+			<span class="ti">Light sensors</span><span class="st">Kontor reads 2 sensors · dark below 1 000 lx</span></button>
+	</div>
+</div>
+
+<!-- ======================= SHEET: NAME IT & WHO LIVES HERE ======================= -->
+<div class="panel" id="sheet-identity">
+	<div class="sheet-head"><span class="lab">Name it &amp; who lives here</span>
+		<span class="note">the facts discovery cannot know</span></div>
+	<div class="sheet-body">
+		<div class="sentences">
+			<p class="sentence">This house is called
+				<span class="tok-host"><button class="tok" id="tok-name" aria-expanded="false">B1</button></span>.
+				<span class="people-row" style="display:inline-flex;vertical-align:middle">
+					<button class="person-chip home" onclick="togPerson(this)"><span class="person-dot home"></span><span class="person-chip-name">Espen</span><span class="person-chip-state">home</span></button>
+					<button class="person-chip" onclick="togPerson(this)"><span class="person-dot"></span><span class="person-chip-name">Nora</span><span class="person-chip-state">away</span></button>
+					<button class="person-chip home out" onclick="togPerson(this)" title="person.bilen — toggled out: the car is not a resident"><span class="person-dot home"></span><span class="person-chip-name">Bilen</span><span class="person-chip-state">home</span></button>
+				</span>
+				decide Home and Away; the house counts as empty
+				<span class="tok-host"><button class="tok" id="tok-delay" aria-expanded="false">5 min</button></span>
+				after the last person leaves.</p>
+		</div>
+		<p class="sentence-legend"><span>Tap a person to leave them out — the car is <i>home</i> whenever it is parked, which is exactly why it should not count.</span></p>
+	</div>
+</div>
+
+<!-- ======================= SHEET: HOUSE MODE (conditional — a select was adopted) ======================= -->
+<div class="panel" id="sheet-mode">
+	<div class="sheet-head"><span class="lab">House mode</span>
+		<span class="note"><span class="mono">input_select.husmodus</span> — adopted from Home Assistant, read back in English</span></div>
+	<div class="sheet-body">
+		<div class="sentences">
+			<p class="sentence"><span class="mode-name">Hjemme</span> is everyday automatic lighting. The house returns here when another mode ends.</p>
+			<p class="sentence"><span class="mode-name">Borte</span> sweeps the lights off and pauses automatic lighting — rooms set to stay on when everyone leaves are left alone. It ends when someone comes home.</p>
+			<p class="sentence"><span class="mode-name">Natt</span> holds the rooms that are gentle at night to the <b class="tok-static">night</b> period's limits, and the rooms set never to come on by themselves stay off.</p>
+			<p class="sentence"><span class="mode-name">Gjester</span> holds every room, so nothing changes by itself, until you switch the house back yourself.</p>
+		</div>
+		<div class="sheet-actions">
+			<button class="primary" onclick="modeKept(this)">Keep it</button>
+			<button onclick="modeDetached(this)">Detach — this house has no mode</button>
+		</div>
+		<p class="smallprint">Adoption only ever <i>reads</i> the dropdown. Remapping what each option means lives under House.</p>
+	</div>
+</div>
+
+<!-- ======================= SHEET: IMPOSTORS (conditional — LightAudit flagged something) ======================= -->
+<div class="panel" id="sheet-impostors">
+	<div class="sheet-head"><span class="lab">Impostors</span>
+		<span class="note">4 of 29 lights look like something other than room lighting</span></div>
+	<div class="sheet-body">
+		<div class="suspects">
+			<!-- Reasons are LightAudit's own sentences, verbatim. The blink button is the recommended
+			     variant of open question 1; if the owner declines, the button is simply absent and
+			     nothing else on this sheet moves. -->
+			<div class="suspect excluded" id="sus-1">
+				<div class="who"><span class="nm">Stue AP status <span class="room">· Stue</span></span>
+					<code>light.stue_ap_status_led</code>
+					<span class="why">named as a status light, which reports on a device rather than lighting a room</span></div>
+				<button class="blinkbtn" onclick="blink('sus-1')" title="Pulse this entity once, so the ceiling answers instead of the name">blink</button>
+				<div class="keepex" role="group"><button onclick="keep('sus-1',this)">keep</button><button class="cur" onclick="exclude('sus-1',this)">exclude</button></div>
+			</div>
+			<div class="suspect" id="sus-2">
+				<div class="who"><span class="nm">Stue vegglys W <span class="room">· Stue</span></span>
+					<code>light.stue_vegglys_w</code>
+					<span class="why">one colour channel of stue_vegglys, which this room already commands as a whole lamp</span></div>
+				<button class="blinkbtn" onclick="blink('sus-2')">blink</button>
+				<div class="keepex" role="group"><button class="cur" onclick="keep('sus-2',this)">keep</button><button onclick="exclude('sus-2',this)">exclude</button></div>
+			</div>
+			<div class="suspect excluded" id="sus-3">
+				<div class="who"><span class="nm">Kjøleskap innvendig <span class="room">· Kjøkken</span></span>
+					<code>light.kjoleskap_innvendig</code>
+					<span class="why">named after an appliance, so this is likely a light inside a machine</span></div>
+				<button class="blinkbtn" onclick="blink('sus-3')">blink</button>
+				<div class="keepex" role="group"><button onclick="keep('sus-3',this)">keep</button><button class="cur" onclick="exclude('sus-3',this)">exclude</button></div>
+			</div>
+			<div class="suspect" id="sus-4">
+				<div class="who"><span class="nm">Kontor USB hub LED <span class="room">· Kontor</span></span>
+					<code>light.kontor_usb_hub_led</code>
+					<span class="why">the name ends in LED, the usual mark of a hardware status light</span></div>
+				<button class="blinkbtn" onclick="blink('sus-4')">blink</button>
+				<div class="keepex" role="group"><button class="cur" onclick="keep('sus-4',this)">keep</button><button onclick="exclude('sus-4',this)">exclude</button></div>
+			</div>
+		</div>
+		<p class="smallprint">Everything starts <b>kept</b> — this is advice, never a filter. Excluding takes effect at commit,
+		for that room only; skipping this sheet just means the same advice appears again under the room's switch.</p>
+	</div>
+</div>
+
+<!-- ======================= SHEET: LIGHT SENSORS (conditional) ======================= -->
+<div class="panel" id="sheet-sensors">
+	<div class="sheet-head"><span class="lab">Light sensors</span>
+		<span class="note">readings are live — cover a sensor with your hand and watch</span></div>
+	<div class="sheet-body">
+		<!-- The race: only rooms with more than one illuminance sensor appear. Default = the average
+		     (the engine's own rule); tapping a tile pins that sensor as the room's. -->
+		<div class="race">
+			<span class="room">Kontor</span>
+			<button class="race-tile" onclick="pin(this,'vindu')"><span class="rn">vindu</span><br><span class="rv">45 lx</span></button>
+			<button class="race-tile" onclick="pin(this,'pult')"><span class="rn">pult</span><br><span class="rv">12 lx</span></button>
+			<span class="race-avg">reads the <b>average · 28 lx</b> — tap the sensor that means the room, or leave it</span>
+		</div>
+
+		<!-- The dial: a logarithmic 1–10 000 lx band. Every lux-carrying room's live reading is a dot;
+		     the house's "dark below" default is the one draggable token. Rooms left of it count as dark
+		     right now. (The options doc's night/day shading needs hours of readings the first run does
+		     not have; live dots are the fallback and the better teacher.) -->
+		<div class="scrollx">
+		<svg class="luxband" viewBox="0 0 720 108" role="img"
+			aria-label="Light levels from 1 to 10 000 lux. Live readings: Kjøkken 9, Stue 12, Kontor 28, Uteplass 180. Dark below 1 000 lux — every room but Uteplass counts as dark right now, and Uteplass is above the line only because it is outdoors in daylight.">
+			<!-- the dark zone, left of the threshold -->
+			<rect x="0" y="46" width="540" height="18" rx="3" fill="var(--panel-2)"/>
+			<rect x="540" y="46" width="180" height="18" rx="3" fill="var(--lane)"/>
+			<rect x="0" y="46" width="720" height="18" rx="3" fill="none" stroke="var(--line)"/>
+			<!-- decade ticks -->
+			<g stroke="var(--grid)"><line x1="180" y1="46" x2="180" y2="64"/><line x1="360" y1="46" x2="360" y2="64"/><line x1="540" y1="46" x2="540" y2="64"/></g>
+			<g text-anchor="middle"><text x="8" y="78" text-anchor="start">1</text><text x="180" y="78">10</text><text x="360" y="78">100</text><text x="540" y="78">1 000</text><text x="712" y="78" text-anchor="end">10 000</text></g>
+			<!-- reference words, teaching the unit -->
+			<g text-anchor="middle" class="refword"><text x="60" y="92">moonlight</text><text x="270" y="92">lit room</text><text x="470" y="92">overcast sky</text><text x="650" y="92">daylight</text></g>
+			<!-- live room dots (x = 180 · log10(lx)) -->
+			<g>
+				<circle cx="172" cy="55" r="4" fill="var(--info)"/><text x="172" y="14" text-anchor="middle" class="roomlbl">Kjøkken 9</text><line x1="172" y1="18" x2="172" y2="49" stroke="var(--grid)"/>
+				<circle cx="194" cy="55" r="4" fill="var(--info)"/><text x="200" y="40" text-anchor="middle" class="roomlbl">Stue 12</text><line x1="196" y1="43" x2="195" y2="49" stroke="var(--grid)"/>
+				<circle cx="260" cy="55" r="4" fill="var(--info)"/><text x="260" y="14" text-anchor="middle" class="roomlbl">Kontor 28</text><line x1="260" y1="18" x2="260" y2="49" stroke="var(--grid)"/>
+				<circle cx="406" cy="55" r="4" fill="var(--info)"/><text x="406" y="40" text-anchor="middle" class="roomlbl">Uteplass 180</text><line x1="406" y1="43" x2="406" y2="49" stroke="var(--grid)"/>
+			</g>
+			<!-- the one draggable token: the house default -->
+			<line x1="540" y1="30" x2="540" y2="70" stroke="var(--accent)" stroke-width="2"/>
+			<g id="lux-token" style="cursor:pointer">
+				<rect x="496" y="18" width="88" height="20" rx="6" fill="var(--chip)" stroke="var(--accent)"/>
+				<text x="540" y="32" text-anchor="middle" style="fill:var(--text);font-weight:600">dark&#8202;&lt;&#8202;1&#8202;000&#8202;lx</text>
+			</g>
+		</svg>
+		</div>
+		<p class="smallprint">Rooms left of the line count as dark right now. Drag the marker — or tap it for the usual values —
+		to set what the whole house means by dark; one room can disagree later, on its own page.</p>
+	</div>
+</div>
+
+<!-- ======================= THE ROOM ROLL-CALL (always visible — the centre) ======================= -->
+<!-- #pickzone bounds the phone's sticky commit bar: pinned while the rooms are being picked,
+     settled into the flow once the reader scrolls past the table's end. -->
+<div id="pickzone">
+<div style="margin:20px 0 0"><span class="lab">The rooms — switch on the ones this app may run</span></div>
+
+<div id="rollcall">
+	<!-- KJELLEREN -->
+	<div class="floor">
+	<div class="floor-head"><span class="floor-name">Kjelleren</span><button class="floor-bulk" onclick="floorOn(this)">Switch on this floor</button></div>
+	<div class="comm-t">
+		<div class="comm-cols"><span>On</span><span>Room</span><span class="c">Lights</span><span class="c">Motion</span><span class="c">Light level</span><span>Notes</span></div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Kjellerstue" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Kjellerstue<code>kjellerstue</code></span>
+			<span class="c"><b>2</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-ready">Ready</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Kjellergang" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Kjellergang<code>kjellergang</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Vaskerom" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Vaskerom<code>vaskerom</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-ready">Ready</span></span>
+		</div>
+	</div>
+
+	</div>
+	<!-- UNDERETASJEN -->
+	<div class="floor">
+	<div class="floor-head"><span class="floor-name">Underetasjen</span><button class="floor-bulk" onclick="floorOn(this)">Switch on this floor</button></div>
+	<div class="comm-t">
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Gang nede" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Gang nede<code>gang_nede</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Bad nede" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Bad nede<code>bad_nede</code></span>
+			<span class="c"><b>2</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-chip info">gentle at night</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Gjesterom" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Gjesterom<code>gjesterom</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-ready">Ready</span></span>
+		</div>
+	</div>
+
+	</div>
+	<!-- HOVEDETASJEN -->
+	<div class="floor">
+	<div class="floor-head"><span class="floor-name">Hovedetasjen</span><button class="floor-bulk" onclick="floorOn(this)">Switch on this floor</button></div>
+	<div class="comm-t">
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Stue" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Stue<code>stue</code></span>
+			<span class="c"><b>5</b></span><span class="c"><b>2</b></span><span class="c lx"><b>12 lx</b></span>
+			<span class="notes meta"><span class="cnt">5 lights · 2 motion</span><span class="note-chip warn">2 of 5 lights look like something else</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Kjøkken" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Kjøkken<code>kjokken</code></span>
+			<span class="c"><b>3</b></span><span class="c"><b>1</b></span><span class="c lx"><b>9 lx</b></span>
+			<span class="notes meta"><span class="cnt">3 lights · 1 motion</span><span class="note-chip warn">1 of 3 lights looks like something else</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Gang" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Gang<code>gang</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Kontor" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Kontor<code>kontor</code></span>
+			<span class="c"><b>3</b></span><span class="c"><b>1</b></span><span class="c lx"><b>28 lx</b></span>
+			<span class="notes meta"><span class="cnt">3 lights · 1 motion</span><span class="note-chip warn">1 of 3 lights looks like something else</span><span class="note-chip info">reads the average of 2 sensors</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Toalett" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Toalett<code>toalett</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">gentle at night</span></span>
+		</div>
+	</div>
+
+	</div>
+	<!-- LOFTET -->
+	<div class="floor">
+	<div class="floor-head"><span class="floor-name">Loftet</span><button class="floor-bulk" onclick="floorOn(this)">Switch on this floor</button></div>
+	<div class="comm-t">
+		<div class="comm-row" aria-expanded="true" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Soverom" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Soverom<code>soverom</code></span>
+			<span class="c"><b>2</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-chip info">bedroom manners</span></span>
+		</div>
+		<!-- The row unfold: the room's behaviour as its own read-only sentences (AreaSentences over the
+		     proposal), the guessed flags visible as the fourth sentence, and the gear as chips. Shown
+		     open here for Soverom; in the product a tap on the row (not the switch) opens it.
+		     Open question 2 decides whether these values ever become editable tokens; recommended is
+		     read-only, exactly as drawn. -->
+		<div class="comm-unfold">
+			<div class="sentences">
+				<p class="sentence">Lights when someone moves and it's darker than <b class="tok-static">1 000 lx</b> — or the sun is below <b class="tok-static">3°</b>. After <b class="tok-static">10 min</b> without movement, dim to <b class="tok-static">50 %</b> for <b class="tok-static">30 s</b>, then off.</p>
+				<p class="sentence">Hand changes hold for <b class="tok-static">2 h</b>; after a manual off, movement is ignored until the room is empty <b class="tok-static">10 min</b>.</p>
+				<p class="sentence">This room is gentle while the house sleeps, and never lights itself while the house sleeps — guessed from its name; change it on the room's page once it is on.</p>
+			</div>
+			<div class="room-gear">
+				<span class="gchip gchip-light">Nattbordlamper <span class="chip-id">light.soverom_nattbord</span></span>
+				<span class="gchip gchip-light">Taklys <span class="chip-id">light.soverom_tak</span></span>
+				<span class="gchip gchip-motion">Bevegelse <span class="chip-id">binary_sensor.soverom_bevegelse</span></span>
+			</div>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Barnerom" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Barnerom<code>barnerom</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-ready">Ready</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Bad oppe" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Bad oppe<code>bad_oppe</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">gentle at night</span></span>
+		</div>
+	</div>
+
+	</div>
+	<!-- GARASJEN -->
+	<div class="floor">
+	<div class="floor-head"><span class="floor-name">Garasjen</span><button class="floor-bulk" onclick="floorOn(this)">Switch on this floor</button></div>
+	<div class="comm-t">
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Garasje" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Garasje<code>garasje</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">stays on when everyone leaves</span></span>
+		</div>
+	</div>
+
+	</div>
+	<!-- UTE -->
+	<div class="floor">
+	<div class="floor-head"><span class="floor-name">Ute</span><button class="floor-bulk" onclick="floorOn(this)">Switch on this floor</button></div>
+	<div class="comm-t">
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch on" role="switch" aria-checked="true" aria-label="Switch on Uteplass" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Uteplass<code>uteplass</code></span>
+			<span class="c"><b>2</b></span><span class="c"><b>1</b></span><span class="c lx"><b>180 lx</b></span>
+			<span class="notes meta"><span class="cnt">2 lights · 1 motion</span><span class="note-chip info">stays on when everyone leaves</span></span>
+		</div>
+		<div class="comm-row" onclick="unfold(this,event)">
+			<span class="sw"><button class="switch" role="switch" aria-checked="false" aria-label="Switch on Inngang" onclick="togRoom(event,this)"><span class="switch-track"><span class="switch-knob"></span></span></button></span>
+			<span class="rn">Inngang<code>inngang</code></span>
+			<span class="c"><b>1</b></span><span class="c"><b>1</b></span><span class="c lx">—</span>
+			<span class="notes meta"><span class="cnt">1 light · 1 motion</span><span class="note-chip info">welcomes you home</span></span>
+		</div>
+	</div>
+
+	</div>
+	<p class="nearmiss"><b>Bod</b> and <b>Teknisk rom</b> have lights but nothing that senses movement, so they sit
+	this out — give them a motion sensor in Home Assistant and press <i>Set up rooms again</i>.</p>
+</div>
+
+<!-- ======================= COMMIT ======================= -->
+<div class="commit-copy">
+	<p class="commit-promise"><b>Nothing in the house changes until this button.</b>
+	<span class="smallprint" style="display:inline">One save: your answers, the exclusions, and the rooms you picked — then those rooms go live.</span></p>
+</div>
+<div class="commit-bar">
+	<button class="bigbtn" id="commitbtn" onclick="committed()">Switch on 9 rooms</button>
+</div>
+<div class="commit-after">
+	<span class="smallprint"><span id="commit-rest">The other 8 stay listed under House, each with its own switch.</span>
+	<span id="commit-suspects">2 lights you left kept will be flagged again on their rooms.</span></span>
+	<div class="legend">
+		<span class="lab" style="letter-spacing:.1em">When they go live:</span>
+		<span class="key"><span class="stw" style="color:var(--machine)"><svg class="ic"><use href="#i-auto"/></svg></span> lit · auto</span>
+		<span class="key"><span class="stw" style="color:var(--human)"><svg class="ic"><use href="#i-manual"/></svg></span> set by hand</span>
+		<span class="key"><span class="stw" style="color:var(--warn)"><svg class="ic state-blink"><use href="#i-dimming"/></svg></span> warning dim</span>
+		<span class="key"><span class="stw" style="color:var(--idle)"><svg class="ic"><use href="#i-off"/></svg></span> switched off</span>
+	</div>
+</div>
+</div><!-- /pickzone -->
+
+<!-- ======================= EPILOGUE (demo of the moment after commit) ======================= -->
+<div class="demo-bar" style="margin-top:26px"><span class="demo-note">After commit — the same page becomes the board.
+The chosen rooms' lanes appear with empty tracks: the quiet start shown, not promised.</span></div>
+<div class="board" aria-label="The board, moments after commit">
+	<div class="board-head"><h2 class="board-title">The board</h2><span class="board-since">since the engine started, 21:14</span></div>
+	<div class="board-floor"><span class="board-floor-name">Underetasjen</span></div>
+	<div class="lane"><span class="lane-name"><span class="state-dot" style="color:var(--idle)"></span>Gang nede</span><span class="board-track"><span class="board-now"></span></span></div>
+	<div class="lane"><span class="lane-name"><span class="state-dot" style="color:var(--idle)"></span>Bad nede</span><span class="board-track"><span class="board-now"></span></span></div>
+	<div class="board-floor"><span class="board-floor-name">Hovedetasjen</span></div>
+	<div class="lane"><span class="lane-name"><span class="state-dot" style="color:var(--idle)"></span>Stue</span><span class="board-track"><span class="board-now"></span></span></div>
+	<div class="lane"><span class="lane-name"><span class="state-dot" style="color:var(--idle)"></span>Kjøkken</span><span class="board-track"><span class="board-now"></span></span></div>
+	<div class="lane"><span class="lane-name"><span class="state-dot" style="color:var(--idle)"></span>Gang</span><span class="board-track"><span class="board-now"></span></span></div>
+	<div class="lane"><span class="lane-name"><span class="state-dot" style="color:var(--idle)"></span>Kontor</span><span class="board-track"><span class="board-now"></span></span></div>
+	<div class="lane"><span class="lane-name"><span class="state-dot" style="color:var(--idle)"></span>Toalett</span><span class="board-track"><span class="board-now"></span></span></div>
+	<div class="board-floor"><span class="board-floor-name">Loftet</span></div>
+	<div class="lane"><span class="lane-name"><span class="state-dot" style="color:var(--idle)"></span>Soverom</span><span class="board-track"><span class="board-now"></span></span></div>
+	<div class="board-floor"><span class="board-floor-name">Ute</span></div>
+	<div class="lane"><span class="lane-name"><span class="state-dot" style="color:var(--idle)"></span>Uteplass</span><span class="board-track"><span class="board-now"></span></span></div>
+	<div class="allquiet">All 9 rooms are doing what the schedule says. Garasje, Inngang and 6 others are switched off — <a href="#" onclick="return false">turn them on under House ›</a></div>
+</div>
+
+</div><!-- /wrap -->
+
+<script>
+/* Mock-up behaviour only: enough interaction to judge the design, nothing more. */
+
+/* theme (demo) */
+document.querySelectorAll('[data-set-theme]').forEach(b=>b.onclick=()=>{
+	const t=b.getAttribute('data-set-theme');
+	if(t)document.documentElement.setAttribute('data-theme',t);
+	else document.documentElement.removeAttribute('data-theme');
+	document.querySelectorAll('[data-set-theme]').forEach(x=>x.classList.toggle('cur',x===b));
+});
+
+/* room switches → the commit count. Progress IS the switch count; there is no other progress. */
+function recount(){
+	const n=document.querySelectorAll('#rollcall .switch.on').length;
+	const b=document.getElementById('commitbtn');
+	b.textContent=n?`Switch on ${n} room${n===1?'':'s'}`:'Switch on the rooms you pick';
+	b.disabled=!n;
+	const rest=17-n;
+	document.getElementById('commit-rest').textContent=`The other ${rest} stay listed under House, each with its own switch.`;
+}
+function togRoom(ev,sw){
+	ev.stopPropagation();
+	sw.classList.toggle('on');
+	sw.setAttribute('aria-checked',sw.classList.contains('on'));
+	recount();
+}
+function floorOn(btn){
+	const table=btn.closest('.floor-head').nextElementSibling;
+	table.querySelectorAll('.switch').forEach(sw=>{sw.classList.add('on');sw.setAttribute('aria-checked','true');});
+	recount();
+}
+function unfold(row,ev){
+	if(ev.target.closest('.switch')||!row.classList.contains('comm-row'))return;
+	const next=row.nextElementSibling;
+	if(next&&next.classList.contains('comm-unfold')){next.classList.toggle('hidden');row.setAttribute('aria-expanded',!next.classList.contains('hidden'));}
+}
+
+/* impostors: keep / exclude, and the checklist status follows the data */
+function suspectStatus(){
+	const ex=document.querySelectorAll('.suspect.excluded').length,all=4;
+	document.getElementById('chk-impostors-st').textContent=`${ex} excluded · ${all-ex} kept`;
+	const item=document.getElementById('chk-impostors');
+	item.classList.toggle('warn',ex<all);item.classList.toggle('done',ex===all);
+	const kept=all-ex,cs=document.getElementById('commit-suspects');
+	cs.textContent=kept?`${kept} light${kept===1?'':'s'} you left kept will be flagged again on their rooms.`:'';
+}
+function keep(id,btn){const s=document.getElementById(id);s.classList.remove('excluded');setKX(btn);suspectStatus();}
+function exclude(id,btn){const s=document.getElementById(id);s.classList.add('excluded');setKX(btn);suspectStatus();}
+function setKX(btn){btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.toggle('cur',b===btn));}
+function blink(id){const s=document.getElementById(id);s.classList.add('blinking');setTimeout(()=>s.classList.remove('blinking'),900);}
+
+/* mode sheet */
+function modeKept(btn){btn.closest('.sheet-body').querySelector('.smallprint').textContent='Kept. The house reads Husmodus; remapping lives under House.';}
+function modeDetached(btn){btn.closest('.sheet-body').querySelector('.smallprint').textContent='Detached — staged. This house will run without a mode; nothing is written until commit.';}
+
+/* sensor race */
+function pin(tile,name){
+	tile.closest('.race').querySelectorAll('.race-tile').forEach(t=>t.style.borderColor=t===tile?'var(--accent)':'');
+	tile.closest('.race').querySelector('.race-avg').innerHTML=`pinned to <b>${name}</b> — staged; the other sensor is ignored for this room`;
+}
+
+/* person chips */
+function togPerson(chip){chip.classList.toggle('out');}
+
+/* token popovers: curated values; the note promises commit, not save-on-pick */
+const CHOICES={ 'tok-delay':['1 min','5 min','10 min','15 min','30 min'] };
+let pop=null;
+document.addEventListener('click',e=>{
+	if(pop&&!pop.contains(e.target)){pop.remove();pop=null;}
+	const t=e.target.closest('.tok');if(!t)return;
+	if(pop){pop.remove();pop=null;}
+	pop=document.createElement('div');pop.className='tok-pop';
+	if(t.id==='tok-name'){
+		pop.innerHTML=`<input value="${t.textContent}" aria-label="House name"><span class="tok-pop-note">So two houses can be told apart in logs and notifications. Applies at commit.</span>`;
+		t.parentElement.appendChild(pop);
+		const inp=pop.querySelector('input');inp.focus();inp.select();
+		inp.onkeydown=ev=>{if(ev.key==='Enter'){t.textContent=inp.value||'B1';pop.remove();pop=null;}};
+	}else{
+		const opts=CHOICES[t.id]||['5 min'];
+		pop.innerHTML=opts.map(o=>`<button class="${o===t.textContent?'cur':''}">${o}</button>`).join('')
+			+`<span class="tok-pop-note">Applies at commit — nothing is written until then.</span>`;
+		t.parentElement.appendChild(pop);
+		pop.querySelectorAll('button').forEach(b=>b.onclick=ev=>{ev.stopPropagation();t.textContent=b.textContent;pop.remove();pop=null;});
+	}
+	t.setAttribute('aria-expanded','true');
+});
+
+/* commit (demo) */
+function committed(){
+	const n=document.querySelectorAll('#rollcall .switch.on').length;
+	alert(`Demo: one Save — validate, write, re-read, rebuild. ${n} rooms go live and this page becomes the board below.`);
+}
+recount();suspectStatus();
+</script>
