@@ -269,40 +269,40 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.OverrideDurationMinutes),
 					"Manual changes hold for",
-					"How long a light somebody set by hand is left alone before the room takes it back. Zero hands it back at the next re-check.",
+					"How long a light somebody set manually is left alone before the room takes it back. Zero hands it back at the next re-check.",
 					RoomControl.Minutes, Step: 15, Min: 0),
 				new RoomSetting(
 					nameof(AreaSettings.VacancyResetMinutes),
-					"After switching off by hand, wait",
+					"After switching off manually, wait",
 					"How long the room must stay empty before movement lights it again. Without it, switching the lights off and walking out turns them straight back on.",
 					RoomControl.Minutes, Step: 5, Min: 0)
 			]),
 
 		new RoomSettingGroup(
 			"Darkness",
-			"What has to be true outside before movement lights the room",
+			"What counts as dark enough for movement to light the room",
 			[
 				new RoomSetting(
 					nameof(AreaSettings.Darkness),
 					"How the room decides it's dark",
-					"What has to say dark before movement lights the room. A room on Sensor with nothing to read counts as dark. Always dark skips the check, for a windowless room.",
+					"What has to say dark before movement lights the room. Sensor never looks at the sun — and a room with no light-level sensor, or whose sensors have all stopped reporting, counts as dark and lights on movement. Sun reads the sun's height instead; Either lights on whichever says dark first. Always dark skips the check, for a windowless room.",
 					RoomControl.Choice),
 				new RoomSetting(
 					nameof(AreaSettings.LuxThreshold),
 					"Dark below",
-					"At or under this many lux the room counts as dark. A shaded outdoor sensor reads 1–3 lx at night and a few thousand by day, an indoor one far less — pick the decade first, then the number.",
+					"Under this many lux the room counts as dark. A room with no light-level sensor never reaches this test and simply counts as dark. A shaded outdoor sensor reads 1–3 lx at night and a few thousand by day, an indoor one far less — pick the decade first, then the number.",
 					RoomControl.Number, Unit: "lx", Step: 1, Min: 0, Max: MaxLux,
 					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux or DarknessSource.Either),
 				new RoomSetting(
 					nameof(AreaSettings.LuxHysteresis),
-					"Bright again above",
-					"How far above Dark below the reading must climb before the room counts as bright again, so a sensor sitting on the line cannot flap. Scale it with the threshold — 10 lx is a quarter of 40 and lost in the noise at 1000.",
+					"Bright again needs another",
+					"Added on top of Dark below: at 1000 lx and 10 lx the room counts as bright again only above 1010, so a sensor sitting on the line cannot flap. Scale it with the threshold — 10 lx is lost in the noise against 1000.",
 					RoomControl.Number, Unit: "lx", Step: 1, Min: 0, Max: MaxLux,
 					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux or DarknessSource.Either),
 				new RoomSetting(
 					nameof(AreaSettings.SunElevationThreshold),
 					"Dark when the sun is below",
-					"How high the sun may stand and the room still count as dark, in degrees above the horizon. 0° is sunset, −6° is dusk.",
+					"How high the sun may stand and the room still count as dark, in degrees above the horizon. 0° is sunset, −6° is dusk. On Either this can call the room dark while the light-level sensor still reads bright.",
 					RoomControl.Number, Unit: "°", Step: 1, Min: -90, Max: 90,
 
 					// Only the two rules that actually read the sun. It used to be drawn for a Sensor room as well,
@@ -318,7 +318,7 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessEnabled),
 					"Brighten with daylight",
-					"On a bright day this room is lifted above the schedule's brightness, so it doesn't look gloomy against a bright window. Needs a light-level reading; without one nothing changes.",
+					"On a bright day this room is lifted above the schedule's brightness, so it doesn't look gloomy against a bright window. It reads the room's light-level sensor even when the room decides darkness by the sun, and without one nothing changes.",
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessStartLux),
@@ -335,7 +335,7 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessMaxPct),
 					"Brightest it goes",
-					"How bright daylight may push this room, as a percentage. It only ever adds light — a period already brighter than this is left alone.",
+					"How bright daylight may push this room, as a percentage. It only ever adds light — a period already brighter than this is left alone, and a period with a cap of its own still holds the room under that cap.",
 					RoomControl.Number, Unit: "%", Step: 5, Min: 0, Max: 100,
 					AppliesWhen: settings => settings.LuxBrightnessEnabled),
 				new RoomSetting(
@@ -358,7 +358,7 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.SleepBlocksAutoOn),
 					"Never comes on by itself while the house sleeps",
-					"In sleep mode movement leaves this room dark — for the bedroom itself. The wall switch still works, and this overrides the setting above.",
+					"In sleep mode movement leaves this room dark — for the bedroom itself. The wall switch still works, and what it turns on is held to the night period's limits only if the setting above is on as well.",
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.SkipAwaySweep),

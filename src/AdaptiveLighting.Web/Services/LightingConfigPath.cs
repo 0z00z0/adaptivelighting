@@ -143,7 +143,7 @@ public static class LightingConfigPath
 
 			logger.LogInformation(
 				"Created a starting lighting configuration at {External}: a circadian schedule and nothing else. "
-				+ "Areas are discovered from the Home Assistant areas that have both a light and a motion sensor, "
+				+ "Rooms are discovered from the Home Assistant areas that have both a light and a motion sensor, "
 				+ "and everything is editable on the Configuration page.",
 				external);
 

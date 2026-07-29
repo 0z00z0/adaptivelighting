@@ -59,8 +59,8 @@ public static class StateGlyph
 	{
 		AreaState.AutoActive => new StateMark(Glyph.StateAuto, "state-machine", "lit · auto", false),
 		AreaState.PreOff => new StateMark(Glyph.StateDimming, "state-warn", "warning dim", true),
-		AreaState.OverriddenOn => new StateMark(Glyph.StateManual, "state-human", "set by hand", false),
-		AreaState.SuppressedOff => new StateMark(Glyph.StateManual, "state-human", "off by hand", false),
+		AreaState.OverriddenOn => new StateMark(Glyph.StateManual, "state-human", "set manually", false),
+		AreaState.SuppressedOff => new StateMark(Glyph.StateManual, "state-human", "off manually", false),
 
 		// A scene holding the room is a person's decision too — somebody put the house in a guest mode and
 		// chose the look. The engine is standing back for the same reason it stands back after a manual change,
