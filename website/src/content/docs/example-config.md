@@ -149,8 +149,6 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     #            consulted here.
     #   Sun    — sun elevation only. No sensor is read, so a room with none is
     #            unaffected by having none.
-    #   Either — dark when the sensor says so, or when the sun is low enough.
-    #            With no sensor the first half always says dark.
     #   Always — no daylight gate, for rooms with no windows.
     Darkness: Lux
     LuxThreshold: 1000          # "Dark below". A daylight number: the reading is

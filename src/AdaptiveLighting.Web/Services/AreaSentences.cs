@@ -122,7 +122,6 @@ public static class AreaSentences
 	public static IReadOnlyList<TokenChoice> DarknessChoices { get; } = TokenChoices.Of(
 		("the light-level sensor", nameof(DarknessSource.Lux)),
 		("the sun", nameof(DarknessSource.Sun)),
-		("either the sensor or the sun", nameof(DarknessSource.Either)),
 		("whatever the daylight", nameof(DarknessSource.Always)));
 
 	/// <summary>

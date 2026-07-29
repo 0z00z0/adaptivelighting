@@ -105,7 +105,7 @@ public sealed class AreaSentencesTests
 
 		Assert.AreEqual(TokenKind.Choice, token.Kind);
 		Assert.AreEqual("whatever the daylight", token.Text);
-		Assert.AreEqual(4, token.Choices.Count, "all four ways of deciding stay reachable");
+		Assert.AreEqual(3, token.Choices.Count, "all three ways of deciding stay reachable — Either was retired");
 	}
 
 	// ===================== the light-level shortlist =====================
@@ -225,7 +225,7 @@ public sealed class AreaSentencesTests
 			"every other option is an ordinary threshold, keyed by the token it sits in");
 
 		AreaConfig room = Room();
-		room.Darkness = DarknessSource.Either;
+		room.Darkness = DarknessSource.Lux;
 
 		Assert.IsTrue(RoomSettings.Apply(room, new SentenceEdit(off.Key!, off.Kind!.Value, off.Value)));
 		Assert.AreEqual(DarknessSource.Sun, room.Darkness, "the room now decides by the sun alone");

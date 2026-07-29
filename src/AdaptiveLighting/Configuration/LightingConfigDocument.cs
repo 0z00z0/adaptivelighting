@@ -91,6 +91,34 @@ public static class LightingConfigDocument
 		["ZonesAutoDiscovered"] = nameof(GlobalConfig.AreasAutoDiscovered)
 	};
 
+	/// <summary>
+	///     Values a retired setting used to take, and what each becomes.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>A retired enum value is not the same problem as a retired key.</b> An unknown key is silence —
+	///         <c>IgnoreUnmatchedProperties</c> passes over it and the property keeps its default. An unknown enum
+	///         value is a parse failure, and a house whose file still says <c>Darkness: Either</c> would not load
+	///         at all. So this is the one retirement in the 2026-07 simplification that has to be translated
+	///         rather than ignored.
+	///     </para>
+	///     <para>
+	///         <c>Either</c> becomes <c>Lux</c>. It was removed because its sun half could call a room dark while
+	///         its own sensor read a perfectly bright afternoon — the owner's word was "unpredictable" — and the
+	///         lux half is the part that was doing the work. A room with no sensor still counts as dark under
+	///         <c>Lux</c>, which is what <c>Either</c>'s lux half did for it too, so nothing goes dark that was
+	///         not already.
+	///     </para>
+	/// </remarks>
+	private static readonly Dictionary<string, Dictionary<string, string>> LegacyValues =
+		new(StringComparer.Ordinal)
+		{
+			[nameof(AreaSettings.Darkness)] = new(StringComparer.OrdinalIgnoreCase)
+			{
+				["Either"] = nameof(DarknessSource.Lux)
+			}
+		};
+
 	private const string Header =
 		"""
 		# ============================================================================
@@ -369,8 +397,26 @@ public static class LightingConfigDocument
 				{
 					used |= Translate(child.Value, logger);
 
-					if (child.Key is not YamlScalarNode { Value: { Length: > 0 } name }
-						|| !LegacyKeys.TryGetValue(name, out string? currentName))
+					if (child.Key is not YamlScalarNode { Value: { Length: > 0 } name })
+						continue;
+
+					// A retired VALUE, rewritten in place. Done before the key rename below because a key that is
+					// about to be renamed still carries the value under its old name at this point, and a setting
+					// whose value moved is far likelier than one whose name and value both did.
+					if (LegacyValues.TryGetValue(name, out Dictionary<string, string>? moved)
+						&& child.Value is YamlScalarNode { Value: { Length: > 0 } stated } value
+						&& moved.TryGetValue(stated, out string? replacement))
+					{
+						logger?.LogInformation(
+							"'{Setting}: {Old}' is no longer a setting this application has; it now reads as "
+							+ "'{New}', and the next save from the browser writes that.",
+							name, stated, replacement);
+
+						value.Value = replacement;
+						used = true;
+					}
+
+					if (!LegacyKeys.TryGetValue(name, out string? currentName))
 						continue;
 
 					mapping.Children.Remove(child.Key);

@@ -596,7 +596,7 @@ public sealed class LightingConfigDocumentTests
 
 		Assert.AreEqual("Adaptive lighting [Home]", config.ConfigName);
 		Assert.AreEqual("person.REPLACE_ME", config.Global.Persons.Single());
-		Assert.AreEqual(DarknessSource.Either, config.Defaults.Darkness);
+		Assert.AreEqual(DarknessSource.Lux, config.Defaults.Darkness);
 		Assert.AreEqual("22:30", config.Periods.Single().Start);
 		Assert.AreEqual("REPLACE_ME_living_room_area_id", config.Areas.Single().AreaId);
 		Assert.IsTrue(config.Areas.Single().RespectSleepMode);
@@ -667,6 +667,45 @@ public sealed class LightingConfigDocumentTests
 		        - light.outdoor_front
 		      SkipAwaySweep: true
 		""";
+
+	/// <summary>
+	///     <b>A retired enum value has to be translated, where a retired key can simply be ignored.</b>
+	///     <c>IgnoreUnmatchedProperties</c> passes over a key this application no longer has and the property
+	///     keeps its default; an unknown enum <i>value</i> is a parse failure, so a house whose file still says
+	///     <c>Darkness: Either</c> would not load at all. That is the difference between this cut and the three
+	///     beside it in the 2026-07 simplification, and it is why the pre-pass gained a value table.
+	/// </summary>
+	/// <remarks>
+	///     It becomes <c>Lux</c>, not <c>Sun</c>: the lux half was the part doing the work, and a room with no
+	///     sensor counts as dark under both, so nothing that was lighting stops.
+	/// </remarks>
+	[TestMethod]
+	public void A_Room_Still_Set_To_The_Retired_Either_Loads_As_Sensor()
+	{
+		const string yaml = """
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Global:
+			    HouseName: Test
+			  Defaults:
+			    Darkness: Either
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			      Darkness: Either
+			    - Name: Bod
+			      AreaId: bod
+			      Darkness: Always
+			""";
+
+		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml);
+
+		Assert.AreEqual(DarknessSource.Lux, read.Config.Defaults.Darkness, "the house default is translated");
+		Assert.AreEqual(DarknessSource.Lux, read.Config.Areas[0].Darkness, "and so is a room's own");
+		Assert.AreEqual(DarknessSource.Always, read.Config.Areas[1].Darkness, "a value that still exists is left alone");
+
+		Assert.IsTrue(read.UsedLegacyKeys,
+			"reported, or nothing rewrites the file and the translation runs again on every load");
+	}
 
 	[TestMethod]
 	public void A_Document_Written_With_The_Pre_2_0_Keys_Loads_With_Its_Areas_And_Says_So()

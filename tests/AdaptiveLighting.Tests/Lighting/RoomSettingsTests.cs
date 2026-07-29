@@ -465,10 +465,9 @@ public sealed class RoomSettingsTests
 
 		Assert.IsFalse(luxThreshold.AppliesTo(new AreaSettings { Darkness = DarknessSource.Sun }),
 			"a room that gates on the sun has no lux threshold to set");
-		Assert.IsTrue(luxThreshold.AppliesTo(new AreaSettings { Darkness = DarknessSource.Either }));
+		Assert.IsTrue(luxThreshold.AppliesTo(new AreaSettings { Darkness = DarknessSource.Lux }));
 
 		Assert.IsTrue(sunBelow.AppliesTo(new AreaSettings { Darkness = DarknessSource.Sun }));
-		Assert.IsTrue(sunBelow.AppliesTo(new AreaSettings { Darkness = DarknessSource.Either }));
 
 		Assert.IsFalse(sunBelow.AppliesTo(new AreaSettings { Darkness = DarknessSource.Always }),
 			"a windowless room consults neither signal");
@@ -520,7 +519,7 @@ public sealed class RoomSettingsTests
 		AreaConfig room = new()
 		{
 			// Every darkness rule, so the sentence variants that only appear under one of them are covered too.
-			Darkness = DarknessSource.Either
+			Darkness = DarknessSource.Lux
 		};
 
 		foreach (DarknessSource source in Enum.GetValues<DarknessSource>())

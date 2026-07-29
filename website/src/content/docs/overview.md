@@ -46,9 +46,9 @@ is what makes your manual changes stick.
 
 ## How a room decides it is dark
 
-A room reads a light-level sensor, the sun's height, or both — that is the **How the room decides
-it's dark** setting. Out of the box it is *Sensor*: the room's own reading decides, and the sun is
-never consulted. *Sun* and *Either* are still there for a room that wants the sun.
+A room reads a light-level sensor or the sun's height — that is the **How the room decides it's
+dark** setting. Out of the box it is *Sensor*: the room's own reading decides, and the sun is never
+consulted. *Sun* is there for a room that wants the sun instead.
 
 - **A room with nothing to read counts as dark** wherever a sensor is consulted, and movement lights
   it. That covers a room that has no light-level sensor and a room whose sensors have all stopped

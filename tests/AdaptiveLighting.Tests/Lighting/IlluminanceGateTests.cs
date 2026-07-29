@@ -100,7 +100,7 @@ public sealed class IlluminanceGateTests
 	/// </summary>
 	/// <remarks>
 	///     The owner's rule in one test: use the light sensor where there is one, and where there is none always
-	///     light. The default was <see cref="DarknessSource.Either"/>, whose sun half overruled a good reading at
+	///     light. The default was <see cref="DarknessSource.Lux"/>, whose sun half overruled a good reading at
 	///     dusk and put a sun clause into every explanation the gate wrote. Asserted at high noon, which is where
 	///     the two defaults disagree.
 	/// </remarks>
@@ -211,7 +211,7 @@ public sealed class IlluminanceGateTests
 		Assert.IsTrue(Build(Ha(sunElevation: 30), DarknessSource.Lux, luxSensor: null).IsDarkEnough(),
 			"high noon, no sensor: the room still counts as dark rather than falling back to the sun");
 
-		Assert.IsTrue(Build(Ha(sunElevation: 30), DarknessSource.Either, luxSensor: null).IsDarkEnough(),
+		Assert.IsTrue(Build(Ha(sunElevation: 30), DarknessSource.Lux, luxSensor: null).IsDarkEnough(),
 			"and Either is dark when either half says so, which the absent lux half now does");
 	}
 
@@ -383,34 +383,6 @@ public sealed class IlluminanceGateTests
 		Assert.IsTrue(gate.IsDarkEnough(), "and no reading is dark, exactly as it is for a room with no sensor");
 	}
 
-	/// <summary>
-	///     <see cref="DarknessSource.Either"/> is untouched by that: a room of dead sensors still asks the sun.
-	/// </summary>
-	/// <remarks>
-	///     The absent lux verdict is read as "not dark by lux" and the <c>||</c> hands the question to the sun,
-	///     exactly as before. Somebody who set Either asked for the sun, and gets it.
-	/// </remarks>
-	[TestMethod]
-	public void Either_With_Every_Sensor_Dead_Still_Lets_The_Sun_Answer()
-	{
-		DateTimeOffset start = _now;
-		FakeHaContext bright = new();
-		bright.SetStateReportedAt("sensor.a", "10000", start);
-		bright.SetState(Sun, "above_horizon", new() { ["elevation"] = 30d });
-
-		IlluminanceGate day = BuildMany(bright, DarknessSource.Either, ["sensor.a"], staleAfter: TimeSpan.FromHours(2));
-
-		FakeHaContext dusk = new();
-		dusk.SetStateReportedAt("sensor.a", "10000", start);
-		dusk.SetState(Sun, "below_horizon", new() { ["elevation"] = -6d });
-
-		IlluminanceGate night = BuildMany(dusk, DarknessSource.Either, ["sensor.a"], staleAfter: TimeSpan.FromHours(2));
-
-		_now = start.AddHours(3);
-
-		Assert.IsFalse(day.IsDarkEnough(), "dead sensor, high sun: Either is still not dark");
-		Assert.IsTrue(night.IsDarkEnough(), "dead sensor, sun down: the sun answers");
-	}
 
 	/// <summary>The window is the house's to set, and zero switches the rule off entirely.</summary>
 	[TestMethod]
@@ -514,24 +486,8 @@ public sealed class IlluminanceGateTests
 
 	// ===================== either / always =====================
 
-	[TestMethod]
-	public void Either_Is_Dark_When_The_Lux_Sensor_Says_So()
-	{
-		Assert.IsTrue(Build(Ha(lux: "5", sunElevation: 30), DarknessSource.Either).IsDarkEnough(),
-			"a dim room under a high sun — curtains drawn — is still dark");
-	}
 
-	[TestMethod]
-	public void Either_Is_Dark_When_The_Sun_Says_So()
-	{
-		Assert.IsTrue(Build(Ha(lux: "500", sunElevation: -6), DarknessSource.Either).IsDarkEnough());
-	}
 
-	[TestMethod]
-	public void Either_Is_Light_Only_When_Both_Agree()
-	{
-		Assert.IsFalse(Build(Ha(lux: "500", sunElevation: 30), DarknessSource.Either).IsDarkEnough());
-	}
 
 	[TestMethod]
 	public void Always_Is_Dark_Whatever_The_Sensors_Say()
@@ -542,48 +498,7 @@ public sealed class IlluminanceGateTests
 
 	// ===================== the reason string =====================
 
-	/// <summary>
-	///     Under <see cref="DarknessSource.Either"/> the explanation names what settled the verdict, and only that.
-	/// </summary>
-	/// <remarks>
-	///     <b>These four cases are the whole of the branch, read off <c>lux-is-dark || sun-is-down</c>.</b> The rule
-	///     it replaces concatenated both details unconditionally, which produced lines the owner called meaningless:
-	///     a lux reading that had already settled the question followed by a sun clause that had not, and — worse —
-	///     by "no sun elevation from sun.sun", which reports what was missing rather than what was decided.
-	/// </remarks>
-	[TestMethod]
-	public void Either_Explains_The_Verdict_With_The_Reading_That_Settled_It()
-	{
-		IlluminanceGate luxDecided = Build(Ha(lux: "5", sunElevation: 30), DarknessSource.Either);
-		luxDecided.IsDarkEnough();
-		Assert.AreEqual("lux 5, dark below 40", luxDecided.DarknessDetail(),
-			"the lux reading short-circuits the sun, so there is no sun reading of this verdict to report");
 
-		IlluminanceGate sunDecided = Build(Ha(lux: "500", sunElevation: -6), DarknessSource.Either);
-		sunDecided.IsDarkEnough();
-		Assert.AreEqual("sun elevation -6°, dark below 3°", sunDecided.DarknessDetail(),
-			"lux said bright, so the sun carried it alone and is the answer");
-
-		IlluminanceGate neither = Build(Ha(lux: "500", sunElevation: 30), DarknessSource.Either);
-		neither.IsDarkEnough();
-		Assert.AreEqual("lux 500, dark below 40; sun elevation 30°, dark below 3°", neither.DarknessDetail(),
-			"not dark is the one outcome both halves had to agree on, so both readings explain it");
-
-		IlluminanceGate noSunEntity = Build(Ha(lux: "500"), DarknessSource.Either);
-		noSunEntity.IsDarkEnough();
-		Assert.AreEqual("lux 500, dark below 40", noSunEntity.DarknessDetail(),
-			"a half that produced no number is dropped, not described as missing");
-	}
-
-	/// <summary>Neither half readable is the one case where the absence itself is the whole of the answer.</summary>
-	[TestMethod]
-	public void Either_With_Nothing_Readable_Says_So_Plainly()
-	{
-		IlluminanceGate gate = Build(Ha(lux: "unavailable"), DarknessSource.Either);
-		gate.IsDarkEnough();
-
-		Assert.AreEqual("no lux reading, and no sun elevation from sun.sun", gate.DarknessDetail());
-	}
 
 	/// <summary>
 	///     Under <see cref="DarknessSource.Lux"/> a room whose sensors have all gone quiet says so, and says what

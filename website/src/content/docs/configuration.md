@@ -52,13 +52,13 @@ house-wide baseline. It is described under [a room's own facts](#a-rooms-own-fac
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
-| **How the room decides it's dark** | Which signal decides the room is dark enough to light: **Sensor**, **Sun**, **Either** or **Always dark**. | Sensor | `Darkness` |
+| **How the room decides it's dark** | Which signal decides the room is dark enough to light: **Sensor**, **Sun** or **Always dark**. | Sensor | `Darkness` |
 | **Dark below** | At or below this many lux the room counts as dark. Readings run from a few lux at night to tens of thousands at midday, so pick the decade before the number. | 1000 lx | `LuxThreshold` |
 | **Bright again above** | The extra light needed to count as bright again, so a sensor sitting on the threshold cannot flap. Scale it with the threshold. | 10 lx | `LuxHysteresis` |
 | **Dark when the sun is below** | Sun elevation below which the room counts as dark. In degrees above the horizon: 0° is sunset, −6° is dusk. | 3° | `SunElevationThreshold` |
 
-*Dark below* and *Bright again above* are shown under **Sensor** and **Either**, the two that read a
-sensor; *Dark when the sun is below* under **Sun** and **Either**, the two that read the sun.
+*Dark below* and *Bright again above* are shown under **Sensor**, the one that reads a sensor;
+*Dark when the sun is below* under **Sun**, the one that reads the sun.
 
 **Sensor**, the default, reads the room's own light-level sensor and nothing else. A room with
 nothing to read — one that has no sensor, or one whose sensors have all stopped reporting — counts
@@ -66,9 +66,13 @@ as **dark**, so movement lights it: a gate with nothing to read holds nothing ba
 battery is no reason to leave a room unlit through a bright evening. A room whose sensors have gone
 quiet also says so once in the log, which is the only place you are told the hardware has failed.
 
-**Sun** reads sun elevation alone, so a room with no sensor is unaffected by having none. **Either**
-counts the room dark when the sensor says so or when the sun is low enough — which means a room with
-no sensor is always dark under it. **Always dark** is for rooms with no daylight.
+**Sun** reads sun elevation alone, so a room with no sensor is unaffected by having none.
+**Always dark** is for rooms with no daylight.
+
+There was once a fourth, *Either*, which counted a room dark when the sensor said so **or** when the
+sun was low enough. It was retired: two answers, and the one that won was the one you were not
+looking at — a bright afternoon reading overruled by a low winter sun. A room still set to it reads
+as **Sensor**, and the next save writes that.
 
 ### Brightness from daylight
 

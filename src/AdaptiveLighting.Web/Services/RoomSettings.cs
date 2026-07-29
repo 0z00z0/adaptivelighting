@@ -227,7 +227,6 @@ public static class RoomSettings
 	public static IReadOnlyList<TokenChoice> DarknessOptions { get; } = TokenChoices.Of(
 		("Sensor", nameof(DarknessSource.Lux)),
 		("Sun", nameof(DarknessSource.Sun)),
-		("Either", nameof(DarknessSource.Either)),
 		("Always dark", nameof(DarknessSource.Always)));
 
 	/// <summary>
@@ -292,23 +291,23 @@ public static class RoomSettings
 					"Dark below",
 					"Under this many lux the room counts as dark. A room with no light-level sensor never reaches this test and simply counts as dark. A shaded outdoor sensor reads 1–3 lx at night and a few thousand by day, an indoor one far less — pick the decade first, then the number.",
 					RoomControl.Number, Unit: "lx", Step: 1, Min: 0, Max: MaxLux,
-					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux or DarknessSource.Either),
+					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux),
 				new RoomSetting(
 					nameof(AreaSettings.LuxHysteresis),
 					"Bright again needs another",
 					"Added on top of Dark below: at 1000 lx and 10 lx the room counts as bright again only above 1010, so a sensor sitting on the line cannot flap. Scale it with the threshold — 10 lx is lost in the noise against 1000.",
 					RoomControl.Number, Unit: "lx", Step: 1, Min: 0, Max: MaxLux,
-					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux or DarknessSource.Either),
+					AppliesWhen: settings => settings.Darkness is DarknessSource.Lux),
 				new RoomSetting(
 					nameof(AreaSettings.SunElevationThreshold),
 					"Dark when the sun is below",
-					"How high the sun may stand and the room still count as dark, in degrees above the horizon. 0° is sunset, −6° is dusk. On Either this can call the room dark while the light-level sensor still reads bright.",
+					"How high the sun may stand and the room still count as dark, in degrees above the horizon. 0° is sunset, −6° is dusk.",
 					RoomControl.Number, Unit: "°", Step: 1, Min: -90, Max: 90,
 
-					// Only the two rules that actually read the sun. It used to be drawn for a Sensor room as well,
+					// Only the rule that actually reads the sun. It used to be drawn for a Sensor room as well,
 					// because a room whose lux sensors said nothing fell back to the sun — that fallback is gone, and
 					// such a room now simply counts as dark, so the row would have been a control that changed nothing.
-					AppliesWhen: settings => settings.Darkness is DarknessSource.Sun or DarknessSource.Either)
+					AppliesWhen: settings => settings.Darkness is DarknessSource.Sun)
 			]),
 
 		new RoomSettingGroup(

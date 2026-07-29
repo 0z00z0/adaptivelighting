@@ -442,13 +442,11 @@ public enum DarknessSource
 	/// <summary>Sun elevation only. No lux sensor is consulted, so a room with none is unaffected by having none.</summary>
 	Sun,
 
-	/// <summary>
-	///     Dark when either the lux sensor or the sun says so. With no lux sensor the lux half says dark, so this
-	///     behaves as <see cref="Always"/> until the room is given a reading to gate on. It was the default until the
-	///     sun half was found overruling readings that had already settled the question; choosing it now is choosing
-	///     the sun.
-	/// </summary>
-	Either,
+	// Either — dark when the lux sensor OR the sun said so — was removed in the 2026-07 simplification. Its sun
+	// half could call a room dark while the room's own sensor read a bright afternoon, which is unpredictable in
+	// the plainest sense: two answers, and the one that wins is the one you were not looking at. A document that
+	// still says Either is translated to Lux on load — see LightingConfigDocument.LegacyValues, and note that an
+	// unknown enum VALUE fails to parse where an unknown key is merely ignored.
 
 	/// <summary>Always dark. For rooms without daylight.</summary>
 	Always
