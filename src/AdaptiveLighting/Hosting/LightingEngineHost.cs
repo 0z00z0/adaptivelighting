@@ -77,6 +77,17 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>Handed to every area's illuminance gate, so a dead sensor is judged on evidence that survives a restart.</summary>
 	private readonly IEntityLastSeen? _lastSeen;
 
+	/// <summary>
+	///     Handed to the mode brain, so a period boundary that went by while the engine was stopped is not lost.
+	/// </summary>
+	/// <remarks>
+	///     Built here rather than injected, because its path comes from <see cref="LightingConfigStore.FilePath"/>
+	///     which this class already holds — so no host has to register anything to get the behaviour, and the file
+	///     lands beside the document wherever a host has put it. <c>null</c> if it could not even be constructed,
+	///     which costs the note and nothing else.
+	/// </remarks>
+	private readonly ILastPeriodStore? _lastPeriod;
+
 	// Every transition of the orchestrator goes through this. A save from one browser tab and a save from
 	// another must not interleave a Dispose with a Start.
 	private readonly Lock _gate = new();
@@ -101,6 +112,20 @@ public sealed class LightingEngineHost : IDisposable
 		_store = store ?? throw new ArgumentNullException(nameof(store));
 		_loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 		_logger = loggerFactory.CreateLogger<LightingEngineHost>();
+
+		try
+		{
+			_lastPeriod = new LastPeriodStore(_store.FilePath, _loggerFactory.CreateLogger<LastPeriodStore>());
+		}
+		catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+		{
+			// A path this class cannot write beside is not a reason to have no engine. The store never throws once
+			// built; this covers only building it, and the cost of failing is one behaviour, not the house.
+			_logger.LogWarning(exception,
+				"Could not place the note recording which circadian period the engine is in, beside {Path}. A period's "
+				+ "house mode will be applied only at a boundary the engine is running to see.",
+				_store.FilePath);
+		}
 	}
 
 	/// <summary>The configuration file this host reads and writes.</summary>
@@ -559,7 +584,8 @@ public sealed class LightingEngineHost : IDisposable
 				new HaStatePublisher(_ha, _loggerFactory.CreateLogger<HaStatePublisher>()),
 				new HaNotifier(_ha, _loggerFactory.CreateLogger<HaNotifier>()),
 				_loggerFactory,
-				_lastSeen);
+				_lastSeen,
+				_lastPeriod);
 
 			orchestrator.Start();
 

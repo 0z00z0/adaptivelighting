@@ -44,6 +44,9 @@ public sealed class LightingOrchestrator : IDisposable
 
 	/// <summary>Passed to each area so its lux staleness survives a Home Assistant restart.</summary>
 	private readonly IEntityLastSeen? _lastSeen;
+
+	/// <summary>Passed to the mode brain so a period boundary crossed during a restart is not lost.</summary>
+	private readonly ILastPeriodStore? _lastPeriod;
 	private readonly ILogger _logger;
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
@@ -69,6 +72,11 @@ public sealed class LightingOrchestrator : IDisposable
 	///     engine restart. Optional: when absent the lux staleness rule falls back to Home Assistant's own
 	///     timestamps, which reset on its restart and cannot tell a dead sensor from a quiet one.
 	/// </param>
+	/// <param name="lastPeriod">
+	///     Where the circadian period the engine is running in is written down, so a restart can tell whether a
+	///     boundary went by while it was stopped. Optional: without one a period's <c>SetsMode</c> is applied only
+	///     at a boundary the engine was running to see.
+	/// </param>
 	public LightingOrchestrator(
 		IHaContext ha,
 		IHaRegistry registry,
@@ -78,9 +86,11 @@ public sealed class LightingOrchestrator : IDisposable
 		IStatePublisher publisher,
 		INotifier notifier,
 		ILoggerFactory loggerFactory,
-		IEntityLastSeen? lastSeen = null)
+		IEntityLastSeen? lastSeen = null,
+		ILastPeriodStore? lastPeriod = null)
 	{
 		_lastSeen = lastSeen;
+		_lastPeriod = lastPeriod;
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_registry = registry ?? throw new ArgumentNullException(nameof(registry));
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
@@ -190,7 +200,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_scheduler,
 			_config.Periods,
 			() => ReadSunTimes(_config.Defaults.SunEntity),
-			_motionSensorUnion);
+			_motionSensorUnion,
+			_lastPeriod);
 
 		_subscriptions.Add(_presence.Events.SubscribeSafe((PresenceEvent _) => PublishHouseState(), _logger));
 		_subscriptions.Add(_modes.Changed.SubscribeSafe((Unit _) => PublishHouseState(), _logger));
