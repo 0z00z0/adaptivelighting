@@ -55,7 +55,7 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     # echo rather than as a person at a switch.
     SelfEchoWindowSeconds: 8
 
-    # Whether a change made by another automation counts as a hand change.
+    # Whether a change made by another automation counts as a manual change.
     # true means your other automations win.
     TreatAutomationsAsManual: true
 
@@ -137,20 +137,26 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     PreOffSeconds: 30
     PreOffBrightnessFactor: 0.5
 
-    # "Hand changes hold for": how long somebody's own setting is left alone.
+    # "Manual changes hold for": how long somebody's own setting is left alone.
     OverrideDurationMinutes: 120
 
-    # "After a manual off, wait": how long a room must be still after somebody
-    # switches the lights off before movement can turn them back on.
+    # "After switching off by hand, wait": how long a room must be still after
+    # somebody switches the lights off before movement can turn them back on.
     VacancyResetMinutes: 10
 
-    # How a room decides it's dark:
-    #   Lux    — the light-level sensor (falls back to the sun if it will not read)
-    #   Sun    — sun elevation only
-    #   Either — dark when either says so
-    #   Always — no daylight gate, for rooms with no windows
-    # A room with NO light-level sensor counts as dark whichever is set.
-    Darkness: Either
+    # How a room decides it's dark. The UI calls Lux "Sensor".
+    #   Lux    — the room's light-level sensor and nothing else, and the
+    #            default. A room with no sensor, or whose sensors have all
+    #            stopped reporting, counts as dark and lights on movement: a
+    #            gate with nothing to read holds nothing back, and a flat
+    #            battery is no reason to leave a house unlit. The sun is never
+    #            consulted here.
+    #   Sun    — sun elevation only. No sensor is read, so a room with none is
+    #            unaffected by having none.
+    #   Either — dark when the sensor says so, or when the sun is low enough.
+    #            With no sensor the first half always says dark.
+    #   Always — no daylight gate, for rooms with no windows.
+    Darkness: Lux
     LuxThreshold: 1000          # "Dark below". A daylight number: the reading is
                                 # usually an outdoor sensor.
     LuxHysteresis: 10           # "Bright again above": extra light needed to
@@ -272,7 +278,9 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 
     # 5. A hallway with no sensor of its own that follows the weather: it gates
     #    on the sun, and reads the house's outdoor sensor to lift its brightness
-    #    on a bright day. FollowOutdoorLux is file-only.
+    #    on a bright day. Naming Sun is the point of the entry — left at the
+    #    default a room with no sensor is simply always dark. FollowOutdoorLux
+    #    is file-only.
     - AreaId: kjellergang
       Enabled: true
       Darkness: Sun
