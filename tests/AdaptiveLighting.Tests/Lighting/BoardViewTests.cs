@@ -437,6 +437,111 @@ public sealed class BoardViewTests
 			AutoOnBlockingEntity = entity
 		};
 
+	// ===================== movement the room turned down =====================
+
+	private static ActivityEntry Refused(long sequence, DateTimeOffset at, AutoOnBlock block, string? entity = null) =>
+		new(sequence, Blocked(block, entity) with { Timestamp = at });
+
+	/// <summary>
+	///     <b>The mark exists so a refusing room stops looking like an empty one.</b> A refusal draws no stretch —
+	///     the room was dark before it and dark after — so before this the lane of a room that turned movement
+	///     down was pixel-identical to the lane of a room nobody entered. Those are exactly the two cases somebody
+	///     opens the board to tell apart.
+	/// </summary>
+	[TestMethod]
+	public void A_Refused_Movement_Is_Marked_Where_It_Happened()
+	{
+		IReadOnlyList<LaneRefusal> marks = BoardView.Refusals(
+			[Refused(1, At(20, 30), AutoOnBlock.NotDark)],
+			Window());
+
+		Assert.AreEqual(1, marks.Count);
+
+		// 20:30 is three and a half hours into a seven-hour board.
+		Assert.AreEqual(50, marks[0].LeftPct, 0.01);
+		StringAssert.Contains(marks[0].Label, "20:30");
+		StringAssert.Contains(marks[0].Label, "too bright");
+	}
+
+	/// <summary>
+	///     Every gate names itself. A mark that said only "turned down" would send the reader to the log for the
+	///     one word the board had room to carry.
+	/// </summary>
+	[TestMethod]
+	public void Each_Gate_Names_Itself_On_The_Mark()
+	{
+		(AutoOnBlock Block, string Expected)[] cases =
+		[
+			(AutoOnBlock.NotDark, "too bright"),
+			(AutoOnBlock.Sleep, "the house is asleep"),
+			(AutoOnBlock.KillSwitch, "the master switch is off"),
+			(AutoOnBlock.Away, "nobody home yet"),
+			(AutoOnBlock.Disabled, "automatic lighting is off here"),
+			(AutoOnBlock.SceneHold, "a guest scene has this room")
+		];
+
+		foreach ((AutoOnBlock block, string expected) in cases)
+			StringAssert.Contains(
+				BoardView.Refusals([Refused(1, At(20), block)], Window()).Single().Label,
+				expected,
+				$"{block} should name itself");
+
+		StringAssert.Contains(
+			BoardView.Refusals([Refused(1, At(20), AutoOnBlock.EntityOn, "media_player.tv")], Window()).Single().Label,
+			"media_player.tv is on",
+			"the blocking entity is the whole point of that gate");
+	}
+
+	/// <summary>
+	///     Movement the room acted on is not a refusal, and neither is a report that carries no gate. The board
+	///     asks <see cref="ActivityView.IsDeclinedMotion"/> rather than a copy of it, so the mark and the row it
+	///     sends a reader to can never disagree about what was turned down.
+	/// </summary>
+	[TestMethod]
+	public void Movement_That_Lit_The_Room_Is_Not_A_Refusal()
+	{
+		Assert.AreEqual(0, BoardView.Refusals([Entry(1, At(20), AreaState.AutoActive, 2700)], Window()).Count);
+
+		ActivityEntry noGate = new(2, Report(AreaState.AutoVacant) with { Timestamp = At(20), IsDark = true });
+		Assert.AreEqual(0, BoardView.Refusals([noGate], Window()).Count, "a report from before the gate was recorded claims nothing");
+	}
+
+	/// <summary>
+	///     Refusals outside the board's window are not drawn, and two at the same instant are one mark — stacked
+	///     on a single pixel they read as one mark drawn badly rather than as two events, and both rows are still
+	///     in the log.
+	/// </summary>
+	[TestMethod]
+	public void Marks_Stay_Inside_The_Window_And_Do_Not_Stack()
+	{
+		BoardWindow window = Window();
+
+		Assert.AreEqual(0, BoardView.Refusals([Refused(1, At(9), AutoOnBlock.NotDark)], window).Count, "before the window");
+
+		IReadOnlyList<LaneRefusal> together = BoardView.Refusals(
+			[Refused(1, At(20), AutoOnBlock.NotDark), Refused(2, At(20), AutoOnBlock.Sleep)],
+			window);
+
+		Assert.AreEqual(1, together.Count);
+	}
+
+	/// <summary>
+	///     <b>A room that only refused is not quiet.</b> It draws no stretch and arms no timer, so without this it
+	///     would be folded away under the dark-cockpit rule — hidden by the very emptiness the mark exists to
+	///     break.
+	/// </summary>
+	[TestMethod]
+	public void A_Room_That_Only_Refused_Is_Not_Folded_Away()
+	{
+		AreaSnapshot latest = Report(AreaState.AutoVacant) with { IsDark = true };
+
+		BoardLane silent = new("stue", "Stue", "stue", latest, [], null);
+		BoardLane refused = silent with { Refusals = [new LaneRefusal(50, "20:30 movement, too bright")] };
+
+		Assert.IsTrue(silent.IsQuiet, "nothing happened in this room");
+		Assert.IsFalse(refused.IsQuiet, "something happened and the engine decided against it");
+	}
+
 	/// <summary>
 	///     The warning dim leads: it is the only exception with a deadline measured in seconds. The rest are
 	///     standing conditions, named alphabetically so the tray does not reshuffle on every tick.

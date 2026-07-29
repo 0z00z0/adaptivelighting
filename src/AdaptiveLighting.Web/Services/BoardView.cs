@@ -90,6 +90,30 @@ public sealed record LaneBlock(LaneBlockKind Kind, double LeftPct, double WidthP
 /// <param name="Label">The time and the verb — <c>22:20 auto resumes</c>.</param>
 public sealed record LaneMark(double LeftPct, string Label);
 
+/// <summary>
+///     A moment in a lane's past when the room saw movement and did not light: the instant, and the gate that
+///     turned it down.
+/// </summary>
+/// <remarks>
+///     <para>
+///         <b>Why this is a third shape rather than a fifth <see cref="LaneBlockKind"/>.</b> A block is a stretch —
+///         it says the room was in some state from one time to another. A refusal has no duration: the room was
+///         already dark before it and stays dark after, and drawing it as a stretch would claim a state that never
+///         existed. It is not a <see cref="LaneMark"/> either, because those are the future.
+///     </para>
+///     <para>
+///         <b>Why it earns a place on the board at all.</b> "Why didn't the light come on?" is the question this
+///         application exists to answer, and until now the lane for a room that refused looked exactly like the
+///         lane for a room nobody walked through — an empty track. The refusal was in the log, but only for
+///         somebody who already suspected there was something to look for. A mark makes the empty track say
+///         <em>something happened here and I decided against it</em>, which is what sends a reader to the row that
+///         explains it.
+///     </para>
+/// </remarks>
+/// <param name="LeftPct">Where the refusal falls on the board.</param>
+/// <param name="Label">What it was and why — <c>18:04 movement, too bright</c>.</param>
+public sealed record LaneRefusal(double LeftPct, string Label);
+
 /// <summary>One room's row on the board: what it is doing now, what it did, and what happens next.</summary>
 /// <param name="Key">The stable identity — the area id, or the display name when there is none.</param>
 /// <param name="Name">The room's name, as the lane's label.</param>
@@ -97,22 +121,35 @@ public sealed record LaneMark(double LeftPct, string Label);
 /// <param name="Latest">The newest report from the room.</param>
 /// <param name="Blocks">Its recent past, oldest first.</param>
 /// <param name="Next">The one dotted mark ahead of the now-line, or <c>null</c> when nothing is armed.</param>
+/// <param name="Refusals">
+///     Moments it saw movement and did not light, oldest first. Defaulted so the lane can be built without
+///     them; the board passes <see cref="BoardView.Refusals"/> and a caller that does not care may leave it.
+/// </param>
 public sealed record BoardLane(
 	string Key,
 	string Name,
 	string? AreaId,
 	AreaSnapshot Latest,
 	IReadOnlyList<LaneBlock> Blocks,
-	LaneMark? Next)
+	LaneMark? Next,
+	IReadOnlyList<LaneRefusal>? Refusals = null)
 {
 	/// <summary>
 	///     Whether this room has nothing to say: no past worth drawing, nothing armed, nothing wrong.
 	/// </summary>
 	/// <remarks>
-	///     The whole dark-cockpit rule reduces to this property. A quiet room's lane is an empty track, and
-	///     fourteen empty tracks are a wall of nothing that the three rooms worth reading have to be found in.
+	///     <para>
+	///         The whole dark-cockpit rule reduces to this property. A quiet room's lane is an empty track, and
+	///         fourteen empty tracks are a wall of nothing that the three rooms worth reading have to be found in.
+	///     </para>
+	///     <para>
+	///         <b>A refused movement makes a room un-quiet.</b> It draws no stretch and arms no timer, so without
+	///         this it would hide behind the same emptiness as a room nobody entered — and those two are precisely
+	///         the pair a reader comes to the board to tell apart.
+	///     </para>
 	/// </remarks>
-	public bool IsQuiet => Blocks.Count == 0 && Next is null && !BoardView.IsException(Latest);
+	public bool IsQuiet =>
+		Blocks.Count == 0 && Next is null && Refusals is null or { Count: 0 } && !BoardView.IsException(Latest);
 }
 
 /// <summary>One period of the day's schedule, drawn as a band above the lanes.</summary>
@@ -245,6 +282,61 @@ public static class BoardView
 				return new LaneBlock(span.Kind, left, Math.Min(width, 100 - left), span.Kelvin);
 			})
 		];
+	}
+
+	/// <summary>
+	///     The moments this room saw movement and did not light, as marks on its lane.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>The reason the board carries these at all.</b> A room that refuses draws no stretch — it was dark
+	///         before the movement and dark after — so its lane was identical to the lane of a room nobody walked
+	///         through. Those are the two cases a reader is trying to tell apart when they come to the board asking
+	///         why a light did not come on, and the board answered both with the same emptiness.
+	///     </para>
+	///     <para>
+	///         <b>The reports are already thinned by the engine</b>, which publishes one per <i>change of the
+	///         refusing gate</i> rather than one per movement — so somebody pacing under an unchanged block is one
+	///         mark, not forty. That is the same property <see cref="ActivityView.IsDeclinedMotion"/> relies on, and
+	///         it is why this needs no de-duplication of its own beyond the identical-instant guard below.
+	///     </para>
+	///     <para>
+	///         The test for a refusal is <see cref="ActivityView.IsDeclinedMotion"/> itself, not a copy of it. Two
+	///         copies would let the timeline and the log disagree about whether a movement was turned down, and a
+	///         mark with no row to explain it is worse than no mark.
+	///     </para>
+	/// </remarks>
+	/// <param name="entries">The log's entries for one room, in any order.</param>
+	/// <param name="window">The board's window; a refusal outside it is not drawn.</param>
+	/// <returns>The marks, oldest first. Empty when the room turned nothing down.</returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public static IReadOnlyList<LaneRefusal> Refusals(IEnumerable<ActivityEntry> entries, BoardWindow window)
+	{
+		ArgumentNullException.ThrowIfNull(entries);
+		ArgumentNullException.ThrowIfNull(window);
+
+		List<LaneRefusal> marks = [];
+		DateTimeOffset? previous = null;
+
+		foreach (ActivityEntry entry in entries
+			.Where(entry => ActivityView.IsDeclinedMotion(entry.Snapshot))
+			.Where(entry => entry.At >= window.Start && entry.At <= window.End)
+			.OrderBy(entry => entry.At)
+			.ThenBy(entry => entry.Sequence))
+		{
+			// Two reports at the same instant would stack two marks on one pixel, which reads as one mark drawn
+			// badly rather than as two events. The engine can publish a pair when a second gate closes in the
+			// same tick, and the row for each is still in the log.
+			if (previous == entry.At)
+				continue;
+
+			previous = entry.At;
+			marks.Add(new LaneRefusal(
+				Math.Clamp(window.PercentAt(entry.At), 0, 100),
+				$"{Clock(entry.At)} movement, {ActivityView.RefusalReason(entry.Snapshot)}"));
+		}
+
+		return marks;
 	}
 
 	/// <summary>

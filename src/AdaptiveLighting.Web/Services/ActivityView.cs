@@ -1094,7 +1094,12 @@ public static class ActivityView
 	///     <see cref="AreaSnapshot.AutoOnBlockedBy"/> carries none, and reads exactly as it always did — an older
 	///     payload cannot support this claim any better than it can support its opposite.
 	/// </remarks>
-	private static bool IsDeclinedMotion(AreaSnapshot snapshot) =>
+	/// <remarks>
+	///     Internal rather than private because the board draws a mark for the same reports, and two copies of
+	///     "was this movement turned down" would drift — the timeline and the log would then disagree about a
+	///     refusal, which is the one thing both surfaces exist to explain.
+	/// </remarks>
+	internal static bool IsDeclinedMotion(AreaSnapshot snapshot) =>
 		snapshot.Reason is TransitionReason.Motion
 		&& snapshot.State is not AreaState.AutoActive
 		&& snapshot.AutoOnBlockedBy is { } block
@@ -1125,6 +1130,38 @@ public static class ActivityView
 		// than thrown, because a row that says less is a better failure than a page that does not render.
 		_ => "Movement"
 	};
+
+	/// <summary>
+	///     The gate that turned a movement down, in the fewest words that still name it — for the board's mark,
+	///     which has a lane's width rather than a row's.
+	/// </summary>
+	/// <remarks>
+	///     A clause rather than a sentence, because it is read after a time and the word <c>movement</c>:
+	///     <c>18:04 movement, too bright</c>. Derived from the same <see cref="AutoOnBlock"/> the log's full
+	///     sentence uses, so the mark and the row it sends the reader to can never name different causes — but
+	///     deliberately not built by trimming that sentence, which would make every wording change a two-place
+	///     edit with one place easy to miss.
+	/// </remarks>
+	/// <param name="snapshot">A report <see cref="IsDeclinedMotion"/> has already accepted.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is <c>null</c>.</exception>
+	internal static string RefusalReason(AreaSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		return snapshot.AutoOnBlockedBy switch
+		{
+			AutoOnBlock.KillSwitch => "the master switch is off",
+			AutoOnBlock.Disabled => "automatic lighting is off here",
+			AutoOnBlock.Away => "nobody home yet",
+			AutoOnBlock.SceneHold => "a guest scene has this room",
+			AutoOnBlock.Sleep => "the house is asleep",
+			AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
+				? $"{blocker} is on"
+				: "something here is on",
+			AutoOnBlock.NotDark => "too bright",
+			_ => "turned down"
+		};
+	}
 
 	/// <summary>
 	///     What goes under a refused movement: the reading, and only where the reading is what refused.
