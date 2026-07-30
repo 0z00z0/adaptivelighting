@@ -6143,8 +6143,13 @@ h1[tabindex="-1"]:focus {
 	min-width: 0;
 }
 
+/* The global code rule gives an entity id a filled, brass-on-panel badge. Right for an id quoted inside prose;
+   wrong here, where display:block stretched it into a grey bar the width of the column under every room name.
+   The slug is a whisper under the name, so it keeps only the mono face. */
 .comm-row .rn code {
 	display: block;
+	background: none;
+	padding: 0;
 	font-family: var(--mono);
 	font-size: var(--text-xs);
 	color: var(--muted);
@@ -6231,7 +6236,15 @@ h1[tabindex="-1"]:focus {
 
 /* ---- commit ----
    The promise, the one button, and the legend. Everything is in flow on a desk; the phone block below makes
-   only the button bar sticky, so a thumb never scrolls seventeen rows to find it. */
+   only the button bar sticky, so a thumb never scrolls seventeen rows to find it.
+
+   The pick zone is what bounds that stickiness. A sticky element is held inside its containing block, so
+   without this the button floated up over the question sheets — a control promising to switch rooms on,
+   sitting on top of a sentence about who lives here. */
+.comm-pickzone {
+	position: relative;
+}
+
 .commit-copy {
 	padding: 10px 0 0;
 	margin-top: var(--space-2);

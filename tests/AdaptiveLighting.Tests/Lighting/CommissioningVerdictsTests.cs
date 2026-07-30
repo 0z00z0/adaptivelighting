@@ -36,26 +36,55 @@ public sealed class CommissioningVerdictsTests
 	// ===================== the light-level notes =====================
 
 	/// <summary>
-	///     A room with no sensor and the default darkness source counts as dark all day — the engine's own rule
-	///     (<c>IlluminanceGate</c>: a gate with nothing to read is not a gate), which is what the row must say.
+	///     Having no light-level sensor is not a row note. It was, and on a real house it fired on thirteen of
+	///     seventeen rows while restating the muted dash in the column beside it. The consequence is said once,
+	///     under the table.
 	/// </summary>
 	[TestMethod]
-	public void No_Sensor_On_The_Default_Source_Reads_As_Dark_All_Day()
+	public void No_Sensor_Is_Not_A_Row_Note()
 	{
 		AreaConfig room = new() { AreaId = "bod" };
 
-		CollectionAssert.Contains(
-			(System.Collections.ICollection)Words(CommissioningVerdicts.For(room, Defaults, 0, 0, 1)),
-			"no light-level sensor — counts as dark all day");
+		Assert.AreEqual(0, CommissioningVerdicts.For(room, Defaults, 0, 0, 1).Count);
 	}
 
-	/// <summary>A room that judges by the sun is not missing anything by having no sensor, and is not told it is.</summary>
+	/// <summary>
+	///     A room with no sensor on the default darkness source counts as dark all day — the engine's own rule
+	///     (<c>IlluminanceGate</c>: a gate with nothing to read is not a gate), so it is counted for the line.
+	/// </summary>
 	[TestMethod]
-	public void No_Sensor_Is_Not_A_Note_For_A_Room_That_Judges_By_The_Sun()
+	public void No_Sensor_On_The_Default_Source_Counts_As_Dark_All_Day()
+	{
+		Assert.IsTrue(CommissioningVerdicts.CountsAsDarkForWantOfASensor(new AreaConfig { AreaId = "bod" }, Defaults, 0));
+	}
+
+	/// <summary>A room that judges by the sun is not missing anything by having no sensor, so it is not counted.</summary>
+	[TestMethod]
+	public void A_Room_That_Judges_By_The_Sun_Is_Not_Counted()
 	{
 		AreaConfig room = new() { AreaId = "uteplass", Darkness = DarknessSource.Sun };
 
+		Assert.IsFalse(CommissioningVerdicts.CountsAsDarkForWantOfASensor(room, Defaults, 0));
 		Assert.AreEqual(0, CommissioningVerdicts.For(room, Defaults, 0, 0, 1).Count);
+	}
+
+	/// <summary>A room with a sensor, or with one pinned by hand, is not counted either.</summary>
+	[TestMethod]
+	public void A_Room_With_A_Sensor_Is_Not_Counted()
+	{
+		Assert.IsFalse(CommissioningVerdicts.CountsAsDarkForWantOfASensor(new AreaConfig { AreaId = "stue" }, Defaults, 1));
+
+		AreaConfig pinned = new() { AreaId = "stue", LuxSensor = "sensor.stue_lys" };
+		Assert.IsFalse(CommissioningVerdicts.CountsAsDarkForWantOfASensor(pinned, Defaults, 0));
+	}
+
+	/// <summary>The line is said once, counted, and not at all for a house where every room has a sensor.</summary>
+	[TestMethod]
+	public void The_No_Sensor_Line_Is_Said_Once()
+	{
+		Assert.IsNull(CommissioningVerdicts.NoSensorLine(0));
+		StringAssert.StartsWith(CommissioningVerdicts.NoSensorLine(1), "One room has no light-level sensor, so it counts as dark all day");
+		StringAssert.StartsWith(CommissioningVerdicts.NoSensorLine(11), "11 rooms have no light-level sensor, so they count as dark all day");
 	}
 
 	/// <summary>Two sensors are averaged by engine rule, and the row says so rather than leaving it to be found out.</summary>

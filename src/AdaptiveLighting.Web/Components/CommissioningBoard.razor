@@ -70,14 +70,14 @@
 		<div class="sheet-body">
 			<div class="sentences">
 				<p class="sentence">
-					@IdentitySentence.Parts.BeforeName<span class="tok-host">
-						<input class="tok tok-text"
-							   type="text"
-							   aria-label="What this house is called"
-							   placeholder="@IdentitySentence.DefaultHouseName"
-							   value="@HouseNameBox"
-							   @onchange="OnHouseNameChanged" />
-					</span>@IdentitySentence.Parts.AfterName<span class="people-row">
+					@* No stray whitespace anywhere in this paragraph: the runs carry their own spacing, and a newline
+					   between a control and the punctuation after it renders as a space before the full stop. *@
+					@IdentitySentence.Parts.BeforeName<input class="tok tok-text"
+						   type="text"
+						   aria-label="What this house is called"
+						   placeholder="@IdentitySentence.DefaultHouseName"
+						   value="@HouseNameBox"
+						   @onchange="OnHouseNameChanged" />@IdentitySentence.Parts.AfterName<span class="people-row">
 						@foreach (PersonView person in People)
 						{
 							string entityId = person.EntityId;
@@ -142,59 +142,67 @@
 	</div>
 }
 
-<CommissioningRollCall Groups="_groups"
-					   Draft="_draft"
-					   Global="_config.Global"
-					   NearMiss="@_nearMiss"
-					   Changed="Recount" />
-
 @*
-	Commit. One button, counting as it goes, with the promise stated once and meant literally.
+	The pick zone bounds the phone's sticky commit bar: pinned to the bottom edge while the rooms are being
+	picked, settled into the flow once the reader scrolls past the table's end. Unbounded it floated over the
+	question sheets, which is a button promising to switch on rooms sitting on top of a sentence about people.
 *@
-<div class="commit-copy">
-	<p class="commit-promise">
-		<strong>Nothing in the house changes until this button.</strong>
-		<span class="smallprint">One save: your answers and the rooms you picked &mdash; then those rooms go live.</span>
-	</p>
-</div>
+<div class="comm-pickzone">
+	<CommissioningRollCall Groups="_groups"
+						   Draft="_draft"
+						   Global="_config.Global"
+						   NoSensor="@_noSensor"
+						   NearMiss="@_nearMiss"
+						   Changed="Recount" />
 
-@if (_saveMessage is { Length: > 0 } saveMessage)
-{
-	@* A refusal leaves the file and the running engine untouched, and the board exactly as it stands. Said here
-	   rather than as a toast, because it is the one thing standing between this page and a working house. *@
-	<div class="notice bad">
-		<strong>Not switched on.</strong> @saveMessage
-		@if (_saveErrors.Count > 0)
-		{
-			<ul>
-				@foreach (string error in _saveErrors)
-				{
-					<li>@error</li>
-				}
-			</ul>
-		}
+	@*
+		Commit. One button, counting as it goes, with the promise stated once and meant literally.
+	*@
+	<div class="commit-copy">
+		<p class="commit-promise">
+			<strong>Nothing in the house changes until this button.</strong>
+			<span class="smallprint">One save: your answers and the rooms you picked &mdash; then those rooms go live.</span>
+		</p>
 	</div>
-}
 
-<div class="commit-bar">
-	<button type="button" class="bigbtn" disabled="@(_draft.PickedCount == 0 || _busy)" @onclick="Commit">
-		@CommissioningVerdicts.CommitLabel(_draft.PickedCount)
-	</button>
-</div>
-
-<div class="commit-after">
-	@if (CommissioningVerdicts.RestLine(_draft.PickedCount, _rows.Count) is { } rest)
+	@if (_saveMessage is { Length: > 0 } saveMessage)
 	{
-		<span class="smallprint">@rest</span>
+		@* A refusal leaves the file and the running engine untouched, and the board exactly as it stands. Said
+		   here rather than as a toast, because it is the one thing standing between this page and a working house. *@
+		<div class="notice bad">
+			<strong>Not switched on.</strong> @saveMessage
+			@if (_saveErrors.Count > 0)
+			{
+				<ul>
+					@foreach (string error in _saveErrors)
+					{
+						<li>@error</li>
+					}
+				</ul>
+			}
+		</div>
 	}
 
-	@* The board's vocabulary taught at the door, on the last surface before the board starts speaking it. *@
-	<div class="legend">
-		<span class="lab">When they go live:</span>
-		<span class="key"><StateChip State="AreaState.AutoActive" Bare="true" Kelvin="2700" /> lit &middot; auto</span>
-		<span class="key"><StateChip State="AreaState.OverriddenOn" Bare="true" /> set by hand</span>
-		<span class="key"><StateChip State="AreaState.PreOff" Bare="true" /> warning dim</span>
-		<span class="key"><StateChip State="AreaState.Disabled" Bare="true" /> switched off</span>
+	<div class="commit-bar">
+		<button type="button" class="bigbtn" disabled="@(_draft.PickedCount == 0 || _busy)" @onclick="Commit">
+			@CommissioningVerdicts.CommitLabel(_draft.PickedCount)
+		</button>
+	</div>
+
+	<div class="commit-after">
+		@if (CommissioningVerdicts.RestLine(_draft.PickedCount, _rows.Count) is { } rest)
+		{
+			<span class="smallprint">@rest</span>
+		}
+
+		@* The board's vocabulary taught at the door, on the last surface before the board starts speaking it. *@
+		<div class="legend">
+			<span class="lab">When they go live:</span>
+			<span class="key"><StateChip State="AreaState.AutoActive" Bare="true" Kelvin="2700" /> lit &middot; auto</span>
+			<span class="key"><StateChip State="AreaState.OverriddenOn" Bare="true" /> set by hand</span>
+			<span class="key"><StateChip State="AreaState.PreOff" Bare="true" /> warning dim</span>
+			<span class="key"><StateChip State="AreaState.Disabled" Bare="true" /> switched off</span>
+		</div>
 	</div>
 </div>
 
@@ -240,6 +248,7 @@
 	private string? _houseModeName;
 	private string? _houseModeEntity;
 	private string? _nearMiss;
+	private string? _noSensor;
 	private int _lights;
 	private int _motion;
 	private int _lightLevel;
@@ -299,6 +308,7 @@
 		_lights = 0;
 		_motion = 0;
 		_lightLevel = 0;
+		int noSensor = 0;
 
 		foreach (AreaConfig area in _config.Areas)
 		{
@@ -312,6 +322,9 @@
 			_lights += lights;
 			_motion += motion;
 			_lightLevel += lux;
+
+			if (CommissioningVerdicts.CountsAsDarkForWantOfASensor(area, _config.Defaults, lux))
+				noSensor++;
 
 			rows.Add(new CommissioningRow(
 				CommissioningDraft.RoomKey(area),
@@ -346,6 +359,7 @@
 			? Catalog.FriendlyNameOf(entity) ?? entity
 			: null;
 
+		_noSensor = CommissioningVerdicts.NoSensorLine(noSensor);
 		_nearMiss = CommissioningVerdicts.NearMiss(NearMissRooms());
 	}
 

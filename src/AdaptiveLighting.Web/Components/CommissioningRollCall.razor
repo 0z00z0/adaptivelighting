@@ -127,6 +127,15 @@
 	</div>
 }
 
+@*
+	The two lines the rows themselves cannot carry: what having no light-level sensor means, said once for the
+	rooms it applies to rather than as an identical chip down the table, and the rooms discovery refused.
+*@
+@if (NoSensor is { Length: > 0 } noSensor)
+{
+	<p class="comm-nearmiss">@noSensor</p>
+}
+
 @if (NearMiss is { Length: > 0 } nearMiss)
 {
 	<p class="comm-nearmiss">@nearMiss</p>
@@ -150,6 +159,10 @@
 	/// <summary>The globals the light-level read needs — chiefly the house's outdoor sensor, for a room that follows it.</summary>
 	[Parameter, EditorRequired]
 	public GlobalConfig Global { get; set; } = default!;
+
+	/// <summary>The line about the rooms with no light-level sensor, or <c>null</c> when every room has one.</summary>
+	[Parameter]
+	public string? NoSensor { get; set; }
 
 	/// <summary>The line about the rooms discovery looked at and left out, or <c>null</c> when there are none.</summary>
 	[Parameter]

@@ -94,9 +94,11 @@ public static class CommissioningVerdicts
 	///         because they explain rather than ask.
 	///     </para>
 	///     <para>
-	///         The light-level note is about the room's <i>darkness source</i>, not about its sensor count alone: a
-	///         room set to <see cref="DarknessSource.Sun"/> or <see cref="DarknessSource.Always"/> is not missing
-	///         anything by having no sensor, and telling it so would be manufacturing a problem out of a setting.
+	///         <b>Having no light-level sensor is deliberately not a note.</b> It was one, and on a real house it
+	///         fired on thirteen of seventeen rows — an identical chip repeated down the table is texture, not
+	///         information, and it duplicated the muted dash in the Light level column an inch to its left. The
+	///         consequence a dash cannot carry is said once instead, under the table, by
+	///         <see cref="NoSensorLine"/>.
 	///     </para>
 	/// </remarks>
 	/// <param name="area">The proposed room, whose <c>null</c> properties mean "inherit".</param>
@@ -133,9 +135,6 @@ public static class CommissioningVerdicts
 		if (luxSensorCount > 1 && area.LuxSensor is not { Length: > 0 })
 			notes.Add(new Verdict($"reads the average of {luxSensorCount} sensors", VerdictTone.Info));
 
-		if (luxSensorCount == 0 && area.LuxSensor is not { Length: > 0 } && effective.Darkness == DarknessSource.Lux)
-			notes.Add(new Verdict("no light-level sensor — counts as dark all day", VerdictTone.Info));
-
 		if (effective.RespectSleepMode || effective.SleepBlocksAutoOn)
 			notes.Add(new Verdict("bedroom manners", VerdictTone.Info));
 
@@ -147,6 +146,48 @@ public static class CommissioningVerdicts
 
 		return notes;
 	}
+
+	/// <summary>
+	///     Whether a room judges darkness by a light-level sensor it does not have — which the engine reads as
+	///     "dark", so movement alone lights the room whatever the hour.
+	/// </summary>
+	/// <remarks>
+	///     <c>IlluminanceGate</c>'s own rule: on <see cref="DarknessSource.Lux"/> a gate with nothing to read is
+	///     not a gate, and the room counts as dark. A room set to <see cref="DarknessSource.Sun"/> or
+	///     <see cref="DarknessSource.Always"/> is not missing anything by having no sensor, so it is not counted.
+	/// </remarks>
+	/// <param name="area">The proposed room.</param>
+	/// <param name="defaults">The document's all-rooms settings.</param>
+	/// <param name="luxSensorCount">How many illuminance sensors discovery finds in the room.</param>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public static bool CountsAsDarkForWantOfASensor(AreaConfig area, AreaSettings defaults, int luxSensorCount)
+	{
+		ArgumentNullException.ThrowIfNull(area);
+		ArgumentNullException.ThrowIfNull(defaults);
+
+		return luxSensorCount == 0
+			&& area.LuxSensor is not { Length: > 0 }
+			&& area.Effective(defaults).Darkness == DarknessSource.Lux;
+	}
+
+	/// <summary>
+	///     The line under the table about the rooms with no light-level sensor, or <c>null</c> when every room has
+	///     one.
+	/// </summary>
+	/// <remarks>
+	///     Said once rather than on every row it applies to. On a house with five sensors and seventeen rooms the
+	///     per-row version was thirteen identical chips restating the muted dash beside them; what a dash cannot
+	///     say is the consequence, and the consequence is one fact about the house rather than twelve about rooms.
+	/// </remarks>
+	/// <param name="count">How many rooms <see cref="CountsAsDarkForWantOfASensor"/> is true of.</param>
+	public static string? NoSensorLine(int count) => count switch
+	{
+		<= 0 => null,
+		1 => "One room has no light-level sensor, so it counts as dark all day — movement alone lights it. "
+			+ "Give it one in Home Assistant, or set how it decides it is dark on its own page.",
+		_ => $"{count} rooms have no light-level sensor, so they count as dark all day — movement alone lights "
+			+ "them. Give them one in Home Assistant, or set how they decide they are dark on their own pages."
+	};
 
 	/// <summary>
 	///     The line under the table about rooms discovery looked at and left out, or <c>null</c> when there are
