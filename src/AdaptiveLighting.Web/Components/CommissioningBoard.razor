@@ -1,0 +1,539 @@
+@inject LightingEngineHost Engine
+@inject HaCatalog Catalog
+@inject ILogger<CommissioningBoard> Logger
+
+@*
+	The commissioning board: what the dashboard's awaiting-room-choice state becomes.
+
+	A STATE, NOT A ROUTE. It renders exactly while no room is switched on, and the moment the commit lands the
+	same page is the live board with the chosen rooms' lanes empty. There is no shell, no progress model and no
+	back button, because the four answers it takes do not depend on each other — the narrative is the page's
+	top-to-bottom reading order and the freedom is that any sheet opens at any time.
+
+	NOTHING IS WRITTEN UNTIL COMMIT. Every answer lives on the CommissioningDraft in this circuit's memory; the
+	document on disk is the one discovery wrote, untouched, until the commit button applies the draft to a
+	working copy and puts it through LightingEngineHost.Save — validate, write, re-read, rebuild every area
+	controller. A refusal leaves the board exactly as it stands. There is no second write path here.
+
+	A SHEET WITH NO WORK DOES NOT RENDER. A house with no adopted house-mode select gets no mode sheet and no
+	mode chip — that is a cabin, not a fault, and it must commit as cleanly as a seventeen-room house.
+
+	THE ROWS ARE BUILT ONCE PER DOCUMENT. The dashboard re-renders this every second; rebuilding seventeen full
+	resolver runs on that tick would be per-second work for a table nobody is reading that fast. What moves —
+	the live light level — is read per render off the ResolvedArea each row already carries.
+*@
+
+<div class="onboarding">
+	<p class="onboarding-lead">@Lead</p>
+
+	<FindingsStrip Rooms="_rows.Count"
+				   Lights="_lights"
+				   Motion="_motion"
+				   LightLevel="_lightLevel"
+				   People="People.Count"
+				   HouseMode="@_houseModeName" />
+
+	@*
+		The checklist. Its status lines are summaries of the answers as they stand — never a visited-flag — which
+		is what makes coming back to a half-commissioned house a review rather than an interrogation. That is also
+		why the only mark an item carries is which sheet is open: a done-tick would be a second, weaker claim
+		beside a line that already says what the answer is.
+	*@
+	<div class="comm-list">
+		<button type="button"
+				class="comm-item @(_sheet == Sheet.Identity ? "open" : null)"
+				aria-expanded="@(_sheet == Sheet.Identity ? "true" : "false")"
+				@onclick="() => Open(Sheet.Identity)">
+			<span class="ti">Name it &amp; who lives here</span>
+			<span class="st">@IdentitySentence.StatusLine(HouseNameNow, KeptPeopleNames, DebounceNow)</span>
+		</button>
+
+		@if (_modes.Count > 0)
+		{
+			<button type="button"
+					class="comm-item @(_sheet == Sheet.Mode ? "open" : null)"
+					aria-expanded="@(_sheet == Sheet.Mode ? "true" : "false")"
+					@onclick="() => Open(Sheet.Mode)">
+				<span class="ti">House mode</span>
+				<span class="st">@ModeStatus</span>
+			</button>
+		}
+	</div>
+</div>
+
+@if (_sheet == Sheet.Identity)
+{
+	@*
+		The identity sheet: the only facts discovery genuinely cannot know, as one sentence in the product's own
+		grammar. The delay is a real token on the House tab's own shortlist; the name is free text, because no
+		token kind carries that and adding one for a control used once would touch the shared machinery; the
+		people are chips with the live presence dots the house bar already uses — the parked car showing "home"
+		is exactly the evidence for evicting it, and the chip shows it rather than asking for trust.
+	*@
+	<div class="panel comm-sheet">
+		<div class="sheet-head">
+			<span class="lab">Name it &amp; who lives here</span>
+			<span class="note">the facts discovery cannot know</span>
+		</div>
+		<div class="sheet-body">
+			<div class="sentences">
+				<p class="sentence">
+					@* No stray whitespace anywhere in this paragraph: the runs carry their own spacing, and a newline
+					   between a control and the punctuation after it renders as a space before the full stop. *@
+					@IdentitySentence.Parts.BeforeName<input class="tok tok-text"
+						   type="text"
+						   aria-label="What this house is called"
+						   placeholder="@IdentitySentence.DefaultHouseName"
+						   value="@HouseNameBox"
+						   @onchange="OnHouseNameChanged" />@IdentitySentence.Parts.AfterName<span class="people-row">
+						@foreach (PersonView person in People)
+						{
+							string entityId = person.EntityId;
+							bool counted = _draft.Counts(entityId);
+
+							<button type="button"
+									class="person-chip @(person.IsHome ? "home" : null) @(counted ? null : "out")"
+									title="@PersonTitle(person, counted)"
+									@key="entityId"
+									@onclick="() => TogglePerson(entityId)">
+								<span class="person-dot @(person.IsHome ? "home" : null)" aria-hidden="true"></span>
+								<span class="person-chip-name">@person.Name</span>
+								<span class="person-chip-state">@PresenceWord(person)</span>
+							</button>
+						}
+					</span>@IdentitySentence.Parts.BeforeDelay<SentenceTokenView Token="IdentitySentence.Delay(DebounceNow)"
+																			   Note="Applies at commit — nothing is written until then."
+																			   Edited="OnDelayEdited" />@IdentitySentence.Parts.AfterDelay
+				</p>
+			</div>
+
+			<p class="sentence-legend">
+				<span>
+					Tap a person to leave them out &mdash; a car tracker reads <i>home</i> whenever it is parked,
+					which is exactly why it should not decide whether the house is empty.
+				</span>
+			</p>
+		</div>
+	</div>
+}
+
+@if (_sheet == Sheet.Mode && _modes.Count > 0)
+{
+	@*
+		The mode sheet exists to be read more than to be answered. Adoption is safe by construction — an adopted
+		select carries kinds only, so the engine only ever reads the dropdown — but a wrongly adopted select
+		silently reclassifies the whole house's idea of Away, and the moment to catch that is here, in the
+		owner's own option names read back in English. Remapping stays on Configuration.
+	*@
+	<div class="panel comm-sheet">
+		<div class="sheet-head">
+			<span class="lab">House mode</span>
+			<span class="note"><span class="mono">@_houseModeEntity</span> &mdash; adopted from Home Assistant, read back in English</span>
+		</div>
+		<div class="sheet-body">
+			<div class="sentences">
+				@foreach (ModeLine mode in _modes)
+				{
+					<p class="sentence" @key="mode.Name">
+						<span class="mode-name">@mode.Name</span> @mode.Sentences[0].PlainText
+					</p>
+				}
+			</div>
+
+			<div class="sheet-actions">
+				<button type="button" class="@(_draft.KeepHouseMode is not false ? "primary" : null)" @onclick="() => SetMode(true)">Keep it</button>
+				<button type="button" class="@(_draft.KeepHouseMode is false ? "primary" : null)" @onclick="() => SetMode(false)">Detach &mdash; this house has no mode</button>
+			</div>
+
+			<p class="smallprint">@ModeFoot</p>
+		</div>
+	</div>
+}
+
+@*
+	The pick zone bounds the phone's sticky commit bar: pinned to the bottom edge while the rooms are being
+	picked, settled into the flow once the reader scrolls past the table's end. Unbounded it floated over the
+	question sheets, which is a button promising to switch on rooms sitting on top of a sentence about people.
+*@
+<div class="comm-pickzone">
+	<CommissioningRollCall Groups="_groups"
+						   Draft="_draft"
+						   Global="_config.Global"
+						   NoSensor="@_noSensor"
+						   NearMiss="@_nearMiss"
+						   Changed="Recount" />
+
+	@*
+		Commit. One button, counting as it goes, with the promise stated once and meant literally.
+	*@
+	<div class="commit-copy">
+		<p class="commit-promise">
+			<strong>Nothing in the house changes until this button.</strong>
+			<span class="smallprint">One save: your answers and the rooms you picked &mdash; then those rooms go live.</span>
+		</p>
+	</div>
+
+	@if (_saveMessage is { Length: > 0 } saveMessage)
+	{
+		@* A refusal leaves the file and the running engine untouched, and the board exactly as it stands. Said
+		   here rather than as a toast, because it is the one thing standing between this page and a working house. *@
+		<div class="notice bad">
+			<strong>Not switched on.</strong> @saveMessage
+			@if (_saveErrors.Count > 0)
+			{
+				<ul>
+					@foreach (string error in _saveErrors)
+					{
+						<li>@error</li>
+					}
+				</ul>
+			}
+		</div>
+	}
+
+	<div class="commit-bar">
+		<button type="button" class="bigbtn" disabled="@(_draft.PickedCount == 0 || _busy)" @onclick="Commit">
+			@CommissioningVerdicts.CommitLabel(_draft.PickedCount)
+		</button>
+	</div>
+
+	<div class="commit-after">
+		@if (CommissioningVerdicts.RestLine(_draft.PickedCount, _rows.Count) is { } rest)
+		{
+			<span class="smallprint">@rest</span>
+		}
+
+		@* The board's vocabulary taught at the door, on the last surface before the board starts speaking it. *@
+		<div class="legend">
+			<span class="lab">When they go live:</span>
+			<span class="key"><StateChip State="AreaState.AutoActive" Bare="true" Kelvin="2700" /> lit &middot; auto</span>
+			<span class="key"><StateChip State="AreaState.OverriddenOn" Bare="true" /> set by hand</span>
+			<span class="key"><StateChip State="AreaState.PreOff" Bare="true" /> warning dim</span>
+			<span class="key"><StateChip State="AreaState.Disabled" Bare="true" /> switched off</span>
+		</div>
+	</div>
+</div>
+
+@code {
+	/// <summary>Which question sheet is open. One at a time; the roll-call is never folded.</summary>
+	private enum Sheet
+	{
+		/// <summary>None — the resting state, which is the whole page's default.</summary>
+		None,
+
+		/// <summary>Name it &amp; who lives here.</summary>
+		Identity,
+
+		/// <summary>The adopted house-mode select, confirmed or declined.</summary>
+		Mode
+	}
+
+	/// <summary>The people the engine watches, from the dashboard's own read — so the chips and Home/Away agree.</summary>
+	[Parameter, EditorRequired]
+	public IReadOnlyList<PersonView> People { get; set; } = [];
+
+	/// <summary>Raised once the commit has landed, so the page can re-read and become the board.</summary>
+	[Parameter]
+	public EventCallback Committed { get; set; }
+
+	/// <summary>
+	///     Every answer, in this circuit's memory and nowhere else.
+	/// </summary>
+	/// <remarks>
+	///     A field on the component, which is the whole persistence model: Blazor Server's reconnect keeps it
+	///     across a locked phone, and a genuinely closed tab loses it. See <see cref="CommissioningDraft"/> for
+	///     why that is cheaper than a shadow copy of half-made configuration.
+	/// </remarks>
+	private readonly CommissioningDraft _draft = new();
+
+	private AdaptiveLightingConfig _config = new();
+	private DateTimeOffset? _stamp;
+	private bool _loaded;
+
+	private IReadOnlyList<CommissioningRow> _rows = [];
+	private IReadOnlyList<FloorGroup<CommissioningRow>> _groups = [];
+	private IReadOnlyList<ModeLine> _modes = [];
+	private string? _houseModeName;
+	private string? _houseModeEntity;
+	private string? _nearMiss;
+	private string? _noSensor;
+	private int _lights;
+	private int _motion;
+	private int _lightLevel;
+
+	private Sheet _sheet = Sheet.None;
+	private bool _busy;
+	private string? _saveMessage;
+	private IReadOnlyList<string> _saveErrors = [];
+
+	/// <inheritdoc/>
+	protected override void OnParametersSet() => ReadDocument();
+
+	/// <summary>
+	///     Re-reads the document and rebuilds the table, but only when the file has actually changed.
+	/// </summary>
+	/// <remarks>
+	///     The dashboard's one-second ticker re-renders this component, and each rebuild is a full
+	///     <c>AreaEntityResolver</c> run per room. Guarded on the store's last-write time — the same bargain
+	///     <see cref="ModeService"/> and the board's schedule read already make with the same file — it costs a
+	///     stat per tick instead.
+	/// </remarks>
+	private void ReadDocument()
+	{
+		if (!Engine.Store.Exists)
+			return;
+
+		DateTimeOffset? stamp = Engine.Store.LastWrittenUtc;
+
+		if (_loaded && stamp == _stamp)
+			return;
+
+		try
+		{
+			_config = Engine.Store.Load();
+			_stamp = stamp;
+			_loaded = true;
+		}
+		catch (LightingConfigException exception)
+		{
+			// The dashboard has already decided this house is awaiting a room choice, so it read the document
+			// successfully a moment ago. Keeping the last good copy beats blanking the board mid-save.
+			Logger.LogDebug(exception, "Could not re-read the lighting configuration for the commissioning board.");
+			return;
+		}
+
+		Build();
+	}
+
+	/// <summary>Rebuilds every row, the floor grouping, the strip's counts and the near-miss line.</summary>
+	private void Build()
+	{
+		// The registry is re-read with the document: the catalog caches discovery per load, and a stale answer
+		// beside a fresh document would be the worst of both.
+		Catalog.Invalidate();
+
+		List<CommissioningRow> rows = new(_config.Areas.Count);
+		_lights = 0;
+		_motion = 0;
+		_lightLevel = 0;
+		int noSensor = 0;
+
+		foreach (AreaConfig area in _config.Areas)
+		{
+			AreaPreview preview = Catalog.PreviewArea(area, _config.Defaults, _config.Global);
+			ResolvedArea? resolved = preview.Resolved;
+
+			int lights = resolved?.Lights.Count ?? 0;
+			int motion = resolved?.MotionSensors.Count ?? 0;
+			int lux = resolved?.LuxSensors.Count ?? 0;
+
+			_lights += lights;
+			_motion += motion;
+			_lightLevel += lux;
+
+			if (CommissioningVerdicts.CountsAsDarkForWantOfASensor(area, _config.Defaults, lux))
+				noSensor++;
+
+			rows.Add(new CommissioningRow(
+				CommissioningDraft.RoomKey(area),
+				area.AreaId,
+				AreaNaming.DisplayName(area, Catalog.AreaRegistry),
+				lights,
+				motion,
+				lux,
+				// suspectCount is 0 until the impostor sheet ships. The projection takes it as an argument rather
+				// than reaching for LightAudit here, so wiring that sheet in later is one call site, not a rewrite.
+				CommissioningVerdicts.For(area, _config.Defaults, lux, suspectCount: 0, lights),
+				AreaSentences.ForArea(area, _config.Defaults),
+				resolved));
+		}
+
+		_rows = rows;
+
+		// A registry that has not connected throws rather than answering. One unnamed group is FloorGrouping's own
+		// degradation rule, so the failure mode is a flat table — which is the thing somebody came here to operate.
+		try
+		{
+			_groups = FloorGrouping.Group(rows, row => row.AreaId, Catalog.AreaRegistry);
+		}
+		catch (InvalidOperationException)
+		{
+			_groups = rows.Count == 0 ? [] : [new FloorGroup<CommissioningRow>(null, rows)];
+		}
+
+		_modes = HouseSentences.Modes(_config.Global.HouseMode, _config.Periods);
+		_houseModeEntity = _config.Global.HouseMode?.Entity;
+		_houseModeName = _houseModeEntity is { Length: > 0 } entity
+			? Catalog.FriendlyNameOf(entity) ?? entity
+			: null;
+
+		_noSensor = CommissioningVerdicts.NoSensorLine(noSensor);
+		_nearMiss = CommissioningVerdicts.NearMiss(NearMissRooms());
+	}
+
+	/// <summary>
+	///     The rooms discovery looked at and left out: they have lights, but nothing that senses movement.
+	/// </summary>
+	/// <remarks>
+	///     Read through the same <c>AreaOption</c> counts the area picker is labelled with — the resolver's own
+	///     answers — and narrowed to areas the document does not already list, so a room already in the table can
+	///     never also appear underneath it as one that was refused.
+	/// </remarks>
+	private IReadOnlyList<string> NearMissRooms()
+	{
+		HashSet<string> listed = new(
+			_config.Areas.Select(area => area.AreaId).OfType<string>(),
+			StringComparer.Ordinal);
+
+		return
+		[
+			.. Catalog.Areas(_config.Global)
+				.Where(area => !listed.Contains(area.Id))
+				.Where(area => area.HasLights && area.MotionCount == 0)
+				.Select(area => area.Name)
+		];
+	}
+
+	// ===================== the sheets =====================
+
+	private void Open(Sheet sheet) => _sheet = _sheet == sheet ? Sheet.None : sheet;
+
+	private void TogglePerson(string entityId) => _draft.TogglePerson(entityId);
+
+	private void SetMode(bool keep) => _draft.SetHouseMode(keep);
+
+	private void OnHouseNameChanged(ChangeEventArgs args) => _draft.SetHouseName(args.Value?.ToString());
+
+	private void OnDelayEdited(SentenceEdit edit) => _draft.SetAwayDebounce(edit.Minutes);
+
+	/// <summary>The house name as it stands: the draft's answer if there is one, otherwise the document's.</summary>
+	private string? HouseNameNow => _draft.HouseName ?? _config.ConfigName;
+
+	/// <summary>What the box shows. Empty when the name was cleared, so the placeholder can say what will happen.</summary>
+	private string HouseNameBox => _draft.HouseName ?? _config.ConfigName ?? string.Empty;
+
+	/// <summary>The empty-house delay as it stands.</summary>
+	private int DebounceNow => _draft.AwayDebounceMinutes ?? _config.Global.AwayDebounceMinutes;
+
+	/// <summary>The people still counted, named — what the checklist's status line and the sentence both read.</summary>
+	private IReadOnlyList<string> KeptPeopleNames =>
+		[.. People.Where(person => _draft.Counts(person.EntityId)).Select(person => person.Name)];
+
+	/// <summary>
+	///     What a person chip's hover says: the entity behind it, and what tapping would do.
+	/// </summary>
+	/// <remarks>
+	///     The entity id is in the hover rather than on the chip because it is the answer to "which Espen is
+	///     this?" and nothing else — a row of ids would make the sentence unreadable for a fact needed once.
+	/// </remarks>
+	private static string PersonTitle(PersonView person, bool counted) => counted
+		? $"{person.EntityId} — counts for Home and Away. Tap to leave them out."
+		: $"{person.EntityId} — left out. Tap to count them again.";
+
+	/// <summary>
+	///     Where somebody is, or that Home Assistant cannot say. "Unknown" is not "away": a tracker nobody can
+	///     read is exactly the case a household needs to see before trusting the house's idea of empty.
+	/// </summary>
+	private static string PresenceWord(PersonView person) =>
+		!person.IsAvailable ? "unknown" : person.IsHome ? "home" : "away";
+
+	private string ModeStatus => _draft.KeepHouseMode switch
+	{
+		false => "detaching — this house will run without a mode",
+		true => $"{_houseModeName} — kept",
+		_ => $"{_houseModeName} — {_modes.Count} options to check"
+	};
+
+	private string ModeFoot => _draft.KeepHouseMode switch
+	{
+		false => "Detached — staged. This house will run without a mode; nothing is written until commit.",
+		_ => "Adoption only ever reads the dropdown. Remapping what each option means lives under House."
+	};
+
+	// ===================== the one write =====================
+
+	private void Recount()
+	{
+		// The commit button and its sub-line both count the picked rooms, and both live above this component's
+		// child. Nothing to do but re-render — the draft already holds the change.
+	}
+
+	/// <summary>
+	///     The one write, through the one path.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Read fresh from disk rather than reusing the cached copy: the document may have been edited in
+	///         Configuration in another tab while this board sat open, and applying a draft to a stale object
+	///         would silently revert that edit.
+	///     </para>
+	///     <para>
+	///         <c>LightingEngineHost.Save</c> normalises, validates, refuses-or-writes, re-reads and rebuilds every
+	///         area controller. On refusal nothing reaches disk and the board stands exactly as it was, which is
+	///         why the message is shown in place rather than as a toast that scrolls away.
+	///     </para>
+	/// </remarks>
+	private async Task Commit()
+	{
+		_busy = true;
+		_saveMessage = null;
+		_saveErrors = [];
+
+		try
+		{
+			AdaptiveLightingConfig working = Engine.Store.Load();
+			_draft.Apply(working, [.. People.Select(person => person.EntityId)]);
+
+			SaveResult result = Engine.Save(working);
+
+			if (!result.Written)
+			{
+				_saveMessage = result.Message;
+				_saveErrors = [.. result.Validation.Errors];
+				return;
+			}
+
+			Logger.LogInformation(
+				"Commissioning committed: {Rooms} rooms switched on from the first-run board.", _draft.PickedCount);
+
+			// Everything on disk is different now, discovery's cached answers included.
+			Catalog.Invalidate();
+			_loaded = false;
+
+			await Committed.InvokeAsync();
+		}
+		catch (LightingConfigException exception)
+		{
+			Logger.LogError(exception, "Could not commit the commissioning board.");
+			_saveMessage = exception.Message;
+		}
+		catch (InvalidOperationException exception)
+		{
+			// What every read in this project treats as "Home Assistant is not answering". The save path guards it
+			// where it knows about it, but a commit runs the validator and then rebuilds every area controller, and
+			// an unhandled throw here does not fail the button — it terminates the Blazor circuit and takes the
+			// whole page with it. On the one surface a brand-new install lands on, that is the worst possible
+			// failure: nothing has been written, and there is nothing left on screen to say so.
+			Logger.LogError(exception, "Could not commit the commissioning board: Home Assistant is not answering.");
+			_saveMessage = "Home Assistant stopped answering, so nothing was written. Try again in a moment.";
+		}
+		finally
+		{
+			_busy = false;
+		}
+	}
+
+	/// <summary>
+	///     The opening line: what set-up did, and what follows from it.
+	/// </summary>
+	/// <remarks>
+	///     Said in that order on purpose — the rooms were found, so the system's half is done; nothing will
+	///     change, so nothing is broken. The suggestion at the end is the approved §5.4 wording: a hallway is the
+	///     easiest room to trust, and somebody staring at seventeen switches needs a first one.
+	/// </remarks>
+	private string Lead => _rows.Count == 1
+		? "Found one room, its lights and sensors already matched up. Nothing in the house changes until the "
+			+ "one button at the bottom."
+		: $"Found {_rows.Count} rooms, their lights and sensors already matched up. Nothing in the house changes "
+			+ "until the one button at the bottom — start with a hallway, it's the easiest room to trust.";
+}

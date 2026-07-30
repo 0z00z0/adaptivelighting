@@ -150,24 +150,14 @@ else if (AreaView.IsAwaitingRoomChoice(_rooms, Engine.IsAttached))
 
 		It also covers a house whose owner switched every room off later, which is the same sentence and the
 		same next step.
+
+		The panel grew into the commissioning board: the findings strip as its header, the question sheets that
+		have work to do, the room roll-call as its centre, and the one commit button at the end. Still a state
+		rather than a route — the condition above is unchanged, and the moment the commit lands it is false and
+		this same page renders the live board. CommissioningBoard owns the draft and the single Save; nothing
+		here writes.
 	*@
-	<div class="onboarding">
-		<p class="onboarding-lead">@FoundLine</p>
-		<ul class="room-chips">
-			@foreach (RoomView room in _rooms)
-			{
-				<li class="room-chip">
-					<span class="room-chip-name">@room.Name</span>
-					@* No count when discovery has not answered: "(0 lights)" would read as a fault in a room that has none. *@
-					@if (room.LightCount > 0)
-					{
-						<span class="room-chip-count">@LightsWord(room.LightCount)</span>
-					}
-				</li>
-			}
-		</ul>
-		<a class="onboarding-action" href="config?section=areas">Choose which rooms to switch on</a>
-	</div>
+	<CommissioningBoard People="_people" Committed="OnCommissioned" />
 }
 else if (!Cache.HasData)
 {
@@ -812,14 +802,18 @@ else
 		at.ToLocalTime().ToString("dddd d MMMM yyyy, HH:mm:ss", CultureInfo.CurrentCulture);
 
 	/// <summary>
-	///     The first-run state's opening line. Says what set-up did and what follows from it, in that order: the
-	///     rooms were found (the system's half is done) and nothing will change (so nothing is broken).
+	///     Re-reads the page the moment the commissioning board's one save lands.
 	/// </summary>
-	private string FoundLine => _rooms.Count == 1
-		? "Setting up found one room. It isn't switched on yet, so no lights will change."
-		: $"Setting up found {_rooms.Count} rooms. None are switched on yet, so no lights will change.";
-
-	private static string LightsWord(int lights) => lights == 1 ? "1 light" : $"{lights} lights";
+	/// <remarks>
+	///     The ticker would pick the change up within a second anyway; doing it here is what makes the commit feel
+	///     like one act rather than like a page that eventually noticed. <c>IsAwaitingRoomChoice</c> is false as
+	///     soon as a room is switched on, so this render is the board taking over.
+	/// </remarks>
+	private void OnCommissioned()
+	{
+		ReadHouseState();
+		ReadBoard();
+	}
 
 	/// <summary>Flips the master switch through the existing config-resolved toggle, then re-reads the house state.</summary>
 	private void ToggleMaster()
