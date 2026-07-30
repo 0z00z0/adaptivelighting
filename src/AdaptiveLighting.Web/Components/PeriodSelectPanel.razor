@@ -40,7 +40,7 @@
 						  Placeholder="input_select.tid_pa_dagnet" />
 		</div>
 		<div class="field-help">
-			Without one, periods change at the start times in the schedule below and nothing else is read or written.
+			Without one, periods change at the start times in the schedule above and nothing else is read or written.
 		</div>
 	</div>
 
@@ -384,7 +384,7 @@
 
 	/// <summary>What the radio's help line says, which is a different sentence for each direction.</summary>
 	private string AuthorityHelp => Authority is PeriodAuthority.HomeAssistant
-		? "The engine reads this helper and never writes it. Start times in the schedule below are kept, but they "
+		? "The engine reads this helper and never writes it. Start times in the schedule above are kept, but they "
 			+ "stop deciding anything until you hand the time of day back."
 		: "The engine writes this helper to match whatever its schedule resolved. Moving the helper by hand changes "
 			+ "nothing — it is put back on the next re-check.";
