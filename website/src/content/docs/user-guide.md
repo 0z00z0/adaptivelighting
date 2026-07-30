@@ -53,13 +53,21 @@ Assistant's entities to arrive — set-up runs once and:
 
 Then it stops. **Every room it found is switched off**, and the board says so:
 
-> Set-up found 17 rooms. None are switched on yet, so no lights will change.
+> Setting up found 17 rooms. None are switched on yet, so no lights will change.
+
+Under that line are the rooms it found, each with how many lights it holds, and one button.
 
 📷 [screenshot: the board's first-run state — the found-rooms line, the grey room chips, and the
 "Choose which rooms to switch on" button]
 
 Set-up runs once. A house that deliberately has no rooms does not find them grown back after a
-restart.
+restart. If it finds nothing at all it does *not* mark itself done — that usually means Home
+Assistant was still waking up — so it looks again on the next restart.
+
+<!-- TODO (docs): the first-run wizard section goes here, once it has shipped. Do not write it from
+     the design — wait for the built version and describe what it actually asks, in what order, and
+     what it leaves switched off. Screenshot marker 1 above photographs this same surface, so the two
+     have to be updated together. -->
 
 ## 3. Choose which rooms to switch on
 
@@ -91,16 +99,20 @@ the now-line]
 
 Top to bottom:
 
-- **The house bar** — the house mode with buttons to change it, who is home, and at the end the
-  master switch that pauses everything. It sits last and stays quiet on purpose: it is touched twice
-  a year. It speaks up the moment anything is wrong — a line under it and a colour on the panel's
-  edge whether it is off or unreachable, and when it is off, a notice across the page as well.
+- **The house bar** — the house mode with buttons to change it, who is home, and **last of the
+  three, the master switch that pauses everything**. It is the same small on/off switch a room page
+  has, not a big button, and it comes last on purpose: it is touched perhaps twice a year, while the
+  other two are read every day. Nothing says "all is well" — that would be a permanent line saying
+  nothing happened. It speaks up the moment anything is wrong: a line under it and a colour on the
+  panel's edge when it is paused or unreachable, and when it is paused, a notice across the page as
+  well.
 - **The exception tray** — one line per room that is doing something other than following the
-  schedule: a warning dim running, somebody's hand setting standing, a fault. When there is nothing,
+  schedule. There are exactly four: a warning dim running, somebody's setting standing, somebody
+  having switched the lights off, and a scene holding the room. When no room is doing any of them,
   the tray is one sentence saying the rest are doing what the schedule says.
 - **The lanes** — one line per room on a shared time axis, grouped under floor headings, showing the
-  last few hours behind a teal now-line and what is coming after it. A room behaving normally has an
-  empty track, and in a large house the quiet rooms drop to chips rather than claiming a row.
+  **last four hours** behind the now-line and the **next two** after it. A room behaving normally has
+  an empty track, and past six rooms the quiet ones drop to chips rather than claiming a row.
 - **What's worth knowing** — the exceptions, newest first, each line naming the room, what it did and
   why. Room names link through to their pages. Deliberately short: the lanes above have already drawn
   every movement and every light that came on, so this list carries only what a picture cannot say —
@@ -124,23 +136,36 @@ The page has:
   room's own on/off switch.
 - **Right now — what the engine saw** — the readings behind the claim, in the order you are likely to
   want them. *Dark enough?* first, answered yes or no with the actual reading underneath it, because
-  that is what you came to find out. Then the lights and their levels, the last movement, the last
-  change, and the time of day the room is following. When something is stopping movement from
-  lighting the room, an *If someone walks in* row appears and says what.
+  that is what you came to find out. When something is stopping movement from lighting the room, an
+  *If someone walks in* row follows it and says what. Then the lights and their levels, the last
+  movement, the last change, and the time of day the room is following. There is no *State* row — the
+  header an inch above already says what the room is doing. If the master switch is off, that gets a
+  row of its own, above everything, because nothing else on the page matters while it is.
+- **Brightness & warmth** — what this room runs in each period of the day, one row per period, with
+  the one in force now marked *now*. Every row starts out following the schedule and is drawn quietly
+  to say so. Change a brightness or a warmth here and only this room changes; an amber dot marks what
+  you chose, and under it is the way back to the schedule's own value.
+
+  Underneath it, **Brighten with daylight**, off until you switch it on. On, a bright day lifts this
+  room above the schedule so it does not read as gloomy against a bright window — a chart shows the
+  shape, with the room's current reading marked on it. It only ever adds light.
 - **How this room behaves** — the room's settings as sentences with the values written into them:
 
   > Lights when someone moves and it's darker than **1000 lx**. After **10 min** without movement,
   > dim to **50 %** for **30 s**, then off.
   >
-  > Manual changes hold for **2 h**; after somebody switches them off by hand, movement is ignored
+  > Manual changes hold for **2 h**; after somebody switches them off manually, movement is ignored
   > until the room has been empty **10 min**.
 
   Tap any value to pick a different one from a short list. **All settings** reveals the rest as five
-  folded sections — each names what it holds, and opens when you tap it — and says how many of the
-  settings are this room's own rather than the house's.
+  folded sections — each names what it holds, and opens when you tap it — plus one more for what the
+  room *is*: its name, and which Home Assistant area it stands for. The line beside the button says
+  how many of the settings are this room's own rather than the house's.
 - **In this room** — the lights and sensors that were found, as chips. The **×** on a chip leaves that
   entity out of this room, and the exclusions are listed so you can put one back. *Not right? Pick by
-  hand* replaces the automatic choice for one list at a time.
+  hand* replaces the automatic choice for one list at a time. At the bottom sit the two actions that
+  throw work away: *Set this room up again* and *Remove this room*. Each says what it costs before you
+  press it.
 - **What happened here** — the log, filtered to this room.
 
 Changes on a room page apply about a second after you make them; there is no save button. A
