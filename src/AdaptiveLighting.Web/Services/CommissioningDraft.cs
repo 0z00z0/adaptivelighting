@@ -190,7 +190,13 @@ public sealed class CommissioningDraft
 		// Written only when somebody was actually evicted. An empty Persons list means "watch every person Home
 		// Assistant knows" (PresenceMonitor's own rule), and turning that into an explicit list because the sheet
 		// was merely looked at would quietly stop counting the next person the household adds.
-		if (_dropped.Count > 0)
+		//
+		// The second condition is the one that is not obvious: watchedPersons is the chip list as of the last
+		// render, and every reader of Home Assistant here returns an empty list rather than throwing when it is not
+		// answering. A hiccup on the tick before the button is pressed would therefore write Persons = [] — which
+		// says "watch everyone" — and the tracker the household just evicted would be silently back. Writing
+		// nothing is the honest answer to "I could not see who was being watched".
+		if (_dropped.Count > 0 && watchedPersons.Count > 0)
 			config.Global.Persons = [.. watchedPersons.Where(person => !_dropped.Contains(person))];
 
 		// Detach only. Keeping is the do-nothing answer, because the select is already in the document — writing

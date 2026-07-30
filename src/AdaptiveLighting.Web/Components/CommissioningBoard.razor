@@ -331,7 +331,11 @@
 			_motion += motion;
 			_lightLevel += lux;
 
-			if (CommissioningVerdicts.CountsAsDarkForWantOfASensor(area, _config.Defaults, lux))
+			// Not counted for a room that has no lights either: one cause — a room whose entities stopped
+			// resolving — otherwise makes two claims, and the count under the table would say a room "counts as
+			// dark all day, movement alone lights them" about a room that cannot light at all. Its own row already
+			// says the true thing.
+			if (lights > 0 && CommissioningVerdicts.CountsAsDarkForWantOfASensor(area, _config.Defaults, lux))
 				noSensor++;
 
 			rows.Add(new CommissioningRow(
@@ -479,6 +483,12 @@
 		_saveMessage = null;
 		_saveErrors = [];
 
+		// Set inside the try, acted on outside it. Telling the parent the house has been commissioned is not part
+		// of writing the file, and running it inside the same catch meant a throw from the parent's own re-read
+		// would be reported as "nothing was written" over a file that had just been written correctly — the worst
+		// kind of wrong message, because it invites pressing the button again.
+		bool written = false;
+
 		try
 		{
 			AdaptiveLightingConfig working = Engine.Store.Load();
@@ -500,7 +510,7 @@
 			Catalog.Invalidate();
 			_loaded = false;
 
-			await Committed.InvokeAsync();
+			written = true;
 		}
 		catch (LightingConfigException exception)
 		{
@@ -521,6 +531,10 @@
 		{
 			_busy = false;
 		}
+
+		// Past the catch, so a failure in the parent's re-read cannot be reported as a failure to write.
+		if (written)
+			await Committed.InvokeAsync();
 	}
 
 	/// <summary>

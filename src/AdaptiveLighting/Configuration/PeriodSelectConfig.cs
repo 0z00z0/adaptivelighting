@@ -70,6 +70,23 @@ public class PeriodSelectConfig
 	public string? Entity { get; set; }
 
 	/// <summary>
+	///     <see cref="Entity"/> as anything reading Home Assistant should ask for it: trimmed, or <c>null</c> when
+	///     it is blank.
+	/// </summary>
+	/// <remarks>
+	///     The engine trimmed and the pages did not, which is a disagreement rather than an untidiness: a single
+	///     trailing space in a hand-edited file left the engine running <c>night</c> while every page badged
+	///     <c>day</c>, with the document passing validation. Not reachable through the editor — the entity picker
+	///     trims what it is given — but a hand-edited file is exactly the case the rest of this type is careful
+	///     about. One accessor rather than a <c>.Trim()</c> at each call site, because the call sites are what got
+	///     it wrong.
+	/// </remarks>
+	[YamlIgnore]
+	public string? EntityId => Entity is { Length: > 0 } entity && entity.Trim() is { Length: > 0 } trimmed
+		? trimmed
+		: null;
+
+	/// <summary>
 	///     Which side decides. Defaults to <see cref="PeriodAuthority.AdaptiveLighting"/>, so adding the select
 	///     without saying anything else changes nothing about how the lights behave.
 	/// </summary>

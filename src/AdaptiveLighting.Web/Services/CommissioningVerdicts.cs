@@ -121,6 +121,21 @@ public static class CommissioningVerdicts
 		AreaSettings effective = area.Effective(defaults);
 		List<Verdict> notes = [];
 
+		// A room with nothing to command is the one row that must never fall through to "Ready". Without this the
+		// notes list comes back empty — no lights means no suspects, and the other notes are about settings, not
+		// about hardware — and an empty list is exactly how this table says a room is good to go. The owner then
+		// switches on a room that can never light, and the board has told them it was ready.
+		//
+		// It is not a first-boot-only case: this same surface is what a household sees after switching every room
+		// off again, against a document that may be months old. A motion sensor renamed or removed in Home
+		// Assistant since discovery ran is enough.
+		if (lightCount == 0)
+		{
+			notes.Add(new Verdict("no lights found — switching this on will do nothing", VerdictTone.Warn));
+
+			return notes;
+		}
+
 		if (suspectCount > 0 && lightCount > 0)
 		{
 			notes.Add(new Verdict(

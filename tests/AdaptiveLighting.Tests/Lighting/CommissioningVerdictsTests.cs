@@ -33,6 +33,30 @@ public sealed class CommissioningVerdictsTests
 		Assert.AreEqual(0, CommissioningVerdicts.For(room, Defaults, luxSensorCount: 1, suspectCount: 0, lightCount: 1).Count);
 	}
 
+	/// <summary>
+	///     A room with nothing to command must never fall through to the silent "Ready".
+	/// </summary>
+	/// <remarks>
+	///     <b>Empty notes is how this table says "good to go", so a room that cannot light must not produce them.</b>
+	///     No lights means no suspects, and every other note is about settings rather than hardware, so the list
+	///     came back empty and the row printed <i>Ready</i> — over a room that would never light. It is not a
+	///     first-boot-only case: this surface is also what a household sees after switching every room off again,
+	///     against a document that may be months old, and a motion sensor renamed in Home Assistant since discovery
+	///     ran is enough to produce it.
+	/// </remarks>
+	[TestMethod]
+	public void A_Room_With_No_Lights_Is_Never_Called_Ready()
+	{
+		AreaConfig stranded = new() { AreaId = "loftstue" };
+
+		IReadOnlyList<Verdict> notes =
+			CommissioningVerdicts.For(stranded, Defaults, luxSensorCount: 0, suspectCount: 0, lightCount: 0);
+
+		Assert.AreNotEqual(0, notes.Count, "an empty list is how the row says Ready");
+		Assert.AreEqual(VerdictTone.Warn, notes[0].Tone);
+		StringAssert.Contains(notes[0].Text, "no lights found");
+	}
+
 	// ===================== the light-level notes =====================
 
 	/// <summary>

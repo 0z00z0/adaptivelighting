@@ -261,7 +261,7 @@
 
 		// Two questions, both asked of Schedule and neither re-answered here: which period is running, and
 		// whether the dropdown is what decided it. The badge's hover is the only thing that needs the second.
-		string? value = Catalog.CurrentStateOf(Global.PeriodSelect?.Entity);
+		string? value = Catalog.CurrentStateOf(Global.PeriodSelect?.EntityId);
 
 		_namedBySelect = Schedule.NamedBySelect(Periods, Global, value) is not null;
 
@@ -321,17 +321,47 @@
 	///     What a period starts as, in the one place that decides it.
 	/// </summary>
 	/// <remarks>
-	///     Public and static because <see cref="PeriodSelectPanel"/> offers the same "add a period" where a
-	///     dropdown helper has more options than the schedule has periods, and two definitions of "a new period"
-	///     would eventually differ — a household would then get a different starting row depending on which button
-	///     they happened to press.
+	///     <para>
+	///         Public and static because <see cref="PeriodSelectPanel"/> offers the same "add a period" where a
+	///         dropdown helper has more options than the schedule has periods, and two definitions of "a new period"
+	///         would eventually differ — a household would then get a different starting row depending on which
+	///         button they happened to press.
+	///     </para>
+	///     <para>
+	///         <b>The name is made unique against what is already there, because pressing the button twice is a
+	///         prescribed flow, not a mistake.</b> The period-select panel counts the shortfall out loud — "3 of
+	///         them have no period to point at" — and offers one button, so three presses is what the copy asks
+	///         for. Three rows all called "new period" is two document-level errors (a duplicate name, and two
+	///         periods starting at 12:00) and an unsaveable schedule. On a phone the new cards render above the
+	///         fold, so the household does not even see what they made.
+	///     </para>
 	/// </remarks>
-	public static TimePeriodConfig NewPeriod() =>
-		new() { Name = "new period", Start = "12:00", BrightnessPct = 80, ColorTempKelvin = 3500 };
+	/// <param name="existing">
+	///     The periods already in the document, so the new one can be named apart from them. Omit only where
+	///     there is genuinely nothing to collide with.
+	/// </param>
+	public static TimePeriodConfig NewPeriod(IReadOnlyList<TimePeriodConfig>? existing = null)
+	{
+		const string Stem = "new period";
+
+		string name = Stem;
+
+		if (existing is { Count: > 0 })
+		{
+			HashSet<string> taken = existing
+				.Select(period => period.Name?.Trim() ?? "")
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+			for (int suffix = 2; taken.Contains(name); suffix++)
+				name = $"{Stem} {suffix}";
+		}
+
+		return new TimePeriodConfig { Name = name, Start = "12:00", BrightnessPct = 80, ColorTempKelvin = 3500 };
+	}
 
 	private async Task Add()
 	{
-		Periods.Add(NewPeriod());
+		Periods.Add(NewPeriod(Periods));
 		await Changed.InvokeAsync().ConfigureAwait(false);
 	}
 

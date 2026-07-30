@@ -634,7 +634,7 @@ public sealed class ModeService
 	/// </remarks>
 	private string? PeriodSelectValue() =>
 		Schedule.HomeAssistantDecides(Config.Global)
-			? _catalog.CurrentStateOf(Config.Global.PeriodSelect!.Entity)
+			? _catalog.CurrentStateOf(Config.Global.PeriodSelect!.EntityId)
 			: null;
 
 	/// <summary>

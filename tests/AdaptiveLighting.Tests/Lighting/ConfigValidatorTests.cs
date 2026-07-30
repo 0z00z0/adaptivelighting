@@ -1016,6 +1016,31 @@ public sealed class ConfigValidatorTests
 	}
 
 	/// <summary>
+	///     Clearing a mapping in the editor must leave a document that still saves.
+	/// </summary>
+	/// <remarks>
+	///     <b>The dead end this pins.</b> The panel offers "(none — this option changes nothing)" as a legitimate
+	///     pick. Emptying only the row's period left <c>Value</c> in place, and <c>IsEmpty</c> is blank-Value
+	///     <i>and</i> blank-Period — so the normaliser kept the row and the validator raised a document-level
+	///     error, which <c>Save</c> refuses on. Every save on the whole Configuration page then failed, including
+	///     unrelated room edits; and clearing the helper to back out hid the panel while the error stayed, leaving
+	///     no control on screen able to undo it. The row is removed now, and this is the assertion that says so.
+	/// </remarks>
+	[TestMethod]
+	public void PeriodSelect_AClearedRow_NormalisesAwayInsteadOfBlockingEverySave()
+	{
+		AdaptiveLightingConfig config = WithPeriodSelect(options: [("Dag", "day")]);
+
+		// What the editor now does when the household picks "this option changes nothing".
+		config.Global.PeriodSelect!.Options.Clear();
+
+		ConfigNormalizer.Normalize(config);
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "a cleared mapping must not make the document unsaveable");
+	}
+
+	/// <summary>
 	///     Mappings with no entity are a household told nothing while the engine ignores what it said.
 	/// </summary>
 	/// <remarks>

@@ -425,9 +425,18 @@
 
 	/// <summary>Points a live option at a period, or clears it.</summary>
 	/// <remarks>
-	///     A cleared row is emptied rather than removed, so <c>ConfigNormalizer</c> drops it on save through the
-	///     one path that already exists for it — and a row cleared by accident is re-pickable without the editor
-	///     having to remember it was ever there.
+	///     <b>A cleared row is REMOVED, not emptied.</b> Emptying only the period looked tidier and was a trap:
+	///     <c>PeriodSelectOptionConfig.IsEmpty</c> is <c>Value</c> blank <b>and</b> <c>Period</c> blank, so a row
+	///     still carrying its option string is not empty, the normaliser keeps it, and the validator then raises a
+	///     document-level <i>error</i> — which <c>LightingEngineHost.Save</c> refuses on. Picking "this option
+	///     changes nothing", an option this editor offers as legitimate, would have blocked every save on the whole
+	///     Configuration page, including unrelated room edits. Worse, clearing the helper to back out hides this
+	///     panel behind <c>HasEntity</c> while the error stays, leaving no control on screen able to undo it: a
+	///     hand edit of the YAML was the only way out.
+	///     <para>
+	///         Nothing is lost by removing it. The option is still live on the helper, so it renders as an
+	///         unmapped row and is one pick away from being mapped again.
+	///     </para>
 	/// </remarks>
 	private Task SetPeriod(string value, string? period) => Set(() =>
 	{
@@ -436,7 +445,7 @@
 		if (string.IsNullOrWhiteSpace(period))
 		{
 			if (existing is not null)
-				existing.Period = "";
+				Block().Options.Remove(existing);
 
 			return;
 		}
@@ -468,7 +477,7 @@
 	///     The row is <see cref="PeriodsEditor.NewPeriod"/>'s, not one built here, so the two places a household
 	///     can add a period cannot disagree about what a new one starts as.
 	/// </remarks>
-	private Task AddPeriod() => Set(() => Periods.Add(PeriodsEditor.NewPeriod()));
+	private Task AddPeriod() => Set(() => Periods.Add(PeriodsEditor.NewPeriod(Periods)));
 
 	/// <summary>
 	///     The block to write into, created on first use.
