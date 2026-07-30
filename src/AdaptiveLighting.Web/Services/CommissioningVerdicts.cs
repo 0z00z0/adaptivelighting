@@ -1,4 +1,5 @@
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Engine;
 
 namespace AdaptiveLighting.Web.Services;
 
@@ -16,6 +17,45 @@ public enum VerdictTone
 /// <param name="Text">What it says, in the words the row has room for.</param>
 /// <param name="Tone">Which colour it carries.</param>
 public sealed record Verdict(string Text, VerdictTone Tone);
+
+/// <summary>
+///     One proposed room as the roll-call draws it: the counts, the notes, and the sentences its unfold shows.
+/// </summary>
+/// <remarks>
+///     <para>
+///         Assembled once per document, not once per second. The board re-renders on the dashboard's one-second
+///         tick, and rebuilding this would put a full <c>AreaEntityResolver</c> run per room per tick behind a
+///         page nobody is reading that fast. What genuinely moves — the room's live light level — is read off
+///         <see cref="Resolved"/> at render time, which costs one state read per sensor.
+///     </para>
+///     <para>
+///         The <see cref="AreaConfig"/> itself is deliberately not carried. The row is what the table draws; the
+///         document is the board's, and handing a component a mutable room would invite an edit outside the one
+///         write path the commit button is.
+///     </para>
+/// </remarks>
+/// <param name="Key">The room's identity across the board, the draft and the document — <see cref="CommissioningDraft.RoomKey"/>.</param>
+/// <param name="AreaId">The registry area id, or <c>null</c> for a room configured with explicit entities.</param>
+/// <param name="Name">The room's display name, as every other surface says it.</param>
+/// <param name="LightCount">How many lights the room would command.</param>
+/// <param name="MotionCount">How many motion sensors it resolves.</param>
+/// <param name="LuxCount">How many illuminance sensors it resolves.</param>
+/// <param name="Notes">The row's verdict chips, worst first. Empty means the row says <see cref="CommissioningVerdicts.ReadyWord"/>.</param>
+/// <param name="Sentences">
+///     The room's behaviour, through <see cref="AreaSentences.ForArea"/> — the real token machinery, rendered
+///     read-only, so the deferred editable unfold is a switch rather than a rewrite (§2.5).
+/// </param>
+/// <param name="Resolved">What discovery makes of the room, or <c>null</c> when it cannot resolve at all.</param>
+public sealed record CommissioningRow(
+	string Key,
+	string? AreaId,
+	string Name,
+	int LightCount,
+	int MotionCount,
+	int LuxCount,
+	IReadOnlyList<Verdict> Notes,
+	IReadOnlyList<Sentence> Sentences,
+	ResolvedArea? Resolved);
 
 /// <summary>
 ///     What each proposed room has to say for itself before anybody switches it on, and what the table says

@@ -1,0 +1,238 @@
+@inject HaCatalog Catalog
+
+@*
+	The board's centre, and the one part that is never folded away: every proposed room, one row each, with the
+	switch that decides whether the engine may run it.
+
+	Grouped by floor through the shipped FloorGrouping, because six runs of at most five rows are navigated the
+	way the owner thinks about the house while seventeen undifferentiated rows are scrolled. The header carries
+	the one bulk action the settings list already offers.
+
+	A row's notes are CommissioningVerdicts' — read off the document rather than re-derived here — and a row with
+	nothing to say carries one muted word. Tapping the row (not its switch) unfolds the room's own behaviour as
+	read-only sentences through the real SentenceView token machinery, so turning editing on later is a switch
+	rather than a rewrite. Row and switch are distinct targets; the switch stops the tap.
+
+	The live light level is read here, per render, off the ResolvedArea the row already carries — the same
+	geometric mean the engine's own gate takes, so a number here and a decision there cannot disagree.
+*@
+
+<div class="comm-label"><span class="lab">The rooms &mdash; switch on the ones this app may run</span></div>
+
+@foreach (FloorGroup<CommissioningRow> group in Groups)
+{
+	<div class="comm-floor">
+		@if (AreaView.ShowsHeader(Groups.Count, group.Floor))
+		{
+			<div class="floor-head">
+				<span class="floor-name">@AreaView.FloorTitle(group.Floor)</span>
+				<button type="button" class="floor-bulk" @onclick="() => ToggleFloor(group)">
+					@(AllPicked(group) ? "Switch off this floor" : "Switch on this floor")
+				</button>
+			</div>
+		}
+
+		<div class="comm-t">
+			@* The column heads once per floor, so a table scrolled past its first group still says what its
+			   numbers are. Hidden entirely on the phone, where the row folds to two lines and labels them itself. *@
+			<div class="comm-cols" aria-hidden="true">
+				<span>On</span><span>Room</span>
+				<span class="c">Lights</span><span class="c">Motion</span><span class="c">Light level</span>
+				<span>Notes</span>
+			</div>
+
+			@foreach (CommissioningRow row in group.Items)
+			{
+				string key = row.Key;
+				bool open = _open.Contains(key);
+
+				@* A div rather than a button: it contains a switch, and a control inside a control is invalid
+				   markup that browsers resolve by dropping one of them. The keyboard route to the unfold is the
+				   Enter/Space handler below, which is why it also carries a role and a tab stop. *@
+				<div class="comm-row @(open ? "open" : null)"
+					 role="button"
+					 tabindex="0"
+					 aria-expanded="@(open ? "true" : "false")"
+					 title="@($"Show what {row.Name} would do")"
+					 @key="key"
+					 @onclick="() => Unfold(key)"
+					 @onkeydown="args => OnRowKey(args, key)">
+					<span class="sw">
+						@* The room switch's own markup, aria included — one control language across the app. *@
+						<button type="button"
+								class="switch @(Draft.IsPicked(key) ? "on" : null)"
+								role="switch"
+								aria-checked="@(Draft.IsPicked(key) ? "true" : "false")"
+								aria-label="@($"Switch on {row.Name}")"
+								@onclick="() => Toggle(key)"
+								@onclick:stopPropagation="true">
+							<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+						</button>
+					</span>
+
+					<span class="rn">@row.Name<code>@(row.AreaId ?? "no area")</code></span>
+
+					<span class="c"><b>@row.LightCount</b></span>
+					<span class="c"><b>@row.MotionCount</b></span>
+					<span class="c lx">@LightLevel(row)</span>
+
+					<span class="notes meta">
+						@* The counts, for the phone alone: the desktop columns already carry them, and CSS drops
+						   this span past 560px rather than the markup carrying two layouts. *@
+						<span class="cnt">@Counts(row)</span>
+
+						@foreach (Verdict note in row.Notes)
+						{
+							<span class="note-chip @(note.Tone == VerdictTone.Warn ? "warn" : "info")">@note.Text</span>
+						}
+
+						@if (row.Notes.Count == 0)
+						{
+							<span class="note-ready">@CommissioningVerdicts.ReadyWord</span>
+						}
+					</span>
+				</div>
+
+				@if (open)
+				{
+					string unfoldKey = key + "-unfold";
+
+					<div class="comm-unfold" @key="unfoldKey">
+						@* Read-only, and through the real token machinery rather than flattened to prose: the
+						   owner kept the editable unfold open as a future option, and Editable="false" is what
+						   makes that a switch rather than a rewrite (first-run-wizard.md §2.5). *@
+						<SentenceView Sentences="row.Sentences" Editable="false" ShowLegend="false" />
+
+						@if (row.Resolved is { } resolved)
+						{
+							<div class="room-gear">
+								@foreach (string entityId in resolved.Lights)
+								{
+									<span class="gchip gchip-light"><span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code></span>
+								}
+								@foreach (string entityId in resolved.MotionSensors)
+								{
+									<span class="gchip gchip-motion"><span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code></span>
+								}
+								@foreach (string entityId in resolved.LuxSensors)
+								{
+									<span class="gchip gchip-lux"><span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code></span>
+								}
+							</div>
+						}
+					</div>
+				}
+			}
+		</div>
+	</div>
+}
+
+@if (NearMiss is { Length: > 0 } nearMiss)
+{
+	<p class="comm-nearmiss">@nearMiss</p>
+}
+
+@*
+	The escape hatch, kept deliberately. The plain flow through Configuration worked on a real house before this
+	board existed, and until the board has survived one real commissioning it must not be the only way through.
+*@
+<p class="comm-escape">Or <a href="config?section=areas">switch rooms on under Configuration</a>, the way this app has always done it.</p>
+
+@code {
+	/// <summary>The proposed rooms, already grouped by floor in display order.</summary>
+	[Parameter, EditorRequired]
+	public IReadOnlyList<FloorGroup<CommissioningRow>> Groups { get; set; } = [];
+
+	/// <summary>The draft the switches write into. Nothing here reaches disk.</summary>
+	[Parameter, EditorRequired]
+	public CommissioningDraft Draft { get; set; } = default!;
+
+	/// <summary>The globals the light-level read needs — chiefly the house's outdoor sensor, for a room that follows it.</summary>
+	[Parameter, EditorRequired]
+	public GlobalConfig Global { get; set; } = default!;
+
+	/// <summary>The line about the rooms discovery looked at and left out, or <c>null</c> when there are none.</summary>
+	[Parameter]
+	public string? NearMiss { get; set; }
+
+	/// <summary>Raised whenever a switch moves, so the board can recount the commit button.</summary>
+	[Parameter]
+	public EventCallback Changed { get; set; }
+
+	/// <summary>
+	///     Which rows are unfolded, by key.
+	/// </summary>
+	/// <remarks>
+	///     Several at once, deliberately: the unfold is a reading aid, and a set that closed the previous room
+	///     would make comparing two rooms a matter of memory.
+	/// </remarks>
+	private readonly HashSet<string> _open = new(StringComparer.Ordinal);
+
+	private Task Toggle(string key)
+	{
+		Draft.ToggleRoom(key);
+
+		return Changed.InvokeAsync();
+	}
+
+	private Task ToggleFloor(FloorGroup<CommissioningRow> group)
+	{
+		IReadOnlyList<string> keys = [.. group.Items.Select(row => row.Key)];
+
+		if (AllPicked(group))
+			Draft.DropAll(keys);
+		else
+			Draft.PickAll(keys);
+
+		return Changed.InvokeAsync();
+	}
+
+	/// <summary>
+	///     Whether every room on a floor is already picked, which flips the bulk action's words.
+	/// </summary>
+	/// <remarks>An empty floor counts as not-all-picked: offering "switch off" over nothing is a dead control.</remarks>
+	private bool AllPicked(FloorGroup<CommissioningRow> group) =>
+		group.Items.Count > 0 && group.Items.All(row => Draft.IsPicked(row.Key));
+
+	private void Unfold(string key)
+	{
+		if (!_open.Remove(key))
+			_open.Add(key);
+	}
+
+	/// <summary>The keyboard route into the unfold, which a div with a role has to provide for itself.</summary>
+	private void OnRowKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args, string key)
+	{
+		if (args.Key is "Enter" or " ")
+			Unfold(key);
+	}
+
+	/// <summary>
+	///     The room's light level right now, or a muted dash.
+	/// </summary>
+	/// <remarks>
+	///     <see cref="HaCatalog.LuxIn"/>'s geometric mean, which is the figure <c>IlluminanceGate</c> itself takes
+	///     — an arithmetic mean over sensors spanning decades is a different number, and this one sits on the same
+	///     row as the note saying the room reads an average.
+	/// </remarks>
+	private string LightLevel(CommissioningRow row)
+	{
+		if (row.Resolved is not { } resolved)
+			return "—";
+
+		double? lux = Catalog.LuxIn(resolved, Global);
+
+		// Invariant, always: under nb-NO a double renders "62,5", and a number that reads as two on a Norwegian
+		// host is worse than no number at all.
+		return lux is { } reading
+			? string.Create(CultureInfo.InvariantCulture, $"{reading:0} lx")
+			: "—";
+	}
+
+	/// <summary>The counts as the phone's second line says them, where there are no columns to carry them.</summary>
+	private static string Counts(CommissioningRow row) =>
+		$"{row.LightCount} {(row.LightCount == 1 ? "light" : "lights")} · {row.MotionCount} motion";
+
+	/// <summary>Home Assistant's name for an entity, falling back to the id it cannot name.</summary>
+	private string Name(string entityId) => Catalog.FriendlyNameOf(entityId) ?? entityId;
+}
