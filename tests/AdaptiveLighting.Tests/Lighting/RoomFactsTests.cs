@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Web.Services;
 
@@ -37,7 +38,10 @@ public sealed class RoomFactsTests
 		DateTimeOffset? nextFrom = null,
 		string? darknessDetail = null,
 		AutoOnBlock? blockedBy = null,
-		string? blockingEntity = null) =>
+		string? blockingEntity = null,
+		string? houseModeValue = null,
+		bool? isAnyoneHome = null,
+		ForcedMode? forced = null) =>
 		new(
 			"Stue",
 			state,
@@ -53,11 +57,14 @@ public sealed class RoomFactsTests
 			lastMotion,
 			nextChange,
 			nextFrom,
-			null,
+			houseModeValue,
 			darknessDetail,
 			"stue",
 			blockedBy,
-			blockingEntity);
+			blockingEntity,
+			null,
+			isAnyoneHome,
+			forced);
 
 	private static string ValueOf(IReadOnlyList<RoomFact> facts, string label) =>
 		facts.Single(fact => fact.Label == label).Value;
@@ -193,6 +200,84 @@ public sealed class RoomFactsTests
 		StringAssert.StartsWith(RoomFacts.AutoOnNote(unnamed)!, "Something here is on");
 	}
 
+	// ===================== away, and the two things it can mean =====================
+
+	/// <summary>
+	///     <b>The hour this page cost.</b> A cabin's Away option listed <c>ActivateWhileOn</c> on an
+	///     <c>input_boolean</c> that had been on all evening, so every settings save re-asserted Away and swept the
+	///     house dark while the owner stood in it — and this page said "Nobody home" and "wakes when the first
+	///     person comes home" at him while both person entities read <c>home</c>.
+	/// </summary>
+	[TestMethod]
+	public void An_Away_Mode_Over_An_Occupied_House_Names_What_Is_Forcing_It()
+	{
+		ForcedMode forced = new(
+			ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, "input_boolean.occupancy", "on");
+
+		AreaSnapshot held = Report(
+			state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: true, forced: forced);
+
+		// The engine's own sentence, called rather than re-worded: it is the only thing that knows which entity it
+		// read, and the log and this page saying it differently is how a reader trusts the wrong one.
+		Assert.AreEqual(forced.Describe(), RoomFacts.AutoOnNote(held));
+		Assert.AreEqual(forced.Describe(), ValueOf(RoomFacts.For(held, Now), "If someone walks in"));
+
+		Assert.AreEqual("The house is in away mode, though somebody is home.", RoomFacts.Headline(held));
+		Assert.AreEqual("Wakes when the house leaves away mode.", RoomFacts.NextLine(held, Now));
+	}
+
+	/// <summary>
+	///     Nothing is forcing the mode, so somebody chose an away option at the select. The page names it rather
+	///     than falling back on a claim about presence that the report has just contradicted.
+	/// </summary>
+	[TestMethod]
+	public void An_Away_Mode_Nobody_Forced_Names_The_Option_Instead()
+	{
+		AreaSnapshot chosen = Report(
+			state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: true, houseModeValue: "Borte");
+
+		Assert.AreEqual("Somebody is home, but the house mode is set to Borte.", RoomFacts.AutoOnNote(chosen));
+
+		// No select value to name is still not a reason to say nobody is home.
+		AreaSnapshot nameless = Report(state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: true);
+
+		Assert.AreEqual("Somebody is home, but the house is in away mode.", RoomFacts.AutoOnNote(nameless));
+	}
+
+	/// <summary>
+	///     A genuinely empty house keeps every word it had. The fix is a distinction, not a hedge printed over the
+	///     case the page was always right about.
+	/// </summary>
+	[TestMethod]
+	public void An_Empty_House_Still_Says_Nobody_Home()
+	{
+		AreaSnapshot empty = Report(state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: false);
+
+		Assert.AreEqual("Nobody home.", RoomFacts.Headline(empty));
+		Assert.AreEqual("Wakes when the first person comes home.", RoomFacts.NextLine(empty, Now));
+
+		// And the away gate stays off this table: the chip and the headline have already said it.
+		Assert.IsNull(RoomFacts.AutoOnNote(empty));
+
+		Assert.AreEqual(
+			"Nobody home. This room keeps its lights on.",
+			RoomFacts.Headline(Report(state: AreaState.Away, isAnyoneHome: false, brightness: 20)));
+	}
+
+	/// <summary>
+	///     A report from a build that predates <c>IsAnyoneHome</c> says what this page always said. An older
+	///     payload cannot support "somebody is home" any better than it supports the opposite.
+	/// </summary>
+	[TestMethod]
+	public void A_Report_That_Cannot_Say_Who_Is_Home_Keeps_The_Old_Words()
+	{
+		AreaSnapshot older = Report(state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: null);
+
+		Assert.AreEqual("Nobody home.", RoomFacts.Headline(older));
+		Assert.AreEqual("Wakes when the first person comes home.", RoomFacts.NextLine(older, Now));
+		Assert.IsNull(RoomFacts.AutoOnNote(older));
+	}
+
 	/// <summary>
 	///     A report from a build that predates the verdict claims nothing in either direction. An older payload
 	///     cannot support "nothing is blocking this room" any better than it supports the opposite.
@@ -212,6 +297,11 @@ public sealed class RoomFactsTests
 	///     room's switch, the master-switch row, the state chip and the darkness row each say their own piece
 	///     once.
 	/// </summary>
+	/// <remarks>
+	///     The away gate is in this list on the strength of what these reports carry — none of them says who is
+	///     home, so none of them can support the one telling of away the page is not already right about. The
+	///     reports that do say are covered above.
+	/// </remarks>
 	[TestMethod]
 	public void The_Gates_That_Are_Already_Visible_Are_Not_Repeated()
 	{

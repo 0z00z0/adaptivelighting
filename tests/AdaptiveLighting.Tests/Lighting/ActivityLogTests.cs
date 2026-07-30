@@ -1,4 +1,5 @@
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Web.Services;
 
@@ -41,7 +42,9 @@ public sealed class ActivityLogTests
 		HouseMode mode = HouseMode.Home,
 		string? houseModeValue = null,
 		AutoOnBlock? autoOnBlockedBy = null,
-		string? autoOnBlockingEntity = null) =>
+		string? autoOnBlockingEntity = null,
+		bool? isAnyoneHome = null,
+		ForcedMode? forced = null) =>
 		new(
 			area,
 			state,
@@ -61,7 +64,10 @@ public sealed class ActivityLogTests
 			darknessDetail,
 			null,
 			autoOnBlockedBy,
-			autoOnBlockingEntity);
+			autoOnBlockingEntity,
+			null,
+			isAnyoneHome,
+			forced);
 
 	private static ActivityEntry Entry(long sequence, AreaSnapshot snapshot) => new(sequence, snapshot);
 
@@ -648,6 +654,104 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
+	///     <b>The row that cost an hour.</b> A cabin's Away option listed <c>ActivateWhileOn</c> on an
+	///     <c>input_boolean</c> that had been on all evening; every settings save re-asserted Away and swept the
+	///     house dark while the owner stood in it. This row said "Movement, but nobody is home yet" at him while
+	///     both person entities read <c>home</c> — a cause the engine had never checked.
+	/// </summary>
+	[TestMethod]
+	public void A_Movement_Refused_By_An_Away_Mode_Over_An_Occupied_House_Says_So()
+	{
+		ForcedMode forced = new(
+			ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, "input_boolean.occupancy", "on");
+
+		ActivityLine held = Declined(
+			AutoOnBlock.Away, state: AreaState.Away, isAnyoneHome: true, forced: forced);
+
+		Assert.AreEqual("Movement, but the house is in away mode", held.What);
+
+		// The engine's sentence verbatim. It is the only thing that knows which entity it read, and it is what
+		// would have ended the incident in seconds.
+		Assert.AreEqual("Away mode is forced while input_boolean.occupancy is on.", held.Why);
+		Assert.AreEqual(forced.Describe(), held.Why);
+
+		// Nothing forcing it means somebody chose the option, and the row names that rather than presence.
+		ActivityLine chosen = Declined(
+			AutoOnBlock.Away, state: AreaState.Away, isAnyoneHome: true, houseModeValue: "Borte");
+
+		Assert.AreEqual("Somebody is home, but the house mode is set to Borte.", chosen.Why);
+	}
+
+	/// <summary>
+	///     An empty house, and a report too old to say either way, both keep the words they had. The fix is a
+	///     distinction, not a hedge printed over the case the row was always right about.
+	/// </summary>
+	[TestMethod]
+	public void An_Away_Refusal_Keeps_Its_Old_Words_Where_Nothing_Contradicts_Them()
+	{
+		ActivityLine empty = Declined(AutoOnBlock.Away, state: AreaState.Away, isAnyoneHome: false);
+
+		Assert.AreEqual("Movement, but nobody is home yet", empty.What);
+		Assert.IsNull(empty.Why);
+
+		ActivityLine older = Declined(AutoOnBlock.Away, state: AreaState.Away, isAnyoneHome: null);
+
+		Assert.AreEqual("Movement, but nobody is home yet", older.What);
+		Assert.IsNull(older.Why);
+	}
+
+	/// <summary>
+	///     A mode the engine forced never moved the select, so printing the select's value would name the one
+	///     thing that did not happen. The row names the option the engine actually put the house on, and carries
+	///     the engine's own account of what is holding it.
+	/// </summary>
+	[TestMethod]
+	public void A_Forced_Mode_Change_Names_The_Force_Rather_Than_The_Selects_Stale_Value()
+	{
+		ForcedMode forced = new(
+			ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, "input_boolean.occupancy", "on");
+
+		ActivityLine line = ActivityView.Describe(Report(
+			"Stue",
+			AreaState.Away,
+			TransitionReason.HouseModeChanged,
+			mode: HouseMode.Away,
+			houseModeValue: "Hjemme",
+			isAnyoneHome: true,
+			forced: forced));
+
+		Assert.AreEqual("Mode forced to Borte", line.What);
+		Assert.AreEqual(forced.Describe(), line.Why);
+	}
+
+	/// <summary>
+	///     A forced mode's second line is about the house, so it survives the collapse that drops a house-wide
+	///     row's per-room condition — and it is identical in every room, so one forced change is still one row.
+	/// </summary>
+	[TestMethod]
+	public void A_Forced_Modes_Sentence_Survives_The_House_Wide_Collapse()
+	{
+		ForcedMode forced = new(
+			ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, "input_boolean.occupancy", "on");
+
+		AreaSnapshot Publisher(string area, AreaState state) => Report(
+			area, state, TransitionReason.HouseModeChanged,
+			mode: HouseMode.Away, houseModeValue: "Hjemme", isAnyoneHome: true, forced: forced);
+
+		// Two rooms in different states, exactly as a real house is when the mode moves under it.
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(
+		[
+			Entry(2, Publisher("Stue", AreaState.Away)),
+			Entry(1, Publisher("Kjøkken", AreaState.AutoVacant))
+		]);
+
+		Assert.AreEqual(1, rows.Count, "one forced change is one row, whatever the rooms were doing");
+		Assert.AreEqual("Mode forced to Borte", rows[0].Line.What);
+		Assert.AreEqual(forced.Describe(), rows[0].Line.Why);
+		Assert.IsTrue(rows[0].IsAboutTheHouse);
+	}
+
+	/// <summary>
 	///     The master switch is the one refusal that outranked everything, and a refused movement is the one row
 	///     it does not replace.
 	/// </summary>
@@ -704,10 +808,14 @@ public sealed class ActivityLogTests
 		AreaState state = AreaState.AutoVacant,
 		bool? isDark = true,
 		string? detail = null,
-		string? blocker = null) =>
+		string? blocker = null,
+		bool? isAnyoneHome = null,
+		ForcedMode? forced = null,
+		string? houseModeValue = null) =>
 		ActivityView.Describe(Report(
 			"Stue", state, TransitionReason.Motion,
-			isDark: isDark, darknessDetail: detail, autoOnBlockedBy: block, autoOnBlockingEntity: blocker));
+			isDark: isDark, darknessDetail: detail, houseModeValue: houseModeValue,
+			autoOnBlockedBy: block, autoOnBlockingEntity: blocker, isAnyoneHome: isAnyoneHome, forced: forced));
 
 	/// <summary>Every reason the engine can publish has words of its own; none falls through to an enum name.</summary>
 	[TestMethod]
