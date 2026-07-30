@@ -645,36 +645,54 @@ public sealed class ModeMonitor : IDisposable
 		Reset($"presence on {sensor}");
 	}
 
+	/// <summary>
+	///     One evaluation of the clock's news: period entry, the across-restart catch-up, the period select's mirror
+	///     and the auto-away timer.
+	/// </summary>
+	/// <remarks>
+	///     <b>The transition is claimed under the same lock that read it, and that is not cosmetic.</b> This used to
+	///     run only from the scheduler, so reading the previous period at the top and writing the new one at the
+	///     bottom could not overlap with itself. A period-select flip now calls it too
+	///     (<see cref="OnPeriodSelectChanged"/>), from Home Assistant's thread, and a transition read but not yet
+	///     recorded would be acted on by both callers — two <c>SetsMode</c> writes, and a period-start reset firing
+	///     twice. Deciding and claiming together makes the second caller see a boundary already taken.
+	/// </remarks>
 	private void OnTick()
 	{
 		DateTimeOffset now = _scheduler.Now;
-		string? previousPeriodName;
-		bool startPending;
+
+		// Read before the lock: these consult Home Assistant, and the gate is for this object's own fields.
+		HouseModeOptionConfig? activeOption = CurrentOption;
+		string? currentPeriodName = _circadian.ActivePeriodName(now);
+		bool modeIsReadable = CurrentModeValue is { Length: > 0 };
+
+		bool entered;
+		bool applyOnStart;
 
 		lock (_gate)
 		{
-			previousPeriodName = _previousPeriodName;
-			startPending = _startPeriodModePending;
+			// Period entry: the active period changed since the previous evaluation.
+			entered = currentPeriodName is { Length: > 0 }
+				&& _previousPeriodName is { Length: > 0 }
+				&& !string.Equals(currentPeriodName, _previousPeriodName, StringComparison.OrdinalIgnoreCase);
+
+			applyOnStart = !entered
+				&& _startPeriodModePending
+				&& currentPeriodName is { Length: > 0 }
+				&& modeIsReadable;
+
+			_previousPeriodName = currentPeriodName;
+
+			// The one restart chance is spent by an entry — which has already had the say the restart rule would
+			// have had — or by using it. A tick that could read neither the period nor the select leaves it armed.
+			if (entered || applyOnStart)
+				_startPeriodModePending = false;
 		}
-
-		HouseModeOptionConfig? activeOption = CurrentOption;
-		string? currentPeriodName = _circadian.ActivePeriodName(now);
-
-		// Period entry: the active period changed since the previous tick.
-		bool entered = currentPeriodName is { Length: > 0 }
-			&& previousPeriodName is { Length: > 0 }
-			&& !string.Equals(currentPeriodName, previousPeriodName, StringComparison.OrdinalIgnoreCase);
 
 		if (entered)
-		{
 			OnPeriodEntered(currentPeriodName!, activeOption);
-			startPending = false;   // the entry has already had the say the restart rule would have had
-		}
-		else if (startPending && currentPeriodName is { Length: > 0 } && CurrentModeValue is { Length: > 0 })
-		{
-			ApplyPeriodModeOnStart(currentPeriodName);
-			startPending = false;
-		}
+		else if (applyOnStart)
+			ApplyPeriodModeOnStart(currentPeriodName!);
 
 		// Written after the decision above, never before it: the note is the only evidence that a boundary went by
 		// while the engine was down, and recording the new period first would erase it in the window where the
@@ -688,12 +706,6 @@ public sealed class ModeMonitor : IDisposable
 
 		// Auto-away: switch TO an option once the house has been motion-free for its configured span.
 		EvaluateInactivityActivation(now);
-
-		lock (_gate)
-		{
-			_previousPeriodName = currentPeriodName;
-			_startPeriodModePending = startPending;
-		}
 	}
 
 	private void OnPeriodEntered(string periodName, HouseModeOptionConfig? activeOption)

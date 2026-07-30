@@ -944,6 +944,33 @@ public sealed class ModeMonitorTests
 
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"),
 			"the household selected the night, so the night's mode applies — without waiting for the tick");
+
+		Advance(rig, TimeSpan.FromMinutes(5));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"),
+			"and the scheduler's own ticks find the boundary already taken — the flip claimed it");
+	}
+
+	/// <summary>
+	///     The flip now calls the tick body from Home Assistant's thread while the scheduler calls it too, so the
+	///     period transition is claimed under the lock that reads it. Without that, both callers would see the same
+	///     untaken boundary and the period's SetsMode would fire twice.
+	/// </summary>
+	[TestMethod]
+	public void PeriodSelect_UnderHomeAssistantAuthority_AFlipWithinOnePeriod_ChangesNothing()
+	{
+		Rig rig = Started(
+			WithPeriodSelect(PeriodAuthority.HomeAssistant, [("Kveld", "evening"), ("Natt", "night"), ("Senkveld", "night")]),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Kveld"));
+
+		rig.Ha.Trigger(PeriodSelect, "Natt");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "entering the night applied the night's mode, once");
+
+		rig.Ha.Trigger(PeriodSelect, "Senkveld");   // a different option, the same period
+		Advance(rig, TimeSpan.FromMinutes(5));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"),
+			"the period did not move, so nothing entered it a second time");
 	}
 
 	[TestMethod]
