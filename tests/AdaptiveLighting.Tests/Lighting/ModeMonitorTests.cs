@@ -678,6 +678,122 @@ public sealed class ModeMonitorTests
 			"the overlay never writes the select back — no feedback loop");
 	}
 
+	// ---- what is forcing the mode --------------------------------------------------------------
+	//
+	// The incident behind all of these: a cabin's Away option listed an input_boolean that had been on for hours,
+	// every settings save re-asserted Away, and the only trace was "Everyone left the house" while both person
+	// entities read home. The engine reported a cause it had never checked.
+
+	[TestMethod]
+	public void Forced_SelectAlone_ReportsNothingForcing()
+	{
+		Rig rig = Build(WithActivation("Borte", SleepToggle));
+		rig.Ha.SetState(Select, "Borte");
+		rig.Ha.SetState(SleepToggle, "off");
+
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind, "the select says Borte and nothing is overriding it");
+		Assert.IsNull(rig.Monitor.Forced, "a mode somebody chose at the select is not a forced mode");
+	}
+
+	[TestMethod]
+	public void Forced_WhileEntityOn_NamesTheEntityAndItsState()
+	{
+		Rig rig = Build(WithActivation("Borte", SleepToggle));
+		rig.Ha.SetState(Select, "Hjemme");
+		rig.Ha.SetState(SleepToggle, "on");
+
+		ForcedMode forced = rig.Monitor.Forced!;
+
+		Assert.IsNotNull(forced, "an entity holding Away over the select's Hjemme is a forced mode");
+		Assert.AreEqual(ModeForceSource.WhileEntityOn, forced.Source);
+		Assert.AreEqual(ModeKind.Away, forced.Kind);
+		Assert.AreEqual("Borte", forced.OptionValue);
+		Assert.AreEqual(SleepToggle, forced.EntityId, "the entity is named, or the reader is left hunting the house");
+		Assert.AreEqual("on", forced.EntityState);
+	}
+
+	/// <summary>The sentence that would have ended the incident in seconds, pinned verbatim.</summary>
+	[TestMethod]
+	public void Forced_Describe_NamesTheEntityAndItsStateInOneSentence()
+	{
+		Rig rig = Build(WithActivation("Borte", "input_boolean.occupancy"));
+		rig.Ha.SetState(Select, "Hjemme");
+		rig.Ha.SetState("input_boolean.occupancy", "on");
+
+		Assert.AreEqual(
+			"Away mode is forced while input_boolean.occupancy is on.",
+			rig.Monitor.Forced!.Describe());
+	}
+
+	/// <summary>Every kind, not only Away: an entity holding the house asleep is the same fault in a different mode.</summary>
+	[TestMethod]
+	public void Forced_WhileEntityOn_ReportsSleepAsReadilyAsAway()
+	{
+		Rig rig = Build(WithActivation("Sover", SleepToggle));
+		rig.Ha.SetState(Select, "Hjemme");
+		rig.Ha.SetState(SleepToggle, "on");
+
+		ForcedMode forced = rig.Monitor.Forced!;
+
+		Assert.AreEqual(ModeKind.Sleep, forced.Kind);
+		Assert.AreEqual("Sleep mode is forced while input_boolean.sover is on.", forced.Describe());
+	}
+
+	[TestMethod]
+	public void Forced_EntityGoesOff_StopsReportingAForce()
+	{
+		Rig rig = Started(WithActivation("Borte", SleepToggle), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(SleepToggle, "on"));
+
+		Assert.IsNotNull(rig.Monitor.Forced);
+
+		rig.Ha.Trigger(SleepToggle, "off");
+
+		Assert.IsNull(rig.Monitor.Forced, "with the entity off the select decides again, and nothing is forced");
+	}
+
+	[TestMethod]
+	public void Forced_NoMotionActivation_IsReportedAsTheEnginesDoing()
+	{
+		Rig rig = Started(AwayActivatesOnNoMotion(360), periods: FlatPeriod(), motion: [Gang],
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+
+		Advance(rig, TimeSpan.FromHours(7));
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"), "seven quiet hours switched the house");
+
+		// Home Assistant echoes the write back, exactly as it would in the house.
+		rig.Ha.Trigger(Select, "Borte");
+
+		ForcedMode forced = rig.Monitor.Forced!;
+
+		Assert.IsNotNull(forced, "a mode the idle timer wrote is the engine's doing, not a household decision");
+		Assert.AreEqual(ModeForceSource.NoMotionTimeout, forced.Source);
+		Assert.AreEqual(ModeKind.Away, forced.Kind);
+		Assert.IsNull(forced.EntityId, "no entity is holding it — the house simply went quiet");
+		Assert.AreEqual(
+			"Away mode was set because the whole house went quiet, not because anyone left.",
+			forced.Describe());
+	}
+
+	[TestMethod]
+	public void Forced_NoMotionActivation_ClaimEndsWhenTheSelectMovesAway()
+	{
+		Rig rig = Started(AwayActivatesOnNoMotion(360), periods: FlatPeriod(), motion: [Gang],
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+
+		Advance(rig, TimeSpan.FromHours(7));
+		rig.Ha.Trigger(Select, "Borte");
+		Assert.IsNotNull(rig.Monitor.Forced);
+
+		// Somebody turns the dial back. The engine's claim on the value goes with it, and a later move onto Borte
+		// by hand is that person's doing rather than the idle rule's.
+		rig.Ha.Trigger(Select, "Hjemme");
+		Assert.IsNull(rig.Monitor.Forced);
+
+		rig.Ha.Trigger(Select, "Borte");
+		Assert.IsNull(rig.Monitor.Forced, "a hand-set Borte is not the idle rule's, whatever the rule did earlier");
+	}
+
 	// ---- Master-switch default ----------------------------------------------------------------
 
 	[TestMethod]

@@ -39,8 +39,18 @@ public sealed class AreaControllerTests
 		AreaController Area);
 
 	/// <summary>A house-state snapshot, spelled out so the call sites read as English rather than raw fields.</summary>
-	private static HouseState House(bool home = true, ModeKind kind = ModeKind.Normal, bool killed = false, string? modeValue = null, string? scene = null) =>
-		new(home, kind, killed) { ModeValue = modeValue, ActiveScene = scene };
+	private static HouseState House(
+		bool home = true,
+		ModeKind kind = ModeKind.Normal,
+		bool killed = false,
+		string? modeValue = null,
+		string? scene = null,
+		ForcedMode? forced = null) =>
+		new(home, kind, killed) { ModeValue = modeValue, ActiveScene = scene, Forced = forced };
+
+	/// <summary>The cabin's actual fault: an <c>input_boolean</c> left on, pinning the Away option over the select.</summary>
+	private static ForcedMode ForcedAway(string entityId = "input_boolean.occupancy") =>
+		new(ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, entityId, "on");
 
 	/// <summary>The cabin's real helper shape: Normal, Borte (away), Sover (sleep, no ClampPeriod).</summary>
 	private static HouseModeConfig SoverMode() => new()
@@ -1642,6 +1652,120 @@ public sealed class AreaControllerTests
 
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: false });
+	}
+
+	// ---- a forced mode is never a presence departure -------------------------------------------
+	//
+	// The cabin ran ActivateWhileOn: [input_boolean.occupancy] on Borte and that boolean had been on for hours.
+	// Every settings save rebuilds every area controller, so each edit re-asserted Away and swept the house dark
+	// while the owner stood in it — and the engine's account of itself was "Everyone left the house", while both
+	// person entities read home. These pin the two halves of that sentence being wrong.
+
+	/// <summary>The last report of a started area, which is what any reader actually sees.</summary>
+	private static AreaSnapshot LastReport(Fixture fixture) => fixture.Publisher.Snapshots[^1];
+
+	[TestMethod]
+	public void ForcedAwayMode_IsNotReportedAsAPresenceDeparture()
+	{
+		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
+		t.Ha.Trigger(Motion, "on");
+
+		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
+
+		AreaSnapshot report = LastReport(t);
+
+		Assert.AreEqual(AreaState.Away, report.State, "the mode still sweeps the room — that part was never wrong");
+		Assert.AreNotEqual(TransitionReason.EveryoneLeft, report.Reason,
+			"nobody left; the mode did this, and saying otherwise cost an hour hunting a presence fault");
+		Assert.AreEqual(TransitionReason.HouseModeChanged, report.Reason);
+	}
+
+	[TestMethod]
+	public void ForcedAwayMode_ReportsWhoIsHomeAndWhatIsForcingIt()
+	{
+		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
+		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
+
+		AreaSnapshot report = LastReport(t);
+
+		Assert.AreEqual(true, report.IsAnyoneHome,
+			"presence said the house was full throughout — the room must not be able to claim otherwise");
+		Assert.AreEqual(ModeForceSource.WhileEntityOn, report.Forced!.Source);
+		Assert.AreEqual("input_boolean.occupancy", report.Forced.EntityId);
+		Assert.AreEqual("Away mode is forced while input_boolean.occupancy is on.", report.Forced.Describe());
+	}
+
+	[TestMethod]
+	public void PresenceDeparture_StillReportsEveryoneLeft()
+	{
+		Fixture t = Build();
+		t.Ha.Trigger(Motion, "on");
+
+		t.House.OnNext(House(home: false));
+
+		AreaSnapshot report = LastReport(t);
+
+		Assert.AreEqual(TransitionReason.EveryoneLeft, report.Reason,
+			"an empty house is still an empty house — only the mode's route was ever mislabelled");
+		Assert.AreEqual(false, report.IsAnyoneHome);
+		Assert.IsNull(report.Forced, "presence leaving is nobody forcing anything");
+	}
+
+	[TestMethod]
+	public void AwayModeReleasing_IsAModeChange_NotAnArrival()
+	{
+		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
+		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
+		Assert.AreEqual(AreaState.Away, t.Area.State);
+
+		// The boolean goes off. Nobody arrived — the mode simply let go.
+		t.House.OnNext(House(modeValue: "Normal"));
+
+		AreaSnapshot report = LastReport(t);
+
+		Assert.AreNotEqual(TransitionReason.FirstPersonArrived, report.Reason,
+			"claiming an arrival nobody made is the same invented cause in the other direction");
+		Assert.AreEqual(TransitionReason.HouseModeChanged, report.Reason);
+	}
+
+	[TestMethod]
+	public void FirstArrival_AfterAPresenceDeparture_StillReportsAnArrival()
+	{
+		Fixture t = Build();
+		t.House.OnNext(House(home: false));
+		Assert.AreEqual(AreaState.Away, t.Area.State);
+
+		t.House.OnNext(House(home: true));
+
+		Assert.AreEqual(TransitionReason.FirstPersonArrived, LastReport(t).Reason,
+			"somebody genuinely walked in, and that is what an arrival is");
+	}
+
+	/// <summary>
+	///     Somebody walking into a house an entity is holding Away moves presence and moves nothing else — the
+	///     area stays Away, the mode stays Borte — so the tick is the only thing that can correct the standing
+	///     report, and it only does so because <c>IsAnyoneHome</c> counts as meaning.
+	/// </summary>
+	/// <remarks>
+	///     Deliberately asserted on the tick rather than on the house change: an area already Away short-circuits
+	///     out of <c>OnHouseChanged</c> without publishing, which is the right trade for the sweep path and leaves
+	///     one tick of staleness here. Were <c>IsAnyoneHome</c> excluded from the comparison the way the auto-on
+	///     verdict is, the room would sit on "nobody is home" indefinitely.
+	/// </remarks>
+	[TestMethod]
+	public void ComingHomeToAForcedAwayMode_IsCorrectedOnTheNextTick()
+	{
+		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
+		t.House.OnNext(House(home: false, kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
+
+		Assert.AreEqual(false, LastReport(t).IsAnyoneHome);
+
+		// The mode does not move — the boolean is still on — but the house fills up again.
+		t.House.OnNext(House(home: true, kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
+		Advance(t, TimeSpan.FromSeconds(60));
+
+		Assert.AreEqual(true, LastReport(t).IsAnyoneHome,
+			"the report that said the house was empty while somebody stood in it is the one that had to move");
 	}
 
 	[TestMethod]
