@@ -158,4 +158,96 @@ public sealed class ConfigNormalizerTests
 		ConfigNormalizer.Normalize(withOptions);
 		Assert.IsNotNull(withOptions.Global.HouseMode, "a classified option has been set — keep it");
 	}
+
+	// ===================== the period select =====================
+
+	private static AdaptiveLightingConfig WithPeriodSelect(PeriodSelectConfig? select) =>
+		new() { Global = new GlobalConfig { PeriodSelect = select } };
+
+	[TestMethod]
+	public void Normalize_DropsEmptyPeriodSelectOptionRows()
+	{
+		AdaptiveLightingConfig config = WithPeriodSelect(new PeriodSelectConfig
+		{
+			Entity = "input_select.tid_pa_dagen",
+			Options =
+			[
+				new() { Value = "Kveld", Period = "evening" },
+				new(),                                        // an editor's row somebody cleared both fields on
+				new() { Value = "  ", Period = "\t" }
+			]
+		});
+
+		ConfigNormalizer.Normalize(config);
+
+		Assert.AreEqual(1, config.Global.PeriodSelect!.Options.Count, "a row saying nothing is not stored");
+		Assert.AreEqual("Kveld", config.Global.PeriodSelect.Options[0].Value);
+	}
+
+	[TestMethod]
+	public void Normalize_KeepsAHalfFilledRow_SoTheValidatorCanNameIt()
+	{
+		AdaptiveLightingConfig config = WithPeriodSelect(new PeriodSelectConfig
+		{
+			Entity = "input_select.tid_pa_dagen",
+			Options = [new() { Value = "Kveld" }]   // an option chosen, no period yet
+		});
+
+		ConfigNormalizer.Normalize(config);
+
+		Assert.AreEqual(1, config.Global.PeriodSelect!.Options.Count,
+			"half a row is a half-finished decision, not a blank one — dropping it would hide the error");
+	}
+
+	/// <summary>
+	///     A page that binds the object into existence to draw a form must not leave a <c>PeriodSelect:</c> block in
+	///     the file of a household that never adopted the feature.
+	/// </summary>
+	[TestMethod]
+	public void Normalize_DropsAPeriodSelectThatSaysNothing()
+	{
+		AdaptiveLightingConfig empty = WithPeriodSelect(new PeriodSelectConfig());
+		ConfigNormalizer.Normalize(empty);
+		Assert.IsNull(empty.Global.PeriodSelect, "no entity and no rows is no opinion");
+
+		AdaptiveLightingConfig clearedRows = WithPeriodSelect(new PeriodSelectConfig { Options = [new(), new()] });
+		ConfigNormalizer.Normalize(clearedRows);
+		Assert.IsNull(clearedRows.Global.PeriodSelect, "and a block holding only cleared rows is the same thing");
+
+		AdaptiveLightingConfig authorityOnly = WithPeriodSelect(
+			new PeriodSelectConfig { Authority = PeriodAuthority.HomeAssistant });
+		ConfigNormalizer.Normalize(authorityOnly);
+		Assert.IsNull(authorityOnly.Global.PeriodSelect,
+			"an authority without an entity decides nothing, so it is not a reason to keep the block");
+	}
+
+	[TestMethod]
+	public void Normalize_KeepsAPeriodSelect_WithAnEntityOrRows()
+	{
+		AdaptiveLightingConfig withEntity = WithPeriodSelect(
+			new PeriodSelectConfig { Entity = "input_select.tid_pa_dagen" });
+		ConfigNormalizer.Normalize(withEntity);
+		Assert.IsNotNull(withEntity.Global.PeriodSelect, "an entity has been chosen — keep it");
+
+		AdaptiveLightingConfig withRows = WithPeriodSelect(
+			new PeriodSelectConfig { Options = [new() { Value = "Kveld", Period = "evening" }] });
+		ConfigNormalizer.Normalize(withRows);
+		Assert.IsNotNull(withRows.Global.PeriodSelect, "a mapping has been written — keep it");
+	}
+
+	/// <summary>
+	///     The point of all of the above: a document that never mentioned the feature comes back byte-identical.
+	/// </summary>
+	[TestMethod]
+	public void Normalize_LeavesADocumentWithoutAPeriodSelect_ByteIdentical()
+	{
+		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+		string before = LightingConfigDocument.Serialize(config);
+
+		string after = LightingConfigDocument.Serialize(ConfigNormalizer.Normalize(config));
+
+		Assert.AreEqual(before, after);
+		Assert.IsFalse(after.Contains("PeriodSelect", StringComparison.Ordinal),
+			"a household that never adopted the select must not find one written into its file");
+	}
 }

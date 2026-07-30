@@ -977,6 +977,97 @@ public sealed class LightingConfigDocumentTests
 	}
 
 	/// <summary>
+	///     The same failure again, under the period select. Its own test because this list is read on the hottest
+	///     path in the engine — every area's every evaluation goes through the mapping — so a null here is not one
+	///     exception but one per room per tick, out of a method documented never to throw.
+	/// </summary>
+	[TestMethod]
+	public void An_Emptied_Period_Select_Option_List_Loads_As_No_Options()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Global:
+			    PeriodSelect:
+			      Entity: input_select.tid_pa_dagen
+			      Authority: HomeAssistant
+			      Options:
+			""").Config;
+
+		Assert.IsNotNull(config.Global.PeriodSelect!.Options);
+		Assert.AreEqual(0, config.Global.PeriodSelect.Options.Count);
+		Assert.IsNull(config.Global.PeriodSelect.PeriodFor("Kveld"), "and the mapping answers rather than throwing");
+	}
+
+	/// <summary>And a bare <c>-</c> among the rows is dropped rather than read as a mapping of nothing to nothing.</summary>
+	[TestMethod]
+	public void A_Blank_Period_Select_Row_Is_Dropped()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Global:
+			    PeriodSelect:
+			      Entity: input_select.tid_pa_dagen
+			      Options:
+			        -
+			        - Value: Kveld
+			          Period: evening
+			""").Config;
+
+		Assert.AreEqual(1, config.Global.PeriodSelect!.Options.Count);
+		Assert.AreEqual("evening", config.Global.PeriodSelect.PeriodFor("Kveld"));
+	}
+
+	/// <summary>
+	///     <c>Authority</c> is an enum, and an enum value is the one thing a document can carry that stops the app
+	///     rather than being ignored — see <see cref="PeriodAuthority"/>. Both spellings must bind, and the numeral
+	///     must keep meaning what it meant.
+	/// </summary>
+	[TestMethod]
+	public void Period_Select_Authority_Binds_By_Name_And_By_Ordinal()
+	{
+		static PeriodAuthority Read(string authority) => LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Global:
+			    PeriodSelect:
+			      Entity: input_select.tid_pa_dagen
+			      Authority: {authority}
+			""").Config.Global.PeriodSelect!.Authority;
+
+		Assert.AreEqual(PeriodAuthority.AdaptiveLighting, Read("AdaptiveLighting"));
+		Assert.AreEqual(PeriodAuthority.HomeAssistant, Read("HomeAssistant"));
+		Assert.AreEqual(PeriodAuthority.AdaptiveLighting, Read("0"), "Enum.Parse accepts the bare numeral");
+		Assert.AreEqual(PeriodAuthority.HomeAssistant, Read("1"));
+	}
+
+	/// <summary>
+	///     The ordinals themselves, pinned. They are compile-time constants inlined into consuming assemblies, so a
+	///     renumbering silently changes what an already-built binary — and an already-written file — mean.
+	/// </summary>
+	[TestMethod]
+	public void Period_Authority_Ordinals_Are_Fixed()
+	{
+		Assert.AreEqual(0, (int)PeriodAuthority.AdaptiveLighting);
+		Assert.AreEqual(1, (int)PeriodAuthority.HomeAssistant);
+	}
+
+	[TestMethod]
+	public void A_Document_Without_A_Period_Select_Loads_As_None()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Periods:
+			    - Name: day
+			      Start: "07:00"
+			""").Config;
+
+		Assert.IsNull(config.Global.PeriodSelect, "no PeriodSelect block → property null, and OmitNull writes none back");
+	}
+
+	/// <summary>
 	///     A bare <c>-</c> left behind by a half-finished edit is a list entry holding nothing at all. It has to be
 	///     read as absent: substituting an empty room or period would invent one the file never named, and the
 	///     validator would then stop the whole document over a stray dash.

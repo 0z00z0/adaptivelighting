@@ -957,4 +957,147 @@ public sealed class ConfigValidatorTests
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,
 			"the live cabin document validates cleanly — no house-mode rule fires without a HouseMode");
 	}
+
+	// ===================== the period select =====================
+
+	private static AdaptiveLightingConfig WithPeriodSelect(
+		PeriodAuthority authority = PeriodAuthority.HomeAssistant,
+		string? entity = "input_select.tid_pa_dagen",
+		params (string Value, string Period)[] options)
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.PeriodSelect = new PeriodSelectConfig
+		{
+			Entity = entity,
+			Authority = authority,
+			Options = [.. options.Select(row => new PeriodSelectOptionConfig { Value = row.Value, Period = row.Period })]
+		};
+
+		return config;
+	}
+
+	[TestMethod]
+	public void PeriodSelect_MappingTheConfiguredPeriods_Passes()
+	{
+		ValidationResult result = ConfigValidator.Validate(
+			WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]));
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(0, result.Warnings.Count);
+	}
+
+	[TestMethod]
+	public void PeriodSelect_NotAnInputSelect_IsADocumentError()
+	{
+		ValidationResult result = ConfigValidator.Validate(
+			WithPeriodSelect(entity: "sensor.tid_pa_dagen", options: [("Dag", "day")]));
+
+		Assert.IsFalse(result.IsValid, "nothing but an input_select has options to read or write");
+	}
+
+	/// <summary>
+	///     Harsher than the same shape on a room's levels, and deliberately: a levels row that resolves to nothing
+	///     costs one room one preference, whereas this leaves every room unable to place the selected time of day.
+	/// </summary>
+	[TestMethod]
+	public void PeriodSelect_MappingToNoConfiguredPeriod_IsADocumentError()
+	{
+		ValidationResult result = ConfigValidator.Validate(
+			WithPeriodSelect(options: [("Dag", "day"), ("Middag", "siesta")]));
+
+		Assert.IsFalse(result.IsValid);
+		Assert.IsTrue(result.Errors.Any(e => e.Contains("siesta", StringComparison.Ordinal)),
+			"the error names the period nobody configured, or the reader has to go looking for it");
+	}
+
+	[TestMethod]
+	public void PeriodSelect_DuplicateValues_AreADocumentError()
+	{
+		ValidationResult result = ConfigValidator.Validate(
+			WithPeriodSelect(options: [("Dag", "day"), (" dag ", "night")]));
+
+		Assert.IsFalse(result.IsValid,
+			"two rows for one option string means the file says two things and only the first would ever be read");
+	}
+
+	[TestMethod]
+	public void PeriodSelect_BlankHalves_AreADocumentError()
+	{
+		Assert.IsFalse(ConfigValidator.Validate(WithPeriodSelect(options: [("", "day")])).IsValid,
+			"a row with no Value can never be matched by any select option");
+
+		Assert.IsFalse(ConfigValidator.Validate(WithPeriodSelect(options: [("Dag", "")])).IsValid,
+			"a row with no Period means nothing when it is selected");
+	}
+
+	/// <summary>
+	///     A rename in Home Assistant, not a mistake in this document — and erroring would make the document
+	///     unsaveable from the very page that exists to fix it.
+	/// </summary>
+	[TestMethod]
+	public void PeriodSelect_ValueTheLiveSelectNoLongerOffers_IsAWarning()
+	{
+		ValidationResult result = ConfigValidator.Validate(
+			WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]),
+			livePeriodSelectOptions: ["Dag", "Kveld"]);
+
+		Assert.IsTrue(result.IsValid, "the row is inert, not dangerous");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("Natt", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void PeriodSelect_LiveOptionsAreNotCheckedAgainstTheHouseModeSelect()
+	{
+		// The house-mode select's live options are Hjemme/Borte; the period select's are Dag/Natt. Reusing one
+		// list for both would report every row of each as renamed.
+		ValidationResult result = ConfigValidator.Validate(
+			WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]),
+			liveSelectOptions: ["Hjemme", "Borte"],
+			livePeriodSelectOptions: ["Dag", "Natt"]);
+
+		Assert.AreEqual(0, result.Warnings.Count(w => w.Contains("PeriodSelect", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void PeriodSelect_HomeAssistantAuthorityWithNoMappings_IsAWarning()
+	{
+		ValidationResult result = ConfigValidator.Validate(WithPeriodSelect(PeriodAuthority.HomeAssistant));
+
+		Assert.IsTrue(result.IsValid, "the house keeps working — it simply never follows the select");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("Authority", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void PeriodSelect_AdaptiveLightingAuthorityWithNoMappings_SaysNothing()
+	{
+		ValidationResult result = ConfigValidator.Validate(WithPeriodSelect(PeriodAuthority.AdaptiveLighting));
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(0, result.Warnings.Count,
+			"the engine owns the periods and simply mirrors nothing; that is not a misconfiguration");
+	}
+
+	/// <summary>
+	///     A warning rather than an error, on the argument the outdoor lux sensor gets: the feature fails open in
+	///     both directions, so the house degrades to the schedule rather than going dark.
+	/// </summary>
+	[TestMethod]
+	public void PeriodSelect_EntityHomeAssistantDoesNotKnow_IsAWarning()
+	{
+		ValidationResult result = ConfigValidator.Validate(
+			WithPeriodSelect(options: [("Dag", "day")]),
+			knownEntityIds: ["input_select.husmodus"]);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("tid_pa_dagen", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void PeriodSelect_Absent_FiresNoRuleAtAll()
+	{
+		ValidationResult result = ConfigValidator.Validate(Minimal(), livePeriodSelectOptions: ["Dag"]);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(0, result.Warnings.Count, "every document today has no period select and must notice nothing");
+	}
 }
