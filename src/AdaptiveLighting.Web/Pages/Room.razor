@@ -1036,8 +1036,17 @@ else
 		// Resolved here rather than taken from the snapshot's PeriodName, because the levels table has to be right
 		// for a room that has never reported — a switched-off room, or one the engine has not reached yet — and
 		// because a stale snapshot would leave the "now" badge on last night's period.
+		//
+		// Through InForceNow, not InForceAt: under Home Assistant's period authority the engine stops placing
+		// periods by the clock altogether, and a badge that went on doing it would mark the row this room is not
+		// running.
 		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
-		_activePeriod = Schedule.InForceAt(_document.Periods, new SunTimes(sunrise, sunset), TimeOnly.FromDateTime(_now.LocalDateTime));
+		_activePeriod = Schedule.InForceNow(
+			_document.Periods,
+			_document.Global,
+			new SunTimes(sunrise, sunset),
+			TimeOnly.FromDateTime(_now.LocalDateTime),
+			Catalog.CurrentStateOf(_document.Global.PeriodSelect?.Entity));
 
 		_liveLux = _preview.Resolved is { } resolved ? Catalog.LuxIn(resolved, _document.Global) : null;
 	}

@@ -285,6 +285,11 @@ public static class ActivityView
 	///         rejected: a hedge printed over every house that is merely asleep is a different false statement,
 	///         not a smaller one.
 	///     </para>
+	///     <para>
+	///         A mode change nobody chose is the fourth branch, and it is here rather than in
+	///         <see cref="Condition"/> because its second line is about the house. See <see cref="AwayHold"/> for
+	///         the hour that bought it.
+	///     </para>
 	/// </remarks>
 	/// <param name="snapshot">The report to describe.</param>
 	/// <returns>The row's two lines.</returns>
@@ -306,6 +311,13 @@ public static class ActivityView
 		// A quiet re-check that found the darkness verdict had moved. That verdict is the whole news, so it leads.
 		if (snapshot is { Reason: TransitionReason.CircadianTick, State: AreaState.AutoVacant, IsDark: { } dark })
 			return new ActivityLine(dark ? DarkEnough(snapshot) : TooBright, Reading(snapshot));
+
+		// A mode the engine put the house on rather than a person choosing it. The engine's own sentence takes the
+		// second line, past Condition, because Condition speaks for the publishing room and this speaks for the
+		// house — and because on a forced change the select never moved, so the value in the headline is the whole
+		// of what a reader would otherwise have to go on.
+		if (snapshot is { Reason: TransitionReason.HouseModeChanged, Forced: { } forced })
+			return new ActivityLine(Headline(snapshot), forced.Describe());
 
 		return new ActivityLine(Headline(snapshot), Condition(snapshot));
 	}
@@ -749,24 +761,38 @@ public static class ActivityView
 	///         row has just given up.
 	///     </para>
 	///     <para>
-	///         The master switch keeps its own second line. That sentence — no lights will change until it is turned
-	///         back on — is about the whole house, and <see cref="Describe"/> does not build it from
-	///         <see cref="Condition"/> at all, which is exactly the distinction being drawn here.
+	///         The master switch keeps its own second line, and so does a forced mode. Both sentences are about the
+	///         whole house, and <see cref="Describe"/> does not build either from <see cref="Condition"/> at all,
+	///         which is exactly the distinction being drawn here.
 	///     </para>
 	///     <para>
 	///         Dropping it is also what lets one mode change be one row. The rooms of a real house are in different
 	///         states when the mode moves, so their conditions differ, and a collapse that kept them would split a
-	///         single event into a row per condition — the defect again, with a smaller number.
+	///         single event into a row per condition — the defect again, with a smaller number. A forced mode's
+	///         sentence is identical in every room that publishes it, so keeping it costs nothing there.
 	///     </para>
 	/// </remarks>
 	private static ActivityLine LineFor(AreaSnapshot snapshot)
 	{
 		ActivityLine line = Describe(snapshot);
 
-		return IsAboutTheHouse(snapshot) && !snapshot.KillSwitchActive
+		return IsAboutTheHouse(snapshot) && !SpeaksForTheHouse(snapshot)
 			? line with { Why = null }
 			: line;
 	}
+
+	/// <summary>
+	///     Whether the row's second line is one <see cref="Describe"/> wrote about the house, rather than
+	///     <see cref="Condition"/>'s verdict on the room that happened to publish the report.
+	/// </summary>
+	/// <remarks>
+	///     The two are the two branches of <see cref="Describe"/> that bypass <see cref="Condition"/> on a
+	///     house-wide report. Listed here rather than tested by re-reading the strings, so a third such branch has
+	///     to be added in both places by hand instead of silently losing its sentence to the collapse.
+	/// </remarks>
+	private static bool SpeaksForTheHouse(AreaSnapshot snapshot) =>
+		snapshot.KillSwitchActive
+		|| snapshot is { Reason: TransitionReason.HouseModeChanged, Forced: not null };
 
 	/// <summary>
 	///     Whether the report is the standing darkness verdict a quiet re-check republishes on every tick.
@@ -1044,9 +1070,15 @@ public static class ActivityView
 		TransitionReason.CircadianTick => snapshot.State == AreaState.AutoActive
 			? Lit("Retuned to the time of day", snapshot)
 			: "Rechecked the room",
-		TransitionReason.HouseModeChanged => snapshot.HouseModeValue is { Length: > 0 } value
-			? $"Mode changed to {value}"
-			: "The house changed mode",
+		// "Mode changed to Hjemme" over a house the engine had just swept Away is the row this branch exists to
+		// stop: on a forced change the select never moves, so HouseModeValue still reads whatever a person last
+		// chose, and printing it would name the one thing that did not happen. The option the engine actually put
+		// the house on comes off the force itself.
+		TransitionReason.HouseModeChanged => snapshot.Forced is { } forced
+			? $"Mode forced to {ForcedOption(forced)}"
+			: snapshot.HouseModeValue is { Length: > 0 } value
+				? $"Mode changed to {value}"
+				: "The house changed mode",
 		TransitionReason.SceneHold => snapshot.State == AreaState.SceneHold
 			? "A guest scene has this room"
 			: "The guest scene let this room go",
@@ -1071,6 +1103,9 @@ public static class ActivityView
 	private static string? Condition(AreaSnapshot snapshot) => snapshot.State switch
 	{
 		AreaState.Disabled => "Automatic lighting is off here.",
+
+		// "Waiting for the first arrival" is a promise about people who are already in the room. See AwayHold.
+		AreaState.Away when snapshot.IsAnyoneHome is true => AwayHold(snapshot),
 		AreaState.Away => "Nobody home — waiting for the first arrival.",
 
 		// Through DarkEnough rather than worded again, so the chip, this row and the dusk row it sits above all
@@ -1147,7 +1182,12 @@ public static class ActivityView
 	{
 		AutoOnBlock.KillSwitch => "Movement, but the master switch is off",
 		AutoOnBlock.Disabled => "Movement, but automatic lighting is off here",
-		AutoOnBlock.Away => "Movement, but nobody is home yet",
+
+		// The one gate with two causes. "Nobody is home yet" was printed at somebody standing in the room for an
+		// hour; it is only ever true of an empty house, and the second line says what is holding the other one.
+		AutoOnBlock.Away => snapshot.IsAnyoneHome is true
+			? "Movement, but the house is in away mode"
+			: "Movement, but nobody is home yet",
 		AutoOnBlock.SceneHold => "Movement, but a guest scene has this room",
 		AutoOnBlock.Sleep => "Movement, but the house is asleep and this room stays dark",
 		AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
@@ -1181,7 +1221,7 @@ public static class ActivityView
 		{
 			AutoOnBlock.KillSwitch => "the master switch is off",
 			AutoOnBlock.Disabled => "automatic lighting is off here",
-			AutoOnBlock.Away => "nobody home yet",
+			AutoOnBlock.Away => snapshot.IsAnyoneHome is true ? "the house is in away mode" : "nobody home yet",
 			AutoOnBlock.SceneHold => "a guest scene has this room",
 			AutoOnBlock.Sleep => "the house is asleep",
 			AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
@@ -1193,14 +1233,73 @@ public static class ActivityView
 	}
 
 	/// <summary>
-	///     What goes under a refused movement: the reading, and only where the reading is what refused.
+	///     What goes under a refused movement: the reading where the reading is what refused, and what is holding
+	///     an away mode over a house that is not empty.
 	/// </summary>
 	/// <remarks>
 	///     Every other gate has already named itself in the headline, and repeating the lux figure beside "the
-	///     house is asleep" invites the reader to blame the sensor for a decision the house mode made.
+	///     house is asleep" invites the reader to blame the sensor for a decision the house mode made. The away
+	///     gate is the exception, because naming it is not the same as explaining it: the headline can say the
+	///     house is in away mode, and the reader's next question — <i>why, with me standing here?</i> — is the one
+	///     that cost an hour.
 	/// </remarks>
-	private static string? RefusalDetail(AreaSnapshot snapshot) =>
-		snapshot.AutoOnBlockedBy is AutoOnBlock.NotDark ? Reading(snapshot) : null;
+	private static string? RefusalDetail(AreaSnapshot snapshot) => snapshot.AutoOnBlockedBy switch
+	{
+		AutoOnBlock.NotDark => Reading(snapshot),
+		AutoOnBlock.Away when snapshot.IsAnyoneHome is true => AwayHold(snapshot),
+		_ => null
+	};
+
+	/// <summary>
+	///     Why an away-kind mode is holding a room shut while somebody is home — the engine's own sentence where
+	///     it has one.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>This is the wording of a live incident.</b> A cabin's Away option listed
+	///         <c>ActivateWhileOn: [input_boolean.occupancy]</c> and that boolean had been on for hours; every
+	///         settings save rebuilds every area controller, so each edit re-asserted Away and swept the house dark
+	///         while the owner stood in it. The engine said <i>everyone left the house</i> and the room said
+	///         <i>movement, but nobody is home yet</i>, while both <c>person.*</c> entities read <c>home</c>
+	///         throughout. An hour went into hunting a presence fault that did not exist.
+	///     </para>
+	///     <para>
+	///         <see cref="ForcedMode.Describe"/> is called rather than re-worded. It is the sentence the engine's
+	///         own log prints, it is the only thing that knows which entity it read, and two wordings of one fact
+	///         is how a reader ends up trusting the wrong one. Where nothing is forcing the mode, somebody chose
+	///         an away option at the select and the honest answer names it.
+	///     </para>
+	///     <para>
+	///         <b>Only ever called where <see cref="AreaSnapshot.IsAnyoneHome"/> is <c>true</c>.</b> A report from
+	///         a build that predates the field carries <c>null</c>, and <c>null</c> means say what this page always
+	///         said — an older payload cannot support "somebody is home" any better than it supports the opposite.
+	///     </para>
+	/// </remarks>
+	/// <remarks>
+	///     Internal rather than private because <see cref="RoomFacts"/> says it too, and the room page and the
+	///     timeline naming one cause two ways is the failure this whole class of field exists to stop.
+	/// </remarks>
+	/// <param name="snapshot">A report whose away gate is shut over an occupied house.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is <c>null</c>.</exception>
+	internal static string AwayHold(AreaSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		if (snapshot.Forced is { } forced)
+			return forced.Describe();
+
+		return snapshot.HouseModeValue is { Length: > 0 } mode
+			? $"Somebody is home, but the house mode is set to {mode}."
+			: "Somebody is home, but the house is in away mode.";
+	}
+
+	/// <summary>The option a forced mode put the house on, falling back to its kind when the option is nameless.</summary>
+	/// <remarks>
+	///     A blank <see cref="ForcedMode.OptionValue"/> is not expected from the engine, but a headline reading
+	///     <c>Mode forced to</c> with nothing after it is a worse failure than a headline that names the kind.
+	/// </remarks>
+	private static string ForcedOption(ForcedMode forced) =>
+		forced.OptionValue is { Length: > 0 } value ? value : forced.Kind.ToString();
 
 	/// <summary>
 	///     The darkness gate's own words — the measured reading and the threshold it was compared against.

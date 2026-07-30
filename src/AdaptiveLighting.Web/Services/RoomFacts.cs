@@ -149,6 +149,12 @@ public static class RoomFacts
 			{ State: AreaState.OverriddenOn } => "Someone set these lights manually — they're being left alone.",
 			{ State: AreaState.SuppressedOff } => "Someone switched these lights off. Movement is ignored for now.",
 			{ State: AreaState.SceneHold } => "A scene is holding this room. The engine stands back until the scene lets go.",
+
+			// Ahead of the two below, because those two say "Nobody home" and the engine has now measured that
+			// this is the case where it is false. See ActivityView.AwayHold for the hour it cost.
+			{ State: AreaState.Away, IsAnyoneHome: true, BrightnessPct: not null } =>
+				"The house is in away mode. This room keeps its lights on.",
+			{ State: AreaState.Away, IsAnyoneHome: true } => "The house is in away mode, though somebody is home.",
 			{ State: AreaState.Away, BrightnessPct: not null } => "Nobody home. This room keeps its lights on.",
 			{ State: AreaState.Away } => "Nobody home.",
 			{ State: AreaState.Disabled } => "This room never changes by itself.",
@@ -197,6 +203,10 @@ public static class RoomFacts
 				$"Movement will light it once it's dark — {detail}.",
 			AreaState.AutoVacant when snapshot.IsDark is false => "Movement will light it once it's dark.",
 			AreaState.AutoVacant => "Movement in the dark turns the lights on.",
+
+			// A promise about people who are already in the room. What it is actually waiting for is the mode, and
+			// the evidence table's "If someone walks in" row carries what is holding that — see AutoOnNote.
+			AreaState.Away when snapshot.IsAnyoneHome is true => "Wakes when the house leaves away mode.",
 			AreaState.Away => "Wakes when the first person comes home.",
 			AreaState.Disabled => "Nothing will be commanded until it is switched back on.",
 			_ => null
@@ -237,15 +247,25 @@ public static class RoomFacts
 	///         to come on.
 	///     </para>
 	///     <para>
-	///         <b>Only the two gates that are otherwise invisible.</b> A sleeping house and a blocking entity both
+	///         <b>Only the gates that are otherwise invisible.</b> A sleeping house and a blocking entity both
 	///         leave the room in <see cref="AreaState.AutoVacant"/>, indistinguishable from a room simply waiting
 	///         for somebody to walk in. The other refusals already have their own place on this page — the room's
 	///         own switch, the master-switch row, the state chip, the darkness row — and repeating them here would
 	///         be the same fact three times.
 	///     </para>
 	///     <para>
+	///         <b>An away mode over an occupied house is the third such gate, and it is invisible in the worst
+	///         way: the rest of the page states its opposite.</b> The chip reads Away and the headline reads
+	///         "Nobody home", so a reader who is themselves standing in the room has been given a page that
+	///         disagrees with them and no way to find out why. That is the hour recorded in
+	///         <see cref="ActivityView.AwayHold"/>. An <i>empty</i> house is deliberately still not named here —
+	///         it is the case the chip and the headline are already right about.
+	///     </para>
+	///     <para>
 	///         <c>null</c> from a report that predates the field means <b>say nothing</b>. An older payload cannot
-	///         support "nothing is blocking this room" any better than it supports the opposite.
+	///         support "nothing is blocking this room" any better than it supports the opposite — and the same rule
+	///         governs <see cref="AreaSnapshot.IsAnyoneHome"/>, which is why the away arm asks for <c>true</c>
+	///         rather than for "not false".
 	///     </para>
 	///     <para>
 	///         The wording is <c>ActivityView</c>'s, on purpose: somebody moving between the timeline and this page
@@ -264,6 +284,7 @@ public static class RoomFacts
 			AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
 				? $"{blocker} is on — movement won't light the room."
 				: "Something here is on — movement won't light the room.",
+			AutoOnBlock.Away when snapshot.IsAnyoneHome is true => ActivityView.AwayHold(snapshot),
 			_ => null
 		};
 	}
