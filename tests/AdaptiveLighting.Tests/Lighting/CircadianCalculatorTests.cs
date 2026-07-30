@@ -453,4 +453,124 @@ public sealed class CircadianCalculatorTests
 		Assert.IsNull(calc.ActivePeriodName(At(12)), "no boundary can be placed, so nothing is active");
 		Assert.IsNull(calc.GetTarget(At(12)), "and the target is null too — the caller must command nothing");
 	}
+
+	// ===================== the period override (Home Assistant decides) =====================
+
+	/// <summary>A calculator following a dropdown rather than the clock. Blending on, so the step is visible.</summary>
+	private static CircadianCalculator Following(
+		Func<string?> periodOverride,
+		IReadOnlyList<RoomLevelOverride>? levels = null) =>
+		new(Table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 },
+			() => SunTimes.Unknown, levels, periodOverride);
+
+	[TestMethod]
+	public void Override_NamesThePeriod_WhateverTheClockSays()
+	{
+		CircadianCalculator calc = Following(() => "night");
+
+		Assert.AreEqual("night", calc.ActivePeriodName(At(12)), "noon, and the house has selected night");
+		Assert.AreEqual("night", calc.GetTarget(At(12))!.PeriodName);
+		Assert.AreEqual(15d, calc.GetTarget(At(12))!.BrightnessPct);
+		Assert.AreEqual(2200, calc.GetTarget(At(12))!.ColorTempKelvin);
+	}
+
+	/// <summary>
+	///     The name and the levels come from one resolution, so a card and a lamp cannot disagree about which
+	///     period is in force.
+	/// </summary>
+	[TestMethod]
+	public void Override_MakesActivePeriodNameAndGetTargetAgree()
+	{
+		string? selected = "day";
+		CircadianCalculator calc = Following(() => selected);
+
+		Assert.AreEqual(calc.ActivePeriodName(At(23)), calc.GetTarget(At(23))!.PeriodName);
+
+		selected = "evening";
+
+		Assert.AreEqual("evening", calc.ActivePeriodName(At(23)));
+		Assert.AreEqual("evening", calc.GetTarget(At(23))!.PeriodName);
+	}
+
+	[TestMethod]
+	public void Override_ReturningNull_LeavesTheScheduleInCharge()
+	{
+		CircadianCalculator calc = Following(() => null);
+
+		Assert.AreEqual("day", calc.ActivePeriodName(At(12)), "an unreadable or unmapped select is not an opinion");
+		Assert.AreEqual("night", calc.ActivePeriodName(At(23)));
+	}
+
+	/// <summary>
+	///     A mapping the validator refuses and the reader reports falls back rather than taking the room dark. Both
+	///     halves are already said out loud; commanding nothing on top of that would cost a room over a typo.
+	/// </summary>
+	[TestMethod]
+	public void Override_NamingNoConfiguredPeriod_FallsBackToTheSchedule()
+	{
+		CircadianCalculator calc = Following(() => "middag");
+
+		Assert.AreEqual("day", calc.ActivePeriodName(At(12)));
+		Assert.AreEqual("day", calc.GetTarget(At(12))!.PeriodName);
+	}
+
+	[TestMethod]
+	public void Override_MatchesThePeriodNameCaseInsensitively()
+	{
+		Assert.AreEqual("night", Following(() => "NIGHT").ActivePeriodName(At(12)),
+			"period names are matched case-insensitively everywhere else in the engine");
+	}
+
+	/// <summary>
+	///     The room's own levels still apply — <c>LevelsOf</c> is inside <c>GetPeriodTarget</c>, which is the whole
+	///     reason the override routes through it rather than reading the period's raw values.
+	/// </summary>
+	[TestMethod]
+	public void Override_StillAppliesTheRoomsOwnLevels()
+	{
+		List<RoomLevelOverride> levels = [new() { Period = "night", BrightnessPct = 8 }];
+
+		LightTarget target = Following(() => "night", levels).GetTarget(At(12))!;
+
+		Assert.AreEqual(8d, target.BrightnessPct, "the room runs the night at 8 %, selected or scheduled");
+		Assert.AreEqual(RoomLevelSource.Brightness, target.FromRoom);
+		Assert.AreEqual(2200, target.ColorTempKelvin, "and inherits the half it did not replace");
+	}
+
+	/// <summary>
+	///     <b>The step is intended.</b> A selected period began the instant somebody moved the dropdown, so there is
+	///     no boundary time to interpolate away from; a synthetic one would be the engine easing toward a period
+	///     already in force. Pinned so nobody "fixes" it into a blend later.
+	/// </summary>
+	[TestMethod]
+	public void Override_IsAStep_NotABlend()
+	{
+		CircadianCalculator calc = Following(() => "night");
+
+		Assert.AreEqual(15d, calc.GetTarget(At(18, 1))!.BrightnessPct,
+			"one minute into what would have been the evening blend, the selected night is already whole");
+		Assert.AreEqual(15d, calc.GetTarget(At(18, 15))!.BrightnessPct);
+
+		LightTarget blended = new CircadianCalculator(
+			Table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 }, () => SunTimes.Unknown)
+			.GetTarget(At(18, 15))!;
+
+		Assert.AreNotEqual(15d, blended.BrightnessPct,
+			"the same calculator without an override does blend, so the step is the override's doing and not the table's");
+	}
+
+	/// <summary>
+	///     The sleep clamp asks for a period <i>by name</i>, and a caller that named one must get the one it named —
+	///     otherwise a house that selected "day" would have its night clamp quietly hand back the day's levels.
+	/// </summary>
+	[TestMethod]
+	public void Override_DoesNotReachGetPeriodTarget()
+	{
+		CircadianCalculator calc = Following(() => "day");
+
+		LightTarget night = calc.GetPeriodTarget("night")!;
+
+		Assert.AreEqual("night", night.PeriodName);
+		Assert.AreEqual(15d, night.BrightnessPct, "the clamp reaches for the night rules, whatever is selected");
+	}
 }
