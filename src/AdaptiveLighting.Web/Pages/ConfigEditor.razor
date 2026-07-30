@@ -434,7 +434,8 @@ else
 				<PeriodsEditor Periods="@_config.Periods"
 							   Changed="@Revalidate"
 							   HouseModeOptions="@_houseModeOptionValues"
-							   HouseMode="@_config.Global.HouseMode" />
+							   HouseMode="@_config.Global.HouseMode"
+							   Global="@_config.Global" />
 			}
 			else if (_section == Section.HouseModes)
 			{

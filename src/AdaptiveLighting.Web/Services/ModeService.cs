@@ -366,7 +366,7 @@ public sealed class ModeService
 
 		// The resolved period target is identical for every non-Away option, so resolve it once here rather than
 		// building a CircadianCalculator per card. Away ignores it (its swatch is dark) and passes null through.
-		LightTarget? sharedTarget = new CircadianCalculator(Config.Periods, Config.Global, () => sun).GetTarget(now);
+		LightTarget? sharedTarget = Calculator(Config, sun, PeriodSelectValue()).GetTarget(now);
 
 		var options = values
 			.Select(value =>
@@ -573,11 +573,19 @@ public sealed class ModeService
 	/// <param name="kind">The option's kind, which decides the swatch and the effect line.</param>
 	/// <param name="now">The instant to resolve the active period at.</param>
 	/// <param name="sun">The day's sun times, for placing sun-anchored boundaries.</param>
+	/// <param name="periodSelectValue">
+	///     What the period select currently reads, or <c>null</c> when there is none, it cannot be read, or this
+	///     house's own schedule decides. Under <see cref="PeriodAuthority.HomeAssistant"/> the engine takes the
+	///     period from here and never from the clock, so a preview that resolved from the clock anyway would show
+	///     a card the lights disagree with. Passed in rather than read, so this stays as pure as
+	///     <paramref name="sun"/> already made it.
+	/// </param>
 	public static ModePreview ComputePreview(
 		AdaptiveLightingConfig config,
 		ModeKind kind,
 		DateTimeOffset now,
-		SunTimes sun)
+		SunTimes sun,
+		string? periodSelectValue = null)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 		ArgumentNullException.ThrowIfNull(sun);
@@ -586,9 +594,48 @@ public sealed class ModeService
 		if (kind == ModeKind.Away)
 			return BuildPreview(config, kind, null);
 
-		var calculator = new CircadianCalculator(config.Periods, config.Global, () => sun);
-		return BuildPreview(config, kind, calculator.GetTarget(now));
+		return BuildPreview(config, kind, Calculator(config, sun, periodSelectValue).GetTarget(now));
 	}
+
+	/// <summary>
+	///     A calculator that resolves the period the way the engine's does — from the select when Home Assistant
+	///     owns the time of day, from the clock otherwise.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The whole reason this exists is that <c>new CircadianCalculator(periods, global, sun)</c> was written
+	///         twice here, and neither copy knew about the select: under
+	///         <see cref="PeriodAuthority.HomeAssistant"/> both would have gone on placing periods by clock time
+	///         while every room in the house ran whatever the dropdown said.
+	///     </para>
+	///     <para>
+	///         The name is resolved once and closed over rather than read live, because a preview describes one
+	///         instant and every card on the page has to describe the same one — the same reason
+	///         <c>GetHouseMode</c> reads the sun times and "now" once. Resolving through
+	///         <see cref="Schedule.NamedBySelect"/> also means an unmapped or dead mapping falls back to the
+	///         schedule here for exactly the reason it does in the engine.
+	///     </para>
+	/// </remarks>
+	private static CircadianCalculator Calculator(AdaptiveLightingConfig config, SunTimes sun, string? periodSelectValue)
+	{
+		string? forced = Schedule.NamedBySelect(config.Periods, config.Global, periodSelectValue)?.Name;
+
+		return new CircadianCalculator(
+			config.Periods, config.Global, () => sun, null, forced is null ? null : () => forced);
+	}
+
+	/// <summary>
+	///     What the period select reads right now, or <c>null</c> when this house's own schedule decides.
+	/// </summary>
+	/// <remarks>
+	///     Deliberately <c>null</c> under <see cref="PeriodAuthority.AdaptiveLighting"/> rather than the select's
+	///     value: there the engine <i>writes</i> that select as a mirror of what its schedule resolved, and reading
+	///     it back as an input would let a stale mirror decide what the page shows.
+	/// </remarks>
+	private string? PeriodSelectValue() =>
+		Schedule.HomeAssistantDecides(Config.Global)
+			? _catalog.CurrentStateOf(Config.Global.PeriodSelect!.Entity)
+			: null;
 
 	/// <summary>
 	///     Turns a kind and a pre-resolved circadian <paramref name="target"/> into the preview. Split from

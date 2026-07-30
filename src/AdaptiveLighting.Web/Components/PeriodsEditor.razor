@@ -18,6 +18,19 @@
 @inject HaCatalog Catalog
 
 <div class="periods">
+	@*
+		Said once, at the top, and not repeated per card: it is one fact about the whole table, and a chip on
+		every Start field would be the same sentence five times over the one control it is about. It is a
+		statement rather than a warning — this is a configuration somebody chose, not a fault — but it is not
+		optional, because without it the Start fields below look exactly like Start fields that work.
+	*@
+	@if (StartsAreDead)
+	{
+		<p class="notice period-authority">
+			Start times are not in force &mdash; Home Assistant decides when periods change.
+		</p>
+	}
+
 	@for (int index = 0; index < Periods.Count; index++)
 	{
 		TimePeriodConfig period = Periods[index];
@@ -33,7 +46,7 @@
 				<span class="period-title">@DisplayName(period)</span>
 				@if (ReferenceEquals(period, _activePeriod))
 				{
-					<span class="badge active-now" title="This period is in force right now.">active now</span>
+					<span class="badge active-now" title="@ActiveNowTitle">active now</span>
 				}
 				<span class="period-summary-start">@StartSummary(period)</span>
 				<span class="period-summary-hint">@LevelSummary(period)</span>
@@ -146,8 +159,16 @@
 	</div>
 
 	<p class="lede">
-		Each period runs until the next one starts. Sun-tied starts move with the seasons, so the running order
-		can differ from the list order.
+		@if (StartsAreDead)
+		{
+			@:A period runs for as long as Home Assistant's dropdown names it. The start times are kept, and take
+			@:over again the moment you hand the time of day back to adaptive lighting.
+		}
+		else
+		{
+			@:Each period runs until the next one starts. Sun-tied starts move with the seasons, so the running
+			@:order can differ from the list order.
+		}
 	</p>
 </div>
 
@@ -171,8 +192,31 @@
 	[Parameter]
 	public HouseModeConfig? HouseMode { get; set; }
 
+	/// <summary>
+	///     The house settings, for the one question this component cannot answer from the period list alone: who
+	///     owns the time of day. <c>null</c> is the pre-2.1 caller, and reads as "this house's own schedule".
+	/// </summary>
+	[Parameter]
+	public GlobalConfig? Global { get; set; }
+
 	/// <summary>Whether a house-mode select is configured — a dead field teaches nothing, so it is hidden otherwise.</summary>
 	private bool HasHouseMode => HouseMode?.Entity is { Length: > 0 };
+
+	/// <summary>
+	///     Whether the Start fields below are actually deciding anything.
+	/// </summary>
+	/// <remarks>
+	///     Under Home Assistant's period authority they are not: the engine takes the period from the dropdown and
+	///     never places one by the clock. Without saying so, this editor is a page whose main control does nothing
+	///     — somebody moves a start time, saves, watches the lights not change, and goes looking for a fault in the
+	///     schedule.
+	/// </remarks>
+	private bool StartsAreDead => Global is not null && Schedule.HomeAssistantDecides(Global);
+
+	/// <summary>What the "active now" badge promises, which is a different promise under each authority.</summary>
+	private string ActiveNowTitle => StartsAreDead
+		? "Home Assistant's dropdown is naming this period right now."
+		: "This period is in force right now.";
 
 	/// <summary>The period in force right now, so its card carries the "active now" badge and accent edge.</summary>
 	private TimePeriodConfig? _activePeriod;
@@ -181,20 +225,26 @@
 	protected override void OnParametersSet() => _activePeriod = ResolveActivePeriod();
 
 	/// <summary>
-	///     The period in force at the current wall-clock time. Sun-anchored starts resolve against <c>sun.sun</c>
-	///     exactly as the header's <see cref="StartSummary"/> does, so the running order can differ from the list
-	///     order.
+	///     The period in force right now: the one the select names under Home Assistant's authority, and otherwise
+	///     the one the clock places. Sun-anchored starts resolve against <c>sun.sun</c> exactly as the header's
+	///     <see cref="StartSummary"/> does, so the running order can differ from the list order.
 	/// </summary>
 	/// <remarks>
-	///     The rule itself is <see cref="Schedule.InForceAt"/>'s, because the room page asks the same question of
+	///     The rule itself is <see cref="Schedule.InForceNow"/>'s, because the room page asks the same question of
 	///     the same list — which period is this room running right now — and two copies of "the latest start at or
-	///     before now, wrapping past midnight" would be believed while they drifted.
+	///     before now, wrapping past midnight", or of who is allowed to answer at all, would be believed while they
+	///     drifted.
 	/// </remarks>
 	private TimePeriodConfig? ResolveActivePeriod()
 	{
 		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
+		SunTimes sun = new(sunrise, sunset);
+		TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
 
-		return Schedule.InForceAt(Periods, new SunTimes(sunrise, sunset), TimeOnly.FromDateTime(DateTime.Now));
+		if (Global is null)
+			return Schedule.InForceAt(Periods, sun, now);
+
+		return Schedule.InForceNow(Periods, Global, sun, now, Catalog.CurrentStateOf(Global.PeriodSelect?.Entity));
 	}
 
 	/// <summary>The collapsed header's name: the period's own, or a placeholder for an unnamed row.</summary>
