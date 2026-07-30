@@ -210,7 +210,7 @@ public static class RoomSettings
 	///     Every setting a room can state for itself, derived from the schema.
 	/// </summary>
 	/// <remarks>
-	///     The denominator in "n of 21 settings are this room's own". Never write the number down anywhere:
+	///     The denominator in "n of 21 are this room's own". Never write the number down anywhere:
 	///     <see cref="AreaView.OverridableSettingCount"/> and this list are two readings of one fact, and a test
 	///     holds them together.
 	/// </remarks>

@@ -290,11 +290,16 @@ else
 				All settings @(_showAll ? "▴" : "▾")
 			</button>
 			@* Every number above is read against the house's own, and the house's own are on another page. A
-			   room that says "3 of 21 settings are this room's own" has just raised the question of what the
-			   other eighteen are, so the way to them is here rather than left as a hunt. *@
+			   room that says "3 of 21 are this room's own" has just raised the question of what the other
+			   eighteen are, so the way to them is here rather than left as a hunt.
+
+			   The wording is as short as it is because of the phone. Measured at 390px the bar has 340px to
+			   work with and the old sentence needed 399, so the note took a second line and the bar stood
+			   three lines tall. The two words cut are the two already on screen: "settings" is the button
+			   immediately above it, and "change the" is what a link already means. *@
 			<span class="room-more-note">
 				@OwnLine &mdash;
-				<a href="config?section=house">change the baseline under House</a>
+				<a href="config?section=house">baseline under House</a>
 			</span>
 		</div>
 
@@ -1221,9 +1226,11 @@ else
 
 			int own = RoomSettings.OwnCount(room);
 
+			// Short on purpose — see the note's markup for the 390px measurement that set the length.
+			// "settings" is dropped because the button immediately above the line already says it.
 			return own == 0
-				? $"every one of the {AreaView.OverridableSettingCount} follows the house"
-				: $"{own} of {AreaView.OverridableSettingCount} settings are this room's own";
+				? $"all {AreaView.OverridableSettingCount} follow the house"
+				: $"{own} of {AreaView.OverridableSettingCount} are this room's own";
 		}
 	}
 
