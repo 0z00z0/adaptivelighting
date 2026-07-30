@@ -436,6 +436,27 @@ else
 							   HouseModeOptions="@_houseModeOptionValues"
 							   HouseMode="@_config.Global.HouseMode"
 							   Global="@_config.Global" />
+
+				@* Under the table, not over it. The overwhelming majority of houses never adopt this, and the
+				   schedule is what somebody came to this section for; a fold whose header says what it is for is
+				   findable without spending the top of the page on it. Open when it is already in use, because
+				   then it is not an offer any more — it is the thing deciding what the table above means. *@
+				<GroupFold Title="Connect existing Selection from Home Assistant (must be an Input-Select)"
+						   Description="@PeriodSelectSummary"
+						   Open="@(_config.Global.PeriodSelect?.Entity is { Length: > 0 })">
+					<PeriodSelectPanel Global="@_config.Global"
+									   Periods="@_config.Periods"
+									   InputSelects="@_inputSelects"
+									   LiveOptions="@_livePeriodSelectOptions"
+									   ActiveValue="@_activePeriodValue"
+									   IsAvailable="@Catalog.Knows(_config.Global.PeriodSelect?.Entity)"
+									   IsReady="@HomeAssistantIsAnswering"
+									   EmptyNote="@EmptyNote("No dropdown helpers yet — make one in Home Assistant under Settings → Devices & services → Helpers, or type an id.")"
+									   NameResolver="@Name"
+									   KnownResolver="@Catalog.Knows"
+									   EntityChanged="@SetPeriodSelectEntity"
+									   Changed="@Revalidate" />
+				</GroupFold>
 			}
 			else if (_section == Section.HouseModes)
 			{
@@ -1287,6 +1308,12 @@ else
 	private IReadOnlyList<string> _houseModeOptionValues = [];
 	private string? _activeModeValue;
 
+	// The period helper's own live options and current value. Read separately from the house mode's: they are two
+	// different helpers, and checking one document's option strings against the other's list would report renames
+	// that never happened.
+	private IReadOnlyList<string> _livePeriodSelectOptions = [];
+	private string? _activePeriodValue;
+
 	// How the configured mode list stands against the helper's own, recomputed with the document. Starts as "cannot
 	// compare", which is what a page that has not read anything yet honestly knows.
 	private HouseModeOptionsDiff _helperDiff = new(false, [], []);
@@ -1458,6 +1485,8 @@ else
 		_liveSelectOptions = Catalog.SelectOptionsOf(_config.Global.HouseMode?.Entity);
 		_activeModeValue = Catalog.CurrentStateOf(_config.Global.HouseMode?.Entity);
 		_houseModeOptionValues = HouseModeOptionValues();
+		_livePeriodSelectOptions = Catalog.SelectOptionsOf(_config.Global.PeriodSelect?.Entity);
+		_activePeriodValue = Catalog.CurrentStateOf(_config.Global.PeriodSelect?.Entity);
 		_homeLocation = HomeGeo.TryRead();
 		_sensorDeviceClasses = Catalog.SensorDeviceClasses();
 
@@ -2293,6 +2322,66 @@ else
 		_activeModeValue = Catalog.CurrentStateOf(_config.Global.HouseMode?.Entity);
 		_houseModeOptionValues = HouseModeOptionValues();
 		Revalidate();
+	}
+
+	/// <summary>
+	///     Picks the helper that carries the time of day, and re-reads what that helper offers.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         The panel writes every other field of <c>PeriodSelect</c> itself; this one stays here because it is
+	///         the only field whose value changes what the panel is <i>drawn from</i> — a different helper has
+	///         different live options and a different current value, and only the page reads the catalog.
+	///     </para>
+	///     <para>
+	///         The mappings are deliberately <b>not</b> rebuilt from the new helper, where the house-mode picker
+	///         does adopt. The two lists are different kinds of thing: a mode option carries its whole behaviour
+	///         (its kind, its scene, its resets) and losing it is expensive, whereas a period mapping is one string
+	///         pointing at another and adopting a new helper's options would silently invent mappings nobody chose.
+	///         What survives shows as a row; what does not shows as a rename, with the one pick that moves it.
+	///     </para>
+	/// </remarks>
+	private void SetPeriodSelectEntity(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			// Leave the object — the mappings may still be wanted; ConfigNormalizer drops it on save if empty.
+			if (_config.Global.PeriodSelect is { } existing)
+				existing.Entity = null;
+		}
+		else
+		{
+			// Lazily created the first time a helper is picked, so a never-adopted document acquires no block.
+			(_config.Global.PeriodSelect ??= new PeriodSelectConfig()).Entity = value;
+		}
+
+		_livePeriodSelectOptions = Catalog.SelectOptionsOf(_config.Global.PeriodSelect?.Entity);
+		_activePeriodValue = Catalog.CurrentStateOf(_config.Global.PeriodSelect?.Entity);
+		Revalidate();
+	}
+
+	/// <summary>
+	///     The period-select fold's header line: what the pairing is doing, without opening it.
+	/// </summary>
+	/// <remarks>
+	///     A fold whose header only repeats its title is a fold nobody can decide whether to open. The one fact
+	///     worth carrying is the direction, because it is what decides whether the start times in the table above
+	///     mean anything.
+	/// </remarks>
+	private string PeriodSelectSummary
+	{
+		get
+		{
+			if (_config.Global.PeriodSelect?.Entity is not { Length: > 0 } entity)
+				return "not connected — the schedule's start times decide the time of day";
+
+			int mapped = _config.Global.PeriodSelect.Options.Count(option => !option.IsEmpty);
+			string rows = mapped == 1 ? "1 option mapped" : $"{mapped} options mapped";
+
+			return Schedule.HomeAssistantDecides(_config.Global)
+				? $"{entity} decides the time of day · {rows}"
+				: $"{entity} is kept in step with the schedule · {rows}";
+		}
 	}
 
 	/// <summary>

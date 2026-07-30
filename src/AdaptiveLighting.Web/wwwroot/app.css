@@ -5864,3 +5864,115 @@ h1[tabindex="-1"]:focus {
 		stroke-width: 3.5;
 	}
 }
+
+/* ===== period select (agent P) ===== */
+
+/* Tying the schedule to a Home Assistant dropdown. Everything here lives inside a GroupFold, so the block
+   owns no background of its own — .field already carries the row rhythm the rest of the settings page uses,
+   and a second surface inside the fold would read as a box nobody put there. */
+
+.periodselect {
+	display: flex;
+	flex-direction: column;
+}
+
+/* The two directions, side by side. A row rather than a stack, because the whole point of the control is that
+   they are alternatives to each other and reading them as a list invites ticking both. */
+.periodselect-authority {
+	display: inline-flex;
+	gap: 0.15rem 1.1rem;
+	flex-wrap: wrap;
+}
+
+.periodselect-choice {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	white-space: nowrap;
+	color: var(--text);
+}
+
+/* A notice inside a fold: the fold's body already insets it, so the default bottom margin would stack a gap
+   under it that nothing sits in. Column, because each of these is a sentence, its consequence, and sometimes
+   a button — and the three read as a block rather than a paragraph. */
+.periodselect-warning {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	margin: 0.6rem 0 0;
+}
+
+.periodselect-warning .panel-actions {
+	margin-top: 0.25rem;
+}
+
+.periodselect-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	margin-top: 0.8rem;
+}
+
+/* One live option, one period. A grid rather than a spread row: with space-between, a 22rem select and a
+   six-character option string sat a third of a screen apart and the eye had to cross the gap once per row to
+   find out what it was reading. Two columns put the answer next to the question and line the dropdowns up. */
+.periodselect-row {
+	display: grid;
+	grid-template-columns: minmax(6rem, 13rem) minmax(0, 22rem);
+	align-items: center;
+	gap: 0.3rem 1rem;
+}
+
+.periodselect-row select {
+	width: 100%;
+}
+
+/* Stacked on a phone, where 13rem + 22rem cannot both fit and the option strings are whatever somebody typed
+   into a helper — so their width is not something this page gets to assume. */
+@media (max-width: 560px) {
+	.periodselect-row {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.periodselect-option {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+/* The rename cases, held apart from the live rows by a rule rather than by a heading: they are the same kind
+   of row, and what makes them different is that Home Assistant no longer offers them — which each row's own
+   badge already says. */
+.periodselect-orphans {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	margin-top: 0.8rem;
+	padding-top: 0.7rem;
+	border-top: 1px solid var(--line);
+}
+
+.periodselect-orphan {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem 0.7rem;
+	flex-wrap: wrap;
+}
+
+.periodselect-orphan-text {
+	color: var(--muted);
+	font-size: var(--text-sm);
+	min-width: 0;
+}
+
+/* The schedule editor's one line when Home Assistant owns the time of day. A notice rather than a badge
+   because it is about every Start field below it, not about one of them — and it has to survive being read
+   at a glance by somebody who is about to edit a control that does nothing. */
+.period-authority {
+	margin-bottom: 0.9rem;
+}
+
+/* ===== end period select ===== */

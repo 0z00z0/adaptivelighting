@@ -213,13 +213,27 @@
 	/// </remarks>
 	private bool StartsAreDead => Global is not null && Schedule.HomeAssistantDecides(Global);
 
-	/// <summary>What the "active now" badge promises, which is a different promise under each authority.</summary>
-	private string ActiveNowTitle => StartsAreDead
-		? "Home Assistant's dropdown is naming this period right now."
-		: "This period is in force right now.";
+	/// <summary>
+	///     What the "active now" badge promises, which is a different promise in each of three cases.
+	/// </summary>
+	/// <remarks>
+	///     The third case is the one worth the extra branch, and looking at the page is what found it: under Home
+	///     Assistant's authority with the dropdown standing on an option nothing maps, the engine falls back to the
+	///     clock — so a badge saying "the dropdown is naming this" would be pointing at a period the dropdown has
+	///     never heard of, directly under a line saying start times are not in force.
+	/// </remarks>
+	private string ActiveNowTitle => (StartsAreDead, _namedBySelect) switch
+	{
+		(true, true) => "Home Assistant's dropdown is naming this period right now.",
+		(true, false) => "The dropdown names no period this schedule has, so this one is in force from its start time.",
+		_ => "This period is in force right now."
+	};
 
 	/// <summary>The period in force right now, so its card carries the "active now" badge and accent edge.</summary>
 	private TimePeriodConfig? _activePeriod;
+
+	/// <summary>Whether the dropdown named it, rather than the clock placing it — see <see cref="ActiveNowTitle"/>.</summary>
+	private bool _namedBySelect;
 
 	/// <inheritdoc/>
 	protected override void OnParametersSet() => _activePeriod = ResolveActivePeriod();
@@ -240,11 +254,18 @@
 		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
 		SunTimes sun = new(sunrise, sunset);
 		TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
+		_namedBySelect = false;
 
 		if (Global is null)
 			return Schedule.InForceAt(Periods, sun, now);
 
-		return Schedule.InForceNow(Periods, Global, sun, now, Catalog.CurrentStateOf(Global.PeriodSelect?.Entity));
+		// Two questions, both asked of Schedule and neither re-answered here: which period is running, and
+		// whether the dropdown is what decided it. The badge's hover is the only thing that needs the second.
+		string? value = Catalog.CurrentStateOf(Global.PeriodSelect?.Entity);
+
+		_namedBySelect = Schedule.NamedBySelect(Periods, Global, value) is not null;
+
+		return Schedule.InForceNow(Periods, Global, sun, now, value);
 	}
 
 	/// <summary>The collapsed header's name: the period's own, or a placeholder for an unnamed row.</summary>
@@ -296,9 +317,21 @@
 	private Task SetMode(TimePeriodConfig period, string? value) =>
 		Set(() => period.SetsMode = string.IsNullOrWhiteSpace(value) ? null : value);
 
+	/// <summary>
+	///     What a period starts as, in the one place that decides it.
+	/// </summary>
+	/// <remarks>
+	///     Public and static because <see cref="PeriodSelectPanel"/> offers the same "add a period" where a
+	///     dropdown helper has more options than the schedule has periods, and two definitions of "a new period"
+	///     would eventually differ — a household would then get a different starting row depending on which button
+	///     they happened to press.
+	/// </remarks>
+	public static TimePeriodConfig NewPeriod() =>
+		new() { Name = "new period", Start = "12:00", BrightnessPct = 80, ColorTempKelvin = 3500 };
+
 	private async Task Add()
 	{
-		Periods.Add(new TimePeriodConfig { Name = "new period", Start = "12:00", BrightnessPct = 80, ColorTempKelvin = 3500 });
+		Periods.Add(NewPeriod());
 		await Changed.InvokeAsync().ConfigureAwait(false);
 	}
 
