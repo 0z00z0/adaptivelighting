@@ -5969,7 +5969,9 @@ h1[tabindex="-1"]:focus {
 	color: var(--muted);
 }
 
-.comm-item.todo {
+/* The one mark an item carries: which sheet is open. The status line under the title already says what the
+   answer is, so a done-tick would be a second and weaker claim beside it. */
+.comm-item.open {
 	border-left-color: var(--accent);
 }
 

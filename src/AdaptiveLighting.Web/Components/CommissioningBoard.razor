@@ -35,17 +35,25 @@
 
 	@*
 		The checklist. Its status lines are summaries of the answers as they stand — never a visited-flag — which
-		is what makes coming back to a half-commissioned house a review rather than an interrogation.
+		is what makes coming back to a half-commissioned house a review rather than an interrogation. That is also
+		why the only mark an item carries is which sheet is open: a done-tick would be a second, weaker claim
+		beside a line that already says what the answer is.
 	*@
 	<div class="comm-list">
-		<button type="button" class="comm-item @(_sheet == Sheet.Identity ? "todo" : "done")" @onclick="() => Open(Sheet.Identity)">
+		<button type="button"
+				class="comm-item @(_sheet == Sheet.Identity ? "open" : null)"
+				aria-expanded="@(_sheet == Sheet.Identity ? "true" : "false")"
+				@onclick="() => Open(Sheet.Identity)">
 			<span class="ti">Name it &amp; who lives here</span>
 			<span class="st">@IdentitySentence.StatusLine(HouseNameNow, KeptPeopleNames, DebounceNow)</span>
 		</button>
 
 		@if (_modes.Count > 0)
 		{
-			<button type="button" class="comm-item @(_draft.KeepHouseMode is null ? "todo" : "done")" @onclick="() => Open(Sheet.Mode)">
+			<button type="button"
+					class="comm-item @(_sheet == Sheet.Mode ? "open" : null)"
+					aria-expanded="@(_sheet == Sheet.Mode ? "true" : "false")"
+					@onclick="() => Open(Sheet.Mode)">
 				<span class="ti">House mode</span>
 				<span class="st">@ModeStatus</span>
 			</button>
