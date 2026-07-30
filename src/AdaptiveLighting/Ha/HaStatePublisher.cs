@@ -67,7 +67,16 @@ public sealed class HaStatePublisher : IStatePublisher
 				auto_on_blocking_entity = snapshot.AutoOnBlockingEntity,
 				// Additive again: which of this room's levels it names for itself during this period, absent on a
 				// consumer's side rather than reading as "none" if they never learned about it.
-				levels_from_room = snapshot.LevelsFromRoom?.ToString()
+				levels_from_room = snapshot.LevelsFromRoom?.ToString(),
+				// Presence, and what is holding the house mode. Flattened rather than nested so a template or an
+				// automation trigger can read one field without walking an object: `mode` says Away, and these say
+				// whether that is an empty house or an entity holding the mode over a full one.
+				is_anyone_home = snapshot.IsAnyoneHome,
+				mode_forced_kind = snapshot.Forced?.Kind.ToString(),
+				mode_forced_option = snapshot.Forced?.OptionValue,
+				mode_forced_source = snapshot.Forced?.Source.ToString(),
+				mode_forced_by = snapshot.Forced?.EntityId,
+				mode_forced_by_state = snapshot.Forced?.EntityState
 			});
 		}
 		catch (Exception exception)

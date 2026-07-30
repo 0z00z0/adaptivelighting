@@ -61,6 +61,16 @@ public sealed class ModeMonitor : IDisposable
 	private string? _previousPeriodName;
 	private bool _started;
 
+	// The option value the no-motion rule last wrote to the select, so a mode the engine set because the house went
+	// quiet can be told apart from the same mode a person chose. Cleared the moment the select stops reading it.
+	// Deliberately not persisted: after a restart nobody knows why the select stands where it does, and a guess is
+	// exactly the invented cause this reporting exists to stop.
+	private string? _inactivityActivated;
+
+	// The last sentence AnnounceForcedMode wrote, so a forcing entity that stays on is stated once rather than on
+	// every edge that re-reads it. Empty means "nothing was being forced last time we looked".
+	private string _announcedForce = "";
+
 	// Armed by Start and spent on the first tick that can read the select: the one chance a restart gets to notice
 	// that a boundary went by while it was stopped. Held open until the select answers, because after a Home
 	// Assistant restart an input_select can be unavailable for a while, and spending the chance on a value nobody
@@ -172,11 +182,80 @@ public sealed class ModeMonitor : IDisposable
 
 	/// <summary>
 	///     The first option (in list order) any of whose <see cref="HouseModeOptionConfig.ActivateWhileOn"/> entities
-	///     is currently on, or <c>null</c> when none is. Such an option forces the effective house mode regardless of
-	///     the select's value; the select is never written from this, so there is no feedback loop.
+	///     is currently on, together with the entity that is on — or <c>null</c> when none is. Such an option forces
+	///     the effective house mode regardless of the select's value; the select is never written from this, so there
+	///     is no feedback loop.
 	/// </summary>
-	private HouseModeOptionConfig? ActivatedOption =>
-		_global.HouseMode?.Options.FirstOrDefault(option => option.ActivateWhileOn.Any(IsOn));
+	/// <remarks>
+	///     The entity is returned beside the option rather than looked up again by whoever needs to name it. There is
+	///     only one read of "which entity is holding this mode on", and it is this one — a second copy would be free
+	///     to name a different entity from the one the engine actually acted on, which is the whole class of fault
+	///     <see cref="ForcedMode"/> exists to close.
+	/// </remarks>
+	private (HouseModeOptionConfig Option, string EntityId)? ActivatedNow
+	{
+		get
+		{
+			if (_global.HouseMode is not { } houseMode)
+				return null;
+
+			foreach (HouseModeOptionConfig option in houseMode.Options)
+				if (option.ActivateWhileOn.FirstOrDefault(IsOn) is { Length: > 0 } entityId)
+					return (option, entityId);
+
+			return null;
+		}
+	}
+
+	/// <summary>
+	///     The first option (in list order) any of whose <see cref="HouseModeOptionConfig.ActivateWhileOn"/> entities
+	///     is currently on, or <c>null</c> when none is.
+	/// </summary>
+	private HouseModeOptionConfig? ActivatedOption => ActivatedNow?.Option;
+
+	/// <summary>
+	///     What is forcing the effective mode, or <c>null</c> when the select's own value is the whole story.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>Read live, in the same order the engine decides in.</b> The <c>ActivateWhileOn</c> overlay wins over
+	///         the select, so it is asked first; the no-motion rule wrote the select and therefore only holds while
+	///         the value it wrote still stands.
+	///     </para>
+	///     <para>
+	///         Every <see cref="ModeKind"/> is reported, not only <see cref="ModeKind.Away"/>. Sleep has exactly the
+	///         same shape — an entity holding the house asleep looks, from a room, identical to a household that
+	///         chose it — and a rule that only covered Away would leave the second half of the same fault in place.
+	///     </para>
+	/// </remarks>
+	public ForcedMode? Forced
+	{
+		get
+		{
+			if (ActivatedNow is { } activated)
+				return new ForcedMode(
+					activated.Option.Kind,
+					activated.Option.Value?.Trim() ?? "",
+					ModeForceSource.WhileEntityOn,
+					activated.EntityId,
+					_ha.GetState(activated.EntityId).AsUsableState());
+
+			string? claimed;
+			lock (_gate)
+				claimed = _inactivityActivated;
+
+			if (claimed is not { Length: > 0 })
+				return null;
+
+			// The claim only holds while the value the engine wrote is still the value the select reads. Anything
+			// that moved it since — a person, a period's SetsMode, a reset — took ownership of it back.
+			if (!string.Equals(CurrentModeValue, claimed, StringComparison.OrdinalIgnoreCase)
+				|| _global.HouseMode?.OptionFor(claimed) is not { } option)
+				return null;
+
+			return new ForcedMode(option.Kind, claimed, ModeForceSource.NoMotionTimeout);
+		}
+	}
 
 	/// <summary>
 	///     The option the engine actually acts on: an <see cref="HouseModeOptionConfig.ActivateWhileOn"/> override
@@ -243,6 +322,12 @@ public sealed class ModeMonitor : IDisposable
 		SubscribeActivationSensors();
 		SubscribeInactivityActivation();
 
+		// An entity that was already on before the engine started forces the mode from the first instant and raises
+		// no edge to announce it. Said here so a house that boots into a forced mode says so once at start-up rather
+		// than only when somebody happens to toggle the entity — which, in the incident this comes from, is a toggle
+		// nobody was going to make.
+		AnnounceForcedMode();
+
 		_subscriptions.Add(_scheduler.SchedulePeriodic(
 			TimeSpan.FromSeconds(_global.CircadianTickSeconds),
 			OnTick));
@@ -253,8 +338,18 @@ public sealed class ModeMonitor : IDisposable
 	private void OnSelectChanged(StateChange change)
 	{
 		lock (_gate)
+		{
 			_activatedAt = _scheduler.Now;
 
+			// The no-motion rule's claim on the value survives only while the value it wrote still stands. Anything
+			// that moves the select away — a person, a period's SetsMode, a reset — takes ownership back, and a
+			// later move onto the same option is then somebody else's doing rather than the rule's.
+			if (_inactivityActivated is { Length: > 0 } claimed
+				&& !string.Equals(change.New?.State?.Trim(), claimed, StringComparison.OrdinalIgnoreCase))
+				_inactivityActivated = null;
+		}
+
+		AnnounceForcedMode();
 		_changed.OnNext(Unit.Default);
 	}
 
@@ -315,8 +410,59 @@ public sealed class ModeMonitor : IDisposable
 			_logger.LogInformation("Watching mode-activation sensor {EntityId}.", sensor);
 			_subscriptions.Add(_ha.Entity(sensor)
 				.StateChanges()
-				.SubscribeSafe(_ => _changed.OnNext(Unit.Default), _logger));
+				.SubscribeSafe(_ => OnActivationSensorChanged(), _logger));
 		}
+	}
+
+	// An overlay entity moved. Said out loud before the house state is republished, because this is the one mode
+	// change with no visible cause: nothing writes the select, so the log used to carry only what the areas then
+	// did — "Everyone left the house", while everybody was standing in the room.
+	private void OnActivationSensorChanged()
+	{
+		AnnounceForcedMode();
+		_changed.OnNext(Unit.Default);
+	}
+
+	/// <summary>
+	///     Writes one line naming what is forcing the house mode, and one when nothing is any more.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>The line this exists to write is <c>Away mode is forced while input_boolean.occupancy is on.</c></b>
+	///         Its absence cost an hour: a cabin's Away option listed a boolean that had been on for hours, every
+	///         settings save rebuilt every area controller and re-asserted Away, and the only evidence in the log was
+	///         a presence departure that had not happened. The entity <i>and</i> its state are named because
+	///         "something is forcing Away" sends the reader hunting the same way "something here is on" once did.
+	///     </para>
+	///     <para>
+	///         Deduplicated on the sentence rather than on the entity, so an entity that stays on says it once while
+	///         a different entity taking over still gets its own line. Every kind is announced, not only Away.
+	///     </para>
+	/// </remarks>
+	private void AnnounceForcedMode()
+	{
+		ForcedMode? forced = Forced;
+		string sentence = forced?.Describe() ?? "";
+
+		lock (_gate)
+		{
+			if (string.Equals(_announcedForce, sentence, StringComparison.Ordinal))
+				return;
+
+			_announcedForce = sentence;
+		}
+
+		if (forced is null)
+		{
+			_logger.LogInformation("Nothing is forcing the house mode any more; the select's own value decides again.");
+			return;
+		}
+
+		// The sentence comes from ForcedMode.Describe so the log and whatever renders the house cannot word one
+		// fact two ways. It is still passed as a property, not concatenated, so a structured sink keeps it whole.
+		_logger.LogInformation(
+			"{ForcedMode} The house-mode select reads '{Select}' and is being overridden — this is not a presence departure.",
+			forced.Describe(), CurrentModeValue ?? "(nothing)");
 	}
 
 	// Auto-away by inactivity: any option with ActivateAfterNoMotionMinutes watches the house-wide motion union and,
@@ -408,7 +554,15 @@ public sealed class ModeMonitor : IDisposable
 				new ServiceTarget { EntityIds = [select] }, new { option = option.Value.Trim() });
 
 			lock (_gate)
+			{
 				_inactivityLatched = true;
+
+				// Remembered so the mode this wrote is reported as the engine's doing rather than as a household
+				// decision — and, crucially, never as a presence departure. It survives only as long as the select
+				// keeps reading it; see OnSelectChanged.
+				_inactivityActivated = option.Value.Trim();
+			}
+
 			return;
 		}
 	}

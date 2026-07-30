@@ -32,6 +32,8 @@ namespace AdaptiveLighting.Abstractions;
 /// <param name="AutoOnBlockedBy">Which gate would refuse to light this area for movement at this instant, <see cref="AutoOnBlock.None"/> when none would, or <c>null</c> from a build that predates the field. Two of the refusals — a sleeping house, and an <c>IgnoreWhenOn</c> entity that is on — leave the area in <see cref="AreaState.AutoVacant"/> looking exactly like an area that is merely waiting, so a reader holding only <paramref name="State"/> and <paramref name="IsDark"/> would confidently promise a light that will not come on. Descriptive, like <paramref name="DarknessDetail"/>: excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/>, so a television switching on does not by itself republish every area it blocks.</param>
 /// <param name="AutoOnBlockingEntity">The entity id holding auto-on off when <paramref name="AutoOnBlockedBy"/> is <see cref="AutoOnBlock.EntityOn"/>, and <c>null</c> otherwise. Named rather than counted: "something is on" leaves the reader hunting through the room, which is the dead end this field exists to end.</param>
 /// <param name="LevelsFromRoom">Which of this room's two levels it names for itself during <paramref name="PeriodName"/>, rather than taking from the schedule — <see cref="RoomLevelSource.None"/> for the overwhelming majority of rooms, and <c>null</c> from a build that predates the field. A statement about the period rather than about the standing command, exactly as <paramref name="PeriodName"/> is: a room card can say "this room runs the night at 8 %" whether or not the engine has commanded anything yet. Optional so every existing construction site — and every consumer of the published event — carries on unchanged, the same way <paramref name="AreaId"/> and <paramref name="AutoOnBlockedBy"/> were added.</param>
+/// <param name="IsAnyoneHome">What presence said at this instant, or <c>null</c> from a build that predates the field. <paramref name="Mode"/> alone cannot answer it: <see cref="HouseMode.Away"/> is presence <i>or</i> an away-kind option, so a reader holding only the mode cannot tell an empty house from a full one the mode has shut. It said "nobody is home yet" to somebody standing in the room for an hour, which is what this field exists to stop.</param>
+/// <param name="Forced">What is holding the house on its mode when the select's own value is not the answer — an <c>ActivateWhileOn</c> entity, or the no-motion rule — and <c>null</c> when nothing is. Carried rather than re-derived, on the same rule as <paramref name="AutoOnBlockedBy"/>: the engine is the only thing that knows which entity it read, and a second copy of that lookup is how a page comes to name a cause the engine never checked.</param>
 public sealed record AreaSnapshot(
 	string AreaName,
 	AreaState State,
@@ -52,7 +54,9 @@ public sealed record AreaSnapshot(
 	string? AreaId = null,
 	AutoOnBlock? AutoOnBlockedBy = null,
 	string? AutoOnBlockingEntity = null,
-	RoomLevelSource? LevelsFromRoom = null)
+	RoomLevelSource? LevelsFromRoom = null,
+	bool? IsAnyoneHome = null,
+	ForcedMode? Forced = null)
 {
 	/// <summary>
 	///     Whether <paramref name="other"/> says the same thing about the area as this snapshot does — the
@@ -95,6 +99,14 @@ public sealed record AreaSnapshot(
 	///         is a pure function of <see cref="PeriodName"/>, which is compared already, and the room's overrides
 	///         cannot change under a live controller — a save rebuilds every one of them.
 	///     </para>
+	///     <para>
+	///         <see cref="IsAnyoneHome"/> and <see cref="Forced"/> are compared too, and for the reason the
+	///         exclusions above do not apply to them: each carries a case <see cref="Mode"/> cannot show at all.
+	///         Somebody walking back into a house an <c>ActivateWhileOn</c> entity is holding Away moves presence
+	///         and moves nothing else — that is precisely the news worth publishing, and excluding these would
+	///         leave the room sitting on a report that says the house is empty. Neither drifts: they change a
+	///         handful of times a day, when the mode's cause changes.
+	///     </para>
 	/// </remarks>
 	/// <param name="other">The snapshot to compare against, typically the last one published for this area.</param>
 	/// <returns><c>true</c> when the two carry the same news; <c>false</c> when something worth publishing moved.</returns>
@@ -110,7 +122,9 @@ public sealed record AreaSnapshot(
 		ColorTempKelvin == other.ColorTempKelvin &&
 		Nullable.Equals(NextChangeAt, other.NextChangeAt) &&
 		Nullable.Equals(NextChangeFrom, other.NextChangeFrom) &&
-		Nullable.Equals(LevelsFromRoom, other.LevelsFromRoom);
+		Nullable.Equals(LevelsFromRoom, other.LevelsFromRoom) &&
+		Nullable.Equals(IsAnyoneHome, other.IsAnyoneHome) &&
+		Forced == other.Forced;
 }
 
 /// <summary>

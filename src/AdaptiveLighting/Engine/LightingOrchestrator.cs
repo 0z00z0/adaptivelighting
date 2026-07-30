@@ -332,7 +332,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_modes?.KillSwitchActive ?? false)
 		{
 			ModeValue = _modes?.CurrentModeValue,
-			ActiveScene = _modes?.ActiveScene
+			ActiveScene = _modes?.ActiveScene,
+			Forced = _modes?.Forced
 		};
 
 		if (state == previous)
@@ -344,8 +345,14 @@ public sealed class LightingOrchestrator : IDisposable
 			&& state.ActiveScene is { Length: > 0 } scene)
 			_actuator.ActivateScene(scene);
 
-		_logger.LogInformation("House is now {Mode} (kill switch {KillSwitch}).",
-			state.Mode, state.KillSwitchActive ? "active" : "inactive");
+		// The forcing clause is on this line as well as on ModeMonitor's own: this is the line that says the house
+		// went Away, and a reader who finds it has no reason to go looking for a second one that explains why.
+		if (state.Forced is { } forced)
+			_logger.LogInformation("House is now {Mode} (kill switch {KillSwitch}). {ForcedMode}",
+				state.Mode, state.KillSwitchActive ? "active" : "inactive", forced.Describe());
+		else
+			_logger.LogInformation("House is now {Mode} (kill switch {KillSwitch}).",
+				state.Mode, state.KillSwitchActive ? "active" : "inactive");
 
 		_house.OnNext(state);
 	}

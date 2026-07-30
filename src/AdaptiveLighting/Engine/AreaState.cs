@@ -71,7 +71,18 @@ public enum TransitionReason
 	/// <summary>The area stayed vacant long enough to lift a manual turn-off.</summary>
 	SuppressionLifted,
 
-	/// <summary>Presence reported the house empty.</summary>
+	/// <summary>
+	///     Presence reported the house empty. <b>Presence, and only presence.</b>
+	/// </summary>
+	/// <remarks>
+	///     <b>It used to mean either that or a mode saying Away, and that was a lie the engine told for an hour.</b>
+	///     A cabin's Away option listed an <c>input_boolean</c> that had been on all evening; every settings save
+	///     rebuilds every area controller, so each edit re-asserted Away and swept the house dark while the owner
+	///     stood in it — and the log said everyone had left while both <c>person.*</c> entities read <c>home</c>.
+	///     An area that goes Away because the <i>mode</i> says so now reports <see cref="HouseModeChanged"/>
+	///     instead, and carries <see cref="AdaptiveLighting.Abstractions.AreaSnapshot.Forced"/> to say what put the
+	///     mode there. Nothing but presence reaches this value any more.
+	/// </remarks>
 	EveryoneLeft,
 
 	/// <summary>Presence reported the first arrival.</summary>
@@ -83,7 +94,17 @@ public enum TransitionReason
 	/// <summary>The circadian target moved.</summary>
 	CircadianTick,
 
-	/// <summary>The house mode kind or value changed.</summary>
+	/// <summary>
+	///     The house mode kind or value changed — including into and out of an away-kind mode, which is the one
+	///     case that used to be reported as <see cref="EveryoneLeft"/> whether or not anybody had left.
+	/// </summary>
+	/// <remarks>
+	///     <see cref="AreaState.Away"/> under this reason is the mode holding the room shut, not an empty house;
+	///     <see cref="AdaptiveLighting.Abstractions.AreaSnapshot.Forced"/> beside it says what is holding the mode.
+	///     A reason of its own was considered and not taken: this one already carries the right categories and the
+	///     right words, and the state distinguishes the sweep from the retarget without a second enum member for
+	///     every reader to learn.
+	/// </remarks>
 	HouseModeChanged,
 
 	/// <summary>A Guest scene took the area into, or released it from, an indefinite hold.</summary>
@@ -109,7 +130,19 @@ public enum AutoOnBlock
 	/// <summary>The master switch is on, so the engine commands nothing anywhere.</summary>
 	KillSwitch,
 
-	/// <summary>The house is away, or nobody is home.</summary>
+	/// <summary>
+	///     The house is away, or nobody is home.
+	/// </summary>
+	/// <remarks>
+	///     <b>Two causes under one name, so a reader that wants to word it must read further.</b>
+	///     <see cref="AdaptiveLighting.Abstractions.AreaSnapshot.IsAnyoneHome"/> says which — <c>false</c> is a
+	///     genuinely empty house, <c>true</c> is the mode holding the room shut with people in it — and
+	///     <see cref="AdaptiveLighting.Abstractions.AreaSnapshot.Forced"/> says what is holding the mode there.
+	///     Left as one gate deliberately: the gate is what the engine acts on and there is only one of it, whereas
+	///     splitting it would silently re-route every existing reader that names <see cref="Away"/> onto a default
+	///     arm. Saying "nobody is home yet" while two people stand in the room is what those two fields exist to
+	///     stop.
+	/// </remarks>
 	Away,
 
 	/// <summary>

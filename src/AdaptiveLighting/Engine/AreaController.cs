@@ -439,7 +439,12 @@ public sealed class AreaController : IDisposable
 
 			if (_state == AreaState.Away)
 			{
-				ComeHome();
+				// An away-kind mode releasing is a mode change; presence arriving is an arrival. Read from what the
+				// house was, because what it is no longer says Away either way.
+				ComeHome(previous.ActiveKind == ModeKind.Away
+					? TransitionReason.HouseModeChanged
+					: TransitionReason.FirstPersonArrived);
+
 				return;
 			}
 
@@ -586,16 +591,35 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	/// <summary>
+	///     Why this area is going Away: because presence says the house is empty, or because the house mode says
+	///     Away whatever presence reads.
+	/// </summary>
+	/// <remarks>
+	///     <b>These were reported as one thing, and the wrong one.</b> <see cref="HouseState.Mode"/> is
+	///     <see cref="HouseMode.Away"/> when presence is empty <i>or</i> the standing option is away-kind, and every
+	///     one of those routes used to publish <see cref="TransitionReason.EveryoneLeft"/> — so a cabin whose Away
+	///     option was pinned on by an <c>input_boolean</c> logged "Everyone left the house" over and over while two
+	///     people stood in it. The mode is checked first because it is the sufficient cause: it holds the house dark
+	///     after somebody walks back in, which is the state that has to be readable.
+	///     <see cref="AdaptiveLighting.Abstractions.AreaSnapshot.Forced"/> then says which of the three routes —
+	///     a person at the select, an <c>ActivateWhileOn</c> entity, or the no-motion rule — put the mode there.
+	/// </remarks>
+	private TransitionReason AwayReason() =>
+		_house.ActiveKind == ModeKind.Away ? TransitionReason.HouseModeChanged : TransitionReason.EveryoneLeft;
+
 	private void GoAway()
 	{
+		TransitionReason reason = AwayReason();
+
 		CancelAllTimers();
-		Enter(AreaState.Away, TransitionReason.EveryoneLeft);
+		Enter(AreaState.Away, reason);
 
 		// An away scene IS the away look, so skip the sweep and let the scene stand — same stand-down as SkipAwaySweep.
 		if (_house.ActiveScene is { Length: > 0 })
 		{
 			_logger.LogDebug("{Area}: away scene {Scene} is holding; skipping the leaving sweep.", Name, _house.ActiveScene);
-			Publish(TransitionReason.EveryoneLeft);
+			Publish(reason);
 			return;
 		}
 
@@ -603,26 +627,34 @@ public sealed class AreaController : IDisposable
 		if (_area.Settings.SkipAwaySweep)
 		{
 			_logger.LogDebug("{Area} opted out of the leaving sweep.", Name);
-			Publish(TransitionReason.EveryoneLeft);
+			Publish(reason);
 			return;
 		}
 
-		TurnOff(TransitionReason.EveryoneLeft);
+		TurnOff(reason);
 	}
 
-	private void ComeHome()
+	/// <summary>
+	///     Leaves the Away state.
+	/// </summary>
+	/// <param name="reason">
+	///     Why the area is leaving Away. The mirror of <see cref="AwayReason"/>: an away-kind mode letting go is the
+	///     house changing mode, not somebody walking in the door, and claiming an arrival that nobody made is the
+	///     same invented cause in the opposite direction.
+	/// </param>
+	private void ComeHome(TransitionReason reason)
 	{
-		Enter(AreaState.AutoVacant, TransitionReason.FirstPersonArrived);
+		Enter(AreaState.AutoVacant, reason);
 
 		if (!_area.Settings.WelcomeHome || !CanAutoOn(out _))
 		{
-			Publish(TransitionReason.FirstPersonArrived);
+			Publish(reason);
 			return;
 		}
 
-		Enter(AreaState.AutoActive, TransitionReason.FirstPersonArrived);
+		Enter(AreaState.AutoActive, reason);
 		RestartVacancyTimer();
-		ApplyTarget(TransitionReason.FirstPersonArrived);
+		ApplyTarget(reason);
 	}
 
 	/// <summary>Whether the engine may command this area at all, ignoring presence and darkness.</summary>
@@ -637,7 +669,11 @@ public sealed class AreaController : IDisposable
 			AutoOnBlock.None => "",
 			AutoOnBlock.KillSwitch => "kill switch is active",
 			AutoOnBlock.Disabled => "area is disabled",
-			AutoOnBlock.Away => _house.IsAnyoneHome ? "the house is set to away" : "nobody is home",
+			// Away has three tellings and only one of them is a departure. The forced one is checked first because
+			// it is the one nothing else in the log would ever have named.
+			AutoOnBlock.Away => _house.Forced is { Kind: ModeKind.Away } forced ? forced.Describe()
+				: _house.IsAnyoneHome ? "the house is set to away"
+				: "nobody is home",
 			AutoOnBlock.SceneHold => $"a guest scene ({_house.ActiveScene}) is holding this area",
 			AutoOnBlock.Sleep => "sleep mode blocks auto-on for this area",
 			AutoOnBlock.EntityOn => $"{blocker} is on",
@@ -996,7 +1032,9 @@ public sealed class AreaController : IDisposable
 			_areaId,
 			blocked,
 			blocker,
-			_resolvedLevelsFromRoom);
+			_resolvedLevelsFromRoom,
+			_house.IsAnyoneHome,
+			_house.Forced);
 	}
 
 	/// <summary>Resolves the period for <paramref name="now"/> — and caches it — only if this instant is not the one already resolved.</summary>
