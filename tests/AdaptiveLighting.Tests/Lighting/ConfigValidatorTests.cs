@@ -986,6 +986,53 @@ public sealed class ConfigValidatorTests
 		Assert.AreEqual(0, result.Warnings.Count);
 	}
 
+	/// <summary>
+	///     One helper cannot be both the house mode and the time of day.
+	/// </summary>
+	/// <remarks>
+	///     Both are <c>input_select</c>s, so every other rule passes and the document looks fine. What follows is
+	///     not cosmetic: under Adaptive-lighting authority the mirror writes the period's option to this entity on
+	///     every tick, and that is the same entity the auto-away write, <c>SetsMode</c> and the resets set a MODE
+	///     on — so Away and Sleep would be overwritten within a tick of being set. Lights that will not go off.
+	/// </remarks>
+	[TestMethod]
+	public void PeriodSelect_OnTheHouseModesOwnHelper_IsADocumentError()
+	{
+		AdaptiveLightingConfig config = WithPeriodSelect(
+			PeriodAuthority.AdaptiveLighting,
+			"input_select.husmodus",
+			("Dag", "day"));
+
+		config.Global.HouseMode = new HouseModeConfig
+		{
+			Entity = "input_select.husmodus",
+			Options = [new HouseModeOptionConfig { Value = "Hjemme", Kind = ModeKind.Normal }]
+		};
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid, "the two would overwrite each other every tick");
+		Assert.IsTrue(result.Errors.Any(error => error.Contains("house-mode select", StringComparison.Ordinal)));
+	}
+
+	/// <summary>
+	///     Mappings with no entity are a household told nothing while the engine ignores what it said.
+	/// </summary>
+	/// <remarks>
+	///     Every other branch is gated on the entity being present, and the normaliser cannot drop the block because
+	///     rows exist — so without this rule the document says Home Assistant owns the time of day, the reader is
+	///     never built, the schedule quietly stays in charge, and nothing anywhere says so.
+	/// </remarks>
+	[TestMethod]
+	public void PeriodSelect_WithMappingsButNoEntity_Warns()
+	{
+		ValidationResult result = ConfigValidator.Validate(
+			WithPeriodSelect(entity: null, options: [("Dag", "day")]));
+
+		Assert.IsTrue(result.IsValid, "it is a misconfiguration, not an unsaveable document");
+		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("names no Entity", StringComparison.Ordinal)));
+	}
+
 	[TestMethod]
 	public void PeriodSelect_NotAnInputSelect_IsADocumentError()
 	{

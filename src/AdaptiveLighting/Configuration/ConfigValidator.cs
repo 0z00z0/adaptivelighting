@@ -93,8 +93,36 @@ public static class ConfigValidator
 		if (config.Global.PeriodSelect is not { } select)
 			return;
 
+		// Mappings but no entity: the document says Home Assistant owns the time of day and then names nothing to
+		// read it from. PeriodSelectReader.For returns null, so the engine silently keeps following the schedule —
+		// and every other branch below is skipped, so without this the household is told nothing at all. The
+		// normaliser cannot help either: rows exist, so the block is not empty enough to drop.
+		if (string.IsNullOrWhiteSpace(select.Entity) && select.Options.Count > 0)
+		{
+			result.AddWarning(
+				$"[PeriodSelect] maps {select.Options.Count} option(s) to periods but names no Entity, so nothing "
+				+ "reads or writes them and the schedule stays in charge. Name the input_select, or remove the block.");
+		}
+
 		if (select.Entity is { Length: > 0 } entity)
 		{
+			// One helper cannot be both the house mode and the time of day. Both are input_selects, so every other
+			// rule here passes — and the consequence is not cosmetic: under AdaptiveLighting authority
+			// ModeMonitor.MirrorPeriodSelect writes the period's option to this entity on every tick, which is the
+			// same entity the auto-away write, SetsMode and Reset are all setting a MODE on. Away and Sleep would
+			// then be overwritten within one tick of being set — lights that will not go off — or, if the helper
+			// does not carry the period strings at all, an option Home Assistant rejects and the mirror re-sends
+			// forever. The exclusivity of the two authorities is per object; it cannot see two objects aimed at one
+			// helper, so the check has to live here.
+			if (config.Global.HouseMode?.Entity is { Length: > 0 } houseModeEntity
+				&& string.Equals(entity.Trim(), houseModeEntity.Trim(), StringComparison.OrdinalIgnoreCase))
+			{
+				result.AddError(
+					$"[PeriodSelect] Entity '{entity}' is also the house-mode select. One helper cannot carry both "
+					+ "the house mode and the time of day: the two would overwrite each other every tick. Give the "
+					+ "periods their own input_select.");
+			}
+
 			// The domain is an error because it can never work: nothing but an input_select has options to read or
 			// write. An id Home Assistant does not know is only a warning, on the same argument the outdoor lux
 			// sensor gets — it fails open in both directions (a missing select yields no override under HomeAssistant

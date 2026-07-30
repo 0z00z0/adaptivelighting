@@ -656,6 +656,15 @@ public sealed class ModeMonitor : IDisposable
 	///     (<see cref="OnPeriodSelectChanged"/>), from Home Assistant's thread, and a transition read but not yet
 	///     recorded would be acted on by both callers — two <c>SetsMode</c> writes, and a period-start reset firing
 	///     twice. Deciding and claiming together makes the second caller see a boundary already taken.
+	///     <para>
+	///         <b>The period is read inside the gate, not before it.</b> Moving only the claim under the lock left
+	///         the <i>input</i> to the decision outside it, which is the same bug wearing a hat: thread A reads
+	///         "evening", thread B runs the whole method and claims "night", then A takes the gate still holding
+	///         "evening" and fires a backwards entry that never happened — and regresses
+	///         <see cref="_previousPeriodName"/> so the night entry fires again on the next tick. The read is a
+	///         dictionary lookup against NetDaemon's state cache plus a sort; it blocks on nothing and cannot
+	///         re-enter this gate.
+	///     </para>
 	/// </remarks>
 	private void OnTick()
 	{
@@ -663,25 +672,40 @@ public sealed class ModeMonitor : IDisposable
 
 		// Read before the lock: these consult Home Assistant, and the gate is for this object's own fields.
 		HouseModeOptionConfig? activeOption = CurrentOption;
-		string? currentPeriodName = _circadian.ActivePeriodName(now);
 		bool modeIsReadable = CurrentModeValue is { Length: > 0 };
 
+		// A period select that cannot be read right now is NOT a period change. Under Home Assistant authority
+		// OverriddenPeriod() returns null while the helper is unavailable — an HA restart, a reload, an edit — and
+		// ActivePeriodName then falls through to the clock. That answer is indistinguishable from a real one, so a
+		// household holding "day" at 23:30 would have the clock's "night" counted as an entry: night's SetsMode
+		// latches the house to Sover, and when the helper comes back nothing puts it right, because "day" normally
+		// sets no mode. Levels revert on their own; a latched mode does not, and that asymmetry is the whole defect.
+		bool overrideIsBlind = _periodSelect is { ReadPeriod: not null } reader && reader.CurrentValue() is null;
+
+		string? currentPeriodName;
 		bool entered;
 		bool applyOnStart;
 
 		lock (_gate)
 		{
+			currentPeriodName = _circadian.ActivePeriodName(now);
+
 			// Period entry: the active period changed since the previous evaluation.
-			entered = currentPeriodName is { Length: > 0 }
+			entered = !overrideIsBlind
+				&& currentPeriodName is { Length: > 0 }
 				&& _previousPeriodName is { Length: > 0 }
 				&& !string.Equals(currentPeriodName, _previousPeriodName, StringComparison.OrdinalIgnoreCase);
 
 			applyOnStart = !entered
+				&& !overrideIsBlind
 				&& _startPeriodModePending
 				&& currentPeriodName is { Length: > 0 }
 				&& modeIsReadable;
 
-			_previousPeriodName = currentPeriodName;
+			// A blind read is not evidence about which period is running, so it must not overwrite the last thing
+			// that was. Recording the clock's guess here would make the helper's recovery look like a fresh entry.
+			if (!overrideIsBlind)
+				_previousPeriodName = currentPeriodName;
 
 			// The one restart chance is spent by an entry — which has already had the say the restart rule would
 			// have had — or by using it. A tick that could read neither the period nor the select leaves it armed.

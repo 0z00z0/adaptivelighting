@@ -952,10 +952,15 @@ public sealed class ModeMonitorTests
 	}
 
 	/// <summary>
-	///     The flip now calls the tick body from Home Assistant's thread while the scheduler calls it too, so the
-	///     period transition is claimed under the lock that reads it. Without that, both callers would see the same
-	///     untaken boundary and the period's SetsMode would fire twice.
+	///     Two options mapping to one period are one period: flipping between them re-enters nothing.
 	/// </summary>
+	/// <remarks>
+	///     <b>This test is single-threaded and does not pin the locking.</b> Its remark used to claim it covered the
+	///     "claimed under the lock that reads it" change; it does not — it passes identically against the shape
+	///     before that change, because that shape also recorded the period before returning. The claim was found by
+	///     a review that then showed the locking was still incomplete, which is precisely the false confidence a
+	///     remark like that buys. What this test does pin is in its name, and that is worth having.
+	/// </remarks>
 	[TestMethod]
 	public void PeriodSelect_UnderHomeAssistantAuthority_AFlipWithinOnePeriod_ChangesNothing()
 	{
@@ -983,6 +988,31 @@ public sealed class ModeMonitorTests
 
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"),
 			"an option nothing maps is not an opinion, so the clock's own night boundary still arrives");
+	}
+
+	/// <summary>
+	///     A select that cannot be read is not a period change, and must not latch a mode the household never chose.
+	/// </summary>
+	/// <remarks>
+	///     <b>The asymmetry that makes this a defect rather than a fail-open.</b> When the helper goes unavailable —
+	///     an HA restart, a reload, an edit — the override reads null and the clock answers instead. Levels revert on
+	///     their own the moment it comes back. A <c>SetsMode</c> does not: night latches the house to Sover, and
+	///     "day" normally sets no mode, so nothing puts it right. A household up late, holding the select on Dag at
+	///     23:30, would find the house asleep because a helper blinked.
+	/// </remarks>
+	[TestMethod]
+	public void PeriodSelect_UnreadableForAMoment_DoesNotLatchTheClocksPeriodMode()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.HomeAssistant, Norwegian()),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Dag"));
+
+		// The household is holding "Dag" deliberately. The helper drops out, and the clock crosses into night.
+		rig.Ha.SetState(PeriodSelect, "unavailable");
+
+		Advance(rig, TimeSpan.FromHours(4));   // 20:00 → midnight, over the 23:00 boundary
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"),
+			"the clock's answer is a fallback, not a choice — it must not fire the night's SetsMode");
 	}
 
 	[TestMethod]
