@@ -93,7 +93,8 @@ public sealed class ModeMonitorTests
 
 		var monitor = new ModeMonitor(
 			ha, global, NullLogger.Instance, scheduler,
-			periods ?? Periods(), () => SunTimes.Unknown, motion ?? [], lastPeriod ?? note);
+			periods ?? Periods(), () => SunTimes.Unknown, motion ?? [], lastPeriod ?? note,
+			PeriodSelectReader.For(ha, global, NullLogger.Instance));
 
 		return new Rig(ha, scheduler, monitor, note);
 	}
@@ -792,6 +793,180 @@ public sealed class ModeMonitorTests
 
 		rig.Ha.Trigger(Select, "Borte");
 		Assert.IsNull(rig.Monitor.Forced, "a hand-set Borte is not the idle rule's, whatever the rule did earlier");
+	}
+
+	// ---- the period select ---------------------------------------------------------------------
+
+	private const string PeriodSelect = "input_select.tid_pa_dagen";
+
+	private static GlobalConfig WithPeriodSelect(PeriodAuthority authority, params (string Value, string Period)[] options) =>
+		new()
+		{
+			CircadianTickSeconds = 60,
+			HouseMode = Mode(),
+			PeriodSelect = new PeriodSelectConfig
+			{
+				Entity = PeriodSelect,
+				Authority = authority,
+				Options = [.. options.Select(row => new PeriodSelectOptionConfig { Value = row.Value, Period = row.Period })]
+			}
+		};
+
+	/// <summary>The three periods of <see cref="Periods"/>, mapped to a Norwegian dropdown.</summary>
+	private static (string Value, string Period)[] Norwegian() =>
+		[("Morgen", "morning"), ("Kveld", "evening"), ("Natt", "night")];
+
+	private static int PeriodSelectCalls(FakeHaContext ha, string option) =>
+		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"
+			&& c.Target?.EntityIds?.Contains(PeriodSelect) == true && OptionOf(c) == option);
+
+	private static int AnyPeriodSelectCalls(FakeHaContext ha) =>
+		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"
+			&& c.Target?.EntityIds?.Contains(PeriodSelect) == true);
+
+	[TestMethod]
+	public void PeriodSelect_UnderOurAuthority_IsWrittenToTheActivePeriod_Once()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.AdaptiveLighting, Norwegian()),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Morgen"));
+
+		Advance(rig, TimeSpan.FromMinutes(1));
+
+		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Kveld"), "20:00 is the evening period, and the select says so");
+
+		// Home Assistant echoes the write back, exactly as it would in the house.
+		rig.Ha.Trigger(PeriodSelect, "Kveld");
+		Advance(rig, TimeSpan.FromMinutes(5));
+
+		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Kveld"),
+			"the write is idempotent — a select already showing the period is left alone");
+	}
+
+	[TestMethod]
+	public void PeriodSelect_UnderOurAuthority_FollowsTheBoundary()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.AdaptiveLighting, Norwegian()),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Kveld"));
+
+		Advance(rig, TimeSpan.FromHours(2) + TimeSpan.FromMinutes(59));   // 22:59, still the evening
+		Assert.AreEqual(0, AnyPeriodSelectCalls(rig.Ha), "the evening is already showing, so nothing is written");
+
+		Advance(rig, TimeSpan.FromMinutes(1));   // 23:00 — one tick inside the night
+
+		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Natt"), "the boundary moved, so the mirror moved with it");
+
+		rig.Ha.Trigger(PeriodSelect, "Natt");   // Home Assistant echoes it back
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Natt"), "and then it is left alone for the rest of the period");
+	}
+
+	/// <summary>
+	///     A select that never echoes is asked again, rather than being written once and abandoned.
+	/// </summary>
+	/// <remarks>
+	///     The deliberate cost of comparing against what the select actually reads instead of remembering what was
+	///     asked for. In the house Home Assistant echoes within milliseconds, so this is one call; the retry is what
+	///     makes an option the select rejects, or a helper that came back on the wrong value, self-correcting rather
+	///     than permanently wrong. The log line is bounded separately, on the distinct option.
+	/// </remarks>
+	[TestMethod]
+	public void PeriodSelect_UnderOurAuthority_AsksAgainWhileTheSelectStillDisagrees()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.AdaptiveLighting, Norwegian()),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Morgen"));
+
+		Advance(rig, TimeSpan.FromMinutes(3));   // three ticks, and the select never moves
+
+		Assert.AreEqual(3, PeriodSelectCalls(rig.Ha, "Kveld"),
+			"a write that landed nowhere is retried, so the mirror cannot be left silently wrong");
+	}
+
+	/// <summary>
+	///     A select somebody moved by hand — or one that came back from a Home Assistant restart on the wrong
+	///     option — is put right rather than left disagreeing with the lights for hours. A remembered "we already
+	///     asked for this" latch would have made both of those permanent.
+	/// </summary>
+	[TestMethod]
+	public void PeriodSelect_UnderOurAuthority_CorrectsADriftedSelect()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.AdaptiveLighting, Norwegian()),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Kveld"));
+
+		Advance(rig, TimeSpan.FromMinutes(1));
+		Assert.AreEqual(0, AnyPeriodSelectCalls(rig.Ha));
+
+		rig.Ha.Trigger(PeriodSelect, "Morgen");   // somebody turns the dial at eight in the evening
+
+		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Kveld"),
+			"the flip is seen at once, and the engine says what the period actually is");
+	}
+
+	[TestMethod]
+	public void PeriodSelect_UnderOurAuthority_WritesNothing_ForAnUnmappedPeriod()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.AdaptiveLighting, [("Natt", "night")]),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Morgen"));
+
+		Advance(rig, TimeSpan.FromMinutes(1));
+
+		Assert.AreEqual(0, AnyPeriodSelectCalls(rig.Ha),
+			"no row maps the evening, so there is nothing to write — and guessing at an option is not the answer");
+	}
+
+	/// <summary>The whole of the authority rule, from the outside: Home Assistant's select is never written to.</summary>
+	[TestMethod]
+	public void PeriodSelect_UnderHomeAssistantAuthority_IsNeverWritten()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.HomeAssistant, Norwegian()),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Morgen"));
+
+		Advance(rig, TimeSpan.FromHours(6));   // across two of the table's boundaries
+
+		Assert.AreEqual(0, AnyPeriodSelectCalls(rig.Ha),
+			"the engine follows this select; writing it would have it chasing its own tail through Home Assistant");
+	}
+
+	/// <summary>
+	///     Under Home Assistant's authority the select <i>is</i> the period boundary, so a period's SetsMode has to
+	///     fire on the flip rather than up to a whole tick later.
+	/// </summary>
+	[TestMethod]
+	public void PeriodSelect_UnderHomeAssistantAuthority_AFlipFiresSetsMode()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.HomeAssistant, Norwegian()),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Kveld"));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "the evening sets no mode");
+
+		// Periods() gives night SetsMode: Sover. The clock has not moved at all.
+		rig.Ha.Trigger(PeriodSelect, "Natt");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"),
+			"the household selected the night, so the night's mode applies — without waiting for the tick");
+	}
+
+	[TestMethod]
+	public void PeriodSelect_UnderHomeAssistantAuthority_AnUnmappedOptionLeavesTheScheduleInCharge()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.HomeAssistant, Norwegian()),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Siesta"));
+
+		Advance(rig, TimeSpan.FromHours(4));   // 20:00 → midnight, over the 23:00 night boundary
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"),
+			"an option nothing maps is not an opinion, so the clock's own night boundary still arrives");
+	}
+
+	[TestMethod]
+	public void PeriodSelect_Absent_ChangesNothing()
+	{
+		Rig rig = Started(startAt: Evening, initialSelect: "Hjemme");
+
+		Advance(rig, TimeSpan.FromHours(4));
+
+		Assert.AreEqual(0, AnyPeriodSelectCalls(rig.Ha), "no select is configured, so none is written");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "and the schedule drives the mode exactly as it always did");
 	}
 
 	// ---- Master-switch default ----------------------------------------------------------------
