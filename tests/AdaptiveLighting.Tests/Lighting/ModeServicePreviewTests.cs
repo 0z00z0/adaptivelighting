@@ -152,6 +152,64 @@ public sealed class ModeServicePreviewTests
 		Assert.AreEqual("everyday lighting — the \"evening\" period right now", preview.EffectSummary);
 	}
 
+	// ===================== the preview under Home Assistant's period authority =====================
+
+	/// <summary>
+	///     <b>The preview builds its own calculator, and the calculator has to know about the period select.</b>
+	///     Under <see cref="PeriodAuthority.HomeAssistant"/> the engine takes the period from the dropdown and
+	///     never from the clock, so a card resolving 20:00 to "evening" while every room ran "night" would be a
+	///     confident wrong answer on the page somebody opens to find out what a mode does.
+	/// </summary>
+	[TestMethod]
+	public void The_Preview_Follows_The_Period_Select_When_Home_Assistant_Owns_The_Time_Of_Day()
+	{
+		AdaptiveLightingConfig config = CabinConfig();
+		config.Global.PeriodSelect = new PeriodSelectConfig
+		{
+			Entity = "input_select.tid",
+			Authority = PeriodAuthority.HomeAssistant,
+			Options = [new PeriodSelectOptionConfig { Value = "Natt", Period = "night" }]
+		};
+
+		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(20), NoSun, "Natt");
+
+		Assert.AreEqual("night", preview.ActivePeriodName, "20:00 is the evening period on the clock, and the clock is not deciding");
+		Assert.AreEqual(15d, preview.PreviewBrightness);
+		Assert.AreEqual(2200, preview.PreviewKelvin);
+	}
+
+	/// <summary>
+	///     The mirror direction ignores the dropdown, and so does an option nothing maps: both leave the engine on
+	///     its own schedule, so both leave the preview there too.
+	/// </summary>
+	[TestMethod]
+	public void The_Preview_Ignores_The_Select_Where_The_Engine_Does()
+	{
+		AdaptiveLightingConfig mirror = CabinConfig();
+		mirror.Global.PeriodSelect = new PeriodSelectConfig
+		{
+			Entity = "input_select.tid",
+			Authority = PeriodAuthority.AdaptiveLighting,
+			Options = [new PeriodSelectOptionConfig { Value = "Natt", Period = "night" }]
+		};
+
+		Assert.AreEqual("evening", ModeService.ComputePreview(mirror, ModeKind.Normal, At(20), NoSun, "Natt").ActivePeriodName);
+
+		AdaptiveLightingConfig follows = CabinConfig();
+		follows.Global.PeriodSelect = new PeriodSelectConfig
+		{
+			Entity = "input_select.tid",
+			Authority = PeriodAuthority.HomeAssistant,
+			Options = [new PeriodSelectOptionConfig { Value = "Natt", Period = "night" }]
+		};
+
+		Assert.AreEqual("evening", ModeService.ComputePreview(follows, ModeKind.Normal, At(20), NoSun, "Fest").ActivePeriodName,
+			"an option no row maps leaves the engine on its schedule, and the card with it");
+
+		Assert.AreEqual("evening", ModeService.ComputePreview(follows, ModeKind.Normal, At(20), NoSun).ActivePeriodName,
+			"an unreadable select is the same answer said a different way");
+	}
+
 	// ===================== derived kind from the current option =====================
 
 	[TestMethod]
