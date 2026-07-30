@@ -507,6 +507,16 @@
 			Logger.LogError(exception, "Could not commit the commissioning board.");
 			_saveMessage = exception.Message;
 		}
+		catch (InvalidOperationException exception)
+		{
+			// What every read in this project treats as "Home Assistant is not answering". The save path guards it
+			// where it knows about it, but a commit runs the validator and then rebuilds every area controller, and
+			// an unhandled throw here does not fail the button — it terminates the Blazor circuit and takes the
+			// whole page with it. On the one surface a brand-new install lands on, that is the worst possible
+			// failure: nothing has been written, and there is nothing left on screen to say so.
+			Logger.LogError(exception, "Could not commit the commissioning board: Home Assistant is not answering.");
+			_saveMessage = "Home Assistant stopped answering, so nothing was written. Try again in a moment.";
+		}
 		finally
 		{
 			_busy = false;
