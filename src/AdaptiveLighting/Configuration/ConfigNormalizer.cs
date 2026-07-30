@@ -57,6 +57,20 @@ public static class ConfigNormalizer
 			&& houseMode.Options.Count == 0)
 			global.HouseMode = null;
 
+		// The period select gets the same two-step treatment, and for the same reason the HouseMode drop above
+		// exists: an editor that binds the object into existence to draw a form must not leave a PeriodSelect:
+		// block in the file of a household that never adopted the feature. A row saying nothing goes first, so a
+		// block that held only cleared rows can then be recognised as empty and go too.
+		if (global.PeriodSelect is { } periodSelect)
+		{
+			periodSelect.Options.RemoveAll(option => option.IsEmpty);
+
+			// Authority is deliberately not consulted: it defaults to AdaptiveLighting and means nothing at all
+			// without an entity, so a block carrying only a non-default Authority is still a block saying nothing.
+			if (string.IsNullOrWhiteSpace(periodSelect.Entity) && periodSelect.Options.Count == 0)
+				global.PeriodSelect = null;
+		}
+
 		// A levels row with neither value set says nothing at all, and an editor that draws a row per period
 		// produces one the moment somebody clears both fields. Dropped on save so the file records only the
 		// periods a room actually disagrees about — which is also what makes "this room has levels" a question the

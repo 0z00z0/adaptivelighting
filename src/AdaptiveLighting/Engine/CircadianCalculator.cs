@@ -94,12 +94,25 @@ public sealed record DroppedPeriod(string PeriodName, string Start, PeriodDropRe
 ///         boundary resolution. So <see cref="LevelsOf"/> is the single place a room's effective level is decided,
 ///         and everything downstream reads what it returned.
 ///     </para>
+///     <para>
+///         <b>The clock is not always what decides which period is in force.</b> Under
+///         <see cref="PeriodAuthority.HomeAssistant"/> a Home Assistant dropdown does, through the optional
+///         override delegate, and <see cref="OverriddenPeriod"/> is the one point both public answers go through
+///         so they cannot disagree. <see cref="GetPeriodTarget"/> is deliberately outside that: it is asked for a
+///         period <i>by name</i> — the sleep clamp reaching for the night rules — and a caller that named a period
+///         must get the one it named.
+///     </para>
 /// </remarks>
 public sealed class CircadianCalculator
 {
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
 	private readonly GlobalConfig _global;
 	private readonly Func<SunTimes> _sunTimes;
+
+	// Names the period to run instead of resolving one from the clock. Null on every calculator except those built
+	// under HomeAssistant period authority, so a house that has never heard of the select resolves exactly as it
+	// always did — the delegate is not installed, rather than installed and returning null.
+	private readonly Func<string?>? _periodOverride;
 
 	// The room's overrides, indexed the way every other period-name lookup in the engine matches: by name,
 	// case-insensitively. First row wins on a duplicate, matching how the validator reports one (and how the
@@ -147,15 +160,24 @@ public sealed class CircadianCalculator
 	///     matched: the validator reports the rename, and dropping somebody's levels here would make that report the
 	///     only trace they ever existed.
 	/// </param>
+	/// <param name="periodOverride">
+	///     Names the period to run <i>instead of</i> resolving one from the clock, or <c>null</c> — the default and
+	///     the behaviour of every caller that says nothing — to resolve from the schedule exactly as before. Supplied
+	///     by <see cref="PeriodSelectReader.ReadPeriod"/> under <see cref="PeriodAuthority.HomeAssistant"/> and by
+	///     nothing else; a delegate rather than a value because it is read live, and a delegate rather than an
+	///     <c>IHaContext</c> for the same reason <paramref name="sunTimes"/> is one.
+	/// </param>
 	public CircadianCalculator(
 		IReadOnlyList<TimePeriodConfig> periods,
 		GlobalConfig global,
 		Func<SunTimes> sunTimes,
-		IReadOnlyList<RoomLevelOverride>? roomLevels = null)
+		IReadOnlyList<RoomLevelOverride>? roomLevels = null,
+		Func<string?>? periodOverride = null)
 	{
 		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_sunTimes = sunTimes ?? throw new ArgumentNullException(nameof(sunTimes));
+		_periodOverride = periodOverride;
 
 		Dictionary<string, RoomLevelOverride> levels = new(StringComparer.OrdinalIgnoreCase);
 
@@ -195,9 +217,23 @@ public sealed class CircadianCalculator
 	///     The target at <paramref name="now"/>, or <c>null</c> when no period can be placed — an all-sun-anchored
 	///     table during polar night, say. A caller that gets <c>null</c> must command nothing rather than guess.
 	/// </summary>
-	/// <remarks>There is one shared table now (09 §3.5): every period is a candidate, full stop.</remarks>
+	/// <remarks>
+	///     <para>There is one shared table now (09 §3.5): every period is a candidate, full stop.</para>
+	///     <para>
+	///         <b>Under an override the blend is gone and the change is a step.</b> That is accepted and intended:
+	///         a period the household selected has no boundary <i>time</i> to interpolate away from — it began the
+	///         instant somebody moved the dropdown — so there is nothing to blend across. Inventing one would mean
+	///         the engine picking a boundary nobody configured and then easing toward a period that was already in
+	///         force, which is a smoother lie rather than a truer answer. See <see cref="PeriodAuthority"/>.
+	///     </para>
+	/// </remarks>
 	public LightTarget? GetTarget(DateTimeOffset now)
 	{
+		// Asked before the clock is consulted at all, so the override and ActivePeriodName can never disagree about
+		// which period is in force — the caps, the reported name and the levels are one answer or none.
+		if (OverriddenPeriod() is { } forced)
+			return GetPeriodTarget(forced.Name);
+
 		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = ResolveBoundaries();
 		if (boundaries.Count == 0)
 			return null;
@@ -297,6 +333,9 @@ public sealed class CircadianCalculator
 	/// </summary>
 	public string? ActivePeriodName(DateTimeOffset now)
 	{
+		if (OverriddenPeriod() is { } forced)
+			return forced.Name;
+
 		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = ResolveBoundaries();
 		if (boundaries.Count == 0)
 			return null;
@@ -304,6 +343,28 @@ public sealed class CircadianCalculator
 		int index = ActiveIndex(boundaries, TimeOnly.FromTimeSpan(now.TimeOfDay));
 		return boundaries[index].Period.Name;
 	}
+
+	/// <summary>
+	///     The period an override names, or <c>null</c> when there is no override or it names nothing this table has.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>The single point every consumer of an override goes through.</b> <see cref="GetTarget"/> and
+	///         <see cref="ActivePeriodName"/> both ask it, first, before touching the clock — so the period a room is
+	///         lit for, the name a card shows and the boundary <see cref="ModeMonitor"/> watches for cannot come from
+	///         two different answers. Splitting the check would put the disagreement exactly where nobody looks.
+	///     </para>
+	///     <para>
+	///         A name matching no configured period falls through to the schedule rather than stopping the house.
+	///         The validator refuses that mapping at document level and <see cref="PeriodSelectReader"/> says the
+	///         value once, so both halves are already reported; commanding nothing on top of that would take a room
+	///         dark over a typo in a dropdown.
+	///     </para>
+	/// </remarks>
+	private TimePeriodConfig? OverriddenPeriod() =>
+		_periodOverride?.Invoke() is { Length: > 0 } name
+			? _periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase))
+			: null;
 
 	private List<(TimeOnly Start, TimePeriodConfig Period)> ResolveBoundaries()
 	{

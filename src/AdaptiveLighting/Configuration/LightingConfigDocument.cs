@@ -328,6 +328,17 @@ public static class LightingConfigDocument
 			}
 		}
 
+		// Exactly the HouseMode.Options repair above, for exactly the same reason: a bare `Options:` line under
+		// PeriodSelect is valid YAML for "this key is null", YamlDotNet honours it literally, and the assignment
+		// lands over the property initialiser — so the model's never-null list comes back null and the first read
+		// of it throws out of Reload, which is documented never to throw and whose caller dying takes the Home
+		// Assistant connection and the web UI down with it. One blank line has already done that once.
+		if (global.PeriodSelect is { } periodSelect)
+		{
+			repaired |= NullSafeList(periodSelect.Options, out List<PeriodSelectOptionConfig> periodOptions);
+			periodSelect.Options = periodOptions;
+		}
+
 		// An area's own entity lists are nullable by design — null means "let discovery find them" — so only their
 		// contents are repaired, never their absence. Levels is not one of those: the model says it is never null,
 		// so a bare `Levels:` assigning null over the initialiser would take the room down at build time, which is

@@ -58,6 +58,19 @@ public sealed class LightingOrchestrator : IDisposable
 
 	private PresenceMonitor? _presence;
 	private ModeMonitor? _modes;
+
+	/// <summary>
+	///     The period select, built once here and handed to both directions that can use it.
+	/// </summary>
+	/// <remarks>
+	///     <b>This is the single construction site the authority rule rests on.</b> The calculators are handed
+	///     <see cref="PeriodSelectReader.ReadPeriod"/> and the mode brain is handed the whole reader; exactly one of
+	///     the reader's two delegates is non-null, so "the engine follows the select" and "the engine writes the
+	///     select" are not two flags that could both come out true — they are two branches of one object built from
+	///     one enum. <c>null</c> when no select is configured, which is every house today.
+	/// </remarks>
+	private PeriodSelectReader? _periodSelect;
+
 	private bool _started;
 
 	/// <summary>Creates an orchestrator. Nothing is wired until <see cref="Start"/>.</summary>
@@ -140,6 +153,15 @@ public sealed class LightingOrchestrator : IDisposable
 
 		_logger.LogInformation("Starting adaptive lighting: {ConfigName}, {AreaCount} areas configured.",
 			_config.ConfigName ?? "(unnamed)", _config.Areas.Count);
+
+		// Built before the areas, because every one of their calculators is handed its read delegate.
+		_periodSelect = PeriodSelectReader.For(_ha, _config.Global, _loggerFactory.CreateLogger<PeriodSelectReader>());
+
+		if (_periodSelect is { } select)
+			_logger.LogInformation(
+				"Period select {Entity}: {Authority} decides the time of day.",
+				select.Entity,
+				select.ReadPeriod is not null ? "Home Assistant" : "adaptive lighting (the select mirrors the schedule)");
 
 		HaAreaRegistry registry = new(_registry);
 		AreaEntityResolver resolver = new(
@@ -271,7 +293,10 @@ public sealed class LightingOrchestrator : IDisposable
 			_config.Periods,
 			_config.Global,
 			() => ReadSunTimes(resolved.Settings.SunEntity),
-			config.Levels);
+			config.Levels,
+			// Null unless Home Assistant owns the periods, so a house without the select — every house today —
+			// builds the calculator it always built rather than one carrying an override that answers null.
+			_periodSelect?.ReadPeriod);
 
 		// Surface any period the calculator cannot use, so a dropped boundary is a logged warning rather than a
 		// silent hole the table wraps over — the failure behind an area "showing night at 04:16" when its
@@ -314,7 +339,10 @@ public sealed class LightingOrchestrator : IDisposable
 			_config.Periods,
 			() => ReadSunTimes(_config.Defaults.SunEntity),
 			_motionSensorUnion,
-			_lastPeriod);
+			_lastPeriod,
+			// The same reader the calculators got. Its own calculator therefore follows the same override, so the
+			// period boundary the mode brain acts on is the one the rooms are lit for.
+			_periodSelect);
 
 		_subscriptions.Add(_presence.Events.SubscribeSafe((PresenceEvent _) => PublishHouseState(), _logger));
 		_subscriptions.Add(_modes.Changed.SubscribeSafe((Unit _) => PublishHouseState(), _logger));

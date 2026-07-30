@@ -527,7 +527,15 @@ public sealed class LightingEngineHost : IDisposable
 		// leaves KillSwitchEntity unset. Never written back to the document.
 		config.Global.DefaultKillSwitchEntity = _defaultKillSwitchEntity;
 
-		return ConfigValidator.Validate(config, KnownEntityIds(), KnownAreaIds(), LiveSelectOptions(config.Global.HouseMode?.Entity), LabelsInUse());
+		// Both selects' live options, read separately: they are two different helpers, and checking one document's
+		// option strings against the other's list would report renames that never happened.
+		return ConfigValidator.Validate(
+			config,
+			KnownEntityIds(),
+			KnownAreaIds(),
+			LiveSelectOptions(config.Global.HouseMode?.Entity),
+			LabelsInUse(),
+			LiveSelectOptions(config.Global.PeriodSelect?.Entity));
 	}
 
 	/// <summary>Stops the engine and drops the Home Assistant connection.</summary>

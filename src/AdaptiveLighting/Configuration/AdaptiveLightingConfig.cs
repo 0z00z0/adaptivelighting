@@ -114,6 +114,17 @@ public class GlobalConfig
 	public HouseModeConfig? HouseMode { get; set; }
 
 	/// <summary>
+	///     The <c>input_select</c> tied to the circadian period table, and which side of it decides.
+	/// </summary>
+	/// <remarks>
+	///     <c>null</c> when unconfigured, which is every document written before it existed — and, under OmitNull,
+	///     what keeps those documents byte-identical through a save. <see cref="ConfigNormalizer"/> puts an empty one
+	///     back to <c>null</c> for the same reason it does to <see cref="HouseMode"/>: a page that binds the object
+	///     into existence must not leave a <c>PeriodSelect:</c> block in a file that never adopted the feature.
+	/// </remarks>
+	public PeriodSelectConfig? PeriodSelect { get; set; }
+
+	/// <summary>
 	///     The house's outdoor lux sensor, offered to the rooms that ask for it by name.
 	/// </summary>
 	/// <remarks>

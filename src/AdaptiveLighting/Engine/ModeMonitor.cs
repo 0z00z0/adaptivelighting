@@ -44,6 +44,9 @@ public sealed class ModeMonitor : IDisposable
 	/// </summary>
 	private readonly ILastPeriodStore? _lastPeriod;
 
+	/// <summary>The period select, or <c>null</c> when none is configured. Which direction it grants is its own to say.</summary>
+	private readonly PeriodSelectReader? _periodSelect;
+
 	private readonly Subject<Unit> _changed = new();
 	private readonly CompositeDisposable _subscriptions = [];
 	private readonly object _gate = new();
@@ -70,6 +73,10 @@ public sealed class ModeMonitor : IDisposable
 	// The last sentence AnnounceForcedMode wrote, so a forcing entity that stays on is stated once rather than on
 	// every edge that re-reads it. Empty means "nothing was being forced last time we looked".
 	private string _announcedForce = "";
+
+	// The option MirrorPeriodSelect last asked the period select for. It bounds the log line only — the call itself
+	// is decided by comparing against what the select actually reads, so a select that never echoes is asked again.
+	private string? _mirroredPeriodOption;
 
 	// Armed by Start and spent on the first tick that can read the select: the one chance a restart gets to notice
 	// that a boundary went by while it was stopped. Held open until the select answers, because after a Home
@@ -102,6 +109,14 @@ public sealed class ModeMonitor : IDisposable
 	///     knows that a boundary was crossed during an outage, and therefore never re-applies a mode after a restart,
 	///     which is the behaviour every build before this one had.
 	/// </param>
+	/// <param name="periodSelect">
+	///     The period <c>input_select</c>, or <c>null</c> when none is configured. Whichever of its two directions is
+	///     live is the one this uses: under Home Assistant authority its read delegate goes into this monitor's own
+	///     calculator, so the boundary the mode brain watches for is the one the rooms are lit for; under adaptive
+	///     lighting's own authority this writes it, beside <see cref="OnPeriodEntered"/>'s <c>SetsMode</c> and the
+	///     across-restart catch-up. The object is what makes those mutually exclusive — see
+	///     <see cref="PeriodSelectReader"/>.
+	/// </param>
 	public ModeMonitor(
 		IHaContext ha,
 		GlobalConfig global,
@@ -110,7 +125,8 @@ public sealed class ModeMonitor : IDisposable
 		IReadOnlyList<TimePeriodConfig> periods,
 		Func<SunTimes> sunTimes,
 		IReadOnlyCollection<string> areaMotionSensors,
-		ILastPeriodStore? lastPeriod = null)
+		ILastPeriodStore? lastPeriod = null,
+		PeriodSelectReader? periodSelect = null)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
@@ -120,8 +136,9 @@ public sealed class ModeMonitor : IDisposable
 		ArgumentNullException.ThrowIfNull(sunTimes);
 		_areaMotionSensors = areaMotionSensors ?? throw new ArgumentNullException(nameof(areaMotionSensors));
 		_lastPeriod = lastPeriod;
+		_periodSelect = periodSelect;
 
-		_circadian = new CircadianCalculator(periods, global, sunTimes);
+		_circadian = new CircadianCalculator(periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod);
 	}
 
 	/// <summary>Fires whenever the kill switch or the house-mode select changes state.</summary>
@@ -318,6 +335,18 @@ public sealed class ModeMonitor : IDisposable
 				.SubscribeSafe(OnSelectChanged, _logger));
 		}
 
+		// The period select is watched the same way the house-mode select is, whichever direction it runs in: under
+		// Home Assistant authority a flip is a period boundary that did not come from the clock, and waiting for the
+		// tick to notice it would delay a SetsMode by up to a whole CircadianTickSeconds. Under this application's
+		// own authority it fires on the engine's own echo and costs one idempotent re-evaluation.
+		if (_periodSelect is { } periodSelect)
+		{
+			_logger.LogInformation("Watching period select {EntityId}.", periodSelect.Entity);
+			_subscriptions.Add(_ha.Entity(periodSelect.Entity)
+				.StateChanges()
+				.SubscribeSafe(_ => OnPeriodSelectChanged(), _logger));
+		}
+
 		SubscribePresenceResets();
 		SubscribeActivationSensors();
 		SubscribeInactivityActivation();
@@ -350,6 +379,29 @@ public sealed class ModeMonitor : IDisposable
 		}
 
 		AnnounceForcedMode();
+		_changed.OnNext(Unit.Default);
+	}
+
+	/// <summary>
+	///     The period select moved, so the period may have changed without the clock crossing anything.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         Runs the tick body rather than a copy of the period half of it: <see cref="OnTick"/> is idempotent —
+	///         period entry is edge-triggered on a name change, the inactivity rule is latched, and the mirror write
+	///         compares against what the select already reads — so running it early costs nothing and running a
+	///         second implementation of it would be a rule with two homes.
+	///     </para>
+	///     <para>
+	///         <b>What this does not do is retarget the rooms.</b> Each area re-reads its own period on its own tick,
+	///         so a flip reaches the lamps within <see cref="GlobalConfig.CircadianTickSeconds"/> — the same latency
+	///         a clock-driven boundary already has. What it does buy is the mode: a period whose <c>SetsMode</c> puts
+	///         the house to sleep now does so the instant the household selects it.
+	///     </para>
+	/// </remarks>
+	private void OnPeriodSelectChanged()
+	{
+		OnTick();
 		_changed.OnNext(Unit.Default);
 	}
 
@@ -629,6 +681,10 @@ public sealed class ModeMonitor : IDisposable
 		// process dies between the two.
 		RememberPeriod(currentPeriodName);
 
+		// The period select as an output. Beside the two rules above because it answers the same question they do —
+		// which period is in force — and reads the same answer, so the select can never point somewhere the rooms
+		// are not. A no-op unless this application owns the select.
+		MirrorPeriodSelect(currentPeriodName);
 
 		// Auto-away: switch TO an option once the house has been motion-free for its configured span.
 		EvaluateInactivityActivation(now);
@@ -732,6 +788,59 @@ public sealed class ModeMonitor : IDisposable
 
 		_ha.CallService(SelectDomain, SelectOptionService,
 			new ServiceTarget { EntityIds = [select] }, new { option = setsMode.Trim() });
+	}
+
+	/// <summary>
+	///     Points the period select at the period the engine's own schedule resolved.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>A no-op unless this application owns the select.</b> Under
+	///         <see cref="PeriodAuthority.HomeAssistant"/> the reader hands out no
+	///         <see cref="PeriodSelectReader.OptionForPeriod"/> at all, so there is nothing here to write with — the
+	///         two directions are exclusive by construction rather than by a flag this method could get wrong.
+	///     </para>
+	///     <para>
+	///         <b>Edge-triggered by comparison, not by memory.</b> The write happens only when the select is not
+	///         already showing the wanted option, which makes it one call per period change in the ordinary day and
+	///         also self-healing: a select somebody moved by hand, or one that came back from a Home Assistant
+	///         restart on the wrong option, is put right rather than left disagreeing with the lights for hours. A
+	///         remembered "we already asked for this" latch would have been fewer calls and would have made both of
+	///         those permanent.
+	///     </para>
+	///     <para>
+	///         The log line is bounded separately from the call, on the distinct option: an option the select does
+	///         not actually offer is rejected by Home Assistant and would otherwise be retried — correctly — on every
+	///         tick, with a line each time.
+	///     </para>
+	/// </remarks>
+	/// <param name="periodName">The period the schedule resolved, or <c>null</c> when none could be placed.</param>
+	private void MirrorPeriodSelect(string? periodName)
+	{
+		if (_periodSelect is not { OptionForPeriod: { } optionFor } select || periodName is not { Length: > 0 })
+			return;
+
+		if (optionFor(periodName) is not { Length: > 0 } wanted)
+			return;   // no row maps this period; the validator has already said so if it matters
+
+		if (string.Equals(select.CurrentValue(), wanted, StringComparison.OrdinalIgnoreCase))
+			return;   // already showing it
+
+		bool firstTime;
+		lock (_gate)
+		{
+			firstTime = !string.Equals(_mirroredPeriodOption, wanted, StringComparison.OrdinalIgnoreCase);
+			_mirroredPeriodOption = wanted;
+		}
+
+		if (firstTime)
+			_logger.LogInformation("Period '{Period}' is in force; setting {Select} to '{Option}'.",
+				periodName, select.Entity, wanted);
+		else
+			_logger.LogDebug("Period select {Select} still does not read '{Option}'; asking again.", select.Entity, wanted);
+
+		_ha.CallService(SelectDomain, SelectOptionService,
+			new ServiceTarget { EntityIds = [select.Entity] }, new { option = wanted });
 	}
 
 	/// <summary>

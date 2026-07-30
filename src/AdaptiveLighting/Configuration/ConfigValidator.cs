@@ -36,12 +36,19 @@ public static class ConfigValidator
 	///     the resolver does. When <c>null</c>, the include-label warning is skipped, same pattern as
 	///     <paramref name="knownEntityIds"/>.
 	/// </param>
+	/// <param name="livePeriodSelectOptions">
+	///     The live <c>options</c> of the configured period select. A second collection rather than a reuse of
+	///     <paramref name="liveSelectOptions"/>: they are two different helpers, and checking one document's option
+	///     strings against the other helper's list would report renames that had not happened and miss the ones that
+	///     had. When <c>null</c>, the rename warning is skipped.
+	/// </param>
 	public static ValidationResult Validate(
 		AdaptiveLightingConfig config,
 		IReadOnlyCollection<string>? knownEntityIds = null,
 		IReadOnlyCollection<string>? knownAreaIds = null,
 		IReadOnlyCollection<string>? liveSelectOptions = null,
-		IReadOnlyCollection<string>? labelsInUse = null)
+		IReadOnlyCollection<string>? labelsInUse = null,
+		IReadOnlyCollection<string>? livePeriodSelectOptions = null)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
@@ -50,12 +57,93 @@ public static class ConfigValidator
 		ValidateGlobal(config.Global, knownEntityIds, labelsInUse, result);
 		ValidatePeriods(config.Periods, result);
 		ValidateHouseMode(config, knownEntityIds, liveSelectOptions, result);
+		ValidatePeriodSelect(config, knownEntityIds, livePeriodSelectOptions, result);
 		ValidateSettings("Defaults", config.Defaults, result);
 		ValidateAreas(config, knownEntityIds, knownAreaIds, result);
 		ValidateOutdoorLuxOptIn(config, result);
 		ValidateLuxBrightnessSource(config, result);
 
 		return result;
+	}
+
+	/// <summary>
+	///     The <c>input_select</c> tied to the period table, in whichever direction its authority names.
+	/// </summary>
+	/// <remarks>
+	///     <para>
+	///         <b>A mapping that cannot resolve is an error here, where the same shape is a warning for a room's
+	///         levels.</b> The severities are not inconsistent: a levels row naming a renamed period costs one room
+	///         one preference and is nearly always recoverable by hand, whereas a period mapping that resolves to
+	///         nothing leaves the whole house unable to place the time of day the household just selected — under
+	///         <see cref="PeriodAuthority.HomeAssistant"/> that is every room, at once, for as long as the select
+	///         sits on that option.
+	///     </para>
+	///     <para>
+	///         The one thing that is only a warning is a stored <c>Value</c> the live select no longer offers. That
+	///         is a rename in Home Assistant rather than a mistake in this document, the row is inert rather than
+	///         dangerous, and erroring would make the document unsaveable from the very page that exists to fix it.
+	///     </para>
+	/// </remarks>
+	private static void ValidatePeriodSelect(
+		AdaptiveLightingConfig config,
+		IReadOnlyCollection<string>? knownEntityIds,
+		IReadOnlyCollection<string>? livePeriodSelectOptions,
+		ValidationResult result)
+	{
+		if (config.Global.PeriodSelect is not { } select)
+			return;
+
+		if (select.Entity is { Length: > 0 } entity)
+		{
+			// The domain is an error because it can never work: nothing but an input_select has options to read or
+			// write. An id Home Assistant does not know is only a warning, on the same argument the outdoor lux
+			// sensor gets — it fails open in both directions (a missing select yields no override under HomeAssistant
+			// authority, and a mirror write that lands nowhere under AdaptiveLighting), so the house degrades to the
+			// schedule rather than going dark, and refusing the whole document over a typo would be the harsher fault.
+			if (!entity.HasDomain("input_select"))
+				result.AddError($"PeriodSelect.Entity '{entity}' is not an input_select. The time of day is a Home Assistant dropdown helper.");
+			else if (knownEntityIds is not null && !knownEntityIds.Contains(entity))
+				result.AddWarning($"PeriodSelect.Entity '{entity}' is not known to Home Assistant; until it appears, every room follows the schedule.");
+		}
+
+		HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+
+		foreach (PeriodSelectOptionConfig option in select.Options)
+		{
+			if (string.IsNullOrWhiteSpace(option.Value))
+			{
+				result.AddError("A PeriodSelect option has a blank Value, so no select option can ever match it.");
+				continue;
+			}
+
+			// Duplicates are reported rather than silently resolved: two rows for one option string means the file
+			// says two things about the same selection, and only the first would ever be read.
+			if (!seen.Add(option.Value.Trim()))
+				result.AddError($"Duplicate PeriodSelect option value '{option.Value.Trim()}'.");
+
+			if (string.IsNullOrWhiteSpace(option.Period))
+				result.AddError($"PeriodSelect option '{option.Value.Trim()}' names no Period, so selecting it would mean nothing.");
+			else if (!config.Periods.Any(period => string.Equals(period.Name, option.Period.Trim(), StringComparison.OrdinalIgnoreCase)))
+				result.AddError($"PeriodSelect option '{option.Value.Trim()}' maps to period '{option.Period.Trim()}', which matches no configured period.");
+		}
+
+		// Authority is Home Assistant's and there is nothing for it to decide with. Not an error: the engine falls
+		// back to its own schedule for every unmapped value, so the house keeps working — it simply never follows
+		// the select, which is the opposite of what the document asked for and worth saying out loud.
+		if (select.Authority is PeriodAuthority.HomeAssistant && select.Options.Count == 0)
+			result.AddWarning(
+				"PeriodSelect.Authority is HomeAssistant but no option is mapped to a period, so the select can never "
+				+ "change the time of day and every room keeps following the schedule. Map its options, or set "
+				+ "Authority back to AdaptiveLighting.");
+
+		if (livePeriodSelectOptions is null)
+			return;
+
+		foreach (PeriodSelectOptionConfig option in select.Options.Where(o => !string.IsNullOrWhiteSpace(o.Value)))
+			if (!livePeriodSelectOptions.Any(live => string.Equals(live.Trim(), option.Value.Trim(), StringComparison.OrdinalIgnoreCase)))
+				result.AddWarning(
+					$"PeriodSelect option '{option.Value.Trim()}' is no longer one of the select's live options — it has "
+					+ "probably been renamed in Home Assistant, and until it matches again the mapping does nothing.");
 	}
 
 	/// <summary>
