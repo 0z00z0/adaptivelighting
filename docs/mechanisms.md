@@ -166,6 +166,59 @@ trims the *referring* side only, not `TimePeriodConfig.Name`.
 Sun-anchored boundaries are laid out for the day before, the day of and the day after, so a period past
 midnight still places, and so a DST boundary resolves against its own offset rather than the window's.
 
+### A period that waits for movement
+
+`StartsOnMotion` means the period **does not begin at its `Start`**. The previous period keeps running — the
+house stays at night levels — until somebody moves in one of `StartsOnMotionAreas`, and then the period begins
+whole: brightness, warmth and `SetsMode` together, for every room.
+
+It is implemented by **leaving the boundary out of the table**, not by a rule anywhere downstream.
+`CircadianCalculator.ResolveBoundaries` skips a held period, so the wrap keeps the previous period in force and
+the next period's own `Start` overtakes it without anything having to notice. Every question the engine asks —
+`ActivePeriodName`, `GetTarget`, the blend — comes out of that one table, which is why the name and the levels
+cannot disagree about a period that has not begun.
+
+This was half-built for a long time. The flag existed and only `ModeMonitor` read it, so the clock still entered
+the period on time and the lights brightened at 06:30 regardless; the flag moved the *house mode* and only
+inside one `CircadianTickSeconds`, or after a restart mid-period.
+
+Four things it is bounded by, and each of them is a house that would otherwise misbehave:
+
+- **Its own `Start` must have come round.** Otherwise a 02:00 trip to the kitchen is the morning. This is also
+  what stops the wrapped case — night, still running at 02:00 — from restarting itself on the far side of
+  midnight.
+- **The next period overtakes it.** An empty house is never stranded on last night's levels, and the day never
+  ends holding a period that never started.
+- **Once per local day**, so walking back in at lunch does not re-fire `SetsMode` over a mode somebody chose.
+- **Nothing at all under `PeriodAuthority.HomeAssistant`.** The dropdown is the boundary there.
+
+The latch itself is `MotionPeriodLatch`: one object per engine, written by `ModeMonitor` and read by every
+area's calculator through an injected predicate. A predicate and not the object, because the calculator is pure
+— the instant is an argument, sun times arrive through a delegate, nothing there reads a clock, Home Assistant
+or a motion sensor. It has to be shared because a calculator is built per area and a latch inside one would let
+eighteen rooms hold eighteen opinions.
+
+It is keyed by the **local day the running instance began on**, not by today. A boundary still ahead of now
+belongs to yesterday's instance, which is the one the wrap has in force; asking about today would ask about a
+period that has not come round yet.
+
+Two places write it, and no more. `ModeMonitor.Start` seeds it from the note on disk, and movement claims it.
+The seed is what stops a restart from re-firing a period's `SetsMode` and its period-start reset over a mode a
+person chose — three separate reviews found that the day latch was never seeded. A held period is seeded only
+when the note names it: without the note there is no evidence it ever began, and the house waits for movement
+as it would have without the restart. Movement writes the note immediately rather than leaving it to the tick,
+because a config save rebuilds the whole engine and the latch is in memory.
+
+The blend is unchanged, which means a period started at 06:45 whose `Start` was 06:30 arrives already part-way
+through its blend. The window trails the boundary, and the boundary is still 06:30.
+
+`GetPeriodTarget(name)` sits outside all of it. The sleep clamp asks for a period by name and gets the one it
+named, held or not.
+
+A document where **every** period sets `StartsOnMotion` places nothing at all from midnight until somebody
+moves, so the validator warns. It is a warning and not an error: it is a house that waits, not a document that
+cannot run.
+
 ### Who owns the time of day
 
 `PeriodSelectConfig.Authority` decides, and `PeriodSelectReader` is the one object between the dropdown and

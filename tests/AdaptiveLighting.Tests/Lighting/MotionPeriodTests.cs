@@ -59,9 +59,16 @@ public sealed class MotionPeriodTests
 	/// <summary>The note recording which period the last run ended in. <c>null</c> is a first run or a lost note.</summary>
 	private sealed class FakeLastPeriodStore(string? recalled = null) : ILastPeriodStore
 	{
+		/// <summary>Every period written, in order.</summary>
+		public List<string> Saved { get; } = [];
+
 		public string? Load() => recalled;
 
-		public bool TrySave(string periodName) => true;
+		public bool TrySave(string periodName)
+		{
+			Saved.Add(periodName);
+			return true;
+		}
 	}
 
 	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor, CircadianCalculator Rooms);
@@ -282,6 +289,19 @@ public sealed class MotionPeriodTests
 
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"));
 		Assert.AreEqual("morning", rig.Rooms.ActivePeriodName(QuarterPastMorning));
+	}
+
+	// The latch is in memory and a config save rebuilds the engine, so the note is what carries the start across.
+	[TestMethod]
+	public void MotionStart_RecordsThePeriodAtOnce_NotOnTheNextTick()
+	{
+		FakeLastPeriodStore note = new();
+		Rig rig = Started(Periods(), QuarterPastMorning, lastPeriod: note);
+
+		Move(rig, Gang);
+
+		Assert.AreEqual("morning", note.Saved.LastOrDefault(),
+			"a rebuild between the movement and the next tick would otherwise drop the house back to night");
 	}
 
 	// A note naming the period before it is a boundary that went by while the engine was down. It still waits.

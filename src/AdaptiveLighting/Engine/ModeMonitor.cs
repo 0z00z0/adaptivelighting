@@ -664,6 +664,10 @@ public sealed class ModeMonitor : IDisposable
 
 		_logger.LogInformation("Motion on {Sensor} started period '{Period}'.", sensor, periodName);
 
+		// Not left to the next tick: the latch is in memory, and a config save rebuilds the engine. The note is the
+		// only thing that tells the rebuilt monitor this period had already begun.
+		RememberPeriod(periodName);
+
 		OnPeriodEntered(periodName!, activeOption);
 		_changed.OnNext(Unit.Default);
 	}

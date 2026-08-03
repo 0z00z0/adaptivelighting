@@ -148,6 +148,25 @@ under one version, because they are compiled against each other.
 
 ### Changed
 
+- **A period with `StartsOnMotion` no longer begins at its `Start`.** It was half a feature: only the
+  house-mode brain ever read the flag, so the clock still entered the period on time and the lights
+  brightened at 06:30 whether or not anybody was up. The flag moved the house *mode*, and only inside
+  one `CircadianTickSeconds` or after a restart mid-period.
+  - Now the previous period keeps running — the house stays at night levels — until somebody moves in
+    one of `StartsOnMotionAreas`, and then the period begins whole: brightness, warmth and `SetsMode`
+    together, for every room. An empty `StartsOnMotionAreas` still means any room the engine watches.
+  - It falls through on its own. The next period's own `Start` overtakes a period that never began, so
+    an empty house is never stranded on last night's levels and the day never ends holding a period
+    nobody started.
+  - Still once per local day, still nothing at all under `PeriodAuthority.HomeAssistant`, and still
+    never before the period's own `Start` — a 02:00 trip to the kitchen is not the morning.
+  - A document where *every* period sets `StartsOnMotion` now warns: nothing would be in force from
+    midnight until somebody moved.
+  - **Restarting inside such a period no longer re-fires it.** The day latch was never seeded at
+    start-up, so the first movement after a deploy re-applied the period's `SetsMode` and its
+    period-start reset over a mode a person had chosen. It is now seeded from the note the engine
+    already keeps of which period the last run ended in, and movement writes that note at once rather
+    than waiting for the next tick, so a configuration save cannot drop the house back to night.
 - **Groups are preferred for motion and light-level sensors, exactly as they already were for
   lights.** The same code, reached from all three domains: transitive membership, a cycle guard, a
   clip on any group reaching into another Home Assistant area, and widest-coverage selection between
