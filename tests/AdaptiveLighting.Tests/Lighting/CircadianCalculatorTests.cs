@@ -545,4 +545,93 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual("night", night.PeriodName);
 		Assert.AreEqual(15d, night.BrightnessPct, "the clamp reaches for the night rules, whatever is selected");
 	}
+
+	// ---- a period that waits for movement ------------------------------------------------------------
+
+	/// <summary>A calculator holding back whatever <paramref name="heldBack"/> says is still waiting.</summary>
+	private static CircadianCalculator Holding(Func<string, DateOnly, bool> heldBack, GlobalConfig? global = null) =>
+		new(Table, global ?? new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown, null, null, heldBack);
+
+	[TestMethod]
+	public void AHeldPeriod_IsLeftOutOfTheTable_SoThePreviousOneKeepsRunning()
+	{
+		CircadianCalculator calc = Holding((period, _) => period == "day");
+
+		Assert.AreEqual("night", calc.ActivePeriodName(At(8)), "day@07:00 has not begun, so last night is still running");
+		Assert.AreEqual(15d, calc.GetTarget(At(8))!.BrightnessPct);
+	}
+
+	[TestMethod]
+	public void AHeldPeriod_ThatHasBegun_IsInForceLikeAnyOther()
+	{
+		CircadianCalculator calc = Holding((_, _) => false);
+
+		Assert.AreEqual("day", calc.ActivePeriodName(At(8)));
+		Assert.AreEqual(90d, calc.GetTarget(At(8))!.BrightnessPct);
+	}
+
+	[TestMethod]
+	public void AHeldPeriod_IsOvertakenByTheNextPeriodsStart()
+	{
+		CircadianCalculator calc = Holding((period, _) => period == "day");
+
+		Assert.AreEqual("evening", calc.ActivePeriodName(At(18, 30)),
+			"evening@18:00 arrives whether or not the day ever began");
+		Assert.AreEqual("night", calc.ActivePeriodName(At(23)), "and the day does not end holding it either");
+	}
+
+	[TestMethod]
+	public void AHeldPeriod_IsNamedByTheScheduleEvenWhileItIsNotInForce()
+	{
+		CircadianCalculator calc = Holding((period, _) => period == "day");
+
+		Assert.AreEqual("day", calc.ScheduledPeriodName(At(8)), "the clock alone would have placed the day");
+		Assert.AreEqual("night", calc.ActivePeriodName(At(8)), "and what is in force is what the hold left behind");
+	}
+
+	/// <summary>The sleep clamp asks for a period by name and must still get it while it is being held back.</summary>
+	[TestMethod]
+	public void AHeldPeriod_IsStillReachableByName()
+	{
+		CircadianCalculator calc = Holding((_, _) => true);
+
+		LightTarget night = calc.GetPeriodTarget("night")!;
+
+		Assert.AreEqual("night", night.PeriodName);
+		Assert.AreEqual(15d, night.BrightnessPct);
+	}
+
+	[TestMethod]
+	public void AHeldPeriod_ThatHasBegun_StillBlendsAwayFromTheOneBeforeIt()
+	{
+		CircadianCalculator calc = Holding(
+			(_, _) => false, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 });
+
+		double half = calc.GetTarget(At(7, 15))!.BrightnessPct;
+
+		Assert.IsTrue(half is > 15 and < 90, $"halfway from night's 15 % to day's 90 %, not a step; got {half}");
+	}
+
+	/// <summary>
+	///     Which day the hold is asked about. A boundary still ahead of now belongs to the instance that began
+	///     yesterday, so keying every question on today would ask about a period that has not come round yet.
+	/// </summary>
+	[TestMethod]
+	public void TheHoldIsAskedAboutTheDayTheInstanceWouldHaveBegunOn()
+	{
+		List<(string Period, DateOnly Day)> asked = [];
+
+		CircadianCalculator calc = Holding((period, day) =>
+		{
+			asked.Add((period, day));
+			return false;
+		});
+
+		calc.ActivePeriodName(At(8));
+
+		Assert.AreEqual(new DateOnly(2026, 1, 15), asked.Single(row => row.Period == "day").Day,
+			"day@07:00 is behind us, so the instance in question is today's");
+		Assert.AreEqual(new DateOnly(2026, 1, 14), asked.Single(row => row.Period == "night").Day,
+			"night@22:30 is ahead of us, so the instance in question is the one that began yesterday");
+	}
 }

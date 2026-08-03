@@ -219,6 +219,20 @@ public sealed class ConfigValidatorTests
 			"an empty list is the default and means any room the engine watches");
 	}
 
+	// Nothing begins on the clock, so from midnight the table places nothing and the rooms are commanded nothing.
+	[TestMethod]
+	public void StartsOnMotion_OnEveryPeriod_WarnsThatNothingBeginsOnTheClock()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		foreach (TimePeriodConfig period in config.Periods)
+			period.StartsOnMotion = true;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "it is a house that waits, not a document that cannot run");
+		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("Every period sets StartsOnMotion", StringComparison.Ordinal)));
+	}
+
 	[TestMethod]
 	public void StartsOnMotion_OnAPeriodWithAnUnparseableStart_AddsNothingToTheOneError()
 	{

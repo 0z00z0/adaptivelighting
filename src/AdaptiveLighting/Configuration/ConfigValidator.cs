@@ -307,7 +307,7 @@ public static class ConfigValidator
 		}
 	}
 
-	/// <summary>The rooms whose movement may pull a period forward (<see cref="TimePeriodConfig.StartsOnMotionAreas"/>).</summary>
+	/// <summary>The rooms whose movement may start a period (<see cref="TimePeriodConfig.StartsOnMotionAreas"/>).</summary>
 	/// <remarks>
 	///     A warning: an id no room answers to costs that one room its trigger, and an error would block the save
 	///     from the page somebody would rename the room on. Area ids are matched ordinally, as
@@ -321,12 +321,19 @@ public static class ConfigValidator
 			if (area.AreaId is { Length: > 0 } areaId)
 				areaIds.Add(areaId.Trim());
 
-		foreach (TimePeriodConfig period in config.Periods.Where(p => p.StartsOnMotion))
-		{
-			// An unparseable Start already drops the whole period, so its area list earns nothing further.
-			if (!PeriodStart.TryParse(period.Start, out _))
-				continue;
+		// An unparseable Start already drops the whole period, so it earns nothing further here.
+		List<TimePeriodConfig> placeable = [.. config.Periods.Where(period => PeriodStart.TryParse(period.Start, out _))];
 
+		// A period that waits for movement is out of the table until it begins, so a table of nothing else leaves
+		// the rooms with no period at all from midnight until somebody moves.
+		if (placeable.Count > 0 && placeable.All(period => period.StartsOnMotion))
+			result.AddWarning(
+				"Every period sets StartsOnMotion, so none of them begins on the clock. From midnight until somebody "
+				+ "moves there is no period in force and the rooms are commanded nothing. At least one period should "
+				+ "start on its own time.");
+
+		foreach (TimePeriodConfig period in placeable.Where(p => p.StartsOnMotion))
+		{
 			foreach (string areaId in period.StartsOnMotionAreas.Where(id => !string.IsNullOrWhiteSpace(id)))
 				if (!areaIds.Contains(areaId.Trim()))
 					result.AddWarning(
