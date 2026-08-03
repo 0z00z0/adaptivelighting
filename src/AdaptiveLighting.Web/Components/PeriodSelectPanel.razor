@@ -1,21 +1,9 @@
 @*
-	Ties a Home Assistant dropdown helper to the engine's period table, in whichever direction the household
-	wants it to run.
+	Ties a Home Assistant dropdown helper to the engine's period table, in either direction.
 
-	One helper, two entirely different jobs, and never both at once. Under Home Assistant's authority the
-	dropdown is an INPUT: the household's own automations move it and every room runs whatever period it names,
-	whatever the clock says. Under adaptive lighting's it is an OUTPUT: the engine keeps it pointing at the
-	period its own schedule resolved, so a dashboard or a template elsewhere in the house can read the time of
-	day the lights are actually running on.
-
-	THE ROWS COME FROM THE HELPER, NOT FROM THE DOCUMENT. A mapping is only ever useful for an option the
-	select actually offers, so the editor draws one row per live option and the document follows. A stored row
-	whose value the helper no longer offers is the rename case — it is shown apart, named as such, and can be
-	moved onto a live option in one pick rather than retyped. It is deliberately not deleted for you: the
-	period it names is somebody's decision, and dropping it would make the warning the only trace it existed.
-
-	A helper with more options than the schedule has periods cannot be fully mapped, so the shortfall is
-	counted and the schedule's own "add a period" is offered here rather than described.
+	Under Home Assistant's authority the helper is an input the engine reads; under adaptive lighting's it is
+	an output the engine writes. The rows come from the helper's live options, not from the document; a stored
+	row the helper no longer offers is shown apart as the rename case and can be moved onto a live option.
 *@
 
 <div class="periodselect">
@@ -46,11 +34,7 @@
 
 	@if (HasEntity)
 	{
-		@*
-			The one control that decides what everything below means, so it comes before the mappings rather
-			than after them. Radios rather than a switch: the two directions are not on and off, they are two
-			different jobs, and a switch would leave a reader guessing which way "on" ran.
-		*@
+		@* The authority decides what everything below means, so it comes before the mappings. *@
 		<div class="field">
 			<div class="field-head">
 				<span class="field-label">Changes to periods are set by:
@@ -79,12 +63,8 @@
 			<div class="field-help">@AuthorityHelp</div>
 		</div>
 
-		@*
-			What is wrong with this pairing right now, said in the order it costs the household. The helper being
-			unreadable outranks everything, because under Home Assistant's authority the whole house is back on
-			the schedule until it answers; the current option not being mapped is next, because it is the one
-			fault that is happening rather than waiting to.
-		*@
+		@* Faults in the order they cost the household: an unreadable helper first, then an unmapped current
+		   option, the one fault already happening. *@
 		@if (!IsAvailable && IsReady)
 		{
 			<div class="notice bad periodselect-warning">
@@ -132,8 +112,8 @@
 			<div class="periodselect-rows">
 				@foreach (string live in _liveValues)
 				{
-					@* Captured per iteration: the handlers below outlive the loop, and a closure over the loop
-					   variable would map every row to whichever option happened to be last. *@
+					@* Captured per iteration: the handlers outlive the loop, and a closure over the loop variable
+					   would map every row to whichever option was last. *@
 					string option = live;
 					PeriodSelectOptionConfig? row = Find(option);
 					string chosen = row?.Period ?? string.Empty;
@@ -148,8 +128,6 @@
 						</span>
 
 						<select class="cell wide" @bind:get="chosen" @bind:set="@(value => SetPeriod(option, value))">
-							@* Never opens with the dash: a leading em dash reads as a separator rather than as the
-							   option that is currently chosen. The same "(none — …)" form the rest of the page uses. *@
 							<option value="">(none — this option changes nothing)</option>
 							@foreach (string name in PeriodChoices(chosen))
 							{
@@ -202,14 +180,7 @@
 	[Parameter, EditorRequired]
 	public GlobalConfig Global { get; set; } = new();
 
-	/// <summary>
-	///     The document's period list, for the mappings' dropdowns and for the "add a period" shortfall button.
-	/// </summary>
-	/// <remarks>
-	///     Edited in place, exactly as <see cref="PeriodsEditor"/> edits it, and only ever by appending the one
-	///     row <see cref="PeriodsEditor.NewPeriod"/> defines — so the period a household adds from here and the
-	///     period it adds from the table below are the same period, with the same defaults.
-	/// </remarks>
+	/// <summary>The document's period list, edited in place, only ever by appending a <c>PeriodsEditor.NewPeriod</c>.</summary>
 	[Parameter, EditorRequired]
 	public List<TimePeriodConfig> Periods { get; set; } = [];
 
@@ -218,8 +189,8 @@
 	public IReadOnlyList<EntityOption> InputSelects { get; set; } = [];
 
 	/// <summary>
-	///     The helper's live options, as Home Assistant reports them. Empty means Home Assistant has not
-	///     answered, never "the helper has no options" — see <see cref="IsReady"/>.
+	///     The helper's live options. Empty means Home Assistant has not answered, never "the helper has no
+	///     options"; see <see cref="IsReady"/>.
 	/// </summary>
 	[Parameter]
 	public IReadOnlyList<string> LiveOptions { get; set; } = [];
@@ -232,33 +203,22 @@
 	[Parameter]
 	public bool IsAvailable { get; set; }
 
-	/// <summary>
-	///     Whether Home Assistant is actually answering. The page knows this; this component uses it so an empty
-	///     option list stops hedging and says the honest thing instead.
-	/// </summary>
+	/// <summary>Whether Home Assistant is answering, so an empty option list can say which of the two it is.</summary>
 	[Parameter]
 	public bool IsReady { get; set; } = true;
 
-	/// <summary>What the helper picker says when it has nothing to offer, in the page's own words.</summary>
 	[Parameter]
 	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
 
-	/// <summary>Resolves an id to a friendly name for the helper picker. Optional.</summary>
 	[Parameter]
 	public Func<string, string>? NameResolver { get; set; }
 
-	/// <summary>Whether Home Assistant knows an id, for the picker's "unknown" styling. Optional.</summary>
 	[Parameter]
 	public Func<string, bool>? KnownResolver { get; set; }
 
-	/// <summary>
-	///     Raised with the chosen entity id, or <c>null</c> for none.
-	/// </summary>
-	/// <remarks>
-	///     The entity is the one field this component does <b>not</b> write itself. Changing it changes which
-	///     helper's live options and current value the rows are drawn from, and only the page can re-read those —
-	///     so the page owns the write, exactly as it owns the house-mode helper's.
-	/// </remarks>
+	/// <summary>Raised with the chosen entity id, or <c>null</c> for none.</summary>
+	// The one field this component does not write itself: changing it changes which helper's live options the
+	// rows are drawn from, and only the page can re-read those.
 	[Parameter]
 	public EventCallback<string?> EntityChanged { get; set; }
 
@@ -269,52 +229,31 @@
 	/// <summary>The configured block, or <c>null</c> before a helper has ever been picked.</summary>
 	private PeriodSelectConfig? Select => Global.PeriodSelect;
 
-	/// <summary>Whether a helper is named, which is what every control below the picker depends on.</summary>
-	/// <remarks>
-	///     The entity, not the block: <c>ConfigNormalizer</c> keeps an entity-less block only until the next save,
-	///     and <c>PeriodSelectReader.For</c> builds nothing without an entity — so an authority radio over a blank
-	///     entity would be a control with no effect at all.
-	/// </remarks>
+	// The entity, not the block: ConfigNormalizer keeps an entity-less block only until the next save, and
+	// PeriodSelectReader.For builds nothing without an entity.
 	private bool HasEntity => Select?.EntityId is not null;
 
 	/// <summary>Which side currently owns the time of day.</summary>
 	private PeriodAuthority Authority => Select?.Authority ?? PeriodAuthority.AdaptiveLighting;
 
-	/// <summary>The stored mappings, never <c>null</c> — a block that does not exist yet has none.</summary>
+	/// <summary>The stored mappings, never <c>null</c>. A block that does not exist yet has none.</summary>
 	private IReadOnlyList<PeriodSelectOptionConfig> Options => Select?.Options ?? [];
 
 	/// <summary>The helper's live options, blank-free and de-duplicated the way every value here is compared.</summary>
-	/// <remarks>
-	///     <para>
-	///         Resolved once per parameter set rather than on each read. It was a property running a nested-loop
-	///         de-dupe, and the markup reaches it a dozen times per render — directly, and again through
-	///         <see cref="Shortfall"/>, <see cref="Orphans"/> and <see cref="UnmappedLiveValues"/>, the last of which
-	///         is read twice inside the orphan loop without depending on the orphan.
-	///     </para>
-	///     <para>
-	///         Safe to cache because it is a pure function of the <see cref="LiveOptions"/> parameter. The lists that
-	///         read <i>it</i> stay properties, because they also read <see cref="Options"/>, which this component
-	///         mutates between renders — caching those would serve a stale table after an edit.
-	///     </para>
-	/// </remarks>
+	// Cached per parameter set, and safe only because it is a pure function of the LiveOptions parameter. The
+	// lists that read it stay properties: they also read Options, which this component mutates between renders.
 	private List<string> _liveValues = [];
 
 	/// <inheritdoc/>
 	protected override void OnParametersSet() => _liveValues = HouseModeSync.Clean(LiveOptions);
 
-	/// <summary>Live options no mapping names yet — what an orphan can be moved onto in one pick.</summary>
+	/// <summary>Live options no mapping names yet: what an orphan can be moved onto in one pick.</summary>
 	private List<string> UnmappedLiveValues =>
 		[.. _liveValues.Where(value => Find(value) is null)];
 
-	/// <summary>
-	///     Stored mappings the helper no longer offers: the rename case.
-	/// </summary>
-	/// <remarks>
-	///     Empty whenever the question cannot be asked. An empty <see cref="LiveOptions"/> is a Home Assistant
-	///     that has not answered, not a helper with no options — read as an answer it would condemn every mapping
-	///     at once, striking through the whole table the moment the connection blinked. The same refusal
-	///     <c>HouseModeOptions.IsLive</c> makes, for the same reason.
-	/// </remarks>
+	/// <summary>Stored mappings the helper no longer offers: the rename case.</summary>
+	// Empty when LiveOptions is empty. That is a Home Assistant that has not answered, not a helper with no
+	// options; read as an answer it strikes the entire table through the moment the connection blinks.
 	private List<PeriodSelectOptionConfig> Orphans
 	{
 		get
@@ -329,12 +268,9 @@
 		}
 	}
 
-	/// <summary>Whether the helper's current option maps to nothing, which is the one fault that is happening now.</summary>
-	/// <remarks>
-	///     Only asked under Home Assistant's authority. Under adaptive lighting's the engine <i>writes</i> this
-	///     helper, so an unmapped value is a helper somebody moved by hand and the engine is about to correct —
-	///     which is not a fault, and saying it was would send somebody to fix a mapping they do not need.
-	/// </remarks>
+	/// <summary>Whether the helper's current option maps to nothing.</summary>
+	// Only asked under Home Assistant's authority. Under adaptive lighting's the engine writes this helper, so
+	// an unmapped value is one somebody moved by hand and the engine is about to correct.
 	private bool CurrentIsUnmapped =>
 		Authority is PeriodAuthority.HomeAssistant
 		&& ActiveValue is { Length: > 0 }
@@ -343,26 +279,18 @@
 	/// <summary>How many live options cannot be mapped, because the schedule has fewer periods than the helper has options.</summary>
 	private int Shortfall => Math.Max(0, _liveValues.Count - Periods.Count);
 
-	/// <summary>Whether the helper stands on this option right now.</summary>
 	private bool IsActive(string value) => ActiveValue is { Length: > 0 } && Eq(ActiveValue, value);
 
 	/// <summary>The mapping for a live option, or <c>null</c> when nothing names it.</summary>
 	private PeriodSelectOptionConfig? Find(string value) =>
 		Options.FirstOrDefault(option => Eq(option.Value, value));
 
-	/// <summary>What an orphan's period is called, or a placeholder for a row that named none.</summary>
 	private static string OrphanPeriod(PeriodSelectOptionConfig orphan) =>
 		orphan.Period is { Length: > 0 } period ? period : "no period";
 
-	/// <summary>
-	///     The periods a row may choose: the ones nothing else has taken, plus whatever this row already holds.
-	/// </summary>
-	/// <remarks>
-	///     Two options mapping to one period is an ambiguity the engine cannot resolve in the writing direction —
-	///     <see cref="PeriodSelectConfig.OptionFor"/> takes the first — so the list simply does not offer it. The
-	///     row's own choice stays on the list regardless, because a dropdown that hid its current value would
-	///     make remapping the one thing this editor could not do.
-	/// </remarks>
+	/// <summary>The periods a row may choose: the untaken ones, plus whatever this row already holds.</summary>
+	// Two options mapping to one period is an ambiguity the writing direction cannot resolve, so it is not
+	// offered. The row's own choice stays on the list, or remapping would be impossible.
 	private List<string> PeriodChoices(string chosen)
 	{
 		List<string> taken = [.. Options
@@ -378,49 +306,35 @@
 		];
 	}
 
-	/// <summary>
-	///     Whether a mapping's stored period text names the schedule period called <paramref name="periodName"/>.
-	/// </summary>
-	/// <remarks>
-	///     <b>Trims the mapping's side only, because that is what the document does.</b>
-	///     <see cref="ConfigValidator"/>, <see cref="Schedule.NamedBySelect"/> and
-	///     <c>CircadianCalculator.OverriddenPeriod</c> all match a trimmed <c>Option.Period</c> against a raw
-	///     <c>TimePeriodConfig.Name</c>. This editor used its own <see cref="Eq"/>, which trims both — so a period
-	///     named <c>"night "</c> mapped to <c>"night"</c> read as an ordinary valid choice here while the validator
-	///     refused the whole document and the engine quietly fell back to the clock. An editor that disagrees with
-	///     the validator about what it just accepted is worse than one that offers less.
-	/// </remarks>
+	/// <summary>Whether a mapping's stored period text names the schedule period called <paramref name="periodName"/>.</summary>
 	/// <param name="periodName">A period's name, exactly as the schedule carries it.</param>
 	/// <param name="chosen">A mapping's stored period text.</param>
+	// Trims the mapping's side only. ConfigValidator, Schedule.NamedBySelect and CircadianCalculator all match a
+	// trimmed Option.Period against a raw TimePeriodConfig.Name; Eq trims both, and a period named "night "
+	// mapped to "night" then reads as valid here while the validator refuses the document.
 	private static bool NamesPeriod(string? periodName, string? chosen) =>
 		string.Equals(periodName, chosen?.Trim(), StringComparison.OrdinalIgnoreCase);
 
 	/// <summary>Whether a stored choice names a period the schedule no longer has, so the dropdown must still show it.</summary>
-	/// <remarks>
-	///     Kept visible rather than silently blanked: the validator refuses the document over exactly this, and a
-	///     dropdown that had quietly reset itself would leave the refusal with nothing on screen to explain it.
-	/// </remarks>
+	// The validator refuses the document over this; a dropdown that quietly reset itself would leave the
+	// refusal with nothing on screen to explain it.
 	private bool IsDeadPeriod(string chosen) =>
 		chosen is { Length: > 0 } && !Periods.Any(period => NamesPeriod(period.Name, chosen));
 
-	/// <summary>What the radio's help line says, which is a different sentence for each direction.</summary>
 	private string AuthorityHelp => Authority is PeriodAuthority.HomeAssistant
 		? "The engine reads this helper and never writes it. Start times in the schedule above are kept, but they "
 			+ "stop deciding anything until you hand the time of day back."
 		: "The engine writes this helper to match whatever its schedule resolved. Moving the helper by hand changes "
 			+ "nothing — it is put back on the next re-check.";
 
-	/// <summary>Why an unknown entity is worth saying out loud, in the terms of the direction it breaks.</summary>
 	private string UnavailableNote => Authority is PeriodAuthority.HomeAssistant
 		? "Until it appears, every room follows the schedule's start times instead. Check the id for a typo."
 		: "Until it appears, the engine has nothing to write the time of day to. Check the id for a typo.";
 
-	/// <summary>What an unmapped current option costs, which is the whole house for as long as it stands there.</summary>
 	private string UnmappedNote =>
 		"Every room is following the schedule's start times until it does. Give this option a period below, or pick "
 		+ "a different one in Home Assistant.";
 
-	/// <summary>The shortfall's own sentence, counted rather than described.</summary>
 	private string ShortfallTitle
 	{
 		get
@@ -434,31 +348,13 @@
 		}
 	}
 
-	/// <summary>
-	///     Sets which side owns the time of day.
-	/// </summary>
-	/// <remarks>
-	///     The mappings are untouched by the switch, because they mean something in both directions: one reads
-	///     them option-to-period, the other period-to-option. Clearing them on a switch would make trying the
-	///     other direction cost the whole table.
-	/// </remarks>
+	/// <summary>Sets which side owns the time of day. The mappings mean something in both directions, so they stand.</summary>
 	private Task SetAuthority(PeriodAuthority authority) => Set(() => Block().Authority = authority);
 
 	/// <summary>Points a live option at a period, or clears it.</summary>
-	/// <remarks>
-	///     <b>A cleared row is REMOVED, not emptied.</b> Emptying only the period looked tidier and was a trap:
-	///     <c>PeriodSelectOptionConfig.IsEmpty</c> is <c>Value</c> blank <b>and</b> <c>Period</c> blank, so a row
-	///     still carrying its option string is not empty, the normaliser keeps it, and the validator then raises a
-	///     document-level <i>error</i> — which <c>LightingEngineHost.Save</c> refuses on. Picking "this option
-	///     changes nothing", an option this editor offers as legitimate, would have blocked every save on the whole
-	///     Configuration page, including unrelated room edits. Worse, clearing the helper to back out hides this
-	///     panel behind <c>HasEntity</c> while the error stays, leaving no control on screen able to undo it: a
-	///     hand edit of the YAML was the only way out.
-	///     <para>
-	///         Nothing is lost by removing it. The option is still live on the helper, so it renders as an
-	///         unmapped row and is one pick away from being mapped again.
-	///     </para>
-	/// </remarks>
+	// A cleared row is removed, not emptied. IsEmpty needs Value and Period both blank, so a row still carrying
+	// its option string survives the normaliser and the validator then raises a document-level error, blocking
+	// every save on the Configuration page.
 	private Task SetPeriod(string value, string? period) => Set(() =>
 	{
 		PeriodSelectOptionConfig? existing = Find(value);
@@ -477,38 +373,19 @@
 			existing.Period = period.Trim();
 	});
 
-	/// <summary>
-	///     Moves a stale mapping onto a live option, keeping the period it named.
-	/// </summary>
-	/// <remarks>
-	///     The rename case, answered in one pick. Rewriting the value rather than adding a row and deleting the
-	///     old one is what keeps the period: a household that renamed <c>Kveld</c> to <c>Evening</c> in Home
-	///     Assistant did not change their mind about what it means.
-	/// </remarks>
+	/// <summary>Moves a stale mapping onto a live option, keeping the period it named.</summary>
 	private Task Remap(PeriodSelectOptionConfig orphan, string? live) =>
 		string.IsNullOrWhiteSpace(live) ? Task.CompletedTask : Set(() => orphan.Value = live.Trim());
 
-	/// <summary>Drops a stale mapping outright, for the option that was removed rather than renamed.</summary>
+	/// <summary>Drops a stale mapping outright, for the option that was removed and not renamed.</summary>
 	private Task Forget(PeriodSelectOptionConfig orphan) => Set(() => Block().Options.Remove(orphan));
 
-	/// <summary>
-	///     Appends a period, so a helper with more options than periods can be finished without leaving here.
-	/// </summary>
-	/// <remarks>
-	///     The row is <see cref="PeriodsEditor.NewPeriod"/>'s, not one built here, so the two places a household
-	///     can add a period cannot disagree about what a new one starts as.
-	/// </remarks>
+	/// <summary>Appends a period, so a helper with more options than periods can be finished without leaving here.</summary>
+	// PeriodsEditor.NewPeriod's row, not one built here: the two "add a period" buttons must agree.
 	private Task AddPeriod() => Set(() => Periods.Add(PeriodsEditor.NewPeriod(Periods)));
 
-	/// <summary>
-	///     The block to write into, created on first use.
-	/// </summary>
-	/// <remarks>
-	///     Every control that calls this is behind <see cref="HasEntity"/>, so in practice the block already
-	///     exists — but binding it into existence is the documented contract with <c>ConfigNormalizer</c>, which
-	///     drops a block that ends up saying nothing rather than leaving a <c>PeriodSelect:</c> stanza in the file
-	///     of a household that never adopted the feature.
-	/// </remarks>
+	/// <summary>The block to write into, created on first use.</summary>
+	// Creating it here is safe: ConfigNormalizer drops a block that ends up saying nothing.
 	private PeriodSelectConfig Block() => Global.PeriodSelect ??= new PeriodSelectConfig();
 
 	private Task Set(Action mutate)
@@ -517,14 +394,9 @@
 		return Changed.InvokeAsync();
 	}
 
-	/// <summary>
-	///     How two option strings are compared, everywhere on this panel.
-	/// </summary>
-	/// <remarks>
-	///     Trimmed and case-insensitive, matching <see cref="PeriodSelectConfig.PeriodFor"/> exactly. These are
-	///     display strings a person typed into a Home Assistant helper, and an editor stricter than the engine
-	///     would draw an "unmapped" row for a mapping the engine is happily reading.
-	/// </remarks>
+	/// <summary>How two option strings are compared everywhere on this panel.</summary>
+	// Trimmed and case-insensitive, matching PeriodSelectConfig.PeriodFor. An editor stricter than the engine
+	// would draw an "unmapped" row for a mapping the engine is reading happily.
 	private static bool Eq(string? left, string? right) =>
 		string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
 }

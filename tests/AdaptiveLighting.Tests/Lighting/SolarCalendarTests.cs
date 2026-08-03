@@ -3,20 +3,21 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The NOAA sunrise/sunset routine behind the daylight chart. Two things are load-bearing and asserted here:
-///     the longitude sign — the form <c>720 - 4*(lon ± ha) - eqtime</c> takes longitude positive-east, so an
-///     easterly move must bring the UTC sunrise earlier, not later — and the polar-state distinction the chart
-///     draws from, where a day with no crossing must say whether the sun stayed <i>above</i> the angle (white
-///     night / midnight sun) or <i>below</i> it (polar night). Time comparisons use wrap-normalised differences so
-///     the result is the same in every host timezone.
+///     The NOAA sunrise/sunset routine behind the daylight chart.
 /// </summary>
+/// <remarks>
+///     Two things are load-bearing. The form <c>720 - 4*(lon ± ha) - eqtime</c> takes longitude positive-east, so
+///     an easterly move brings the UTC sunrise earlier. And a day with no crossing has to say whether the sun
+///     stayed above the angle (midnight sun) or below it (polar night); the chart draws from that distinction.
+///     Time comparisons are wrap-normalised so the result holds in every host timezone.
+/// </remarks>
 [TestClass]
 public sealed class SolarCalendarTests
 {
 	/// <summary>
-	///     The signed minutes from <paramref name="from"/> to <paramref name="to"/>, taken the short way round the
-	///     clock. Independent of the host timezone: both times were converted through the same offset, so only their
-	///     difference matters, and the modulo folds away any midnight wrap that offset introduced.
+	///     Signed minutes from <paramref name="from"/> to <paramref name="to"/>, the short way round the clock.
+	///     Both times came through the same offset, so the modulo folds away any midnight wrap it introduced and
+	///     the answer is the same in every host timezone.
 	/// </summary>
 	private static double MinutesBetween(TimeOnly from, TimeOnly to)
 	{
@@ -36,7 +37,7 @@ public sealed class SolarCalendarTests
 		Assert.IsNotNull(west);
 		Assert.IsNotNull(east);
 
-		// East of the prime meridian the sun rises earlier: the 10° step is exactly 40 minutes (4 min/degree).
+		// East of the prime meridian the sun rises earlier: the 10° step is 40 minutes, at 4 min/degree.
 		// A negative or near-zero result is the inverted-sign bug this test exists to catch.
 		double delta = MinutesBetween(east!.Value, west!.Value);
 		Assert.IsTrue(delta > 0, "an easterly longitude must give an earlier sunrise, not a later one");
@@ -50,8 +51,8 @@ public sealed class SolarCalendarTests
 
 		SolarDay day = SolarCalendar.On(midsummer, 80.0, 10.0);
 
-		// Midnight sun: the sun never dips to the horizon, so there is no sunrise or sunset — and the state must say
-		// it is AlwaysAbove rather than the ambiguous "no crossing" the chart cannot draw from.
+		// Midnight sun: the sun never dips to the horizon, so there is no sunrise or sunset. The state has to say
+		// AlwaysAbove; the ambiguous "no crossing" is something the chart cannot draw from.
 		Assert.AreEqual(SunState.AlwaysAbove, day.State, "high-Arctic midsummer is the midnight sun");
 		Assert.IsNull(day.Sunrise, "the polar day has no sunrise to report");
 		Assert.IsNull(day.Sunset, "…and no sunset either");
@@ -64,8 +65,8 @@ public sealed class SolarCalendarTests
 
 		SolarDay day = SolarCalendar.On(midwinter, 80.0, 10.0);
 
-		// Polar night: the sun never climbs to the horizon. This is the opposite of the midnight sun, and the state
-		// is what lets the chart fill it dark rather than bright.
+		// Polar night: the sun never climbs to the horizon. The opposite of the midnight sun, and the state is
+		// what lets the chart fill the day dark.
 		Assert.AreEqual(SunState.AlwaysBelow, day.State, "high-Arctic midwinter is the polar night");
 		Assert.IsNull(day.Sunrise, "the polar night has no sunrise");
 		Assert.IsNull(day.Sunset, "…and no sunset");
@@ -76,9 +77,9 @@ public sealed class SolarCalendarTests
 	{
 		DateOnly midsummer = new(2024, 6, 21);
 
-		// 63°N is below the Arctic Circle, so the sun still sets at the official horizon — but it never sinks the
-		// full 6° to civil-twilight depth. This is the exact transition the twilight band has to draw: an ordinary
-		// day at the official zenith, AlwaysAbove at the civil one (twilight all night, no true darkness).
+		// 63°N is below the Arctic Circle, so the sun still sets at the official horizon, but it never sinks the
+		// full 6° to civil-twilight depth. This is the transition the twilight band has to draw: an ordinary day
+		// at the official zenith, AlwaysAbove at the civil one, twilight all night and no true darkness.
 		SolarDay official = SolarCalendar.On(midsummer, 63.0, 10.0);
 		SolarDay civil = SolarCalendar.On(midsummer, 63.0, 10.0, SolarCalendar.CivilZenithDegrees);
 

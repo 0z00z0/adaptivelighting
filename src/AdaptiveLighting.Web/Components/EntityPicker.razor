@@ -1,14 +1,8 @@
 @*
 	One entity, chosen by the name Home Assistant shows, stored as the id the engine needs.
 
-	The select is the primary path and the text box is the fallback, never the other way round. A household
-	has no reason to know that "Stuelampe" is light.stuelampe_2, and every time we ask them to type it we
-	are asking them to make a mistake the engine can only report hours later, in the dark.
-
-	The text box still exists, for two honest reasons: Home Assistant may not be connected yet (Kestrel
-	serves before NetDaemon finishes connecting), and an entity may legitimately be named here before it
-	exists in HA. When HA is unreachable the picker has nothing to offer and says so rather than rendering
-	an empty dropdown that looks like "you have no lights".
+	The select is the primary path; the text box exists because Kestrel serves before NetDaemon finishes
+	connecting, and because an entity may be named here before it exists in Home Assistant.
 *@
 
 <div class="picker">
@@ -22,8 +16,8 @@
 	}
 	else
 	{
-		@* Discovery's own answer first and unheaded, then everything else under a heading — the same two-block
-		   order the list picker uses, so a light and a light-level sensor are chosen the same way. *@
+		@* The same two-block order the list picker uses: discovery's answer first, everything else under a
+		   heading. *@
 		<select class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
 			<option value="">@NoneLabel</option>
 			@foreach (EntityOption option in Options)
@@ -41,8 +35,8 @@
 			}
 			@if (IsUnlisted)
 			{
-				@* Never silently drop a configured value just because HA does not know it — that is exactly
-				   the REPLACE_ME case, and the operator needs to see it sitting there to replace it. *@
+				@* Never drop a configured value because Home Assistant does not know it. That is the
+				   REPLACE_ME case, and it has to be visible to be replaced. *@
 				<option value="@Value">@UnlistedLabel</option>
 			}
 		</select>
@@ -77,43 +71,32 @@
 
 	/// <summary>
 	///     Everything else the field could use, offered under <see cref="OthersLabel"/> below <see cref="Options"/>.
+	///     Kept apart because <see cref="Options"/> is what the room resolves to as it stands.
 	/// </summary>
-	/// <remarks>
-	///     Kept apart from <see cref="Options"/> because the split is the information: the first block is what the
-	///     room resolves to as it stands, the second is what that answer swallowed or a label kept out.
-	/// </remarks>
 	[Parameter]
 	public IReadOnlyList<EntityOption> Others { get; set; } = [];
 
-	/// <summary>The heading above <see cref="Others"/>, in words the caller is in a position to be right about.</summary>
 	[Parameter]
 	public string OthersLabel { get; set; } = "Everything else";
 
-	/// <summary>What the empty choice is called, phrased for what "none" means to this particular field.</summary>
+	/// <summary>What the empty choice is called, phrased for what "none" means to this field.</summary>
 	[Parameter]
 	public string NoneLabel { get; set; } = "(none)";
 
-	/// <summary>Example id shown in the free-text fallback.</summary>
 	[Parameter]
 	public string Placeholder { get; set; } = "domain.entity_id";
 
 	/// <summary>
-	///     Why there is nothing to pick, in words the caller is in a position to be right about.
+	///     Why there is nothing to pick. The caller says, because this component cannot tell a Home Assistant
+	///     that is down from a list filtered to an area holding no such entity, the ordinary case for a lux sensor.
 	/// </summary>
-	/// <remarks>
-	///     An empty list is not self-explanatory and this component cannot tell the reasons apart. Home Assistant
-	///     may be down; or it may be perfectly healthy and the caller may have filtered the list to an area that
-	///     genuinely holds no such entity, which is the ordinary case for a lux sensor. Blaming the connection for
-	///     the second is a lie that sends somebody to debug a connection that is fine, so the caller says.
-	/// </remarks>
 	[Parameter]
 	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
 
-	/// <summary>Resolves an id to the name Home Assistant shows, for a configured value not in the offered list. Optional.</summary>
 	[Parameter]
 	public Func<string, string>? NameResolver { get; set; }
 
-	/// <summary>Whether Home Assistant knows an id, so an out-of-list value reads as "filtered out" rather than "unknown". Optional.</summary>
+	/// <summary>Whether Home Assistant knows an id, so an out-of-list value reads as filtered out, not unknown.</summary>
 	[Parameter]
 	public Func<string, bool>? KnownResolver { get; set; }
 
@@ -125,10 +108,9 @@
 		Value is { Length: > 0 }
 		&& !Options.Concat(Others).Any(option => string.Equals(option.EntityId, Value, StringComparison.Ordinal));
 
-	/// <summary>Whether an out-of-list value is genuinely unknown to Home Assistant, not merely filtered out of this field's domain.</summary>
+	/// <summary>Whether an out-of-list value is unknown to Home Assistant, not merely filtered out of this domain.</summary>
 	private bool IsUnknown => IsUnlisted && !(KnownResolver?.Invoke(Value!) ?? false);
 
-	/// <summary>Label for the out-of-list value: its friendly name if resolvable, flagged when Home Assistant does not know it.</summary>
 	private string UnlistedLabel
 	{
 		get
@@ -146,8 +128,8 @@
 
 	private Task Commit(string? raw)
 	{
-		// Normalise "" to null at the edge. The config schema uses null for "not set", and a stray empty
-		// string would be validated as an entity id that Home Assistant does not know.
+		// "" normalises to null at the edge: the schema uses null for "not set", and an empty string would be
+		// validated as an entity id Home Assistant does not know.
 		string? value = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
 		Value = value;
 		return ValueChanged.InvokeAsync(value);

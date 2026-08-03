@@ -8,10 +8,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     Floors through the seam, and the one place the house's floor plan turns into display groups.
 /// </summary>
 /// <remarks>
-///     Both screens that show rooms group them through <see cref="FloorGrouping.Group"/>, so these tests are what
-///     stops the dashboard and the Areas section describing one house two different ways. The degradation rule —
-///     a house with no floors gets no headers — is the reason the all-floorless case has a test of its own: it is
-///     the common case, and getting it wrong would invent a feature for houses that never asked for one.
+///     Both screens that show rooms group them through <see cref="FloorGrouping.Group"/>, so the dashboard and
+///     the Areas section cannot describe one house two ways.
 /// </remarks>
 [TestClass]
 public sealed class FloorGroupingTests
@@ -44,7 +42,7 @@ public sealed class FloorGroupingTests
 		registry.Floors["loft"] = new AreaFloor("loft", "Loftet", 2);
 		registry.Floors["ground"] = new AreaFloor("ground", "Ground floor", 0);
 		registry.Floors["first"] = new AreaFloor("first", "First floor", 1);
-		// Two floors sharing a level: the tie is broken by name, so the order is stable rather than incidental.
+		// Two floors sharing a level: the tie is broken by name, so the order is stable.
 		registry.Floors["annex"] = new AreaFloor("annex", "Annexe", 0);
 
 		IReadOnlyList<FloorGroup<AreaConfig>> groups = Group(registry, "loft", "first", "ground", "annex");
@@ -102,11 +100,8 @@ public sealed class FloorGroupingTests
 
 	// ===================== degradation: the house with no floors =====================
 
-	/// <summary>
-	///     The common case, and the whole reason the rule lives in one place. A house that has never made a floor
-	///     must render exactly today's flat list — one group, no name — so the renderers can decide on headers with
-	///     "more than one group, or a named one" and never learn that floors exist.
-	/// </summary>
+	// The common case. Renderers decide on headers with "more than one group, or a named one", so a floorless
+	// house has to collapse to a single unnamed group.
 	[TestMethod]
 	public void A_House_With_No_Floors_At_All_Collapses_To_One_Unnamed_Group()
 	{

@@ -12,17 +12,15 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     A registry that throws until it is told to stop, and counts how often it was asked.
 /// </summary>
 /// <remarks>
-///     The window every read in the web UI has to survive: NetDaemon connects to Home Assistant after Kestrel is
-///     already serving pages, and its registry throws <see cref="InvalidOperationException"/> until it has. What
-///     matters is not only that the throw is caught but that it is not mistaken for an answer, and the only
-///     observable difference between the two is whether Home Assistant is asked a second time.
+///     NetDaemon connects to Home Assistant after Kestrel is already serving pages, and its registry throws
+///     <see cref="InvalidOperationException"/> until it has. The only observable difference between a caught
+///     throw and a real answer is whether Home Assistant gets asked a second time.
 /// </remarks>
 public sealed class RecoveringHaRegistry : IHaRegistry
 {
 	/// <summary>How many times an area lookup was attempted.</summary>
 	public int Lookups { get; private set; }
 
-	/// <summary>Whether the registry is still refusing to answer.</summary>
 	public bool IsDown { get; set; } = true;
 
 	/// <inheritdoc/>
@@ -65,21 +63,14 @@ public sealed class RecoveringHaRegistry : IHaRegistry
 ///     The discovery cache behind the area picker's labels and the dashboard's light counts.
 /// </summary>
 /// <remarks>
-///     The cache exists because discovery is expensive and Blazor re-renders whole pages: uncached, an eleven-area
-///     house runs eleven full discoveries per keystroke. What it must never do is cache the one result that is not
-///     a result — Home Assistant refusing to answer — because that turns a start-up window of a few seconds into a
-///     wrong answer that stands for as long as the browser tab is open.
+///     Blazor re-renders whole pages, so uncached an eleven-area house runs eleven full discoveries per keystroke.
+///     The one thing that must never be cached is a refusal to answer.
 /// </remarks>
 [TestClass]
 public sealed class HaCatalogDiscoveryTests
 {
-	/// <summary>
-	///     <b>The answer that was not an answer.</b> A discovery that threw was filed in the cache as
-	///     <c>0 lights, 0 motion, 0 lux</c>. Because <see cref="HaCatalog"/> is scoped to the Blazor circuit and
-	///     the dashboard asks on a one-second ticker, any page opened in the documented start-up window — Kestrel
-	///     serving before NetDaemon has connected — read every area as empty for the whole session, however long
-	///     Home Assistant had since been up, and only a page reload cleared it.
-	/// </summary>
+	// A discovery that threw used to be filed as 0 lights, 0 motion, 0 lux. HaCatalog is scoped to the Blazor
+	// circuit, so a page opened in the start-up window read every area as empty until it was reloaded.
 	[TestMethod]
 	public void A_Discovery_Home_Assistant_Refused_Is_Not_Kept_As_Its_Answer()
 	{
@@ -102,10 +93,6 @@ public sealed class HaCatalogDiscoveryTests
 			"a refusal is not an answer, so the next question has to reach Home Assistant rather than the cache");
 	}
 
-	/// <summary>
-	///     An answer is still cached, which is the whole reason the cache exists: discovery costs a registry read
-	///     and a state read per candidate, and the area picker needs it for every area on every re-render.
-	/// </summary>
 	[TestMethod]
 	public void A_Discovery_That_Succeeded_Is_Asked_Once()
 	{
@@ -122,10 +109,6 @@ public sealed class HaCatalogDiscoveryTests
 		Assert.IsTrue(afterFirst > 0, "and the first one actually reached the registry");
 	}
 
-	/// <summary>
-	///     Invalidation still drops what was cached. The page calls it whenever it re-reads the document, and
-	///     anything worth re-reading the file for is worth re-reading the registry for.
-	/// </summary>
 	[TestMethod]
 	public void Invalidating_Sends_The_Next_Question_Back_To_Home_Assistant()
 	{

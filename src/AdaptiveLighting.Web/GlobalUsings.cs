@@ -1,4 +1,4 @@
-// Common usings for the lighting web UI. Deliberately mirrors AdaptiveLighting/GlobalUsings.cs.
+// Mirrors AdaptiveLighting/GlobalUsings.cs.
 global using System;
 global using System.Collections.Generic;
 global using System.Linq;

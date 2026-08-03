@@ -11,8 +11,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     The classes that actually talk to Home Assistant: the exact wire format, and the calls not made.
 /// </summary>
 /// <remarks>
-///     Worth testing precisely because nothing else can catch a wrong key. A misspelled <c>brightness_pct</c>
-///     is not a compile error and not a runtime exception — it is a light that quietly ignores the engine.
+///     Nothing else catches a wrong key. A misspelled <c>brightness_pct</c> compiles, throws nothing, and leaves
+///     a light quietly ignoring the engine.
 /// </remarks>
 [TestClass]
 public sealed class HaAdapterTests
@@ -123,8 +123,6 @@ public sealed class HaAdapterTests
 		Assert.AreEqual(0, ha.Calls.Count, "a white-only bulb must not be re-commanded on every single tick");
 	}
 
-	// ===================== notifier =====================
-
 	[TestMethod]
 	public void A_Notification_Is_A_Persistent_Notification_With_A_Stable_Id()
 	{
@@ -142,8 +140,6 @@ public sealed class HaAdapterTests
 		Assert.IsTrue(data.ContainsKey("title"));
 		Assert.IsTrue(data.ContainsKey("message"));
 	}
-
-	// ===================== publisher =====================
 
 	[TestMethod]
 	public void A_Snapshot_Is_Published_As_An_Event_The_UI_Can_Listen_For()

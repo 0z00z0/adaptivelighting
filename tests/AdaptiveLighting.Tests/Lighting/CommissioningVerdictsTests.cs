@@ -4,14 +4,8 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     What a roll-call row says about a room before anybody switches it on.
+///     The words a roll-call row uses. Which flags a room gets is <c>AreaAutoDiscovery</c>'s, and is tested there.
 /// </summary>
-/// <remarks>
-///     The words rather than the rules. Which flags a room gets is <c>AreaAutoDiscovery</c>'s decision and is
-///     tested there; what is asserted here is that a row with nothing to say stays silent, that the amber note
-///     comes first, and that the light-level note describes the room's darkness source rather than manufacturing
-///     a problem out of a setting.
-/// </remarks>
 [TestClass]
 public sealed class CommissioningVerdictsTests
 {
@@ -21,10 +15,6 @@ public sealed class CommissioningVerdictsTests
 
 	// ===================== silence =====================
 
-	/// <summary>
-	///     An ordinary room with a sensor and no flags says nothing, so the row shows one muted word. Seventeen
-	///     green verdicts would be the reassurance dashboard this design guards against.
-	/// </summary>
 	[TestMethod]
 	public void An_Ordinary_Room_Says_Nothing()
 	{
@@ -33,17 +23,8 @@ public sealed class CommissioningVerdictsTests
 		Assert.AreEqual(0, CommissioningVerdicts.For(room, Defaults, luxSensorCount: 1, suspectCount: 0, lightCount: 1).Count);
 	}
 
-	/// <summary>
-	///     A room with nothing to command must never fall through to the silent "Ready".
-	/// </summary>
-	/// <remarks>
-	///     <b>Empty notes is how this table says "good to go", so a room that cannot light must not produce them.</b>
-	///     No lights means no suspects, and every other note is about settings rather than hardware, so the list
-	///     came back empty and the row printed <i>Ready</i> — over a room that would never light. It is not a
-	///     first-boot-only case: this surface is also what a household sees after switching every room off again,
-	///     against a document that may be months old, and a motion sensor renamed in Home Assistant since discovery
-	///     ran is enough to produce it.
-	/// </remarks>
+	// Regression: no lights means no suspects, and every other note is about settings, so the list came back
+	// empty and the row printed Ready over a room that would never light.
 	[TestMethod]
 	public void A_Room_With_No_Lights_Is_Never_Called_Ready()
 	{
@@ -59,11 +40,6 @@ public sealed class CommissioningVerdictsTests
 
 	// ===================== the light-level notes =====================
 
-	/// <summary>
-	///     Having no light-level sensor is not a row note. It was, and on a real house it fired on thirteen of
-	///     seventeen rows while restating the muted dash in the column beside it. The consequence is said once,
-	///     under the table.
-	/// </summary>
 	[TestMethod]
 	public void No_Sensor_Is_Not_A_Row_Note()
 	{
@@ -72,17 +48,13 @@ public sealed class CommissioningVerdictsTests
 		Assert.AreEqual(0, CommissioningVerdicts.For(room, Defaults, 0, 0, 1).Count);
 	}
 
-	/// <summary>
-	///     A room with no sensor on the default darkness source counts as dark all day — the engine's own rule
-	///     (<c>IlluminanceGate</c>: a gate with nothing to read is not a gate), so it is counted for the line.
-	/// </summary>
+	// Follows IlluminanceGate: a gate with nothing to read is not a gate, so the room counts as dark.
 	[TestMethod]
 	public void No_Sensor_On_The_Default_Source_Counts_As_Dark_All_Day()
 	{
 		Assert.IsTrue(CommissioningVerdicts.CountsAsDarkForWantOfASensor(new AreaConfig { AreaId = "bod" }, Defaults, 0));
 	}
 
-	/// <summary>A room that judges by the sun is not missing anything by having no sensor, so it is not counted.</summary>
 	[TestMethod]
 	public void A_Room_That_Judges_By_The_Sun_Is_Not_Counted()
 	{
@@ -92,16 +64,9 @@ public sealed class CommissioningVerdictsTests
 		Assert.AreEqual(0, CommissioningVerdicts.For(room, Defaults, 0, 0, 1).Count);
 	}
 
-	/// <summary>
-	///     The retired <c>Either</c> counts exactly as <c>Lux</c> does, because the engine's gate does.
-	/// </summary>
-	/// <remarks>
-	///     Not a hypothetical value to be tidy about. <c>IlluminanceGate</c> answers <c>Lux or Either</c> identically
-	///     in all three of its arms, and <c>ConfigNormalizer</c> rewrites <c>Either</c> away <b>only on save</b> — the
-	///     load path deliberately leaves a hand-edited document alone. The board reads that un-normalised document, so
-	///     a pre-2.x room saying <c>Either</c> with no sensor lights on movement all day while the line under the table
-	///     omitted it. The one room the warning exists for was the one it did not count.
-	/// </remarks>
+	// Defensive agreement with IlluminanceGate, which answers Lux or Either alike in all three arms. No page can
+	// reach this with Either: every web read goes through LightingConfigDocument.Deserialize, whose LegacyValues
+	// rewrites the scalar on load. The member survives for NetDaemon's binder, which has no such pre-pass.
 	[TestMethod]
 	public void The_Retired_Either_Counts_As_Dark_Just_As_Lux_Does()
 	{
@@ -113,7 +78,6 @@ public sealed class CommissioningVerdictsTests
 		Assert.IsTrue(CommissioningVerdicts.CountsAsDarkForWantOfASensor(new AreaConfig { AreaId = "bod" }, inherited, 0));
 	}
 
-	/// <summary>A room with a sensor, or with one pinned by hand, is not counted either.</summary>
 	[TestMethod]
 	public void A_Room_With_A_Sensor_Is_Not_Counted()
 	{
@@ -123,7 +87,6 @@ public sealed class CommissioningVerdictsTests
 		Assert.IsFalse(CommissioningVerdicts.CountsAsDarkForWantOfASensor(pinned, Defaults, 0));
 	}
 
-	/// <summary>The line is said once, counted, and not at all for a house where every room has a sensor.</summary>
 	[TestMethod]
 	public void The_No_Sensor_Line_Is_Said_Once()
 	{
@@ -132,7 +95,6 @@ public sealed class CommissioningVerdictsTests
 		StringAssert.StartsWith(CommissioningVerdicts.NoSensorLine(11), "11 rooms have no light-level sensor, so they count as dark all day");
 	}
 
-	/// <summary>Two sensors are averaged by engine rule, and the row says so rather than leaving it to be found out.</summary>
 	[TestMethod]
 	public void Two_Sensors_Are_Reported_As_An_Average()
 	{
@@ -143,7 +105,6 @@ public sealed class CommissioningVerdictsTests
 			"reads the average of 2 sensors");
 	}
 
-	/// <summary>A room that pins its own sensor has no ambiguity left to report.</summary>
 	[TestMethod]
 	public void A_Pinned_Sensor_Ends_The_Average_Note()
 	{
@@ -154,7 +115,6 @@ public sealed class CommissioningVerdictsTests
 
 	// ===================== the role guesses =====================
 
-	/// <summary>The bedroom guess is the two sleep flags, said once however many of them are set.</summary>
 	[TestMethod]
 	public void The_Sleep_Flags_Read_As_Bedroom_Manners()
 	{
@@ -164,7 +124,6 @@ public sealed class CommissioningVerdictsTests
 			CommissioningVerdicts.For(room, Defaults, 1, 0, 2)));
 	}
 
-	/// <summary>The hallway guess and the outdoor guess get the words the room's own sentences use.</summary>
 	[TestMethod]
 	public void The_Other_Two_Guesses_Keep_Their_Own_Words()
 	{
@@ -175,7 +134,6 @@ public sealed class CommissioningVerdictsTests
 		CollectionAssert.Contains((System.Collections.ICollection)Words(CommissioningVerdicts.For(terrace, Defaults, 0, 0, 2)), "stays on when everyone leaves");
 	}
 
-	/// <summary>A flag inherited from the house's defaults counts exactly as a flag the room states itself.</summary>
 	[TestMethod]
 	public void An_Inherited_Flag_Still_Earns_Its_Note()
 	{
@@ -187,7 +145,6 @@ public sealed class CommissioningVerdictsTests
 
 	// ===================== the suspects =====================
 
-	/// <summary>The amber note comes first, because it is the one thing on the row somebody has to act on.</summary>
 	[TestMethod]
 	public void The_Warning_Leads_The_Row()
 	{
@@ -200,7 +157,6 @@ public sealed class CommissioningVerdictsTests
 		Assert.AreEqual(VerdictTone.Info, notes[1].Tone);
 	}
 
-	/// <summary>One suspect is singular. An off-by-one in a plural reads as a bug in the product.</summary>
 	[TestMethod]
 	public void One_Suspect_Reads_As_One()
 	{
@@ -213,14 +169,12 @@ public sealed class CommissioningVerdictsTests
 
 	// ===================== the near-miss line =====================
 
-	/// <summary>A house where discovery refused nothing gets no line at all.</summary>
 	[TestMethod]
 	public void No_Near_Misses_Means_No_Line()
 	{
 		Assert.IsNull(CommissioningVerdicts.NearMiss([]));
 	}
 
-	/// <summary>The line names the rooms and the fix, and reads as English in both numbers.</summary>
 	[TestMethod]
 	public void The_Near_Miss_Line_Names_The_Rooms_And_The_Fix()
 	{
@@ -237,7 +191,6 @@ public sealed class CommissioningVerdictsTests
 
 	// ===================== the commit button =====================
 
-	/// <summary>The button counts, which is the whole progress model — there is no progress bar anywhere.</summary>
 	[TestMethod]
 	public void The_Button_Counts()
 	{
@@ -246,7 +199,6 @@ public sealed class CommissioningVerdictsTests
 		Assert.AreEqual("Switch on 9 rooms", CommissioningVerdicts.CommitLabel(9));
 	}
 
-	/// <summary>The rest are not lost, and the line says where they went rather than only how many there are.</summary>
 	[TestMethod]
 	public void The_Rest_Line_Says_Where_They_Went()
 	{

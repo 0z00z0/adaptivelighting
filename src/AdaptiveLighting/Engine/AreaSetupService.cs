@@ -5,84 +5,38 @@ namespace AdaptiveLighting.Engine;
 
 /// <summary>
 ///     What one setup run will do, itemised so the warning dialog can be concrete about losses.
+///     <c>NoLongerQualifying</c> rooms are reported and never removed; removing a room stays the owner's act.
 /// </summary>
-/// <param name="NewAreas">
-///     Areas Home Assistant now qualifies that the document does not have yet, already switched off. Always
-///     included: adding a room nobody has switched on cannot change what any light does.
-/// </param>
-/// <param name="Rebuilds">One entry per area the run will rebuild, with what that rebuild costs.</param>
-/// <param name="NoLongerQualifying">
-///     Area ids in the run that discovery can no longer furnish — the room lost its light or its motion sensor.
-///     Reported so the dialog can say so; never removed, because removing a room stays the owner's explicit act.
-/// </param>
 public sealed record SetupPlan(
 	IReadOnlyList<AreaConfig> NewAreas,
 	IReadOnlyList<AreaRebuildPlan> Rebuilds,
 	IReadOnlyList<string> NoLongerQualifying);
 
 /// <summary>
-///     One existing area's rebuild. The three counts are the three things a rebuild destroys — hand-picked
-///     entities, changed settings, a custom name — which is exactly what the dialog lists.
+///     One existing area's rebuild. The three counts are the three things a rebuild destroys: hand-picked
+///     entities, changed settings, a custom name.
 /// </summary>
-/// <param name="AreaId">The area being rebuilt. Its identity, and one of the three fields a rebuild spares.</param>
-/// <param name="PinnedEntityCount">
-///     How many entity choices the area has made by hand rather than discovering: explicit lights, motion sensors,
-///     a lux sensor, a decision to follow the house's outdoor one, the blockers under <c>IgnoreWhenOn</c>, and the
-///     per-room exclusions under <c>ExcludeEntities</c> — all of which a rebuild throws away, so all of which the
-///     warning must count.
-/// </param>
-/// <param name="OverrideCount">
-///     How many of the sixteen per-room settings the area overrides. <c>Enabled</c> is not among them: it survives
-///     the rebuild, so counting it would warn about a loss that never happens.
-/// </param>
-/// <param name="HasCustomName">Whether the area carries a display name of its own, which the rebuild drops.</param>
 public sealed record AreaRebuildPlan(string AreaId, int PinnedEntityCount, int OverrideCount, bool HasCustomName);
 
 /// <summary>
-///     Sets areas up from what Home Assistant knows — on a first start, and again whenever the owner asks.
+///     Sets areas up from what Home Assistant knows, on a first start and again whenever the owner asks.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why this is not inside the host.</b> First run and "set up rooms again" must be the same code
-///         observed twice. While discovery lived inside <c>LightingEngineHost</c> the only way to re-run it was to
-///         delete the document, and any UI button would have been a second implementation of the same rules —
-///         which is how a warning dialog starts lying about what the rebuild actually does.
-///     </para>
-///     <para>
-///         <b>There is deliberately no merge parameter and no preserve-list.</b> The owner chose a clear warning
-///         over clever preservation: a service with one behaviour is a service whose warning is always true. Every
-///         option added here would be a case the dialog has to describe and a case nobody tested.
-///     </para>
-///     <para>
-///         <see cref="Plan"/> is pure — registry in, plan out — so the dialog can be rendered, cancelled, or
-///         asserted on without anything being written. <see cref="Apply"/> mutates the in-memory document and
-///         nothing else; writing stays the save path's job, which is why it is still the only write path.
-///     </para>
+///     One behaviour, no merge parameter and no preserve-list, so the warning dialog is always true.
+///     <see cref="Plan"/> is pure: registry in, plan out, nothing written. <see cref="Apply"/> mutates the
+///     in-memory document only; writing stays the save path's job.
 /// </remarks>
 public static class AreaSetupService
 {
-	/// <summary>The domain presence is read from when the document names nobody.</summary>
 	private const string PersonDomain = "person";
 
-	/// <summary>
-	///     The attribute a <c>person.*</c> state carries: the device-tracker entity ids that back it. An empty or
-	///     missing list means the person has no presence source, so it is never seeded.
-	/// </summary>
+	// The device-tracker entity ids backing a person. Empty or missing means no presence source at all.
 	private const string DeviceTrackersAttribute = "device_trackers";
 
 	/// <summary>
 	///     Works out what setting up <paramref name="scope"/> again would do, without touching anything.
+	///     <paramref name="scope"/> is the area ids ticked for rebuild; ids the document lacks are ignored.
 	/// </summary>
-	/// <param name="config">The document as it stands. Not mutated.</param>
-	/// <param name="registry">Source of the area list.</param>
-	/// <param name="resolver">Classifies each area's entities, by exactly the rules the engine runs on.</param>
-	/// <param name="scope">
-	///     The area ids ticked for rebuild. Empty on a first run, where the document has no areas to rebuild;
-	///     every id in the document when the owner presses "Set up rooms again"; one when they press it inside a
-	///     room. Ids the document does not have are ignored — a plan describes this document, not a wish.
-	/// </param>
-	/// <returns>What a following <see cref="Apply"/> would do.</returns>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static SetupPlan Plan(
 		AdaptiveLightingConfig config,
 		IAreaRegistry registry,
@@ -117,8 +71,7 @@ public static class AreaSetupService
 				OverrideCount(area),
 				area.Name is { Length: > 0 }));
 
-			// Ticked and no longer qualifying is still a rebuild — "ticked means rebuilt" has no exceptions, or the
-			// dialog would have to describe one. It just also earns a line saying the house changed underneath it.
+			// Ticked and no longer qualifying is still a rebuild. "Ticked means rebuilt" has no exceptions.
 			if (!qualifying.Contains(areaId))
 				noLongerQualifying.Add(areaId);
 		}
@@ -126,35 +79,15 @@ public static class AreaSetupService
 		return new SetupPlan(newAreas, rebuilds, noLongerQualifying);
 	}
 
-	/// <summary>
-	///     Carries <paramref name="plan"/> out on <paramref name="config"/>, in memory.
-	/// </summary>
+	/// <summary>Carries <paramref name="plan"/> out on <paramref name="config"/>, in memory.</summary>
 	/// <remarks>
-	///     A rebuilt area is <i>replaced</i> by a fresh proposal rather than edited: exactly three things survive,
-	///     each because it is not discovery's output — <see cref="AreaConfig.AreaId"/>, the room's identity,
-	///     <see cref="AreaConfig.Enabled"/>, the owner's power switch, and <see cref="AreaConfig.Levels"/>, the
-	///     brightness and warmth the owner set for this room by period. Re-tagging lights in Home Assistant must
-	///     not silently switch a room off, or on, and must not throw away levels that have nothing to do with which
-	///     bulbs were found. Everything else — the name, the pinned entity lists, the setting overrides — is what
-	///     the dialog warned about, and it goes.
-	///     <para>
-	///         Nothing is written and nothing is removed. Areas outside the plan keep their exact instance, so a
-	///         document that had no rebuilds serialises byte for byte as it was.
-	///     </para>
-	///     <para>
-	///         <b>A room the document already has is never added again.</b> A plan is a value somebody holds
-	///         across an edit — the Areas page keeps the setup panel open beside its own "Add a room" and "Discard
-	///         changes" buttons, and a confirmation can be delivered twice — so the document being mutated is not
-	///         always the one <see cref="Plan"/> read. Two rows for one Home Assistant area is not a cosmetic
-	///         duplicate: it either refuses every save (the validator rejects a duplicate area name) or, once one
-	///         row carries a name of its own, runs two state machines against the same lights. So the check
-	///         <see cref="Plan"/> already makes is made again here, against the document actually in hand, which
-	///         also makes applying the same plan twice the same document as applying it once.
-	///     </para>
+	///     A rebuilt area is replaced by a fresh proposal, not edited. Three fields survive because discovery does
+	///     not produce them: <see cref="AreaConfig.AreaId"/>, <see cref="AreaConfig.Enabled"/> and
+	///     <see cref="AreaConfig.Levels"/>. Areas outside the plan keep their exact instance, so a document with
+	///     no rebuilds serialises byte for byte as it was.
+	///     A plan is held across edits, so the document in hand may not be the one <see cref="Plan"/> read. The
+	///     duplicate check is therefore repeated here, which also makes applying a plan twice idempotent.
 	/// </remarks>
-	/// <param name="config">The document to mutate.</param>
-	/// <param name="plan">The plan, from <see cref="Plan"/> against this same document.</param>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static void Apply(AdaptiveLightingConfig config, SetupPlan plan)
 	{
 		ArgumentNullException.ThrowIfNull(config);
@@ -162,8 +95,7 @@ public static class AreaSetupService
 
 		HashSet<string> rebuilding = new(plan.Rebuilds.Select(rebuild => rebuild.AreaId), StringComparer.Ordinal);
 
-		// By index, so an area keeps its place in the document and a duplicated area id rebuilds both rows rather
-		// than only the first one a search would find.
+		// By index, so an area keeps its place and a duplicated area id rebuilds both rows, not just the first.
 		for (int index = 0; index < config.Areas.Count; index++)
 		{
 			AreaConfig existing = config.Areas[index];
@@ -171,19 +103,14 @@ public static class AreaSetupService
 			if (existing.AreaId is not { Length: > 0 } areaId || !rebuilding.Contains(areaId))
 				continue;
 
-			// Levels survive for the same reason Enabled does: a rebuild re-runs discovery, and discovery has no
-			// opinion about what brightness a cellar corridor wants. Everything else this drops — the pinned
-			// entities, the tuned settings, the custom name — is something the fresh proposal supplies again;
-			// nothing supplies these, so dropping them would be destroying an answer rather than re-asking a
-			// question. That is also why they are counted by neither PinnedEntityCount nor OverrideCount: a
-			// rebuild does not cost them, so warning about them would be warning about nothing.
+			// Enabled and Levels survive, which is why neither PinnedEntityCount nor OverrideCount counts them.
 			AreaConfig fresh = new() { AreaId = areaId, Enabled = existing.Enabled, Levels = existing.Levels };
 			AreaAutoDiscovery.ApplyRole(fresh);
 
 			config.Areas[index] = fresh;
 		}
 
-		// Grown as it goes, so a registry that named an area twice cannot slip two rows past it either.
+		// Grown as it goes, so a registry naming an area twice cannot slip two rows past it either.
 		HashSet<string> present = new(AreaIdsOf(config), StringComparer.Ordinal);
 
 		foreach (AreaConfig added in plan.NewAreas)
@@ -195,32 +122,11 @@ public static class AreaSetupService
 	///     Names the people Home Assistant knows in <c>Global.Persons</c>, but only while nobody is named yet.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         Called on a first setup and never on a re-run, and it guards the empty case itself so both halves of
-	///         that rule hold: a household that deliberately empties the list must find it still empty next start,
-	///         the same principle as the one-way discovery flag.
-	///     </para>
-	///     <para>
-	///         The trade-off, stated honestly rather than hidden: an empty list means "everyone, forever, including
-	///         the person added next year", and an explicit list freezes membership. Seeding it anyway is the
-	///         requirement, because a non-technical owner should be able to <i>see</i> who decides Home and Away —
-	///         and remove the car tracker — instead of trusting a rule they cannot read.
-	///     </para>
-	///     <para>
-	///         Only a person <i>with a device tracker</i> is seeded. A <c>person.*</c> entity with no tracker can
-	///         never resolve to home or away — it is not a presence source at all — so it is dead weight in the
-	///         Home/Away calculation and, having no friendly name, renders as its raw entity id in the UI. A live
-	///         house carried exactly such a stray (<c>person.espen</c>, <c>unavailable</c>, no trackers) beside the
-	///         two real people; the tracker filter keeps it out.
-	///     </para>
+	///     Seeding freezes membership where an empty list means everyone forever, so it guards the empty case
+	///     itself: a household that empties the list must find it still empty next start. Only a person with a
+	///     device tracker is seeded; one without can never resolve to home or away.
 	/// </remarks>
-	/// <param name="config">The document to seed. Only <c>Global.Persons</c> is touched.</param>
-	/// <param name="ha">Where the <c>person.*</c> entities are read from.</param>
-	/// <returns>
-	///     The ids written, in entity-id order. Empty when the list was already non-empty, or HA knows nobody with
-	///     a device tracker.
-	/// </returns>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	/// <returns>The ids written, in entity-id order. Empty when the list was already non-empty.</returns>
 	public static IReadOnlyList<string> SeedPersons(AdaptiveLightingConfig config, IHaContext ha)
 	{
 		ArgumentNullException.ThrowIfNull(config);
@@ -243,24 +149,14 @@ public static class AreaSetupService
 		return persons;
 	}
 
-	/// <summary>Every area id the document names, skipping rows that name none.</summary>
 	private static IEnumerable<string> AreaIdsOf(AdaptiveLightingConfig config) =>
 		config.Areas
 			.Select(area => area.AreaId)
 			.Where(areaId => areaId is { Length: > 0 })
 			.Select(areaId => areaId!);
 
-	/// <summary>
-	///     How many entity choices the area has made by hand instead of discovering them, plus the ids it excludes
-	///     from discovery.
-	/// </summary>
-	/// <remarks>
-	///     <c>FollowOutdoorLux</c> counts among them, and belongs here rather than with the settings: it answers
-	///     the same question <c>LuxSensor</c> answers — which entity supplies this room's illuminance — and a
-	///     rebuild drops it exactly as it drops a pinned id. Counting it as a setting instead would put it in a
-	///     numerator whose denominator is the per-room settings the model has, and a room could then report
-	///     overriding more settings than exist.
-	/// </remarks>
+	// FollowOutdoorLux counts here, not as a setting: it answers the same question LuxSensor does, and counted as
+	// a setting a room could report overriding more settings than the model has.
 	private static int PinnedEntityCount(AreaConfig area) =>
 		(area.Lights?.Count ?? 0)
 		+ (area.MotionSensors?.Count ?? 0)
@@ -270,25 +166,10 @@ public static class AreaSetupService
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>
-	///     How many of the twenty-one per-room settings the area overrides.
+	///     How many of the twenty-one per-room settings the area overrides. The only copy: the editor once kept a
+	///     twin, and it drifted. A test pins the count against the model by reflection.
 	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Spelled out rather than reflected over, so that a setting has to be named to be counted and the
-	///         list can be read against the model. <c>Enabled</c> and <c>Levels</c> are deliberately absent — both
-	///         survive the rebuild, so counting them would warn about a loss that does not happen.
-	///     </para>
-	///     <para>
-	///         <b>Public, and the only copy, because the previous arrangement drifted.</b> The editor kept its own
-	///         spelled-out twin on the theory that two lists read side by side would be kept in step; when the five
-	///         daylight-brightness settings arrived only this one was updated, so a room tuned solely through them
-	///         reported "all automatic" while the re-setup dialog correctly counted five. Both surfaces now ask
-	///         here. A test pins this count against the model by reflection, so a setting added without being
-	///         named fails loudly rather than going quietly uncounted.
-	///     </para>
-	/// </remarks>
-	/// <param name="area">The room to count.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="area"/> is <c>null</c>.</exception>
+	/// <remarks><c>Enabled</c> and <c>Levels</c> are absent because both survive a rebuild.</remarks>
 	public static int OverrideCount(AreaConfig area) =>
 		(area.VacancyTimeoutSeconds is not null ? 1 : 0) + (area.PreOffSeconds is not null ? 1 : 0)
 		+ (area.PreOffBrightnessFactor is not null ? 1 : 0) + (area.OverrideDurationMinutes is not null ? 1 : 0)

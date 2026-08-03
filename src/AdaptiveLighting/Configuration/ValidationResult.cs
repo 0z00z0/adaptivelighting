@@ -3,17 +3,16 @@ using System.Text;
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>
-///     A configuration problem scoped to a single area. These degrade rather than throw: the area is skipped
-///     and the rest of the house keeps working.
+///     A configuration problem scoped to a single area. These degrade instead of throwing: the area is skipped and
+///     the rest of the house keeps working.
 /// </summary>
 /// <param name="AreaName">Display name of the offending area.</param>
 /// <param name="Message">What is wrong, phrased for someone editing the YAML.</param>
 public sealed record AreaError(string AreaName, string Message);
 
 /// <summary>
-///     The outcome of <see cref="ConfigValidator.Validate"/>. Document-level <see cref="Errors"/> are fatal —
-///     the app must throw. <see cref="AreaErrors"/> are not: an entity renamed in HA must not black out the
-///     whole house.
+///     The outcome of <see cref="ConfigValidator.Validate"/>. Document-level <see cref="Errors"/> are fatal;
+///     <see cref="AreaErrors"/> are not, because an entity renamed in HA must not black out the whole house.
 /// </summary>
 public sealed class ValidationResult
 {
@@ -33,13 +32,11 @@ public sealed class ValidationResult
 	/// <summary>Whether the document can be run. Area errors and warnings do not make a document invalid.</summary>
 	public bool IsValid => _errors.Count == 0;
 
-	/// <summary>Records a fatal, document-level error.</summary>
 	public void AddError(string message) => _errors.Add(message);
 
 	/// <summary>Records an area that must be skipped, and why.</summary>
 	public void AddAreaError(string areaName, string message) => _areaErrors.Add(new AreaError(areaName, message));
 
-	/// <summary>Records a non-blocking warning — worth surfacing, but not worth refusing the document over.</summary>
 	public void AddWarning(string message) => _warnings.Add(message);
 
 	/// <summary>Plain-text rendering for log output and exception messages.</summary>

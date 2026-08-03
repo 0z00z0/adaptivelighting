@@ -6,9 +6,8 @@ namespace AdaptiveLighting.Web.Services;
 ///     Reads the house's latitude and longitude from Home Assistant's <c>zone.home</c>, for the daylight chart.
 /// </summary>
 /// <remarks>
-///     No engine surface is added: the location is presentation-only. When <c>zone.home</c> cannot be read — HA
-///     down, or an exotic install without it — <see cref="TryRead"/> returns <c>null</c> and the chart shows a
-///     note rather than a guessed location. "Never a default dressed as a fact" applies to geography too.
+///     Presentation-only; no engine surface is added. With <c>zone.home</c> unreadable, <see cref="TryRead"/>
+///     answers <c>null</c> and the chart shows a note in place of a guessed location.
 /// </remarks>
 public sealed class HomeLocation
 {
@@ -18,9 +17,6 @@ public sealed class HomeLocation
 
 	private readonly IHaContext _ha;
 
-	/// <summary>Creates the service.</summary>
-	/// <param name="ha">The HA context <c>zone.home</c> is read through.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="ha"/> is <c>null</c>.</exception>
 	public HomeLocation(IHaContext ha) => _ha = ha ?? throw new ArgumentNullException(nameof(ha));
 
 	/// <summary>The home's latitude/longitude in degrees, or <c>null</c> when Home Assistant did not provide one.</summary>

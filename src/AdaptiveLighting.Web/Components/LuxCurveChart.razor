@@ -5,22 +5,9 @@
 @*
 	The room's daylight curve, drawn and dragged.
 
-	Five numbers decide how far a bright day lifts this room above its schedule, and four of them are anchors on
-	one line. Read as four rows of digits they are a puzzle; drawn as a line with the room's own reading standing
-	on it, they are a picture — which is why the owner asked for a chart rather than better help text.
-
-	The x axis is logarithmic, and not as a preference: illuminance spans four decades between a dark night and a
-	bright day, and a linear axis spends nine tenths of its width on the top one. It is the same log-space
-	interpolation the engine performs, so the axis is a picture of the arithmetic rather than a second opinion
-	about it. Every y on the line comes from LuxBrightnessCurve.Raise itself — see Services/LuxCurve.cs.
-
-	THREE WAYS TO SET THE SAME NUMBERS. The handles drag with a mouse, a pen or a finger (pointer events, with
-	the surface capturing the pointer so a drag may leave the plot, and touch-action: none so a finger drags the
-	curve instead of scrolling the page). Each handle is also a focusable slider: Tab reaches it and the arrow
-	keys move it by the setting's own step. And the numbers themselves sit under the chart as the same steppers
-	the settings rows use, because a value only a drag can reach is a value some people cannot reach at all.
-
-	It writes nothing. Every change leaves as a CurveEdit and the page puts it through its own save path.
+	The x axis is logarithmic and every y on the line comes from LuxBrightnessCurve.Raise, so the picture is
+	the engine's own arithmetic. Handles drag, take the keyboard, and are also editable as numbers below.
+	It writes nothing: every change leaves as a CurveEdit and the page saves.
 *@
 
 <div class="luxc @(_grip == Grip.None ? null : "luxc-dragging")">
@@ -85,12 +72,8 @@
 			</g>
 		</svg>
 
-		@*
-			The thing a finger actually touches, laid exactly over the plot area by LuxCurve.SurfaceStyle so the
-			drawing and the target can never disagree about where the plot is. It is on top of the handles on
-			purpose: a tap anywhere grabs the nearest one, which is the difference between a chart that works on a
-			phone and one that demands a seven-pixel hit. Tab still reaches the handles themselves.
-		*@
+		@* The gesture target, laid over the plot by LuxCurve.SurfaceStyle. It sits above the handles so a tap
+		   anywhere grabs the nearest one; Tab still reaches the handles themselves. *@
 		<div class="luxc-surface" style="@LuxCurve.SurfaceStyle()" @ref="_surface"></div>
 	</div>
 
@@ -98,45 +81,32 @@
 </div>
 
 @code {
-	/// <summary>Which handle a gesture is steering.</summary>
+	/// <summary>Which handle a gesture is steering: the foot, the head, or the shaping exponent.</summary>
 	private enum Grip
 	{
-		/// <summary>Nothing is being dragged.</summary>
 		None,
-
-		/// <summary>The foot of the curve: the reading at which brightening starts.</summary>
 		Start,
-
-		/// <summary>The head: the reading for full brightness, and how bright that is.</summary>
 		Full,
-
-		/// <summary>The middle: the shaping exponent.</summary>
 		Shape
 	}
 
-	/// <summary>The room's settings with its inheritance already resolved — the curve as the engine would run it.</summary>
+	/// <summary>The room's settings with inheritance already resolved.</summary>
 	[Parameter, EditorRequired]
 	public AreaSettings Settings { get; set; } = new();
 
-	/// <summary>
-	///     The level the curve rises from: what the period in force asks this room for.
-	/// </summary>
-	/// <remarks>
-	///     The adjustment raises the schedule's own brightness rather than replacing it, so the foot of the line
-	///     sits at whatever the period wants. Drawn against a fixed 0 % it would be a different rule's picture.
-	/// </remarks>
+	/// <summary>The level the curve rises from: what the period in force asks this room for.</summary>
 	[Parameter]
 	public double BaseBrightnessPct { get; set; } = 80;
 
-	/// <summary>The period the base level came from, so the caption can name it. <c>null</c> when none resolves.</summary>
+	/// <summary>The period the base level came from, so the caption can name it.</summary>
 	[Parameter]
 	public string? PeriodName { get; set; }
 
-	/// <summary>The room's light-level reading right now, or <c>null</c> when it has no sensor that answers.</summary>
+	/// <summary>The room's light-level reading right now, or <c>null</c> when no sensor answers.</summary>
 	[Parameter]
 	public double? Reading { get; set; }
 
-	/// <summary>Raised for each setting a drag or a key changes. The page decides what applying it means.</summary>
+	/// <summary>Raised for each setting a drag or a key changes. Nothing here writes.</summary>
 	[Parameter]
 	public EventCallback<CurveEdit> Changed { get; set; }
 
@@ -146,8 +116,8 @@
 
 	private Grip _grip = Grip.None;
 
-	// Rebuilt in OnParametersSet rather than read in getters: this sits on a page that redraws once a second,
-	// and the backdrop is a hundred-odd string appends.
+	// Rebuilt in OnParametersSet, not read in getters: this page redraws once a second and the backdrop is a
+	// hundred-odd string appends.
 	private double _axisMax = 10_000;
 	private string _backdrop = "";
 	private string _path = "";
@@ -185,11 +155,8 @@
 		_backdrop = Backdrop();
 	}
 
-	/// <inheritdoc/>
-	/// <remarks>
-	///     Attached once, and never re-attached: the surface element is stable for the life of the component, and
-	///     a second <c>watch</c> on the same element is refused by the script rather than doubling every report.
-	/// </remarks>
+	// Attached once: the surface element is stable for the component's life, and a second watch on the same
+	// element is refused by the script.
 	protected override async Task OnAfterRenderAsync(bool firstRender)
 	{
 		if (!firstRender || _watching)
@@ -204,25 +171,17 @@
 		}
 		catch (Exception exception) when (IsSurvivable(exception))
 		{
-			// The chart is still readable and every value it sets is still reachable from the numbers under it,
-			// so a missing script costs the drag and nothing else. Taking the circuit down for it would cost the
-			// page — an exception out of OnAfterRenderAsync is an unhandled circuit exception.
+			// An exception out of OnAfterRenderAsync tears the circuit down. A missing script costs only the
+			// drag; every value is still reachable from the numbers under the chart.
 			Logger.LogDebug(exception, "The daylight curve could not attach its pointer handler; it stays read-only.");
 		}
 	}
 
-	/// <summary>Which interop failures are ordinary in a long-lived circuit — the same three <c>ThemePicker</c> survives.</summary>
+	/// <summary>Which interop failures are ordinary in a long-lived circuit. The same three <c>ThemePicker</c> survives.</summary>
 	private static bool IsSurvivable(Exception exception) =>
 		exception is JSDisconnectedException or JSException or OperationCanceledException;
 
-	/// <summary>
-	///     Takes hold of whichever handle the gesture started nearest.
-	/// </summary>
-	/// <remarks>
-	///     Nearest rather than hit-tested, so the whole plot is a target: a seven-pixel circle is a fair mouse
-	///     target and an unfair finger one. The grab also applies at once, so a tap moves the curve rather than
-	///     waiting for a drag that a tap never produces.
-	/// </remarks>
+	/// <summary>Takes hold of whichever handle the gesture started nearest, and applies at once so a tap moves it.</summary>
 	/// <param name="x">Where the pointer went down, as a fraction across the plot.</param>
 	/// <param name="y">The same, down the plot.</param>
 	[JSInvokable]
@@ -236,13 +195,10 @@
 		return Apply(x, y);
 	}
 
-	/// <summary>Moves the held handle. Ignored when nothing is held, which is a report that outran a drop.</summary>
-	/// <param name="x">Where the pointer is, as a fraction across the plot.</param>
-	/// <param name="y">The same, down the plot.</param>
+	/// <summary>Moves the held handle. Ignored when nothing is held: that is a report which outran a drop.</summary>
 	[JSInvokable]
 	public Task Move(double x, double y) => _grip == Grip.None ? Task.CompletedTask : Apply(x, y);
 
-	/// <summary>Lets go.</summary>
 	[JSInvokable]
 	public Task Drop()
 	{
@@ -287,14 +243,9 @@
 		_ => Task.CompletedTask
 	};
 
-	/// <summary>
-	///     The exponent that puts the curve through a point dragged to <paramref name="y"/>.
-	/// </summary>
-	/// <remarks>
-	///     Read as a position within the headroom rather than as a brightness, because that is what the engine's
-	///     shaping acts on: the same drag means a different exponent under a period asking 20 % than under one
-	///     asking 70 %, and taking the brightness literally would make the handle disagree with the line it sits on.
-	/// </remarks>
+	/// <summary>The exponent that puts the curve through a point dragged to <paramref name="y"/>.</summary>
+	// Read as a position within the headroom, not as a brightness: that is what the engine's shaping acts on, so
+	// the same drag means a different exponent under a period asking 20 % than under one asking 70 %.
 	private double GammaAt(double y)
 	{
 		double brightness = (1 - Math.Clamp(y, 0, 1)) * 100;
@@ -309,18 +260,11 @@
 			ShapeSetting.Min,
 			ShapeSetting.Max ?? 5);
 
-		// To the stepper's own grain, so a value reached by dragging is one the arrows can reach again.
+		// Snapped to the stepper's grain, so a value reached by dragging is one the arrows can reach again.
 		return Math.Round(gamma / ShapeSetting.Step, MidpointRounding.AwayFromZero) * ShapeSetting.Step;
 	}
 
-	/// <summary>
-	///     Moves the foot of the curve, keeping it below the head.
-	/// </summary>
-	/// <remarks>
-	///     The validator refuses anchors that cross, and a chart that can produce a document the validator refuses
-	///     is a chart that turns a drag into a red banner. So the two anchors hold each other apart here, at the
-	///     point where the number is made rather than after it has been written.
-	/// </remarks>
+	/// <summary>Moves the foot of the curve, keeping it below the head. The validator refuses anchors that cross.</summary>
 	private Task SetStartLux(double lux)
 	{
 		double ceiling = Math.Max(StartSetting.Min, Settings.LuxBrightnessFullLux - 1);
@@ -328,30 +272,10 @@
 		return Raise(nameof(AreaSettings.LuxBrightnessStartLux), Math.Clamp(lux, StartSetting.Min, ceiling));
 	}
 
-	/// <summary>
-	///     Moves the head of the curve, which is two settings: the reading it happens at, and how bright it is.
-	/// </summary>
-	/// <remarks>
-	///     <b>The CEILING gives way to the floor, never the other way round.</b> <c>LuxBrightnessStartLux</c> has no
-	///     configured maximum and the validator only asks that full is above start, so
-	///     <c>{ StartLux: 120000, FullLux: 200000 }</c> is a document this app will happily save — direct sunlight
-	///     is around 100 000 lx. The floor derived from it then exceeds this axis's 100 000 ceiling, and
-	///     <c>Math.Clamp</c> throws when its minimum is above its maximum: an <c>ArgumentException</c> out of an
-	///     event handler, which takes the circuit down. One arrow key on the handle was enough.
-	///     <para>
-	///         Lowering the floor to meet the ceiling also stops the throw, and is worse. It would rewrite
-	///         <c>FullLux</c> from 200 000 down to 100 000 — <i>below the start anchor</i> — as a side effect of a
-	///         keypress that asked to change brightness only. The validator then refuses every subsequent save, so
-	///         the page sits on a permanent "Not saved" banner with its state diverged from disk, and nothing on
-	///         screen says an arrow key destroyed an anchor. A crash is loud; that is silent and unrecoverable
-	///         without knowing what happened.
-	///     </para>
-	///     <para>
-	///         So the axis ceiling yields instead. The two anchors can never cross, no value the owner did not
-	///         touch is rewritten, and <c>Math.Clamp</c> always has a valid range. <see cref="SetStartLux"/> cannot
-	///         invert the same way — its <c>Math.Max</c> only ever raises.
-	///     </para>
-	/// </remarks>
+	/// <summary>Moves the head of the curve: the reading full brightness happens at, and how bright that is.</summary>
+	// The ceiling yields to the floor, never the reverse. StartLux has no configured maximum, so a saved
+	// { StartLux: 120000, FullLux: 200000 } puts the derived floor above the axis ceiling, and Math.Clamp throws
+	// when min > max: an ArgumentException out of an event handler takes the circuit down.
 	private async Task SetFull(double lux, double brightnessPct)
 	{
 		double floor = Math.Max(FullSetting.Min, Settings.LuxBrightnessStartLux + 1);
@@ -368,26 +292,9 @@
 
 	private Task Raise(string key, double value) => Changed.InvokeAsync(new CurveEdit(key, value));
 
-	/// <summary>
-	///     The keyboard half: the arrows move a handle by the setting's own step.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Left and right move an illuminance, up and down a brightness or a shape — which is the axis each
-	///         setting lives on, so the key that moves the picture is the key that moves the number. Lux steps
-	///         multiply rather than add: a fixed 50 lx step needs two hundred presses to cross the top decade and
-	///         cannot express the bottom one at all, and this axis is logarithmic precisely because the quantity is.
-	///     </para>
-	///     <para>
-	///         <b>On the shaping handle, Up lowers the exponent.</b> That is backwards for an ARIA slider, whose
-	///         convention is that Up increases the value — and it is deliberate: a lower exponent lifts the curve,
-	///         so Up moves the handle up, which is what dragging it does. Keyboard and pointer disagreeing about
-	///         direction on one handle would be the worse surprise, and it is the one a person using both would
-	///         hit immediately. The cost is paid where it barely lands: a screen reader announces
-	///         <c>aria-valuetext</c> in preference to <c>aria-valuenow</c>, and that text is the curve described in
-	///         words, which moves the right way.
-	///     </para>
-	/// </remarks>
+	/// <summary>The keyboard half: the arrows move a handle by the setting's own step.</summary>
+	// On the shaping handle Up lowers the exponent, backwards for an ARIA slider. A lower exponent
+	// lifts the curve, so Up matches what dragging does; do not "fix" the sign without moving the drag too.
 	private Task OnKey(Grip grip, KeyboardEventArgs args)
 	{
 		int direction = args.Key switch
@@ -412,20 +319,13 @@
 		};
 	}
 
-	/// <summary>One keyboard step along a logarithmic axis: a quarter of a decade, which is about 1.8×.</summary>
+	/// <summary>One keyboard step along a logarithmic axis: a quarter of a decade, about 1.8×.</summary>
 	private static double Nudge(double lux, int direction) =>
 		Math.Pow(10, Math.Log10(Math.Max(lux, LuxCurve.AxisMinLux)) + (direction * 0.25));
 
-	/// <summary>
-	///     Everything on the chart that is drawn rather than touched: the grid, the axes, the period's own
-	///     ceiling, and the room's live reading.
-	/// </summary>
-	/// <remarks>
-	///     Composed as a markup string rather than as Razor tags because Razor reserves <c>&lt;text&gt;</c> as a
-	///     control-flow transition, so an SVG text element with attributes cannot be written inline — the same
-	///     reason <c>DaylightChart</c> builds its whole picture this way. The interactive handles stay real Razor
-	///     elements, since they carry event handlers and a live class.
-	/// </remarks>
+	/// <summary>Everything on the chart that is drawn and not touched: grid, axes, and the live reading.</summary>
+	// A markup string, not Razor tags: Razor reserves <text> as a control-flow transition, so an SVG text
+	// element with attributes cannot be written inline. DaylightChart builds its whole picture the same way.
 	private string Backdrop()
 	{
 		System.Text.StringBuilder svg = new();
@@ -447,8 +347,7 @@
 				svg.Append($"<text x=\"-8\" y=\"{LuxCurve.Num(LuxCurve.Y(percent) + 4)}\" text-anchor=\"end\" class=\"luxc-axis\">{percent} %</text>");
 		}
 
-		// Decade gridlines. Labelled in the words a person uses for the light, not only as a number: the whole
-		// point of the log axis is that each decade is a different kind of day.
+		// Decade gridlines, labelled in words as well as numbers.
 		IReadOnlyList<double> decades = LuxCurve.Decades(_axisMax);
 
 		for (int index = 0; index < decades.Count; index++)
@@ -456,18 +355,12 @@
 			double lux = decades[index];
 			string x = LuxCurve.Num(LuxCurve.X(LuxCurve.FractionOf(lux, _axisMax)));
 
-			// The end labels are anchored inward rather than centred on their line. Centred, the first and last
-			// hang half their width outside the viewBox — which paints, but overlaps the card's own padding, and
-			// is simply cut off in any screenshot of the chart alone.
+			// End labels anchor inward; centred, the first and last hang outside the viewBox.
 			string anchor = index == 0 ? "start" : index == decades.Count - 1 ? "end" : "middle";
 
-			// Every decade keeps its gridline, but a narrow card cannot label all six: measured at 390 px,
-			// "10000 lx" and "100000 lx" ran together into one unreadable word. Alternate labels are marked so
-			// the stylesheet can drop them there — it has to be CSS, because this SVG is built on the server
-			// against a fixed viewBox and knows nothing about the viewport it will land in.
-			//
-			// Counted from the RIGHT so the top decade always survives: it is the one that says how far the
-			// axis reaches, and losing it leaves the curve looking like it stopped somewhere else.
+			// Alternate labels are marked so the stylesheet can drop them on a narrow card: this SVG is built on
+			// the server against a fixed viewBox and knows nothing about the viewport. Counted from the right so
+			// the top decade, which says how far the axis reaches, always survives.
 			string thin = (decades.Count - 1 - index) % 2 == 1 ? " luxc-thin" : string.Empty;
 
 			svg.Append($"<line x1=\"{x}\" y1=\"0\" x2=\"{x}\" y2=\"{LuxCurve.Num(LuxCurve.PlotHeight)}\" class=\"luxc-grid\" />");
@@ -477,8 +370,7 @@
 				svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 29)}\" text-anchor=\"{anchor}\" class=\"luxc-decade{thin}\">{Escape(word)}</text>");
 		}
 
-		// The house's own number, standing on the curve. A curve read in the abstract is a shape; a curve with
-		// "170 lx now" on it is a decision about this room.
+		// The room's own reading, standing on the curve.
 		if (Reading is { } reading)
 		{
 			double x = LuxCurve.X(LuxCurve.FractionOf(reading, _axisMax));
@@ -487,7 +379,7 @@
 			svg.Append($"<line x1=\"{LuxCurve.Num(x)}\" y1=\"0\" x2=\"{LuxCurve.Num(x)}\" y2=\"{LuxCurve.Num(LuxCurve.PlotHeight)}\" class=\"luxc-now\" />");
 			svg.Append($"<circle cx=\"{LuxCurve.Num(x)}\" cy=\"{LuxCurve.Num(y)}\" r=\"3.5\" class=\"luxc-now-dot\" />");
 
-			// Nudged inside the plot at both ends, so a reading at 1 lx or on a bright day keeps its label on the chart.
+			// Nudged inside the plot at both ends, so a reading at either extreme keeps its label on the chart.
 			double labelX = Math.Clamp(x, 4, LuxCurve.PlotWidth - 4);
 			string anchor = x > LuxCurve.PlotWidth - 80 ? "end" : x < 80 ? "start" : "middle";
 
@@ -499,7 +391,7 @@
 		return svg.ToString();
 	}
 
-	/// <summary>What a decade of illuminance is, in a word — the axis's real labels.</summary>
+	/// <summary>What a decade of illuminance is, in a word.</summary>
 	private static string DecadeWord(double lux) => lux switch
 	{
 		1 => "night",
@@ -509,13 +401,7 @@
 		_ => ""
 	};
 
-	/// <summary>
-	///     The chart in words: the accessible name, the caption under it, and what a screen reader is told.
-	/// </summary>
-	/// <remarks>
-	///     One string for all three, because they are one statement. A chart whose alternative text says something
-	///     the caption does not is two claims about one picture.
-	/// </remarks>
+	/// <summary>The chart in words, used for the accessible name, the caption and the screen-reader text alike.</summary>
 	private string Description
 	{
 		get
@@ -548,12 +434,8 @@
 			.Replace("<", "&lt;", StringComparison.Ordinal)
 			.Replace(">", "&gt;", StringComparison.Ordinal);
 
-	/// <inheritdoc/>
-	/// <remarks>
-	///     The listeners are released before the .NET reference they call into is, so a pointer already down when
-	///     the page is left cannot invoke a disposed component. A circuit that has already gone takes the
-	///     listeners with it, which is why a failure here is logged rather than thrown.
-	/// </remarks>
+	// Order matters: the listeners go before the .NET reference they call into, so a pointer already down when
+	// the page is left cannot invoke a disposed component.
 	public async ValueTask DisposeAsync()
 	{
 		if (_watching)

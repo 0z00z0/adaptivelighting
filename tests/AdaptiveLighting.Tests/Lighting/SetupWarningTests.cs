@@ -9,15 +9,6 @@ namespace AdaptiveLighting.Tests.Lighting;
 /// <summary>
 ///     The words the re-setup warning shows, computed from the plan the engine will actually carry out.
 /// </summary>
-/// <remarks>
-///     <para>
-///         The dialog's whole claim is that its per-room lines are concrete: hand-picked entities, changed
-///         settings and a custom name, counted, because those are the three things a rebuild destroys. "Are you
-///         sure?" without stakes is noise, and a warning that under-counts is worse than no warning at all — so
-///         every line here is asserted against a plan made by <see cref="AreaSetupService.Plan"/> rather than one
-///         written by hand. If the rebuild's losses ever stop matching its warning, that is what fails.
-///     </para>
-/// </remarks>
 [TestClass]
 public sealed class SetupWarningTests
 {
@@ -48,9 +39,6 @@ public sealed class SetupWarningTests
 	private static SetupPlan Plan(AdaptiveLightingConfig config, House house, params string[] ticked) =>
 		AreaSetupService.Plan(config, house.Registry, house.Resolver, ticked);
 
-	// ===================== per-room lines =====================
-
-	/// <summary>Everything a rebuild destroys, named and counted, in one readable sentence.</summary>
 	[TestMethod]
 	public void A_Room_Is_Told_Exactly_What_It_Loses()
 	{
@@ -75,10 +63,6 @@ public sealed class SetupWarningTests
 		Assert.IsNull(lines[0].Note);
 	}
 
-	/// <summary>
-	///     A room with nothing to lose says so. The alternative — a generic "everything you changed is lost" over
-	///     a room where nothing was changed — teaches people to click through warnings without reading them.
-	/// </summary>
 	[TestMethod]
 	public void A_Room_With_Nothing_To_Lose_Says_So()
 	{
@@ -91,7 +75,6 @@ public sealed class SetupWarningTests
 		StringAssert.Contains(lines[0].Consequence, "nothing to lose");
 	}
 
-	/// <summary>Singulars are singular. "1 changed settings" is the tell of a warning nobody read before shipping.</summary>
 	[TestMethod]
 	public void One_Of_Anything_Reads_As_One()
 	{
@@ -108,10 +91,7 @@ public sealed class SetupWarningTests
 		StringAssert.Contains(lines[0].Consequence, "1 hand-picked entity and 1 changed setting");
 	}
 
-	/// <summary>
-	///     Ticked means rebuilt, with no exceptions — a room the house has changed underneath is still rebuilt, and
-	///     earns an extra line saying why it will come back empty rather than being silently skipped.
-	/// </summary>
+	// Ticked means rebuilt with no exceptions; a room the house changed underneath gets an extra note.
 	[TestMethod]
 	public void A_Room_That_No_Longer_Qualifies_Is_Still_A_Rebuild_Line_With_A_Note()
 	{
@@ -133,13 +113,8 @@ public sealed class SetupWarningTests
 		StringAssert.Contains(bod.Note, "no longer shows both a light and a motion sensor");
 	}
 
-	/// <summary>
-	///     Two rows for one Home Assistant area get their own lines, not two copies of the first row's name.
-	///     <see cref="AreaSetupService.Plan"/> emits one rebuild per row, so resolving a line by first match on the
-	///     area id quoted the wrong room's custom name — in the one dialog whose whole job is telling somebody
-	///     precisely what they are about to lose. The counts were right either way, so it never under-warned; it
-	///     mis-labelled, which is worse in a warning read once and clicked through.
-	/// </summary>
+	// Regression: Plan emits one rebuild per row, and resolving a line by first match on the area id quoted
+	// the wrong row's custom name. The counts were right, the label was not.
 	[TestMethod]
 	public void Two_Rows_For_One_Area_Are_Each_Named_As_Themselves()
 	{
@@ -162,9 +137,6 @@ public sealed class SetupWarningTests
 		StringAssert.Contains(lines[1].Consequence, "1 hand-picked entity");
 	}
 
-	// ===================== the rest of the dialog =====================
-
-	/// <summary>New rooms are named, and named as switched off: adding a room nobody switched on cannot hurt.</summary>
 	[TestMethod]
 	public void New_Rooms_Are_Named_And_Said_To_Arrive_Switched_Off()
 	{
@@ -182,7 +154,6 @@ public sealed class SetupWarningTests
 			"nothing to add is nothing to say");
 	}
 
-	/// <summary>The question the dialog asks is sized to what it is about to do.</summary>
 	[TestMethod]
 	public void The_Title_Counts_What_Is_Actually_Happening()
 	{
@@ -200,10 +171,7 @@ public sealed class SetupWarningTests
 		Assert.AreEqual("Nothing to set up", SetupWarning.Title(new SetupPlan([], [], [])));
 	}
 
-	/// <summary>
-	///     The counts in the warning are the counts of the rebuild that follows it. Asserted end to end, because
-	///     the two drifting apart is the failure the whole design is arranged to prevent.
-	/// </summary>
+	// End to end on purpose: the warning's counts and the rebuild's losses have to stay the same numbers.
 	[TestMethod]
 	public void What_The_Warning_Counts_Is_What_The_Rebuild_Destroys()
 	{

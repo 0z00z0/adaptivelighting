@@ -3,16 +3,13 @@ using YamlDotNet.Serialization;
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>
-///     Root of the adaptive lighting configuration document. One document per NetDaemon host,
-///     bound by <c>IAppConfig&lt;AdaptiveLightingConfig&gt;</c> from a YAML file whose top-level key is
-///     the fully qualified name of this class.
+///     Root of the adaptive lighting configuration document. One document per NetDaemon host, bound from a YAML
+///     file whose top-level key is the fully qualified name of this class.
 /// </summary>
 public class AdaptiveLightingConfig
 {
-	/// <summary>Free-form label for this document; used in log and notification text only.</summary>
 	public string? ConfigName { get; set; }
 
-	/// <summary>House-wide settings shared by every area.</summary>
 	public GlobalConfig Global { get; set; } = new();
 
 	/// <summary>Baseline for every per-area knob. A <see cref="AreaConfig"/> overrides only what differs.</summary>
@@ -21,25 +18,13 @@ public class AdaptiveLightingConfig
 	/// <summary>The house-wide circadian table. Ordered by <see cref="TimePeriodConfig.Start"/> at resolution time, not here.</summary>
 	public List<TimePeriodConfig> Periods { get; set; } = [];
 
-	/// <summary>The areas the engine manages. Areas are opt-in: an HA area absent from this list is never touched.</summary>
+	/// <summary>Areas are opt-in: an HA area absent from this list is never touched.</summary>
 	public List<AreaConfig> Areas { get; set; } = [];
 
-	/// <summary>
-	///     The document a fresh installation starts from: valid, runnable, and naming nothing.
-	/// </summary>
+	/// <summary>The document a fresh installation starts from.</summary>
 	/// <remarks>
-	///     <para>
-	///         Deliberately <b>empty of entities</b>. A seed full of <c>REPLACE_ME</c> placeholders looks helpful and
-	///         is not: every placeholder is an id Home Assistant does not know, so a brand-new installation starts
-	///         with a document-level error and refuses to run. Worse, a placeholder <i>overrides</i> the discovery
-	///         that would otherwise fill the same field in — an empty <see cref="GlobalConfig.Persons"/> finds every
-	///         person by itself, while <c>person.REPLACE_ME</c> finds nothing and blocks the engine.
-	///     </para>
-	///     <para>
-	///         So: no persons, no areas, no house mode, no kill switch (the built-in app switch is used). Only the
-	///         circadian table is filled in, because a sensible day/night curve is the one thing that is the same in
-	///         every house. Areas arrive on their own — see <see cref="Engine.AreaAutoDiscovery"/>.
-	///     </para>
+	///     Names no entities. A placeholder id is one Home Assistant does not know, so it fails validation on a fresh
+	///     install and blocks the discovery that would otherwise have filled the same field in.
 	/// </remarks>
 	public static AdaptiveLightingConfig CreateDefault() => new()
 	{
@@ -57,114 +42,68 @@ public class AdaptiveLightingConfig
 	};
 }
 
-/// <summary>
-///     Settings that apply to the whole house rather than to a single area.
-/// </summary>
+/// <summary>Settings that apply to the whole house, not to a single area.</summary>
 public class GlobalConfig
 {
 	/// <summary><c>person.*</c> / <c>device_tracker.*</c> ids to watch. Empty means "discover every person entity".</summary>
 	public List<string> Persons { get; set; } = [];
 
 	/// <summary>
-	///     Entity gating the whole engine. <c>null</c> now means "use the built-in switch" (09 §7): the engine
-	///     resolves it in memory to this app's own enable <c>input_boolean</c>. Read through
+	///     Entity gating the whole engine. <c>null</c> means the built-in app switch. Read through
 	///     <see cref="EffectiveKillSwitchEntity"/>, never directly.
 	/// </summary>
 	public string? KillSwitchEntity { get; set; }
 
-	/// <summary>
-	///     When <c>true</c> (the default) the kill switch is read as an <i>enabled</i> flag: state <c>off</c> kills
-	///     the engine. Set <c>false</c> for an entity named as a true kill switch, where <c>on</c> kills. Forced to
-	///     the enabled-flag reading while the built-in switch is defaulted in.
-	/// </summary>
+	/// <summary>When <c>true</c> the switch is an enabled flag, so <c>off</c> kills the engine.</summary>
 	public bool KillSwitchActiveWhenOff { get; set; } = true;
 
-	/// <summary>
-	///     The app's built-in enable switch, set once at application start by the engine host (09 §7). Never
-	///     serialised — populated in memory only, so the document keeps saying "no opinion".
-	/// </summary>
+	/// <summary>The app's built-in enable switch, set at start-up by the host. In memory only.</summary>
 	[YamlIgnore]
 	public string? DefaultKillSwitchEntity { get; set; }
 
-	/// <summary>
-	///     The kill switch actually read: <see cref="KillSwitchEntity"/> when set, else
-	///     <see cref="DefaultKillSwitchEntity"/>. All readers (ModeMonitor, ModeService, validator) go through this.
-	/// </summary>
+	/// <summary>The kill switch actually read. Every reader goes through this, not the two fields behind it.</summary>
 	[YamlIgnore]
 	public string? EffectiveKillSwitchEntity =>
 		KillSwitchEntity is { Length: > 0 } ? KillSwitchEntity : DefaultKillSwitchEntity;
 
-	/// <summary>
-	///     Whether the effective kill switch is the built-in default rather than an operator's own entity:
-	///     <see cref="KillSwitchEntity"/> is blank and <see cref="DefaultKillSwitchEntity"/> resolved one in.
-	/// </summary>
+	/// <summary>Whether the effective kill switch is the built-in default, not an operator's own entity.</summary>
 	/// <remarks>
-	///     The single truth both <c>ModeMonitor</c> and the web <c>ModeService</c> read so their kill-switch
-	///     polarity agrees: while defaulted the built-in switch is always an <i>enabled</i> flag (off = muzzled),
-	///     whatever <see cref="KillSwitchActiveWhenOff"/> happens to say — that flag only governs an explicit entity.
+	///     While defaulted the switch is always an enabled flag, whatever <see cref="KillSwitchActiveWhenOff"/> says;
+	///     that flag governs an explicit entity only. ModeMonitor and ModeService both read this so their polarity
+	///     agrees.
 	/// </remarks>
 	[YamlIgnore]
 	public bool KillSwitchIsDefaulted =>
 		string.IsNullOrWhiteSpace(KillSwitchEntity) && DefaultKillSwitchEntity is { Length: > 0 };
 
-	/// <summary>
-	///     The house-mode select and its option kinds. <c>null</c> when unconfigured — leaves today's documents
-	///     visually untouched under OmitNull.
-	/// </summary>
+	/// <summary>The house-mode select and its option kinds. <c>null</c> when unconfigured.</summary>
 	public HouseModeConfig? HouseMode { get; set; }
 
-	/// <summary>
-	///     The <c>input_select</c> tied to the circadian period table, and which side of it decides.
-	/// </summary>
+	/// <summary>The <c>input_select</c> tied to the period table, and which side of it decides.</summary>
 	/// <remarks>
-	///     <c>null</c> when unconfigured, which is every document written before it existed — and, under OmitNull,
-	///     what keeps those documents byte-identical through a save. <see cref="ConfigNormalizer"/> puts an empty one
-	///     back to <c>null</c> for the same reason it does to <see cref="HouseMode"/>: a page that binds the object
-	///     into existence must not leave a <c>PeriodSelect:</c> block in a file that never adopted the feature.
+	///     <c>null</c> when unconfigured, and <see cref="ConfigNormalizer"/> puts an empty one back to <c>null</c>:
+	///     under OmitNull that keeps a document that never adopted the feature byte-identical through a save.
 	/// </remarks>
 	public PeriodSelectConfig? PeriodSelect { get; set; }
 
-	/// <summary>
-	///     The house's outdoor lux sensor, offered to the rooms that ask for it by name.
-	/// </summary>
+	/// <summary>The house's outdoor lux sensor, offered to the rooms that ask for it by name.</summary>
 	/// <remarks>
-	///     <para>
-	///         <b>It is no longer a silent fallback.</b> This used to be handed automatically to every area that
-	///         resolved no lux sensor of its own, which meant a room's darkness could be decided by a sensor
-	///         nobody in that room had ever chosen — and, because one shaded outdoor sensor reads hundreds of lux
-	///         while the rooms behind it are dark, decided wrongly. A room now says so explicitly with
-	///         <see cref="AreaConfig.FollowOutdoorLux"/>; a room that says nothing simply has no lux reading, and
-	///         the lux half of its darkness gate stops holding it back (<see cref="Engine.IlluminanceGate"/>).
-	///     </para>
-	///     <para>
-	///         Naming it here rather than repeating the id on every room is the whole point of the setting: change
-	///         the house's outdoor sensor once and every room following it moves with it. A room that wants some
-	///         other sensor names it under <see cref="AreaConfig.LuxSensor"/> instead, and a room's own sensor
-	///         always wins over this one.
-	///     </para>
+	///     Not a fallback. A room reads it only when it sets <see cref="AreaConfig.FollowOutdoorLux"/>; a room that
+	///     says nothing has no lux reading at all.
 	/// </remarks>
 	public string? OutdoorLuxSensor { get; set; }
 
-	/// <summary>
-	///     Whether areas have already been discovered from the Home Assistant area registry once.
-	/// </summary>
-	/// <remarks>
-	///     Set the first time the engine auto-populates an empty area list, and never reset. It is what stops a
-	///     household that has deliberately removed every area from having them silently grow back on the next
-	///     restart: discovery is a one-time convenience on a fresh install, not a standing policy.
-	/// </remarks>
+	/// <summary>Whether areas have been discovered from the HA area registry once.</summary>
+	/// <remarks>Set on the first auto-populate and never reset, so an emptied list stays empty.</remarks>
 	public bool AreasAutoDiscovered { get; set; }
 
-	/// <summary>HA user id of the NetDaemon token. Optional; a belt-and-braces input to override detection.</summary>
 	public string? NetDaemonUserId { get; set; }
 
-	/// <summary>How long everyone must be gone before the house is considered <c>Away</c>.</summary>
 	public int AwayDebounceMinutes { get; set; } = 5;
 
 	/// <summary>
-	///     How often an area re-evaluates the world: an active area's circadian target, and — for every area,
-	///     whatever its state — darkness, period and house mode, so a snapshot that has stopped being true is
-	///     replaced rather than left standing. A tick that finds nothing changed publishes nothing.
+	///     How often an area re-evaluates darkness, period and house mode, whatever state it is in. A tick that
+	///     finds nothing changed publishes nothing.
 	/// </summary>
 	public int CircadianTickSeconds { get; set; } = 60;
 
@@ -174,103 +113,53 @@ public class GlobalConfig
 	/// <summary>Whether a change carrying a parent context (another automation) counts as a manual override.</summary>
 	public bool TreatAutomationsAsManual { get; set; } = true;
 
-	/// <summary>Whether circadian targets are blended across period boundaries instead of stepping.</summary>
 	public bool SmoothTransitions { get; set; } = true;
 
-	/// <summary>Width of the blend window following each period boundary.</summary>
 	public int BlendMinutes { get; set; } = 30;
 
 	/// <summary>Registry label marking an entity the engine must never touch.</summary>
 	public string ExcludeLabel { get; set; } = "adaptive-exclude";
 
 	/// <summary>
-	///     Registry label a light must carry to be managed. Null — the default and the meaning of every
-	///     pre-existing document — manages every light discovery finds. Applied to light discovery only:
-	///     sensors are inputs, not things the engine commands, and filtering them too would make a
-	///     half-labelled house silently deaf. The exclude label always wins over this one.
+	///     Registry label a light must carry to be managed. <c>null</c> manages every light discovery finds.
+	///     Applied to light discovery only, never to sensors. The exclude label always wins over this one.
 	/// </summary>
 	public string? IncludeLabel { get; set; }
 
 	/// <summary>Registry label marking an entity as a motion source regardless of its device class.</summary>
 	public string MotionLabel { get; set; } = "adaptive-motion";
 
-	/// <summary>The device classes motion discovery uses when <see cref="MotionDeviceClasses"/> is left empty.</summary>
 	public static readonly IReadOnlyList<string> DefaultMotionDeviceClasses = ["motion", "occupancy", "presence"];
 
 	/// <summary>
-	///     Device classes that qualify a <c>binary_sensor</c> as a motion source during discovery. Empty — the
-	///     default — means <see cref="DefaultMotionDeviceClasses"/>; read <see cref="EffectiveMotionDeviceClasses"/>
-	///     rather than this list.
+	///     Device classes that qualify a <c>binary_sensor</c> as a motion source. Read
+	///     <see cref="EffectiveMotionDeviceClasses"/>, not this list.
 	/// </summary>
 	/// <remarks>
-	///     The default is empty rather than the three real values because the .NET configuration binder <i>appends</i>
-	///     bound list items to a non-empty default instead of replacing it. With the real values here, a YAML list of
-	///     three device classes bound to six entries — the defaults plus the household's — so the config said one
-	///     thing and the engine did another, and no amount of editing the YAML could remove a default. An empty
-	///     default makes the binder's append indistinguishable from a replace, and the fallback moves to the reader.
+	///     The default stays empty because the .NET configuration binder appends bound list items to a non-empty
+	///     default instead of replacing it, so real values here would leave a configured list of three binding to six.
 	/// </remarks>
 	public List<string> MotionDeviceClasses { get; set; } = [];
 
-	/// <summary>
-	///     The device classes motion discovery actually matches on: the configured list, or
-	///     <see cref="DefaultMotionDeviceClasses"/> when nothing was configured.
-	/// </summary>
-	/// <remarks>
-	///     <see cref="YamlIgnoreAttribute"/> because this is a view over <see cref="MotionDeviceClasses"/>, not a
-	///     setting. Serialised it would write the resolved fallback back into the file as if it had been chosen,
-	///     turning "no opinion" into three device classes on the first save; and it has no setter, so reading it
-	///     back would fail. The document must say what the household configured, never what the code inferred.
-	/// </remarks>
+	/// <summary>The configured list, or <see cref="DefaultMotionDeviceClasses"/> when nothing was configured.</summary>
+	/// <remarks>A view, not a setting: serialised it would write the fallback back into the file as a choice.</remarks>
 	[YamlIgnore]
 	public IReadOnlyList<string> EffectiveMotionDeviceClasses =>
 		MotionDeviceClasses.Count > 0 ? MotionDeviceClasses : DefaultMotionDeviceClasses;
 
-	/// <summary>Device class that qualifies a <c>sensor</c> as the area's lux source during discovery.</summary>
 	public string IlluminanceDeviceClass { get; set; } = "illuminance";
 
-	/// <summary>
-	///     How long a <b>light-level</b> sensor may go without reporting before the engine stops believing it.
-	/// </summary>
+	/// <summary>How long a light-level sensor may go without reporting before the engine stops believing it.</summary>
 	/// <remarks>
-	///     <para>
-	///         A room reads the average of its illuminance sensors, so one dead sensor stuck on its last value
-	///         drags that average with it for ever. Two hours is the default: an illuminance sensor reports a
-	///         continuously varying number, so on any ordinary day it has something new to say every few minutes,
-	///         and two hours of silence from one is a fault rather than a quiet afternoon.
-	///     </para>
-	///     <para>
-	///         <b>Illuminance only, and the narrowness is deliberate.</b> The obvious generalisation — cull any
-	///         sensor that has not reported — is wrong for motion and would break the house: a motion sensor
-	///         reports on change, and a battery PIR reports on nothing else, so silence from one means nobody
-	///         walked through that room. Measured on one live instance (2026-07-28), 30 of 51 motion sensors had
-	///         not reported in over two hours and every one of them was healthy. Motion's only test for death stays
-	///         the one that cannot be wrong: no state, <c>unavailable</c> or <c>unknown</c>.
-	///     </para>
-	///     <para>
-	///         Zero or less switches the rule off, for a house whose illuminance sensors genuinely report rarely.
-	///     </para>
+	///     Illuminance only. A motion sensor reports on change, so silence from one is not a fault and this rule must
+	///     never be generalised to it. Zero or less switches the rule off.
 	/// </remarks>
 	public int LuxSensorStaleAfterMinutes { get; set; } = 120;
 
-	/// <summary>
-	///     Brightness difference below which a light counts as already at target, so no command is sent.
-	/// </summary>
-	/// <remarks>
-	///     A constant since the 2026-07 simplification, where it was a house setting nobody had ever changed. It
-	///     is not a preference: it exists because Home Assistant reports brightness as a 0–255 integer and this
-	///     application thinks in per cent, so a round trip lands a per cent or so off what was asked for. Two per
-	///     cent is wider than that rounding and narrower than anything an eye can see. A house that wanted a
-	///     different number would be describing a different bug.
-	/// </remarks>
+	/// <summary>Brightness difference below which a light counts as already at target, so no command is sent.</summary>
+	/// <remarks>HA reports brightness as a 0-255 integer and this app thinks in per cent, so a round trip lands about a per cent off.</remarks>
 	public const double BrightnessTolerancePct = 2;
 
-	/// <summary>
-	///     Colour temperature difference below which a light counts as already at target.
-	/// </summary>
-	/// <remarks>
-	///     A constant, for the same reason and by the same argument as <see cref="BrightnessTolerancePct"/>. Fifty
-	///     kelvin is under two per cent at the warm end of the range and invisible at any point in it.
-	/// </remarks>
 	public const int ColorTempToleranceKelvin = 50;
 }
 
@@ -286,140 +175,55 @@ public class AreaSettings
 	/// <summary>Length of the pre-off warning: the grace in which motion still cancels darkness.</summary>
 	public int PreOffSeconds { get; set; } = 30;
 
-	/// <summary>Fraction of the circadian brightness used for the pre-off warning level.</summary>
 	public double PreOffBrightnessFactor { get; set; } = 0.5;
 
-	/// <summary>How long a manual change holds the area before automatic control resumes.</summary>
 	public int OverrideDurationMinutes { get; set; } = 120;
 
 	/// <summary>Motion-free time after a manual turn-off before the suppression is lifted.</summary>
 	public int VacancyResetMinutes { get; set; } = 10;
 
-	/// <summary>
-	///     Which signal decides whether the area is dark enough to light.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         <b><see cref="DarknessSource.Lux"/>, moved from <see cref="DarknessSource.Either"/>.</b> The owner's
-	///         rule is one sentence: use the light sensor where there is one, and where there is none always light.
-	///         <see cref="DarknessSource.Lux"/> is that sentence exactly — a room with no sensor, or with none still
-	///         reporting, counts as dark (<see cref="Engine.IlluminanceGate"/>), and a room with a working sensor is
-	///         decided by it alone.
-	///     </para>
-	///     <para>
-	///         <see cref="DarknessSource.Either"/> could not say it. Its sun half overrides a perfectly good reading
-	///         the moment the sun drops, so a bright room lights at dusk, and it dragged a sun clause into every
-	///         explanation the gate wrote whether or not the sun had decided anything. It remains available for a
-	///         house that wants the sun; it is no longer what a house gets without asking.
-	///     </para>
-	/// </remarks>
+	/// <summary>Which signal decides whether the area is dark enough to light.</summary>
+	/// <remarks>Under <see cref="DarknessSource.Lux"/> a room with no sensor, or none still reporting, counts as dark.</remarks>
 	public DarknessSource Darkness { get; set; } = DarknessSource.Lux;
 
-	/// <summary>
-	///     Lux below which the area counts as dark.
-	/// </summary>
+	/// <summary>Lux below which the area counts as dark.</summary>
 	/// <remarks>
-	///     <para>
-	///         <b>A daylight threshold, not an indoor one — which is why it is 1000 and not 40.</b> The reading a
-	///         room gates on is very often not a reading of that room at all: most houses have one outdoor lux
-	///         sensor and a good many rooms with none of their own. One live instance's outdoor sensor, measured
-	///         over 30 hours, sits at 1–3 lx at night, 9–47 at 04:00, 102–570 at 05:00 and 1000–3706 through the
-	///         day — and it is shaded, so an unobstructed one would read 10 000–50 000. Against a threshold of 40
-	///         every room in that house read "not dark" from first light until dusk while sitting genuinely dark;
-	///         the owner's office reports 170 lx and is dark.
-	///     </para>
-	///     <para>
-	///         So the number answers "is the sun still doing this room's lighting for it", and the rule behind it
-	///         is the owner's: better to light up too early than never. A room whose sensor really does measure the
-	///         room — a bathroom probe, a windowless hallway — is exactly the case for overriding this per room
-	///         with a low number, which costs one line and is a decision somebody has made rather than a default
-	///         everybody inherits.
-	///     </para>
+	///     A daylight threshold, not an indoor one, because the reading is very often an outdoor sensor a room merely
+	///     follows. A room whose sensor genuinely measures the room wants a much lower number set per room.
 	/// </remarks>
 	public double LuxThreshold { get; set; } = 1000;
 
 	/// <summary>Extra lux required to leave the dark state, so a sensor sitting on the threshold cannot flap.</summary>
 	public double LuxHysteresis { get; set; } = 10;
 
-	/// <summary>
-	///     Whether the light outside also raises this area's brightness, on top of the circadian schedule.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         <b>Off, and off is the whole point.</b> Every house that predates this setting must behave exactly as
-	///         it did, so the default is <c>false</c> and a disabled area never touches the schedule's brightness at
-	///         all — not "raises it by zero", but leaves the target object untouched. See
-	///         <see cref="Engine.LuxBrightnessCurve"/>.
-	///     </para>
-	///     <para>
-	///         Deliberately independent of <see cref="Darkness"/>, which answers a different question. The darkness
-	///         gate decides <i>whether</i> the engine may light the area; this decides <i>how bright</i> given how
-	///         bright it is outside. A hallway that gates on the sun still looks gloomy against a bright window at
-	///         noon, and that is precisely the case this exists for — so the reading is taken whatever the gate is
-	///         configured to consult.
-	///     </para>
-	/// </remarks>
+	/// <summary>Whether the light outside also raises this area's brightness, on top of the circadian schedule.</summary>
+	/// <remarks>Off leaves the schedule's target object untouched, not raised by zero.</remarks>
 	public bool LuxBrightnessEnabled { get; set; }
 
 	/// <summary>
-	///     The illuminance at which the daylight adjustment starts. At or below it the schedule's brightness is
-	///     used unchanged.
+	///     The illuminance at which the daylight adjustment starts. Must be positive: the curve interpolates on
+	///     <c>log10</c>.
 	/// </summary>
-	/// <remarks>
-	///     Must be positive: the curve interpolates on <c>log10</c>, which has no value at or below zero. The
-	///     default of 100 lx is roughly deep twilight outdoors — dim enough that a room genuinely wants only what
-	///     the schedule asked for.
-	/// </remarks>
 	public double LuxBrightnessStartLux { get; set; } = 100;
 
-	/// <summary>
-	///     The illuminance at which the adjustment is fully applied. At or above it the area holds
-	///     <see cref="LuxBrightnessMaxPct"/>, which since the caps cut is the only ceiling there is.
-	/// </summary>
-	/// <remarks>
-	///     The default of 10 000 lx is a bright overcast day outdoors, two decades above the start anchor. Direct
-	///     sun is another decade beyond that; anchoring "full" at the bright-overcast point means an ordinary day
-	///     reaches the top of the curve rather than sitting halfway up it.
-	/// </remarks>
 	public double LuxBrightnessFullLux { get; set; } = 10000;
 
-	/// <summary>
-	///     The brightness the area is raised <i>toward</i> at <see cref="LuxBrightnessFullLux"/> and beyond.
-	/// </summary>
-	/// <remarks>
-	///     A ceiling, never a replacement: the adjustment interpolates from whatever the schedule asked for up to
-	///     this value, so it can only ever add light. A period whose brightness already exceeds this is left alone
-	///     rather than dimmed — dimming on a bright reading would fight the circadian intent instead of serving it.
-	/// </remarks>
+	/// <summary>The brightness the area is raised toward at <see cref="LuxBrightnessFullLux"/> and beyond.</summary>
+	/// <remarks>A ceiling, never a replacement: the curve can only add light, and a period already above it is left alone.</remarks>
 	public double LuxBrightnessMaxPct { get; set; } = 100;
 
-	/// <summary>
-	///     Shapes the curve between the two anchors: the normalised 0–1 position is raised to this power.
-	/// </summary>
-	/// <remarks>
-	///     1 is a straight line in log space and is the default. Above 1 holds the level back until it is properly
-	///     bright out — the adjustment then arrives late and quickly. Below 1 does the opposite, lifting the room
-	///     as soon as the light outside starts climbing. It exists because "which decade matters to me" is a
-	///     genuinely per-room judgement that neither anchor can express on its own.
-	/// </remarks>
 	public double LuxBrightnessGamma { get; set; } = 1.0;
 
-	/// <summary>Sun elevation in degrees below which the area counts as dark.</summary>
 	public double SunElevationThreshold { get; set; } = 3.0;
 
-	/// <summary>The sun entity supplying elevation and the sunrise/sunset boundaries for this area.</summary>
 	public string SunEntity { get; set; } = "sun.sun";
 
-	/// <summary>Fade length used while the area is not dark.</summary>
 	public double DayTransitionSeconds { get; set; } = 1;
 
-	/// <summary>Fade length used while the area is dark — gentler, because eyes are dark-adapted.</summary>
 	public double NightTransitionSeconds { get; set; } = 15;
 
-	/// <summary>Whether the area clamps to the night period's caps while sleep mode is on.</summary>
 	public bool RespectSleepMode { get; set; }
 
-	/// <summary>Whether the area refuses to auto-on at all while sleep mode is on.</summary>
 	public bool SleepBlocksAutoOn { get; set; }
 
 	/// <summary>Whether the area opts out of the leaving sweep. Outdoor and security lights set this.</summary>
@@ -432,70 +236,35 @@ public class AreaSettings
 	public bool Enabled { get; set; } = true;
 }
 
-/// <summary>
-///     Which signal an area consults to decide it is dark enough to light.
-/// </summary>
+/// <summary>Which signal an area consults to decide it is dark enough to light.</summary>
 /// <remarks>
-///     This chooses the <i>signals</i>; which entity supplies the lux one is a separate question, answered by
-///     <see cref="AreaConfig.LuxSensor"/>, by discovery, or by <see cref="AreaConfig.FollowOutdoorLux"/>. Keeping
-///     the two apart is what lets a room follow the outdoor sensor for its brightness curve while gating darkness
-///     on the sun, and what stops "which sensor" needing a value of its own in here for every combination.
+///     Ordinals are pinned and no member may be renamed or removed. Two readers bind this type: the engine's own
+///     deserializer, which has a legacy pre-pass, and NetDaemon's binder on the app YAML, which cannot have one. An
+///     unknown key is silence; an unknown enum value is a <see cref="FormatException"/> at start-up. Which entity
+///     supplies the lux reading is a separate question, answered by <see cref="AreaConfig.LuxSensor"/> or
+///     <see cref="AreaConfig.FollowOutdoorLux"/>.
 /// </remarks>
 public enum DarknessSource
 {
-	/// <summary>
-	///     Lux only, and the default. A room with no lux sensor at all — and one whose sensors have all stopped
-	///     answering — is simply dark, because a gate with nothing to read is not a gate; see
-	///     <see cref="Engine.IlluminanceGate"/>. The sun is never consulted on this setting.
-	/// </summary>
+	/// <summary>Lux only, and the default. A room with no sensor, or with none still answering, is simply dark.</summary>
 	Lux = 0,
 
-	/// <summary>Sun elevation only. No lux sensor is consulted, so a room with none is unaffected by having none.</summary>
+	/// <summary>Sun elevation only. No lux sensor is consulted.</summary>
 	Sun = 1,
 
-	/// <summary>
-	///     Always dark. For rooms without daylight.
-	/// </summary>
+	/// <summary>Always dark. For rooms without daylight.</summary>
 	/// <remarks>
-	///     <b>3, not 2, and pinned explicitly.</b> Retiring <see cref="Either"/> left it declared last, which
-	///     silently renumbered this member from 3 to 2. Enum members are compile-time constants and are inlined
-	///     into consuming assemblies, so anything built against an earlier version of this package carries
-	///     <c>Always</c> baked in as 3 — which an unpinned enum would now read back as <see cref="Either"/>.
-	///     <c>Enum.Parse</c> also accepts the bare numeral, so <c>Darkness: 3</c> in a hand-written file has to keep
-	///     meaning what it meant. Written out rather than left to declaration order because declaration order is
-	///     exactly what changed.
+	///     3, not 2: retiring <see cref="Either"/> left this declared last, which would silently renumber it. Enum
+	///     members are inlined into consuming assemblies, and <c>Enum.Parse</c> accepts the bare numeral, so
+	///     <c>Darkness: 3</c> in a hand-written file has to keep meaning what it meant.
 	/// </remarks>
 	Always = 3,
 
-	/// <summary>
-	///     <b>Retired. Behaves as <see cref="Lux"/>.</b> Kept only so a document that still names it can be read.
-	/// </summary>
+	/// <summary>Retired. Behaves as <see cref="Lux"/>, and stays only so a document that names it still parses.</summary>
 	/// <remarks>
-	///     <para>
-	///         It meant "dark when the lux sensor <i>or</i> the sun says so", and it was removed in the 2026-07
-	///         simplification because its sun half could call a room dark while the room's own sensor read a bright
-	///         afternoon: two answers, and the one that won was the one you were not looking at.
-	///     </para>
-	///     <para>
-	///         <b>The name has to survive even though the behaviour does not.</b> An unknown key in a document is
-	///         silence — <c>IgnoreUnmatchedProperties</c> passes over it — but an unknown enum <i>value</i> is a
-	///         parse failure, and this type is bound by two readers, not one:
-	///         <see cref="LightingConfigDocument"/> for the engine's own file, and NetDaemon's configuration binder
-	///         for the app's YAML. Only the first can be given a translation pre-pass. Deleting the member took a
-	///         live house's dashboard down with
-	///         <c>FormatException: Either is not a valid value for DarknessSource</c>, and would have done the same
-	///         to anybody upgrading the package.
-	///     </para>
-	///     <para>
-	///         So it parses, it reads as <see cref="Lux"/> wherever the engine acts on it, the editor does not
-	///         offer it, and <see cref="ConfigNormalizer"/> rewrites it on the next save — the same treatment, and
-	///         for the same reason, as the pre-2.0 <c>Zones:</c> key. There is no version at which removing it
-	///         becomes safe, because there is no way to prove no file still says it.
-	///     </para>
-	///     <para>
-	///         Keeps its original value 2 while being declared last, so the ordinals of the three live members are
-	///         untouched. See <see cref="Always"/> for why that matters.
-	///     </para>
+	///     Deleting it took a live house down with <c>FormatException: Either is not a valid value</c>. The editor does
+	///     not offer it and <see cref="ConfigNormalizer"/> rewrites it on the next save, but there is no way to prove
+	///     no file still says the word. Keeps value 2 while declared last so the live members' ordinals are untouched.
 	/// </remarks>
 	Either = 2
 }

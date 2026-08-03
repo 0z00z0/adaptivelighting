@@ -14,14 +14,14 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     <see cref="ModeService.IsHomeAssistantReady"/> in a house-mode-only setup with Home Assistant down:
-///     <see cref="ModeService.GetHouseMode"/> discovers the disconnection, and <see cref="ModeService.GetToggles"/>
-///     — called next on the same render — must not clobber that false back to true (Fix 8).
+///     <see cref="ModeService.IsHomeAssistantReady"/> in a house-mode-only setup with Home Assistant down.
+///     <see cref="ModeService.GetHouseMode"/> discovers the disconnection; <see cref="ModeService.GetToggles"/>
+///     runs next on the same render and must not clobber that false back to true.
 /// </summary>
 [TestClass]
 public sealed class ModeServiceReadinessTests
 {
-	/// <summary>An <see cref="IHaContext"/> whose state cache is not up yet: <see cref="GetState"/> throws, as the real one does.</summary>
+	/// <summary>An <see cref="IHaContext"/> whose state cache is not up yet, so <see cref="GetState"/> throws.</summary>
 	private sealed class DisconnectedHaContext : IHaContext
 	{
 		private readonly Subject<StateChange> _changes = new();
@@ -54,7 +54,7 @@ public sealed class ModeServiceReadinessTests
 		{
 			Global = new GlobalConfig
 			{
-				// A house-mode select, and NO legacy KillSwitch/Sleep/Guest entities — the case that regressed.
+				// A house-mode select and no legacy KillSwitch/Sleep/Guest entities: the case that regressed.
 				HouseMode = new HouseModeConfig
 				{
 					Entity = "input_select.husmodus",

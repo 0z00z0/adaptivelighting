@@ -6,54 +6,35 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     An in-memory area registry: area id to entity ids, entity id to labels, and area id to floor.
 /// </summary>
 /// <remarks>
-///     This fake is the whole reason <see cref="IAreaRegistry"/> exists. HassModel's <c>Area</c> cannot be built
-///     in a test — non-public constructors, a computed <c>Entities</c> collection and an internal navigator — so
-///     a resolver written against <c>IHaRegistry</c> would have been untestable by construction. The seam is one
-///     interface with five members, and it buys every discovery rule below, plus the floored houses the grouping
-///     rules need (<c>Floor</c> is as unconstructable as <c>Area</c>, which is why <see cref="AreaFloor"/> exists).
+///     HassModel's Area and Floor cannot be constructed in a test, so the resolver binds this seam and not
+///     IHaRegistry. AreaFloor exists for the same reason.
 /// </remarks>
 public sealed class FakeAreaRegistry : IAreaRegistry
 {
-	/// <summary>Area id to the entity ids in it.</summary>
 	public Dictionary<string, List<string>> Areas { get; } = new(StringComparer.Ordinal);
 
-	/// <summary>Entity id to its registry labels.</summary>
 	public Dictionary<string, List<string>> Labels { get; } = new(StringComparer.Ordinal);
 
-	/// <summary>
-	///     Entity id to the device it belongs to. An entity absent from here belongs to none, which is what a
-	///     group helper looks like — and what every entity looked like before the duplicate-device rule existed,
-	///     so an untouched fixture keeps behaving exactly as it did.
-	/// </summary>
+	/// <summary>Entity id to its device. Absent means no device, which is what a group helper looks like.</summary>
 	public Dictionary<string, string> Devices { get; } = new(StringComparer.Ordinal);
 
-	/// <summary>Area id to the floor it sits on. An area absent from here is floorless, as most houses' are.</summary>
+	/// <summary>Area id to its floor. An area absent from here is floorless.</summary>
 	public Dictionary<string, AreaFloor> Floors { get; } = new(StringComparer.Ordinal);
 
-	/// <summary>
-	///     Area id to the display name Home Assistant shows for it. An area absent from here is unnamed, which is
-	///     what a registry that cannot answer looks like from the outside.
-	/// </summary>
+	/// <summary>Area id to the display name HA shows. Absent means the registry cannot answer.</summary>
 	public Dictionary<string, string> Names { get; } = new(StringComparer.Ordinal);
 
-	/// <inheritdoc/>
 	public IReadOnlyList<string> AreaIds => [.. Areas.Keys];
 
-	/// <inheritdoc/>
 	public bool AreaExists(string areaId) => Areas.ContainsKey(areaId);
 
-	/// <inheritdoc/>
 	public string? NameOf(string areaId) => Names.GetValueOrDefault(areaId);
 
-	/// <inheritdoc/>
 	public IReadOnlyList<string> EntitiesInArea(string areaId) => Areas.GetValueOrDefault(areaId) ?? [];
 
-	/// <inheritdoc/>
 	public IReadOnlyList<string> LabelsOf(string entityId) => Labels.GetValueOrDefault(entityId) ?? [];
 
-	/// <inheritdoc/>
 	public string? DeviceOf(string entityId) => Devices.GetValueOrDefault(entityId);
 
-	/// <inheritdoc/>
 	public AreaFloor? FloorOf(string areaId) => Floors.GetValueOrDefault(areaId);
 }

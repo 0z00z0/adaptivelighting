@@ -8,7 +8,7 @@ namespace AdaptiveLighting.Extensions;
 /// </summary>
 public static class EntityIdExtensions
 {
-	/// <summary>Whether the entity id is in <paramref name="domain"/> — i.e. starts with <c>&lt;domain&gt;.</c> (ordinal).</summary>
+	/// <summary>Whether the entity id starts with <c>&lt;domain&gt;.</c>, ordinal.</summary>
 	public static bool HasDomain(this string entityId, string domain) =>
 		entityId.Length > domain.Length
 		&& entityId[domain.Length] == '.'

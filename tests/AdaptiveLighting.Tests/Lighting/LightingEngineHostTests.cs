@@ -13,18 +13,9 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     The save path: validate first, write second, and never the other way round.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The ordering is the whole safety property. A document with document-level errors is one the engine
-///         refuses to run, so writing it would mean the next host start finds a config it cannot use — the UI
-///         would have bricked the thing it exists to fix, from the page whose job is to fix it. So the refusal
-///         has to happen before any byte reaches the disk, and "the file is untouched" is the assertion that
-///         matters, not the return value.
-///     </para>
-///     <para>
-///         No Home Assistant here. <see cref="LightingEngineHost"/> with nothing attached validates without the
-///         referential checks and reports that it cannot start an engine, which is exactly the shape of the
-///         write path under test.
-///     </para>
+///     The engine refuses to run a document with document-level errors, so a refused save must reach no byte of
+///     the disk; "the file is untouched" is the assertion that matters, not the return value. With nothing
+///     attached the host validates without the referential checks and reports that it cannot start an engine.
 /// </remarks>
 [TestClass]
 public sealed class LightingEngineHostTests
@@ -80,16 +71,11 @@ public sealed class LightingEngineHostTests
 
 		var result = BuildHost().Save(config);
 
-		// Removing your last room is a legitimate thing to do, and a fresh install has none to begin with. The
-		// save must land so the document reflects what the owner asked for; the validator says so with a warning.
 		Assert.AreNotEqual(SaveStatus.Rejected, result.Status, "an area-less document is valid, just idle");
 		Assert.IsTrue(File.Exists(_path), "and it reaches the disk");
 	}
 
-	/// <summary>
-	///     The refusal must carry the validator's own words. The page renders these verbatim, so a save that
-	///     said only "invalid" would leave the operator with a form full of fields and no idea which one.
-	/// </summary>
+	/// <summary>The page renders these messages verbatim, so the refusal has to carry the validator's own words.</summary>
 	[TestMethod]
 	public void Save_WhenRefused_ReportsTheValidatorsOwnMessages()
 	{
@@ -105,7 +91,6 @@ public sealed class LightingEngineHostTests
 			$"Expected the validator's PreOffSeconds message, got: {result.Validation}");
 	}
 
-	/// <summary>An existing, working document must survive a refused save completely untouched.</summary>
 	[TestMethod]
 	public void Save_WhenRefused_LeavesTheExistingDocumentExactlyAsItWas()
 	{
@@ -138,11 +123,6 @@ public sealed class LightingEngineHostTests
 		Assert.AreEqual("stue", reloaded.Areas.Single().AreaId);
 	}
 
-	/// <summary>
-	///     Valid but unattached: the document is good and the engine still cannot start, because no Home
-	///     Assistant connection has been handed over. That is a save, not a failure — and it must say so rather
-	///     than claiming an engine is running.
-	/// </summary>
 	[TestMethod]
 	public void Save_WithNoHomeAssistantAttached_SavesButDoesNotClaimToBeRunning()
 	{
@@ -173,7 +153,6 @@ public sealed class LightingEngineHostTests
 		StringAssert.Contains(File.ReadAllText(_path), "[second]");
 	}
 
-	/// <summary>A save must not leave the temp file it wrote through lying next to the real one.</summary>
 	[TestMethod]
 	public void Save_LeavesNoTemporaryFilesBehind()
 	{
@@ -205,10 +184,6 @@ public sealed class LightingEngineHostTests
 		Assert.IsFalse(result.Validation.IsValid);
 	}
 
-	/// <summary>
-	///     Area-level errors cost an area, not the save. A household whose entity got renamed in Home Assistant
-	///     must still be able to fix the rest of the document from the browser.
-	/// </summary>
 	[TestMethod]
 	public void Save_WithAnAreaThatCannotResolve_StillSaves()
 	{
@@ -224,22 +199,12 @@ public sealed class LightingEngineHostTests
 	}
 
 	/// <summary>
-	///     Pointing one room at an area another room already uses is a document-level refusal, not an area-level one.
+	///     A room with no <c>Name</c> is identified by its area id, so re-pointing it at a taken area gives two
+	///     rows one <see cref="AreaConfig.DisplayName"/>. That is a document-level refusal.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         This is the room page's "Home Assistant area" picker in one call. A room that states no
-	///         <c>Name</c> is identified by its area id, so re-pointing it at a taken area gives two rows the same
-	///         <see cref="AreaConfig.DisplayName"/> — which <c>ConfigValidator</c> refuses, and refusal means
-	///         nothing is written and the running engine is untouched.
-	///     </para>
-	///     <para>
-	///         Asserted here because the page's own behaviour depends on it and cannot be tested: <c>Room.razor</c>
-	///         used to navigate to the new area's URL whether or not the save landed, which reloaded the page from
-	///         disk and wiped both the failure and the edit, dropping the reader on whichever room really does own
-	///         that area id. The page now only follows a save that reported <see cref="SaveResult.Written"/>. If
-	///         this refusal is ever downgraded to a warning, that guard is dead code and this test is where it says so.
-	///     </para>
+	///     <c>Room.razor</c> navigates to the new area only on <see cref="SaveResult.Written"/>. Downgrade this
+	///     refusal to a warning and that guard becomes dead code.
 	/// </remarks>
 	[TestMethod]
 	public void Save_WhenTwoRoomsWouldShareAnAreaId_IsRefusedAndNothingIsWritten()
@@ -252,7 +217,6 @@ public sealed class LightingEngineHostTests
 
 		string before = File.ReadAllText(_path);
 
-		// The edit the picker makes: the kitchen is told it is the living room.
 		config.Areas[1].AreaId = "stue";
 
 		SaveResult result = host.Save(config);
@@ -274,9 +238,7 @@ public sealed class LightingEngineHostTests
 		Assert.IsFalse(File.Exists(_path));
 	}
 
-	// ===================== the pre-2.0 schema, migrated on first load =====================
-
-	/// <summary>A document as it sits on disk in a house that has not been upgraded yet.</summary>
+	/// <summary>The pre-2.0 schema, as it sits on disk in a house that has not been upgraded yet.</summary>
 	private const string LegacySchema =
 		"""
 		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
@@ -293,12 +255,7 @@ public sealed class LightingEngineHostTests
 		      AreaId: stue
 		""";
 
-	/// <summary>
-	///     The migration is a write, and every write in this host goes through the store — which is the whole
-	///     point: the store already keeps one previous version, so the document as it was before the upgrade
-	///     survives at the path the Configuration page already shows, with no second backup mechanism invented
-	///     for the occasion.
-	/// </summary>
+	/// <summary>The migration is a write like any other, so the pre-upgrade file lands in the store's one backup slot.</summary>
 	[TestMethod]
 	public void Reload_OfALegacyDocument_RewritesItOnceAndLeavesThePreviousFileAtTheBackupPath()
 	{
@@ -322,22 +279,17 @@ public sealed class LightingEngineHostTests
 		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath),
 			"the backup is the pre-migration file, byte for byte");
 
-		// Once, not on every start. A second rewrite would push the only pre-migration copy out of the backup
-		// slot and replace it with a copy of the migrated file — the safety net quietly emptying itself.
+		// Once, not on every start: a second rewrite pushes the only pre-migration copy out of the backup slot.
 		host.Reload();
 
 		Assert.AreEqual(migrated, File.ReadAllText(_path));
 		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath));
 	}
 
-	// ===================== a half-finished hand-edit must not kill the host =====================
-
 	/// <summary>
-	///     <see cref="LightingEngineHost.Reload"/> says it never throws, and that is not a nicety: the caller is
-	///     the per-host <c>[NetDaemonApp]</c> bootstrap, and an app that throws goes to
-	///     <c>ApplicationState.Error</c>, taking its DI scope and its <c>IHaContext</c> with it. The browser can
-	///     then save a corrected file and still not start the engine — the one thing this host exists to make
-	///     possible. A line reading <c>Areas:</c> with nothing under it used to be enough to do that.
+	///     <see cref="LightingEngineHost.Reload"/> never throws. Its caller is the <c>[NetDaemonApp]</c>
+	///     bootstrap, and an app that throws goes to <c>ApplicationState.Error</c>, taking its DI scope and its
+	///     <c>IHaContext</c> with it; the browser can then save a corrected file and still not start the engine.
 	/// </summary>
 	[TestMethod]
 	public void Reload_OfADocumentWithASectionEmptiedByHand_LoadsItRatherThanThrowing()
@@ -366,9 +318,8 @@ public sealed class LightingEngineHostTests
 	}
 
 	/// <summary>
-	///     The same guarantee for a stray <c>-</c>, which is what a half-deleted room leaves behind. Kept separate
-	///     from the emptied-section test because it is a null <i>inside</i> a list the model believes is full of
-	///     rooms, which is the shape every consumer iterates.
+	///     A stray <c>-</c> is what a half-deleted room leaves behind. Separate from the emptied-section test: this
+	///     is a null inside the list every consumer iterates.
 	/// </summary>
 	[TestMethod]
 	public void Reload_OfADocumentWithABlankListEntry_LoadsItRatherThanThrowing()
@@ -396,16 +347,10 @@ public sealed class LightingEngineHostTests
 	}
 
 	/// <summary>
-	///     Area discovery runs on a timer half an hour into the future as far as the caller is concerned: nobody is
-	///     left to catch anything it throws, and on a thread-pool scheduler an unobserved exception ends the
-	///     process — the whole Home Assistant host, not just the lighting engine.
+	///     Discovery runs on a timer with no caller left to catch anything, and on a thread-pool scheduler an
+	///     unobserved exception ends the process, not only the lighting engine. NetDaemon's registry throws until
+	///     its first connection completes, so a house on a slow link reaches this path.
 	/// </summary>
-	/// <remarks>
-	///     The trigger is ordinary. The settle delay is a guess at how long Home Assistant needs before its
-	///     registry is readable; a house on a slow link can still be filling it when the timer fires, and
-	///     NetDaemon's registry throws until its first connection completes. Discovery finding nothing then is a
-	///     thing to log and retry on the next start — never a reason to take the house down.
-	/// </remarks>
 	[TestMethod]
 	public void AreaDiscovery_WhenTheRegistryIsStillUnreadable_IsAbandonedRatherThanThrownOntoTheScheduler()
 	{
@@ -426,7 +371,7 @@ public sealed class LightingEngineHostTests
 		host.Attach(new FakeHaContext(), new UnreadableRegistry(), scheduler);
 		host.Reload();
 
-		// Fires the armed discovery. Before this was guarded, the registry's exception came straight back out.
+		// Fires the armed discovery; unguarded, the registry's exception comes straight back out here.
 		scheduler.AdvanceBy(TimeSpan.FromMinutes(1).Ticks);
 
 		Assert.IsFalse(host.Store.Load().Global.AreasAutoDiscovered,
@@ -459,7 +404,6 @@ public sealed class LightingEngineHostTests
 		public Label? GetLabel(string labelId) => throw new InvalidOperationException("not connected");
 	}
 
-	/// <summary>A start that had nothing to migrate must be a start that wrote nothing.</summary>
 	[TestMethod]
 	public void Reload_OfACurrentSchemaDocument_WritesNothing()
 	{

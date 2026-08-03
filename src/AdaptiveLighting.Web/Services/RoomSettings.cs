@@ -5,13 +5,11 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Web.Services;
 
 /// <summary>
-///     What a setting's detail row draws — and therefore how its value is written, bounded and carried.
+///     What a setting's detail row draws, and therefore how its value is written, bounded and carried.
 /// </summary>
 /// <remarks>
-///     The kind is the contract between the metadata and the one row renderer. Every control in this design is
-///     constrained (a stepper in the field's own grain, a segmented choice, a switch), which is what makes
-///     applying an edit the moment it is made safe: no interaction here can produce a document the validator
-///     would refuse.
+///     Every control here is constrained, so applying an edit the moment it is made is safe: no
+///     interaction can produce a document the validator would refuse.
 /// </remarks>
 public enum RoomControl
 {
@@ -24,13 +22,13 @@ public enum RoomControl
 	/// <summary>A proportion the schema stores as a 0-1 factor. Shown and stepped as a percentage.</summary>
 	Fraction,
 
-	/// <summary>A quantity with a unit — lux, degrees, percent, seconds of fade.</summary>
+	/// <summary>A quantity with a unit: lux, degrees, percent, seconds of fade.</summary>
 	Number,
 
-	/// <summary>A yes/no. Drawn as a switch, because the shape is the meaning.</summary>
+	/// <summary>A yes/no, drawn as a switch.</summary>
 	Flag,
 
-	/// <summary>One of a fixed set. Drawn as a segmented control, so every option is visible without a tap.</summary>
+	/// <summary>One of a fixed set, drawn as a segmented control.</summary>
 	Choice,
 
 	/// <summary>A Home Assistant entity id, picked from what the registry knows.</summary>
@@ -41,28 +39,16 @@ public enum RoomControl
 ///     One overridable per-room setting, as the detail view needs it.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The labels and help lines are <c>area-restructure.md</c> §3's, which were written and reviewed for a
-///         reader who does not know the vocabulary. They are data rather than markup so the same words can be
-///         asserted on, and so the sentence layer and the detail layer can never call one setting two things.
-///     </para>
-///     <para>
-///         <see cref="AppliesWhen"/> is the design's <i>When</i> rule: a setting that cannot take effect is not
-///         drawn at all rather than greyed out. Greying still spends the reader's attention, still invites the
-///         tap, and still has to explain itself; the row simply comes back on the tap that turns its gate on.
-///     </para>
+///     The labels and help lines are data, not markup, so the same words can be asserted on and the
+///     sentence layer and the detail layer cannot call one setting two things.
 /// </remarks>
-/// <param name="Key">The <see cref="AreaSettings"/> property name — the same key the sentence tokens carry.</param>
-/// <param name="Label">The setting's name in the words the sentences use.</param>
-/// <param name="Help">One line on what it changes. Says what happens, not what the field is.</param>
-/// <param name="Control">How the row draws it.</param>
+/// <param name="Key">The <see cref="AreaSettings"/> property name, and the key the sentence tokens carry.</param>
 /// <param name="Unit">The unit written after the value, for <see cref="RoomControl.Number"/>.</param>
 /// <param name="Step">How far one press of the stepper moves it, in the shown unit.</param>
 /// <param name="Min">The lowest value the stepper will reach, in the shown unit.</param>
-/// <param name="Max">The highest, or <c>null</c> for unbounded above.</param>
 /// <param name="AppliesWhen">
-///     Whether this setting can take effect at all, read off the room's effective settings. <c>null</c> means
-///     always.
+///     Whether this setting can take effect at all, read off the room's effective settings. A setting that cannot
+///     is not drawn at all, never greyed out. <c>null</c> means always.
 /// </param>
 public sealed record RoomSetting(
 	string Key,
@@ -75,9 +61,6 @@ public sealed record RoomSetting(
 	double? Max = null,
 	Func<AreaSettings, bool>? AppliesWhen = null)
 {
-	/// <summary>Whether this setting can take effect given what the room is otherwise set to.</summary>
-	/// <param name="effective">The room's settings with its inheritance already resolved.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="effective"/> is <c>null</c>.</exception>
 	public bool AppliesTo(AreaSettings effective)
 	{
 		ArgumentNullException.ThrowIfNull(effective);
@@ -87,31 +70,12 @@ public sealed record RoomSetting(
 }
 
 /// <summary>
-///     What reading a typed number produced: the value to apply, or the sentence saying why nothing was.
+///     What reading a typed number produced: the value to apply, or the sentence saying why nothing was. One of the
+///     two is always set, never both.
 /// </summary>
-/// <remarks>
-///     Both fields can be absent at once only in principle — a reading either yields a number or explains itself,
-///     so the reader is never left with a field that changed nothing and said nothing about it.
-/// </remarks>
-/// <param name="Value">The number to apply, or <c>null</c> when nothing should change.</param>
-/// <param name="Refusal">
-///     Why nothing changed, in words meant for the person who typed it, or <c>null</c> when a value came through.
-/// </param>
 public sealed record TypedNumber(double? Value, string? Refusal);
 
-/// <summary>
-///     One named section of the detail view: the unit a person navigates by.
-/// </summary>
-/// <remarks>
-///     Every section starts folded, and there is deliberately no per-section say in it. Sections used to carry a
-///     <c>StartsOpen</c> flag that all but one set, so revealing <i>All settings</i> unrolled four sections at once
-///     and the structure — the thing that makes twenty-one settings findable — was several screens of controls
-///     rather than five headings. Shut, the headings are what a reader meets, and the one they want is one tap
-///     away. Their notes are what make that work, which is why every section has to have one.
-/// </remarks>
-/// <param name="Title">What the section is called.</param>
 /// <param name="Note">One line naming what is inside, so a folded section still says what it holds.</param>
-/// <param name="Settings">Its settings, in reading order.</param>
 public sealed record RoomSettingGroup(string Title, string Note, IReadOnlyList<RoomSetting> Settings);
 
 /// <summary>
@@ -119,31 +83,14 @@ public sealed record RoomSettingGroup(string Title, string Note, IReadOnlyList<R
 ///     grouped, and how one is read, written and sent back to following the house.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Two surfaces read it. The room page renders these settings against one <see cref="AreaConfig"/>; the
-///         House tab renders the very same list against the document's <see cref="AreaSettings"/> defaults —
-///         which is why every reader takes a nullable room and every writer has a twin that takes the house
-///         instead. Splitting the two into separate classes would duplicate the key-to-property mapping and the
-///         unit conversions, and a house that wrote a warning dim as 50 while a room wrote it as 0.5 is exactly
-///         the drift this class exists to prevent.
-///     </para>
-///     <para>
-///         <b>The set of settings is derived, not listed.</b> <see cref="Keys"/> is reflection over the nullable
-///         twins <see cref="AreaConfig"/> declares for <see cref="AreaSettings"/> properties, so a setting added
-///         to the schema is a setting this page counts from the moment it exists. A hand-written list is how the
-///         shipped editor came to say "n of 16" about a document with twenty-one overridable settings, quietly
-///         under-reporting five of them.
-///     </para>
-///     <para>
-///         <b>Provenance is read off <c>null</c>, never guessed by comparing values.</b> A room that pins 10 min
-///         while the house also says 10 min has made a decision — one taken precisely so a later change to the
-///         house leaves this room alone — and the amber dot must say so.
-///     </para>
-///     <para>
-///         Pure, because this repo has no Razor render harness and does not gain one: the grouping, the count,
-///         the inherited-versus-own determination and every value format are asserted here rather than
-///         screenshotted.
-///     </para>
+///     Two surfaces read it: the room page against one <see cref="AreaConfig"/>, the House tab against the
+///     document's <see cref="AreaSettings"/> defaults. Hence every reader taking a nullable room and every writer
+///     having a twin for the house. One key-to-property mapping and one set of unit conversions serve both, so a
+///     warning dim cannot be stored as 50 by one surface and 0.5 by the other.
+///     The set of settings is derived by reflection, never listed: a setting added to the schema is counted from
+///     the moment it exists.
+///     Provenance is read off <c>null</c>, never guessed by comparing values. A room that pins 10 min while the
+///     house also says 10 min has made a decision, and the page must say so.
 /// </remarks>
 public static class RoomSettings
 {
@@ -160,15 +107,15 @@ public static class RoomSettings
 
 		foreach (PropertyInfo house in typeof(AreaSettings).GetProperties(BindingFlags.Public | BindingFlags.Instance))
 		{
-			// Enabled is deliberately not one of them: the room's power switch owns it, so it is not a setting the
-			// detail view offers and must not be counted among the ones it does.
+			// Enabled is not one of them: the room's power switch owns it, so it must not be counted among the
+			// settings the detail view offers.
 			if (!house.CanRead || !house.CanWrite || string.Equals(house.Name, nameof(AreaSettings.Enabled), StringComparison.Ordinal))
 				continue;
 
 			PropertyInfo? room = typeof(AreaConfig).GetProperty(house.Name, BindingFlags.Public | BindingFlags.Instance);
 
-			// A twin, or nothing. AreaConfig carries members of its own — the explicit entity lists, the area id —
-			// and those are per-room facts rather than overrides of a house setting.
+			// A nullable twin, or nothing. AreaConfig also carries members of its own, such as the entity lists
+			// and the area id, and those are per-room facts, not overrides.
 			if (room is null || !room.CanRead || !room.CanWrite)
 				continue;
 
@@ -185,65 +132,36 @@ public static class RoomSettings
 	}
 
 	/// <summary>
-	///     The most a light-level setting takes: the largest illuminance a 16-bit sensor reading can carry.
+	///     The most a light-level setting takes: the largest illuminance a 16-bit sensor reading can carry. Above
+	///     it is a value no real sensor produces, so the field refuses it instead of clamping.
 	/// </summary>
-	/// <remarks>
-	///     A bound taken from the hardware rather than from taste. Real sensors report 0–65 535 lx, so a number
-	///     above it is not a preference this UI should quietly reshape — it is a value nothing will ever produce,
-	///     and saying so is more use than clamping it to something the reader did not type.
-	/// </remarks>
 	public const double MaxLux = 65535;
 
 	/// <summary>
-	///     What the movement section is called, named once so the page can find it.
+	///     What the movement section is called. The room page appends its "Blocked while on" control to whichever
+	///     section this names. Matching by constant, not by literal, is what stops a rename dropping it.
 	/// </summary>
-	/// <remarks>
-	///     The room page appends one control to this section that is not an overridable setting and so cannot be a
-	///     <see cref="RoomSetting"/>: <i>Blocked while on</i>, which is a per-room list of entities rather than a
-	///     value inherited from the house. It is a movement rule — it decides whether movement lights the room — and
-	///     was filed with the entity pickers, several folds away from the timings it belongs beside. Matching the
-	///     section by a constant rather than by a literal is what stops a rename quietly dropping it.
-	/// </remarks>
 	public const string MovementSection = "Movement & timing";
 
 	/// <summary>
 	///     Every setting a room can state for itself, derived from the schema.
 	/// </summary>
 	/// <remarks>
-	///     The denominator in "n of 21 are this room's own". Never write the number down anywhere:
-	///     <see cref="AreaView.OverridableSettingCount"/> and this list are two readings of one fact, and a test
-	///     holds them together.
+	///     The denominator in "n of 21 are this room's own". Never write that number down:
+	///     <see cref="AreaView.OverridableSettingCount"/> and this list are two readings of one fact, held together
+	///     by a test.
 	/// </remarks>
 	public static IReadOnlyList<string> Keys { get; }
 
 	/// <summary>
-	///     How a room decides it is dark, worded for a segmented control rather than for a sentence.
+	///     How a room decides it is dark, worded for a segmented control. Shorter than
+	///     <see cref="AreaSentences.DarknessChoices"/>; that one is prose, and the two mean the same thing.
 	/// </summary>
-	/// <remarks>
-	///     Shorter words than <see cref="AreaSentences.DarknessChoices"/> on purpose: a segment is a button and
-	///     "either the sensor or the sun" does not fit on one. The sentence and the row therefore read differently
-	///     and mean identically, which is the right way round — the sentence is prose and the row is a control.
-	/// </remarks>
 	public static IReadOnlyList<TokenChoice> DarknessOptions { get; } = TokenChoices.Of(
 		("Sensor", nameof(DarknessSource.Lux)),
 		("Sun", nameof(DarknessSource.Sun)),
 		("Always dark", nameof(DarknessSource.Always)));
 
-	/// <summary>
-	///     The detail view, in sections, in the order somebody looks for them.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         The grouping is <c>area-restructure.md</c> §3's — movement &amp; timing, darkness, room behaviour —
-	///         plus two the schema has grown since: the daylight-brightness curve, which is one idea and belongs
-	///         together, and the fades and sun entity, which are the rare things §3 already folds away.
-	///     </para>
-	///     <para>
-	///         A section is what a person navigates by. Somebody looking for "how long the lights stay on" is
-	///         thinking about movement and time, not about which of twenty-one rows it is, so the sections are
-	///         named after what they change and every one of them starts folded.
-	///     </para>
-	/// </remarks>
 	public static IReadOnlyList<RoomSettingGroup> Groups { get; } =
 	[
 		new RoomSettingGroup(
@@ -304,9 +222,8 @@ public static class RoomSettings
 					"How high the sun may stand and the room still count as dark, in degrees above the horizon. 0° is sunset, −6° is dusk.",
 					RoomControl.Number, Unit: "°", Step: 1, Min: -90, Max: 90,
 
-					// Only the rule that actually reads the sun. It used to be drawn for a Sensor room as well,
-					// because a room whose lux sensors said nothing fell back to the sun — that fallback is gone, and
-					// such a room now simply counts as dark, so the row would have been a control that changed nothing.
+					// Only the rule that reads the sun. A Sensor room with no reading counts as dark outright; there
+					// is no sun fallback for this row to serve.
 					AppliesWhen: settings => settings.Darkness is DarknessSource.Sun)
 			]),
 
@@ -394,23 +311,10 @@ public static class RoomSettings
 	];
 
 	/// <summary>
-	///     Whether a setting's range spans so many decades that no single step can serve it.
+	///     Whether a setting's range spans so many decades that no single step can serve it, and so is typed
+	///     instead of stepped. Derived from the bounds, so a future setting of the same shape gets the same
+	///     control without anyone asking.
 	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Derived from the bounds rather than flagged setting by setting, because it is arithmetic and not
-	///         taste. A control running 0–65 535 lx with a five-lux step needs 7 992 presses to get from 40 to
-	///         40 000, and no other step rescues it: 5 is absurd at the top of the range and 500 is unusable at
-	///         the bottom. The instrument is wrong, not its calibration.
-	///     </para>
-	///     <para>
-	///         So a setting shaped like this is typed rather than stepped, with the sentence's shortlist for the
-	///         decade and the box for the number. Illuminance is the case that raised it; the rule is general, so
-	///         a future setting with the same shape gets the same control without anyone remembering to ask.
-	///     </para>
-	/// </remarks>
-	/// <param name="min">The setting's floor, in the unit its control shows.</param>
-	/// <param name="max">Its ceiling, or <c>null</c> for unbounded above.</param>
 	public static bool SpansDecades(double min, double? max) =>
 		max is { } ceiling && ceiling / Math.Max(min, 1) >= 1000;
 
@@ -418,20 +322,12 @@ public static class RoomSettings
 	///     Reads a number somebody typed, in the unit the control shows.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         <b>Refuses rather than clamps, and says which.</b> A box that silently turns 70 000 into 65 535 has
-	///         answered a question nobody asked, and the person who typed it is left looking at a number they did
-	///         not choose, unable to tell a rejected entry from a typo of their own.
-	///     </para>
-	///     <para>
-	///         Invariant first, then the machine's own culture. A browser hands <c>type="number"</c> back in HTML
-	///         number syntax, but a paste, an autofill or a locale-aware field can arrive written the way the desk
-	///         writes numbers, and on an <c>nb-NO</c> host that is "62,5". The invariant pass deliberately refuses
-	///         thousands separators: allowing them would read "1,5" as fifteen before the Norwegian pass ever saw
-	///         it, which is the same class of bug as writing <c>value="62,5"</c> into an HTML attribute.
-	///     </para>
+	///     Refuses out-of-range values instead of clamping them, so a rejected entry is distinguishable from a
+	///     typo. Invariant first, then the machine's culture: a browser hands <c>type="number"</c> back in HTML
+	///     syntax, but a paste or an autofill can arrive as the desk writes numbers, and on an <c>nb-NO</c> host
+	///     that is "62,5". The invariant pass must refuse thousands separators, or it reads "1,5" as fifteen
+	///     before the Norwegian pass ever sees it.
 	/// </remarks>
-	/// <param name="typed">What was in the box.</param>
 	/// <param name="min">The lowest value the setting takes, in the shown unit.</param>
 	/// <param name="max">The highest, or <c>null</c> for unbounded above.</param>
 	/// <param name="unit">The unit, so a refusal names the bound the way the readout does.</param>
@@ -457,25 +353,16 @@ public static class RoomSettings
 		return new TypedNumber(value, null);
 	}
 
-	/// <summary>The setting a key names.</summary>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
 	/// <exception cref="KeyNotFoundException">No group holds that key.</exception>
 	public static RoomSetting Of(string key) => ByKey[key];
 
-	/// <summary>Whether a key names a setting the detail view knows about.</summary>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
 	public static bool Knows(string key) => key is not null && ByKey.ContainsKey(key);
 
 	/// <summary>
-	///     Whether this room states its own value for a setting rather than following the house.
+	///     Whether this room states its own value for a setting instead of following the house. Read off the
+	///     schema's <c>null</c>, never by comparing against the house's number: two values being equal today says
+	///     nothing about whether somebody chose one.
 	/// </summary>
-	/// <remarks>
-	///     Read straight off the schema's <c>null</c>, which is what "inherit" is written as. Never a comparison
-	///     against the house's number: two values being equal today says nothing about whether somebody chose one.
-	/// </remarks>
-	/// <param name="room">The room.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="room"/> is <c>null</c>.</exception>
 	public static bool IsOwn(AreaConfig room, string key)
 	{
 		ArgumentNullException.ThrowIfNull(room);
@@ -483,9 +370,6 @@ public static class RoomSettings
 		return RoomProperties.TryGetValue(key, out PropertyInfo? property) && property.GetValue(room) is not null;
 	}
 
-	/// <summary>How many of the overridable settings this room states for itself.</summary>
-	/// <param name="room">The room.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="room"/> is <c>null</c>.</exception>
 	public static int OwnCount(AreaConfig room)
 	{
 		ArgumentNullException.ThrowIfNull(room);
@@ -494,17 +378,9 @@ public static class RoomSettings
 	}
 
 	/// <summary>
-	///     Sends one setting back to following the house.
+	///     Sends one setting back to following the house. Clears the property; never copies the house's current
+	///     number in, which would pin the room to today's value.
 	/// </summary>
-	/// <remarks>
-	///     Clears the room's property rather than copying the house's current number into it, and the difference
-	///     is the whole point: a room that follows the house keeps following it the next time the house changes.
-	///     Writing the number in would silently pin the room to today's value.
-	/// </remarks>
-	/// <param name="room">The room to change, in place.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <returns>Whether the key named an overridable setting.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="room"/> is <c>null</c>.</exception>
 	public static bool Clear(AreaConfig room, string key)
 	{
 		ArgumentNullException.ThrowIfNull(room);
@@ -521,14 +397,9 @@ public static class RoomSettings
 	///     A numeric setting's value in the unit its control shows, following the room's inheritance.
 	/// </summary>
 	/// <remarks>
-	///     The shown unit is not always the stored one: the schema keeps the warning dim as a 0-1 factor, and a
-	///     stepper offering 0.05 steps of an unnamed fraction is a control nobody can read. The conversion lives
-	///     here, once, so the stepper and the row's readout can never disagree about what a number means.
+	///     The shown unit is not always the stored one: the schema keeps the warning dim as a 0-1 factor. The
+	///     conversion lives here, once, so the stepper and the readout cannot disagree about what a number means.
 	/// </remarks>
-	/// <param name="room">The room, or <c>null</c> to read the house's own value.</param>
-	/// <param name="defaults">The document's all-rooms settings.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="defaults"/> is <c>null</c>.</exception>
 	public static double Shown(AreaConfig? room, AreaSettings defaults, string key)
 	{
 		ArgumentNullException.ThrowIfNull(defaults);
@@ -542,15 +413,11 @@ public static class RoomSettings
 	///     Writes a numeric setting from a value given in the unit its control shows.
 	/// </summary>
 	/// <remarks>
-	///     Bounded here rather than by the control, so a value typed into the stepper's keyboard escape hatch is
-	///     held to the same limits as one reached by pressing the arrows. Whole-number settings are rounded rather
-	///     than truncated: 0.5 steps of a second-valued setting must land somewhere, and away-from-zero is what a
-	///     person watching the readout expects.
+	///     Bounded here, not by the control, so a value typed into the stepper's keyboard escape hatch is
+	///     held to the same limits as one reached by pressing the arrows. Whole-number settings round away from
+	///     zero, never truncate.
 	/// </remarks>
-	/// <param name="room">The room to change, in place.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
 	/// <param name="shown">The new value, in the control's own unit.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="room"/> is <c>null</c>.</exception>
 	public static void SetShown(AreaConfig room, string key, double shown)
 	{
 		ArgumentNullException.ThrowIfNull(room);
@@ -569,11 +436,6 @@ public static class RoomSettings
 				: Convert.ChangeType(stored, underlying, CultureInfo.InvariantCulture));
 	}
 
-	/// <summary>A yes/no setting's value, following the room's inheritance.</summary>
-	/// <param name="room">The room, or <c>null</c> to read the house's own value.</param>
-	/// <param name="defaults">The document's all-rooms settings.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="defaults"/> is <c>null</c>.</exception>
 	public static bool Flag(AreaConfig? room, AreaSettings defaults, string key)
 	{
 		ArgumentNullException.ThrowIfNull(defaults);
@@ -581,11 +443,6 @@ public static class RoomSettings
 		return Effective(room, defaults, key) is true;
 	}
 
-	/// <summary>Writes a yes/no setting as this room's own.</summary>
-	/// <param name="room">The room to change, in place.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <param name="value">The new value.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="room"/> is <c>null</c>.</exception>
 	public static void SetFlag(AreaConfig room, string key, bool value)
 	{
 		ArgumentNullException.ThrowIfNull(room);
@@ -593,11 +450,6 @@ public static class RoomSettings
 		RoomProperties[key].SetValue(room, value);
 	}
 
-	/// <summary>An entity-valued setting, following the room's inheritance.</summary>
-	/// <param name="room">The room, or <c>null</c> to read the house's own value.</param>
-	/// <param name="defaults">The document's all-rooms settings.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="defaults"/> is <c>null</c>.</exception>
 	public static string Entity(AreaConfig? room, AreaSettings defaults, string key)
 	{
 		ArgumentNullException.ThrowIfNull(defaults);
@@ -605,11 +457,7 @@ public static class RoomSettings
 		return Effective(room, defaults, key) as string ?? string.Empty;
 	}
 
-	/// <summary>Writes an entity-valued setting as this room's own. An empty pick clears it back to the house.</summary>
-	/// <param name="room">The room to change, in place.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <param name="value">The entity id, or <c>null</c>/empty to follow the house again.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="room"/> is <c>null</c>.</exception>
+	/// <summary>An empty pick clears the setting back to the house.</summary>
 	public static void SetEntity(AreaConfig room, string key, string? value)
 	{
 		ArgumentNullException.ThrowIfNull(room);
@@ -617,14 +465,6 @@ public static class RoomSettings
 		RoomProperties[key].SetValue(room, string.IsNullOrWhiteSpace(value) ? null : value);
 	}
 
-	/// <summary>
-	///     A setting's value as it is written, whatever its kind: the stepper's readout, and the number inside
-	///     <i>Use house setting (10 min)</i>.
-	/// </summary>
-	/// <param name="room">The room, or <c>null</c> to read the house's own value.</param>
-	/// <param name="defaults">The document's all-rooms settings.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="defaults"/> is <c>null</c>.</exception>
 	public static string Describe(AreaConfig? room, AreaSettings defaults, string key)
 	{
 		ArgumentNullException.ThrowIfNull(defaults);
@@ -645,15 +485,9 @@ public static class RoomSettings
 
 	/// <summary>The value of the one enum-valued setting, following the room's inheritance.</summary>
 	/// <remarks>
-	///     The last resort is the house's own value, never a rule named again here. It is unreachable in practice —
-	///     the house's property is not nullable, so the pattern above always matches — but a literal written into it
-	///     would be a second copy of a default that has already moved once, and a second copy is how the two come to
-	///     disagree.
+	///     The last resort is the house's own value, never a literal. The house property is not nullable so the
+	///     pattern always matches, but a literal here would be a second copy of a default that has moved before.
 	/// </remarks>
-	/// <param name="room">The room, or <c>null</c> to read the house's own value.</param>
-	/// <param name="defaults">The document's all-rooms settings.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="defaults"/> is <c>null</c>.</exception>
 	public static DarknessSource Choice(AreaConfig? room, AreaSettings defaults, string key)
 	{
 		ArgumentNullException.ThrowIfNull(defaults);
@@ -661,8 +495,6 @@ public static class RoomSettings
 		return Effective(room, defaults, key) is DarknessSource source ? source : defaults.Darkness;
 	}
 
-	/// <summary>What a darkness rule is called on a segment.</summary>
-	/// <param name="source">The rule.</param>
 	public static string Word(DarknessSource source) =>
 		DarknessOptions.FirstOrDefault(option => string.Equals(option.Value, source.ToString(), StringComparison.Ordinal))?.Text
 		?? source.ToString();
@@ -671,16 +503,12 @@ public static class RoomSettings
 	///     Applies one sentence-token edit to a room.
 	/// </summary>
 	/// <remarks>
-	///     A typed switch rather than the reflection the rest of this class uses, because the conversions genuinely
-	///     differ: a duration token carries seconds while the schema stores some of them in minutes, and a
-	///     percentage token carries 0-100 while the schema stores a 0-1 factor. A generic path would have to guess,
-	///     and a wrong guess writes a ten-second timeout where ten minutes was asked for with nothing on screen
-	///     looking wrong.
+	///     A typed switch, not the reflection the rest of this class uses, because the conversions differ per key:
+	///     a duration token carries seconds while the schema stores some in minutes, and a percentage token carries
+	///     0-100 against a stored 0-1 factor. A generic path would write a ten-second timeout where ten minutes was
+	///     asked for, with nothing on screen looking wrong.
 	/// </remarks>
-	/// <param name="room">The room to change, in place. Nothing here writes anything to disk.</param>
-	/// <param name="edit">The edit the sentence handed back.</param>
-	/// <returns>Whether the key was one this page knows how to apply.</returns>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	/// <param name="room">The room to change, in place. Nothing here writes to disk.</param>
 	public static bool Apply(AreaConfig room, SentenceEdit edit)
 	{
 		ArgumentNullException.ThrowIfNull(room);
@@ -730,22 +558,15 @@ public static class RoomSettings
 
 	// ===================== the house's own copy of the same settings =====================
 	//
-	// The House tab edits AreaSettings directly: these values ARE the house, so there is no null to mean
-	// "inherit" and no road back to offer. Everything else — which keys exist, what each is called, how a shown
-	// value converts to a stored one — is the same metadata the room page reads, so a change to a bound or a
-	// unit lands on both surfaces at once.
+	// The House tab edits AreaSettings directly: these values ARE the house, so there is no null meaning
+	// "inherit" and no road back. Everything else is the same metadata the room page reads, so a change to a
+	// bound or a unit lands on both surfaces at once.
 
 	/// <summary>
-	///     Writes a numeric house default from a value given in the unit its control shows.
+	///     By <see cref="SetShown(AreaConfig, string, double)"/>'s rules. Always writes a value: the house has no
+	///     nullable twin and nothing above it to fall back to.
 	/// </summary>
-	/// <remarks>
-	///     Bounded and converted by exactly <see cref="SetShown(AreaConfig, string, double)"/>'s rules. The house
-	///     has no nullable twin, so this always writes a value — there is nothing above it to fall back to.
-	/// </remarks>
-	/// <param name="house">The document's all-rooms settings, changed in place.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
 	/// <param name="shown">The new value, in the control's own unit.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="house"/> is <c>null</c>.</exception>
 	public static void SetShown(AreaSettings house, string key, double shown)
 	{
 		ArgumentNullException.ThrowIfNull(house);
@@ -763,11 +584,6 @@ public static class RoomSettings
 				: Convert.ChangeType(stored, property.PropertyType, CultureInfo.InvariantCulture));
 	}
 
-	/// <summary>Writes a yes/no house default.</summary>
-	/// <param name="house">The document's all-rooms settings, changed in place.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <param name="value">The new value.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="house"/> is <c>null</c>.</exception>
 	public static void SetFlag(AreaSettings house, string key, bool value)
 	{
 		ArgumentNullException.ThrowIfNull(house);
@@ -776,16 +592,9 @@ public static class RoomSettings
 	}
 
 	/// <summary>
-	///     Writes an entity-valued house default.
+	///     An empty pick is stored as an empty string, not <c>null</c>: the house's properties are not nullable,
+	///     and empty is what the engine reads as "nothing chosen".
 	/// </summary>
-	/// <remarks>
-	///     An empty pick is stored as an empty string rather than <c>null</c>: the house's own properties are not
-	///     nullable, and empty is already what the engine reads as "nothing chosen".
-	/// </remarks>
-	/// <param name="house">The document's all-rooms settings, changed in place.</param>
-	/// <param name="key">The <see cref="AreaSettings"/> property name.</param>
-	/// <param name="value">The entity id, or <c>null</c>/empty for none.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="house"/> is <c>null</c>.</exception>
 	public static void SetEntity(AreaSettings house, string key, string? value)
 	{
 		ArgumentNullException.ThrowIfNull(house);
@@ -794,17 +603,10 @@ public static class RoomSettings
 	}
 
 	/// <summary>
-	///     Applies one sentence-token edit to the house's defaults.
+	///     The same typed conversions <see cref="Apply(AreaConfig, SentenceEdit)"/> makes. The two must stay in
+	///     step, or one value picked in two places lands in the document meaning different things.
 	/// </summary>
-	/// <remarks>
-	///     The same typed conversions <see cref="Apply(AreaConfig, SentenceEdit)"/> makes, against the
-	///     non-nullable twins — so a value picked in the House tab's sentence and the same value picked in a
-	///     room's sentence cannot land in the document meaning different things.
-	/// </remarks>
 	/// <param name="house">The document's all-rooms settings, changed in place. Nothing here writes to disk.</param>
-	/// <param name="edit">The edit the sentence handed back.</param>
-	/// <returns>Whether the key was one this class knows how to apply.</returns>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static bool Apply(AreaSettings house, SentenceEdit edit)
 	{
 		ArgumentNullException.ThrowIfNull(house);

@@ -3,10 +3,7 @@ using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Extensions;
 
-/// <summary>
-///     The <see cref="IHaRegistry"/> questions the engine actually asks, each in one expression — the whole
-///     of the engine's former <c>HaAreaRegistry</c> body, made available to everyone.
-/// </summary>
+/// <summary>The <see cref="IHaRegistry"/> questions the engine asks, each in one expression.</summary>
 public static class RegistryExtensions
 {
 	/// <summary>Every area id the registry knows.</summary>
@@ -17,9 +14,8 @@ public static class RegistryExtensions
 	public static bool AreaExists(this IHaRegistry registry, string areaId) => registry.GetArea(areaId) is not null;
 
 	/// <summary>
-	///     The display name Home Assistant shows for <paramref name="areaId"/>, or <c>null</c> when the area is
-	///     unknown or unnamed. An area id is a slug, so this is the only thing that turns <c>kjeller_bad</c> back
-	///     into "Kjeller - Bad".
+	///     The display name for <paramref name="areaId"/>, or <c>null</c> when the area is unknown or unnamed. An area
+	///     id is a slug, so this is the only thing that turns <c>kjeller_bad</c> back into "Kjeller - Bad".
 	/// </summary>
 	public static string? AreaNameOf(this IHaRegistry registry, string areaId) =>
 		registry.GetArea(areaId)?.Name is { Length: > 0 } name ? name : null;
@@ -31,12 +27,12 @@ public static class RegistryExtensions
 			: [];
 
 	/// <summary>
-	///     The floor <paramref name="areaId"/> sits on, or <c>null</c> when the area is unknown or the house never
-	///     put it on one. Floors are optional in Home Assistant, so <c>null</c> is an ordinary answer, not a fault.
+	///     The floor <paramref name="areaId"/> sits on. Floors are optional in Home Assistant, so <c>null</c> is an
+	///     ordinary answer.
 	/// </summary>
 	public static Floor? FloorOf(this IHaRegistry registry, string areaId) => registry.GetArea(areaId)?.Floor;
 
-	/// <summary>The labels on <paramref name="entityId"/> — both label ids and names. Empty when it has none.</summary>
+	/// <summary>The labels on <paramref name="entityId"/>, both ids and names, in one list. Empty when it has none.</summary>
 	public static IReadOnlyList<string> LabelsOf(this IHaRegistry registry, string entityId) =>
 		registry.GetEntityRegistration(entityId)?.Labels is { } labels
 			? [.. labels.SelectMany(label => new[] { label.Id, label.Name }).OfType<string>()]
@@ -50,10 +46,8 @@ public static class RegistryExtensions
 	///     The id of the device <paramref name="entityId"/> belongs to, or <c>null</c> when it belongs to none.
 	/// </summary>
 	/// <remarks>
-	///     The exact answer to "are these two entities the same piece of hardware", which every naming convention
-	///     can only guess at. A group helper and a template entity have no device, which is what makes <c>null</c>
-	///     an ordinary answer rather than a fault — and conveniently means a group can never be mistaken for a
-	///     duplicate of the entities inside it.
+	///     How duplicate-hardware checks are decided. A group helper and a template entity have no device, so null is
+	///     ordinary, and a group is never mistaken for a duplicate of the entities inside it.
 	/// </remarks>
 	public static string? DeviceOf(this IHaRegistry registry, string entityId) =>
 		registry.GetEntityRegistration(entityId)?.Device?.Id is { Length: > 0 } device ? device : null;

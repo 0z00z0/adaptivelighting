@@ -6,12 +6,6 @@ namespace AdaptiveLighting.Tests.Lighting;
 /// <summary>
 ///     The daylight brightness adjustment: brighter outdoors raises the level the schedule asked for.
 /// </summary>
-/// <remarks>
-///     The maths is pure, so it is tested as maths — no scheduler, no Home Assistant, no controller. The one
-///     property worth more than the rest is the last section: a document that has not switched this on must be
-///     handed back the very target it came in with, because two live houses run this engine and none of them
-///     asked for the feature.
-/// </remarks>
 [TestClass]
 public sealed class LuxBrightnessCurveTests
 {
@@ -31,7 +25,6 @@ public sealed class LuxBrightnessCurveTests
 			LuxBrightnessGamma = gamma
 		};
 
-	/// <summary>A target as the circadian calculator would hand one over.</summary>
 	private static LightTarget Target(double brightnessPct) =>
 		new("evening", brightnessPct, 2700);
 
@@ -67,11 +60,6 @@ public sealed class LuxBrightnessCurveTests
 
 	// ===================== the log interpolation =====================
 
-	/// <summary>
-	///     The whole reason for the feature's shape. With anchors at 100 and 10 000 lx the halfway point is the
-	///     geometric mean, 1 000 lx — broad daylight, and where a room genuinely wants half the adjustment. A
-	///     linear map puts 1 000 lx at 9 % of the range instead, which is the failure this is guarding against.
-	/// </summary>
 	[TestMethod]
 	public void The_Midpoint_Of_The_Log_Range_Is_Halfway_Up_The_Curve()
 	{
@@ -117,10 +105,7 @@ public sealed class LuxBrightnessCurveTests
 		Assert.AreEqual(100, LuxBrightnessCurve.Raise(40, 10000, Curve(gamma: 0.25)));
 	}
 
-	/// <summary>
-	///     <c>Math.Pow(0, 0)</c> is 1, so a zero exponent taken at face value would command the full daylight level
-	///     in pitch darkness. The validator refuses it; this is the belt to that pair of braces.
-	/// </summary>
+	// Math.Pow(0, 0) is 1, so a zero exponent at face value commands full daylight in pitch darkness.
 	[TestMethod]
 	public void A_Zero_Gamma_Does_Not_Turn_Darkness_Into_Full_Daylight()
 	{
@@ -139,7 +124,7 @@ public sealed class LuxBrightnessCurveTests
 
 	// ===================== readings that are not numbers =====================
 
-	/// <summary>Sensors report 0 — and log10(0) is negative infinity, which is not a brightness.</summary>
+	// Sensors do report 0, and log10(0) is negative infinity.
 	[TestMethod]
 	public void Zero_Lux_Is_Safe_And_Leaves_The_Schedule_Alone()
 	{
@@ -158,7 +143,6 @@ public sealed class LuxBrightnessCurveTests
 		Assert.IsTrue(double.IsFinite(raised));
 	}
 
-	/// <summary>An infinity is not a bright day, it is a broken sensor, and it is treated as one.</summary>
 	[TestMethod]
 	public void A_NaN_Or_Infinite_Reading_Never_Reaches_A_Light()
 	{
@@ -192,14 +176,8 @@ public sealed class LuxBrightnessCurveTests
 		Assert.IsTrue(double.IsFinite(raised));
 	}
 
-	/// <summary>
-	///     Two anchors can differ while their logarithms do not: <c>log10(100)</c> and
-	///     <c>log10(100.00000000000003)</c> are the same double, so the span the interpolation divides by is zero
-	///     and so is the numerator. The validator has no reason to object to either number — full is genuinely
-	///     above start — and 0/0 is a NaN <see cref="LuxBrightnessCurve.Position"/> promises never to return.
-	///     <see cref="LuxBrightnessCurve.Raise"/> survived it on its own finiteness check; anything drawing the
-	///     curve did not.
-	/// </summary>
+	// Two anchors can differ while their logarithms do not, so the interpolation divides 0 by 0. The validator
+	// cannot catch it: full is genuinely above start. Position must still return a number.
 	[TestMethod]
 	public void Anchors_Whose_Logarithms_Are_Indistinguishable_Are_Inert_Rather_Than_NaN()
 	{
@@ -260,11 +238,6 @@ public sealed class LuxBrightnessCurveTests
 
 	// ===================== off means off =====================
 
-	/// <summary>
-	///     The test that protects the houses already running this. Off does not mean "a curve that adds zero": the
-	///     very same target instance comes back, so there is no arithmetic on the path at all and no rounding to
-	///     argue about.
-	/// </summary>
 	[TestMethod]
 	public void A_Disabled_Curve_Returns_The_Target_Untouched()
 	{
@@ -308,11 +281,6 @@ public sealed class LuxBrightnessCurveTests
 		Assert.AreEqual(200d, effective.LuxBrightnessStartLux, "and the house's anchors, untouched");
 	}
 
-	/// <summary>
-	///     The reason the switch is its own <c>bool</c> rather than "leave the numbers blank to mean off": a
-	///     bedroom has to be able to refuse a house-wide setting, and it must be able to do so without also
-	///     throwing away the curve it would use if it changed its mind.
-	/// </summary>
 	[TestMethod]
 	public void A_Room_Can_Switch_It_Off_While_The_House_Leaves_It_On()
 	{
@@ -332,7 +300,7 @@ public sealed class LuxBrightnessCurveTests
 		Assert.IsTrue(effective.LuxBrightnessEnabled);
 	}
 
-	/// <summary>A fresh <see cref="AreaSettings"/> is the shape every pre-existing document binds to: off, and valid.</summary>
+	// A fresh AreaSettings is what every pre-existing document binds to.
 	[TestMethod]
 	public void The_Defaults_Are_Off_And_Sane()
 	{

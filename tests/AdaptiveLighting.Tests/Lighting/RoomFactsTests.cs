@@ -11,15 +11,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     What the room page says a room is doing, and what the engine measured to decide it.
 /// </summary>
 /// <remarks>
-///     <para>
-///         This is the detective's half of the page: somebody opens a room <i>because</i> a light did not come
-///         on. A confident wrong answer there is worse than no page at all, so the two claims most easily got
-///         wrong are pinned here — that movement would light the room, and that a countdown is running.
-///     </para>
-///     <para>
-///         There is no Razor render harness in this repo, so every one of these strings is built outside the
-///         markup and asserted here rather than screenshotted.
-///     </para>
+///     There is no Razor render harness in this repo, so every one of these strings is built outside the markup
+///     and asserted here.
 /// </remarks>
 [TestClass]
 public sealed class RoomFactsTests
@@ -71,13 +64,6 @@ public sealed class RoomFactsTests
 
 	// ===================== the table =====================
 
-	/// <summary>
-	///     The readings, ordered by the question that brought somebody to the page — darkness first, context after.
-	/// </summary>
-	/// <remarks>
-	///     There is deliberately no State row: the header's state chip and headline sentence sit an inch above this
-	///     table, and a third telling of the same fact is what made the table unscannable.
-	/// </remarks>
 	[TestMethod]
 	public void The_Table_Leads_With_Darkness_And_Never_Repeats_The_State_Chip()
 	{
@@ -88,10 +74,7 @@ public sealed class RoomFactsTests
 			facts.Select(fact => fact.Label).ToArray());
 	}
 
-	/// <summary>
-	///     The master switch outranks everything and leads: while it is off the engine commands nothing anywhere,
-	///     and a table reporting a state and a period without saying so sends somebody hunting a room-level fault.
-	/// </summary>
+	/// <summary>While the master switch is off the engine commands nothing anywhere, so no room-level row means much.</summary>
 	[TestMethod]
 	public void The_Master_Switch_Leads_When_It_Is_Off()
 	{
@@ -101,10 +84,7 @@ public sealed class RoomFactsTests
 		StringAssert.Contains(facts[0].Value, "nothing will change");
 	}
 
-	/// <summary>
-	///     The darkness row answers in two words and carries the engine's own reading beneath, not welded onto the
-	///     end of the answer. The gate is still the only thing that knows which source it consulted.
-	/// </summary>
+	/// <summary>The detail line is the gate's own reading; it is the only thing that knows which source it consulted.</summary>
 	[TestMethod]
 	public void Darkness_Answers_First_And_Shows_The_Engines_Reading_Beneath()
 	{
@@ -119,7 +99,6 @@ public sealed class RoomFactsTests
 
 		Assert.AreEqual("yes", lit.Value);
 
-		// No reading published means no second line at all, rather than an empty one taking the space.
 		RoomFact bare = RoomFacts.For(Report(isDark: null), Now).Single(fact => fact.Label == "Dark enough?");
 
 		Assert.AreEqual("not checked yet", bare.Value);
@@ -127,15 +106,9 @@ public sealed class RoomFactsTests
 	}
 
 	/// <summary>
-	///     Times read ago-first without seconds: the age is the fact, the clock is the corroboration, and this
-	///     table is read to the nearest minute.
+	///     The clock half is asserted by shape. <c>RoomFacts.Stamp</c> renders through <c>ToLocalTime()</c>, so a
+	///     pinned "21:37" passes on this Europe/Oslo box and fails on the UTC build agent with "19:37".
 	/// </summary>
-	/// <remarks>
-	///     <b>The clock half is asserted by shape, not by value.</b> <c>RoomFacts.Stamp</c> renders through
-	///     <c>ToLocalTime()</c>, so pinning "21:37" passed on a Europe/Oslo machine and failed on the UTC build
-	///     agent with "19:37" — a red CI that said nothing about the behaviour under test. Both halves of the name
-	///     are still checked exactly: the age leads, and the time carries no seconds.
-	/// </remarks>
 	[TestMethod]
 	public void A_Stamp_Leads_With_The_Age_And_Drops_The_Seconds()
 	{
@@ -147,10 +120,7 @@ public sealed class RoomFactsTests
 			"hours and minutes only — 17:42:10 asks to be compared digit by digit with the row below it");
 	}
 
-	/// <summary>
-	///     "No command yet" and "off" are different facts. After a restart the first is true while the ceiling
-	///     light may well be on, and the page must not claim otherwise.
-	/// </summary>
+	/// <summary>After a restart no command has been sent while the ceiling light may well be on.</summary>
 	[TestMethod]
 	public void An_Uncommanded_Room_Is_Not_Reported_As_Off()
 	{
@@ -158,8 +128,7 @@ public sealed class RoomFactsTests
 
 		Assert.AreEqual("off", ValueOf(RoomFacts.For(Report(lastCommand: Now.AddHours(-1)), Now), "Lights"));
 
-		// The warmth is named rather than numbered — "2700 K" is a unit you have to already know to read, and this
-		// table is written for the person asking why a light did not come on. The kelvin is kept in the hover.
+		// The warmth is named in the value and numbered in the hover.
 		RoomFact lit = RoomFacts.For(Report(state: AreaState.AutoActive, brightness: 70, kelvin: 2700, lastCommand: Now), Now)
 			.Single(fact => fact.Label == "Lights");
 
@@ -170,9 +139,8 @@ public sealed class RoomFactsTests
 	// ===================== would movement light this room? =====================
 
 	/// <summary>
-	///     <b>The claim this page must never get wrong.</b> A bedroom set not to light itself while the house
-	///     sleeps sits in exactly the same state as a room waiting for somebody to walk in, and the page is opened
-	///     precisely by somebody asking why the light did not come on.
+	///     A bedroom that will not light itself while the house sleeps sits in the same state as a room waiting
+	///     for somebody to walk in, so the state alone cannot answer this.
 	/// </summary>
 	[TestMethod]
 	public void A_Sleeping_House_Is_Not_Promised_A_Light()
@@ -185,10 +153,6 @@ public sealed class RoomFactsTests
 		StringAssert.Contains(ValueOf(RoomFacts.For(asleep, Now), "If someone walks in"), "won't light the room");
 	}
 
-	/// <summary>
-	///     A blocking entity is named. "Something is on" leaves somebody hunting through the room, which is the
-	///     dead end the published entity id exists to end.
-	/// </summary>
 	[TestMethod]
 	public void A_Blocking_Entity_Is_Named()
 	{
@@ -203,10 +167,8 @@ public sealed class RoomFactsTests
 	// ===================== away, and the two things it can mean =====================
 
 	/// <summary>
-	///     <b>The hour this page cost.</b> A cabin's Away option listed <c>ActivateWhileOn</c> on an
-	///     <c>input_boolean</c> that had been on all evening, so every settings save re-asserted Away and swept the
-	///     house dark while the owner stood in it — and this page said "Nobody home" and "wakes when the first
-	///     person comes home" at him while both person entities read <c>home</c>.
+	///     Regression: an Away option held by <c>ActivateWhileOn</c> over an occupied house. The page said
+	///     "Nobody home" while both person entities read <c>home</c>.
 	/// </summary>
 	[TestMethod]
 	public void An_Away_Mode_Over_An_Occupied_House_Names_What_Is_Forcing_It()
@@ -217,8 +179,7 @@ public sealed class RoomFactsTests
 		AreaSnapshot held = Report(
 			state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: true, forced: forced);
 
-		// The engine's own sentence, called rather than re-worded: it is the only thing that knows which entity it
-		// read, and the log and this page saying it differently is how a reader trusts the wrong one.
+		// ForcedMode.Describe is the single wording; the log reads the same one. Never re-word it here.
 		Assert.AreEqual(forced.Describe(), RoomFacts.AutoOnNote(held));
 		Assert.AreEqual(forced.Describe(), ValueOf(RoomFacts.For(held, Now), "If someone walks in"));
 
@@ -226,10 +187,6 @@ public sealed class RoomFactsTests
 		Assert.AreEqual("Wakes when the house leaves away mode.", RoomFacts.NextLine(held, Now));
 	}
 
-	/// <summary>
-	///     Nothing is forcing the mode, so somebody chose an away option at the select. The page names it rather
-	///     than falling back on a claim about presence that the report has just contradicted.
-	/// </summary>
 	[TestMethod]
 	public void An_Away_Mode_Nobody_Forced_Names_The_Option_Instead()
 	{
@@ -238,16 +195,11 @@ public sealed class RoomFactsTests
 
 		Assert.AreEqual("Somebody is home, but the house mode is set to Borte.", RoomFacts.AutoOnNote(chosen));
 
-		// No select value to name is still not a reason to say nobody is home.
 		AreaSnapshot nameless = Report(state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: true);
 
 		Assert.AreEqual("Somebody is home, but the house is in away mode.", RoomFacts.AutoOnNote(nameless));
 	}
 
-	/// <summary>
-	///     A genuinely empty house keeps every word it had. The fix is a distinction, not a hedge printed over the
-	///     case the page was always right about.
-	/// </summary>
 	[TestMethod]
 	public void An_Empty_House_Still_Says_Nobody_Home()
 	{
@@ -256,7 +208,6 @@ public sealed class RoomFactsTests
 		Assert.AreEqual("Nobody home.", RoomFacts.Headline(empty));
 		Assert.AreEqual("Wakes when the first person comes home.", RoomFacts.NextLine(empty, Now));
 
-		// And the away gate stays off this table: the chip and the headline have already said it.
 		Assert.IsNull(RoomFacts.AutoOnNote(empty));
 
 		Assert.AreEqual(
@@ -264,10 +215,7 @@ public sealed class RoomFactsTests
 			RoomFacts.Headline(Report(state: AreaState.Away, isAnyoneHome: false, brightness: 20)));
 	}
 
-	/// <summary>
-	///     A report from a build that predates <c>IsAnyoneHome</c> says what this page always said. An older
-	///     payload cannot support "somebody is home" any better than it supports the opposite.
-	/// </summary>
+	/// <summary>A null <c>IsAnyoneHome</c> is a report from a build that predates the field.</summary>
 	[TestMethod]
 	public void A_Report_That_Cannot_Say_Who_Is_Home_Keeps_The_Old_Words()
 	{
@@ -278,10 +226,7 @@ public sealed class RoomFactsTests
 		Assert.IsNull(RoomFacts.AutoOnNote(older));
 	}
 
-	/// <summary>
-	///     A report from a build that predates the verdict claims nothing in either direction. An older payload
-	///     cannot support "nothing is blocking this room" any better than it supports the opposite.
-	/// </summary>
+	/// <summary>A null <c>BlockedBy</c> is a report from a build that predates the verdict.</summary>
 	[TestMethod]
 	public void An_Older_Report_Claims_Nothing_About_The_Gate()
 	{
@@ -293,15 +238,9 @@ public sealed class RoomFactsTests
 	}
 
 	/// <summary>
-	///     Nothing blocking, and the refusals that already have their own place on the page, add no row: the
-	///     room's switch, the master-switch row, the state chip and the darkness row each say their own piece
-	///     once.
+	///     Away is in this list because none of these reports says who is home; the reports that do say are
+	///     covered above.
 	/// </summary>
-	/// <remarks>
-	///     The away gate is in this list on the strength of what these reports carry — none of them says who is
-	///     home, so none of them can support the one telling of away the page is not already right about. The
-	///     reports that do say are covered above.
-	/// </remarks>
 	[TestMethod]
 	public void The_Gates_That_Are_Already_Visible_Are_Not_Repeated()
 	{
@@ -315,7 +254,7 @@ public sealed class RoomFactsTests
 
 	// ===================== the countdown =====================
 
-	/// <summary>A missing start is a missing ring, never an invented one.</summary>
+	/// <summary>The ring needs both ends: an armed instant and the deadline it was armed from.</summary>
 	[TestMethod]
 	public void The_Countdown_Is_Absent_Rather_Than_Invented()
 	{
@@ -328,10 +267,6 @@ public sealed class RoomFactsTests
 			0.001);
 	}
 
-	/// <summary>
-	///     A deadline long past that no report replaced means the page has lost touch, and it says so rather than
-	///     counting down into the negative.
-	/// </summary>
 	[TestMethod]
 	public void An_Overdue_Deadline_Says_So_Rather_Than_Counting_Down()
 	{
@@ -347,10 +282,7 @@ public sealed class RoomFactsTests
 
 	// ===================== the present tense =====================
 
-	/// <summary>
-	///     Lights the engine adopted at start-up have no command behind them, so the page does not describe their
-	///     levels as the engine's doing.
-	/// </summary>
+	/// <summary>Lights the engine adopted at start-up have no command behind them; brightness without one is adopted.</summary>
 	[TestMethod]
 	public void An_Adopted_Room_Does_Not_Claim_Its_Levels()
 	{
@@ -363,7 +295,6 @@ public sealed class RoomFactsTests
 			"Lit at 70 %");
 	}
 
-	/// <summary>The master switch outranks the state in the prose too.</summary>
 	[TestMethod]
 	public void A_Paused_House_Says_So_Before_Anything_Else()
 	{
@@ -372,7 +303,6 @@ public sealed class RoomFactsTests
 			"Paused by the master switch");
 	}
 
-	/// <summary>A switched-off room says what it is rather than what it would do.</summary>
 	[TestMethod]
 	public void A_Switched_Off_Room_Says_It_Never_Changes_By_Itself()
 	{
@@ -381,7 +311,6 @@ public sealed class RoomFactsTests
 
 	// ===================== relative time =====================
 
-	/// <summary>Ages are a function of two instants, so they can be asserted rather than watched.</summary>
 	[TestMethod]
 	public void Ages_Are_Written_In_The_Largest_Unit_That_Stays_Useful()
 	{
@@ -393,7 +322,6 @@ public sealed class RoomFactsTests
 		Assert.AreEqual("3 d ago", RoomFacts.Ago(Now.AddDays(-3), Now));
 	}
 
-	/// <summary>A future never reads as negative: the overdue line takes over before it could.</summary>
 	[TestMethod]
 	public void A_Countdown_Never_Reads_As_Negative()
 	{
@@ -403,10 +331,6 @@ public sealed class RoomFactsTests
 		Assert.AreEqual("in 1 h", RoomFacts.In(Now.AddHours(1), Now));
 	}
 
-	/// <summary>
-	///     The lamp's colour comes from the Kelvin the engine commanded, so a night dim and a midday white are
-	///     visibly different rooms rather than one palette choice applied twice.
-	/// </summary>
 	[TestMethod]
 	public void The_Lamp_Takes_The_Warmth_It_Was_Commanded()
 	{

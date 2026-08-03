@@ -10,20 +10,9 @@ namespace AdaptiveLighting.LastSeen;
 ///     before it has one.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why a facade rather than registering the tracker directly.</b> The tracker needs
-///         <see cref="IHaContext"/>, which NetDaemon scopes, but everything that will ask it questions — the
-///         lighting decisions — is a singleton and must be able to hold the reference from start-up. So this
-///         singleton holds one long-lived scope of its own, exactly as <c>AreaSnapshotCache</c> does, builds the
-///         tracker inside it, and forwards every question. Before the host has started, and if the scope could not
-///         be created at all, every answer is "unknown" — which <see cref="IEntityLastSeen"/> defines as safe.
-///     </para>
-///     <para>
-///         The scope is an <i>async</i> one and is disposed only through <see cref="DisposeAsync"/>, because
-///         NetDaemon's scoped <see cref="IHaContext"/> implements <see cref="IAsyncDisposable"/> alone and disposing
-///         it synchronously throws. This class therefore deliberately does not implement <see cref="IDisposable"/>:
-///         there must be no synchronous path into here.
-///     </para>
+///     The tracker needs a scoped IHaContext but its callers are singletons, so this singleton holds one long-lived
+///     scope of its own, as AreaSnapshotCache does. No IDisposable here on purpose: NetDaemon's scoped IHaContext is
+///     IAsyncDisposable only, and disposing it synchronously throws.
 /// </remarks>
 public sealed class LastSeenService : IEntityLastSeen, IHostedService, IAsyncDisposable
 {
@@ -38,12 +27,6 @@ public sealed class LastSeenService : IEntityLastSeen, IHostedService, IAsyncDis
 	private LastSeenTracker? _tracker;
 
 	/// <summary>Creates the service. Nothing is loaded or sampled until <see cref="StartAsync"/>.</summary>
-	/// <param name="scopeFactory">Used to hold one long-lived scope for this service's own <see cref="IHaContext"/>.</param>
-	/// <param name="store">The cache files beside the configuration document.</param>
-	/// <param name="options">The tracker's tuning.</param>
-	/// <param name="scheduler">The tracker's only clock.</param>
-	/// <param name="loggerFactory">Builds the tracker's logger as well as this one.</param>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public LastSeenService(
 		IServiceScopeFactory scopeFactory,
 		LastSeenStore store,
@@ -77,13 +60,9 @@ public sealed class LastSeenService : IEntityLastSeen, IHostedService, IAsyncDis
 	/// <inheritdoc/>
 	public int TrackedCount => _tracker?.TrackedCount ?? 0;
 
-	/// <summary>Opens the scope and starts the tracker.</summary>
-	/// <param name="cancellationToken">Unused; starting does not block.</param>
-	/// <returns>A completed task.</returns>
+	/// <summary>Opens the scope and starts the tracker. Never throws; a failure leaves every answer unknown.</summary>
 	public Task StartAsync(CancellationToken cancellationToken)
 	{
-		// A cache that cannot start is a degraded engine, not a dead host: everything downstream reads "unknown"
-		// and carries on exactly as it did before this module existed.
 		try
 		{
 			AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
@@ -112,12 +91,9 @@ public sealed class LastSeenService : IEntityLastSeen, IHostedService, IAsyncDis
 	}
 
 	/// <summary>Stops the tracker, writing whatever has changed on the way out.</summary>
-	/// <param name="cancellationToken">Unused.</param>
-	/// <returns>A task that completes once the tracker and its scope are gone.</returns>
 	public async Task StopAsync(CancellationToken cancellationToken) => await DisposeAsync().ConfigureAwait(false);
 
-	/// <summary>Disposes the tracker — which flushes — and then its scope. Safe to call more than once.</summary>
-	/// <returns>A task that completes once the scope has been disposed.</returns>
+	/// <summary>Disposes the tracker, which flushes, and then its scope. Safe to call more than once.</summary>
 	public async ValueTask DisposeAsync()
 	{
 		LastSeenTracker? tracker = _tracker;

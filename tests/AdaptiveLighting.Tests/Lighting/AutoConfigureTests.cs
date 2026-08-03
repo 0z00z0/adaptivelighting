@@ -54,7 +54,7 @@ public sealed class AutoConfigureTests
 			Assert.IsTrue(Role(area).SkipAwaySweep, $"{area} is wanted precisely when nobody is home");
 	}
 
-	/// <summary>Segment matching, so a rental flat is not mistaken for the outdoors.</summary>
+	// Matching is per segment, so "utleieleilighet" is not read as "ute".
 	[TestMethod]
 	public void An_Unrecognised_Room_Is_Left_Entirely_On_The_Defaults()
 	{
@@ -66,8 +66,6 @@ public sealed class AutoConfigureTests
 			Assert.IsNull(area.WelcomeHome);
 		}
 	}
-
-	// ===================== house mode =====================
 
 	private static FakeHaContext WithSelect(string entityId, params string[] options)
 	{
@@ -107,7 +105,7 @@ public sealed class AutoConfigureTests
 		Assert.AreEqual(ModeKind.Guest, detected.OptionFor("Gjester")!.Kind);
 	}
 
-	/// <summary>A dropdown that is not about the house classifies as all-Normal and is ignored.</summary>
+	// A dropdown that is not about the house classifies as all-Normal, and all-Normal is never adopted.
 	[TestMethod]
 	public void An_Unrelated_Dropdown_Is_Not_Adopted()
 	{
@@ -115,17 +113,8 @@ public sealed class AutoConfigureTests
 			WithSelect("input_select.thermostat_profile", "Eco", "Comfort", "Boost"), NullLogger.Instance));
 	}
 
-	/// <summary>
-	///     An adopted select always changes what the house does, which is why detection has to stay narrow.
-	/// </summary>
-	/// <remarks>
-	///     Qualifying takes two different kinds, so an adopted select always carries at least one Sleep, Away or
-	///     Guest option: "everything classifies as Normal and nothing happens" is the one outcome adoption rules
-	///     out, not its worst case. A drying cupboard's <c>Inne / Ute</c> qualifies — <c>Ute</c> is Away vocabulary
-	///     and <c>Inne</c> matches nothing, so it falls to Normal — and while the select stands on <c>Ute</c> the
-	///     engine reads the whole house as empty. What adoption genuinely cannot do is <i>write</i>: it invents no
-	///     scene and no reset trigger, so nothing it adds can switch the select or apply a look.
-	/// </remarks>
+	// Qualifying takes two kinds, so an adopted select always carries a Sleep, Away or Guest option. A drying
+	// cupboard's Inne/Ute qualifies, and while it stands on Ute the engine reads the house as empty.
 	[TestMethod]
 	public void An_Adopted_Select_Always_Carries_A_Kind_That_Changes_What_The_House_Does()
 	{
@@ -149,7 +138,6 @@ public sealed class AutoConfigureTests
 			"nothing adopted here can make the engine write the select or apply a scene");
 	}
 
-	/// <summary>Two plausible candidates is a choice for the household, not for this.</summary>
 	[TestMethod]
 	public void Two_Candidates_Means_Choosing_Neither()
 	{

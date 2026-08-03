@@ -1,23 +1,11 @@
 @*
-	What this room is set to, period by period — and where each of those values came from.
+	What this room is set to, period by period, and where each value came from.
 
-	The schedule is the house's description of the day, and until now every room ran it unaltered. A cellar
-	corridor at the living room's 100 % is glare; a workshop at the evening's 2700 K is unusable. This is one
-	room disagreeing, in one period, about one of the two values — and, just as importantly, it is where a
-	reader sees that the room is *not* disagreeing, which is the answer for most rooms most of the time.
+	A row is drawn for every period but written only once it says something: RoomLevels creates a row on the
+	first value set and drops it when the last is cleared, or drawing four rows would pin four values nobody
+	chose and the schedule would stop reaching this room.
 
-	QUIET UNTIL SOMETHING IS DECIDED. Every row is drawn for every period, because the question "what does this
-	room run in the evening?" has an answer whether or not the room has an opinion — but a value the schedule
-	decides is drawn muted and unmarked, so a room that follows the house everywhere is four grey rows and no
-	colour at all. What is loud is exactly what somebody chose: the amber dot the settings rows already use for
-	"this room's own", and beneath it the only road back.
-
-	A ROW IS NOT WRITTEN UNTIL IT SAYS SOMETHING. Drawing four rows must not write four rows: that would pin
-	values nobody chose and the schedule would stop reaching this room. RoomLevels creates a row on the first
-	value set and drops it again when the last one is cleared.
-
-	It writes nothing to disk. Edits mutate the document the page holds and the page saves, exactly as the
-	period editor does.
+	Nothing here writes to disk. Edits mutate the document the page holds and the page saves.
 *@
 
 <div class="levels">
@@ -73,11 +61,8 @@
 			<div class="lvl-cell @(current.Colour == LevelSource.Room ? "lvl-set" : null)">
 				<span class="lvl-cell-head">
 					<span class="lvl-cell-label">Warmth</span>
-					@*
-						The colour itself, not only its number: 2700 K and 4500 K are two different rooms, and a
-						table of four-digit numbers is the one form in which that difference is invisible. The same
-						conversion the state chip and the board use, so no two surfaces disagree about a warmth.
-					*@
+					@* The same KelvinColour conversion the state chip and the board use, so no two surfaces
+					   disagree about a warmth. *@
 					<span class="lvl-swatch" style="@Swatch(current.ColorTempKelvin)" title="@($"{current.ColorTempKelvin} K")" aria-hidden="true"></span>
 					@if (current.Colour == LevelSource.Room)
 					{
@@ -104,13 +89,8 @@
 		</div>
 	}
 
-	@*
-		Rows this room wrote for a period that no longer exists. The schema keeps them rather than dropping them
-		because a missing period is nearly always a rename in progress, and deleting somebody's levels on a rename
-		is the worse failure — but kept silently they would be invisible baggage that reappears the moment the name
-		comes back. So they are shown, named, and removable, and offer no controls: there is no period to edit
-		against.
-	*@
+	@* Rows this room wrote for a period that no longer exists. The schema keeps them because a missing period
+	   is usually a rename in progress; they are shown and removable, but have nothing to edit against. *@
 	@foreach (RoomLevelOrphan orphan in RoomLevels.Orphans(Periods, Room))
 	{
 		RoomLevelOrphan current = orphan;
@@ -135,7 +115,7 @@
 </div>
 
 @code {
-	/// <summary>The document's period list. Read, never edited here — the schedule belongs to the House pages.</summary>
+	/// <summary>The document's period list. Read, never edited here; the schedule belongs to the House pages.</summary>
 	[Parameter, EditorRequired]
 	public List<TimePeriodConfig> Periods { get; set; } = [];
 
@@ -143,7 +123,7 @@
 	[Parameter, EditorRequired]
 	public AreaConfig Room { get; set; } = new();
 
-	/// <summary>The period in force right now, so the row that is actually running says so. <c>null</c> when none is.</summary>
+	/// <summary>The period in force right now, so its row says so. <c>null</c> when none is.</summary>
 	[Parameter]
 	public string? ActivePeriod { get; set; }
 
@@ -151,7 +131,7 @@
 	[Parameter]
 	public EventCallback Changed { get; set; }
 
-	/// <summary>An unnamed period still needs a label; it is the same placeholder the schedule editor uses.</summary>
+	/// <summary>The same placeholder the schedule editor uses for an unnamed period.</summary>
 	private static string PeriodName(string name) => name is { Length: > 0 } ? name : "unnamed period";
 
 	/// <summary>When the period starts, in the engine's own reading of its Start string.</summary>
@@ -166,14 +146,8 @@
 	private int ScheduleKelvin(string name) =>
 		Periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase))?.ColorTempKelvin ?? 0;
 
-	/// <summary>
-	///     The swatch's fill.
-	/// </summary>
-	/// <remarks>
-	///     A custom property rather than a background outright, so the stylesheet decides how a warmth is painted
-	///     in each theme — the same arrangement the board's blocks use. <see cref="KelvinColour.Css"/> writes its
-	///     own invariant integers, so nothing here can render a Norwegian decimal comma into a colour function.
-	/// </remarks>
+	/// <summary>The swatch's fill, as a custom property so the stylesheet decides how a warmth is painted.</summary>
+	// KelvinColour.Css writes its own invariant integers, so no decimal comma reaches the colour function.
 	private static string Swatch(int kelvin) => $"--lvl-kelvin: {KelvinColour.Css(kelvin)}";
 
 	private Task SetBrightness(string period, double value)
@@ -190,13 +164,8 @@
 		return Changed.InvokeAsync();
 	}
 
-	/// <summary>
-	///     Colour temperature is a whole number of kelvin in the schema, and the preset control carries a double.
-	/// </summary>
-	/// <remarks>
-	///     Rounded rather than truncated, for the reason the settings rows round: a value entered as 2699.6 is
-	///     2700 to everyone who typed it, and truncation would file it as 2699 where nothing on the page shows it.
-	/// </remarks>
+	/// <summary>Colour temperature is a whole number of kelvin in the schema; the preset control carries a double.</summary>
+	// Rounded, not truncated: 2699.6 filed as 2699 shows nowhere on the page.
 	private Task SetColour(string period, double value)
 	{
 		RoomLevels.SetColorTemp(Room, period, (int)Math.Round(value, MidpointRounding.AwayFromZero));

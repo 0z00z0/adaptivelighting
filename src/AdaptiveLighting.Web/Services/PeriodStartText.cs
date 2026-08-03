@@ -7,10 +7,8 @@ namespace AdaptiveLighting.Web.Services;
 ///     control writes, and describing what the engine will make of one.
 /// </summary>
 /// <remarks>
-///     The grammar belongs to <see cref="PeriodStart.TryParse"/> and only there — everything here either
-///     produces a string for that parser or feeds a string through it. Nothing re-implements the parse: a
-///     second implementation would drift, and be believed while it drifted. The composing side is unit-tested
-///     against the real parser precisely so the UI can never generate a string the engine refuses.
+///     The grammar belongs to <see cref="PeriodStart.TryParse"/> and only there. Everything here either produces
+///     a string for that parser or feeds one through it; nothing re-implements the parse.
 /// </remarks>
 public static class PeriodStartText
 {
@@ -41,8 +39,8 @@ public static class PeriodStartText
 	}
 
 	/// <summary>
-	///     Says what the engine will make of a Start string, in words — or <c>null</c> when it will refuse it.
-	///     Runs the engine's own parser, so what this describes is what actually happens.
+	///     What the engine will make of a Start string, in words, or <c>null</c> when it will refuse it. Runs the
+	///     engine's own parser, so this describes what actually happens.
 	/// </summary>
 	public static string? Describe(string? start)
 	{

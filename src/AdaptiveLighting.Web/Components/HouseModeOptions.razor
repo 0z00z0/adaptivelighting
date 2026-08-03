@@ -1,15 +1,8 @@
 @*
-	One row per house-mode option: its value and a radio group for its single Kind — Normal, Sleep, Away or Guest.
-	The kinds are mutually exclusive, so an option is exactly one thing. Selecting a kind reveals only the sub-fields
-	that kind uses: a scene for Away/Guest, a clamp period for Sleep, and the three reset triggers for every
-	non-Normal kind. Selecting Normal clears them again and makes the row the reset target.
+	One row per house-mode option: its value and a radio group for its single Kind.
 
-	The rows come from the select's LIVE options when Home Assistant is connected. A configured option that is no
-	longer live is still shown — with a warning badge and a remove control — so a rename in HA is visible and
-	fixable rather than silent. When HA is not connected, the rows fall back to the values already stored.
-
-	Exactly one option should be Normal: it is where every reset returns to. When none is, the first option is
-	treated as Normal and an inline note says so.
+	Rows come from the select's live options; a configured value the helper no longer offers is still shown,
+	with a remove control. One option is the reset target; when none is Normal, the first stands in.
 *@
 
 <div class="housemode-options">
@@ -45,12 +38,7 @@
 			bool isActive = IsActive(current);
 			string group = $"kind-{current}";
 
-			@*
-				One collapsible card per option — the same <details> fold grammar as an area or a period. Collapsed
-				it is a header: the option value, what it means (its Kind), and a hint of its key settings, because a
-				list of options is read far more often than any one is edited. Expanded, the full editor. Collapsed
-				by default and uncontrolled, so Blazor's diff never fights a fold a human has toggled.
-			*@
+			@* Uncontrolled fold: no open attribute, so Blazor's diff never fights a fold a human has toggled. *@
 			<details class="panel housemode-fold @(isLive ? "" : "orphan") @(isActive ? "active" : "")" @key="current">
 				<summary class="housemode-summary">
 					<span class="housemode-summary-value">@current</span>
@@ -64,8 +52,7 @@
 					}
 					else if (kind == ModeKind.Normal && option is not null)
 					{
-						@* Normal, but not the reset target — the engine takes the first, and the badge has to say
-						   the same thing rather than promise a fallback this option will never be. *@
+						@* Normal but not the reset target: the engine takes the first Normal option. *@
 						<span class="badge warn" title="Only the first Normal option is the reset target; this one has no behaviour of its own.">Normal — not the reset target</span>
 					}
 					else
@@ -272,11 +259,10 @@
 	[Parameter]
 	public IReadOnlyList<string> LiveOptions { get; set; } = [];
 
-	/// <summary>The option the select currently stands on, or <c>null</c> when unknown — marks the "active now" card.</summary>
+	/// <summary>The option the select currently stands on, or <c>null</c> when unknown.</summary>
 	[Parameter]
 	public string? ActiveValue { get; set; }
 
-	/// <summary>The period list, for the clamp/period-reset dropdowns and the sleep-clamp default label.</summary>
 	[Parameter]
 	public IReadOnlyList<TimePeriodConfig> Periods { get; set; } = [];
 
@@ -284,31 +270,24 @@
 	[Parameter]
 	public IReadOnlyList<EntityOption> Scenes { get; set; } = [];
 
-	/// <summary>The presence sensors (motion <c>binary_sensor</c>s ∪ <c>person.*</c>) the presence override picker offers.</summary>
+	/// <summary>The presence sensors (motion <c>binary_sensor</c>s ∪ <c>person.*</c>) for the presence override picker.</summary>
 	[Parameter]
 	public IReadOnlyList<EntityOption> PresenceSensors { get; set; } = [];
 
-	/// <summary>The date/time entities the "reset at a time" dropdown offers (input_datetime/time/datetime + timestamp/date sensors).</summary>
 	[Parameter]
 	public IReadOnlyList<EntityOption> DateTimes { get; set; } = [];
 
-	/// <summary>The boolean-ish entities (<c>input_boolean.*</c>, <c>switch.*</c>, <c>binary_sensor.*</c>) the "turn on while" picker offers.</summary>
+	/// <summary><c>input_boolean.*</c>, <c>switch.*</c> and <c>binary_sensor.*</c>, for the "turn on while" picker.</summary>
 	[Parameter]
 	public IReadOnlyList<EntityOption> ActivationEntities { get; set; } = [];
 
-	/// <summary>Resolves an id to a friendly name for the entity pickers. Optional.</summary>
 	[Parameter]
 	public Func<string, string>? NameResolver { get; set; }
 
-	/// <summary>Whether Home Assistant knows an id, for the pickers' "unknown" styling. Optional.</summary>
 	[Parameter]
 	public Func<string, bool>? KnownResolver { get; set; }
 
-	/// <summary>
-	///     Whether Home Assistant is actually answering. The page knows this (it passes
-	///     <c>HomeAssistantIsAnswering</c>); this component uses it so an empty select and empty pickers stop
-	///     hedging with "or Home Assistant has not answered" and say the honest thing instead.
-	/// </summary>
+	/// <summary>Whether Home Assistant is answering, so an empty list can say which of the two it is.</summary>
 	[Parameter]
 	public bool IsReady { get; set; } = true;
 
@@ -316,25 +295,15 @@
 	[Parameter]
 	public EventCallback Changed { get; set; }
 
-	/// <summary>The period names offered by the clamp and period-reset dropdowns.</summary>
 	private IReadOnlyList<string> PeriodNames =>
 		[.. Periods.Select(p => p.Name).Where(name => !string.IsNullOrWhiteSpace(name))];
 
-	/// <summary>Whether no configured option is Normal, so the first displayed value is standing in as the reset target.</summary>
+	/// <summary>Whether no configured option is Normal, so the first displayed value stands in as the reset target.</summary>
 	private bool NoNormalOption =>
 		DisplayValues.Count > 0 && !HouseMode.Options.Any(o => o.Kind == ModeKind.Normal);
 
-	/// <summary>
-	///     Whether this option is <em>the</em> reset target, rather than merely one of the Normal ones.
-	/// </summary>
-	/// <remarks>
-	///     Reference equality against <see cref="HouseModeConfig.NormalOption"/>, so the badge and the engine can
-	///     never disagree about which option the house returns to. They used to: <see cref="ModeKind"/> defaults to
-	///     <see cref="ModeKind.Normal"/>, so every option adopted from the helper that this document had not seen
-	///     before arrived claiming to be the reset target, and a list could show two or three of them while the
-	///     engine had always taken the first. The validator warns on save, but a badge that is wrong on screen is
-	///     read long before a save is pressed.
-	/// </remarks>
+	// Reference equality, not Kind == Normal: ModeKind defaults to Normal, so every option adopted from the
+	// helper claims to be the reset target while the engine takes the first.
 	private bool IsResetTarget(HouseModeOptionConfig? option) =>
 		option is not null && ReferenceEquals(option, HouseMode.NormalOption);
 
@@ -357,27 +326,14 @@
 		}
 	}
 
-	/// <summary>
-	///     Whether the helper still offers this option — <c>true</c> whenever the question cannot be asked.
-	/// </summary>
-	/// <remarks>
-	///     <b>An empty <see cref="LiveOptions"/> is a Home Assistant that has not answered, not a helper with no
-	///     options.</b> Read as an answer it condemns every mode at once: a house with the connection down showed
-	///     each of its four options struck through as "removed from the helper in Home Assistant", each with a
-	///     Remove button, directly under a notice saying the two lists could not be compared. The same refusal
-	///     <see cref="HouseModeSync.Compare"/> makes, and for the same reason — nothing about the helper is knowable
-	///     until it speaks, so nothing about it is claimed.
-	/// </remarks>
+	// An empty LiveOptions is a Home Assistant that has not answered, not a helper with no options. Read as an
+	// answer it strikes every mode through at once. Same refusal HouseModeSync.Compare makes.
 	private bool IsLive(string value) =>
 		LiveOptions.Count == 0 || LiveOptions.Any(live => Eq(live, value));
 
-	/// <summary>Whether the select currently stands on this option — drives the "active now" badge and accent edge.</summary>
 	private bool IsActive(string value) => ActiveValue is { Length: > 0 } && Eq(ActiveValue, value);
 
-	/// <summary>
-	///     The collapsed header's hint: the option's key settings at a glance, so the fold answers "what does this
-	///     option do" without being opened. A Normal option shows only its scene, if any (its badge says "reset target").
-	/// </summary>
+	/// <summary>The collapsed header's hint: the option's key settings at a glance.</summary>
 	private string SummaryHint(HouseModeOptionConfig? option, ModeKind kind)
 	{
 		if (option is null)
@@ -409,35 +365,30 @@
 		return string.Join(" · ", parts);
 	}
 
-	/// <summary>A no-motion window as a compact "6h" / "90m" / "1h 30m" label for the collapsed header's hint.</summary>
+	/// <summary>A no-motion window as "6h" / "90m" / "1h 30m".</summary>
 	private static string FormatIdle(int minutes)
 	{
 		int hours = minutes / 60, rest = minutes % 60;
 		return hours > 0 && rest > 0 ? $"{hours}h {rest}m" : hours > 0 ? $"{hours}h" : $"{rest}m";
 	}
 
-	/// <summary>How many of the two reset triggers this option has set — for the collapsed header's hint.</summary>
 	private static int ResetTriggerCount(HouseModeOptionConfig option) =>
 		(option.ResetOnPeriodStart is { Length: > 0 } ? 1 : 0) + (option.ResetOnPresence ? 1 : 0);
 
 	private HouseModeOptionConfig? Find(string value) =>
 		HouseMode.Options.FirstOrDefault(option => Eq(option.Value, value));
 
-	/// <summary>The empty-clamp label: the period the §4.1 chain resolves to when no explicit clamp is set.</summary>
+	/// <summary>The empty-clamp label: the period the fallback chain resolves to when no explicit clamp is set.</summary>
 	private string ClampDefaultLabel(HouseModeOptionConfig option)
 	{
-		HouseModeOptionConfig probe = new HouseModeOptionConfig { Value = option.Value };   // no explicit ClampPeriod, so the chain's fallback shows.
+		HouseModeOptionConfig probe = new HouseModeOptionConfig { Value = option.Value };   // no explicit ClampPeriod, so the fallback shows.
 		string? resolved = HouseModeConfig.SleepClampPeriodFor(probe, [.. Periods]);
 		return resolved is { Length: > 0 }
 			? $"(default: {resolved})"
 			: "(default: none found — name a period)";
 	}
 
-	/// <summary>
-	///     The empty-picker note for the scene, presence and date/time pickers, chosen by whether Home Assistant
-	///     is answering (10 §3, table E). When connected an empty domain gets an honest "none yet — here's how to
-	///     make one"; when not, it names the real cause rather than blaming a healthy connection.
-	/// </summary>
+	/// <summary>The empty-picker note, worded by whether Home Assistant is answering.</summary>
 	private string EmptyNote(string noneYet) => IsReady
 		? noneYet
 		: "Waiting for Home Assistant — type an id for now.";
@@ -454,8 +405,8 @@
 
 		option.Kind = kind;
 
-		// Normal is the reset target: it keeps any entry scene, but clamp and reset triggers are cleared so the
-		// document carries no inert fields the validator would warn about.
+		// Normal keeps its entry scene; clamp and reset triggers are cleared so the document carries no inert
+		// fields the validator would warn about.
 		if (kind == ModeKind.Normal)
 		{
 			option.ClampPeriod = null;
@@ -465,19 +416,14 @@
 			option.ActivateWhileOn = [];
 			option.ActivateAfterNoMotionMinutes = null;
 
-			// Exactly one Normal reset target. Marking this option Normal by hand clears any earlier (usually
-			// auto-created) Normal row: a pure-Normal row carries nothing but its value, so a still-live one simply
-			// reverts to the implicit-Normal display rather than being lost.
+			// One Normal reset target at a time. A pure-Normal row carries nothing but its value, so a still-live
+			// one dropped here reverts to the implicit-Normal display.
 			HouseMode.Options.RemoveAll(other => !ReferenceEquals(other, option) && other.Kind == ModeKind.Normal);
 		}
 
-		// Keep Options in the displayed order so "the first Normal" and "the first configured option" both mean the
-		// topmost row — the same order NormalOption resolves in.
+		// Options stays in displayed order, so "the first Normal" here means the same row NormalOption resolves to.
 		Reorder();
 
-		// Classifying an option non-Normal leaves the engine needing a concrete option to reset to. Give the first
-		// still-unclassified option an explicit Normal row so the reset target is stored, not merely implied — the
-		// same shape the §2.5 example carries. When every option is deliberately non-Normal, the note fires instead.
 		EnsureNormalTarget();
 
 		await Changed.InvokeAsync().ConfigureAwait(false);
@@ -496,14 +442,12 @@
 				option.ResetPresenceGraceMinutes = Math.Max(0, minutes);
 		});
 
-	/// <summary>The default no-motion window when the auto-away box is first ticked: six hours.</summary>
 	private const int DefaultNoMotionMinutes = 360;
 
 	private static int NoMotionHours(HouseModeOptionConfig option) => (option.ActivateAfterNoMotionMinutes ?? 0) / 60;
 
 	private static int NoMotionMinutes(HouseModeOptionConfig option) => (option.ActivateAfterNoMotionMinutes ?? 0) % 60;
 
-	/// <summary>Ticking the box seeds the six-hour default; unticking clears it back to null (disabled).</summary>
 	private Task ToggleNoMotion(HouseModeOptionConfig option, bool on) =>
 		SetField(option, () => option.ActivateAfterNoMotionMinutes = on ? DefaultNoMotionMinutes : null);
 
@@ -513,7 +457,7 @@
 	private Task SetNoMotionMinutes(HouseModeOptionConfig option, string? raw) =>
 		SetField(option, () => option.ActivateAfterNoMotionMinutes = ComposeMinutes(NoMotionHours(option), Math.Clamp(ParseNonNegative(raw), 0, 59)));
 
-	/// <summary>Combines an hours/minutes pair into a positive total; a 0:00 entry is floored to one minute so the value the validator accepts (positive) is never produced from the UI.</summary>
+	/// <summary>Floors a 0:00 entry to one minute; the validator only accepts a positive total.</summary>
 	private static int ComposeMinutes(int hours, int minutes) => Math.Max(1, hours * 60 + minutes);
 
 	private static int ParseNonNegative(string? raw) =>
@@ -526,23 +470,17 @@
 		await Changed.InvokeAsync().ConfigureAwait(false);
 	}
 
-	/// <summary>
-	///     Ensures a stored Normal reset target exists whenever any option is classified. Adds an explicit Normal row
-	///     for the first still-unclassified displayed option; when every displayed option already carries a non-Normal
-	///     row there is nothing to promote, and the "no Normal" note fires instead.
-	/// </summary>
+	/// <summary>Stores an explicit Normal row once any option is classified, so the reset target is on disk.</summary>
 	private void EnsureNormalTarget()
 	{
 		List<string> values = DisplayValues;
 
-		// Only act when something is classified but no explicit Normal target exists yet. A fresh document with no
-		// classified option keeps its implicit-Normal state and the note; it is not force-populated.
+		// A fresh document with nothing classified keeps its implicit-Normal state; it is not force-populated.
 		bool hasNormal = HouseMode.Options.Any(o => o.Kind == ModeKind.Normal);
 		bool hasClassified = HouseMode.Options.Any(o => o.Kind != ModeKind.Normal);
 		if (values.Count == 0 || hasNormal || !hasClassified)
 			return;
 
-		// Promote the first still-unclassified displayed option (the first live value, in the common case).
 		string? target = values.FirstOrDefault(value => Find(value) is null);
 		if (target is not null)
 		{
@@ -552,12 +490,8 @@
 	}
 
 	/// <summary>Reorders the stored options to follow the displayed order; orphans keep their trailing position.</summary>
-	/// <remarks>
-	///     A stable <see cref="Enumerable.OrderBy{TSource, TKey}(IEnumerable{TSource}, Func{TSource, TKey})"/> rather
-	///     than <see cref="List{T}.Sort()"/>: Sort is unstable, so two rows sharing a rank (e.g. orphans, all at
-	///     <see cref="int.MaxValue"/>) could swap places on an unrelated edit and reassign the row an in-progress
-	///     edit was bound to.
-	/// </remarks>
+	// OrderBy is stable and List.Sort is not. Orphans all rank int.MaxValue, so an unstable sort could swap two
+	// of them on an unrelated edit and rebind an in-progress edit to another row.
 	private void Reorder()
 	{
 		List<string> order = DisplayValues;
@@ -573,7 +507,7 @@
 		HouseMode.Options.AddRange(sorted);
 	}
 
-	/// <summary>Sets or clears a mode's entry scene, creating the option row on demand so any kind — Normal included — can carry one.</summary>
+	/// <summary>Sets or clears a mode's entry scene, creating the option row on demand. Any kind can carry one.</summary>
 	private async Task SetScene(string value, string? scene)
 	{
 		HouseModeOptionConfig option = Find(value) ?? AddOption(value);
@@ -588,7 +522,6 @@
 		return option;
 	}
 
-	/// <summary>The scene picker's "none" label, worded for what no scene means to each kind.</summary>
 	private static string SceneNoneLabel(ModeKind kind) => kind switch
 	{
 		ModeKind.Away => "(none — sweep the rooms off)",

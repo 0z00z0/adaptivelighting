@@ -1,18 +1,9 @@
 @*
-	One Home Assistant label, chosen from the ones this house has made, stored as the label's name.
+	One Home Assistant label, stored as the label's name. The registry matches either name or id, and the
+	shipped default "adaptive-exclude" is already a name, so storing ids would rewrite every document.
 
-	The name and not the id, deliberately: the registry matches either, the name is what somebody reading the
-	YAML recognises, and the shipped default "adaptive-exclude" is already a name. Storing ids would rewrite
-	every existing document into strings nobody can read.
-
-	Two states this field must get right, because most houses are in one of them:
-
-	  - The house has no labels at all. That is the common case, not a fault, so the field says how to make one
-	    rather than rendering an empty dropdown that reads as "something is broken".
-	  - The stored value matches no live label. It stays selected, always. A value must survive Home Assistant
-	    being briefly unreadable — the same rule the entity pickers already follow — and the shipped exclude
-	    default trips this in nearly every house, which is why the warning's words come from the caller: on the
-	    exclude field it is information, not alarm.
+	A stored value that matches no live label stays selected. It must survive Home Assistant being briefly
+	unreadable, and the shipped exclude default matches nothing in most houses.
 *@
 
 <div class="picker">
@@ -67,30 +58,22 @@
 	[Parameter]
 	public IReadOnlyList<LabelOption> Options { get; set; } = [];
 
-	/// <summary>What the empty choice is called, phrased for what "no label" means to this particular field.</summary>
+	/// <summary>What the empty choice is called, phrased for what "no label" means to this field.</summary>
 	[Parameter]
 	public string NoneLabel { get; set; } = "(none)";
 
-	/// <summary>Example label shown in the free-text fallback.</summary>
 	[Parameter]
 	public string Placeholder { get; set; } = "adaptive";
 
-	/// <summary>
-	///     What to say when the house has made no labels at all. The default is the instruction from the copy
-	///     guide; a caller only overrides it to say something truer about its own field.
-	/// </summary>
+	/// <summary>What to say when the house has made no labels at all.</summary>
 	[Parameter]
 	public string EmptyNote { get; set; } =
 		"You haven't created any labels in Home Assistant yet. Labels are made under Settings → Areas, labels & zones → Labels — create one there, then pick it here.";
 
 	/// <summary>
-	///     What to say when the stored value matches no live label.
+	///     What to say when the stored value matches no live label. The caller's words: on the exclude label
+	///     this is expected, on an include filter it means no light is being managed.
 	/// </summary>
-	/// <remarks>
-	///     The caller's words, not this component's, because the same fact means different things per field. On
-	///     the exclude label the shipped default matches nothing in most houses and that is fine; on an include
-	///     filter it means no light is being managed, which is not.
-	/// </remarks>
 	[Parameter]
 	public string UnknownNote { get; set; } = "No label with this name exists in Home Assistant yet.";
 
@@ -109,8 +92,7 @@
 
 	private Task Commit(string? raw)
 	{
-		// "" normalises to null at the edge, as the entity pickers do: the schema uses null for "not set", and a
-		// blank string would be a label nothing can carry.
+		// "" normalises to null at the edge, as the entity pickers do; the schema uses null for "not set".
 		string? value = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
 		Value = value;
 		return ValueChanged.InvokeAsync(value);

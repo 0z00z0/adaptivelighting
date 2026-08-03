@@ -2,12 +2,11 @@ namespace AdaptiveLighting.Configuration;
 
 /// <summary>
 ///     Checks an <see cref="AdaptiveLightingConfig"/> before the engine is built. Pure: the known entity and
-///     area ids are passed in rather than read from HA, so the whole validator is unit-testable without fakes.
+///     area ids are passed in, never read from HA, so the whole validator is unit-testable without fakes.
 /// </summary>
 /// <remarks>
-///     The split is deliberate. Document-level problems mean nobody can have thought about this config, so the
-///     app throws and shows up dead in HA. Referential problems are one area's business — an entity renamed in
-///     HA must cost that area, not the house.
+///     Document-level problems stop the engine. Referential problems are one area's business: an entity renamed in
+///     HA costs that area, not the house.
 /// </remarks>
 public static class ConfigValidator
 {
@@ -18,30 +17,12 @@ public static class ConfigValidator
 	private const double MinSunElevationDegrees = -90;
 	private const double MaxSunElevationDegrees = 90;
 
-	/// <summary>
-	///     Validates <paramref name="config"/>.
-	/// </summary>
-	/// <param name="config">The bound configuration document.</param>
-	/// <param name="knownEntityIds">
-	///     Every entity id HA knows. When <c>null</c>, referential checks against entity ids are skipped —
-	///     which is what unit tests want, and what a caller that has no <c>IHaContext</c> gets.
-	/// </param>
-	/// <param name="knownAreaIds">Every area id the registry knows. When <c>null</c>, area checks are skipped.</param>
-	/// <param name="liveSelectOptions">
-	///     The live <c>options</c> of the configured house-mode select. When <c>null</c>, the live-option warnings
-	///     are skipped — same pattern as <paramref name="knownEntityIds"/>.
-	/// </param>
-	/// <param name="labelsInUse">
-	///     Every registry label that at least one entity carries, by id and by name — the same either-way matching
-	///     the resolver does. When <c>null</c>, the include-label warning is skipped, same pattern as
-	///     <paramref name="knownEntityIds"/>.
-	/// </param>
-	/// <param name="livePeriodSelectOptions">
-	///     The live <c>options</c> of the configured period select. A second collection rather than a reuse of
-	///     <paramref name="liveSelectOptions"/>: they are two different helpers, and checking one document's option
-	///     strings against the other helper's list would report renames that had not happened and miss the ones that
-	///     had. When <c>null</c>, the rename warning is skipped.
-	/// </param>
+	/// <summary>Validates <paramref name="config"/>. A null collection means "skip the checks that need it".</summary>
+	/// <remarks>
+	///     <c>labelsInUse</c> lists labels by id and by name, matching either way as the resolver does. The two
+	///     selects' live options come in separately: they are different helpers, and crossing them would report
+	///     renames that never happened.
+	/// </remarks>
 	public static ValidationResult Validate(
 		AdaptiveLightingConfig config,
 		IReadOnlyCollection<string>? knownEntityIds = null,
@@ -66,23 +47,12 @@ public static class ConfigValidator
 		return result;
 	}
 
-	/// <summary>
-	///     The <c>input_select</c> tied to the period table, in whichever direction its authority names.
-	/// </summary>
+	/// <summary>The <c>input_select</c> tied to the period table, in whichever direction its authority names.</summary>
 	/// <remarks>
-	///     <para>
-	///         <b>A mapping that cannot resolve is an error here, where the same shape is a warning for a room's
-	///         levels.</b> The severities are not inconsistent: a levels row naming a renamed period costs one room
-	///         one preference and is nearly always recoverable by hand, whereas a period mapping that resolves to
-	///         nothing leaves the whole house unable to place the time of day the household just selected — under
-	///         <see cref="PeriodAuthority.HomeAssistant"/> that is every room, at once, for as long as the select
-	///         sits on that option.
-	///     </para>
-	///     <para>
-	///         The one thing that is only a warning is a stored <c>Value</c> the live select no longer offers. That
-	///         is a rename in Home Assistant rather than a mistake in this document, the row is inert rather than
-	///         dangerous, and erroring would make the document unsaveable from the very page that exists to fix it.
-	///     </para>
+	///     An unresolvable mapping is an error here where the same shape is a warning on a room's levels: under
+	///     <see cref="PeriodAuthority.HomeAssistant"/> it costs every room at once. A stored value the live select no
+	///     longer offers stays a warning, because erroring would make the document unsaveable from the page that
+	///     fixes it.
 	/// </remarks>
 	private static void ValidatePeriodSelect(
 		AdaptiveLightingConfig config,
@@ -93,10 +63,8 @@ public static class ConfigValidator
 		if (config.Global.PeriodSelect is not { } select)
 			return;
 
-		// Mappings but no entity: the document says Home Assistant owns the time of day and then names nothing to
-		// read it from. PeriodSelectReader.For returns null, so the engine silently keeps following the schedule —
-		// and every other branch below is skipped, so without this the household is told nothing at all. The
-		// normaliser cannot help either: rows exist, so the block is not empty enough to drop.
+		// Mappings but no entity. Every other branch below is skipped in that case, so without this the household is
+		// told nothing at all, and the normaliser cannot drop a block that still holds rows.
 		if (string.IsNullOrWhiteSpace(select.Entity) && select.Options.Count > 0)
 		{
 			result.AddWarning(
@@ -107,13 +75,8 @@ public static class ConfigValidator
 		if (select.Entity is { Length: > 0 } entity)
 		{
 			// One helper cannot be both the house mode and the time of day. Both are input_selects, so every other
-			// rule here passes — and the consequence is not cosmetic: under AdaptiveLighting authority
-			// ModeMonitor.MirrorPeriodSelect writes the period's option to this entity on every tick, which is the
-			// same entity the auto-away write, SetsMode and Reset are all setting a MODE on. Away and Sleep would
-			// then be overwritten within one tick of being set — lights that will not go off — or, if the helper
-			// does not carry the period strings at all, an option Home Assistant rejects and the mirror re-sends
-			// forever. The exclusivity of the two authorities is per object; it cannot see two objects aimed at one
-			// helper, so the check has to live here.
+			// rule passes; under AdaptiveLighting authority the period mirror would then overwrite Away or Sleep
+			// within one tick of it being set. The per-object authority check cannot see two objects on one helper.
 			if (config.Global.HouseMode?.Entity is { Length: > 0 } houseModeEntity
 				&& string.Equals(entity.Trim(), houseModeEntity.Trim(), StringComparison.OrdinalIgnoreCase))
 			{
@@ -123,11 +86,7 @@ public static class ConfigValidator
 					+ "periods their own input_select.");
 			}
 
-			// The domain is an error because it can never work: nothing but an input_select has options to read or
-			// write. An id Home Assistant does not know is only a warning, on the same argument the outdoor lux
-			// sensor gets — it fails open in both directions (a missing select yields no override under HomeAssistant
-			// authority, and a mirror write that lands nowhere under AdaptiveLighting), so the house degrades to the
-			// schedule rather than going dark, and refusing the whole document over a typo would be the harsher fault.
+			// Wrong domain can never work, so it errors. An unknown id fails open in both directions and only warns.
 			if (!entity.HasDomain("input_select"))
 				result.AddError($"PeriodSelect.Entity '{entity}' is not an input_select. The time of day is a Home Assistant dropdown helper.");
 			else if (knownEntityIds is not null && !knownEntityIds.Contains(entity))
@@ -144,8 +103,7 @@ public static class ConfigValidator
 				continue;
 			}
 
-			// Duplicates are reported rather than silently resolved: two rows for one option string means the file
-			// says two things about the same selection, and only the first would ever be read.
+			// Only the first row for an option string is ever read.
 			if (!seen.Add(option.Value.Trim()))
 				result.AddError($"Duplicate PeriodSelect option value '{option.Value.Trim()}'.");
 
@@ -155,9 +113,8 @@ public static class ConfigValidator
 				result.AddError($"PeriodSelect option '{option.Value.Trim()}' maps to period '{option.Period.Trim()}', which matches no configured period.");
 		}
 
-		// Authority is Home Assistant's and there is nothing for it to decide with. Not an error: the engine falls
-		// back to its own schedule for every unmapped value, so the house keeps working — it simply never follows
-		// the select, which is the opposite of what the document asked for and worth saying out loud.
+		// Authority is Home Assistant's with nothing to decide with. The engine falls back to its own schedule for
+		// every unmapped value, so this warns instead of erroring.
 		if (select.Authority is PeriodAuthority.HomeAssistant && select.Options.Count == 0)
 			result.AddWarning(
 				"PeriodSelect.Authority is HomeAssistant but no option is mapped to a period, so the select can never "
@@ -174,32 +131,10 @@ public static class ConfigValidator
 					+ "probably been renamed in Home Assistant, and until it matches again the mapping does nothing.");
 	}
 
-	/// <summary>
-	///     The house names an outdoor lux sensor, and no room asked to read it.
-	/// </summary>
+	/// <summary>The house names an outdoor lux sensor and no room asked to read it, or the reverse.</summary>
 	/// <remarks>
-	///     <para>
-	///         <b>This is a meaning change, said out loud, and it is the only place a document can be told about
-	///         it.</b> The outdoor sensor was once handed to every room that resolved no lux sensor of its own,
-	///         silently. It is now an opt-in per room (<see cref="AreaConfig.FollowOutdoorLux"/>), because one
-	///         shaded outdoor sensor reading several hundred lux through the day held off every sensorless room in
-	///         a house that was genuinely dark. A document written under the old rule looks identical under the
-	///         new one and means something different: rooms that used to gate on the outdoor reading now have no
-	///         reading, so the lux half of their gate stops refusing and they light on movement.
-	///     </para>
-	///     <para>
-	///         A warning rather than a migration, deliberately. The validator is pure and cannot run discovery, so
-	///         it cannot know which rooms will find a sensor of their own and are therefore unaffected; and
-	///         rewriting somebody's file to preserve a behaviour they may well have been suffering under is the
-	///         kind of help nobody asked for. The new behaviour is the intended one — better to light too early
-	///         than never — so this says what changed and how to put it back, room by room, and leaves the choice
-	///         where it belongs.
-	///     </para>
-	///     <para>
-	///         The mirror case is an area-level warning: a room that asked to follow an outdoor sensor the house
-	///         does not name has asked for nothing, and would sit there counting as dark while believing itself
-	///         gated.
-	///     </para>
+	///     A warning, not a migration: the validator is pure and cannot run discovery, so it cannot know which rooms
+	///     will find a sensor of their own.
 	/// </remarks>
 	private static void ValidateOutdoorLuxOptIn(AdaptiveLightingConfig config, ValidationResult result)
 	{
@@ -221,29 +156,12 @@ public static class ConfigValidator
 	}
 
 	/// <summary>
-	///     The daylight brightness adjustment is switched on somewhere, but the document names no lux sensor at all.
+	///     The daylight brightness adjustment is on somewhere, but the document guarantees no lux reading at all.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         A warning, and only one, at document level. It degrades rather than breaks: a room with no reading
-	///         gets the schedule's brightness, which is what the whole house did before the feature existed. And the
-	///         validator is pure — it cannot run discovery — so it cannot know that a room will find an illuminance
-	///         sensor of its own at runtime. Erroring on something it cannot see would refuse a perfectly good
-	///         document.
-	///     </para>
-	///     <para>
-	///         What it <i>can</i> see is the case that motivates the feature: a hallway has no lux sensor, so the
-	///         reading has to come from <see cref="GlobalConfig.OutdoorLuxSensor"/> — and if no room pins one and
-	///         no room follows the house's, the switch is on and nothing anywhere is guaranteed to feed it. Said
-	///         once, at the top, in the same spirit as the include-label warning.
-	///     </para>
-	///     <para>
-	///         <b>Naming the outdoor sensor is no longer enough to satisfy this.</b> It used to be: the sensor was
-	///         handed to every room that had none. Now a room reads it only if it says so
-	///         (<see cref="AreaConfig.FollowOutdoorLux"/>), and the daylight curve reads whatever the darkness gate
-	///         reads — one sensor per room, one answer — so a house that names an outdoor sensor no room follows
-	///         feeds the curve nothing at all.
-	///     </para>
+	///     Naming <see cref="GlobalConfig.OutdoorLuxSensor"/> is not enough on its own: a room reads it only when it
+	///     sets <see cref="AreaConfig.FollowOutdoorLux"/>. One document-level warning, because the validator cannot
+	///     run discovery and a room may still find a sensor of its own at runtime.
 	/// </remarks>
 	private static void ValidateLuxBrightnessSource(AdaptiveLightingConfig config, ValidationResult result)
 	{
@@ -283,8 +201,7 @@ public static class ConfigValidator
 		if (global.BlendMinutes < 0)
 			result.AddError($"Global.BlendMinutes must not be negative (is {global.BlendMinutes}).");
 
-		// MotionDeviceClasses is deliberately not checked for emptiness: empty is the default and means
-		// GlobalConfig.DefaultMotionDeviceClasses. See the remarks on the property.
+		// MotionDeviceClasses is not checked for emptiness: empty means GlobalConfig.DefaultMotionDeviceClasses.
 
 		if (knownEntityIds is null)
 			return;
@@ -293,11 +210,8 @@ public static class ConfigValidator
 			if (!knownEntityIds.Contains(entityId))
 				result.AddError($"Global.{label} refers to '{entityId}', which Home Assistant does not know.");
 
-		// Kill switch: the known-entity check uses the effective id (09 §7). It is only ever a WARNING, never a
-		// document-stopping error — the engine fails open on an unavailable kill switch (an unreadable state is read
-		// as "not killed", ModeMonitor.KillSwitchActive), so a missing switch can never darken the house. An explicit
-		// id HA does not know is a likely mistake worth flagging; the defaulted built-in switch may simply not be
-		// visible to the standalone web host yet (the state manager creates it at app start).
+		// Never an error: the engine fails open on an unreadable kill switch, so a missing one cannot darken the
+		// house, and the built-in switch may simply not be visible to the standalone web host yet.
 		if (global.EffectiveKillSwitchEntity is { Length: > 0 } killSwitch && !knownEntityIds.Contains(killSwitch))
 		{
 			if (global.KillSwitchEntity is { Length: > 0 })
@@ -306,9 +220,7 @@ public static class ConfigValidator
 				result.AddWarning($"The built-in master switch '{killSwitch}' is not known to Home Assistant yet; the state manager creates it at app start.");
 		}
 
-		// Outdoor lux sensor: the reading offered to the rooms that ask for it. It fails open — an unknown or
-		// non-sensor id just leaves those rooms with no reading, which now means they count as dark rather than
-		// that they stop lighting — so both are warnings, not errors.
+		// Fails open: an unknown or non-sensor id leaves the following rooms with no reading, so they count as dark.
 		if (global.OutdoorLuxSensor is { Length: > 0 } outdoorLux)
 		{
 			if (outdoorLux.Domain() is not "sensor")
@@ -318,14 +230,10 @@ public static class ConfigValidator
 		}
 	}
 
-	/// <summary>
-	///     The include label, when nothing in Home Assistant carries it.
-	/// </summary>
+	/// <summary>The include label, when nothing in Home Assistant carries it.</summary>
 	/// <remarks>
-	///     A warning and never an error, deliberately. The filter fails closed room by room — every room reports
-	///     that its lights carry no such label and is skipped — so the house degrades exactly as it does for any
-	///     other unresolvable room, and the document stays saveable. What the per-room messages cannot say is that
-	///     one typo at the top of the file is behind all of them, which is what this says once.
+	///     The filter fails closed room by room, so the per-room messages already appear; this says once that one
+	///     typo at the top of the file is behind all of them.
 	/// </remarks>
 	private static void ValidateIncludeLabel(
 		GlobalConfig global,
@@ -358,7 +266,6 @@ public static class ConfigValidator
 			return;
 		}
 
-		// One shared table now (09 §3.5), so a plain duplicate name or fixed start time is an error again.
 		IEnumerable<string> duplicateNames = periods
 			.GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
 			.Where(g => g.Count() > 1)
@@ -409,9 +316,7 @@ public static class ConfigValidator
 	}
 
 	/// <summary>
-	///     The house-mode rules (09 §6). Structural problems are document-level errors; classification quirks
-	///     (no/many Normals, inert scenes/resets) are non-blocking warnings; live-option warnings only fire when
-	///     <paramref name="liveSelectOptions"/> is given.
+	///     The house-mode rules. Structural problems are document-level errors; classification quirks are warnings.
 	/// </summary>
 	private static void ValidateHouseMode(
 		AdaptiveLightingConfig config,
@@ -422,18 +327,13 @@ public static class ConfigValidator
 		HouseModeConfig? houseMode = config.Global.HouseMode;
 		List<TimePeriodConfig> periods = config.Periods;
 
-		// SetsMode must match a configured option value (needs the select and its options); warn when it names a
-		// Normal option — legal (a scheduled reset) but probably a mistake.
 		foreach (TimePeriodConfig? period in periods.Where(p => p.SetsMode is { Length: > 0 }))
 		{
 			string setsMode = period.SetsMode!;
 			HouseModeOptionConfig? option = houseMode?.OptionFor(setsMode);
 
-			// Valid if it names a configured option OR a live option of the select: the engine sets the select to
-			// that value at runtime, so a live option it can genuinely select is legitimate even before the owner
-			// has tagged it a Kind. Only when it matches neither is it a document-level error — otherwise a period
-			// pointing at an untagged live option (e.g. the "Normal" the select already offers) would deadlock the
-			// save, since tagging that option is itself a save.
+			// A live option the owner has not tagged yet is still legitimate. Erroring on it would deadlock the save,
+			// because tagging that option is itself a save.
 			bool isLiveOption = liveSelectOptions?.Any(live => string.Equals(live.Trim(), setsMode.Trim(), StringComparison.OrdinalIgnoreCase)) ?? false;
 
 			if (option is null && !isLiveOption)
@@ -442,17 +342,15 @@ public static class ConfigValidator
 				result.AddWarning($"Period '{period.Name}' SetsMode '{setsMode}', which is a Normal option — the period would schedule a reset to the baseline.");
 		}
 
-		// The sleep clamp must resolve when sleep is load-bearing.
 		ValidateSleepPath(config, houseMode, result);
 
 		if (houseMode?.Entity is not { Length: > 0 })
 			return;
 
-		// The entity must be an input_select. The "unknown to HA" half is checked in ValidateGlobal.
+		// The "unknown to HA" half of the entity check is in ValidateGlobal.
 		if (!houseMode.Entity.HasDomain("input_select"))
 			result.AddError($"HouseMode.Entity '{houseMode.Entity}' is not an input_select. The house mode is a Home Assistant dropdown helper.");
 
-		// Duplicate or blank option values.
 		foreach (HouseModeOptionConfig option in houseMode.Options)
 			if (string.IsNullOrWhiteSpace(option.Value))
 				result.AddError("A HouseMode option has a blank Value.");
@@ -475,7 +373,7 @@ public static class ConfigValidator
 			WarnOnLiveOptionMismatch(houseMode, liveSelectOptions, result);
 	}
 
-	/// <summary>Exactly-one-Normal: none → warning (first is treated as Normal); more than one → warning (first wins).</summary>
+	/// <summary>One Normal, no more. With none the first option is treated as Normal; with several the first wins.</summary>
 	private static void ValidateNormalCount(HouseModeConfig houseMode, ValidationResult result)
 	{
 		List<HouseModeOptionConfig> configured = houseMode.Options.Where(o => !string.IsNullOrWhiteSpace(o.Value)).ToList();
@@ -499,8 +397,7 @@ public static class ConfigValidator
 		bool isNormal = option.Kind == ModeKind.Normal;
 		bool isAwayOrGuest = option.Kind is ModeKind.Away or ModeKind.Guest;
 
-		// Scene: applied on entry for any kind. On Away/Guest it stands (they pause the engine); on Normal/Sleep it is
-		// a one-shot the ordinary commands may soon override — legal, so no warning. Must be a scene entity, known when ids are provided.
+		// Applied on entry for any kind, so a scene on Normal or Sleep is a legal one-shot, not a mistake.
 		if (option.Scene is { Length: > 0 } scene)
 		{
 			if (!scene.HasDomain("scene"))
@@ -509,8 +406,7 @@ public static class ConfigValidator
 				result.AddError($"HouseMode option '{option.Value}' Scene '{scene}' is not known to Home Assistant.");
 		}
 
-		// ClampPeriod is load-bearing only on Sleep; a dangling period name is an error only then. On any other
-		// kind it is inert, so a stale name is a warning, not something that makes the whole document unsaveable.
+		// ClampPeriod is load-bearing only on Sleep, so a dangling name errors only there.
 		if (option.ClampPeriod is { Length: > 0 } clamp)
 		{
 			if (option.Kind != ModeKind.Sleep)
@@ -519,18 +415,13 @@ public static class ConfigValidator
 				result.AddError($"HouseMode option '{option.Value}' ClampPeriod '{clamp}' matches no configured period.");
 		}
 
-		// Reset triggers are only meaningful on a non-Normal option (Normal is the reset target). A scene is not
-		// listed here: it now applies on entry to any kind, Normal included.
+		// Normal is the reset target, so a trigger on it is inert.
 		if (isNormal && option.HasResetTrigger)
 			result.AddWarning($"HouseMode option '{option.Value}' is Normal but carries reset triggers; they are inert on the reset target.");
 
-		// An Away/Guest option with no reset trigger stays active until someone changes it by hand — legal, but
-		// usually a forgotten trigger, so warn rather than let it silently stick.
 		if (isAwayOrGuest && !option.HasResetTrigger)
 			result.AddWarning($"HouseMode option '{option.Value}' is {option.Kind} but has no reset trigger; it will stay active until a manual change.");
 
-		// ResetOnPeriodStart is load-bearing only on a non-Normal option; on a Normal one it is inert, so a stale
-		// period name is a warning rather than a document error.
 		if (option.ResetOnPeriodStart is { Length: > 0 } resetPeriod
 			&& !config.Periods.Any(p => string.Equals(p.Name, resetPeriod, StringComparison.OrdinalIgnoreCase)))
 		{
@@ -543,8 +434,7 @@ public static class ConfigValidator
 		if (option.ResetPresenceGraceMinutes < 0)
 			result.AddError($"HouseMode option '{option.Value}' ResetPresenceGraceMinutes must not be negative (is {option.ResetPresenceGraceMinutes}).");
 
-		// ActivateAfterNoMotionMinutes is an activation trigger — meaningful only on a non-Normal option, and a
-		// positive duration (zero would fire the instant motion stops). Inert on Normal, so warn rather than error.
+		// Zero would fire the instant motion stops.
 		if (option.ActivateAfterNoMotionMinutes is { } idleMinutes)
 		{
 			if (idleMinutes <= 0)
@@ -553,9 +443,7 @@ public static class ConfigValidator
 				result.AddWarning($"HouseMode option '{option.Value}' is Normal but sets ActivateAfterNoMotionMinutes; a Normal option is the reset target, so it is inert.");
 		}
 
-		// ActivateWhileOn: the engine reads these as on/off, so only input_boolean, switch and binary_sensor can
-		// force the mode — any other domain is inert and warned; an id HA does not know is an error. Mirrors the
-		// presence-sensor rules below.
+		// Read as on/off, so only input_boolean, switch and binary_sensor can force the mode.
 		foreach (string? sensor in option.ActivateWhileOn.Where(s => !string.IsNullOrWhiteSpace(s)))
 		{
 			if (sensor.Domain() is not ("input_boolean" or "switch" or "binary_sensor"))
@@ -565,8 +453,7 @@ public static class ConfigValidator
 				result.AddError($"HouseMode option '{option.Value}' ActivateWhileOn refers to '{sensor}', which Home Assistant does not know.");
 		}
 
-		// Presence sensors: the engine only detects presence on binary_sensor (turn-on) or person/device_tracker
-		// (state → home), so any other domain is inert and warned; an id HA does not know is an error.
+		// Presence is detected on binary_sensor turn-on, or person/device_tracker moving to home. Nothing else.
 		foreach (string? sensor in option.ResetPresenceSensors.Where(s => !string.IsNullOrWhiteSpace(s)))
 		{
 			if (sensor.Domain() is not ("binary_sensor" or "person" or "device_tracker"))
@@ -577,7 +464,7 @@ public static class ConfigValidator
 		}
 	}
 
-	/// <summary>When any option is Sleep and any area respects sleep mode, the §4.1 clamp chain must resolve to an existing period.</summary>
+	/// <summary>When any option is Sleep and any area respects sleep mode, the clamp chain must resolve.</summary>
 	private static void ValidateSleepPath(AdaptiveLightingConfig config, HouseModeConfig? houseMode, ValidationResult result)
 	{
 		List<HouseModeOptionConfig> sleepOptions = houseMode?.Options.Where(o => o.Kind == ModeKind.Sleep).ToList() ?? [];
@@ -621,11 +508,7 @@ public static class ConfigValidator
 		IReadOnlyCollection<string>? knownAreaIds,
 		ValidationResult result)
 	{
-		// A warning, not an error. An empty area list is a legitimate state, not a broken document: it is what a
-		// brand-new installation starts from before discovery has run, and what a household is left with after
-		// deliberately removing every room. The engine runs perfectly well managing nothing — it simply commands
-		// nothing — whereas refusing the document stops the whole app and greets a new owner with "the
-		// configuration has document-level errors", which is both alarming and untrue.
+		// An empty area list is what a fresh install starts from, so it warns instead of stopping the app.
 		if (config.Areas.Count == 0)
 		{
 			result.AddWarning("No rooms yet — adaptive lighting is running but managing nothing. Add a room under Configuration → Areas.");
@@ -648,21 +531,10 @@ public static class ConfigValidator
 		}
 	}
 
-	/// <summary>
-	///     What one room runs instead of the schedule (<see cref="AreaConfig.Levels"/>).
-	/// </summary>
+	/// <summary>What one room runs instead of the schedule (<see cref="AreaConfig.Levels"/>).</summary>
 	/// <remarks>
-	///     <para>
-	///         <b>A dangling period name is a warning and the row survives.</b> It is nearly always a rename, and
-	///         deleting somebody's levels on a rename is the worse failure by a distance — the row is inert until
-	///         the name matches something again, which is a state a human can look at and fix. Refusing the document
-	///         over it would be worse still: renaming a period is itself a save, so the file would deadlock.
-	///     </para>
-	///     <para>
-	///         <b>A value outside the physical range is an error.</b> That is not a rename, it is a number nobody
-	///         could have meant, and it is checked exactly as the schedule's own levels are — same range, same
-	///         severity. The editor writes these, so refusing the save is where it is cheapest to notice.
-	///     </para>
+	///     A dangling period name warns and the row survives: renaming a period is itself a save, so erroring would
+	///     deadlock the file. A value outside the physical range is an error, checked as the schedule's own is.
 	/// </remarks>
 	private static void ValidateRoomLevels(List<TimePeriodConfig> periods, AreaConfig area, ValidationResult result)
 	{
@@ -680,17 +552,13 @@ public static class ConfigValidator
 				continue;
 			}
 
-			// An empty row is not a claim, so it cannot be the row that "won". CircadianCalculator.LevelsOf skips
-			// these before it takes the first match, and counting them here made the warning say the opposite of
-			// what the engine does: a cleared row followed by a real one drew "the first one wins and the rest are
-			// ignored" while the room actually ran on the second. Only reachable on a hand-edited file — Save
-			// normalises empty rows away before validating — which is exactly the file whose reader has no other
-			// way to find out.
+			// Skipped before the duplicate count, matching CircadianCalculator.LevelsOf: an empty row is not the row
+			// that won. Counting it made the warning name the wrong row on a hand-edited file, which is the only
+			// file that reaches here with empty rows, since Save normalises them away first.
 			if (level.IsEmpty)
 				continue;
 
-			// First wins, matching the calculator and the house-mode Normal rows. Reported rather than silently
-			// resolved: two rows for one period means the file says two things, and the reader has to be told which.
+			// First wins, matching the calculator.
 			if (!seen.Add(name))
 			{
 				result.AddWarning(
@@ -709,7 +577,7 @@ public static class ConfigValidator
 		}
 	}
 
-	/// <summary>The physical ranges, checked whether or not the row's period resolves — a nonsense number is nonsense either way.</summary>
+	/// <summary>The physical ranges, checked whether or not the row's period resolves.</summary>
 	private static void ValidateRoomLevelRange(AreaConfig area, RoomLevelOverride level, ValidationResult result)
 	{
 		if (level.BrightnessPct is { } brightness && brightness is < MinBrightnessPct or > MaxBrightnessPct)
@@ -804,26 +672,14 @@ public static class ConfigValidator
 			result.AddError($"[{scope}] NightTransitionSeconds must not be negative (is {settings.NightTransitionSeconds}).");
 	}
 
-	/// <summary>
-	///     The daylight brightness curve: two anchors, a ceiling and a shaping exponent.
-	/// </summary>
+	/// <summary>The daylight brightness curve: two anchors, a ceiling and a shaping exponent.</summary>
 	/// <remarks>
-	///     <para>
-	///         Checked whether or not the feature is switched on, matching how <c>LuxThreshold</c> is checked for an
-	///         area gating on the sun alone: a number outside its range is a mistake in the document, and it is no
-	///         less a mistake for currently being inert — it would come alive the moment somebody flipped the
-	///         switch. Every default is valid, so a document that predates the feature passes untouched.
-	///     </para>
-	///     <para>
-	///         The engine survives all of these on its own (<c>LuxBrightnessCurve</c> makes a nonsensical curve
-	///         inert rather than dangerous), but that is a safety net, not a reason to accept the document. Silently
-	///         ignoring the curve an owner wrote is worse than telling them it cannot be read.
-	///     </para>
+	///     Checked whether or not the feature is switched on, since a bad number comes alive the moment the switch
+	///     is flipped. Every default is valid, so a document predating the feature passes untouched.
 	/// </remarks>
 	private static void ValidateLuxBrightness(string scope, AreaSettings settings, ValidationResult result)
 	{
-		// A logarithm needs a positive anchor. This is the one that would be genuinely undefined rather than merely
-		// odd, so it is checked before the ordering.
+		// Checked before the ordering: a non-positive anchor is undefined, not merely odd.
 		if (settings.LuxBrightnessStartLux <= 0)
 			result.AddError($"[{scope}] LuxBrightnessStartLux must be positive (is {settings.LuxBrightnessStartLux}) — the curve interpolates on log10(lux), which has no value at or below zero.");
 
@@ -834,12 +690,11 @@ public static class ConfigValidator
 		if (settings.LuxBrightnessMaxPct is < MinBrightnessPct or > MaxBrightnessPct)
 			result.AddError($"[{scope}] LuxBrightnessMaxPct is {settings.LuxBrightnessMaxPct}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
 
-		// Zero is the dangerous one rather than merely the useless one: pow(0, 0) is 1, so a zero exponent reads as
-		// "full daylight level at any reading, including pitch dark" to anything that trusts the arithmetic.
+		// Zero is the dangerous value, not merely the useless one: pow(0, 0) is 1, so it reads as full daylight
+		// level at any reading, pitch dark included.
 		if (settings.LuxBrightnessGamma <= 0)
 			result.AddError($"[{scope}] LuxBrightnessGamma must be positive (is {settings.LuxBrightnessGamma}); 1 is a straight line, above 1 holds the level back until it is properly bright.");
 
-		// On but unable to add anything: legal, inert, and almost certainly a switch flipped without a ceiling set.
 		if (settings.LuxBrightnessEnabled && settings.LuxBrightnessMaxPct <= MinBrightnessPct)
 			result.AddWarning($"[{scope}] LuxBrightnessEnabled is on but LuxBrightnessMaxPct is {settings.LuxBrightnessMaxPct}, so daylight can never raise the brightness above the schedule.");
 	}

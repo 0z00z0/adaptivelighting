@@ -9,17 +9,9 @@ using NetDaemon.AppModel;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The read-only enrichment of the modes page: the per-mode period/target preview and its area-effect counts
-///     (<see cref="ModeService.ComputePreview"/>), and the derived <see cref="ModeKind"/> the hero shows, taken from
-///     the current option (<see cref="ModeService.GetHouseState"/>).
+///     The read-only enrichment of the modes page: the per-mode preview and its area-effect counts, and the
+///     derived <see cref="ModeKind"/> the hero shows.
 /// </summary>
-/// <remarks>
-///     The preview is a pure function of (config, kind, instant, sun times) — the same premise the engine's
-///     <see cref="AdaptiveLighting.Engine.CircadianCalculator"/> makes — so these need no clock and
-///     no fakes for the compute. There is one shared table now, so every kind but Away resolves the same baseline
-///     period. The derived-state tests go through the whole service against <see cref="FakeHaContext"/>, because
-///     that is the code path the page runs.
-/// </remarks>
 [TestClass]
 public sealed class ModeServicePreviewTests
 {
@@ -43,13 +35,13 @@ public sealed class ModeServicePreviewTests
 		Defaults = new AreaSettings(),
 		Areas =
 		[
-			// living room: swept away, respects sleep
+			// swept away, respects sleep
 			new() { Name = "stue", AreaId = "stue", RespectSleepMode = true },
-			// hallway: opts out of the sweep, blocks auto-on while asleep
+			// opts out of the sweep, blocks auto-on while asleep
 			new() { Name = "gang", AreaId = "gang", SkipAwaySweep = true, RespectSleepMode = true, SleepBlocksAutoOn = true },
-			// outdoor: opts out of the sweep
+			// opts out of the sweep
 			new() { Name = "ute", AreaId = "ute", SkipAwaySweep = true },
-			// a disabled area must be counted by neither the sweep nor the clamp
+			// disabled: counted by neither the sweep nor the clamp
 			new() { Name = "loft", AreaId = "loft", RespectSleepMode = true, Enabled = false }
 		]
 	};
@@ -70,7 +62,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void A_Sleep_Mode_Resolves_The_Shared_Table()
 	{
-		// There is one shared table now: sleep resolves the same period the baseline would.
+		// One shared table: every kind but Away resolves the same period the baseline would.
 		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Sleep, At(14), NoSun);
 
 		Assert.AreEqual("day", preview.ActivePeriodName, "14:00 is the day period on the shared table");
@@ -102,7 +94,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void An_Empty_Table_Resolves_No_Period_Rather_Than_Guessing()
 	{
-		var config = new AdaptiveLightingConfig();   // no periods at all
+		var config = new AdaptiveLightingConfig();
 
 		var preview = ModeService.ComputePreview(config, ModeKind.Normal, At(20), NoSun);
 
@@ -118,7 +110,7 @@ public sealed class ModeServicePreviewTests
 	{
 		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Away, At(20), NoSun);
 
-		// Three enabled areas: stue is swept; gang and ute opt out. The disabled loft is counted by neither.
+		// Three enabled areas: stue is swept, gang and ute opt out. The disabled loft is not counted.
 		Assert.AreEqual("turns 1 of 3 rooms off, keeps 2 on", preview.EffectSummary);
 	}
 
@@ -154,12 +146,7 @@ public sealed class ModeServicePreviewTests
 
 	// ===================== the preview under Home Assistant's period authority =====================
 
-	/// <summary>
-	///     <b>The preview builds its own calculator, and the calculator has to know about the period select.</b>
-	///     Under <see cref="PeriodAuthority.HomeAssistant"/> the engine takes the period from the dropdown and
-	///     never from the clock, so a card resolving 20:00 to "evening" while every room ran "night" would be a
-	///     confident wrong answer on the page somebody opens to find out what a mode does.
-	/// </summary>
+	// The preview builds its own calculator, so that calculator has to be given the period select too.
 	[TestMethod]
 	public void The_Preview_Follows_The_Period_Select_When_Home_Assistant_Owns_The_Time_Of_Day()
 	{
@@ -178,10 +165,6 @@ public sealed class ModeServicePreviewTests
 		Assert.AreEqual(2200, preview.PreviewKelvin);
 	}
 
-	/// <summary>
-	///     The mirror direction ignores the dropdown, and so does an option nothing maps: both leave the engine on
-	///     its own schedule, so both leave the preview there too.
-	/// </summary>
 	[TestMethod]
 	public void The_Preview_Ignores_The_Select_Where_The_Engine_Does()
 	{
@@ -271,7 +254,6 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void Derived_State_With_No_Select_Is_Normal()
 	{
-		// No house-mode select: the hero has nothing to assert, so it reads Normal.
 		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
 
 		var state = Service(new FakeHaContext(), config).GetHouseState();
@@ -280,12 +262,12 @@ public sealed class ModeServicePreviewTests
 		Assert.IsTrue(state.IsAvailable, "no select to probe means no disconnection was discovered");
 	}
 
-	// ===================== master-switch default (09 §7) =====================
+	// ===================== master-switch default =====================
 
 	[TestMethod]
 	public void The_Master_Switch_Toggle_Renders_From_The_Built_In_Default_When_Unset()
 	{
-		// KillSwitchEntity is blank; the host provides the app's own enable switch as the in-memory default.
+		// KillSwitchEntity is blank, so the host provides the app's own enable switch as the in-memory default.
 		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
 		var builtIn = "input_boolean.netdaemon_test_app";
 
@@ -302,9 +284,8 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Master_Switch_Appears_After_Attach_WithoutReconstructingTheService()
 	{
-		// The scoped ModeService can be built before the singleton engine host is attached to Home Assistant. The
-		// built-in switch must appear once the connection lands, on the same service instance — so it is read live,
-		// not copied once at construction.
+		// The scoped ModeService can be built before the singleton engine host attaches to Home Assistant, so the
+		// built-in switch is read live on every call, never copied once at construction.
 		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
 		var builtIn = "input_boolean.netdaemon_test_app";
 
@@ -368,7 +349,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Master_Switch_View_Folds_In_An_Explicit_Kill_Switchs_Inverted_Polarity()
 	{
-		// An explicit kill switch read inverted: on muzzles the engine, so AdaptiveLightingOn is the inverse of IsOn.
+		// Read inverted: on muzzles the engine, so AdaptiveLightingOn is the inverse of IsOn.
 		var config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { KillSwitchEntity = "switch.kill", KillSwitchActiveWhenOff = false }
@@ -387,7 +368,6 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Master_Switch_View_Is_Null_Before_The_Default_Resolves()
 	{
-		// KillSwitchEntity is blank and no Attach has provided the built-in default, so there is nothing to show.
 		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
 
 		var view = Service(new FakeHaContext(), config).GetMasterSwitch();
@@ -400,7 +380,7 @@ public sealed class ModeServicePreviewTests
 	{
 		var config = new AdaptiveLightingConfig { Global = new GlobalConfig { KillSwitchEntity = "switch.kill" } };
 
-		// No state set for switch.kill: HA answers (does not throw) but has no such entity.
+		// No state set for switch.kill. HA answers, it does not throw, but it has no such entity.
 		var view = Service(new FakeHaContext(), config).GetMasterSwitch();
 
 		Assert.IsNotNull(view, "the entity is configured, so the control still renders");
@@ -412,7 +392,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void GetPeople_Discovers_Every_Person_Entity_When_None_Are_Configured()
 	{
-		// No configured Persons list, so the panel falls back to the person domain — mirroring PresenceMonitor.
+		// With no configured Persons list the panel falls back to the person domain, mirroring PresenceMonitor.
 		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
 
 		var ha = new FakeHaContext();
@@ -436,7 +416,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void GetPeople_Uses_The_Configured_List_When_One_Is_Set()
 	{
-		// A configured list wins over discovery, and it may name a device_tracker — exactly as the engine watches it.
+		// A configured list wins over discovery, and it may name a device_tracker, as the engine watches it.
 		var config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { Persons = ["person.alex", "device_tracker.kari_phone"] }
@@ -445,7 +425,6 @@ public sealed class ModeServicePreviewTests
 		var ha = new FakeHaContext();
 		ha.SetState("person.alex", "home", new() { ["friendly_name"] = "Alex" });
 		ha.SetState("device_tracker.kari_phone", "home");
-		// A person entity NOT on the configured list must be ignored.
 		ha.SetState("person.guest", "home", new() { ["friendly_name"] = "Guest" });
 
 		var people = Service(ha, config).GetPeople();
@@ -458,7 +437,6 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void GetPeople_Reports_An_Unknown_Entity_As_Unavailable_Not_Away()
 	{
-		// A configured id Home Assistant does not know reads "unknown" (IsAvailable false), never "away".
 		var config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { Persons = ["person.ghost"] }

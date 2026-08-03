@@ -3,18 +3,13 @@ using AdaptiveLighting.Abstractions;
 namespace AdaptiveLighting.Ha;
 
 /// <summary>
-///     The real <see cref="IAreaRegistry"/>: a thin projection of <see cref="IHaRegistry"/> onto the six
-///     questions the engine actually asks.
+///     The real <see cref="IAreaRegistry"/>: a projection of <see cref="IHaRegistry"/> onto the questions the engine
+///     asks. Reads live; there is no snapshot to go stale.
 /// </summary>
-/// <remarks>
-///     Reads the registry live rather than snapshotting it. Resolution happens once at startup, so a snapshot
-///     would buy nothing and would only be one more thing that could go stale.
-/// </remarks>
 public sealed class HaAreaRegistry : IAreaRegistry
 {
 	private readonly IHaRegistry _registry;
 
-	/// <summary>Wraps the live registry.</summary>
 	public HaAreaRegistry(IHaRegistry registry) => _registry = registry ?? throw new ArgumentNullException(nameof(registry));
 
 	/// <inheritdoc/>
@@ -37,8 +32,8 @@ public sealed class HaAreaRegistry : IAreaRegistry
 
 	/// <inheritdoc/>
 	/// <remarks>
-	///     A floor with no id cannot be grouped on — the group key is the id — so it is read as no floor at all
-	///     rather than as an anonymous one every floorless area would then share.
+	///     A floor with no id reads as no floor. The group key is the id, so an anonymous floor would collect every
+	///     floorless area into one group.
 	/// </remarks>
 	public AreaFloor? FloorOf(string areaId) =>
 		_registry.FloorOf(areaId) is { Id: { Length: > 0 } id } floor

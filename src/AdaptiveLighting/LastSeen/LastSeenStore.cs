@@ -6,26 +6,16 @@ namespace AdaptiveLighting.LastSeen;
 /// <summary>
 ///     One entity as it came off disk, with the bucket it was filed in and the file's own write time.
 /// </summary>
-/// <param name="EntityId">The entity.</param>
-/// <param name="Bucket">Where it was filed last time. Re-derived from Home Assistant on the next census.</param>
-/// <param name="Entry">Its record.</param>
-/// <param name="SavedAt">When the file holding it was written, which is what settles a duplicate.</param>
+/// <remarks><c>SavedAt</c> is what settles a duplicate.</remarks>
 public sealed record LoadedEntity(string EntityId, string Bucket, LastSeenEntry Entry, DateTimeOffset SavedAt);
 
 /// <summary>
 ///     Everything a load produced, including what it could not read.
 /// </summary>
-/// <param name="Entities">The merged records, one per entity id.</param>
-/// <param name="HomeAssistantStarted">The newest restart estimate found in any file, or <c>null</c>.</param>
-/// <param name="FilesRead">How many cache files were read successfully.</param>
-/// <param name="FilesUnreadable">How many existed but could not be read or parsed. Their entities are simply unknown.</param>
-/// <param name="DuplicatesResolved">How many entities were found in more than one file. Normally zero.</param>
-/// <param name="PreSplitRecords">
-///     How many records came out of a pre-split catch-all file. They are read exactly like any other record — the
-///     history is not the thing that changed — but they are all keyed <c>other</c> until the next census re-derives
-///     their class, which is worth counting so the migration is visible in the log rather than inferred from file
-///     sizes a week later.
-/// </param>
+/// <remarks>
+///     <c>HomeAssistantStarted</c> is the newest restart estimate found in any file. <c>PreSplitRecords</c> counts
+///     records from a pre-split catch-all file, all keyed <c>other</c> until the next census re-derives their class.
+/// </remarks>
 public sealed record LastSeenCacheLoad(
 	IReadOnlyDictionary<string, LoadedEntity> Entities,
 	DateTimeOffset? HomeAssistantStarted,
@@ -34,7 +24,7 @@ public sealed record LastSeenCacheLoad(
 	int DuplicatesResolved,
 	int PreSplitRecords)
 {
-	/// <summary>An empty load: what a first run, a deleted cache and a completely unreadable one all produce.</summary>
+	/// <summary>What a first run, a deleted cache and a completely unreadable one all produce.</summary>
 	public static LastSeenCacheLoad Empty { get; } =
 		new(new Dictionary<string, LoadedEntity>(StringComparer.Ordinal), null, 0, 0, 0, 0);
 }
@@ -43,31 +33,10 @@ public sealed record LastSeenCacheLoad(
 ///     The cache's files: where they live, how they are written, and how a torn set is read back.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>The write is the one from <see cref="Hosting.LightingConfigStore"/>, per file.</b> New contents go to a
-///         uniquely named temp file in the same directory and are then moved into place, with the previous version
-///         kept as <c>.bak</c> — so a process death mid-write cannot leave a half-written file, and a bad write
-///         leaves one generation to fall back to.
-///     </para>
-///     <para>
-///         <b>Where the files live is derived, never constant.</b> They sit beside the configuration document and
-///         take their name from it, because two houses run different document names and a hardcoded path would work
-///         in one and quietly fail in the other. That directory is also the only place on a Home Assistant box that
-///         survives a redeploy.
-///     </para>
-///     <para>
-///         <b>A torn set is recoverable in a way a torn configuration would not be.</b> Per-entity data is
-///         independent: a file that failed to write costs the entities in it and nothing else, and they degrade to
-///         "unknown" rather than to "dead". That is what makes splitting the cache across files safe at all, and it
-///         is why the loader reads every file it can and shrugs at the rest instead of refusing the whole load.
-///     </para>
-///     <para>
-///         <b>The set of files is discovered, not declared.</b> Buckets are device classes now, so the store cannot
-///         know the names in advance and does not try: a load reads whatever matches the naming convention in the
-///         directory. That is also what makes the upgrade from the pre-split layout free — the old
-///         <c>.last-seen.other.json</c> is simply one of the files found, its records are read, and once the census
-///         has re-keyed them by class the emptied bucket takes its own file away.
-///     </para>
+///     Files are discovered from the directory, never composed from a list of buckets; a bucket is a device class, so
+///     the names are not known in advance. They sit beside the configuration document and take their stem from it,
+///     because two houses run different document names and that directory is the only path on a Home Assistant box
+///     that survives a redeploy.
 /// </remarks>
 public sealed class LastSeenStore
 {
@@ -79,7 +48,7 @@ public sealed class LastSeenStore
 
 	private readonly ILogger<LastSeenStore> _logger;
 
-	// "b1.last-seen." — everything before the bucket token. Two hosts sharing a directory cannot collide.
+	// Everything before the bucket token, e.g. "b1.last-seen.". Two hosts sharing a directory cannot collide.
 	private readonly string _prefix;
 
 	// Serialises the flush against a load, which only overlap at start-up but would overlap badly.
@@ -88,12 +57,7 @@ public sealed class LastSeenStore
 	/// <summary>
 	///     Creates a store whose files sit beside <paramref name="configFilePath"/>.
 	/// </summary>
-	/// <param name="configFilePath">
-	///     The configuration document's path, from <see cref="Hosting.LightingConfigStore.FilePath"/>. Only its
-	///     directory and its file name stem are used; the file itself is never read or written by this class.
-	/// </param>
-	/// <param name="logger">Where read and write failures are reported. They are always warnings, never faults.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="logger"/> is <c>null</c>.</exception>
+	/// <remarks>Only the directory and stem of the path are used. The configuration file itself is never touched here.</remarks>
 	/// <exception cref="ArgumentException"><paramref name="configFilePath"/> is blank or has no directory.</exception>
 	public LastSeenStore(string configFilePath, ILogger<LastSeenStore> logger)
 	{
@@ -106,7 +70,7 @@ public sealed class LastSeenStore
 		DirectoryPath = Path.GetDirectoryName(full)
 			?? throw new ArgumentException($"'{configFilePath}' has no directory to write beside.", nameof(configFilePath));
 
-		// The stem, so b1.yaml gets b1.last-seen.motion.json: the files sort next to the document they belong to.
+		// b1.yaml gives b1.last-seen.motion.json, so the files sort next to the document they belong to.
 		string stem = Path.GetFileNameWithoutExtension(full);
 		if (stem.Length == 0)
 			stem = "adaptive-lighting";
@@ -114,45 +78,23 @@ public sealed class LastSeenStore
 		_prefix = stem + NameInfix;
 	}
 
-	/// <summary>The directory the cache files live in — the configuration document's own.</summary>
+	/// <summary>The directory the cache files live in: the configuration document's own.</summary>
 	public string DirectoryPath { get; }
 
-	/// <summary>
-	///     Every cache file currently on disk, in name order. A path, not a secret: safe to log and worth logging.
-	/// </summary>
-	/// <remarks>
-	///     Read from the directory rather than composed from a list of buckets, because there is no such list any
-	///     more — a bucket exists when an entity is in it and its file exists only while that is true.
-	/// </remarks>
+	/// <summary>Every cache file currently on disk, in name order.</summary>
 	public IReadOnlyList<string> FilePaths => [.. EnumerateFiles()];
 
-	/// <summary>
-	///     The file a bucket is written to.
-	/// </summary>
-	/// <param name="bucket">The bucket key. Sanitised on the way into the name; see <see cref="LastSeenBuckets.FileToken"/>.</param>
-	/// <returns>Its absolute path. Distinct buckets always give distinct paths.</returns>
+	/// <summary>The absolute path a bucket is written to. Distinct buckets always give distinct paths.</summary>
 	public string PathFor(string? bucket) =>
 		Path.Combine(DirectoryPath, _prefix + LastSeenBuckets.FileToken(bucket) + Extension);
 
 	/// <summary>
-	///     Reads every cache file and merges them.
+	///     Reads every cache file and merges them. Never throws; an unreadable file just leaves its entities unknown.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         <b>Never throws.</b> A missing file is a first run. An unreadable or corrupt one is a warning and its
-	///         entities are simply unknown — which is the safe degradation, because a caller that reads "unknown" as
-	///         "dead" would turn a deleted file into a dark house, and <see cref="IEntityLastSeen"/> says so in as
-	///         many words.
-	///     </para>
-	///     <para>
-	///         <b>Duplicates are settled by last write.</b> An entity whose bucket changed — a device class can move
-	///         when an integration is updated, and every record in a pre-split <c>other</c> file changes bucket on
-	///         the first census after an upgrade — is written to its new file and removed from its old one, but a
-	///         crash between those two writes can leave it in both. The entry from the more recently written file
-	///         wins, and the next flush removes the loser, so the state is self-healing rather than sticky.
-	///     </para>
+	///     An entity found in two files is settled by the newer file's SavedAt. That happens when a crash lands between
+	///     the write to its new bucket and the rewrite of its old one; the next flush removes the loser.
 	/// </remarks>
-	/// <returns>The merged records and what it took to get them.</returns>
 	public LastSeenCacheLoad Load()
 	{
 		lock (_gate)
@@ -229,26 +171,13 @@ public sealed class LastSeenStore
 	}
 
 	/// <summary>
-	///     Writes one bucket, keeping the previous version as <c>.bak</c> — or removes its file when it is empty.
+	///     Writes one bucket via temp file and <c>.bak</c>, or removes its file when the document is empty.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         <b>An empty bucket has no file.</b> Buckets are device classes now, so they come and go with the
-	///         hardware: the last battery sensor leaving the house would otherwise leave a husk of a file behind for
-	///         ever, and a folder of husks is exactly the thing splitting the cache was meant to make readable. It is
-	///         also how the pre-split <c>other</c> file disappears — once the census has re-filed its records by
-	///         class, the bucket is empty and the file goes with it.
-	///     </para>
-	///     <para>
-	///         Reports failure rather than throwing. This is a cache: a read-only <c>/config</c>, a full disk or a
-	///         permissions mistake must cost the history and nothing else — never the lighting, and never the timer
-	///         this is called from.
-	///     </para>
+	///     An empty bucket has no file. Buckets come and go with the hardware, and that removal is also how the
+	///     pre-split catch-all file disappears once the census has re-filed its records. Reports failure, never throws:
+	///     it is called from a timer, and a read-only /config must cost history and nothing else.
 	/// </remarks>
-	/// <param name="bucket">Which bucket is being written.</param>
-	/// <param name="document">Its contents. An empty one removes the file instead of writing a husk.</param>
-	/// <returns><c>true</c> when the disk agrees with the bucket afterwards.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="document"/> is <c>null</c>.</exception>
 	public bool TrySave(string bucket, LastSeenDocument document)
 	{
 		ArgumentNullException.ThrowIfNull(document);
@@ -260,8 +189,7 @@ public sealed class LastSeenStore
 			if (document.Entities.Count == 0)
 				return TryRemove(path);
 
-			// A random temp name rather than a fixed ".tmp": two writers on a fixed name would have the second
-			// truncate the first's file out from under it, which is the exact failure the temp file prevents.
+			// Random temp name, not a fixed ".tmp": on a fixed name a second writer truncates the first's file.
 			string temporary = Path.Combine(DirectoryPath, $".{Path.GetFileName(path)}.{Path.GetRandomFileName()}.tmp");
 
 			try
@@ -270,8 +198,8 @@ public sealed class LastSeenStore
 				File.WriteAllText(temporary, JsonSerializer.Serialize(document, LastSeenDocument.SerializerOptions), Utf8NoBom);
 
 				if (File.Exists(path))
-					// One call: replace the target and move the old contents to the backup. Copying to .bak first
-					// would leave a window in which the backup is the only copy.
+					// One call replaces the target and moves the old contents to .bak. Copying to .bak first would
+					// leave a window in which the backup is the only copy.
 					File.Replace(temporary, path, path + BackupSuffix, ignoreMetadataErrors: true);
 				else
 					File.Move(temporary, path);
@@ -297,10 +225,8 @@ public sealed class LastSeenStore
 	///     Every file in the directory that looks like one of this store's.
 	/// </summary>
 	/// <remarks>
-	///     The pattern excludes both of the things that live alongside a cache file: a <c>.bak</c> does not end in
-	///     <c>.json</c>, and an in-flight temp file starts with a dot rather than with the stem. Names are matched
-	///     case-insensitively because most file systems this runs on are, and a file the operating system will hand
-	///     back under a different case is still this store's file.
+	///     The pattern excludes the two neighbours of a cache file: a .bak does not end in .json, and an in-flight temp
+	///     file starts with a dot instead of the stem. Matched case-insensitively; the file systems this runs on are.
 	/// </remarks>
 	private IEnumerable<string> EnumerateFiles()
 	{
@@ -314,7 +240,7 @@ public sealed class LastSeenStore
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{
-			// An unreadable directory is a first run as far as anything downstream is concerned: unknown, not dead.
+			// An unreadable directory reads downstream as a first run: unknown, not dead.
 			_logger.LogWarning(exception, "Could not list the last-seen cache files under {Directory}; every entity starts as unknown.", DirectoryPath);
 			return [];
 		}
@@ -330,14 +256,9 @@ public sealed class LastSeenStore
 		&& fileName.EndsWith(Extension, StringComparison.OrdinalIgnoreCase);
 
 	/// <summary>
-	///     Which bucket a loaded file holds: what it says it holds, or failing that what its name suggests.
+	///     Which bucket a loaded file holds: what the document says, falling back to what its name suggests.
 	/// </summary>
-	/// <remarks>
-	///     The document is preferred because the file name is a sanitised form of the key and can be fingerprinted,
-	///     so it is lossy by design. The name is the fallback for a file whose body lost the field — hand-edited, or
-	///     written by a build that spelled it differently — because filing such a record under its own name is
-	///     better than sweeping it into the catch-all.
-	/// </remarks>
+	/// <remarks>The document wins because the file name is sanitised and possibly fingerprinted, so it is lossy.</remarks>
 	private string BucketOf(LastSeenDocument document, string path) =>
 		LastSeenBuckets.NormaliseKey(document.Bucket) is { Length: > 0 } declared
 			? declared
@@ -359,7 +280,7 @@ public sealed class LastSeenStore
 		}
 	}
 
-	/// <summary>Takes an emptied bucket's file away, and its backup with it. Reports failure rather than throwing.</summary>
+	/// <summary>Takes an emptied bucket's file away, and its backup with it. Reports failure, never throws.</summary>
 	private bool TryRemove(string path)
 	{
 		try
@@ -367,8 +288,7 @@ public sealed class LastSeenStore
 			if (File.Exists(path))
 				File.Delete(path);
 
-			// The backup of an empty bucket is a backup of nothing anybody can use: the in-memory set already holds
-			// every record that was in it, so keeping it would only be a file nobody reads and nobody dares delete.
+			// The in-memory set already holds every record the emptied bucket had, so its .bak backs up nothing.
 			if (File.Exists(path + BackupSuffix))
 				File.Delete(path + BackupSuffix);
 

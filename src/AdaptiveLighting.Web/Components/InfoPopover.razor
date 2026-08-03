@@ -1,20 +1,9 @@
 @*
-	The (i) beside a control: a one-line label stays visible, and this reveals the longer "what it does and
-	why you'd change it".
+	The (i) beside a control, revealing the longer "what it does and why you'd change it".
 
-	A button, not a hover title: a phone has no hover, and a keyboard reaches a button. The open panel is a
-	small floating card on a desktop; under 560px it becomes a fixed sheet pinned above the bottom edge of the
-	screen, because an absolutely positioned card anchored to an icon near the screen edge is a card half off
-	the screen. Both are plain CSS — no script, so nothing a CSP could object to. Escape closes it, clicking
-	the icon again closes it, and the sheet carries its own close button for thumbs.
-
-	AND CLICKING ANYWHERE ELSE CLOSES IT, which is the thing it was missing. The panel is not in the flow —
-	that is what lets it be wider than the (i) and land where it can be read — so it paints over whatever
-	follows, and on a phone the sheet covers the bottom of the screen outright. A reader who has finished with
-	it reaches for the page, not for a Close button, and until now that press did nothing: the panel stayed
-	over the field they were reaching for. The scrim below is that press. It is a plain element, not script,
-	so the no-JS promise above still holds; it costs the first click after reading, which is the ordinary
-	bargain of every dismissable overlay and much cheaper than a panel that will not go away.
+	A button, not a hover title, so a phone and a keyboard both reach it. The panel is a floating card
+	on a desktop and a fixed bottom sheet under 560px. All plain CSS, no script: nothing for the CSP to
+	refuse. Escape, the icon, the Close button and the scrim all close it.
 *@
 
 <span class="info" @onkeydown="OnKeyDown">
@@ -28,16 +17,12 @@
 	@if (_open)
 	{
 		@*
-			Behind the panel and in front of everything else. A span rather than a button, and aria-hidden,
-			because it is not a control anybody should meet: Escape and the panel's own Close button are the
-			accessible ways out, and a screen reader announcing an unnamed button between the note and the page
-			is noise.
+			A span and aria-hidden: Escape and the Close button are the accessible ways out, so this need not
+			be a control.
 
-			preventDefault is load-bearing, not tidiness. Nearly every (i) sits inside a <label>, and a click on
-			ANY descendant of a label is forwarded by the browser to the first labelable element inside it —
-			which here is the (i) button itself. Without this, the scrim closed the panel and the forwarded
-			click immediately reopened it, so the press looked like it did nothing at all. Cancelling the
-			default action cancels the label's activation behaviour, which is what that forwarding is.
+			preventDefault is load-bearing. Nearly every (i) sits inside a <label>, and a click on any
+			descendant of a label is forwarded to the first labelable element inside it, which here is the (i)
+			button. Without it the scrim closes the panel and the forwarded click reopens it at once.
 		*@
 		<span class="info-scrim" aria-hidden="true" @onclick="Close" @onclick:preventDefault="true"></span>
 
@@ -50,7 +35,7 @@
 </span>
 
 @code {
-	/// <summary>What the icon explains — usually the field's label. Titles the panel and names the icon for a screen reader.</summary>
+	/// <summary>What the icon explains. Titles the panel and names the icon for a screen reader.</summary>
 	[Parameter, EditorRequired]
 	public string Label { get; set; } = "";
 
@@ -62,13 +47,7 @@
 
 	private void Toggle() => _open = !_open;
 
-	/// <summary>
-	///     Shuts the panel, whatever it was doing.
-	/// </summary>
-	/// <remarks>
-	///     Separate from <see cref="Toggle"/> on purpose: the scrim only ever closes, and a scrim wired to the
-	///     toggle would reopen the panel on a second stray click.
-	/// </remarks>
+	/// <summary>Shuts the panel. Separate from <see cref="Toggle"/>: a scrim wired to the toggle would reopen it.</summary>
 	private void Close() => _open = false;
 
 	private void OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)

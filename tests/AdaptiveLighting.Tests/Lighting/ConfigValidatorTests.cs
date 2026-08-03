@@ -3,12 +3,12 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     What the validator refuses outright, what it merely reports against one area, and the difference.
+///     What the validator refuses outright, what it reports against one area, and the difference.
 /// </summary>
 /// <remarks>
-///     The split is the whole design: a document-level problem means nobody thought about this config and the
-///     app should show up dead in HA; a referential problem — an entity renamed under us — must cost that one
-///     area rather than the house.
+///     A document error stops the engine; a referential error, such as an entity renamed under us, costs that
+///     one area. The validator is pure: it cannot run discovery, so it never refuses over a sensor a room may
+///     find at runtime.
 /// </remarks>
 [TestClass]
 public sealed class ConfigValidatorTests
@@ -28,15 +28,9 @@ public sealed class ConfigValidatorTests
 	// ===================== the outdoor sensor stopped being a silent fallback =====================
 
 	/// <summary>
-	///     <b>A document can now mean something different from what it used to, and this is where it is told so.</b>
+	///     The outdoor sensor was once handed to every room with no lux sensor of its own; it is opt-in now. A
+	///     document written under the old rule looks identical and behaves differently.
 	/// </summary>
-	/// <remarks>
-	///     The outdoor sensor used to be handed to every room that resolved no lux sensor of its own. It is now an
-	///     opt-in per room, so a document written under the old rule looks identical and behaves differently: the
-	///     rooms that used to gate on the outdoor reading now have none, and light on movement. A warning rather
-	///     than a migration — the validator is pure and cannot know which rooms will discover a sensor of their
-	///     own, and rewriting somebody's file to preserve a behaviour they were suffering under is not help.
-	/// </remarks>
 	[TestMethod]
 	public void An_Outdoor_Sensor_No_Room_Follows_Is_Warned_About_As_A_Change_Of_Meaning()
 	{
@@ -63,7 +57,6 @@ public sealed class ConfigValidatorTests
 			ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("no room follows it", StringComparison.Ordinal)));
 	}
 
-	/// <summary>The mirror case: a room following a sensor the house does not name has asked for nothing.</summary>
 	[TestMethod]
 	public void Following_An_Outdoor_Sensor_The_House_Does_Not_Name_Warns_Per_Room()
 	{
@@ -78,7 +71,6 @@ public sealed class ConfigValidatorTests
 			"the room believes itself gated and is not, which is worth naming the room over");
 	}
 
-	/// <summary>A document that names no outdoor sensor at all gains nothing from any of this.</summary>
 	[TestMethod]
 	public void A_Document_With_No_Outdoor_Sensor_Is_Untouched_By_The_Opt_In()
 	{
@@ -93,19 +85,13 @@ public sealed class ConfigValidatorTests
 		Assert.IsFalse(result.IsValid, "with no periods the engine could never pick a target");
 		Assert.IsTrue(result.Errors.Any(e => e.Contains("Periods", StringComparison.Ordinal)));
 
-		// Deliberately NOT an error. An empty area list is where a new installation starts, before discovery has
-		// run - and where a household ends up after removing every room on purpose. The engine runs and commands
-		// nothing, which is a fine state to be in; refusing the document would stop the app and announce
-		// "document-level errors" to somebody whose only sin is not having configured anything yet.
+		// An empty area list is where a new installation starts, before discovery has run.
 		Assert.IsFalse(result.Errors.Any(e => e.Contains("areas", StringComparison.OrdinalIgnoreCase)),
 			"an empty area list is a warning, not a document error");
 		Assert.IsTrue(result.Warnings.Any(w => w.Contains("No rooms yet", StringComparison.Ordinal)));
 	}
 
-	/// <summary>
-	///     Empty is the default and means <see cref="GlobalConfig.DefaultMotionDeviceClasses"/>, so it must not be
-	///     an error. It used to be, which would now reject every config that did not fight the binder.
-	/// </summary>
+	/// <summary>Empty is the default and means <see cref="GlobalConfig.DefaultMotionDeviceClasses"/>.</summary>
 	[TestMethod]
 	public void An_Empty_MotionDeviceClasses_Is_Not_An_Error()
 	{
@@ -196,9 +182,8 @@ public sealed class ConfigValidatorTests
 	// ===================== the include label =====================
 
 	/// <summary>
-	///     A warning, never an error. The filter fails closed one room at a time — each skipped room already says
-	///     its lights carry no such label — so the house degrades the ordinary way and the document stays saveable.
-	///     What no per-room message can say is that one typo at the top of the file is behind all of them.
+	///     The label filter fails closed one room at a time, and each skipped room says so itself. Only this
+	///     warning can say that one typo at the top of the file is behind all of them.
 	/// </summary>
 	[TestMethod]
 	public void An_Include_Label_Nothing_Carries_Is_A_Warning_Not_An_Error()
@@ -270,11 +255,6 @@ public sealed class ConfigValidatorTests
 
 	// ===================== the daylight brightness curve =====================
 
-	/// <summary>
-	///     Checked whether or not the feature is switched on, exactly as <c>LuxThreshold</c> is checked for an area
-	///     gating on the sun alone: an inverted pair of anchors is a mistake in the document, and it is no less a
-	///     mistake for being inert until somebody flips the switch.
-	/// </summary>
 	[TestMethod]
 	public void Inverted_Anchors_Are_Rejected_Even_With_The_Feature_Off()
 	{
@@ -345,11 +325,6 @@ public sealed class ConfigValidatorTests
 		StringAssert.Contains(result.ToString(), "Gang", "the household needs to know which room to go and fix");
 	}
 
-	/// <summary>
-	///     Degrades rather than breaks — a room with no reading simply keeps the schedule's brightness — so it is a
-	///     warning. The validator is pure and cannot run discovery, so it must not refuse a document over a sensor
-	///     the room may well find at runtime.
-	/// </summary>
 	[TestMethod]
 	public void Switching_It_On_With_No_Lux_Sensor_Named_Anywhere_Only_Warns()
 	{
@@ -363,14 +338,9 @@ public sealed class ConfigValidatorTests
 	}
 
 	/// <summary>
-	///     A house-wide outdoor sensor answers the warning only once a room says it reads it.
+	///     The daylight curve reads whatever the darkness gate reads, so an outdoor sensor no room follows feeds
+	///     the curve nothing and the warning still stands.
 	/// </summary>
-	/// <remarks>
-	///     <b>This test's contract changed, and the name says how.</b> Naming the sensor used to be enough, because
-	///     it reached every sensorless room automatically. That fallback is gone — a room now opts in — and the
-	///     daylight curve reads whatever the darkness gate reads, so a house that names an outdoor sensor no room
-	///     follows feeds the curve nothing at all and the warning is still earned.
-	/// </remarks>
 	[TestMethod]
 	public void A_House_Wide_Outdoor_Sensor_Answers_That_Warning_Once_A_Room_Follows_It()
 	{
@@ -422,7 +392,6 @@ public sealed class ConfigValidatorTests
 		Assert.IsTrue(result.Warnings.Any(w => w.Contains("never raise", StringComparison.Ordinal)));
 	}
 
-	/// <summary>The two live houses: a document that has never heard of the feature must gain neither error nor warning.</summary>
 	[TestMethod]
 	public void A_Document_That_Never_Heard_Of_The_Feature_Is_Untouched_By_It()
 	{
@@ -488,8 +457,7 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void An_Unknown_Global_Entity_Is_A_Document_Error()
 	{
-		// A watched-person entity HA does not know is a document-level error (unlike the kill switch, which fails
-		// open and only warns — see KillSwitch_Unknown_OnlyWarns_NeverStopsTheDocument).
+		// Asymmetric with the kill switch, which fails open and only warns.
 		var config = Minimal();
 		config.Global.Persons = ["person.ghost"];
 
@@ -510,10 +478,6 @@ public sealed class ConfigValidatorTests
 
 	// ===================== a room's own levels =====================
 
-	/// <summary>
-	///     A period name that matches nothing is a warning and the row survives — it is nearly always a rename,
-	///     and deleting somebody's levels on a rename is the worse failure by a distance.
-	/// </summary>
 	[TestMethod]
 	public void Levels_Naming_A_Missing_Period_Warn_And_Are_Never_Refused()
 	{
@@ -551,18 +515,10 @@ public sealed class ConfigValidatorTests
 	}
 
 	/// <summary>
-	///     A cleared row does not count as the row that won, because the calculator does not treat it as one.
+	///     Regression: the validator counted an empty row into <c>seen</c> while
+	///     <c>CircadianCalculator.LevelsOf</c> skips it. Reachable only on a hand-edited file, since <c>Save</c>
+	///     normalises empty rows away before validating.
 	/// </summary>
-	/// <remarks>
-	///     <b>The two sides used to contradict each other.</b> <c>CircadianCalculator.LevelsOf</c> skips empty rows
-	///     before taking the first match, so this room genuinely runs at 8 %; the validator counted the empty row
-	///     into <c>seen</c> and warned that "the first one wins and the rest are ignored", telling the reader the
-	///     room was following the schedule. Both behaviours were pinned by tests, in opposite directions.
-	///     <para>
-	///         Only reachable on a hand-edited file — <c>Save</c> normalises empty rows away before validating —
-	///         which is exactly the file whose owner has no other way to find out.
-	///     </para>
-	/// </remarks>
 	[TestMethod]
 	public void A_Cleared_Row_Does_Not_Shadow_The_Real_One_Below_It()
 	{
@@ -616,7 +572,6 @@ public sealed class ConfigValidatorTests
 		Assert.IsTrue(result.Errors.Any(e => e.Contains("ColorTempKelvin 42", StringComparison.Ordinal)));
 	}
 
-	/// <summary>An unreadable number is unreadable whether or not its period still exists.</summary>
 	[TestMethod]
 	public void A_Rooms_Out_Of_Range_Value_Is_Still_An_Error_When_Its_Period_Has_Been_Renamed()
 	{
@@ -697,12 +652,10 @@ public sealed class ConfigValidatorTests
 		var config = WithHouseMode();
 		config.Periods.Add(new TimePeriodConfig { Name = "film", SetsMode = "Film", Start = "20:00" });
 
-		// "Film" is not a configured option, but the select reports it live → valid: the engine can select it, and
-		// requiring it be tagged first would deadlock the save (tagging is itself a save).
+		// Requiring the option be tagged first would deadlock the save: tagging is itself a save.
 		Assert.IsTrue(ConfigValidator.Validate(config, liveSelectOptions: ["Film"]).IsValid,
 			"a SetsMode naming a live select option is legitimate even before it is tagged a Kind");
 
-		// Without the live option, the configured-only rule still refuses it.
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid, "unknown to both configured and live options → error");
 	}
 
@@ -788,7 +741,6 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void StaleResetOnPeriodStart_OnANormalOption_Warns_NotErrors()
 	{
-		// The field is inert on a Normal option, so a dangling period name must not make the whole document unsaveable.
 		var config = WithHouseMode();
 		config.Global.HouseMode!.OptionFor("Normal")!.ResetOnPeriodStart = "gone";
 
@@ -800,7 +752,7 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void AnAwayOrGuestOption_WithNoResetTrigger_Warns()
 	{
-		// WithHouseMode's Borte (Away) carries no reset trigger, so it would stay active until a manual change.
+		// WithHouseMode's Borte carries no reset trigger.
 		var result = ConfigValidator.Validate(WithHouseMode());
 
 		Assert.IsTrue(result.IsValid, "a triggerless away option is legal");
@@ -860,23 +812,20 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void SleepClamp_MustResolveWhenLoadBearing()
 	{
-		// Load-bearing (an area respects sleep), resolvable via the "night" period Minimal() carries → valid.
 		var resolvable = WithHouseMode();
 		resolvable.Areas[0].RespectSleepMode = true;
 		Assert.IsTrue(ConfigValidator.Validate(resolvable).IsValid, "the 'night' period resolves the clamp");
 
-		// Load-bearing, but nothing resolves the clamp (no ClampPeriod, no SetsMode period, no 'night') → error.
+		// Nothing resolves the clamp: no ClampPeriod, no SetsMode period, no "night".
 		var unresolvable = WithHouseMode();
 		unresolvable.Areas[0].RespectSleepMode = true;
 		unresolvable.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" }];
 		Assert.IsFalse(ConfigValidator.Validate(unresolvable).IsValid, "nothing resolves the clamp for a load-bearing sleep path");
 
-		// Not load-bearing (no area respects sleep) → valid even though nothing resolves.
 		var notBearing = WithHouseMode();
 		notBearing.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" }];
 		Assert.IsTrue(ConfigValidator.Validate(notBearing).IsValid, "sleep is not load-bearing, so the missing clamp is inert");
 
-		// Load-bearing, resolvable via an explicit ClampPeriod → valid.
 		var viaClamp = WithHouseMode();
 		viaClamp.Areas[0].RespectSleepMode = true;
 		viaClamp.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "dim", Start = "22:00" }];
@@ -887,9 +836,7 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void KillSwitch_Unknown_OnlyWarns_NeverStopsTheDocument()
 	{
-		// The engine fails open on a missing kill switch, so an unknown one — explicit or defaulted — must never be
-		// a document-stopping error, only a warning. (An explicit id that no longer exists is exactly what a renamed
-		// app switch leaves behind.)
+		// The engine fails open on a missing kill switch, so an unknown one never stops the document.
 		var explicitUnknown = Minimal();
 		explicitUnknown.Global.KillSwitchEntity = "input_boolean.ghost";
 		var explicitResult = ConfigValidator.Validate(explicitUnknown, knownEntityIds: ["input_boolean.real"]);
@@ -908,7 +855,7 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void PlainDuplicatePeriodStarts_AreRejected_Again()
 	{
-		// With one shared table there is no per-mode partitioning: a fixed-start collision is a document error.
+		// One shared period table, so there is no per-mode partitioning to excuse a collision.
 		var colliding = WithHouseMode();
 		colliding.Periods =
 		[
@@ -987,14 +934,9 @@ public sealed class ConfigValidatorTests
 	}
 
 	/// <summary>
-	///     One helper cannot be both the house mode and the time of day.
+	///     Both are <c>input_select</c>s, so every other rule passes. Under Adaptive-lighting authority the mirror
+	///     writes the period to this entity every tick, over the mode that auto-away and <c>SetsMode</c> wrote.
 	/// </summary>
-	/// <remarks>
-	///     Both are <c>input_select</c>s, so every other rule passes and the document looks fine. What follows is
-	///     not cosmetic: under Adaptive-lighting authority the mirror writes the period's option to this entity on
-	///     every tick, and that is the same entity the auto-away write, <c>SetsMode</c> and the resets set a MODE
-	///     on — so Away and Sleep would be overwritten within a tick of being set. Lights that will not go off.
-	/// </remarks>
 	[TestMethod]
 	public void PeriodSelect_OnTheHouseModesOwnHelper_IsADocumentError()
 	{
@@ -1016,22 +958,14 @@ public sealed class ConfigValidatorTests
 	}
 
 	/// <summary>
-	///     Clearing a mapping in the editor must leave a document that still saves.
+	///     Regression: <c>IsEmpty</c> needs blank Value and blank Period, so a row emptied of only its period
+	///     survived the normaliser and became a document error that blocked every save on the page.
 	/// </summary>
-	/// <remarks>
-	///     <b>The dead end this pins.</b> The panel offers "(none — this option changes nothing)" as a legitimate
-	///     pick. Emptying only the row's period left <c>Value</c> in place, and <c>IsEmpty</c> is blank-Value
-	///     <i>and</i> blank-Period — so the normaliser kept the row and the validator raised a document-level
-	///     error, which <c>Save</c> refuses on. Every save on the whole Configuration page then failed, including
-	///     unrelated room edits; and clearing the helper to back out hid the panel while the error stayed, leaving
-	///     no control on screen able to undo it. The row is removed now, and this is the assertion that says so.
-	/// </remarks>
 	[TestMethod]
 	public void PeriodSelect_AClearedRow_NormalisesAwayInsteadOfBlockingEverySave()
 	{
 		AdaptiveLightingConfig config = WithPeriodSelect(options: [("Dag", "day")]);
 
-		// What the editor now does when the household picks "this option changes nothing".
 		config.Global.PeriodSelect!.Options.Clear();
 
 		ConfigNormalizer.Normalize(config);
@@ -1041,13 +975,9 @@ public sealed class ConfigValidatorTests
 	}
 
 	/// <summary>
-	///     Mappings with no entity are a household told nothing while the engine ignores what it said.
+	///     Every other branch is gated on the entity being present, and the normaliser keeps the block while rows
+	///     exist. Without this rule the reader is never built and nothing says so.
 	/// </summary>
-	/// <remarks>
-	///     Every other branch is gated on the entity being present, and the normaliser cannot drop the block because
-	///     rows exist — so without this rule the document says Home Assistant owns the time of day, the reader is
-	///     never built, the schedule quietly stays in charge, and nothing anywhere says so.
-	/// </remarks>
 	[TestMethod]
 	public void PeriodSelect_WithMappingsButNoEntity_Warns()
 	{
@@ -1068,8 +998,8 @@ public sealed class ConfigValidatorTests
 	}
 
 	/// <summary>
-	///     Harsher than the same shape on a room's levels, and deliberately: a levels row that resolves to nothing
-	///     costs one room one preference, whereas this leaves every room unable to place the selected time of day.
+	///     Harsher than the same shape on a room's levels, which only warns: an unresolvable mapping here leaves
+	///     every room unable to place the selected time of day.
 	/// </summary>
 	[TestMethod]
 	public void PeriodSelect_MappingToNoConfiguredPeriod_IsADocumentError()
@@ -1102,10 +1032,6 @@ public sealed class ConfigValidatorTests
 			"a row with no Period means nothing when it is selected");
 	}
 
-	/// <summary>
-	///     A rename in Home Assistant, not a mistake in this document — and erroring would make the document
-	///     unsaveable from the very page that exists to fix it.
-	/// </summary>
 	[TestMethod]
 	public void PeriodSelect_ValueTheLiveSelectNoLongerOffers_IsAWarning()
 	{
@@ -1120,8 +1046,7 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void PeriodSelect_LiveOptionsAreNotCheckedAgainstTheHouseModeSelect()
 	{
-		// The house-mode select's live options are Hjemme/Borte; the period select's are Dag/Natt. Reusing one
-		// list for both would report every row of each as renamed.
+		// Two separate live lists. Reusing one for both reports every row of each as renamed.
 		ValidationResult result = ConfigValidator.Validate(
 			WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]),
 			liveSelectOptions: ["Hjemme", "Borte"],
@@ -1149,10 +1074,6 @@ public sealed class ConfigValidatorTests
 			"the engine owns the periods and simply mirrors nothing; that is not a misconfiguration");
 	}
 
-	/// <summary>
-	///     A warning rather than an error, on the argument the outdoor lux sensor gets: the feature fails open in
-	///     both directions, so the house degrades to the schedule rather than going dark.
-	/// </summary>
 	[TestMethod]
 	public void PeriodSelect_EntityHomeAssistantDoesNotKnow_IsAWarning()
 	{

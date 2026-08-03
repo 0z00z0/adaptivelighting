@@ -8,9 +8,8 @@ using Microsoft.Reactive.Testing;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The mode brain (09 §3.2): reading the select, deriving kind/scene, and the set → retain → reset lifecycle —
-///     period-entry SetsMode, the three reset triggers (period, presence with grace, time), and the master-switch
-///     default. Everything runs on a virtual <see cref="TestScheduler"/> and a <see cref="FakeHaContext"/>.
+///     Reading the mode select, deriving kind and scene, and the set, retain and reset lifecycle. Everything runs
+///     on a virtual <see cref="TestScheduler"/> and a <see cref="FakeHaContext"/>.
 /// </summary>
 [TestClass]
 public sealed class ModeMonitorTests
@@ -46,15 +45,12 @@ public sealed class ModeMonitorTests
 	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor, FakeLastPeriodStore LastPeriod);
 
 	/// <summary>
-	///     The note recording which period the last run ended in, in memory.
+	///     The note recording which period the last run ended in, in memory. A null <paramref name="recalled"/> is
+	///     a first run, a deleted note or a corrupt one; <see cref="LastPeriodStore"/> does not tell those apart.
 	/// </summary>
-	/// <remarks>
-	///     <paramref name="recalled"/> is what the previous run left: <c>null</c> is a first run, a deleted note or a
-	///     corrupt one, which <see cref="LastPeriodStore"/> deliberately does not tell apart.
-	/// </remarks>
 	private sealed class FakeLastPeriodStore(string? recalled = null) : ILastPeriodStore
 	{
-		/// <summary>Every period written, in order, so "written once on a change" can be asserted.</summary>
+		/// <summary>Every period written, in order.</summary>
 		public List<string> Saved { get; } = [];
 
 		public string? Load() => recalled;
@@ -66,7 +62,7 @@ public sealed class ModeMonitorTests
 		}
 	}
 
-	/// <summary>A note that throws on both operations, standing in for any store a host might supply.</summary>
+	/// <summary>A note that throws on both operations.</summary>
 	private sealed class ThrowingLastPeriodStore : ILastPeriodStore
 	{
 		public string? Load() => throw new InvalidOperationException("the note is unreadable");
@@ -250,18 +246,12 @@ public sealed class ModeMonitorTests
 
 	// ---- Restart across a period boundary ------------------------------------------------------
 
-	// 23:30 — half an hour into night, whose SetsMode is Sover. Every restart test starts here and varies only
+	// 23:30, half an hour into night, whose SetsMode is Sover. Every restart test starts here and varies only
 	// which period the note says the previous run ended in.
 	private static readonly DateTimeOffset HalfPastNight = new(2026, 1, 15, 23, 30, 0, TimeSpan.Zero);
 
-	/// <summary>
-	///     A boundary that went by while the engine was stopped applies the new period's mode on the first tick.
-	/// </summary>
-	/// <remarks>
-	///     The defect this pins: entry is edge-triggered, so a boundary crossed during an outage was a boundary
-	///     nothing ever noticed and the house kept its daytime mode until the same hour came round again. The note
-	///     says the last run ended in evening; it is night now, so night began while nothing was watching.
-	/// </remarks>
+	// Entry is edge-triggered, so a boundary crossed during an outage was a boundary nothing noticed, and the
+	// house kept its daytime mode until the same hour came round again.
 	[TestMethod]
 	public void StartAfterABoundaryWentBy_AppliesSetsMode_OnTheFirstTick()
 	{
@@ -274,7 +264,7 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "night began while the engine was down, so night's mode applies");
 	}
 
-	/// <summary>Once, not on every tick — the select's echo is asynchronous, so the flag has to be the guard.</summary>
+	// The select's echo is asynchronous, so the flag has to be the guard, not the select's own value.
 	[TestMethod]
 	public void StartAfterABoundaryWentBy_AppliesSetsMode_OnlyOnce()
 	{
@@ -285,16 +275,7 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "one call, however many ticks pass with HA silent");
 	}
 
-	/// <summary>
-	///     A boundary really did go by, so the new period's mode applies over whatever the select stands on.
-	/// </summary>
-	/// <remarks>
-	///     <b>This is the owner's rule, and it is not the cautious one.</b> An earlier draft wrote only over the
-	///     Normal option, on the ground that a restart cannot tell a deliberate Gjester from a stale one. He chose
-	///     the other trade: a crossed boundary is a real event and the schedule is entitled to act on it, exactly as
-	///     it would have done had the engine been running to watch the boundary arrive. The protection against
-	///     overruling a person is the boundary test itself, not the standing mode.
-	/// </remarks>
+	// The protection against overruling a person is the boundary test, not the standing mode.
 	[TestMethod]
 	public void StartAfterABoundaryWentBy_AppliesSetsMode_OverANonNormalMode()
 	{
@@ -305,13 +286,7 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "night began; night's mode wins over the standing option");
 	}
 
-	/// <summary>
-	///     Restarting inside the period you were already in changes nothing, and a mode set by hand survives.
-	/// </summary>
-	/// <remarks>
-	///     This is the case a deploy actually produces most of the time, several times a day. No boundary went by,
-	///     so there is no event to act on and re-asserting the period's mode would only undo somebody's choice.
-	/// </remarks>
+	// The case a deploy produces most of the time.
 	[TestMethod]
 	public void StartInsideTheSamePeriod_LeavesAHandSetModeAlone()
 	{
@@ -322,14 +297,6 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "same period as when it stopped: nothing happened to act on");
 	}
 
-	/// <summary>
-	///     With no note of the previous run, nothing is applied — not knowing is not knowing a boundary was crossed.
-	/// </summary>
-	/// <remarks>
-	///     A first run, a deleted note and a corrupt one are the same answer, and the safe half is inertia. The cost
-	///     is one missed re-application, after which the note exists; the cost of guessing the other way is a mode
-	///     overwritten on no evidence, on a path a corrupt file could trigger at every single start.
-	/// </remarks>
 	[TestMethod]
 	public void StartWithNoNoteOfThePreviousRun_AppliesNothing()
 	{
@@ -340,12 +307,8 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "nothing is assumed from an absent note");
 	}
 
-	/// <summary>A note that cannot be read or written is inert: it costs the behaviour, never the tick.</summary>
-	/// <remarks>
-	///     <see cref="LastPeriodStore"/> promises never to throw, and the monitor catches anyway — the store is an
-	///     interface a host supplies, and a throw out of <see cref="ModeMonitor.Start"/> or out of the tick would
-	///     take the engine with it. A blank line in a configuration file once did exactly that.
-	/// </remarks>
+	// LastPeriodStore promises never to throw and the monitor catches anyway: the store is an interface a host
+	// supplies, and a throw out of Start or out of the tick takes the engine with it.
 	[TestMethod]
 	public void StartWithAnUnreadableNote_DoesNotThrow_AndAppliesNothing()
 	{
@@ -356,7 +319,6 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "an unreadable note reads as 'we do not know'");
 	}
 
-	/// <summary>The period is written down when it changes, and not on every tick.</summary>
 	[TestMethod]
 	public void ThePeriodIsRecorded_OnceWhenItChanges()
 	{
@@ -372,7 +334,6 @@ public sealed class ModeMonitorTests
 			"one write on the change, and none for the ticks that follow it");
 	}
 
-	/// <summary>A period that sets no mode writes nothing, however the boundary was detected.</summary>
 	[TestMethod]
 	public void StartAfterABoundaryWentBy_WithoutSetsMode_WritesNothing()
 	{
@@ -384,15 +345,8 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(0, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"));
 	}
 
-	/// <summary>
-	///     A restart is not an entry, and the period-start reset must not fire for one.
-	/// </summary>
-	/// <remarks>
-	///     Routing the restart through <see cref="ModeMonitor"/>'s entry path would have been fewer lines and would
-	///     have cancelled a retained Away or Guest mode as a side effect of a deploy. A reset trigger that fires
-	///     because somebody redeployed is not a trigger at all — asserted here with the boundary genuinely crossed,
-	///     so the mode is applied and only the reset is withheld.
-	/// </remarks>
+	// Routing the restart through ModeMonitor's entry path is fewer lines and cancels a retained Away or Guest
+	// mode as a side effect of a deploy.
 	[TestMethod]
 	public void StartAfterABoundaryWentBy_DoesNotFireThePeriodStartReset()
 	{
@@ -408,13 +362,8 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "but the engine restarted mid-night; it did not enter night");
 	}
 
-	/// <summary>
-	///     An unreadable select does not spend the restart's one chance; the mode is applied when it answers.
-	/// </summary>
-	/// <remarks>
-	///     After a Home Assistant restart an <c>input_select</c> can read <c>unavailable</c> for a while, which is
-	///     exactly the moment this rule exists for. Spending the chance on a value nobody could read would waste it.
-	/// </remarks>
+	// After a Home Assistant restart an input_select can read unavailable for a while. The restart's one chance
+	// must not be spent on a value nobody could read.
 	[TestMethod]
 	public void StartAfterABoundaryWentBy_WaitsForASelectThatIsNotAnsweringYet()
 	{
@@ -429,7 +378,6 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "once it answers, the boundary it missed is acted on");
 	}
 
-	/// <summary>A first tick that does cross a boundary is an ordinary entry, and is not doubled by the restart rule.</summary>
 	[TestMethod]
 	public void StartJustBeforeABoundary_EntersNormally_WithoutDoubleSetting()
 	{
@@ -681,9 +629,8 @@ public sealed class ModeMonitorTests
 
 	// ---- what is forcing the mode --------------------------------------------------------------
 	//
-	// The incident behind all of these: a cabin's Away option listed an input_boolean that had been on for hours,
-	// every settings save re-asserted Away, and the only trace was "Everyone left the house" while both person
-	// entities read home. The engine reported a cause it had never checked.
+	// The incident: a cabin's Away option listed an input_boolean that had been on for hours, every settings save
+	// re-asserted Away, and the only trace was "Everyone left the house" while both person entities read home.
 
 	[TestMethod]
 	public void Forced_SelectAlone_ReportsNothingForcing()
@@ -713,7 +660,7 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual("on", forced.EntityState);
 	}
 
-	/// <summary>The sentence that would have ended the incident in seconds, pinned verbatim.</summary>
+	// Pinned verbatim: this sentence is the diagnosis the incident above did not have.
 	[TestMethod]
 	public void Forced_Describe_NamesTheEntityAndItsStateInOneSentence()
 	{
@@ -726,7 +673,6 @@ public sealed class ModeMonitorTests
 			rig.Monitor.Forced!.Describe());
 	}
 
-	/// <summary>Every kind, not only Away: an entity holding the house asleep is the same fault in a different mode.</summary>
 	[TestMethod]
 	public void Forced_WhileEntityOn_ReportsSleepAsReadilyAsAway()
 	{
@@ -762,7 +708,7 @@ public sealed class ModeMonitorTests
 		Advance(rig, TimeSpan.FromHours(7));
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"), "seven quiet hours switched the house");
 
-		// Home Assistant echoes the write back, exactly as it would in the house.
+		// Home Assistant echoes the write back, as it would in the house.
 		rig.Ha.Trigger(Select, "Borte");
 
 		ForcedMode forced = rig.Monitor.Forced!;
@@ -786,8 +732,7 @@ public sealed class ModeMonitorTests
 		rig.Ha.Trigger(Select, "Borte");
 		Assert.IsNotNull(rig.Monitor.Forced);
 
-		// Somebody turns the dial back. The engine's claim on the value goes with it, and a later move onto Borte
-		// by hand is that person's doing rather than the idle rule's.
+		// Somebody turns the dial back, and the engine's claim on the value goes with it.
 		rig.Ha.Trigger(Select, "Hjemme");
 		Assert.IsNull(rig.Monitor.Forced);
 
@@ -834,7 +779,7 @@ public sealed class ModeMonitorTests
 
 		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Kveld"), "20:00 is the evening period, and the select says so");
 
-		// Home Assistant echoes the write back, exactly as it would in the house.
+		// Home Assistant echoes the write back, as it would in the house.
 		rig.Ha.Trigger(PeriodSelect, "Kveld");
 		Advance(rig, TimeSpan.FromMinutes(5));
 
@@ -861,15 +806,8 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Natt"), "and then it is left alone for the rest of the period");
 	}
 
-	/// <summary>
-	///     A select that never echoes is asked again, rather than being written once and abandoned.
-	/// </summary>
-	/// <remarks>
-	///     The deliberate cost of comparing against what the select actually reads instead of remembering what was
-	///     asked for. In the house Home Assistant echoes within milliseconds, so this is one call; the retry is what
-	///     makes an option the select rejects, or a helper that came back on the wrong value, self-correcting rather
-	///     than permanently wrong. The log line is bounded separately, on the distinct option.
-	/// </remarks>
+	// The write compares against what the select reads, not against what was last asked for, so a select that
+	// never echoes is asked again on every tick. The log line is bounded separately, on the distinct option.
 	[TestMethod]
 	public void PeriodSelect_UnderOurAuthority_AsksAgainWhileTheSelectStillDisagrees()
 	{
@@ -882,11 +820,8 @@ public sealed class ModeMonitorTests
 			"a write that landed nowhere is retried, so the mirror cannot be left silently wrong");
 	}
 
-	/// <summary>
-	///     A select somebody moved by hand — or one that came back from a Home Assistant restart on the wrong
-	///     option — is put right rather than left disagreeing with the lights for hours. A remembered "we already
-	///     asked for this" latch would have made both of those permanent.
-	/// </summary>
+	// A remembered "we already asked for this" latch would make a hand-moved select, and one that came back from a
+	// Home Assistant restart on the wrong option, permanently wrong.
 	[TestMethod]
 	public void PeriodSelect_UnderOurAuthority_CorrectsADriftedSelect()
 	{
@@ -914,7 +849,6 @@ public sealed class ModeMonitorTests
 			"no row maps the evening, so there is nothing to write — and guessing at an option is not the answer");
 	}
 
-	/// <summary>The whole of the authority rule, from the outside: Home Assistant's select is never written to.</summary>
 	[TestMethod]
 	public void PeriodSelect_UnderHomeAssistantAuthority_IsNeverWritten()
 	{
@@ -927,10 +861,8 @@ public sealed class ModeMonitorTests
 			"the engine follows this select; writing it would have it chasing its own tail through Home Assistant");
 	}
 
-	/// <summary>
-	///     Under Home Assistant's authority the select <i>is</i> the period boundary, so a period's SetsMode has to
-	///     fire on the flip rather than up to a whole tick later.
-	/// </summary>
+	// Under Home Assistant's authority the select is the period boundary, so SetsMode fires on the flip and not up
+	// to a tick later.
 	[TestMethod]
 	public void PeriodSelect_UnderHomeAssistantAuthority_AFlipFiresSetsMode()
 	{
@@ -951,16 +883,8 @@ public sealed class ModeMonitorTests
 			"and the scheduler's own ticks find the boundary already taken — the flip claimed it");
 	}
 
-	/// <summary>
-	///     Two options mapping to one period are one period: flipping between them re-enters nothing.
-	/// </summary>
-	/// <remarks>
-	///     <b>This test is single-threaded and does not pin the locking.</b> Its remark used to claim it covered the
-	///     "claimed under the lock that reads it" change; it does not — it passes identically against the shape
-	///     before that change, because that shape also recorded the period before returning. The claim was found by
-	///     a review that then showed the locking was still incomplete, which is precisely the false confidence a
-	///     remark like that buys. What this test does pin is in its name, and that is worth having.
-	/// </remarks>
+	// Single-threaded: this pins what its name says and nothing about the locking. A remark here once claimed it
+	// covered the claim-under-the-lock change; it passes identically without that change.
 	[TestMethod]
 	public void PeriodSelect_UnderHomeAssistantAuthority_AFlipWithinOnePeriod_ChangesNothing()
 	{
@@ -990,23 +914,15 @@ public sealed class ModeMonitorTests
 			"an option nothing maps is not an opinion, so the clock's own night boundary still arrives");
 	}
 
-	/// <summary>
-	///     A select that cannot be read is not a period change, and must not latch a mode the household never chose.
-	/// </summary>
-	/// <remarks>
-	///     <b>The asymmetry that makes this a defect rather than a fail-open.</b> When the helper goes unavailable —
-	///     an HA restart, a reload, an edit — the override reads null and the clock answers instead. Levels revert on
-	///     their own the moment it comes back. A <c>SetsMode</c> does not: night latches the house to Sover, and
-	///     "day" normally sets no mode, so nothing puts it right. A household up late, holding the select on Dag at
-	///     23:30, would find the house asleep because a helper blinked.
-	/// </remarks>
+	// The asymmetry: when the helper goes unavailable the override reads null and the clock answers instead.
+	// Levels revert on their own when it comes back; a SetsMode latch does not, because "day" sets no mode.
 	[TestMethod]
 	public void PeriodSelect_UnreadableForAMoment_DoesNotLatchTheClocksPeriodMode()
 	{
 		Rig rig = Started(WithPeriodSelect(PeriodAuthority.HomeAssistant, Norwegian()),
 			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Dag"));
 
-		// The household is holding "Dag" deliberately. The helper drops out, and the clock crosses into night.
+		// The household is holding "Dag" on purpose. The helper drops out, and the clock crosses into night.
 		rig.Ha.SetState(PeriodSelect, "unavailable");
 
 		Advance(rig, TimeSpan.FromHours(4));   // 20:00 → midnight, over the 23:00 boundary
@@ -1080,8 +996,8 @@ public sealed class ModeMonitorTests
 	[TestMethod]
 	public void KillSwitch_DefaultedForcesEnabledFlagPolarity_EvenWhenActiveWhenOffFalse()
 	{
-		// A blank KillSwitchEntity with a defaulted built-in switch: polarity is forced to the enabled-flag reading
-		// (off = muzzled), whatever KillSwitchActiveWhenOff says — that flag only governs an explicit entity.
+		// KillSwitchActiveWhenOff governs an explicit entity only. With a defaulted built-in switch the polarity is
+		// forced to the enabled-flag reading: off means muzzled.
 		var global = new GlobalConfig
 		{
 			KillSwitchEntity = null,
@@ -1103,8 +1019,7 @@ public sealed class ModeMonitorTests
 	[TestMethod]
 	public void Reset_NoOp_WhenNoOptionIsNormal()
 	{
-		// Every option is tagged, so nothing is Normal: a reset trigger has no target and must no-op rather than
-		// clobber the select onto a Sleep/Away option.
+		// Every option is tagged, so nothing is Normal and a reset trigger has no target to write.
 		var mode = new HouseModeConfig
 		{
 			Entity = Select,
@@ -1125,7 +1040,7 @@ public sealed class ModeMonitorTests
 			"no Normal option resolves, so the reset is a no-op — no select_option is dispatched");
 	}
 
-	/// <summary>An <see cref="ILogger"/> that counts warnings, so the once-per-value tripwire can be asserted.</summary>
+	/// <summary>An <see cref="ILogger"/> that counts warnings.</summary>
 	private sealed class CountingLogger : ILogger
 	{
 		public int Warnings { get; private set; }

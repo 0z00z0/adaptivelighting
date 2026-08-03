@@ -4,21 +4,9 @@ using AdaptiveLighting.Engine;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     What a room is called, and in what order that is decided.
+///     What a room is called, and in what order that is decided. Discovery writes only an area id, so the
+///     registry is the only source of a readable name.
 /// </summary>
-/// <remarks>
-///     <para>
-///         The bug this covers was visible on every surface at once: discovery writes only an area id, nothing
-///         asked Home Assistant what the area was called, and the room page's heading, the board's lanes and the
-///         activity log's room column all read the slug — <c>kjeller_bad</c> for a room Home Assistant calls
-///         Kjeller - Bad.
-///     </para>
-///     <para>
-///         Three properties are worth pinning and are pinned here: a stated name still wins, the registry is only
-///         consulted when there is no stated name, and a registry that cannot answer leaves the area id standing
-///         rather than blanking the room.
-///     </para>
-/// </remarks>
 [TestClass]
 public sealed class AreaNamingTests
 {
@@ -35,7 +23,6 @@ public sealed class AreaNamingTests
 
 	// ===================== the order =====================
 
-	/// <summary>The whole point: a room that states nothing is called what Home Assistant calls its area.</summary>
 	[TestMethod]
 	public void A_Room_With_No_Name_Takes_The_Registrys()
 	{
@@ -43,7 +30,6 @@ public sealed class AreaNamingTests
 		Assert.AreEqual("Kjøkken", AreaNaming.DisplayName(new AreaConfig { AreaId = "kjokken" }, Registry()));
 	}
 
-	/// <summary>A name in the document is the owner overruling Home Assistant, and it outranks the registry.</summary>
 	[TestMethod]
 	public void A_Stated_Name_Wins_Over_The_Registry()
 	{
@@ -52,14 +38,13 @@ public sealed class AreaNamingTests
 			AreaNaming.DisplayName(new AreaConfig { AreaId = "kjeller_bad", Name = "Kjellerbadet" }, Registry()));
 	}
 
-	/// <summary>An area the registry does not know keeps its id, which is still a fact about the room.</summary>
 	[TestMethod]
 	public void An_Unknown_Area_Falls_Back_To_Its_Id()
 	{
 		Assert.AreEqual("sykkelbod", AreaNaming.DisplayName(new AreaConfig { AreaId = "sykkelbod" }, Registry()));
 	}
 
-	/// <summary>A room configured with explicit entities and no area at all still has to be called something.</summary>
+	// A room configured with explicit entities has no area at all.
 	[TestMethod]
 	public void A_Room_With_No_Area_Reaches_The_Placeholder()
 	{
@@ -69,10 +54,6 @@ public sealed class AreaNamingTests
 
 	// ===================== a registry that cannot be read =====================
 
-	/// <summary>
-	///     No registry is the state every page is reachable in for the first minute after a restart. It must cost
-	///     the registry's name and nothing else.
-	/// </summary>
 	[TestMethod]
 	public void Without_A_Registry_The_Area_Id_Still_Names_The_Room()
 	{
@@ -80,10 +61,7 @@ public sealed class AreaNamingTests
 		Assert.AreEqual("Stue", AreaNaming.DisplayName(new AreaConfig { AreaId = "stue", Name = "Stue" }, registry: null));
 	}
 
-	/// <summary>
-	///     NetDaemon's registry throws until its first connection completes, and Kestrel serves pages inside that
-	///     window. A room whose name blanked — or a page that failed outright — would be worse than the slug.
-	/// </summary>
+	// NetDaemon's registry throws until its first connection completes, and Kestrel serves pages in that window.
 	[TestMethod]
 	public void A_Registry_That_Throws_Does_Not_Blank_The_Name()
 	{
@@ -92,7 +70,6 @@ public sealed class AreaNamingTests
 			AreaNaming.DisplayName(new AreaConfig { AreaId = "kjeller_bad" }, new ThrowingAreaRegistry()));
 	}
 
-	/// <summary>An area named as an empty string is as good as unnamed — it must not win over the id.</summary>
 	[TestMethod]
 	public void An_Empty_Registry_Name_Is_No_Name()
 	{
@@ -104,15 +81,8 @@ public sealed class AreaNamingTests
 
 	// ===================== a name made only of spaces =====================
 
-	/// <summary>
-	///     Whitespace is not a name, at any step of the order.
-	/// </summary>
-	/// <remarks>
-	///     Only the length was tested before, so a hand-edited <c>Name: "  "</c> outranked both the registry and the
-	///     id and every surface labelled the room with two spaces. It also reached <c>SwitchOnWarning.For</c>, whose
-	///     <c>ThrowIfNullOrWhiteSpace</c> faulted the settings page while it loaded — the page somebody would have
-	///     fixed the name on. Each step now falls through to the next, ending at the caller's placeholder.
-	/// </remarks>
+	// Regression: a hand-edited Name of two spaces used to outrank both the registry and the id, and it reaches
+	// SwitchOnWarning.For, whose ThrowIfNullOrWhiteSpace faulted the settings page as it loaded.
 	[TestMethod]
 	public void A_Name_Of_Only_Spaces_Does_Not_Name_The_Room()
 	{
@@ -134,7 +104,7 @@ public sealed class AreaNamingTests
 			"nothing readable anywhere leaves the caller's own placeholder");
 	}
 
-	/// <summary>A registry that answers by callback works the same way — that is how the re-setup panel asks.</summary>
+	// The re-setup panel asks by callback; it has no registry to hand.
 	[TestMethod]
 	public void A_Name_Source_Works_The_Same_As_A_Registry()
 	{

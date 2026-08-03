@@ -1,10 +1,6 @@
 @*
-	A collapsible group of settings: a header that says what the section is for, a fold that keeps a long
-	page skimmable. The same <details> pattern as the area folds, so the page opens and closes one way.
-
-	Collapsed by default, like the area, period and house-mode folds: a settings page reads as a short list of
-	named groups you open the one you came for, not a wall of every knob at once. The open attribute is decided
-	once, so Blazor's diff never overrides a fold a human toggled.
+	A collapsible group of settings, on the same <details> pattern as the area folds. Collapsed by default,
+	and the open attribute is decided once so Blazor's diff never overrides a fold a human toggled.
 *@
 
 <details class="panel group-fold" open="@_openInitially">
@@ -35,11 +31,7 @@
 	[Parameter]
 	public bool Open { get; set; }
 
-	/// <summary>
-	///     Drops the body's own padding, for content that already spans the fold edge to edge — a bar with its
-	///     own background, a block with a rule across it. Without this the content would be inset twice and the
-	///     bar would stop short of the fold's border, which reads as a mistake rather than as a nested box.
-	/// </summary>
+	/// <summary>Drops the body's padding, for content that already spans the fold edge to edge.</summary>
 	[Parameter]
 	public bool Flush { get; set; }
 
@@ -49,6 +41,5 @@
 
 	private bool _openInitially;
 
-	/// <inheritdoc/>
 	protected override void OnInitialized() => _openInitially = Open;
 }

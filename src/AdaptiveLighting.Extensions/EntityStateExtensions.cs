@@ -9,12 +9,9 @@ namespace AdaptiveLighting.Extensions;
 ///     Reads values out of an <see cref="EntityState"/> and its attribute bag, tolerantly.
 /// </summary>
 /// <remarks>
-///     The attribute bag is <c>Dictionary&lt;string, object&gt;</c> deserialised from JSON, so a value may arrive
-///     as a <see cref="JsonElement"/>, a boxed primitive, or a string, depending on how it was produced. Every
-///     read here handles all three rather than casting and hoping. Nothing throws: a state that is <c>null</c>, an
-///     attribute that is missing or the wrong shape is indistinguishable from one that was never set, and both
-///     mean "don't know" — <c>null</c>, <c>false</c> or an empty list. These bodies are the engine's former
-///     <c>AttributeReader</c>, lifted here verbatim so every app can read the same way.
+///     A value in the attribute bag may arrive as a <see cref="JsonElement"/>, a boxed primitive or a string,
+///     depending on how it was produced, so every read here handles all three. Nothing throws: an absent state and a
+///     wrongly shaped attribute both read as null, false or an empty list.
 /// </remarks>
 public static class EntityStateExtensions
 {
@@ -90,10 +87,8 @@ public static class EntityStateExtensions
 	///     Reads an attribute holding an ISO-8601 timestamp, or <c>null</c> when absent or unparseable.
 	/// </summary>
 	/// <remarks>
-	///     Parsed with the invariant culture and <see cref="DateTimeStyles.AssumeUniversal"/> |
-	///     <see cref="DateTimeStyles.AdjustToUniversal"/>, matching how Home Assistant publishes <c>sun.sun</c>'s
-	///     <c>next_rising</c>/<c>next_setting</c>. The returned offset is therefore in UTC; call
-	///     <see cref="DateTimeOffset.ToLocalTime"/> for wall-clock terms.
+	///     Invariant culture, AssumeUniversal and AdjustToUniversal, matching how Home Assistant publishes sun.sun's
+	///     next_rising and next_setting. The result is UTC; call ToLocalTime for wall-clock terms.
 	/// </remarks>
 	public static DateTimeOffset? AttrDateTimeOffset(this EntityState? state, string attribute) =>
 		state.AttrString(attribute) is { } text
@@ -108,17 +103,10 @@ public static class EntityStateExtensions
 			? value
 			: null;
 
-	/// <summary>
-	///     Whether the entity is something Home Assistant can act on right now: it has a state, and that state is
-	///     not <c>unavailable</c>.
-	/// </summary>
+	/// <summary>Whether the entity has a state and that state is not <c>unavailable</c>.</summary>
 	/// <remarks>
-	///     This is Home Assistant's plain "available" meaning: a <c>null</c> state (a registry row with no device)
-	///     and <c>unavailable</c> are dropped, but <c>unknown</c> is deliberately <b>not</b> — an entity reporting
-	///     <c>unknown</c> exists and is reachable, it simply does not know its value yet, which is a real state to
-	///     act on. The engine's discovery gate <c>AreaEntityResolver.IsLive</c> is stricter: for pre-populating
-	///     rooms it additionally drops <c>unknown</c>, because an entity that has never reported is indistinguishable
-	///     from absent there. The two answer different questions and are intentionally not identical.
+	///     Lets <c>unknown</c> through. Two neighbours do not: <see cref="AsUsableState"/> and the engine's
+	///     <c>AreaEntityResolver.IsLive</c> both drop it. Three predicates, three answers; do not unify them.
 	/// </remarks>
 	public static bool IsAvailable(this EntityState? state) =>
 		state is not null && !string.Equals(state.State, "unavailable", StringComparison.OrdinalIgnoreCase);
@@ -132,10 +120,8 @@ public static class EntityStateExtensions
 	///     absent, <c>unknown</c> or <c>unavailable</c>.
 	/// </summary>
 	/// <remarks>
-	///     The single guard the house-mode readers share (the mode select, the reset <c>input_datetime</c>, the
-	///     UI's current-value read). <c>unknown</c> and <c>unavailable</c> both mean "don't act on this" — unlike
-	///     <see cref="IsAvailable"/>, which lets <c>unknown</c> through — so a select sitting on <c>unknown</c>
-	///     classifies as no mode rather than as its literal text.
+	///     The guard the house-mode readers share. A select sitting on <c>unknown</c> must classify as no mode, not as
+	///     its literal text, so this drops <c>unknown</c> where <see cref="IsAvailable"/> keeps it.
 	/// </remarks>
 	public static string? AsUsableState(this EntityState? state)
 	{

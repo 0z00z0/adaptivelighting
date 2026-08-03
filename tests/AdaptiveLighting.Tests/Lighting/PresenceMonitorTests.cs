@@ -46,7 +46,6 @@ public sealed class PresenceMonitorTests
 		CollectionAssert.AreEqual(new[] { PresenceEvent.EveryoneLeft }, events);
 	}
 
-	/// <summary>Somebody walking through the door wants the light now, not in five minutes.</summary>
 	[TestMethod]
 	public void Arriving_Is_Not_Debounced()
 	{
@@ -95,9 +94,7 @@ public sealed class PresenceMonitorTests
 		CollectionAssert.AreEqual(new[] { PresenceEvent.EveryoneLeft, PresenceEvent.FirstPersonArrived }, events);
 	}
 
-	/// <summary>
-	///     A tracker flickering to <c>not_home</c> while somebody is in the garden must not sweep the house dark.
-	/// </summary>
+	// A tracker flickering while somebody is in the garden must not sweep the house dark.
 	[TestMethod]
 	public void A_Flicker_Inside_The_Debounce_Is_Not_A_Departure()
 	{

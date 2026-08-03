@@ -12,9 +12,8 @@ namespace AdaptiveLighting.Ha;
 ///     Applies light commands by calling <c>light.turn_on</c> / <c>light.turn_off</c>.
 /// </summary>
 /// <remarks>
-///     Suppresses commands the light already satisfies. Every circadian tick would otherwise re-send the same
-///     levels to every light in the house, and a light that is told to fade to where it already is will
-///     visibly restart the fade.
+///     Suppresses commands the light already satisfies. Every circadian tick would otherwise re-send the same levels
+///     to every light in the house, and a light told to fade to where it already is visibly restarts the fade.
 /// </remarks>
 public sealed class HaLightActuator : ILightActuator
 {
@@ -29,17 +28,13 @@ public sealed class HaLightActuator : ILightActuator
 	private const string ColorTempKelvinKey = "color_temp_kelvin";
 	private const string TransitionKey = "transition";
 
-	/// <summary>HA reports brightness on 0–255 but takes it as a percentage; this converts for the comparison.</summary>
+	// Home Assistant reports brightness on 0-255 but accepts it as a percentage. Convert before comparing.
 	private const double MaxRawBrightness = 255.0;
 
 	private readonly IHaContext _ha;
 	private readonly GlobalConfig _global;
 	private readonly ILogger _logger;
 
-	/// <summary>Creates an actuator.</summary>
-	/// <param name="ha">Where the service calls go.</param>
-	/// <param name="global">Supplies the tolerances deciding when a light already matches.</param>
-	/// <param name="logger">Diagnostics.</param>
 	public HaLightActuator(IHaContext ha, GlobalConfig global, ILogger logger)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
@@ -108,8 +103,7 @@ public sealed class HaLightActuator : ILightActuator
 		return true;
 	}
 
-	// A dictionary rather than an anonymous type: it carries the snake_case keys HA expects verbatim, and a key
-	// that is absent is a key the serializer cannot turn into a null that HA would reject.
+	// A dictionary, not an anonymous type: an absent key stays absent, where a serialized null would be rejected.
 	private static Dictionary<string, object> BuildOnData(LightCommand command)
 	{
 		Dictionary<string, object> data = new(StringComparer.Ordinal);

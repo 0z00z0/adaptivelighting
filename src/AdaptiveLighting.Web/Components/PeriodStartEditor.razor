@@ -1,15 +1,8 @@
 @*
-	When a period starts, without asking anybody to type "sunrise+00:45".
+	When a period starts. Three shapes, one stored string: a clock time, a sun offset, or the raw grammar.
 
-	Three shapes, one stored string. A clock time gets a real time input; a sun boundary gets minutes,
-	before/after, and sunrise/sunset as three small controls; and the raw string stays reachable behind
-	"typed as text" for whoever thinks in the grammar. Whatever the shape, the control composes exactly the
-	string the engine's own PeriodStart.TryParse accepts — the composing lives in PeriodStartText, which is
-	unit-tested against that parser — and the note underneath says what the engine will make of it, by
-	parsing what was actually stored. For a sun-anchored start the note also shows the wall-clock time it
-	resolves to today, read from sun.sun (the engine's own truth, not an approximation), so an editable field
-	sits next to what the lights will actually do tonight. The stored format never changes; only the way of
-	writing it does.
+	The composing lives in PeriodStartText, unit-tested against PeriodStart.TryParse, so every shape emits a
+	string the engine accepts. The note underneath is produced by parsing what was actually stored.
 *@
 @inject HaCatalog Catalog
 
@@ -73,16 +66,14 @@
 	private int _minutes;
 
 	// The last string this control emitted or was initialised from. Re-initialising the sub-controls on every
-	// render would fight the person using them; re-initialising only when the value changed under us (a reload,
-	// a discard) is what parameters are for.
+	// render would fight the person using them, so it happens only when the value changed underneath.
 	private string? _seen;
 
 	private string? Description => PeriodStartText.Describe(Value);
 
 	/// <summary>
-	///     For a sun-anchored start, the wall-clock time it resolves to from <c>sun.sun</c>, as "→ next 21:22" —
-	///     "next" because <c>SunTimesToday</c> reads sun.sun's <i>next</i> rising/setting, which is often tomorrow.
-	///     Omitted for a fixed time, and when <c>sun.sun</c> is unavailable.
+	///     For a sun-anchored start, the wall-clock time it resolves to from <c>sun.sun</c>. It says "next"
+	///     because <c>SunTimesToday</c> reads sun.sun's next rising/setting, often tomorrow.
 	/// </summary>
 	private string? TodaySuffix
 	{
@@ -108,8 +99,8 @@
 
 		if (!PeriodStart.TryParse(Value, out PeriodStart? parsed) || parsed is null)
 		{
-			// Unparseable — including a fresh empty row. The raw text mode shows the string as it is, and the
-			// note says the engine will refuse it, which is the honest state of affairs.
+			// Unparseable, including a fresh empty row: raw text mode shows the string and the note says the
+			// engine will refuse it.
 			_mode = "text";
 			return;
 		}
@@ -131,14 +122,10 @@
 	{
 		_mode = mode;
 
-		// A raw-text edit commits through Commit, which sets _seen = Value and so short-circuits OnParametersSet —
-		// leaving _time/_anchor/_direction/_minutes describing whatever was last shown, not the typed string. Re-parse
-		// the current Value into them first, so switching shape after a raw edit preserves the typed value rather than
-		// emitting a stale one.
+		// Commit sets _seen = Value, which short-circuits OnParametersSet, so after a raw-text edit the
+		// sub-control fields still describe whatever was last shown. Re-parse before recomposing from them.
 		SyncControlsFromValue();
 
-		// Switching shape recomposes immediately from the sub-controls' current state, so the stored string
-		// and the visible controls never describe two different boundaries.
 		return mode switch
 		{
 			"clock" => EmitClock(),

@@ -3,18 +3,12 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Extensions;
 
 /// <summary>
-///     Edge-triggered verbs on <see cref="Entity"/>: the on/off subscriptions the archived helpers established,
-///     rebuilt on NetDaemon's <c>SubscribeSafe</c> so a thrown handler is logged rather than silently killing the
-///     subscription.
+///     Edge-triggered on/off subscriptions on <see cref="Entity"/>, built on <c>SubscribeSafe</c> so a thrown handler
+///     is logged instead of killing the subscription.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <c>StateChanges()</c> only emits when the state <i>value</i> changes, so a new value of <c>on</c>
-///         already implies the old value was not <c>on</c>. <see cref="TurnsOn(Entity)"/> therefore filters only
-///         on the new state — which means it fires on <c>unavailable → on</c> as well as <c>off → on</c>, matching
-///         the engine's own inline filters. The archived versions additionally required the old state to be off,
-///         which silently dropped a sensor coming back online <i>with</i> motion; that was a bug, not a feature.
-///     </para>
+///     These filter on the new state only, so they fire on unavailable to on as well as off to on. Requiring the old
+///     state to be off drops a sensor that comes back online already reporting motion.
 /// </remarks>
 public static class EntityObservableExtensions
 {

@@ -1,4 +1,4 @@
-﻿namespace AdaptiveLighting.Tests
+namespace AdaptiveLighting.Tests
 {
 	[TestClass]
 	public sealed class Test1

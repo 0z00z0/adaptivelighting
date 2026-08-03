@@ -1,10 +1,6 @@
 @*
-	The who's-home cell of the board's house bar: one chip per watched person, a dot for their state, and the
-	plain word home / away / unknown. Read-only — it shows the same people the engine watches for Home and Away
-	(ModeService.GetPeople mirrors PresenceMonitor). No timestamps, no entity ids, no actions.
-
-	Chips on one wrapping row rather than a stacked table: a household of three cost three rows of the board's
-	chrome to say three words, and the dot is what an eye reads here anyway.
+	The who's-home cell of the board's house bar: one chip per watched person. Read-only, and the same people
+	the engine watches for Home and Away, since ModeService.GetPeople mirrors PresenceMonitor.
 *@
 
 <div class="housebar-cell">

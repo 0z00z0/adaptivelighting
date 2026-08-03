@@ -6,11 +6,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     The area picker's label: what a room there would actually get.
 /// </summary>
 /// <remarks>
-///     This label used to be the registry's entity count, and it was worse than nothing. On a live instance it read
-///     "Stue (stue) — 517 entities" where Home Assistant's own <c>area_entities('stue')</c> says 164 — the gap
-///     being disabled registry rows — and neither number had anything to do with lighting. A big reassuring
-///     number on an area that resolves to no lights at all is the exact shape of a bug somebody only finds in
-///     the dark, so what is counted here is what discovery resolves, and nothing else.
+///     The counts are what discovery resolves, never registry rows. The old label read "517 entities" on an area
+///     whose <c>area_entities('stue')</c> was 164, and neither number said anything about lighting.
 /// </remarks>
 [TestClass]
 public sealed class AreaOptionTests
@@ -32,10 +29,6 @@ public sealed class AreaOptionTests
 			"'tilbygg (tilbygg)' tells a household nothing twice");
 	}
 
-	/// <summary>
-	///     The whole point of counting resolved entities rather than registry rows: an area that cannot run a
-	///     area has to say so on sight. The old label would have said "517 entities" here.
-	/// </summary>
 	[TestMethod]
 	public void An_Area_That_Resolves_No_Lights_Says_So_And_Is_Flagged()
 	{

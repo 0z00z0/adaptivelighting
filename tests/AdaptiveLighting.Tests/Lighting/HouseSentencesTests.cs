@@ -7,18 +7,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     The house's own behaviour as English: the blend, the away debounce, and one sentence per house mode.
 /// </summary>
 /// <remarks>
-///     <para>
-///         These sentences are the only place several house-wide settings are ever read by a person, so a
-///         sentence that renders the wrong knob is a setting nobody can find. They are asserted through
-///         <see cref="Sentence.PlainText"/> rather than through markup, for the same reason the area sentences
-///         are: this repo has no Razor render harness and is not getting one.
-///     </para>
-///     <para>
-///         Two of them carry real risk. The blend token folds a switch and a number into one value, so it must
-///         mean "step at the boundary" at zero and never write a zero into the minute count somebody chose. And
-///         a mode token's key has to name which of four modes it belongs to, which is an encoding — so it is
-///         written and read by one class, and round-tripped here.
-///     </para>
+///     The blend token folds a switch and a number into one value, so zero has to mean "step at the boundary"
+///     without writing a zero into the minute count somebody chose.
 /// </remarks>
 [TestClass]
 public sealed class HouseSentencesTests
@@ -30,7 +20,6 @@ public sealed class HouseSentencesTests
 
 	// ===================== blending =====================
 
-	/// <summary>Blending on reads as a span, and the token carries the minutes rather than the words.</summary>
 	[TestMethod]
 	public void Blending_Reads_As_A_Span()
 	{
@@ -39,7 +28,6 @@ public sealed class HouseSentencesTests
 		Assert.AreEqual("Lights ease over 30 min when one period hands over to the next.", Text(HouseSentences.Blend(global)));
 	}
 
-	/// <summary>Blending off is not "0 min": it is a different instruction, and the sentence says which.</summary>
 	[TestMethod]
 	public void Blending_Off_Reads_As_A_Step()
 	{
@@ -48,10 +36,6 @@ public sealed class HouseSentencesTests
 		Assert.AreEqual("Lights step at the boundary when one period hands over to the next.", Text(HouseSentences.Blend(global)));
 	}
 
-	/// <summary>
-	///     The value the document holds is always offered, so the popover never opens with nothing ticked — the
-	///     rendering of a control that has lost its own state.
-	/// </summary>
 	[TestMethod]
 	public void The_Blend_Shortlist_Always_Offers_The_Current_Value()
 	{
@@ -66,7 +50,6 @@ public sealed class HouseSentencesTests
 		Assert.AreEqual("step at the boundary", curated[0].Text);
 	}
 
-	/// <summary>A house already on a curated value is not offered it twice.</summary>
 	[TestMethod]
 	public void The_Blend_Shortlist_Does_Not_Repeat_A_Curated_Value()
 	{
@@ -76,7 +59,7 @@ public sealed class HouseSentencesTests
 
 	// ===================== the away debounce =====================
 
-	/// <summary>Stored in minutes, carried in seconds — the one conversion this sentence has to get right.</summary>
+	// Stored in minutes, carried in seconds.
 	[TestMethod]
 	public void The_Away_Debounce_Reads_And_Carries_The_Same_Span()
 	{
@@ -93,7 +76,6 @@ public sealed class HouseSentencesTests
 
 	// ===================== the modes =====================
 
-	/// <summary>No select, no sentences — the card is not rendered rather than rendered empty.</summary>
 	[TestMethod]
 	public void A_House_With_No_Mode_Select_Has_No_Mode_Lines()
 	{
@@ -101,7 +83,6 @@ public sealed class HouseSentencesTests
 		Assert.AreEqual(0, HouseSentences.Modes(new HouseModeConfig(), []).Count);
 	}
 
-	/// <summary>The name is carried beside the sentence so the card can set it in bold and the sentence stays a sentence.</summary>
 	[TestMethod]
 	public void A_Mode_Line_Carries_Its_Name_Beside_Its_Sentence()
 	{
@@ -120,13 +101,8 @@ public sealed class HouseSentencesTests
 			Text(line.Sentences.Single()));
 	}
 
-	/// <summary>
-	///     <b>Only one Normal option is told it is the one the house comes back to.</b> A list can hold several:
-	///     <see cref="HouseModeOptionConfig.Kind"/> defaults to <see cref="ModeKind.Normal"/>, so every option taken
-	///     from the dropdown helper that the document had not seen before arrives Normal. The engine returns to the
-	///     first; printing "the house returns here" under each of them states, of every one but that first, something
-	///     that will not happen.
-	/// </summary>
+	// HouseModeOptionConfig.Kind defaults to Normal, so a list can hold several Normals. The engine returns to
+	// the first one only.
 	[TestMethod]
 	public void Only_The_First_Normal_Mode_Is_Called_The_One_The_House_Returns_To()
 	{
@@ -146,10 +122,6 @@ public sealed class HouseSentencesTests
 		StringAssert.Contains(Text(lines[1].Sentences.Single()), "not to this one");
 	}
 
-	/// <summary>
-	///     The away mode is the one with everything in it: what arms it, what it does, and what ends it —
-	///     each clause built only when the document actually says so.
-	/// </summary>
 	[TestMethod]
 	public void An_Away_Mode_Says_What_Arms_It_And_What_Ends_It()
 	{
@@ -175,7 +147,6 @@ public sealed class HouseSentencesTests
 		StringAssert.Contains(text, "It ends when someone comes home — ignoring the first 15 min");
 	}
 
-	/// <summary>A mode nothing arms simply does not carry the clause — the design's When rule, not a greyed row.</summary>
 	[TestMethod]
 	public void A_Mode_Nothing_Arms_Says_Nothing_About_Arming()
 	{
@@ -193,7 +164,6 @@ public sealed class HouseSentencesTests
 		Assert.AreEqual(0, Tokens(sentence).Length, "with nothing to tune there is nothing to offer a popover for");
 	}
 
-	/// <summary>A sleep mode names the period it clamps to, and says so plainly when nothing resolves one.</summary>
 	[TestMethod]
 	public void A_Sleep_Mode_Names_Its_Clamp_Period()
 	{
@@ -209,7 +179,6 @@ public sealed class HouseSentencesTests
 		StringAssert.Contains(Text(HouseSentences.Modes(modes, []).Single().Sentences.Single()), "no period is named for it yet");
 	}
 
-	/// <summary>Several endings read as English rather than as a list with a stray comma.</summary>
 	[TestMethod]
 	public void Several_Endings_Are_Joined_As_English()
 	{
@@ -229,16 +198,12 @@ public sealed class HouseSentencesTests
 			]
 		};
 
-		// Two endings, joined with a comma and a conjunction rather than listed — the point of the test. The
-		// third ending, a datetime helper, was cut in the 2026-07 simplification; the grammar it exercised is
-		// the same one these two still go through.
 		StringAssert.Contains(
 			Text(HouseSentences.Modes(modes, []).Single().Sentences.Single()),
 			"It ends when someone comes home — ignoring the first 15 min so your own leaving does not cancel it, "
 			+ "or when the Morning period starts.");
 	}
 
-	/// <summary>An option the document left blank still gets a line, with a stand-in rather than an empty bold.</summary>
 	[TestMethod]
 	public void A_Nameless_Option_Still_Gets_A_Line()
 	{
@@ -253,10 +218,8 @@ public sealed class HouseSentencesTests
 
 	// ===================== the mode token keys =====================
 
-	/// <summary>
-	///     The key names which option it belongs to, and is read back by the same class that wrote it — the page
-	///     must never parse this string itself, or the two halves of the encoding live in two files.
-	/// </summary>
+	// The key is an encoding written and read by HouseSentences alone. A page that parses it itself splits the
+	// two halves across two files.
 	[TestMethod]
 	public void A_Mode_Token_Key_Round_Trips()
 	{
@@ -267,7 +230,6 @@ public sealed class HouseSentencesTests
 		Assert.AreEqual(nameof(HouseModeOptionConfig.ResetPresenceGraceMinutes), property);
 	}
 
-	/// <summary>An area setting's key is not a mode's, so the House tab can tell one sentence's edit from another's.</summary>
 	[TestMethod]
 	public void An_Area_Setting_Key_Is_Not_A_Mode_Key()
 	{
@@ -277,7 +239,6 @@ public sealed class HouseSentencesTests
 		Assert.IsFalse(HouseSentences.TryReadModeKey("mode:1:", out _, out _));
 	}
 
-	/// <summary>The tokens a mode sentence renders are keyed to their own option, not to the first one.</summary>
 	[TestMethod]
 	public void Each_Mode_Keys_Its_Tokens_To_Itself()
 	{

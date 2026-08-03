@@ -10,23 +10,17 @@ public enum ConfigLocationSource
 	/// <summary>The external, deploy-surviving file named by <see cref="LightingConfigPath.ConfigPathKey"/>.</summary>
 	External,
 
-	/// <summary>The external file, created on this run by copying the shipped in-tree example.</summary>
+	/// <summary>The external file, created on this run. Despite the name it holds a fresh
+	///     <see cref="AdaptiveLightingConfig.CreateDefault"/>, not a copy of the in-tree example.</summary>
 	SeededFromTree,
 
 	/// <summary>The in-tree file under the apps folder, because no usable external location exists.</summary>
 	InTreeFallback
 }
 
-/// <summary>
-///     The resolved location of this host's configuration document.
-/// </summary>
+/// <summary>The resolved location of this host's configuration document.</summary>
 /// <param name="Path">Absolute path of the file the UI reads and writes.</param>
-/// <param name="Source">How that path was arrived at.</param>
-/// <param name="Warning">
-///     What the operator should know about this choice, or <c>null</c> when the answer is unremarkable.
-///     Rendered in the UI: a host silently editing a file that the next deploy will delete is exactly the
-///     failure this type exists to prevent.
-/// </param>
+/// <param name="Warning">What the operator should know about this choice, or <c>null</c> when it is unremarkable.</param>
 public sealed record ConfigLocation(string Path, ConfigLocationSource Source, string? Warning)
 {
 	/// <summary>Whether edits to this file survive a redeploy.</summary>
@@ -34,37 +28,16 @@ public sealed record ConfigLocation(string Path, ConfigLocationSource Source, st
 }
 
 /// <summary>
-///     Works out which file is <i>the</i> lighting configuration document for this host, and seeds it on first
-///     run.
+///     Works out which file is the lighting configuration document for this host, and seeds it on first run.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why the document is not the one in the apps folder.</b> The obvious file to edit is the
-///         <c>apps/AdaptiveLighting/AdaptiveLighting.yaml</c> the host ships — and it is the wrong one, because
-///         it lives inside the publish tree. <c>publish_as_binaries.ps1</c> wipes and re-copies the whole deploy
-///         folder, so every setting a person had chosen in the browser would vanish on the next deploy, silently,
-///         and the lights would revert to the shipped example. Configuration that a deploy destroys is not
-///         configuration. So the editable document lives outside the publish tree — on a Home Assistant box,
-///         alongside <c>/config</c> rather than under <c>/config/netdaemon6</c> — and the in-tree file becomes
-///         what it always really was: the shipped example, used once to seed the real one.
-///     </para>
-///     <para>
-///         <b>The path is configuration, not a constant.</b> Each host names its own file in its tracked
-///         <c>appsettings.json</c> under <see cref="ConfigPathKey"/>, so separate hosts do not have to agree
-///         and neither has a path baked into an assembly.
-///     </para>
-///     <para>
-///         <b>This runs once, at start-up, on the server.</b> Its answer is baked into the singleton
-///         <c>LightingConfigStore</c> and never recomputed. No request, no component and no browser can
-///         influence it — which is the property that keeps the UI's write surface to exactly one file rather
-///         than to "any path someone can name".
-///     </para>
-///     <para>
-///         Token safety: this is the only type in the web UI that touches <see cref="IConfiguration"/>, it reads
-///         exactly three keys, and it returns a file path. It is never injected into a component, and the root
-///         configuration object — which carries the Home Assistant long-lived token under
-///         <c>HomeAssistant:Token</c> — does not leave this method.
-///     </para>
+///     The editable document lives outside the publish tree, because the deploy script wipes and re-copies the
+///     whole deploy folder. The in-tree <c>apps/AdaptiveLighting/AdaptiveLighting.yaml</c> is the shipped example
+///     and the last-resort fallback, nothing more. Runs once at start-up on the server, and the answer is baked
+///     into the singleton <c>LightingConfigStore</c>: no request, component or browser can influence it, which is
+///     what holds the UI's write surface to one file. It is also the only type in the web UI that touches
+///     <see cref="IConfiguration"/>, and the root configuration object, which carries <c>HomeAssistant:Token</c>,
+///     never leaves here.
 /// </remarks>
 public static class LightingConfigPath
 {
@@ -78,17 +51,13 @@ public static class LightingConfigPath
 	private const string DocumentName = "AdaptiveLighting.yaml";
 	private const string DefaultSubFolder = "AdaptiveLighting";
 
-	/// <summary>
-	///     Resolves the document's absolute path, copying the shipped example out to it on first run.
-	/// </summary>
+	/// <summary>Resolves the document's absolute path, writing a starting document to it on first run.</summary>
 	/// <param name="configuration">The host's configuration. Only the keys named on this type are read.</param>
 	/// <param name="contentRootPath">The host's content root, which relative settings are resolved against.</param>
-	/// <param name="logger">Where the seeding and fallback decisions are recorded.</param>
 	/// <returns>
 	///     The chosen location. The file need not exist: a host whose document is missing must still serve a UI
-	///     that says so, rather than failing to start.
+	///     that says so, and not fail to start.
 	/// </returns>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static ConfigLocation Resolve(IConfiguration configuration, string contentRootPath, ILogger logger)
 	{
 		ArgumentNullException.ThrowIfNull(configuration);
@@ -120,11 +89,9 @@ public static class LightingConfigPath
 		if (directory is null)
 			return Fallback(inTree, external, "it has no directory", logger);
 
-		// The directory itself is allowed to be missing — on a Home Assistant box /config exists but
-		// /config/adaptive-lighting does not until something creates it, and refusing to create it would mean
-		// the external file could never come into existence. The *parent* is the real test: if it is missing
-		// too, the configured path belongs to a machine this is not (the Windows dev box has no /config), and
-		// creating C:\config\… would be inventing a location rather than finding one.
+		// The parent is the test, not the directory itself: /config exists on a Home Assistant box while
+		// /config/adaptive-lighting does not. With the parent missing too the path belongs to another machine, and
+		// creating C:\config\… would be inventing a location.
 		if (!Directory.Exists(directory) && !Directory.Exists(Path.GetDirectoryName(directory) ?? directory))
 			return Fallback(inTree, external, "neither it nor its parent directory exists on this machine", logger);
 
@@ -132,13 +99,9 @@ public static class LightingConfigPath
 		{
 			Directory.CreateDirectory(directory);
 
-			// Seed a clean default rather than copying the shipped example. The example is a teaching document
-			// full of REPLACE_ME ids, and copying it onto a real host was actively harmful: every placeholder is
-			// an entity Home Assistant does not know, so a brand-new installation started with document-level
-			// errors and refused to run. A placeholder also OVERRIDES the discovery that would have filled the
-			// same field — an empty Persons list finds every person by itself; person.REPLACE_ME finds nothing
-			// and blocks the engine. Better to name nothing and then look: the engine populates the area list
-			// from the area registry on its first connected reload (LightingEngineHost.AutoDiscoverAreasIfNeeded).
+			// A clean CreateDefault, never a copy of the in-tree example. The example is full of REPLACE_ME ids,
+			// and a placeholder overrides the discovery that would have filled the same field: an empty Persons
+			// list finds every person, person.REPLACE_ME finds nothing and blocks the engine.
 			File.WriteAllText(external, LightingConfigDocument.Serialize(AdaptiveLightingConfig.CreateDefault()));
 
 			logger.LogInformation(
@@ -180,8 +143,7 @@ public static class LightingConfigPath
 		if (File.Exists(conventional))
 			return conventional;
 
-		// The conventional layout is what both hosts ship, but a deployment is free to rearrange its apps
-		// folder. One unambiguous match is worth finding; two is not a guess worth making.
+		// A deployment may rearrange its apps folder. One unambiguous match is worth taking; two is not.
 		IReadOnlyList<string> found = SafeSearch(appsFolder);
 
 		return found.Count == 1 ? found[0] : conventional;
@@ -197,8 +159,7 @@ public static class LightingConfigPath
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{
-			// An unreadable apps folder is the caller's problem to report through the store, not a reason to
-			// fail host start-up here.
+			// An unreadable apps folder is the store's problem to report, not a reason to fail host start-up.
 			return [];
 		}
 	}

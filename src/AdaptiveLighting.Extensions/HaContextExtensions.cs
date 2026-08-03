@@ -3,8 +3,8 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Extensions;
 
 /// <summary>
-///     Verbs and one-hop questions on <see cref="IHaContext"/>: the domain is derived from the entity id, so a
-///     call site never repeats it. The archived helpers' habit, centralised.
+///     Verbs and one-hop questions on <see cref="IHaContext"/>. The domain is derived from the entity id, so a call
+///     site never repeats it.
 /// </summary>
 public static class HaContextExtensions
 {
@@ -16,7 +16,7 @@ public static class HaContextExtensions
 	/// <summary>
 	///     Whether the entity currently reads off. <c>false</c> when it is unknown or unavailable.
 	/// </summary>
-	/// <remarks><b><see cref="IsOff"/> is not <c>!<see cref="IsOn"/></c></b>: both are <c>false</c> for an unavailable entity.</remarks>
+	/// <remarks><see cref="IsOff"/> is not <c>!IsOn</c>. Both are false for an unavailable entity.</remarks>
 	public static bool IsOff(this IHaContext ha, string entityId) => ha.GetState(entityId)?.IsOff() ?? false;
 
 	/// <summary>Whether the entity's state equals <paramref name="value"/>, ordinal-ignore-case.</summary>
@@ -76,10 +76,7 @@ public static class HaContextExtensions
 	///     Calls a service named as a single <c>domain.service</c> id (e.g. <c>notify.mobile_app_phone</c>),
 	///     splitting it into domain and service.
 	/// </summary>
-	/// <remarks>
-	///     Named distinctly from <c>CallService</c> so overload resolution can never surprise. Throws
-	///     <see cref="ArgumentException"/> on a malformed id — a config typo is a fail-loud, not runtime weather.
-	/// </remarks>
+	/// <remarks>Named apart from <c>CallService</c> so overload resolution cannot surprise.</remarks>
 	/// <exception cref="ArgumentException"><paramref name="fullServiceId"/> is not a <c>domain.service</c> id.</exception>
 	public static void CallServiceById(this IHaContext ha, string fullServiceId, ServiceTarget? target = null, object? data = null)
 	{
@@ -94,9 +91,8 @@ public static class HaContextExtensions
 	///     Raises a persistent notification in Home Assistant via <c>persistent_notification.create</c>.
 	/// </summary>
 	/// <remarks>
-	///     Uses <c>persistent_notification.create</c> (id-capable), not <c>notify.persistent_notification</c>: when
-	///     a <paramref name="notificationId"/> is supplied, re-raising it replaces the last card rather than
-	///     stacking a new one.
+	///     Only <c>persistent_notification.create</c> takes an id; <c>notify.persistent_notification</c> does not. With
+	///     an id, re-raising replaces the card instead of stacking one.
 	/// </remarks>
 	public static void NotifyPersistent(this IHaContext ha, string title, string message, string? notificationId = null)
 	{
@@ -130,20 +126,20 @@ public static class HaContextExtensions
 	/// <summary>
 	///     Every entity in <paramref name="area"/> whose id starts with <paramref name="domain"/>.
 	/// </summary>
-	/// <remarks>Ported for continuity; the registry-based lookups in <see cref="RegistryExtensions"/> are the preferred path.</remarks>
+	/// <remarks>Prefer the registry lookups in <see cref="RegistryExtensions"/>; this matches on the area name.</remarks>
 	public static List<Entity> GetEntitiesInAreaByDomain(this IHaContext ha, string area, string domain) =>
 		[.. ha.GetAllEntities().Where(e => e.Area == area && e.EntityId.HasDomain(domain))];
 
 	/// <summary>
 	///     Every entity id in <paramref name="area"/> whose id starts with <paramref name="domain"/>.
 	/// </summary>
-	/// <remarks>Ported for continuity; the registry-based lookups in <see cref="RegistryExtensions"/> are the preferred path.</remarks>
+	/// <remarks>Prefer the registry lookups in <see cref="RegistryExtensions"/>; this matches on the area name.</remarks>
 	public static List<string> GetEntityIdsInAreaByDomain(this IHaContext ha, string area, string domain) =>
 		[.. ha.GetAllEntities().Where(e => e.Area == area && e.EntityId.HasDomain(domain)).Select(e => e.EntityId)];
 
 	private static string DomainForServiceCall(string[] entityIds)
 	{
-		// A malformed id has no domain to call under: fail loud rather than hand CallService a null domain.
+		// A malformed id has no domain to call under. Fail loud instead of handing CallService a null domain.
 		var domains = entityIds
 			.Select(id => id.Domain() ?? throw new ArgumentException($"'{id}' is not a valid entity id.", nameof(entityIds)))
 			.ToList();

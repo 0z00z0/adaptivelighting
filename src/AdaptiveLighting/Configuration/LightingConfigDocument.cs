@@ -8,13 +8,11 @@ namespace AdaptiveLighting.Configuration;
 ///     What reading a document produced: the bound configuration, and whether the file had to be translated
 ///     out of the pre-2.0 schema to produce it.
 /// </summary>
-/// <remarks>
-///     An explicit return rather than an out-parameter because the flag is not a diagnostic — it is the trigger
-///     for the migrating write in <see cref="Hosting.LightingEngineHost.Reload"/>, and a caller that never sees
-///     it leaves a house permanently dependent on the translation table.
-/// </remarks>
 /// <param name="Config">The bound document. Never <c>null</c>.</param>
-/// <param name="UsedLegacyKeys">Whether <see cref="LightingConfigDocument.Deserialize"/> renamed any pre-2.0 key.</param>
+/// <param name="UsedLegacyKeys">
+///     Whether any pre-2.0 key was renamed. Not a diagnostic: it triggers the migrating write in
+///     <see cref="Hosting.LightingEngineHost.Reload"/>.
+/// </param>
 public sealed record DocumentReadResult(AdaptiveLightingConfig Config, bool UsedLegacyKeys);
 
 /// <summary>
@@ -23,20 +21,14 @@ public sealed record DocumentReadResult(AdaptiveLightingConfig Config, bool Used
 /// </summary>
 public sealed class LightingConfigException : Exception
 {
-	/// <summary>Creates the exception.</summary>
-	/// <param name="message">What went wrong, phrased for a human.</param>
 	public LightingConfigException(string message) : base(message)
 	{
 	}
 
-	/// <summary>Creates the exception.</summary>
-	/// <param name="message">What went wrong, phrased for a human.</param>
-	/// <param name="innerException">The underlying parser or IO failure.</param>
 	public LightingConfigException(string message, Exception innerException) : base(message, innerException)
 	{
 	}
 
-	/// <summary>Creates the exception with no message. Present to satisfy the framework's exception pattern.</summary>
 	public LightingConfigException()
 	{
 	}
@@ -47,43 +39,22 @@ public sealed class LightingConfigException : Exception
 ///     and back. Pure text in, pure text out: no file system, so the whole round trip is unit-testable.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why a second parser exists at all.</b> The app model binds this document with the .NET
-///         configuration binder, which reads and never writes. Once the UI can save, something has to
-///         serialise — and having the engine load through the binder while the UI loads through YamlDotNet
-///         would be two parsers disagreeing about one file, which is the bug you find at 03:00. So this is the
-///         only loader: <see cref="Hosting.LightingEngineHost"/> reads through here too, and
-///         <c>IAppConfig&lt;AdaptiveLightingConfig&gt;</c> is no longer in the engine's path.
-///     </para>
-///     <para>
-///         <b>Comments do not survive.</b> YamlDotNet emits a fresh document; every hand-written comment in the
-///         file is lost the first time the UI saves. That is accepted, and the worked examples that used to live
-///         in those comments are published on the documentation site.
-///         <see cref="Header"/> is re-emitted on every write so the file itself says where they went.
-///     </para>
+///     The only loader. <see cref="Hosting.LightingEngineHost"/> reads through here too, so the engine and the UI
+///     cannot end up as two parsers disagreeing about one file. Comments in the file do not survive a write:
+///     YamlDotNet emits a fresh document, and <see cref="Header"/> is re-emitted to say so.
 /// </remarks>
 public static class LightingConfigDocument
 {
 	/// <summary>
 	///     The document's single top-level key: the fully qualified name of <see cref="AdaptiveLightingConfig"/>.
+	///     Also how the .NET configuration binder binds it, so it stays the key.
 	/// </summary>
-	/// <remarks>
-	///     This is how <c>IAppConfig&lt;T&gt;</c> binds, and it stays the key even though the engine no longer
-	///     loads through the app model — the file must keep working if the engine is ever pointed back at it.
-	/// </remarks>
 	public const string RootKey = "AdaptiveLighting.Configuration.AdaptiveLightingConfig";
 
-	/// <summary>
-	///     The pre-2.0 key names, mapped to what the schema calls them now. The only place in the codebase where
-	///     the word "Zone" still exists.
-	/// </summary>
+	/// <summary>The pre-2.0 key names, mapped to what the schema calls them now.</summary>
 	/// <remarks>
-	///     <b>Deleting this is silent data loss, not a cleanup.</b> <see cref="Deserialize"/> binds with
-	///     <c>IgnoreUnmatchedProperties</c> — deliberately, so a stale key cannot brick the UI that exists to
-	///     remove it — which means a document still saying <c>Zones:</c> would bind against a model that has only
-	///     <c>Areas</c> and load as <i>zero areas</i>: no parse error, no warning, no lights, nothing in the log
-	///     to look at. Every document written before 2.0 says <c>Zones:</c>, and there is no way to prove nobody
-	///     is still running one, so there is no version at which this becomes safe to remove.
+	///     Deleting this is silent data loss. <see cref="Deserialize"/> binds with <c>IgnoreUnmatchedProperties</c>,
+	///     so a document still saying <c>Zones:</c> would load as zero areas with no error and nothing in the log.
 	/// </remarks>
 	private static readonly Dictionary<string, string> LegacyKeys = new(StringComparer.OrdinalIgnoreCase)
 	{
@@ -91,24 +62,10 @@ public static class LightingConfigDocument
 		["ZonesAutoDiscovered"] = nameof(GlobalConfig.AreasAutoDiscovered)
 	};
 
-	/// <summary>
-	///     Values a retired setting used to take, and what each becomes.
-	/// </summary>
+	/// <summary>Values a retired setting used to take, and what each becomes.</summary>
 	/// <remarks>
-	///     <para>
-	///         <b>A retired enum value is not the same problem as a retired key.</b> An unknown key is silence —
-	///         <c>IgnoreUnmatchedProperties</c> passes over it and the property keeps its default. An unknown enum
-	///         value is a parse failure, and a house whose file still says <c>Darkness: Either</c> would not load
-	///         at all. So this is the one retirement in the 2026-07 simplification that has to be translated
-	///         rather than ignored.
-	///     </para>
-	///     <para>
-	///         <c>Either</c> becomes <c>Lux</c>. It was removed because its sun half could call a room dark while
-	///         its own sensor read a perfectly bright afternoon — the owner's word was "unpredictable" — and the
-	///         lux half is the part that was doing the work. A room with no sensor still counts as dark under
-	///         <c>Lux</c>, which is what <c>Either</c>'s lux half did for it too, so nothing goes dark that was
-	///         not already.
-	///     </para>
+	///     An unknown key is silence, but an unknown enum value is a parse failure, so a retired value has to be
+	///     translated, not ignored.
 	/// </remarks>
 	private static readonly Dictionary<string, Dictionary<string, string>> LegacyValues =
 		new(StringComparer.Ordinal)
@@ -119,27 +76,11 @@ public static class LightingConfigDocument
 			}
 		};
 
-	/// <summary>
-	///     Keys a document may still carry that no longer do anything, and the sentence each one earns in the log.
-	/// </summary>
+	/// <summary>Keys a document may still carry that no longer do anything, and the sentence each earns in the log.</summary>
 	/// <remarks>
-	///     <para>
-	///         <b>Silence is the wrong answer here, and it was the answer this project shipped.</b> Both binders
-	///         ignore an unknown key, so removing a setting is a parse-clean, log-clean, entirely invisible change
-	///         of behaviour — the house simply starts doing something else one night. That is a softer failure than
-	///         the <c>Either</c> crash and a worse one, because nothing at all points at it.
-	///     </para>
-	///     <para>
-	///         Concretely, and the reason this table exists: a night period written
-	///         <c>{ BrightnessPct: 15, MaxBrightnessPct: 30 }</c> — the shape the shipped default had — used to be
-	///         clamped to 30 % in sleep mode and is now clamped to 15 %. Half the light, no error, no warning,
-	///         nothing in the file to suggest it. Only a line in the log can close that gap.
-	///     </para>
-	///     <para>
-	///         The key is left in place rather than stripped: the binder ignores it either way, and rewriting
-	///         somebody's file as a side effect of reading it is what the load path exists not to do. The next save
-	///         from the browser drops it, as it drops every key the schema no longer has.
-	///     </para>
+	///     Both binders ignore an unknown key, so a retired setting changes behaviour with nothing to point at it: a
+	///     night period written <c>{ BrightnessPct: 15, MaxBrightnessPct: 30 }</c> now clamps to 15 % in sleep mode
+	///     where it clamped to 30 %. The key is left in the file; only the next save drops it.
 	/// </remarks>
 	private static readonly Dictionary<string, string> RetiredKeys = new(StringComparer.OrdinalIgnoreCase)
 	{
@@ -179,20 +120,13 @@ public static class LightingConfigDocument
 
 		""";
 
-	/// <summary>
-	///     Serialises <paramref name="config"/> to the full text of a configuration document, header comment
-	///     included.
-	/// </summary>
-	/// <param name="config">The document to write.</param>
-	/// <returns>YAML text, ready to be written to disk.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="config"/> is <c>null</c>.</exception>
+	/// <summary>Serialises <paramref name="config"/> to the full text of a document, header comment included.</summary>
 	public static string Serialize(AdaptiveLightingConfig config)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
-		// OmitNull, not OmitDefaults: on an AreaConfig every settings property is a nullable twin where null
-		// means "inherit Defaults", so a null must not be written. But an area that deliberately sets
-		// Enabled: false or LuxThreshold: 0 has said something, and OmitDefaults would delete it.
+		// OmitNull, not OmitDefaults. On an AreaConfig null means "inherit Defaults", but an area that sets
+		// Enabled: false or LuxThreshold: 0 has said something and OmitDefaults would delete it.
 		ISerializer serializer = new SerializerBuilder()
 			.ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
 			.Build();
@@ -202,29 +136,17 @@ public static class LightingConfigDocument
 		return Header + serializer.Serialize(document);
 	}
 
-	/// <summary>
-	///     Parses the text of a configuration document, translating any pre-2.0 key names on the way in.
-	/// </summary>
-	/// <param name="yaml">The file's contents.</param>
-	/// <param name="logger">
-	///     Where the both-keys warning goes, or <c>null</c> when nobody is listening. Optional because the
-	///     translation must work identically whether or not a caller happens to have a logger.
-	/// </param>
-	/// <returns>The bound document, and whether it had to be translated to bind at all.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="yaml"/> is <c>null</c>.</exception>
-	/// <exception cref="LightingConfigException">
-	///     The text is not YAML, or carries no <see cref="RootKey"/> section.
-	/// </exception>
+	/// <summary>Parses the text of a configuration document, translating any pre-2.0 key names on the way in.</summary>
+	/// <exception cref="LightingConfigException">The text is not YAML, or carries no <see cref="RootKey"/> section.</exception>
 	public static DocumentReadResult Deserialize(string yaml, ILogger? logger = null)
 	{
 		ArgumentNullException.ThrowIfNull(yaml);
 
 		(string current, bool usedLegacyKeys) = TranslateLegacyKeys(yaml, logger);
 
-		// IgnoreUnmatchedProperties mirrors the .NET configuration binder, which also ignores keys it does not
-		// know. Being stricter here would mean a stale key left in a hand-edited file bricks the UI that exists
-		// to fix exactly that kind of thing. It is also why TranslateLegacyKeys has to run first: an unmatched
-		// Zones: would be ignored just as quietly as a stale key, and the house would load with no rooms.
+		// IgnoreUnmatchedProperties mirrors the .NET configuration binder, so a stale key cannot brick the UI that
+		// exists to remove it. It is also why TranslateLegacyKeys runs first: an unmatched Zones: would be passed
+		// over just as quietly, and the house would load with no rooms.
 		IDeserializer deserializer = new DeserializerBuilder()
 			.IgnoreUnmatchedProperties()
 			.Build();
@@ -244,13 +166,9 @@ public static class LightingConfigDocument
 		if (document is null || document.Count == 0)
 			throw new LightingConfigException("The configuration file is empty.");
 
-		// Looked up case-insensitively even though the key is a .NET type name: the binder that used to own this
-		// file is case-insensitive, so a file that worked before must keep working now.
-		//
-		// The fallback matches ANY key naming AdaptiveLightingConfig, whatever namespace produced it. The key is a
-		// fully qualified type name, so renaming the namespace would otherwise orphan every file already on disk —
-		// which is exactly what happened when this library was extracted for distribution. Reading is forgiving,
-		// writing is not: Serialize always emits RootKey, so a file self-migrates the first time it is saved.
+		// Case-insensitive, because the binder that used to own this file is. The fallback matches any key naming
+		// AdaptiveLightingConfig whatever namespace produced it, so renaming the namespace does not orphan every
+		// file on disk. Reading is forgiving, writing is not: Serialize always emits RootKey.
 		string? match =
 			document.Keys.FirstOrDefault(key => string.Equals(key, RootKey, StringComparison.OrdinalIgnoreCase))
 			?? document.Keys.FirstOrDefault(key => key.EndsWith("." + nameof(AdaptiveLightingConfig), StringComparison.OrdinalIgnoreCase));
@@ -259,9 +177,7 @@ public static class LightingConfigDocument
 			throw new LightingConfigException(
 				$"The configuration file has no '{RootKey}' section. It has: {string.Join(", ", document.Keys)}.");
 
-		// A present-but-empty section parses to null. That is a legitimate starting point — an operator who
-		// deleted everything below the key — and it means "all defaults, no areas", which the validator will
-		// then reject with a message that says so.
+		// A present-but-empty section parses to null, meaning all defaults and no areas.
 		AdaptiveLightingConfig config = document[match] ?? new AdaptiveLightingConfig();
 
 		RepairStructuralNulls(config, logger);
@@ -270,27 +186,14 @@ public static class LightingConfigDocument
 	}
 
 	/// <summary>
-	///     Puts back the collections and sub-objects the model says are never <c>null</c>, after a file that left
-	///     one of them blank.
+	///     Puts back the collections and sub-objects the model says are never <c>null</c>, after a file that left one
+	///     of them blank.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         <b>Why this is not paranoia.</b> A line reading <c>Areas:</c> with nothing under it is valid YAML for
-	///         "this key is null", and YamlDotNet honours that literally: it <i>assigns</i> null over the property's
-	///         initialiser, so <c>config.Areas</c> comes back null even though the type says it cannot be. The same
-	///         goes for a blank <c>Global:</c>, <c>Defaults:</c>, <c>Periods:</c> or <c>Options:</c>, and for a stray
-	///         <c>-</c> that leaves a null <i>element</i> in an otherwise good list. Every one of those is an ordinary
-	///         half-finished hand-edit, and every one of them used to end as a <see cref="NullReferenceException"/>
-	///         thrown straight out of <see cref="Hosting.LightingEngineHost.Reload"/> — which is documented never to
-	///         throw, is called by the per-host bootstrap, and whose caller dying takes the Home Assistant connection
-	///         and the web UI's ability to repair the file down with it. One blank line, and the only way back into
-	///         the house is a text editor.
-	///     </para>
-	///     <para>
-	///         Blank <i>elements</i> are dropped rather than replaced with empty objects: a bare <c>-</c> says
-	///         nothing, and inventing a nameless room or period from it would stop the whole document at validation
-	///         over punctuation. Filling the nulls in is the smallest reading that keeps the rest of the file running.
-	///     </para>
+	///     A bare <c>Areas:</c> line is valid YAML for "this key is null", and YamlDotNet assigns that null over the
+	///     property initialiser. Unrepaired it throws out of <see cref="Hosting.LightingEngineHost.Reload"/>, which
+	///     is documented never to throw and whose caller dying takes the HA connection and the web UI with it. Blank
+	///     list elements are dropped, not replaced, so a stray <c>-</c> does not become a nameless room.
 	/// </remarks>
 	private static void RepairStructuralNulls(AdaptiveLightingConfig config, ILogger? logger)
 	{
@@ -328,21 +231,15 @@ public static class LightingConfigDocument
 			}
 		}
 
-		// Exactly the HouseMode.Options repair above, for exactly the same reason: a bare `Options:` line under
-		// PeriodSelect is valid YAML for "this key is null", YamlDotNet honours it literally, and the assignment
-		// lands over the property initialiser — so the model's never-null list comes back null and the first read
-		// of it throws out of Reload, which is documented never to throw and whose caller dying takes the Home
-		// Assistant connection and the web UI down with it. One blank line has already done that once.
+		// The HouseMode.Options repair above, again for PeriodSelect.
 		if (global.PeriodSelect is { } periodSelect)
 		{
 			repaired |= NullSafeList(periodSelect.Options, out List<PeriodSelectOptionConfig> periodOptions);
 			periodSelect.Options = periodOptions;
 		}
 
-		// An area's own entity lists are nullable by design — null means "let discovery find them" — so only their
-		// contents are repaired, never their absence. Levels is not one of those: the model says it is never null,
-		// so a bare `Levels:` assigning null over the initialiser would take the room down at build time, which is
-		// the one-blank-line failure this whole method exists for.
+		// An area's entity lists are nullable by design (null means "let discovery find them"), so only their
+		// contents are repaired, never their absence. Levels is never null in the model, so it gets both.
 		foreach (AreaConfig area in areas)
 		{
 			repaired |= DropBlanks(area.Lights);
@@ -380,28 +277,14 @@ public static class LightingConfigDocument
 		list is not null && list.RemoveAll(item => item is null) > 0;
 
 	/// <summary>
-	///     Rewrites every <see cref="LegacyKeys"/> name in <paramref name="yaml"/> to its current name, and
-	///     returns the text the binder should see.
+	///     Rewrites every <see cref="LegacyKeys"/> name in <paramref name="yaml"/> to its current name, returning the
+	///     original instance when nothing matched.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         Works on the generic node tree rather than on the text: a regex over the file would rename the word
-	///         inside a room's name or an entity id just as happily as it renamed a key. Within this document's own
-	///         section the tree is walked to any depth, because the two legacy keys sit at two different levels
-	///         (<c>Zones</c> under the root section, <c>ZonesAutoDiscovered</c> under <c>Global</c>), and a rule that
-	///         knows where to look is a rule that breaks the day the schema moves something.
-	///     </para>
-	///     <para>
-	///         <b>It starts at this document's section, not at the top of the file.</b> A YAML file may carry other
-	///         top-level sections — another NetDaemon app's config, sitting beside this one — and "Zones" is an
-	///         entirely reasonable key for an app that manages Home Assistant's GPS zones. Renaming that app's key
-	///         to <c>Areas</c> made its section bind against <see cref="AdaptiveLightingConfig"/>'s area list and
-	///         fail, so a file that had loaded perfectly well stopped loading at all; and it set the migration flag,
-	///         which then rewrote the file over a section this document has no business touching. What is not under
-	///         this document's own key is not this document's to rename.
-	///     </para>
+	///     Starts at this document's own section, never at the top of the file: another NetDaemon app beside this one
+	///     may legitimately have a <c>Zones</c> key of its own, and renaming it broke that app and set the migration
+	///     flag. Works on the node tree, not the text, so the word is not renamed inside a room name or entity id.
 	/// </remarks>
-	/// <returns>The translated text — the original instance when nothing matched — and whether anything did.</returns>
 	private static (string Yaml, bool UsedLegacyKeys) TranslateLegacyKeys(string yaml, ILogger? logger)
 	{
 		YamlStream stream = new();
@@ -448,10 +331,8 @@ public static class LightingConfigDocument
 					if (child.Key is not YamlScalarNode { Value: { Length: > 0 } name })
 						continue;
 
-					// A key that still parses and no longer does anything. Said out loud rather than passed over —
-					// see RetiredKeys for the halved night light this exists to stop being invisible. Nothing is
-					// rewritten and `used` is deliberately not set: the document is unchanged, only the reader is
-					// better informed, and claiming a migration happened would send Reload writing the file back.
+					// `used` is not set here. The document is unchanged, and claiming a migration happened would send
+					// Reload writing the file back.
 					if (RetiredKeys.TryGetValue(name, out string? retired))
 					{
 						logger?.LogWarning(
@@ -460,9 +341,8 @@ public static class LightingConfigDocument
 							name, retired);
 					}
 
-					// A retired VALUE, rewritten in place. Done before the key rename below because a key that is
-					// about to be renamed still carries the value under its old name at this point, and a setting
-					// whose value moved is far likelier than one whose name and value both did.
+					// Before the key rename below: a key about to be renamed still carries its value under the old
+					// name at this point.
 					if (LegacyValues.TryGetValue(name, out Dictionary<string, string>? moved)
 						&& child.Value is YamlScalarNode { Value: { Length: > 0 } stated } value
 						&& moved.TryGetValue(stated, out string? replacement))
@@ -482,8 +362,7 @@ public static class LightingConfigDocument
 					mapping.Children.Remove(child.Key);
 					used = true;
 
-					// Both names present: the file said two things and the reader has to pick one. The current
-					// schema's name is the one a current editor wrote, so it wins and the legacy key is dropped.
+					// Both names present. The current schema's name wins; the legacy key is dropped.
 					if (HasKey(mapping, currentName))
 					{
 						logger?.LogWarning(
@@ -510,14 +389,9 @@ public static class LightingConfigDocument
 	}
 
 	/// <summary>
-	///     The value nodes of every top-level key naming this document's configuration section — the only part of
-	///     the file <see cref="Translate"/> is allowed to rewrite.
+	///     The value nodes of every top-level key naming this document's section, and the only part of the file
+	///     <see cref="Translate"/> may rewrite. Matched the way <see cref="Deserialize"/> matches.
 	/// </summary>
-	/// <remarks>
-	///     Matched the way <see cref="Deserialize"/> matches: the exact key, or any key ending in the config class's
-	///     name, so a document written under an earlier namespace still gets its legacy keys translated. A file with
-	///     no such section yields nothing, and the bind that follows reports the missing section itself.
-	/// </remarks>
 	private static IEnumerable<YamlNode> SectionsOf(YamlNode root) =>
 		root is not YamlMappingNode mapping
 			? []
@@ -529,11 +403,9 @@ public static class LightingConfigDocument
 
 	/// <summary>Whether <paramref name="mapping"/> already carries <paramref name="key"/>, matched as the binder matches.</summary>
 	/// <remarks>
-	///     Ordinal, because the binder is: YamlDotNet matches a property name exactly, so a document saying
-	///     <c>areas:</c> in lower case binds to nothing at all. Comparing case-insensitively here made a file
-	///     carrying <c>Zones:</c> <i>and</i> a lower-case <c>areas:</c> look like the both-keys case, so the legacy
-	///     key — the only one of the two the binder could actually read — was the one dropped, and the house loaded
-	///     with no rooms and a warning that said the opposite. The key that wins has to be a key that binds.
+	///     Ordinal, because YamlDotNet is: a lower-case <c>areas:</c> binds to nothing. Comparing case-insensitively
+	///     here made <c>Zones:</c> beside <c>areas:</c> look like the both-keys case, so the only key that could bind
+	///     was the one dropped and the house loaded with no rooms.
 	/// </remarks>
 	private static bool HasKey(YamlMappingNode mapping, string key) =>
 		mapping.Children.Keys.OfType<YamlScalarNode>()

@@ -4,27 +4,18 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     What a room's switch says for itself the moment it is turned on.
+///     What a room's switch says the moment it is turned on. Which lights get flagged is
+///     <see cref="LightAuditTests"/>.
 /// </summary>
-/// <remarks>
-///     The words rather than the rules — <see cref="LightAuditTests"/> covers which lights are flagged. What is
-///     asserted here is the part a person actually reads: that the lights are <i>named</i> rather than counted,
-///     that a quiet room stays quiet, and that the advice about the include label is not given to a house that
-///     has already taken it.
-/// </remarks>
 [TestClass]
 public sealed class SwitchOnWarningTests
 {
 	private static LightUnderReview Light(string entityId, string name) => new(entityId, name);
 
-	/// <summary>
-	///     A room whose lights are exactly what it commands — a room with nothing behind a group, which is nearly
-	///     every room and is the context these tests are about.
-	/// </summary>
+	/// <summary>A room whose lights are what it commands, with nothing hidden behind a group.</summary>
 	private static RoomLights Room(IReadOnlyList<LightUnderReview> commanded) =>
 		new(commanded, new HashSet<string>(commanded.Select(light => light.EntityId), StringComparer.OrdinalIgnoreCase));
 
-	/// <summary>The three ordinary lamps a normal living room holds.</summary>
 	private static RoomLights ThreeLamps => Room(
 	[
 		Light("light.stue_taklys", "Taklys"),
@@ -44,14 +35,12 @@ public sealed class SwitchOnWarningTests
 
 	// ===================== when it says nothing =====================
 
-	/// <summary>One lamp with nothing wrong with it raises no doubt, so it raises no note.</summary>
 	[TestMethod]
 	public void One_Ordinary_Light_Says_Nothing()
 	{
 		Assert.IsNull(SwitchOnWarning.For("Bod", Room([Light("light.bod_taklys", "Bod taklys")]), null));
 	}
 
-	/// <summary>One light that <i>is</i> flagged still warns — a count of one is not a reason to stay quiet.</summary>
 	[TestMethod]
 	public void One_Suspicious_Light_Still_Warns()
 	{
@@ -64,10 +53,6 @@ public sealed class SwitchOnWarningTests
 
 	// ===================== the quiet tier =====================
 
-	/// <summary>
-	///     A room of ordinary lamps is not a warning. It gets the same list with no amber and no advice, because
-	///     the only thing worth saying there is what "on" now reaches.
-	/// </summary>
 	[TestMethod]
 	public void Several_Ordinary_Lights_Are_A_Remark_Rather_Than_A_Warning()
 	{
@@ -82,7 +67,6 @@ public sealed class SwitchOnWarningTests
 
 	// ===================== naming, never counting =====================
 
-	/// <summary>Every suspect is named with its reason, and the rest are named too — a count leaves them hunting.</summary>
 	[TestMethod]
 	public void The_Warning_Names_Every_Light()
 	{
@@ -99,10 +83,6 @@ public sealed class SwitchOnWarningTests
 		StringAssert.Contains(note.OthersLine ?? "", "Taklys and Vegglys");
 	}
 
-	/// <summary>
-	///     A long list is written out in full. Truncating it would leave somebody doing exactly the hunt the note
-	///     exists to save them, and the total is already in the lead line.
-	/// </summary>
 	[TestMethod]
 	public void A_Long_List_Is_Not_Truncated()
 	{
@@ -120,7 +100,6 @@ public sealed class SwitchOnWarningTests
 		Assert.IsFalse((note.OthersLine ?? "").Contains("others", StringComparison.Ordinal));
 	}
 
-	/// <summary>The count in the lead is the room's whole light list, which is the surprise worth stating.</summary>
 	[TestMethod]
 	public void The_Lead_Counts_Every_Light_And_Then_The_Doubtful_Ones()
 	{
@@ -130,7 +109,6 @@ public sealed class SwitchOnWarningTests
 		Assert.AreEqual("Stue is on, and will command 5 lights. 3 of them look like something other than room lighting.", note.Lead);
 	}
 
-	/// <summary>A room where nothing survives the audit says that instead of listing an empty remainder.</summary>
 	[TestMethod]
 	public void A_Room_Of_Nothing_But_Indicators_Says_So()
 	{
@@ -146,14 +124,8 @@ public sealed class SwitchOnWarningTests
 
 	// ===================== the lamp behind the group =====================
 
-	/// <summary>
-	///     <b>The case the audit was commissioned for, and was blind to.</b> The living room reaches
-	///     <c>light.stue_vegglys</c> through the group <c>light.stue_alle</c>, and the resolver prefers the group —
-	///     so the lamp is not in what the room commands, and the colour-channel rule, which fires only when the
-	///     parent is present, matched nothing. The room drove the lamp through the group and fought it with three
-	///     channel entities, and the note said nothing at all. The sibling check therefore reads the room's own
-	///     lights rather than only the ones that survived group preference.
-	/// </summary>
+	// The resolver prefers a group, so a lamp reached through one is absent from what the room commands. The
+	// sibling check reads the room's own lights, not the commanded list, or a channel's parent is never found.
 	[TestMethod]
 	public void A_Colour_Channel_Is_Flagged_When_Its_Lamp_Is_Reached_Through_A_Group()
 	{
@@ -165,7 +137,7 @@ public sealed class SwitchOnWarningTests
 			Light("light.stue_vegglys_b", "Vegglys B")
 		];
 
-		// The lamp the group covers is in the room, and is exactly what group preference removed from the list above.
+		// The lamp the group covers is in the room, and is what group preference removed from the list above.
 		HashSet<string> inTheRoom = new(commanded.Select(light => light.EntityId), StringComparer.OrdinalIgnoreCase)
 		{
 			"light.stue_vegglys"
@@ -190,11 +162,6 @@ public sealed class SwitchOnWarningTests
 		CollectionAssert.AreEqual(new[] { "Stue alle" }, note.Others.ToArray());
 	}
 
-	/// <summary>
-	///     The opposite property, which is the one worth being careful about: a channel whose lamp is genuinely not
-	///     in this room is not accused of duplicating it. A one-letter suffix on its own is far too thin a thing to
-	///     talk somebody out of managing a real light over.
-	/// </summary>
 	[TestMethod]
 	public void A_Channel_Whose_Lamp_Is_Elsewhere_Is_Not_Flagged()
 	{
@@ -215,10 +182,7 @@ public sealed class SwitchOnWarningTests
 
 	// ===================== the recommendation =====================
 
-	/// <summary>
-	///     The owner's own suggestion, said concretely: the label, where to name it, and that it is house-wide.
-	///     Somebody applying it to fix one room changes every room, and that has to be said before they act.
-	/// </summary>
+	// The include label is house-wide: applying it to fix one room changes every room.
 	[TestMethod]
 	public void The_Advice_Names_The_Label_The_Setting_And_Its_Reach()
 	{
@@ -231,7 +195,6 @@ public sealed class SwitchOnWarningTests
 		StringAssert.Contains(note.Advice, "Stue");
 	}
 
-	/// <summary>A house that already names an include label has taken the advice, so it is not given again.</summary>
 	[TestMethod]
 	public void A_House_With_An_Include_Label_Is_Not_Advised_Again()
 	{

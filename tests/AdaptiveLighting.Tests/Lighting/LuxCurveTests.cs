@@ -10,10 +10,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     The geometry of the daylight-brightness chart.
 /// </summary>
 /// <remarks>
-///     A chart that disagrees with the engine teaches the wrong thing with more authority than no chart at all,
-///     and it does it silently: an inverted axis or a linear one draws a perfectly plausible picture of a rule
-///     nothing implements. So the line is asserted against <see cref="LuxBrightnessCurve"/> itself rather than
-///     against numbers written here.
+///     The line is asserted against <see cref="LuxBrightnessCurve"/> itself, never against numbers written here,
+///     so the chart cannot drift into a plausible second opinion.
 /// </remarks>
 [TestClass]
 public sealed class LuxCurveTests
@@ -36,13 +34,6 @@ public sealed class LuxCurveTests
 				double.Parse(pair[1], CultureInfo.InvariantCulture)))
 	];
 
-	/// <summary>
-	///     Each decade gets an equal share of the axis. That is the whole reason the axis exists.
-	/// </summary>
-	/// <remarks>
-	///     On a linear axis 1 000 lx — broad daylight — sits a tenth of the way across and every anchor a person
-	///     would pick is crushed against the left edge.
-	/// </remarks>
 	[TestMethod]
 	public void Every_Decade_Takes_The_Same_Width()
 	{
@@ -53,7 +44,6 @@ public sealed class LuxCurveTests
 		Assert.AreEqual(1.00, LuxCurve.FractionOf(10_000, 10_000), 1e-9);
 	}
 
-	/// <summary>Reading a position off the axis and putting one back are the same map.</summary>
 	[TestMethod]
 	public void A_Position_Round_Trips_Through_The_Axis()
 	{
@@ -61,7 +51,6 @@ public sealed class LuxCurveTests
 			Assert.AreEqual(lux, LuxCurve.LuxAt(LuxCurve.FractionOf(lux, 10_000), 10_000), lux * 1e-9);
 	}
 
-	/// <summary>Nothing is ever drawn outside the plot, whatever nonsense a sensor reports.</summary>
 	[TestMethod]
 	public void Readings_Off_The_Ends_Are_Held_Inside_The_Plot()
 	{
@@ -71,14 +60,6 @@ public sealed class LuxCurveTests
 		Assert.AreEqual(1, LuxCurve.FractionOf(500_000, 10_000), 1e-9);
 	}
 
-	/// <summary>
-	///     The axis opens on four decades and stretches by whole ones — never to a snug fit.
-	/// </summary>
-	/// <remarks>
-	///     A round decade at the top is what keeps every decade the same width, which is the property the whole
-	///     axis exists for. Topping it at a sensor's own 65 535 lx would give the last decade four fifths of the
-	///     plot, on exactly the houses whose anchors are high enough to notice.
-	/// </remarks>
 	[TestMethod]
 	public void The_Axis_Stretches_By_Whole_Decades_And_Never_To_A_Snug_Fit()
 	{
@@ -96,20 +77,12 @@ public sealed class LuxCurveTests
 			Assert.AreEqual(Math.Round(Math.Log10(axis)), Math.Log10(axis), 1e-9, "and the top of the axis is always a decade");
 	}
 
-	/// <summary>The decade gridlines run from the bottom of the axis to its top, inclusive.</summary>
 	[TestMethod]
 	public void The_Gridlines_Are_The_Decades_The_Axis_Covers()
 	{
 		CollectionAssert.AreEqual(new[] { 1.0, 10.0, 100.0, 1_000.0, 10_000.0 }, LuxCurve.Decades(10_000).ToArray());
 	}
 
-	/// <summary>
-	///     Every point on the line is the engine's own answer for that reading.
-	/// </summary>
-	/// <remarks>
-	///     Sampled back out of the path and compared against <see cref="LuxBrightnessCurve.Raise"/>, so the chart
-	///     cannot drift into being a plausible second opinion.
-	/// </remarks>
 	[TestMethod]
 	public void The_Line_Is_The_Engines_Own_Arithmetic()
 	{
@@ -122,15 +95,11 @@ public sealed class LuxCurveTests
 		{
 			double lux = LuxCurve.LuxAt(x / LuxCurve.PlotWidth, 10_000);
 
-			// Half a thousandth of a user unit: the path is written to three decimals, which is a hundredth of a
-			// screen pixel at this size and the point at which more precision is only bytes.
+			// The path is written to three decimals, so half a thousandth of a user unit is the tightest useful bound.
 			Assert.AreEqual(LuxCurve.Y(LuxBrightnessCurve.Raise(40, lux, settings)), y, 5e-4);
 		}
 	}
 
-	/// <summary>
-	///     The line starts at what the period asked for and never falls: the adjustment only ever adds light.
-	/// </summary>
 	[TestMethod]
 	public void The_Line_Starts_At_The_Schedules_Level_And_Only_Climbs()
 	{
@@ -142,7 +111,6 @@ public sealed class LuxCurveTests
 			Assert.IsTrue(points[step].Y <= points[step - 1].Y + 1e-9, "SVG counts downward, so climbing is decreasing y");
 	}
 
-	/// <summary>Brightness is drawn the right way up: 100 % at the top of the plot, 0 % at the bottom.</summary>
 	[TestMethod]
 	public void The_Brightness_Axis_Is_Not_Upside_Down()
 	{
@@ -150,7 +118,6 @@ public sealed class LuxCurveTests
 		Assert.AreEqual(LuxCurve.PlotHeight, LuxCurve.Y(0), 1e-9);
 	}
 
-	/// <summary>The two anchors' handles sit where the readings they carry sit.</summary>
 	[TestMethod]
 	public void The_Handles_Stand_On_The_Values_They_Set()
 	{
@@ -166,7 +133,6 @@ public sealed class LuxCurveTests
 		Assert.AreEqual(LuxCurve.Y(85), full.Y, 1e-9);
 	}
 
-	/// <summary>The shaping handle sits on the line, at every exponent.</summary>
 	[TestMethod]
 	public void The_Shaping_Handle_Is_On_The_Curve()
 	{
@@ -182,13 +148,7 @@ public sealed class LuxCurveTests
 		}
 	}
 
-	/// <summary>
-	///     A ceiling at or below what the period already asks for leaves nothing for the shape to shape.
-	/// </summary>
-	/// <remarks>
-	///     The engine's headroom is never a signed difference, so every exponent then draws the same flat line. A
-	///     handle that cannot move the picture is worse than no handle.
-	/// </remarks>
+	/// <summary>The engine's headroom is never a signed difference, so with none every exponent draws one flat line.</summary>
 	[TestMethod]
 	public void There_Is_No_Shaping_Handle_Without_Headroom()
 	{
@@ -200,7 +160,6 @@ public sealed class LuxCurveTests
 		Assert.IsFalse(LuxCurve.HasHeadroom(settings, 80));
 	}
 
-	/// <summary>Dragging the shape to where the curve already is asks for the exponent it already has.</summary>
 	[TestMethod]
 	public void The_Dragged_Shape_Reads_Back_The_Exponent_That_Drew_It()
 	{
@@ -212,13 +171,7 @@ public sealed class LuxCurveTests
 		}
 	}
 
-	/// <summary>
-	///     A drag onto the very top or bottom of the plot cannot produce an exponent of zero.
-	/// </summary>
-	/// <remarks>
-	///     <c>Math.Pow(0, 0)</c> is 1, so a gamma of zero would hand back the full daylight ceiling in the dark —
-	///     the trap <see cref="LuxBrightnessCurve"/> names by name.
-	/// </remarks>
+	/// <summary><c>Math.Pow(0, 0)</c> is 1, so a gamma of zero hands back the full daylight ceiling in the dark.</summary>
 	[TestMethod]
 	public void A_Drag_To_The_Edge_Cannot_Produce_A_Zero_Exponent()
 	{
@@ -230,13 +183,6 @@ public sealed class LuxCurveTests
 		}
 	}
 
-	/// <summary>
-	///     A dragged reading is rounded to something a person would have typed, in the decade's own grain.
-	/// </summary>
-	/// <remarks>
-	///     A fixed grain is wrong at both ends: 50 lx makes the bottom decade unreachable, and 1 lx leaves an
-	///     anchor reading "7 431 lx" that nobody chose and nobody can reproduce.
-	/// </remarks>
 	[TestMethod]
 	public void A_Dragged_Reading_Rounds_To_The_Decades_Own_Grain()
 	{
@@ -249,12 +195,9 @@ public sealed class LuxCurveTests
 	}
 
 	/// <summary>
-	///     Every number the chart writes into an attribute is invariant.
+	///     Under nb-NO a bare double renders 7.4 as "7,4". In a path a comma is a coordinate separator; in a
+	///     length it is nothing, and the drag surface silently covers the chart.
 	/// </summary>
-	/// <remarks>
-	///     Under <c>nb-NO</c> a bare double renders 7.4 as "7,4". In a path a comma is a coordinate separator, and
-	///     in a length it is nothing at all — the drag surface would silently cover the whole chart.
-	/// </remarks>
 	[TestMethod]
 	public void The_Geometry_Is_Written_Invariantly_Whatever_The_Machine_Speaks()
 	{
@@ -274,7 +217,6 @@ public sealed class LuxCurveTests
 		}
 	}
 
-	/// <summary>The drag surface lands exactly on the plot, so a touch means what it looks like it means.</summary>
 	[TestMethod]
 	public void The_Drag_Surface_Covers_The_Plot_And_Nothing_Else()
 	{
@@ -286,7 +228,6 @@ public sealed class LuxCurveTests
 		Assert.IsTrue(LuxCurve.PlotTop + LuxCurve.PlotHeight <= LuxCurve.ViewHeight);
 	}
 
-	/// <summary>A curve needs at least its two ends.</summary>
 	[TestMethod]
 	public void One_Point_Is_Not_A_Curve()
 	{

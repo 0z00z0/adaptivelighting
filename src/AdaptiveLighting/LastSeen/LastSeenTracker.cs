@@ -6,61 +6,14 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.LastSeen;
 
 /// <summary>
-///     Keeps an honest record of when each Home Assistant entity was last genuinely heard from, and survives both
-///     a Home Assistant restart and an engine restart.
+///     Records when each Home Assistant entity was last genuinely heard from, across both a Home Assistant restart
+///     and an engine restart.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>The trap this exists to avoid, written down because it is not visible in the code and somebody will
-///         otherwise simplify it away.</b> Home Assistant resets <c>last_updated</c> and <c>last_changed</c> on
-///         every restart: each entity is restored and re-announced, and every timestamp in the house collapses to
-///         the same instant. Measured on the live house on 2026-07-28, 2.3 hours after a restart: of 51 motion
-///         sensors, the oldest timestamp of any of them was 2.30 hours. A sensor dead for a week read exactly the
-///         same as one that reported five minutes before the restart. So the naive implementation — "remember the
-///         newest <c>last_updated</c> we have seen" — is worse than useless: it agrees with Home Assistant that
-///         everything is fresh, on precisely the occasions when it is not.
-///     </para>
-///     <para>
-///         <b>How a restart is told apart from a report.</b> By the shape of the whole population, which is the one
-///         signal that needs no cooperation from Home Assistant and survives being disconnected while it happened.
-///         A running house has timestamps spread over hours or days — a door nobody opened since Tuesday sits well
-///         behind a power meter reporting every ten seconds. Immediately after a restart that spread is gone,
-///         because nothing can carry a timestamp older than the restart. So when the entire population's timestamps
-///         fit inside <see cref="LastSeenOptions.CollapseWindow"/>, and the population is large enough for that to
-///         mean anything, this reads it as a restart and takes the oldest timestamp in it as the moment Home
-///         Assistant started. Home Assistant's own <c>homeassistant_start</c> event does the same job when it
-///         arrives — it usually does not, because the socket is down while Home Assistant is restarting — so it is
-///         a second opinion rather than the mechanism.
-///     </para>
-///     <para>
-///         <b>What happens in the window immediately after a restart.</b> Nothing advances. A timestamp is treated
-///         as evidence only if it is more than <see cref="LastSeenOptions.StartupGrace"/> newer than the restart,
-///         and every restored timestamp is inside that window by construction. Every entity therefore keeps the
-///         record it had before the restart: the sensor that was dead for a week still reads a week, and the healthy
-///         one still reads five minutes before the restart until it reports again — which, being healthy, it does.
-///         The cost is that a genuine report in the first few minutes after a restart is not counted, which is a few
-///         minutes of apparent staleness on an entity that will report again shortly. That trade is deliberate and
-///         one-sided: refusing a real report is recoverable, believing a restore is not.
-///     </para>
-///     <para>
-///         <b>Why this samples rather than subscribes.</b> Home Assistant keeps its own <c>last_updated</c> until it
-///         restarts, so a census a minute misses nothing a subscription would have caught. A subscription would
-///         actually be worse: the restore burst arrives before anything could have worked out that a restart
-///         happened, so an event-driven design advances every record first and discovers its mistake afterwards,
-///         which then needs a rollback to undo. A census decides whether Home Assistant restarted and only then
-///         decides what to believe, so the mistake never happens.
-///     </para>
-///     <para>
-///         <b>"The value did not change" is not "it did not report", and this never confuses the two.</b> A
-///         light-level sensor sitting at a constant 3 lx all night is healthy and quiet. Evidence here is any
-///         forward movement of Home Assistant's <c>last_updated</c> — which covers a changed attribute and a forced
-///         update as well as a changed value — and never a comparison of one state string against the previous one.
-///         One residual limit is worth stating because it is not this module's to fix: since Home Assistant 2024.8 a
-///         report of a byte-identical value with byte-identical attributes moves only <c>last_reported</c>, and
-///         NetDaemon 26.21's <see cref="EntityState"/> does not expose that field, so such a report is invisible to
-///         this process. When NetDaemon surfaces <c>last_reported</c>, reading it here in preference to
-///         <c>last_updated</c> is the whole fix.
-///     </para>
+///     Home Assistant resets last_updated and last_changed on every restart, so all timestamps in the house collapse
+///     to the restart instant and a week-dead sensor reads the same as a healthy one. Nothing here may simplify down
+///     to "remember the newest last_updated": that agrees with Home Assistant that everything is fresh on the very
+///     occasions when it is not.
 /// </remarks>
 public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 {
@@ -78,8 +31,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 
 	private readonly Dictionary<string, TrackedEntity> _entities = new(StringComparer.Ordinal);
 
-	// Bucket keys, not an enum: a bucket is a device class or a domain, so the set is open-ended and known only
-	// from what is currently tracked. Ordinal because the keys are already normalised by LastSeenBuckets.
+	// Ordinal: the keys are already normalised by LastSeenBuckets.
 	private readonly HashSet<string> _dirty = new(StringComparer.Ordinal);
 
 	private readonly CompositeDisposable _subscriptions = [];
@@ -89,12 +41,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	private bool _started;
 
 	/// <summary>Creates a tracker. Nothing is loaded, sampled or written until <see cref="Start"/>.</summary>
-	/// <param name="ha">Where the population and its timestamps are read from. Never commanded.</param>
-	/// <param name="scheduler">The module's only clock: every "now" and every timer comes from here.</param>
-	/// <param name="store">The cache files beside the configuration document.</param>
-	/// <param name="options">The tuning. The defaults are the documented ones.</param>
-	/// <param name="logger">Where restarts, evictions and write failures are reported.</param>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	/// <remarks><paramref name="scheduler"/> is the module's only clock: every "now" and every timer comes from it.</remarks>
 	public LastSeenTracker(
 		IHaContext ha,
 		IScheduler scheduler,
@@ -148,13 +95,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 		threshold > TimeSpan.Zero && SilenceOf(entityId) is { } silence && silence > threshold;
 
 	/// <summary>
-	///     Loads the cache, takes the first census, and arms the census and flush timers.
+	///     Loads the cache, takes the first census inline, and arms the census and flush timers.
 	/// </summary>
-	/// <remarks>
-	///     The first census happens inline rather than on the first timer tick, so that a caller asking a question
-	///     immediately after start-up gets the loaded history and not an empty one — and so that a Home Assistant
-	///     restart which happened while this process was down is noticed at once rather than a minute later.
-	/// </remarks>
 	/// <exception cref="InvalidOperationException">Already started.</exception>
 	public void Start()
 	{
@@ -167,9 +109,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 			LoadCore();
 		}
 
-		// A second opinion on restarts, not the mechanism: Home Assistant fires this while the socket is down for
-		// the restart, so it usually never arrives. When it does, it is the earliest and most certain signal there
-		// is, and it covers the one case the population test abstains from — an instance too small to reason about.
+		// A second opinion, not the mechanism: Home Assistant fires this while the socket is down for the restart,
+		// so it usually never arrives.
 		try
 		{
 			_subscriptions.Add(_ha.Events
@@ -178,7 +119,6 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 		}
 		catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)
 		{
-			// No event stream is a degraded tracker, not a dead one: the population test carries the load.
 			_logger.LogWarning(exception, "Could not watch for Home Assistant start events; restarts will be detected from the entity population alone.");
 		}
 
@@ -202,8 +142,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	///     then decides what to believe.
 	/// </summary>
 	/// <remarks>
-	///     The order is the whole design: the restart verdict is reached from the same sample it is then applied to,
-	///     so there is never a moment at which restore timestamps have been believed and must be taken back.
+	///     Sampling, not subscribing, and the order is why: the restart verdict is reached from the same sample it is
+	///     applied to, so restore timestamps are never believed and then rolled back.
 	/// </remarks>
 	private void TakeCensus()
 	{
@@ -213,8 +153,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 		}
 		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
 		{
-			// This runs on a timer with no caller to catch anything, and an unobserved exception on a thread-pool
-			// scheduler ends the process — the whole Home Assistant host, not just this cache.
+			// Runs on a timer with no caller. An unobserved exception on a thread-pool scheduler ends the whole host.
 			_logger.LogWarning(exception, "A last-seen census failed and was abandoned. The record is unchanged and the next census will try again.");
 		}
 	}
@@ -254,8 +193,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 
 		if (samples.Count == 0)
 		{
-			// A house with nothing in it is a connection problem, not a house where everything died. Concluding
-			// anything here — a restart, an eviction — would be concluding it from no evidence.
+			// An empty house is a connection problem. Never conclude a restart or an eviction from it.
 			_logger.LogDebug("No Home Assistant entity carried a timestamp this census; nothing to record.");
 			return;
 		}
@@ -275,24 +213,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	///     Decides whether this sample is a house that has just restarted, and if so when.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         The collapse must be a <i>transition</i>, not a state. A handful of chatty sensors report inside the
-	///         window every minute of their lives, and a rule that read that as a restart would declare one every
-	///         census and never believe anything again. So a population that was already collapsed last time is
-	///         simply a tight population; only a spread one becoming tight is a restart.
-	///     </para>
-	///     <para>
-	///         The estimate only ever moves forwards, and it is persisted, so an engine restarted five minutes after
-	///         Home Assistant restarted knows it is inside the window and refuses the same timestamps its previous
-	///         run would have refused.
-	///     </para>
-	///     <para>
-	///         <b>The residual, stated rather than hidden.</b> A small installation in which every entity happens to
-	///         report inside one window, having previously been spread, looks exactly like a restart and is called
-	///         one. That costs a few minutes in which nothing advances, and then it corrects itself; it can never
-	///         make an entity look fresher than it is, which is the only error worth defending against here. A house
-	///         of any size has quiet entities and never reaches that state.
-	///     </para>
+	///     The collapse must be a transition, not a state. A population already collapsed last census is just a tight
+	///     population; only a spread one becoming tight is a restart. The estimate moves forwards only.
 	/// </remarks>
 	private void DetectRestart(List<EntitySample> samples, DateTimeOffset now)
 	{
@@ -316,7 +238,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 			return;
 
 		if (_haStartedAt is { } known && oldest <= known)
-			// The same restart we already know about — an engine restarted moments after Home Assistant was.
+			// The same restart already on record; an engine restarted moments after Home Assistant was.
 			return;
 
 		DeclareRestart(oldest, now,
@@ -327,8 +249,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	{
 		_haStartedAt = startedAt;
 
-		// Every file carries the estimate, so every file is now out of date. Rare, and the only place that writes
-		// the whole cache at once — which is why the dirty set is keyed by bucket everywhere else.
+		// Every file carries the estimate, so every file is now out of date.
 		DirtyEveryBucket();
 
 		_logger.LogInformation(
@@ -350,7 +271,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 			if (_haStartedAt is { } known && known >= now)
 				return;
 
-			// The population is about to collapse, so record that as the state rather than waiting to observe it.
+			// The population is about to collapse, so record that now instead of waiting to observe it.
 			_previousCensusCollapsed = true;
 			DeclareRestart(now, now, $"Home Assistant announced it with a {@event.EventType} event");
 		}
@@ -360,9 +281,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	///     Whether a Home Assistant timestamp is evidence that the entity is alive, or an artefact of a restart.
 	/// </summary>
 	/// <remarks>
-	///     With no restart on record everything is believed, and that is the right default rather than a gap: it is
-	///     what a first run against a Home Assistant that has been up for weeks needs, and such an instance's
-	///     timestamps are honest precisely because nothing has reset them.
+	///     With no restart on record everything is believed. Inside the grace window nothing advances, so every entity
+	///     keeps whatever record it had before the restart.
 	/// </remarks>
 	private bool IsEvidence(DateTimeOffset stamp) =>
 		_haStartedAt is not { } started || stamp > started + _options.StartupGrace;
@@ -371,13 +291,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	///     Files one sampled entity, creating its record if this is the first time it has been met.
 	/// </summary>
 	/// <remarks>
-	///     <b>Seeding is not a special case, and deliberately so.</b> The first timestamp an entity is met with is
-	///     accepted exactly when any later one would be: when it postdates the last known restart. A timestamp that
-	///     survived a restart is real evidence, whether or not this process was running when it was set, so a fresh
-	///     installation against a long-running Home Assistant starts with a useful record rather than a blank one.
-	///     A timestamp inside the restart window is not evidence for a new entity either, so the entity starts as
-	///     unknown — which is why a fresh installation cannot declare every sensor dead: the worst it can say is
-	///     that it does not know, and <see cref="IEntityLastSeen.HasBeenSilentFor"/> answers <c>false</c> to that.
+	///     A first sighting is accepted on the same test as any later one, so a fresh install against a long-running
+	///     Home Assistant starts with real history. Inside the restart window it starts as unknown, never as dead.
 	/// </remarks>
 	private void Record(EntitySample sample, DateTimeOffset now)
 	{
@@ -393,10 +308,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 
 		if (!string.Equals(tracked.Bucket, bucket, StringComparison.Ordinal))
 		{
-			// Moved, never copied: the old file is rewritten without it in the same flush that adds it to the new
-			// one. A device class can change when an integration is updated, and a record in two files would then
-			// be two divergent histories of one entity. This is also the whole of the pre-split migration: every
-			// record loaded from the old catch-all moves the first time its class is read.
+			// Moved, never copied: both buckets go dirty so one flush removes it from the old file and adds it to the
+			// new. A record left in two files becomes two divergent histories of one entity.
 			_dirty.Add(tracked.Bucket);
 			tracked.Bucket = bucket;
 			_dirty.Add(bucket);
@@ -412,14 +325,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	private string BucketOf(EntitySample sample) =>
 		LastSeenBuckets.Classify(sample.EntityId, sample.State.AttrString(DeviceClassAttribute), LabelsOf(sample.EntityId), _options);
 
-	/// <summary>
-	///     Marks every bucket that currently holds something.
-	/// </summary>
-	/// <remarks>
-	///     There is no list of all possible buckets to iterate any more, and there should not be: a bucket exists
-	///     because an entity is in it. A bucket with nothing in it has no file either, so nothing is missed by
-	///     starting from what is tracked.
-	/// </remarks>
+	/// <summary>Marks every bucket that currently holds something. There is no list of possible buckets.</summary>
 	private void DirtyEveryBucket()
 	{
 		foreach (TrackedEntity tracked in _entities.Values)
@@ -434,8 +340,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 		}
 		catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)
 		{
-			// NetDaemon's registry throws until its first connection completes. A missing label means a sensor is
-			// filed under its own device class rather than under motion, which costs legibility and nothing else.
+			// NetDaemon's registry throws until its first connection completes. Filing then falls back to the device
+			// class, which costs legibility and nothing else.
 			_logger.LogDebug(exception, "Could not read the labels of {EntityId} for filing.", entityId);
 			return null;
 		}
@@ -445,18 +351,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	///     Drops records that have outlived their entity.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         <b>Only entities Home Assistant no longer reports are ever dropped.</b> A device that is merely quiet
-	///         is never forgotten however long the silence lasts — the silence <i>is</i> the measurement, and
-	///         evicting the record would erase exactly the finding this cache exists to make. That also makes the
-	///         set self-bounding: what is present is bounded by the size of the house, so only the absent set can
-	///         grow, and it is the only set either rule here touches.
-	///     </para>
-	///     <para>
-	///         An entity removed from Home Assistant stops advancing, so its own age is its eviction timer and no
-	///         "missing since" field is needed. The ceiling then catches the pathological case retention is too slow
-	///         for — an instance being rebuilt, minting new entity ids faster than the old ones age out.
-	///     </para>
+	///     Only entities Home Assistant no longer reports are eligible. A quiet device is never evicted however long
+	///     the silence lasts, because the silence is the measurement.
 	/// </remarks>
 	private void Evict(HashSet<string> present, DateTimeOffset now)
 	{
@@ -474,7 +370,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 			if (now - _entities[entityId].AgeAnchor > _options.Retention)
 				dropped.Add(entityId);
 
-		// Oldest first, which is the order retention would have taken them in anyway.
+		// Then the MaxTracked ceiling, oldest first: the order retention would have taken them in anyway.
 		foreach (string entityId in absent)
 		{
 			if (_entities.Count - dropped.Count <= _options.MaxTracked)
@@ -498,7 +394,7 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 
 	// ---- persistence ------------------------------------------------------------------------
 
-	/// <summary>Reads the cache. Called under the lock, from <see cref="Start"/>, exactly once.</summary>
+	/// <summary>Reads the cache. Called once, under the lock, from <see cref="Start"/>.</summary>
 	private void LoadCore()
 	{
 		LastSeenCacheLoad load = _store.Load();
@@ -509,10 +405,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 
 		_haStartedAt = load.HomeAssistantStarted;
 
-		// A record that was found in the wrong bucket, a bucket that failed to load, or a cache written before the
-		// catch-all was split all leave the set inconsistent with what the next census will decide. Writing
-		// everything once settles it — and for the pre-split case that write is the migration itself: each record
-		// lands in its class's file and the emptied catch-all takes its own file away.
+		// A misfiled record, an unreadable bucket or a pre-split cache all leave the set inconsistent with what the
+		// next census decides. One full write settles it, and for the pre-split case that write is the migration.
 		if (load.DuplicatesResolved > 0 || load.FilesUnreadable > 0 || load.PreSplitRecords > 0)
 			DirtyEveryBucket();
 
@@ -536,23 +430,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	///     Writes whichever buckets have changed since the last flush.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         One timer for the whole cache rather than one per file, so a busy motion bucket never drags an idle
-	///         illuminance one into a write it did not need. Batching in time is what makes the write cost bounded:
-	///         state changes arrive constantly, and a write per change would punish the card Home Assistant boots
-	///         from for no gain whatsoever.
-	///     </para>
-	///     <para>
-	///         <b>Only the buckets that changed are written, and that matters more now than it did.</b> Splitting the
-	///         catch-all by device class turned four files into dozens, so a flush that rebuilt all of them would
-	///         multiply the write cost by the number of classes in the house for no reason at all. The dirty set is
-	///         keyed by bucket and is only ever added to where a record actually moved or advanced, so one entity
-	///         reporting writes one file.
-	///     </para>
-	///     <para>
-	///         The documents are built under the lock and written outside it, so a flush never blocks a lighting
-	///         decision on a file system.
-	///     </para>
+	///     Documents are built under the lock and written outside it, so a flush never blocks a lighting decision on
+	///     the file system.
 	/// </remarks>
 	private void Flush()
 	{
@@ -570,13 +449,13 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 		foreach (KeyValuePair<string, LastSeenDocument> pair in pending)
 			if (!_store.TrySave(pair.Key, pair.Value))
 				lock (_gate)
-					// Still unwritten, so still dirty: the next flush retries rather than losing the change.
+					// Still unwritten, so still dirty: the next flush retries instead of losing the change.
 					_dirty.Add(pair.Key);
 	}
 
 	/// <summary>
-	///     One bucket's file contents. An emptied bucket produces an empty document, which the store reads as
-	///     "take this file away" rather than as something to write.
+	///     One bucket's file contents. An emptied bucket produces an empty document, which the store reads as an
+	///     instruction to remove the file.
 	/// </summary>
 	private LastSeenDocument BuildDocument(string bucket)
 	{
@@ -600,11 +479,8 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	///     The entity's Home Assistant timestamp, in UTC, never in the future.
 	/// </summary>
 	/// <remarks>
-	///     <c>last_updated</c> rather than <c>last_changed</c>, because the two differ exactly on the case that
-	///     matters: an entity re-reporting the same value with a changed attribute moves <c>last_updated</c> alone,
-	///     and that is a report. The clamp is against a Home Assistant host whose clock runs ahead of this one:
-	///     clamping reads such a stamp as "just now", which is what it is claiming, whereas rejecting it would make
-	///     a clock-skewed installation permanently unknowable.
+	///     last_updated first, not last_changed: a re-report of the same value with a changed attribute moves only
+	///     last_updated, and that is still a report. The clamp covers a Home Assistant host whose clock runs ahead.
 	/// </remarks>
 	private static DateTimeOffset? StampOf(EntityState state, DateTimeOffset now)
 	{
@@ -617,30 +493,27 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 		{
 			DateTimeKind.Utc => new DateTimeOffset(value, TimeSpan.Zero),
 			DateTimeKind.Local => new DateTimeOffset(value).ToUniversalTime(),
-			// Home Assistant publishes UTC. A value that arrived without a kind is UTC that lost its label on the
-			// way through the JSON reader, not a local time.
+			// Home Assistant publishes UTC. A kindless value lost its label in the JSON reader; it is not local time.
 			_ => new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Utc), TimeSpan.Zero)
 		};
 
 		return stamp > now ? now : stamp;
 	}
 
-	/// <summary>One entity as this census found it.</summary>
 	private sealed record EntitySample(string EntityId, DateTimeOffset Stamp, EntityState State);
 
-	/// <summary>One entity's record while the process is running. The disk shape is <see cref="LastSeenEntry"/>.</summary>
+	/// <summary>One entity's in-memory record. The disk shape is <see cref="LastSeenEntry"/>.</summary>
 	private sealed class TrackedEntity(string entityId, string bucket, DateTimeOffset? lastSeen, DateTimeOffset trackedSince)
 	{
 		public string EntityId { get; } = entityId;
 
-		/// <summary>Which file it belongs in: a device class, a domain, or one of the three curated buckets.</summary>
 		public string Bucket { get; set; } = bucket;
 
 		public DateTimeOffset? LastSeen { get; set; } = lastSeen;
 
 		public DateTimeOffset TrackedSince { get; } = trackedSince;
 
-		/// <summary>What ageing and eviction measure from: real evidence when there is any, else when we met it.</summary>
+		/// <summary>What ageing and eviction measure from: real evidence when there is any, else first sighting.</summary>
 		public DateTimeOffset AgeAnchor => LastSeen ?? TrackedSince;
 	}
 }

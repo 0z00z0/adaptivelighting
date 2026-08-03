@@ -1,32 +1,17 @@
 @*
-	A number moved in its own natural grain, with the keyboard one tap away.
+	A number moved in its own grain: minus and plus, with the readout clicking through to a plain input.
 
-	The design's bargain about numbers: the sentence token offers the handful of values a sane house uses, the
-	stepper covers everything between them, and clicking the readout turns it into a plain input so no value
-	expressible in the document becomes inexpressible here. Three layers, each one tap deeper than the last.
-
-	Minus and plus rather than a slider or a free box, because a constrained control is what makes applying a
-	change the moment it is made safe: no press here can produce a value the validator would refuse, so the page
-	needs no review step between the hand and the house.
-
-	The readout is muted while the value is the house's and solid once the room owns it — the same fact the
-	amber dot beside the label carries, said again where the eye actually is when it presses a button.
-
-	A setting whose range spans decades gets the box instead, and keeps it. See RoomSettings.SpansDecades: at
-	0-65 535 lx the middle layer collapses, because no single step is both usable at 3 lx and usable at 30 000.
-	The bargain there is two layers, not three — the shortlist for the decade, the box for the number — and the
-	box refuses what it cannot take rather than reshaping it into something nobody typed.
+	No press can produce a value the validator would refuse, so a change is safe to apply as it is made. A
+	setting whose range spans decades (see RoomSettings.SpansDecades) gets the box instead and keeps it: no
+	single step is usable at both 3 lx and 30 000, and the box refuses what it cannot take and does not clamp.
 *@
 
 @if (RoomSettings.SpansDecades(Min, Max))
 {
 	<span class="numbox">
 		<span class="numbox-row">
-			@*
-				step="any" because there is no grain to declare: the browser would otherwise mark a perfectly
-				legal 62.5 as invalid against a step nothing here believes in. Every numeric attribute is written
-				invariant — see Invariant below.
-			*@
+			@* step="any" because there is no grain to declare; the browser would otherwise mark a legal 62.5
+			   invalid. Every numeric attribute is written invariant, see Invariant below. *@
 			<input class="numbox-input @(IsOwn ? null : "numbox-inherited")"
 				   type="number"
 				   step="any"
@@ -44,8 +29,7 @@
 			}
 		</span>
 
-		@* Rendered whether or not it says anything, so a screen reader has the live region before the first
-		   refusal arrives. Empty, it is display:none and costs no layout. *@
+		@* Rendered even when empty, so the live region exists before the first refusal arrives. *@
 		<span class="numbox-refusal" role="status">@_refusal</span>
 	</span>
 }
@@ -61,10 +45,8 @@ else
 
 		@if (_typing)
 		{
-			@*
-				@bind is deliberately not used: it writes on every keystroke, and every write here schedules a save.
-				onchange fires on Enter and on leaving the box, which is when a typed number is actually meant.
-			*@
+			@* Not @bind: it writes on every keystroke, and every write here schedules a save. onchange fires on
+			   Enter and on blur, when a typed number is meant. *@
 			<input class="stepper-input"
 				   type="number"
 				   step="@Invariant(Step)"
@@ -109,7 +91,6 @@ else
 	[Parameter]
 	public double Step { get; set; } = 1;
 
-	/// <summary>The lowest value a press will reach.</summary>
 	[Parameter]
 	public double Min { get; set; }
 
@@ -121,41 +102,28 @@ else
 	[Parameter]
 	public bool IsOwn { get; set; }
 
-	/// <summary>Raised with the new value. The page decides what applying it means; nothing here writes anything.</summary>
+	/// <summary>Raised with the new value. Nothing here writes anything.</summary>
 	[Parameter]
 	public EventCallback<double> ValueChanged { get; set; }
 
 	private bool _typing;
 
-	/// <summary>What was typed and refused, left on screen so it can be corrected rather than typed again.</summary>
+	/// <summary>What was typed and refused, left on screen so it can be corrected without being typed again.</summary>
 	private string? _entered;
 
-	/// <summary>Why the last entry changed nothing, in the words the reader sees under the box.</summary>
 	private string? _refusal;
 
 	/// <summary>The written value this box last settled on, so a change from elsewhere can be recognised.</summary>
 	private string? _settled;
 
-	/// <summary>
-	///     The unit, read off the written value rather than passed a second time.
-	/// </summary>
-	/// <remarks>
-	///     <see cref="Text"/> is already the number with its unit, formatted by the caller who knows the kind, so
-	///     taking the unit from there keeps one source. A separate parameter could be given a unit the readout
-	///     does not use, and a box saying lx beside a readout saying degrees is worse than a box saying nothing.
-	/// </remarks>
+	/// <summary>The unit, read off <see cref="Text"/> so the box and the readout cannot name different units.</summary>
 	private string Suffix =>
 		Text.StartsWith(Invariant(Value), StringComparison.Ordinal)
 			? Text[Invariant(Value).Length..].Trim()
 			: string.Empty;
 
-	/// <summary>
-	///     Settles the box when the value arrives from somewhere other than the box.
-	/// </summary>
-	/// <remarks>
-	///     The revert link and the sentence above both write this setting. A refusal still showing after one of
-	///     them lands would be a complaint about a number nobody is looking at any more.
-	/// </remarks>
+	// The revert link and the sentence above both write this setting, so a value arriving from elsewhere has to
+	// clear a refusal that is now about a number nobody is looking at.
 	protected override void OnParametersSet()
 	{
 		if (string.Equals(_settled, Invariant(Value), StringComparison.Ordinal))
@@ -166,13 +134,7 @@ else
 		_refusal = null;
 	}
 
-	/// <summary>
-	///     Snaps to the step's own grid rather than adding to whatever is there.
-	/// </summary>
-	/// <remarks>
-	///     A room sitting on a hand-typed 7 min with a 5 min step should reach 10, not 12: the grid is what the
-	///     step is for, and stepping off it would leave a value nobody could reach again by pressing the other way.
-	/// </remarks>
+	/// <summary>Snaps to the step's grid, not adding: a hand-typed 7 with a step of 5 goes to 10, not 12.</summary>
 	private Task Down() => Move(Math.Ceiling(Round(Value / Step) - 1) * Step);
 
 	private Task Up() => Move(Math.Floor(Round(Value / Step) + 1) * Step);
@@ -187,8 +149,8 @@ else
 	{
 		_typing = false;
 
-		// A box left empty or holding something unparseable is not an instruction to change anything. Writing a
-		// zero into a timeout because somebody selected the text and tabbed away would be the worst reading of it.
+		// An empty or unparseable box is not an instruction to change anything: selecting the text and tabbing
+		// away must not write a zero into a timeout.
 		if (args.Value is not string typed
 			|| !double.TryParse(typed, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed))
 		{
@@ -198,15 +160,9 @@ else
 		return Move(parsed);
 	}
 
-	/// <summary>
-	///     Reads the permanent box, which refuses what it cannot take instead of clamping it.
-	/// </summary>
-	/// <remarks>
-	///     The arrows can clamp because a press cannot mean anything but "one more"; a typed number is a stated
-	///     intention, and turning 70 000 into 65 535 without a word answers a question nobody asked. The parsing
-	///     and the wording are <see cref="RoomSettings.ReadNumber"/>'s, so both are pure and tested rather than
-	///     living in markup nothing can assert about.
-	/// </remarks>
+	/// <summary>Reads the permanent box, which refuses what it cannot take instead of clamping it.</summary>
+	// The arrows may clamp because a press means only "one more". Parsing and wording are RoomSettings'
+	// ReadNumber, so both stay testable outside markup.
 	private Task OnEntered(ChangeEventArgs args)
 	{
 		string raw = args.Value as string ?? string.Empty;
@@ -228,8 +184,10 @@ else
 
 	private double Bounded(double value) => Math.Clamp(value, Min, Max ?? double.MaxValue);
 
-	/// <summary>Rounds away the binary drift a chain of 0.1 steps accumulates, so the grid stays a grid.</summary>
+	/// <summary>Rounds away the binary drift a chain of 0.1 steps accumulates.</summary>
 	private static double Round(double value) => Math.Round(value, 6);
 
+	// A bare @double attribute renders through the current culture: under nb-NO 62.5 becomes value="62,5",
+	// which no browser reads as a number, so the field shows empty and min/step silently drop.
 	private static string Invariant(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
 }

@@ -6,24 +6,9 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The activity page's buffer and its words, tested where they live rather than in markup.
+///     The activity page's buffer and the words it builds. There is no Razor render harness, so the timeline's
+///     judgement lives in pure functions and only its arrangement is in the page.
 /// </summary>
-/// <remarks>
-///     <para>
-///         This repo has no Razor render-test harness and deliberately does not gain one, so the timeline's
-///         judgement was written as pure functions and only its arrangement lives in the page. Five things are
-///         worth being sure about: the buffer really is bounded (an unbounded one is a leak that only shows up
-///         on the houses that have been running longest), it evicts oldest-first (or the page silently loses the
-///         wrong end of the history), the entries and the count that goes with them come back from one read (or a
-///         report landing between two is counted as shown while missing from what was shown), the room filter
-///         matches what the dropdown offered, and the line built from a report says what the engine actually saw.
-///     </para>
-///     <para>
-///         That last one is the feature's reason for existing. The owner's question was why a light did not come
-///         on, and the answer was a lux reading against a threshold; a page that shows a confident wrong sentence
-///         there is worse than no page.
-///     </para>
-/// </remarks>
 [TestClass]
 public sealed class ActivityLogTests
 {
@@ -73,10 +58,6 @@ public sealed class ActivityLogTests
 
 	// ===================== the bounded buffer =====================
 
-	/// <summary>
-	///     The cap is real. This process runs for months in a house, so a buffer that only grew would be a leak
-	///     nobody notices until the installation that has been up longest falls over.
-	/// </summary>
 	[TestMethod]
 	public void The_Log_Never_Holds_More_Than_Its_Capacity()
 	{
@@ -90,10 +71,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(ActivityLog.Capacity, log.Entries.Count);
 	}
 
-	/// <summary>
-	///     Full, it drops the oldest report — never the newest. Getting this backwards would leave the page
-	///     showing ancient history and silently discarding the transition somebody came to look for.
-	/// </summary>
 	[TestMethod]
 	public void A_Full_Log_Drops_Its_Oldest_Report_First()
 	{
@@ -110,7 +87,6 @@ public sealed class ActivityLogTests
 			"the three oldest fell off, so the tail is the fourth report ever recorded");
 	}
 
-	/// <summary>Newest first is the page's order, and the log hands it over already in that order.</summary>
 	[TestMethod]
 	public void Entries_Come_Back_Newest_First()
 	{
@@ -127,10 +103,7 @@ public sealed class ActivityLogTests
 			entries.Select(entry => entry.AreaName).ToArray());
 	}
 
-	/// <summary>
-	///     Sequences count every report ever recorded, not every report still held. That is what lets the page
-	///     say "4 new reports" by subtraction and stay right after the oldest have been evicted.
-	/// </summary>
+	/// <summary>Sequences count every report recorded, not every report held; the page subtracts them to say "4 new".</summary>
 	[TestMethod]
 	public void Sequences_Keep_Counting_After_Eviction()
 	{
@@ -144,7 +117,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(ActivityLog.Capacity + 5, log.Entries[0].Sequence);
 	}
 
-	/// <summary>An empty log says so, which is what the page's honest empty state hangs on.</summary>
 	[TestMethod]
 	public void A_Fresh_Log_Is_Empty_And_Has_No_Sequence_Yet()
 	{
@@ -160,9 +132,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(1L, log.Newest, "sequences count from one, so zero can mean 'nothing yet'");
 	}
 
-	/// <summary>
-	///     The timeline and the count that goes with it come back together, and mean the same instant.
-	/// </summary>
 	[TestMethod]
 	public void A_Read_Hands_Over_The_Entries_And_The_Count_As_One()
 	{
@@ -183,20 +152,15 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(2L, timeline.Newest);
 	}
 
-	/// <summary>
-	///     <b>The report that used to vanish.</b> Reading the entries and the sequence as two separately-locked
-	///     calls leaves a gap, and a report landing in it is counted as shown while being absent from what was
-	///     shown: no "new reports" button appears for it and the row stays invisible until some later report
-	///     happens to arrive, which in a quiet house is hours. So the two come back from one lock, and the
-	///     invariant that proves it is that the newest entry held is the newest sequence counted.
-	/// </summary>
+	/// <remarks>
+	///     Regression: entries and sequence were two separately-locked reads, so a report landing between them
+	///     was counted as shown while absent from the list. One lock; newest entry held is newest sequence.
+	/// </remarks>
 	[TestMethod]
 	public void A_Report_Arriving_Mid_Read_Is_Never_Counted_As_Shown_While_Missing()
 	{
-		// Reader-driven: a fixed number of reads against a writer that runs until they are done, so the window
-		// the race needs is never closed early by the writer finishing first. The reads only begin once the
-		// writer has filed one report, because reads of an empty log cost nothing and five thousand of them can
-		// otherwise be over before the pool has started the writer at all.
+		// Reader-driven: a fixed number of reads against a writer that runs until they finish, gated on the
+		// writer's first report. Reads of an empty log are free and would otherwise all be over before it starts.
 		ActivityLog log = new();
 		const int Reads = 5_000;
 
@@ -237,7 +201,6 @@ public sealed class ActivityLogTests
 
 	// ===================== the room filter =====================
 
-	/// <summary>No room chosen shows the whole house — the filter's resting state, not a special case.</summary>
 	[TestMethod]
 	public void No_Room_Chosen_Shows_Every_Room()
 	{
@@ -248,7 +211,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(2, ActivityView.InRoom(entries, "   ").Count);
 	}
 
-	/// <summary>A chosen room shows only that room, and in the order it was given — the filter never re-sorts.</summary>
 	[TestMethod]
 	public void A_Chosen_Room_Keeps_Only_Its_Own_Reports_In_Order()
 	{
@@ -265,10 +227,6 @@ public sealed class ActivityLogTests
 		CollectionAssert.AreEqual(new long[] { 4, 2 }, filtered.Select(entry => entry.Sequence).ToArray());
 	}
 
-	/// <summary>
-	///     Matched without regard to case, because the name comes back from a form control and a house that
-	///     renamed a room is not a house that wants its history to disappear on a capital letter.
-	/// </summary>
 	[TestMethod]
 	public void The_Room_Filter_Ignores_Case()
 	{
@@ -277,7 +235,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(1, ActivityView.InRoom(entries, "stue").Count);
 	}
 
-	/// <summary>A room with nothing in the buffer filters to nothing, which the page answers with its own words.</summary>
 	[TestMethod]
 	public void A_Room_With_Nothing_Held_Filters_To_Nothing()
 	{
@@ -286,10 +243,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(0, ActivityView.InRoom(entries, "Loft").Count);
 	}
 
-	/// <summary>
-	///     The dropdown offers each room once, alphabetically, and only rooms that have actually reported —
-	///     a filter whose every choice leads to an empty page is worse than no filter.
-	/// </summary>
+	/// <summary>Alphabetical, and only rooms that have reported.</summary>
 	[TestMethod]
 	public void The_Filter_Offers_Each_Reporting_Room_Once()
 	{
@@ -307,10 +261,8 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
-	///     One option per filter. The dropdown is built from the names in the buffer and the filter matches them
-	///     ignoring case, so the two have to agree about what "the same room" is: a room renamed only in its
-	///     capitalisation must not become two options that both show the same entries — and, the way round that
-	///     actually loses history, one option must never stand for names the filter will then decline to match.
+	///     The dropdown is built from the buffer's names and the filter matches them ignoring case, so the two
+	///     have to agree on what "the same room" is.
 	/// </summary>
 	[TestMethod]
 	public void The_Filter_Offers_A_Room_Once_However_Its_Name_Was_Capitalised()
@@ -326,10 +278,6 @@ public sealed class ActivityLogTests
 
 	// ===================== grouping by day =====================
 
-	/// <summary>
-	///     Days a person thinks of by name get one; anything older is dated, because counting back three days
-	///     is arithmetic the reader has to do and then check.
-	/// </summary>
 	[TestMethod]
 	public void Only_Today_And_Yesterday_Are_Named()
 	{
@@ -347,14 +295,9 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
-	///     Grouping cuts the timeline where the day changes and keeps the order it was given: a newest-first
-	///     list visits each day once, so a group is a run, not a bucket to be re-sorted into.
+	///     A group is a run, not a bucket. Grouped over rows, not reports; a row's sequence is the newest report
+	///     behind it, which for an uncollapsed row is the report itself.
 	/// </summary>
-	/// <remarks>
-	///     Over rows rather than reports since a house-wide run became one row. The order it must not disturb is
-	///     the same order, and the sequence numbers it is checked by are the rows' own — each row carries the
-	///     newest report behind it, which for an uncollapsed row is the report itself.
-	/// </remarks>
 	[TestMethod]
 	public void Grouping_Cuts_The_Timeline_By_Day_Without_Reordering_It()
 	{
@@ -377,7 +320,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(1, days[2].Rows.Count);
 	}
 
-	/// <summary>Nothing to group is no groups, not one empty one the page would then head.</summary>
 	[TestMethod]
 	public void Grouping_Nothing_Yields_No_Days()
 	{
@@ -386,11 +328,6 @@ public sealed class ActivityLogTests
 
 	// ===================== the words =====================
 
-	/// <summary>
-	///     <b>The line this whole page exists for.</b> A room that stayed dark because it was too bright must say
-	///     the measured reading and the threshold it was compared against, in that order and in the gate's own
-	///     words. "Too bright" on its own is the answer that sent the owner looking for a fault in the first place.
-	/// </summary>
 	[TestMethod]
 	public void A_Room_Too_Bright_To_Light_Names_The_Reading_And_The_Threshold()
 	{
@@ -405,7 +342,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("lux 86, dark below 40", line.Why);
 	}
 
-	/// <summary>Dusk is news too: the moment a room becomes eligible is the other half of the same question.</summary>
 	[TestMethod]
 	public void A_Room_That_Just_Became_Dark_Enough_Says_So()
 	{
@@ -420,13 +356,10 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("lux 12, dark below 40", line.Why);
 	}
 
-	/// <summary>
-	///     <b>The line that used to lie.</b> Dark enough is only half the question. An area set not to light
-	///     itself while the house sleeps sits in exactly the state of an area merely waiting for someone to walk
-	///     in, so the row promised a light that was never going to come on — and it appeared at dusk, which is
-	///     when somebody is reading this page to find out why the room stayed dark. Auto-discovery sets that
-	///     setting on every bedroom it finds, so this was every bedroom in the house, every night.
-	/// </summary>
+	/// <remarks>
+	///     Regression: a sleep-blocked area sits in the same state as one waiting for movement, so the row
+	///     promised a light that would never come. Auto-discovery sets that block on every bedroom it finds.
+	/// </remarks>
 	[TestMethod]
 	public void A_Sleeping_House_Does_Not_Promise_A_Light_That_Will_Not_Come_On()
 	{
@@ -446,11 +379,6 @@ public sealed class ActivityLogTests
 			"the reading is still the measurement the verdict was reached on");
 	}
 
-	/// <summary>
-	///     A television on at dusk is the everyday version of the same lie, and the row has to say which entity:
-	///     "something is on" leaves the reader walking the room looking for it, which is the dead end this page
-	///     exists to end.
-	/// </summary>
 	[TestMethod]
 	public void A_Blocking_Entity_Is_Named_Rather_Than_Alluded_To()
 	{
@@ -469,11 +397,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("lux 12, dark below 40", line.Why);
 	}
 
-	/// <summary>
-	///     Nothing in the way keeps the original sentence, and so does a report from a build that never carried
-	///     the verdict: absent means "this report cannot say", and a row may no more invent a refusal than it
-	///     may invent a promise.
-	/// </summary>
+	/// <summary>An absent block field means "this report cannot say", never "nothing was in the way".</summary>
 	[TestMethod]
 	public void An_Open_Gate_And_An_Older_Report_Both_Keep_The_Original_Words()
 	{
@@ -489,10 +413,6 @@ public sealed class ActivityLogTests
 			"a report from a build that predates the field says exactly what it always said");
 	}
 
-	/// <summary>
-	///     The reading rides along on transitions too, not only on the quiet re-check — a suppression lifting
-	///     into a room the engine still will not light has to explain the second half as well as the first.
-	/// </summary>
 	[TestMethod]
 	public void A_Transition_Into_A_Too_Bright_Room_Still_Carries_The_Reading()
 	{
@@ -507,10 +427,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Too bright to switch on — lux 86, dark below 40", line.Why);
 	}
 
-	/// <summary>
-	///     A report from a build that predates the darkness detail says less rather than inventing numbers. The
-	///     field deserialises as <c>null</c> from an older payload, exactly as <c>area_id</c> once did.
-	/// </summary>
 	[TestMethod]
 	public void Without_A_Reading_The_Line_Says_Less_Rather_Than_Guessing()
 	{
@@ -523,7 +439,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Too bright to switch on.", line.Why);
 	}
 
-	/// <summary>A gate that has never been consulted says that, rather than reporting a verdict it never reached.</summary>
 	[TestMethod]
 	public void An_Unchecked_Room_Does_Not_Claim_A_Verdict()
 	{
@@ -533,7 +448,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Darkness not checked here yet.", line.Why);
 	}
 
-	/// <summary>Movement that lit a room names the levels it was lit at — what happened, not which field moved.</summary>
 	[TestMethod]
 	public void Movement_That_Lit_A_Room_Names_The_Levels()
 	{
@@ -549,10 +463,7 @@ public sealed class ActivityLogTests
 		Assert.IsNull(line.Why, "the event says everything; a condition line under it would only repeat itself");
 	}
 
-	/// <summary>
-	///     Lights the engine adopted at start-up have no command behind them, so there are no levels to report
-	///     and the line does not report any.
-	/// </summary>
+	/// <summary>Lights adopted at start-up have no command behind them, so there are no levels to report.</summary>
 	[TestMethod]
 	public void A_Room_With_No_Commanded_Levels_Reports_None()
 	{
@@ -565,7 +476,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Movement — lights on", line.What);
 	}
 
-	/// <summary>The house-level events read as house-level events, with the mode the house actually names.</summary>
+	/// <summary>The mode is printed under the house's own name for it, not the enum member.</summary>
 	[TestMethod]
 	public void House_Events_Read_As_House_Events()
 	{
@@ -589,10 +500,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Nobody home — waiting for the first arrival.", empty.Why);
 	}
 
-	/// <summary>
-	///     The master switch outranks every other explanation. A row that described a transition without saying
-	///     the engine was muzzled would send somebody hunting a room-level fault that is not there.
-	/// </summary>
 	[TestMethod]
 	public void The_Master_Switch_Outranks_Every_Other_Explanation()
 	{
@@ -607,7 +514,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("No lights change until it's turned back on.", line.Why);
 	}
 
-	/// <summary>A room switched off in the document says so, and says it as the room's own setting.</summary>
 	[TestMethod]
 	public void A_Switched_Off_Room_Names_Its_Own_Setting()
 	{
@@ -622,14 +528,9 @@ public sealed class ActivityLogTests
 
 	// ===================== movement the engine turned down =====================
 
-	/// <summary>
-	///     <b>Every gate that can refuse movement reads as a plain sentence naming what stopped it.</b>
-	/// </summary>
 	/// <remarks>
-	///     The row exists because movement into a blocked room used to publish nothing, so the page that answers
-	///     "why did that light not come on" had nothing to answer with. A row that said only "Movement" would be
-	///     the same failure with an extra line in it, so every value of <see cref="AutoOnBlock"/> is worded here
-	///     and the exhaustive test below is what stops one being forgotten.
+	///     Regression: movement into a blocked room published nothing, so the page had nothing to answer with.
+	///     Every <see cref="AutoOnBlock"/> value is worded here; the exhaustive test below stops one being missed.
 	/// </remarks>
 	[TestMethod]
 	public void A_Refused_Movement_Names_The_Gate_That_Refused_It()
@@ -653,12 +554,10 @@ public sealed class ActivityLogTests
 			Declined(AutoOnBlock.SceneHold, state: AreaState.SceneHold).What);
 	}
 
-	/// <summary>
-	///     <b>The row that cost an hour.</b> A cabin's Away option listed <c>ActivateWhileOn</c> on an
-	///     <c>input_boolean</c> that had been on all evening; every settings save re-asserted Away and swept the
-	///     house dark while the owner stood in it. This row said "Movement, but nobody is home yet" at him while
-	///     both person entities read <c>home</c> — a cause the engine had never checked.
-	/// </summary>
+	/// <remarks>
+	///     Regression: an Away option forced by <c>ActivateWhileOn</c> said "nobody is home yet" while both person
+	///     entities read home. Presence and a forced mode are different causes and the row has to tell them apart.
+	/// </remarks>
 	[TestMethod]
 	public void A_Movement_Refused_By_An_Away_Mode_Over_An_Occupied_House_Says_So()
 	{
@@ -670,22 +569,17 @@ public sealed class ActivityLogTests
 
 		Assert.AreEqual("Movement, but the house is in away mode", held.What);
 
-		// The engine's sentence verbatim. It is the only thing that knows which entity it read, and it is what
-		// would have ended the incident in seconds.
+		// The engine's sentence verbatim: it is the only thing that knows which entity it read.
 		Assert.AreEqual("Away mode is forced while input_boolean.occupancy is on.", held.Why);
 		Assert.AreEqual(forced.Describe(), held.Why);
 
-		// Nothing forcing it means somebody chose the option, and the row names that rather than presence.
+		// Nothing forcing it means somebody chose the option, and the row names that, not presence.
 		ActivityLine chosen = Declined(
 			AutoOnBlock.Away, state: AreaState.Away, isAnyoneHome: true, houseModeValue: "Borte");
 
 		Assert.AreEqual("Somebody is home, but the house mode is set to Borte.", chosen.Why);
 	}
 
-	/// <summary>
-	///     An empty house, and a report too old to say either way, both keep the words they had. The fix is a
-	///     distinction, not a hedge printed over the case the row was always right about.
-	/// </summary>
 	[TestMethod]
 	public void An_Away_Refusal_Keeps_Its_Old_Words_Where_Nothing_Contradicts_Them()
 	{
@@ -700,11 +594,7 @@ public sealed class ActivityLogTests
 		Assert.IsNull(older.Why);
 	}
 
-	/// <summary>
-	///     A mode the engine forced never moved the select, so printing the select's value would name the one
-	///     thing that did not happen. The row names the option the engine actually put the house on, and carries
-	///     the engine's own account of what is holding it.
-	/// </summary>
+	/// <summary>A forced mode never moves the select, so the select's value is stale for the length of the force.</summary>
 	[TestMethod]
 	public void A_Forced_Mode_Change_Names_The_Force_Rather_Than_The_Selects_Stale_Value()
 	{
@@ -724,10 +614,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(forced.Describe(), line.Why);
 	}
 
-	/// <summary>
-	///     A forced mode's second line is about the house, so it survives the collapse that drops a house-wide
-	///     row's per-room condition — and it is identical in every room, so one forced change is still one row.
-	/// </summary>
+	/// <summary>The forced sentence is about the house, so the house-wide collapse keeps it.</summary>
 	[TestMethod]
 	public void A_Forced_Modes_Sentence_Survives_The_House_Wide_Collapse()
 	{
@@ -738,7 +625,7 @@ public sealed class ActivityLogTests
 			area, state, TransitionReason.HouseModeChanged,
 			mode: HouseMode.Away, houseModeValue: "Hjemme", isAnyoneHome: true, forced: forced);
 
-		// Two rooms in different states, exactly as a real house is when the mode moves under it.
+		// Two rooms in different states, as a real house is when the mode moves under it.
 		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(
 		[
 			Entry(2, Publisher("Stue", AreaState.Away)),
@@ -751,15 +638,7 @@ public sealed class ActivityLogTests
 		Assert.IsTrue(rows[0].IsAboutTheHouse);
 	}
 
-	/// <summary>
-	///     The master switch is the one refusal that outranked everything, and a refused movement is the one row
-	///     it does not replace.
-	/// </summary>
-	/// <remarks>
-	///     "Paused by the master switch" answers a question nobody asked while dropping the fact the report was
-	///     published to carry: somebody moved. The wording names the master switch itself, so the reason that rule
-	///     exists — never letting a row send somebody hunting a room-level fault — is served rather than overridden.
-	/// </remarks>
+	/// <summary>The one row the master switch does not replace outright; it names the switch inside the refusal.</summary>
 	[TestMethod]
 	public void A_Refused_Movement_Survives_The_Master_Switch_And_Still_Names_It()
 	{
@@ -776,7 +655,6 @@ public sealed class ActivityLogTests
 		Assert.IsTrue(categories.HasFlag(ActivityCategory.House), "and it names the master switch, so the house chip offers it");
 	}
 
-	/// <summary>The reading goes under the row only where the reading is what refused.</summary>
 	[TestMethod]
 	public void Only_A_Darkness_Refusal_Carries_The_Reading_Beneath_It()
 	{
@@ -788,10 +666,6 @@ public sealed class ActivityLogTests
 			"the house mode made this decision, and printing the sensor beside it invites blaming the sensor");
 	}
 
-	/// <summary>
-	///     A movement that <i>did</i> light the room is untouched: the block field is <see cref="AutoOnBlock.None"/>
-	///     there, and the row goes on saying what it always said.
-	/// </summary>
 	[TestMethod]
 	public void A_Movement_That_Lit_The_Room_Is_Not_A_Refusal()
 	{
@@ -802,7 +676,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Movement — lights on at 70 %, 2700 K", ActivityView.Describe(lit).What);
 	}
 
-	/// <summary>Puts a refused movement into words. The line, not the whole report.</summary>
+	/// <summary>Puts a refused movement into words.</summary>
 	private static ActivityLine Declined(
 		AutoOnBlock block,
 		AreaState state = AreaState.AutoVacant,
@@ -817,7 +691,6 @@ public sealed class ActivityLogTests
 			isDark: isDark, darknessDetail: detail, houseModeValue: houseModeValue,
 			autoOnBlockedBy: block, autoOnBlockingEntity: blocker, isAnyoneHome: isAnyoneHome, forced: forced));
 
-	/// <summary>Every reason the engine can publish has words of its own; none falls through to an enum name.</summary>
 	[TestMethod]
 	public void Every_Transition_Reason_Has_Words()
 	{
@@ -827,8 +700,8 @@ public sealed class ActivityLogTests
 		{
 			foreach (AreaState state in Enum.GetValues<AreaState>())
 			{
-				// The block is walked too: a refused movement is worded from it, so a value added to AutoOnBlock
-				// later has to be given a sentence here rather than falling through to a bare "Movement".
+				// The block is walked too, so a value added to AutoOnBlock later has to be given a sentence
+				// instead of falling through to a bare "Movement".
 				foreach (AutoOnBlock? block in blocks)
 				{
 					ActivityLine line = ActivityView.Describe(Report("Stue", state, reason, isDark: true, autoOnBlockedBy: block));
@@ -849,10 +722,7 @@ public sealed class ActivityLogTests
 		}
 	}
 
-	/// <summary>
-	///     The timeline borrows the dashboard's colour families rather than defining its own, so one room is
-	///     painted one way on both pages.
-	/// </summary>
+	/// <summary>The timeline borrows the dashboard's colour families; it defines none of its own.</summary>
 	[TestMethod]
 	public void Rows_Take_The_Dashboards_Colour_Families()
 	{
@@ -864,11 +734,8 @@ public sealed class ActivityLogTests
 	// ===================== the category filter =====================
 
 	/// <summary>
-	///     <b>The invariant the whole filter rests on.</b> Every report the engine can publish is reachable from
-	///     at least one chip. A pair that mapped to nothing would be a row no combination of filters could ever
-	///     show — hidden permanently, on the one page whose job is to stop a report going missing. Walked over
-	///     every reason, every state, every darkness verdict including the one that was never taken, and both
-	///     positions of the master switch, because those are the five inputs the mapping reads.
+	///     A report in no category is a row no combination of chips can show. Walked over the six inputs the
+	///     mapping reads.
 	/// </summary>
 	[TestMethod]
 	public void Every_Report_The_Engine_Can_Publish_Lands_In_A_Category()
@@ -884,8 +751,8 @@ public sealed class ActivityLogTests
 				{
 					foreach (bool killSwitch in new[] { false, true })
 					{
-						// The sixth input: a refused movement is the one row the master switch does not replace,
-						// so the block has to be walked or that branch is exhaustively untested.
+						// A refused movement is the one row the master switch does not replace, so the block
+						// has to be walked or that branch goes untested.
 						foreach (AutoOnBlock? block in blocks)
 						{
 							AreaSnapshot snapshot = Report(
@@ -906,10 +773,7 @@ public sealed class ActivityLogTests
 		}
 	}
 
-	/// <summary>
-	///     Nothing is lost between the categoriser and the filter: with every chip on, the filter is the identity
-	///     it looks like. This is the same invariant as above, read from the page's end rather than the report's.
-	/// </summary>
+	/// <summary>The same invariant as above, read from the page's end.</summary>
 	[TestMethod]
 	public void With_Every_Chip_On_The_Filter_Hides_Nothing()
 	{
@@ -925,10 +789,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(entries.Count, ActivityView.InCategories(entries, ActivityView.AllCategories).Count);
 	}
 
-	/// <summary>
-	///     The four the owner asked for, each catching the rows they named. Movement is the sensor speaking; a
-	///     light change is the engine's own command in all four of its shapes.
-	/// </summary>
+	/// <summary>Movement is the sensor speaking; a light change is the engine's own command, in all four shapes.</summary>
 	[TestMethod]
 	public void Movement_And_The_Engines_Own_Commands_Are_Told_Apart()
 	{
@@ -954,11 +815,6 @@ public sealed class ActivityLogTests
 			"a tick is not a movement report");
 	}
 
-	/// <summary>
-	///     <b>The category the feature was asked for.</b> The row carrying the lux reading against the configured
-	///     threshold is the answer to "why didn't that light come on", in both directions: the room that just
-	///     became dark enough, and the room that is still too bright.
-	/// </summary>
 	[TestMethod]
 	public void The_Darkness_Verdict_Is_Its_Own_Category()
 	{
@@ -985,9 +841,8 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
-	///     <b>The trap in the default.</b> Background tasks start switched off, and the recheck shares its reason
-	///     with the two rows this page exists for. If either the circadian re-aim or the dusk verdict were counted
-	///     as housekeeping, the page would open having hidden its own answer.
+	///     Background opens switched off, and the recheck shares its reason with the two rows the page exists
+	///     for. Filing either of those as housekeeping opens the page with its own answer hidden.
 	/// </summary>
 	[TestMethod]
 	public void A_Tick_Is_Housekeeping_Only_When_It_Says_Nothing_Else()
@@ -1005,10 +860,6 @@ public sealed class ActivityLogTests
 			"and the tick that retuned the lights is a light change");
 	}
 
-	/// <summary>
-	///     Start-up and a room's own switch are housekeeping outright — including the sentence the owner named as
-	///     the example of one.
-	/// </summary>
 	[TestMethod]
 	public void Start_Up_And_A_Rooms_Own_Switch_Are_Background_Tasks()
 	{
@@ -1023,11 +874,7 @@ public sealed class ActivityLogTests
 
 	// ===================== the two fates of a start-up row =====================
 
-	/// <summary>
-	///     <b>A start-up row that says nothing is not shown at all.</b> The engine publishes one per room when it
-	///     starts, and where the room had nothing to report the row is "started up, took the room as it was" and
-	///     no more — the engine saying it did nothing, once per room, at the top of every restart.
-	/// </summary>
+	/// <summary>The engine publishes one start-up report per room, so a bare one is noise at the top of a restart.</summary>
 	[TestMethod]
 	public void A_Start_Up_Row_With_Nothing_Under_It_Is_Not_A_Row()
 	{
@@ -1039,13 +886,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(0, ActivityView.Shown([Entry(1, bare)]).Count);
 	}
 
-	/// <summary>
-	///     <b>A start-up row that carries a reading stays — in Background.</b> "Too bright to switch on, lux 4096,
-	///     dark below 40" is twice this month the answer to what a room saw at boot, so it is kept; and it is
-	///     housekeeping rather than a refusal, because the engine had decided nothing yet. Filing it under the
-	///     darkness or refusal chips would put the state of the house at boot among the rows about what the engine
-	///     just chose to do.
-	/// </summary>
+	/// <summary>Background, not a refusal: at boot the engine has decided nothing, it has only read the room.</summary>
 	[TestMethod]
 	public void A_Start_Up_Row_That_Carries_A_Reading_Stays_And_Is_Background_Only()
 	{
@@ -1064,10 +905,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(ActivityCategory.Background, ActivityView.Categorise(measured));
 	}
 
-	/// <summary>
-	///     The sift is about start-up and nothing else. A row with no second line is the ordinary shape of most
-	///     events — movement that lit a room says everything in one line — and dropping those would empty the page.
-	/// </summary>
+	/// <summary>A row with no second line is the ordinary shape of most events; only start-up is ever sifted out.</summary>
 	[TestMethod]
 	public void Only_Start_Up_Rows_Are_Ever_Dropped()
 	{
@@ -1089,10 +927,6 @@ public sealed class ActivityLogTests
 			"the master switch replaces the row with a sentence about the whole house, which is news at any time");
 	}
 
-	/// <summary>
-	///     A manual change is somebody else's command, and so is its ending — which is why the override running out
-	///     is both a manual change and a light change, and a suppression lifting is only the first.
-	/// </summary>
 	[TestMethod]
 	public void Manual_Changes_Cover_A_Persons_Decision_And_Its_Ending()
 	{
@@ -1110,11 +944,7 @@ public sealed class ActivityLogTests
 			"the engine acting on movement is not somebody's hand");
 	}
 
-	/// <summary>
-	///     <b>The rows worth the most when something is wrong.</b> The engine could have lit the room and did not,
-	///     in all three shapes the report can carry: movement into a room somebody's decision is holding, a room
-	///     dark and waiting but blocked, and a room simply too bright.
-	/// </summary>
+	/// <summary>All three shapes a refusal can arrive in: a held room, a blocked room, a room too bright.</summary>
 	[TestMethod]
 	public void The_Refusals_Are_Reachable_On_Their_Own()
 	{
@@ -1144,15 +974,10 @@ public sealed class ActivityLogTests
 			"movement that lit the room is not a refusal");
 	}
 
-	/// <summary>
-	///     <b>The chip promised a reason the row did not give.</b> A room dark, waiting and held off by a sleeping
-	///     house or a blocking entity is filed under <i>Nothing happened</i> whatever the engine's reason for
-	///     publishing — the block is a standing condition, not an event. But the block was only ever written on the
-	///     row when the reason happened to be the quiet re-check, because that is the one branch
-	///     <c>Describe</c> hands to the dark-enough wording. On the other fourteen the row said "Someone switched
-	///     the lights off by hand" and nothing else, under a chip that says "the engine could have lit the room and
-	///     did not — with the reason".
-	/// </summary>
+	/// <remarks>
+	///     Regression: a block is a standing condition, but it was only worded when the reason was the quiet
+	///     re-check, because that is the one branch <c>Describe</c> hands to the dark-enough wording.
+	/// </remarks>
 	[TestMethod]
 	public void A_Blocked_Room_Names_Its_Block_Whatever_The_Engines_Reason_Was()
 	{
@@ -1163,9 +988,7 @@ public sealed class ActivityLogTests
 				isDark: true, darknessDetail: "lux 12, dark below 40",
 				mode: HouseMode.Sleep, autoOnBlockedBy: AutoOnBlock.Sleep);
 
-			// Start-up is the one report that refused nothing: the engine had not decided anything yet, it had only
-			// walked into the house. Its row is filed under background alone and says what boot found, which is the
-			// second assertion below and is exactly as true for it as for every other reason.
+			// Start-up refused nothing; it only read the room. Its row is background alone.
 			if (reason is not TransitionReason.Startup)
 				Assert.IsTrue(Has(ActivityCategory.Declined, asleep), $"{reason}: the block is a refusal in every report");
 
@@ -1187,10 +1010,6 @@ public sealed class ActivityLogTests
 			"named rather than alluded to, in the same words the dusk row and the board's tray use");
 	}
 
-	/// <summary>
-	///     A room nothing is holding back keeps saying exactly what it always said. The block line is an addition
-	///     to the rows that have one, never a hedge printed over the rows that do not.
-	/// </summary>
 	[TestMethod]
 	public void An_Unblocked_Dark_Room_Gains_No_Condition_Line()
 	{
@@ -1213,10 +1032,7 @@ public sealed class ActivityLogTests
 			"a room that is not dark enough is answered by the darkness gate, which is the earlier refusal");
 	}
 
-	/// <summary>
-	///     The house-level events, and the master switch — which replaces a row's words outright, so it replaces
-	///     its categories too rather than leaving a row filed under a sentence it does not say.
-	/// </summary>
+	/// <summary>The master switch replaces a row's words outright, so it replaces its categories too.</summary>
 	[TestMethod]
 	public void House_Events_And_The_Master_Switch_Share_One_Chip()
 	{
@@ -1232,11 +1048,6 @@ public sealed class ActivityLogTests
 			"the row says nothing about darkness or a room's own switch, so it is filed under neither");
 	}
 
-	/// <summary>
-	///     <b>A mode change is its own chip.</b> It used to share one with arriving, leaving and the master switch,
-	///     so somebody asking when the house went to sleep read every coming and going of the day to find out. Its
-	///     own flag, and nothing else moved into it.
-	/// </summary>
 	[TestMethod]
 	public void A_Mode_Change_Has_A_Chip_Of_Its_Own()
 	{
@@ -1260,11 +1071,6 @@ public sealed class ActivityLogTests
 		}
 	}
 
-	/// <summary>
-	///     The new chip opens switched on. Background is still the only one that does not — every other category is
-	///     a decision the engine made or refused, and a page about decisions that opened with one of them hidden
-	///     would be answering a question nobody asked it.
-	/// </summary>
 	[TestMethod]
 	public void The_Mode_Chip_Opens_Switched_On()
 	{
@@ -1272,11 +1078,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(ActivityCategory.Mode, ActivityView.AllCategories & ActivityCategory.Mode);
 	}
 
-	/// <summary>
-	///     A mode change is still a house-wide row, so one change is still one row however many rooms published it.
-	///     Splitting the chip must not split the collapsing with it — that defect is what <see cref="ActivityView.Rows"/>
-	///     was written for.
-	/// </summary>
+	/// <summary>Categorising and collapsing are separate; a chip split must not split the runs with it.</summary>
 	[TestMethod]
 	public void Splitting_The_Chip_Leaves_A_Mode_Change_House_Wide()
 	{
@@ -1295,11 +1097,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(3, rows[0].Rooms.Count);
 	}
 
-	/// <summary>
-	///     The page opens with everything except the housekeeping. Background is the highest volume and the lowest
-	///     signal, and it is the reason a quiet log is readable at all; every other category is a decision the
-	///     engine made or refused, and hiding one of those by default would answer a question nobody asked.
-	/// </summary>
 	[TestMethod]
 	public void Only_Background_Tasks_Start_Switched_Off()
 	{
@@ -1313,10 +1110,6 @@ public sealed class ActivityLogTests
 			Assert.AreEqual(chip.Category != ActivityCategory.Background, chip.IsOn, $"{chip.Label} opens wrong");
 	}
 
-	/// <summary>
-	///     The filter keeps only the chosen categories, and keeps the order it was given — the timeline never
-	///     re-sorts itself behind a chip.
-	/// </summary>
 	[TestMethod]
 	public void The_Category_Filter_Keeps_Only_What_Is_Chosen_In_Order()
 	{
@@ -1342,10 +1135,7 @@ public sealed class ActivityLogTests
 			"every chip switched off shows nothing, which the page answers with words rather than a blank");
 	}
 
-	/// <summary>
-	///     The two filters compose rather than replace one another: a room narrows the timeline, the categories
-	///     narrow what the room left, and the answer is the same whichever way round they are read.
-	/// </summary>
+	/// <summary>The two filters compose, and the answer is the same in either order.</summary>
 	[TestMethod]
 	public void The_Room_And_The_Categories_Narrow_Together()
 	{
@@ -1370,9 +1160,8 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
-	///     Every category is always on offer, counted over the reports the room filter left — so choosing one room
-	///     re-reads every chip, which is what makes the pair of filters legible as a pair. A category holding
-	///     nothing keeps its chip: "this room has never reported a manual change" is an answer.
+	///     Every category is always offered, counted over what the room filter left. A category holding nothing
+	///     keeps its chip, showing zero.
 	/// </summary>
 	[TestMethod]
 	public void Chips_Count_What_The_Chosen_Room_Did()
@@ -1405,11 +1194,7 @@ public sealed class ActivityLogTests
 		}
 	}
 
-	/// <summary>
-	///     <b>A filtered page must never be able to look like an empty one.</b> Whatever the filters are holding
-	///     back is counted and named — and which filter is holding it, because "34 reports are hidden" without a
-	///     cause is a dead end rather than an answer.
-	/// </summary>
+	/// <summary>The note names which filter is holding them back, not only how many.</summary>
 	[TestMethod]
 	public void The_Page_Says_How_Much_The_Filters_Are_Holding_Back()
 	{
@@ -1443,11 +1228,10 @@ public sealed class ActivityLogTests
 
 	// ===================== one row per thing that happened =====================
 
-	/// <summary>
-	///     <b>The defect this exists for.</b> The house changed mode once; every switched-on room published its own
-	///     snapshot, correctly, and the record then showed one identical row per room — each attributed to a room,
-	///     as though that room had changed the house's mode. It got linearly worse with every room switched on.
-	/// </summary>
+	/// <remarks>
+	///     Regression: every switched-on room publishes its own snapshot on a mode change, so the record showed
+	///     one identical row per room, each attributed to a room that had not done it.
+	/// </remarks>
 	[TestMethod]
 	public void One_House_Mode_Change_Is_One_Row_Belonging_To_No_Room()
 	{
@@ -1474,10 +1258,7 @@ public sealed class ActivityLogTests
 		StringAssert.Contains(reported, "Kjøkken", "the rooms are still reachable, or the row lost the only fact it had");
 	}
 
-	/// <summary>
-	///     A single house-wide report is unattributed too. One switched-on room is still not the thing that changed
-	///     the house's mode, and the row that names which room reported it is the hover, not the column.
-	/// </summary>
+	/// <summary>The reporting room is the hover, never the column, even when there is only one of them.</summary>
 	[TestMethod]
 	public void A_Lone_House_Event_Is_Still_Not_A_Rooms_Doing()
 	{
@@ -1489,10 +1270,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Reported by Kontor.", ActivityView.ReportedBy(rows[0]));
 	}
 
-	/// <summary>
-	///     Rooms keep their own rows. Movement, a manual change and a light going off are things one room did, and a
-	///     record that pooled them would have answered the reported defect by inventing a worse one.
-	/// </summary>
 	[TestMethod]
 	public void A_Rooms_Own_Reports_Are_Never_Pooled()
 	{
@@ -1518,10 +1295,7 @@ public sealed class ActivityLogTests
 		}
 	}
 
-	/// <summary>
-	///     The master switch speaks for the house; a scene taking one room over, and a room's own switch, do not —
-	///     whatever chip they are filed under. Merging those would have lost the distinction their words draw.
-	/// </summary>
+	/// <summary>Speaking for the house is not the same test as the House chip; a scene hold has one and not the other.</summary>
 	[TestMethod]
 	public void Only_The_Sentences_That_Speak_For_The_House_Are_Unattributed()
 	{
@@ -1544,10 +1318,6 @@ public sealed class ActivityLogTests
 		Assert.IsFalse(ActivityView.IsAboutTheHouse(Report("Stue", AreaState.AutoActive, TransitionReason.Motion)));
 	}
 
-	/// <summary>
-	///     Only reports saying the same thing collapse. Two different modes are two events, and a row that merged
-	///     them would have to pick one of the two sentences to show and be wrong about the other.
-	/// </summary>
 	[TestMethod]
 	public void House_Rows_Collapse_Only_When_The_Whole_Sentence_Matches()
 	{
@@ -1569,10 +1339,8 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
-	///     A house-wide row drops the publishing room's own condition. "Too bright to switch on" is a verdict on
-	///     one room, and printed under a row headed <i>House</i> it asks the reader which room "here" is — which is
-	///     the question the row has just given up answering. It is also what lets one mode change be one row: the
-	///     rooms of a real house are in different states when the mode moves.
+	///     Dropping the publishing room's condition is what lets one mode change be one row: the rooms of a real
+	///     house are in different states when the mode moves.
 	/// </summary>
 	[TestMethod]
 	public void A_House_Row_Carries_The_House_And_Not_The_Room_That_Published_It()
@@ -1590,17 +1358,14 @@ public sealed class ActivityLogTests
 		Assert.IsNull(rows[0].Line.Why, "a room's own verdict has no room to belong to on this row");
 		Assert.AreEqual(2, rows[0].Rooms.Count);
 
-		// The room's verdict is untouched where it still has a room: only the row drops it.
+		// Only the row drops it. Describe is what the room page reads, and there it is still attributed.
 		StringAssert.Contains(
 			ActivityView.Describe(entries[1].Snapshot).Why,
 			"lux 214",
 			"Describe is what the room page reads, and there the condition is attributed and wanted");
 	}
 
-	/// <summary>
-	///     The master switch keeps its second line, because that sentence is about the house rather than about the
-	///     room that published it — and it is the one consequence of a pause somebody needs spelled out.
-	/// </summary>
+	/// <summary>Its second line is about the house, not the publishing room, so the collapse keeps it.</summary>
 	[TestMethod]
 	public void The_Master_Switch_Keeps_Its_Own_Second_Line()
 	{
@@ -1615,10 +1380,6 @@ public sealed class ActivityLogTests
 		StringAssert.Contains(rows[0].Line.Why, "until it's turned back on");
 	}
 
-	/// <summary>
-	///     Only a consecutive run collapses. Anything else in the record between two identical house events is
-	///     evidence that they are two events, and lifting one out to join the other would rewrite what followed what.
-	/// </summary>
 	[TestMethod]
 	public void Only_A_Run_Collapses_Never_A_Scattered_Set()
 	{
@@ -1637,10 +1398,7 @@ public sealed class ActivityLogTests
 		Assert.IsTrue(rows[2].IsAboutTheHouse);
 	}
 
-	/// <summary>
-	///     The window bounds how wrong a delivery may go before two events are read as one. Inside it a burst is one
-	///     row; past it, with nothing in between, two identical mode changes stay two.
-	/// </summary>
+	/// <summary>The window bounds how late a report may arrive and still count as part of the same event.</summary>
 	[TestMethod]
 	public void Reports_Further_Apart_Than_The_Window_Stay_Two_Rows()
 	{
@@ -1662,11 +1420,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(2, apart.Count, "an hour apart with a silent house between them is two events, not one");
 	}
 
-	/// <summary>
-	///     A limited read finishes the run it is in the middle of. Otherwise the last row on the dashboard would
-	///     name however many rooms happened to fit under the budget, which is a number about the budget rather than
-	///     about the house.
-	/// </summary>
+	/// <summary>Otherwise the last row's room count would be a fact about the budget, not about the house.</summary>
 	[TestMethod]
 	public void A_Limited_Read_Still_Finishes_Its_Last_Run()
 	{
@@ -1689,10 +1443,8 @@ public sealed class ActivityLogTests
 	// ===================== the standing darkness verdict =====================
 
 	/// <summary>
-	///     <b>The verdict is shown when it changes and not once a minute after that.</b> The engine re-checks every
-	///     room on every tick and republishes what it found, so a room dark from dusk to dawn said "dark enough"
-	///     four hundred times — which is what made the line meaningless to read. One row per spell, carrying the
-	///     newest of the run so the reading on it is current.
+	///     The engine re-checks every room on every tick and republishes what it found, so a room dark from dusk
+	///     to dawn reports it hundreds of times. One row per spell, carrying the newest of the run.
 	/// </summary>
 	[TestMethod]
 	public void A_Room_That_Stays_Dark_Says_So_Once()
@@ -1712,10 +1464,6 @@ public sealed class ActivityLogTests
 			"matching on the whole line would collapse nothing at all — the reading moves every tick");
 	}
 
-	/// <summary>
-	///     A verdict that moved is a new row. Dark, then bright again, then dark reads as three rows, because those
-	///     are three things the room did — and the flip is precisely what somebody comes to this page to find.
-	/// </summary>
 	[TestMethod]
 	public void A_Verdict_That_Changes_Starts_A_New_Row()
 	{
@@ -1736,9 +1484,8 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
-	///     <b>The run is the room's own, not the record's.</b> Every room is re-checked in the same pass, so a room's
-	///     repeats are never next to each other — a rule that only collapsed adjacent rows would collapse nothing in
-	///     a house with more than one room, which is every house.
+	///     A run is the room's own, not the record's. Every room is re-checked in the same pass, so a room's
+	///     repeats are never adjacent and a rule keyed on adjacency would collapse nothing.
 	/// </summary>
 	[TestMethod]
 	public void Other_Rooms_Between_The_Repeats_Do_Not_End_The_Run()
@@ -1757,10 +1504,6 @@ public sealed class ActivityLogTests
 		CollectionAssert.AreEqual(new[] { "Stue", "Bad" }, rows.Select(row => row.Room).ToArray());
 	}
 
-	/// <summary>
-	///     Anything else the room did ends the run. The record's order is the account of what followed what, and a
-	///     verdict either side of a movement is the room as it stood before and after something happened in it.
-	/// </summary>
 	[TestMethod]
 	public void Something_Happening_In_The_Room_Ends_The_Run()
 	{
@@ -1777,10 +1520,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Movement — lights on", rows[1].Line.What);
 	}
 
-	/// <summary>
-	///     The block is part of the verdict, so a room that was merely dark and then dark-but-blocked reads as two
-	///     rows. That change is the whole answer to "why did the bedroom stay dark tonight".
-	/// </summary>
+	/// <summary>The block is part of the verdict, so dark and then dark-but-blocked is two rows.</summary>
 	[TestMethod]
 	public void A_Block_Appearing_Is_A_New_Verdict()
 	{
@@ -1799,7 +1539,6 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Dark enough — movement will light the room", rows[1].Line.What);
 	}
 
-	/// <summary>One quiet re-check of a room whose darkness has never been measured states no verdict to collapse.</summary>
 	[TestMethod]
 	public void An_Unmeasured_Recheck_Is_Not_A_Verdict()
 	{
@@ -1816,10 +1555,8 @@ public sealed class ActivityLogTests
 	// ===================== what the dashboard's summary shows =====================
 
 	/// <summary>
-	///     <b>The other defect this exists for.</b> The dashboard's log had no filtering at all, so its dozen rows
-	///     filled with housekeeping about rooms that are switched off. It shows what the activity page shows when
-	///     you open it — the same default set, read from the same place — and its budget is spent after the filter,
-	///     so twelve rows means twelve rows worth reading.
+	///     The summary reads the same default set as the activity page, from the same place, and spends its
+	///     budget after the filter.
 	/// </summary>
 	[TestMethod]
 	public void The_Dashboard_Summary_Applies_The_Activity_Pages_Default_Categories()
@@ -1827,8 +1564,7 @@ public sealed class ActivityLogTests
 		List<ActivityEntry> entries = [];
 		long sequence = 40;
 
-		// A quiet house, as the owner's was: three switched-off rooms rechecking themselves over and over, with
-		// four real decisions scattered through them.
+		// A quiet house: three switched-off rooms rechecking themselves, four real decisions scattered through.
 		for (int tick = 0; tick < 12; tick++)
 		{
 			foreach (string room in new[] { "Stue", "Kjeller - multimedia", "Kjøkken" })
@@ -1859,10 +1595,6 @@ public sealed class ActivityLogTests
 		}
 	}
 
-	/// <summary>
-	///     The budget counts rows, after the filter. Twelve of which nine are hidden is a summary of nothing, which
-	///     is what the dashboard was showing.
-	/// </summary>
 	[TestMethod]
 	public void The_Summary_Spends_Its_Budget_On_Rows_It_Will_Show()
 	{
@@ -1883,13 +1615,9 @@ public sealed class ActivityLogTests
 	}
 
 	/// <summary>
-	///     The dashboard's summary carries only what the board above it cannot draw, and the Activity page keeps
-	///     the wider set.
+	///     Asserted as membership, not as an equal constant, so a new category forces a decision about which side
+	///     of the line it falls on instead of silently joining the summary.
 	/// </summary>
-	/// <remarks>
-	///     Asserted as membership rather than as an equal constant, so that adding a category to the enum forces a
-	///     decision about which side of this line it falls on instead of silently joining the summary.
-	/// </remarks>
 	[TestMethod]
 	public void The_Summary_Carries_Only_What_The_Board_Cannot_Draw()
 	{
@@ -1912,42 +1640,23 @@ public sealed class ActivityLogTests
 				$"the board above already shows {drawn}; repeating it in words spends the whole row budget");
 		}
 
-		// The narrowing is the summary's alone — the page the footer links to must still open on the wide set, or
-		// the reports the summary stopped carrying would have nowhere to be read.
+		// The narrowing is the summary's alone. The page the footer links to still opens on the wide set.
 		Assert.AreNotEqual(ActivityCategory.None, ActivityView.DefaultCategories & ActivityCategory.Movement);
 		Assert.AreNotEqual(ActivityCategory.None, ActivityView.DefaultCategories & ActivityCategory.LightChange);
 		Assert.AreNotEqual(ActivityCategory.None, ActivityView.DefaultCategories & ActivityCategory.Illumination);
 	}
 
 	/// <summary>
-	///     A filter nobody is told about is indistinguishable from reports that were never recorded, which is the
-	///     one failure this project treats as worse than showing too much. So the summary's footer counts what it
-	///     is holding back, names it for what it now mostly is, and says when the buffer has started dropping the
-	///     oldest.
+	///     The count is taken against what the Activity page would draw, not against the buffer: the buffer also
+	///     holds background tasks that page hides on open, and start-up reports that reach no page at all.
 	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         "Everyday reports on the Activity page", not "background tasks hidden". Since the summary narrowed
-	///         to <see cref="ActivityView.SummaryCategories"/> the held-back pile is mostly movement and ordinary
-	///         light changes, so the old noun named the smallest part of it — and "hidden" described reports that
-	///         are one tap away as though they had been suppressed.
-	///     </para>
-	///     <para>
-	///         <b>Which is why the count is taken against what that page would draw, not against the buffer.</b>
-	///         Naming a destination is a promise the link has to keep: the raw buffer also holds background tasks
-	///         the Activity page hides on open and start-up reports that reach no page at all, and counting those
-	///         in would send somebody to a page showing fewer rows than the sentence said were waiting.
-	///     </para>
-	/// </remarks>
 	[TestMethod]
 	public void The_Summarys_Footer_Counts_Only_What_The_Activity_Page_Would_Draw()
 	{
 		Assert.AreEqual("nothing recorded yet", BoardView.LogFoot(0, 0, 0, 0, ActivityLog.Capacity));
 
-		// 137 held, of which the Activity page would draw 137: nothing unreachable, so the whole remainder is
-		// waiting there. Sixty-three kept as eleven rows, because four house-wide events arrived from fourteen
-		// rooms each. Setting the two counts against each other — "newest 11 of 63" — invites a subtraction whose
-		// answer is fifty-two reports that were never left out.
+		// 137 held, all 137 reachable. Sixty-three kept as eleven rows, four house-wide events from fourteen
+		// rooms each. Printing "newest 11 of 63" invites a subtraction whose answer is fifty-two rows nobody cut.
 		string wholeThing = BoardView.LogFoot(137, 137, 63, 11, ActivityLog.Capacity);
 
 		StringAssert.Contains(wholeThing, "63 reports");
@@ -1955,8 +1664,7 @@ public sealed class ActivityLogTests
 			"nothing was cut, so no row count is set against the report count");
 		StringAssert.Contains(wholeThing, "74 everyday reports on the Activity page");
 
-		// The case that made this parameter necessary: 100 held, 5 dropped by Shown() and 30 background, so only
-		// 65 are actually reachable. Against the buffer the line would have claimed 92.
+		// 100 held, 5 dropped by Shown() and 30 background, so 65 are reachable. Against the buffer it claims 92.
 		StringAssert.Contains(BoardView.LogFoot(100, 65, 8, 8, ActivityLog.Capacity),
 			"57 everyday reports on the Activity page");
 
@@ -1966,7 +1674,7 @@ public sealed class ActivityLogTests
 		Assert.IsFalse(quiet.Contains("everyday", StringComparison.Ordinal),
 			"nothing was held back, so nothing is claimed to be");
 
-		// Out of room: the budget is spent, so the line says how many rows it drew and out of how many reports.
+		// Budget spent: the line says how many rows it drew, and out of how many reports.
 		string cut = BoardView.LogFoot(600, 600, 240, BoardView.LogPreview, ActivityLog.Capacity);
 
 		StringAssert.Contains(cut, $"newest {BoardView.LogPreview} rows of 240 reports");
@@ -1989,7 +1697,7 @@ public sealed class ActivityLogTests
 	private static AreaSnapshot Mode(string area, string value, DateTimeOffset at) =>
 		Report(area, AreaState.AutoVacant, TransitionReason.HouseModeChanged, at: at, houseModeValue: value);
 
-	/// <summary>One quiet re-check that reached a darkness verdict — the report a house publishes once a minute.</summary>
+	/// <summary>One quiet re-check that reached a darkness verdict, the report a house publishes once a minute.</summary>
 	private static AreaSnapshot Dusk(string area, bool dark, string detail, DateTimeOffset at) =>
 		Report(area, AreaState.AutoVacant, TransitionReason.CircadianTick, at: at, isDark: dark, darknessDetail: detail);
 

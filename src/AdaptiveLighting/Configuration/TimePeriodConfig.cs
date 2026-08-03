@@ -8,13 +8,12 @@ namespace AdaptiveLighting.Configuration;
 /// </summary>
 public class TimePeriodConfig
 {
-	/// <summary>Free-form name — <c>morning</c>, <c>day</c>, <c>evening</c>, <c>night</c>. Reported in logs and snapshots.</summary>
+	/// <summary>Free-form name: <c>morning</c>, <c>day</c>, <c>evening</c>, <c>night</c>. Reported in logs and snapshots.</summary>
 	public string Name { get; set; } = "";
 
 	/// <summary>
-	///     When this period starts, set the husmodus select to this option value (09 §2.3). <c>null</c> leaves the
-	///     mode unchanged. A deliberately new key, not a repurposed <c>Mode</c>: a stale <c>Mode:</c> in an old file
-	///     binds to nothing and the period quietly becomes a plain period, rather than silently flipping semantics.
+	///     When this period starts, set the house-mode select to this option value. <c>null</c> leaves the mode
+	///     unchanged.
 	/// </summary>
 	public string? SetsMode { get; set; }
 
@@ -24,22 +23,12 @@ public class TimePeriodConfig
 	/// </summary>
 	public string Start { get; set; } = "";
 
-	/// <summary>Target brightness for this period.</summary>
 	public double BrightnessPct { get; set; } = 80;
 
-	/// <summary>Target colour temperature for this period.</summary>
 	public int ColorTempKelvin { get; set; } = 3500;
 
-	// A period used to carry a floor and a ceiling as well as a target — MinBrightnessPct and MaxBrightnessPct,
-	// removed in the 2026-07 simplification. They existed to stop 100 % at three in the morning, which the
-	// period's own target already does: a night row set to 15 % is the answer, and a second pair of numbers
-	// saying "and never above 20" was a rule about a rule. They also had to be threaded through every consumer —
-	// the sleep clamp, the daylight curve, a room's own levels — each of which had to remember to respect them.
-	// A stale key in an existing file still PARSES — both binders ignore what they do not know — but it no longer
-	// BEHAVES, and those are not the same thing. A night row written { BrightnessPct: 15, MaxBrightnessPct: 30 },
-	// which is the shape the shipped default had, was clamped to 30 % in sleep mode and is now clamped to 15 %.
-	// Half the light, with nothing in the file changed to suggest it. LightingConfigDocument.RetiredKeys exists to
-	// say so in the log on load, because that is the only place left where it can be said.
+	// MinBrightnessPct and MaxBrightnessPct are gone. A stale one still parses, since both binders ignore what they
+	// do not know, but it no longer behaves: LightingConfigDocument.RetiredKeys logs it on load.
 }
 
 /// <summary>A sun event a period boundary can be anchored to.</summary>
@@ -48,16 +37,14 @@ public enum SunEvent
 	/// <summary>The boundary is a fixed clock time, not a sun event.</summary>
 	None,
 
-	/// <summary>Anchored to sunrise.</summary>
 	Sunrise,
 
-	/// <summary>Anchored to sunset.</summary>
 	Sunset
 }
 
 /// <summary>
 ///     A parsed <see cref="TimePeriodConfig.Start"/>. Either a fixed clock time or a sun event plus an offset;
-///     resolving the latter to a wall time needs the day's sun times, which is why parsing and resolution are split.
+///     resolving the latter needs the day's sun times, which is why parsing and resolution are split.
 /// </summary>
 /// <param name="FixedTime">The clock time, when <paramref name="SunEvent"/> is <see cref="SunEvent.None"/>.</param>
 /// <param name="SunEvent">The anchoring sun event, if any.</param>
@@ -68,10 +55,9 @@ public sealed record PeriodStart(TimeOnly? FixedTime, SunEvent SunEvent, TimeSpa
 	private const string SunsetToken = "sunset";
 
 	/// <summary>
-	///     Parses <c>"06:30"</c>, <c>"sunrise"</c>, <c>"sunset-01:00"</c> and friends. Culture-invariant, so a
-	///     YAML file behaves identically on a Norwegian and an English host.
+	///     Parses <c>"06:30"</c>, <c>"sunrise"</c>, <c>"sunset-01:00"</c> and friends. Culture-invariant, so a YAML
+	///     file behaves identically on a Norwegian and an English host.
 	/// </summary>
-	/// <returns><c>true</c> when <paramref name="text"/> is a valid boundary.</returns>
 	public static bool TryParse(string? text, out PeriodStart? result)
 	{
 		result = null;
@@ -128,8 +114,7 @@ public sealed record PeriodStart(TimeOnly? FixedTime, SunEvent SunEvent, TimeSpa
 }
 
 /// <summary>
-///     The day's sun times, as far as the engine needs them. Supplied by the caller rather than read here,
-///     so period resolution stays a pure function.
+///     The day's sun times. Supplied by the caller, never read here, so period resolution stays pure.
 /// </summary>
 /// <param name="Sunrise">Local time of sunrise, or <c>null</c> when unknown (polar night, sun entity missing).</param>
 /// <param name="Sunset">Local time of sunset, or <c>null</c> when unknown.</param>

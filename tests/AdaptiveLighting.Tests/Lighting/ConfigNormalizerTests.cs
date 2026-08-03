@@ -3,8 +3,8 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The save-time normaliser (09 §6): pure-default option rows are dropped so the document stays minimal,
-///     except the designated Normal row, which stays explicit; and a never-adopted empty HouseMode is dropped.
+///     The save-time normaliser: pure-default option rows are dropped so the document stays minimal, except the
+///     designated Normal row, which stays explicit. A never-adopted empty HouseMode is dropped too.
 /// </summary>
 [TestClass]
 public sealed class ConfigNormalizerTests
@@ -92,13 +92,7 @@ public sealed class ConfigNormalizerTests
 		Assert.IsNull(config.Global.HouseMode, "a never-adopted, empty HouseMode is dropped so the document stays clean");
 	}
 
-	// ===================== a room's own levels =====================
-
-	/// <summary>
-	///     A row with neither value set says nothing, and an editor that draws a row per period produces one the
-	///     moment somebody clears both fields. The engine ignores it either way, so this is tidying — but a file
-	///     nobody can read is how a room's levels stop being reviewable.
-	/// </summary>
+	// An editor drawing a row per period produces an empty one the moment somebody clears both fields.
 	[TestMethod]
 	public void Normalize_DropsLevelsRowsThatSayNothing()
 	{
@@ -126,7 +120,6 @@ public sealed class ConfigNormalizerTests
 			"the rows that say something survive, in the order they were written");
 	}
 
-	/// <summary>A row naming no period but carrying a value is not empty, so it stays and the validator warns about it.</summary>
 	[TestMethod]
 	public void Normalize_KeepsALevelsRowThatCarriesAValue_EvenWithNoPeriod()
 	{
@@ -158,8 +151,6 @@ public sealed class ConfigNormalizerTests
 		ConfigNormalizer.Normalize(withOptions);
 		Assert.IsNotNull(withOptions.Global.HouseMode, "a classified option has been set — keep it");
 	}
-
-	// ===================== the period select =====================
 
 	private static AdaptiveLightingConfig WithPeriodSelect(PeriodSelectConfig? select) =>
 		new() { Global = new GlobalConfig { PeriodSelect = select } };
@@ -199,10 +190,7 @@ public sealed class ConfigNormalizerTests
 			"half a row is a half-finished decision, not a blank one — dropping it would hide the error");
 	}
 
-	/// <summary>
-	///     A page that binds the object into existence to draw a form must not leave a <c>PeriodSelect:</c> block in
-	///     the file of a household that never adopted the feature.
-	/// </summary>
+	// A page binds the object into existence to draw a form. That must not leave a block in the file.
 	[TestMethod]
 	public void Normalize_DropsAPeriodSelectThatSaysNothing()
 	{
@@ -235,9 +223,6 @@ public sealed class ConfigNormalizerTests
 		Assert.IsNotNull(withRows.Global.PeriodSelect, "a mapping has been written — keep it");
 	}
 
-	/// <summary>
-	///     The point of all of the above: a document that never mentioned the feature comes back byte-identical.
-	/// </summary>
 	[TestMethod]
 	public void Normalize_LeavesADocumentWithoutAPeriodSelect_ByteIdentical()
 	{

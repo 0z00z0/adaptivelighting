@@ -4,19 +4,10 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The §3 sentence table, asserted rather than screenshotted.
+///     The sentences the room page renders, and where each token's value came from.
 /// </summary>
 /// <remarks>
-///     <para>
-///         These sentences are the only place several settings are ever read by a person. A sentence that renders
-///         the wrong knob is therefore a setting nobody can find, and a sentence that shows a value as the
-///         house's when it is the room's own quietly tells the owner they have changed nothing. Neither failure
-///         looks like a bug on screen.
-///     </para>
-///     <para>
-///         There is no Razor render harness in this repo, which is exactly why the projection is a pure function
-///         and the design's own table is a test.
-///     </para>
+///     There is no Razor render harness in this repo, so the projection is a pure function and asserted here.
 /// </remarks>
 [TestClass]
 public sealed class AreaSentencesTests
@@ -34,19 +25,9 @@ public sealed class AreaSentencesTests
 	// ===================== the sentences themselves =====================
 
 	/// <summary>
-	///     A room that overrides nothing reads exactly as the design writes it.
+	///     Asserted on the sentence, not on its tokens: "dim to 50 % for 30 s" and "dim to 30 s for 50 %" hold
+	///     the same tokens.
 	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Asserted on the whole sentence rather than on the tokens inside it, because the prose between the
-	///         values is the part that makes them mean something: "dim to 50 % for 30 s" and "dim to 30 s for 50 %"
-	///         contain the same tokens.
-	///     </para>
-	///     <para>
-	///         The sun clause is gone because the default darkness source moved from Either to Lux: a room that
-	///         configures nothing is now decided by its light sensor alone, and by nothing at all when it has none.
-	///     </para>
-	/// </remarks>
 	[TestMethod]
 	public void An_Untouched_Room_Reads_As_The_Design_Writes_It()
 	{
@@ -65,7 +46,6 @@ public sealed class AreaSentencesTests
 			sentences[1].PlainText);
 	}
 
-	/// <summary>The darkness rule changes the shape of the clause, not just a value inside it.</summary>
 	[TestMethod]
 	public void Each_Darkness_Rule_Gets_Its_Own_Opening()
 	{
@@ -92,9 +72,7 @@ public sealed class AreaSentencesTests
 		}
 	}
 
-	/// <summary>
-	///     The windowless case keeps its rule reachable from the sentence, since it has no threshold to show.
-	/// </summary>
+	/// <summary>A windowless room shows no threshold, so the rule itself has to be the token.</summary>
 	[TestMethod]
 	public void The_Windowless_Room_Can_Change_Its_Rule_From_The_Sentence()
 	{
@@ -110,15 +88,7 @@ public sealed class AreaSentencesTests
 
 	// ===================== the light-level shortlist =====================
 
-	/// <summary>
-	///     The rungs climb by a factor of about three, not by a fixed amount.
-	/// </summary>
-	/// <remarks>
-	///     Illuminance spans four orders of magnitude, so a ladder with a constant <i>difference</i> between rungs
-	///     is either unusably fine at the bottom or useless at the top. A constant <i>ratio</i> is the only shape
-	///     that covers 3 lx and 10 000 lx in the same handful of taps, and this asserts the shape rather than the
-	///     particular numbers, so a later re-tuning stays honest.
-	/// </remarks>
+	/// <summary>The shape is asserted, never the particular numbers, so a re-tuning stays honest.</summary>
 	[TestMethod]
 	public void The_Light_Level_Rungs_Climb_By_Ratio_Not_By_Difference()
 	{
@@ -133,14 +103,7 @@ public sealed class AreaSentencesTests
 		}
 	}
 
-	/// <summary>
-	///     Every light level a real house meets is on a rung or beside one.
-	/// </summary>
-	/// <remarks>
-	///     The measurements are from the house this was written for: a shaded outdoor sensor reading 1–3 lx at
-	///     night and up to 3 706 by day, an unshaded one reaching 10 000–50 000, and an interior room that is
-	///     genuinely dark while its sensor says 170. A shortlist topping out at 60 lx could express none of them.
-	/// </remarks>
+	/// <summary>The bounds below are measured from one live house's own sensors.</summary>
 	[TestMethod]
 	public void The_Light_Level_Rungs_Reach_Every_Reading_A_House_Meets()
 	{
@@ -159,14 +122,7 @@ public sealed class AreaSentencesTests
 			"full daylight: an unshaded sensor works in tens of thousands");
 	}
 
-	/// <summary>
-	///     The value the room is on is always one of the offered ones, even when nothing on the ladder matches it.
-	/// </summary>
-	/// <remarks>
-	///     The detail view now takes any reading up to 65 535, so the ladder cannot hold every value a room can be
-	///     on. A popover that opened on eight alternatives with nothing ticked would have the same fault as one
-	///     missing its own default: the reader cannot tell where they are from where they could go.
-	/// </remarks>
+	/// <summary>The detail view takes any reading up to 65 535, so the ladder cannot hold every value a room is on.</summary>
 	[TestMethod]
 	public void A_Typed_Light_Level_Is_Slotted_Into_The_Shortlist_In_Its_Place()
 	{
@@ -185,9 +141,6 @@ public sealed class AreaSentencesTests
 			"a value already on the ladder is not offered twice — the ladder plus the off option is the whole list");
 	}
 
-	/// <summary>
-	///     A room on a hand-typed threshold opens its popover with that threshold showing.
-	/// </summary>
 	[TestMethod]
 	public void A_Room_On_A_Typed_Threshold_Sees_It_In_Its_Own_Popover()
 	{
@@ -202,14 +155,9 @@ public sealed class AreaSentencesTests
 	}
 
 	/// <summary>
-	///     Off is a change of darkness source, not a lux value that secretly means disabled.
+	///     There is no disabled-sentinel threshold. Off is <see cref="DarknessSource.Sun"/>, so the off choice is
+	///     keyed on Darkness and leaves LuxThreshold alone.
 	/// </summary>
-	/// <remarks>
-	///     A sentinel — <c>-1</c>, or <c>0</c> read as "never dark" — would have to be understood by the engine,
-	///     the validator, every format string and anybody reading the YAML, and would render as a real reading
-	///     wherever one of them forgot. The schema already has the word for "stop consulting the sensor", and it
-	///     is <see cref="DarknessSource.Sun"/>.
-	/// </remarks>
 	[TestMethod]
 	public void Turning_The_Light_Sensor_Off_Changes_The_Source_Rather_Than_The_Number()
 	{
@@ -232,13 +180,6 @@ public sealed class AreaSentencesTests
 		Assert.IsNull(room.LuxThreshold, "and the threshold it had is left exactly as it was");
 	}
 
-	/// <summary>
-	///     With the sensor out of the rule, the room stops showing a threshold at all.
-	/// </summary>
-	/// <remarks>
-	///     The proof that off means something: the clause carrying the lux value is gone from the sentence, rather
-	///     than still there showing a number that no longer decides anything.
-	/// </remarks>
 	[TestMethod]
 	public void A_Room_With_The_Sensor_Off_Shows_No_Threshold()
 	{
@@ -254,9 +195,6 @@ public sealed class AreaSentencesTests
 
 	// ===================== provenance =====================
 
-	/// <summary>
-	///     A value the room states is its own, and it carries the way back to the house's.
-	/// </summary>
 	[TestMethod]
 	public void A_Room_That_States_A_Value_Owns_It()
 	{
@@ -270,7 +208,6 @@ public sealed class AreaSentencesTests
 		Assert.AreEqual("10 min", token.HouseText, "the popover needs the road back, already written out");
 	}
 
-	/// <summary>A value the room leaves alone follows the house, and has no road back to offer.</summary>
 	[TestMethod]
 	public void A_Value_The_Room_Leaves_Alone_Follows_The_House()
 	{
@@ -285,13 +222,9 @@ public sealed class AreaSentencesTests
 	}
 
 	/// <summary>
-	///     Provenance is read off the schema's <c>null</c>, never guessed by comparing values.
+	///     Provenance comes from the schema's null. Comparing values would silently erase a room that pins
+	///     10 min while the house also says 10 min.
 	/// </summary>
-	/// <remarks>
-	///     A room that deliberately pins 10 min while the house also says 10 min has made a decision — one taken
-	///     precisely so a later change to the house leaves this room alone. Comparing values instead of reading
-	///     the null would erase exactly those overrides, and erase them silently.
-	/// </remarks>
 	[TestMethod]
 	public void Pinning_The_House_Value_Is_Still_The_Rooms_Own_Decision()
 	{
@@ -305,7 +238,6 @@ public sealed class AreaSentencesTests
 		Assert.AreEqual(TokenOrigin.Own, token.Origin);
 	}
 
-	/// <summary>The house's own defaults inherit from nothing, so nothing is marked.</summary>
 	[TestMethod]
 	public void The_House_Defaults_Are_Marked_Neither_Inherited_Nor_Owned()
 	{
@@ -319,7 +251,6 @@ public sealed class AreaSentencesTests
 		Assert.AreEqual(0, sentences.Sum(sentence => sentence.OwnValueCount), "and therefore no amber dots");
 	}
 
-	/// <summary>The house and a room untouched by anyone say the same thing, which is the point of inheritance.</summary>
 	[TestMethod]
 	public void The_House_Reads_The_Same_As_A_Room_That_Follows_It()
 	{
@@ -330,7 +261,6 @@ public sealed class AreaSentencesTests
 			AreaSentences.ForDefaults(defaults).First().PlainText);
 	}
 
-	/// <summary>The count behind the amber dots, which is what "3 of 21 are this room's own" is counting.</summary>
 	[TestMethod]
 	public void Own_Values_Are_Counted_Per_Sentence()
 	{
@@ -347,7 +277,6 @@ public sealed class AreaSentencesTests
 
 	// ===================== the flags sentence =====================
 
-	/// <summary>An ordinary room has nothing to add, and adds nothing.</summary>
 	[TestMethod]
 	public void A_Room_With_No_Flags_Gets_No_Third_Sentence()
 	{
@@ -355,7 +284,6 @@ public sealed class AreaSentencesTests
 			"a paragraph reporting an absence is the noise this design spends its budget avoiding");
 	}
 
-	/// <summary>Flags become one sentence, joined the way the design writes it.</summary>
 	[TestMethod]
 	public void Flags_Become_One_Sentence()
 	{
@@ -371,14 +299,7 @@ public sealed class AreaSentencesTests
 			sentences[2].PlainText);
 	}
 
-	/// <summary>
-	///     Blocking auto-on entirely already implies the gentler rule, so only the stronger clause is written.
-	/// </summary>
-	/// <remarks>
-	///     Both flags on is a real and sensible document — a bedroom that both caps its levels and refuses to
-	///     come on by itself. Listing both would read as a contradiction: "never comes on by itself while the
-	///     house sleeps, and is gentle while the house sleeps".
-	/// </remarks>
+	/// <summary>Both flags on is an ordinary document; SleepBlocksAutoOn already implies RespectSleepMode.</summary>
 	[TestMethod]
 	public void The_Stronger_Sleep_Rule_Speaks_For_Both()
 	{
@@ -391,7 +312,6 @@ public sealed class AreaSentencesTests
 			AreaSentences.ForArea(room, Defaults())[2].PlainText);
 	}
 
-	/// <summary>A blocker entity is a fact about the room worth a clause.</summary>
 	[TestMethod]
 	public void A_Blocker_Earns_Its_Own_Clause()
 	{
@@ -403,7 +323,6 @@ public sealed class AreaSentencesTests
 			AreaSentences.ForArea(room, Defaults())[2].PlainText);
 	}
 
-	/// <summary>English, not a comma-joined list: the joiner is where an off-by-one shows as a product bug.</summary>
 	[TestMethod]
 	public void Clauses_Are_Joined_The_Way_English_Joins_Them()
 	{
@@ -416,13 +335,9 @@ public sealed class AreaSentencesTests
 	// ===================== the contract the pages code against =====================
 
 	/// <summary>
-	///     Every token's key is the settings property it changes.
+	///     Two pages apply edits through this contract. A key that drifts from the schema turns
+	///     <c>case nameof(AreaSettings.VacancyTimeoutSeconds)</c> into a branch nothing reaches.
 	/// </summary>
-	/// <remarks>
-	///     This is the contract two later pages apply edits through. A key that drifts from the schema turns
-	///     <c>case nameof(AreaSettings.VacancyTimeoutSeconds)</c> into a branch nothing reaches — an edit that
-	///     silently does nothing, which is the worst way for a settings page to fail.
-	/// </remarks>
 	[TestMethod]
 	public void Every_Token_Is_Keyed_By_The_Setting_It_Changes()
 	{
@@ -442,13 +357,6 @@ public sealed class AreaSentencesTests
 		}
 	}
 
-	/// <summary>
-	///     Every shortlist offers the value the house actually ships with.
-	/// </summary>
-	/// <remarks>
-	///     A curated list that omits its own default opens a popover with nothing ticked, and the reader cannot
-	///     tell whether they are looking at the current value or at five alternatives to it.
-	/// </remarks>
 	[TestMethod]
 	public void Every_Shortlist_Contains_The_Value_It_Is_Offered_For()
 	{

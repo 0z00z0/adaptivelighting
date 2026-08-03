@@ -12,15 +12,8 @@ using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
-/// <summary>
-///     Every arrow in the area state machine of 02-architecture.md §5, driven through fakes and a
-///     <see cref="TestScheduler"/>.
-/// </summary>
-/// <remarks>
-///     Nothing here touches wall-clock time: the scheduler is the controller's only clock, so a vacancy timeout
-///     is an <see cref="TestScheduler.AdvanceBy(long)"/> away and the answer is the same on every machine at
-///     every hour. The literal entity ids are fixtures — the engine itself never names an entity.
-/// </remarks>
+/// <summary>Every arrow in the area state machine, driven through fakes and a <see cref="TestScheduler"/>.</summary>
+/// <remarks>The scheduler is the controller's only clock. No test here reads wall-clock time.</remarks>
 [TestClass]
 public sealed class AreaControllerTests
 {
@@ -38,7 +31,7 @@ public sealed class AreaControllerTests
 		BehaviorSubject<HouseState> House,
 		AreaController Area);
 
-	/// <summary>A house-state snapshot, spelled out so the call sites read as English rather than raw fields.</summary>
+	/// <summary>A house-state snapshot with everything a call site does not mention defaulted.</summary>
 	private static HouseState House(
 		bool home = true,
 		ModeKind kind = ModeKind.Normal,
@@ -48,11 +41,11 @@ public sealed class AreaControllerTests
 		ForcedMode? forced = null) =>
 		new(home, kind, killed) { ModeValue = modeValue, ActiveScene = scene, Forced = forced };
 
-	/// <summary>The cabin's actual fault: an <c>input_boolean</c> left on, pinning the Away option over the select.</summary>
+	/// <summary>An <c>input_boolean</c> left on, pinning the Away option over the select.</summary>
 	private static ForcedMode ForcedAway(string entityId = "input_boolean.occupancy") =>
 		new(ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, entityId, "on");
 
-	/// <summary>The cabin's real helper shape: Normal, Borte (away), Sover (sleep, no ClampPeriod).</summary>
+	/// <summary>Normal, Borte (away) and Sover (sleep, carrying no ClampPeriod).</summary>
 	private static HouseModeConfig SoverMode() => new()
 	{
 		Entity = "input_select.husmodus",
@@ -64,10 +57,7 @@ public sealed class AreaControllerTests
 		]
 	};
 
-	/// <summary>
-	///     Builds a started area at 20:00 — inside "evening", so the area is dark and its target is stable
-	///     across the whole test rather than drifting under it.
-	/// </summary>
+	/// <summary>Builds a started area at 20:00, inside "evening", so its target holds for the length of a test.</summary>
 	private static Fixture Build(
 		Action<AreaSettings>? tweak = null,
 		Action<GlobalConfig>? tweakGlobal = null,
@@ -84,8 +74,7 @@ public sealed class AreaControllerTests
 		ha.SetState(Light, "off");
 		ha.SetState(Lux, "5");
 
-		// Before Start(), so a test can hand the controller a world that already exists — which is the whole
-		// point of start-up adoption.
+		// Before Start(), so a test can hand the controller a world that already exists.
 		seed?.Invoke(ha);
 
 		var settings = new AreaSettings
@@ -124,10 +113,7 @@ public sealed class AreaControllerTests
 
 	private static void Advance(Fixture fixture, TimeSpan by) => fixture.Scheduler.AdvanceBy(by.Ticks);
 
-	/// <summary>
-	///     Builds an area whose light is already on before the engine starts — the state of the world after any
-	///     restart of a host that had lit a room.
-	/// </summary>
+	/// <summary>Builds an area whose light is already on before the engine starts.</summary>
 	private static Fixture BuildAlreadyLit(Action<AreaSettings>? tweak = null, string lux = "5") =>
 		Build(tweak, seed: ha =>
 		{
@@ -354,11 +340,7 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State, "the pre-off timer must not fire into a suppressed area");
 	}
 
-	/// <summary>
-	///     The reset is exactly VacancyResetMinutes of no motion. This is the regression test for a reset that
-	///     was additionally gated on an occupancy check — which, since motion restarts the timer anyway, only
-	///     ever stretched the reset out to the vacancy timeout and made the configured value a lie.
-	/// </summary>
+	// Regression: the reset was once also gated on an occupancy check, which stretched it to the vacancy timeout.
 	[TestMethod]
 	public void Suppression_Lifts_After_VacancyResetMinutes_Of_No_Motion()
 	{
@@ -405,11 +387,8 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
 
-	/// <summary>
-	///     The night-fade bug. A long fade emits attribute changes for its whole duration; with a fixed echo
-	///     window the engine read the tail of its own fade as a human at the dimmer and overrode itself on
-	///     every night retarget. The window must be SelfEchoWindowSeconds + TransitionSeconds.
-	/// </summary>
+	// The echo window must be SelfEchoWindowSeconds + TransitionSeconds. A fixed one reads the tail of the
+	// engine's own night fade as a human at the dimmer.
 	[TestMethod]
 	public void An_Echo_From_The_Middle_Of_A_Long_Fade_Is_Still_Ours()
 	{
@@ -445,14 +424,9 @@ public sealed class AreaControllerTests
 
 	// ===================== a radio is not a hand =====================
 	//
-	// Home Assistant writes 'unavailable' with a context carrying neither a user nor a parent, which is exactly
-	// how a wall switch reports itself, and 'unavailable' does not read as on — so a bulb dropping off the mesh
-	// looked from here like somebody switching it off, and the recovery looked like somebody switching it on.
+	// Home Assistant writes 'unavailable' with a context carrying neither a user nor a parent, the same shape a
+	// wall switch reports. Both ends of the change have to read on or off before it counts as a person.
 
-	/// <summary>
-	///     A Zigbee hiccup used to suppress the room for <c>VacancyResetMinutes</c>, refusing to light it for the
-	///     person standing in it. The area must simply keep automating: the bulb never went anywhere on purpose.
-	/// </summary>
 	[TestMethod]
 	public void A_Light_Dropping_Off_The_Network_Is_Not_A_Human_Switching_It_Off()
 	{
@@ -468,10 +442,6 @@ public sealed class AreaControllerTests
 			"a bulb losing its radio is not a person at the switch, and must not suppress the room");
 	}
 
-	/// <summary>
-	///     The other half, and the more expensive one: coming back read as a manual switch-on and pinned the area
-	///     in <see cref="AreaState.OverriddenOn"/> for <c>OverrideDurationMinutes</c> — two hours by default.
-	/// </summary>
 	[TestMethod]
 	public void A_Light_Coming_Back_From_Unavailable_Is_Not_A_Human_Switching_It_On()
 	{
@@ -485,7 +455,6 @@ public sealed class AreaControllerTests
 			"a device reconnecting is indistinguishable from a hand at the switch, and the safe reading is neither");
 	}
 
-	/// <summary>An entity that has never reported is not a person either — there is no change to attribute.</summary>
 	[TestMethod]
 	public void A_Lights_Very_First_Report_Is_Not_An_Override()
 	{
@@ -498,7 +467,7 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
 
-	/// <summary>The guard must not swallow the thing it sits in front of: on-to-off is still a person.</summary>
+	/// <summary>The guard must not swallow the thing it sits in front of.</summary>
 	[TestMethod]
 	public void A_Real_Off_Is_Still_Read_As_A_Human()
 	{
@@ -601,12 +570,8 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 
-	/// <summary>
-	///     The start-up adoption bug, reached by the other door. Releasing the kill switch resumed the area at
-	///     <see cref="AreaState.AutoVacant"/>, which arms no vacancy timeout, so a room left lit under the muzzle
-	///     burned until somebody happened to walk into it — indefinitely, in a room nobody enters. Muzzle-then-
-	///     release must leave the house where stop-then-start does.
-	/// </summary>
+	// Regression: releasing the kill switch resumed at AutoVacant, which arms no vacancy timeout, so a room left
+	// lit under the muzzle burned on. Muzzle-then-release must land where stop-then-start does.
 	[TestMethod]
 	public void Releasing_The_Kill_Switch_Adopts_A_Room_Left_Lit()
 	{
@@ -624,7 +589,7 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "adoption observes; it does not command");
 		Assert.IsNotNull(t.Publisher.Snapshots[^1].NextChangeAt, "and it arms the timeout that ends the burning");
 
-		// The vacancy timeout, then the pre-off grace: the lights the engine had forgotten are finally swept.
+		// The vacancy timeout, then the pre-off grace.
 		Advance(t, TimeSpan.FromSeconds(601));
 		Advance(t, TimeSpan.FromSeconds(31));
 
@@ -632,7 +597,6 @@ public sealed class AreaControllerTests
 		Assert.IsFalse(t.Actuator.Last!.On, "the room does not burn on for ever because the engine was muzzled once");
 	}
 
-	/// <summary>Nothing to adopt is still nothing to adopt: an unlit room resumes at rest, as it always did.</summary>
 	[TestMethod]
 	public void Releasing_The_Kill_Switch_Over_A_Dark_Room_Changes_Nothing()
 	{
@@ -777,7 +741,7 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void RespectSleepMode_Holds_The_Evening_Target_To_The_Night_Level()
 	{
-		// Sover is Sleep-kind with no ClampPeriod; SleepClampPeriodFor falls back to the period named "night" (09 §4.1).
+		// Sover is Sleep-kind with no ClampPeriod, so the clamp falls back to the period named "night".
 		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode());
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
@@ -803,11 +767,8 @@ public sealed class AreaControllerTests
 
 	// ===================== what the snapshot says about auto-on =====================
 
-	/// <summary>
-	///     A snapshot has to carry whether movement would actually light the area, because two of the refusals
-	///     leave it in <see cref="AreaState.AutoVacant"/> — the same state as an area simply waiting for someone
-	///     to walk in. Read from the gate the engine itself consults, not from a second copy of its rules.
-	/// </summary>
+	// Two of the refusals leave the area in AutoVacant, the same state as one waiting for someone to walk in,
+	// so the snapshot has to carry the gate as well.
 	[TestMethod]
 	public void A_Sleeping_House_Is_Published_As_The_Reason_Auto_On_Would_Refuse()
 	{
@@ -824,10 +785,6 @@ public sealed class AreaControllerTests
 		Assert.IsNull(latest.AutoOnBlockingEntity, "no entity is holding this one off");
 	}
 
-	/// <summary>
-	///     The blocking entity is named, not counted. This is the dusk case: the darkness verdict flips, the tick
-	///     publishes on it, and that report is the one somebody reads when the room stayed dark.
-	/// </summary>
 	[TestMethod]
 	public void A_Blocking_Entity_Is_Published_By_Name()
 	{
@@ -848,10 +805,6 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(Blocker, dusk.AutoOnBlockingEntity);
 	}
 
-	/// <summary>
-	///     An area with nothing in the way says so, so the field is a verdict rather than a flag that is only ever
-	///     set when something is wrong.
-	/// </summary>
 	[TestMethod]
 	public void An_Area_With_Nothing_In_The_Way_Publishes_An_Open_Gate()
 	{
@@ -860,10 +813,7 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AutoOnBlock.None, t.Publisher.Snapshots[0].AutoOnBlockedBy);
 	}
 
-	/// <summary>
-	///     The gate the snapshot reports is the gate that decides, not a second reading of the same rules: an area
-	///     the snapshot calls blocked is an area motion really does leave dark.
-	/// </summary>
+	// The snapshot reads the gate the engine consults, not a second copy of its rules.
 	[TestMethod]
 	public void What_The_Snapshot_Reports_Is_What_Motion_Actually_Does()
 	{
@@ -881,14 +831,10 @@ public sealed class AreaControllerTests
 
 	// ===================== a room's own levels =====================
 
-	/// <summary>
-	///     The room commands its own level, not the schedule's — end to end, through the controller rather than
-	///     against the calculator alone.
-	/// </summary>
 	[TestMethod]
 	public void Motion_Lights_The_Area_At_The_Rooms_Own_Level_Where_It_Has_One()
 	{
-		// The fixture's clock stands at 20:00, in evening — which the house runs at 70 % / 2700 K.
+		// The fixture's clock stands at 20:00, in evening, which the house runs at 70 % / 2700 K.
 		Fixture t = Build(levels: [new RoomLevelOverride { Period = "evening", BrightnessPct = 25 }]);
 
 		t.Ha.Trigger(Motion, "on");
@@ -897,10 +843,6 @@ public sealed class AreaControllerTests
 			"the room's brightness, and the schedule's colour it never said anything about");
 	}
 
-	/// <summary>
-	///     And the snapshot says whose level it is, so a card can explain a room that looks wrong beside its
-	///     neighbours instead of leaving somebody to diff the YAML.
-	/// </summary>
 	[TestMethod]
 	public void The_Snapshot_Says_Which_Levels_This_Room_Names_For_Itself()
 	{
@@ -922,7 +864,6 @@ public sealed class AreaControllerTests
 			"null is reserved for a build that predates the field; a running engine always has an answer");
 	}
 
-	/// <summary>The flag follows the period, so crossing a boundary out of an overridden period clears it.</summary>
 	[TestMethod]
 	public void The_Snapshot_Flag_Follows_The_Period_Across_A_Boundary()
 	{
@@ -930,7 +871,7 @@ public sealed class AreaControllerTests
 
 		Assert.AreEqual(RoomLevelSource.Brightness, t.Publisher.Snapshots[^1].LevelsFromRoom);
 
-		// 20:00 + 2h35m is 22:35, five minutes into night — which this room does not override.
+		// 20:00 + 2h35m is 22:35, five minutes into night, which this room does not override.
 		Advance(t, TimeSpan.FromMinutes(155));
 
 		AreaSnapshot latest = t.Publisher.Snapshots[^1];
@@ -1005,11 +946,6 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(2026, t.Publisher.Snapshots[^1].Timestamp.Year, "the snapshot clock is the scheduler, not the wall");
 	}
 
-	/// <summary>
-	///     The startup snapshot is read by a person on the dashboard, and it must not dress defaults up as
-	///     facts: darkness is evaluated, the period is named, and everything the engine cannot know yet —
-	///     commands, motion, deadlines — is null rather than a confident-looking zero.
-	/// </summary>
 	[TestMethod]
 	public void The_Startup_Snapshot_Claims_Only_What_It_Evaluated()
 	{
@@ -1056,14 +992,10 @@ public sealed class AreaControllerTests
 			"5000 lux is not dark, and the opening snapshot must say so rather than echo a default");
 	}
 
-	/// <summary>
-	///     The opt-in: a room with no lux sensor reads the house's outdoor one <i>because it said so</i>.
-	/// </summary>
+	/// <summary>Following the house's outdoor lux sensor is opt-in per room.</summary>
 	/// <remarks>
-	///     This used to happen to every sensorless room without anyone asking, which is how a whole house came to
-	///     refuse to light itself: one shaded outdoor sensor reads several hundred lux while the rooms behind it
-	///     are dark. Asserted against a bright outdoor reading rather than a dark one, because a dark one cannot
-	///     tell the two rules apart — a room with no reading at all now counts as dark too.
+	///     Asserted on a bright outdoor reading. A dark one cannot tell the two rules apart, because a room with
+	///     no reading at all counts as dark too.
 	/// </remarks>
 	[TestMethod]
 	public void A_Room_That_Follows_The_Outdoor_Sensor_Is_Gated_By_It()
@@ -1074,13 +1006,6 @@ public sealed class AreaControllerTests
 			"the room asked to follow the outdoor sensor, and outdoors it is broad daylight");
 	}
 
-	/// <summary>
-	///     And the room that did not ask has no reading at all, so the lux gate stops holding it back.
-	/// </summary>
-	/// <remarks>
-	///     The owner's rule: "No sensor means always trigger light, then allow manually setting to following
-	///     outdoor." Better to light too early than never.
-	/// </remarks>
 	[TestMethod]
 	public void A_Room_That_Did_Not_Ask_Ignores_The_Outdoor_Sensor_And_Counts_As_Dark()
 	{
@@ -1090,7 +1015,7 @@ public sealed class AreaControllerTests
 			"no lux sensor and no opt-in means no reading, and a gate with nothing to read refuses nothing");
 	}
 
-	/// <summary>Starts a room that resolved no lux sensor of its own, and hands back its opening report.</summary>
+	/// <summary>Starts a room that resolved no lux sensor of its own and hands back its opening report.</summary>
 	private static AreaSnapshot SensorlessRoom(string outdoorLux, bool followOutdoorLux)
 	{
 		var scheduler = new TestScheduler();
@@ -1148,11 +1073,8 @@ public sealed class AreaControllerTests
 		Assert.IsNotNull(vacant.LastCommandAt, "…but it is a dated command, not an absence of one");
 	}
 
-	/// <summary>
-	///     Motion in an active area moves the vacancy deadline without a state change. A snapshot that
-	///     carries a deadline must be re-issued when the deadline moves, or every consumer holds a stale
-	///     countdown — this was the dashboard bug where a card could sit frozen for half an hour.
-	/// </summary>
+	// Motion in an active area moves the vacancy deadline without a state change. Regression: consumers held a
+	// countdown that could sit stale for half an hour.
 	[TestMethod]
 	public void Motion_While_Active_Republishes_With_The_Deadline_Moved()
 	{
@@ -1221,12 +1143,7 @@ public sealed class AreaControllerTests
 		Assert.IsNull(disabled.NextChangeFrom, "…and no countdown span either — the pair lives and dies together");
 	}
 
-	/// <summary>
-	///     A countdown has two ends. <see cref="AreaSnapshot.NextChangeAt"/> alone renders a deadline; a
-	///     progress bar also needs the instant the timer was armed, and deriving that client-side from any
-	///     other timestamp would be a guess — <see cref="AreaSnapshot.Timestamp"/> moves on republishes that
-	///     re-arm nothing.
-	/// </summary>
+	// NextChangeFrom cannot be derived client-side: Timestamp moves on republishes that re-arm nothing.
 	[TestMethod]
 	public void A_Snapshot_Carries_Both_Ends_Of_Its_Countdown()
 	{
@@ -1271,10 +1188,7 @@ public sealed class AreaControllerTests
 		Assert.IsNull(vacant.NextChangeFrom, "an area waiting on motion has no countdown to draw");
 	}
 
-	/// <summary>
-	///     Every snapshot carries the registry area id, so a reader can join live state to the document by
-	///     identity rather than by a display name somebody can edit while the page is open.
-	/// </summary>
+	/// <summary>The area id is what joins live state to the document; the display name is editable.</summary>
 	[TestMethod]
 	public void Every_Snapshot_Names_The_Registry_Area_It_Came_From()
 	{
@@ -1285,10 +1199,7 @@ public sealed class AreaControllerTests
 		Assert.IsTrue(t.Publisher.Snapshots.All(snapshot => snapshot.AreaId == "test_area"));
 	}
 
-	/// <summary>
-	///     The armed instant is part of what the area is waiting on, not a date on the report — so it counts
-	///     in <see cref="AreaSnapshot.HasSameMeaningAs"/>, where the as-of fields deliberately do not.
-	/// </summary>
+	// NextChangeFrom counts in HasSameMeaningAs; the as-of fields, Timestamp among them, do not.
 	[TestMethod]
 	public void A_Moved_Countdown_Start_Is_News_And_A_Moved_Timestamp_Is_Not()
 	{
@@ -1304,11 +1215,8 @@ public sealed class AreaControllerTests
 
 	// ===================== start-up adoption =====================
 
-	/// <summary>
-	///     The forever-on bug. An area the engine lit and then forgot across a restart used to start
-	///     <see cref="AreaState.AutoVacant"/>, which arms no vacancy timer — so the light burned until somebody
-	///     walked back into the room, which in a room nobody enters means forever.
-	/// </summary>
+	// Regression: an area lit before a restart started AutoVacant, which arms no vacancy timer, so the light
+	// burned until somebody walked back in.
 	[TestMethod]
 	public void An_Area_Found_Lit_Is_Adopted_And_Eventually_Turned_Off()
 	{
@@ -1333,17 +1241,12 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(0, t.Actuator.Applied.Count,
 			"somebody walking past a restart must notice nothing at all");
 
-		// Nor may the first tick quietly 'correct' levels the engine never chose: the target is seeded at
-		// adoption precisely so the tick finds nothing to do.
+		// The target is seeded at adoption so the first tick finds nothing to correct.
 		Advance(t, TimeSpan.FromMinutes(5));
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "adoption takes charge of the lights, not of their levels");
 	}
 
-	/// <summary>
-	///     Darkness gates auto-on, not adoption. They answer different questions — "should I light this?" versus
-	///     "these are lit, whose are they?" — and answering the second with the first would leave a lamp burning
-	///     through a bright afternoon, which is the same bug in daylight.
-	/// </summary>
+	/// <summary>Darkness gates auto-on, not adoption.</summary>
 	[TestMethod]
 	public void A_Lit_Area_Is_Adopted_Even_When_It_Is_Too_Bright_To_Have_Been_Lit()
 	{
@@ -1386,8 +1289,7 @@ public sealed class AreaControllerTests
 	{
 		var t = BuildAlreadyLit(s => s.Enabled = false);
 
-		// Start() declines to adopt, and the house subscription then lands the area in Disabled — where a lit
-		// room is somebody else's business, which is exactly what a kill switch is for.
+		// Start() declines to adopt, then the house subscription lands the area in Disabled.
 		Assert.AreEqual(AreaState.Disabled, t.Area.State);
 
 		Advance(t, TimeSpan.FromMinutes(15));
@@ -1397,10 +1299,7 @@ public sealed class AreaControllerTests
 
 	// ===================== periodic evaluation =====================
 
-	/// <summary>
-	///     Dusk. Lux crossing the threshold is the moment a vacant area becomes eligible to light, and it is
-	///     exactly a moment with no transition and no deadline — so nothing but the tick can notice it.
-	/// </summary>
+	// Dusk moves no state and arms no deadline, so only the tick can notice it.
 	[TestMethod]
 	public void A_Vacant_Area_Publishes_Once_When_Darkness_Changes_Under_It()
 	{
@@ -1426,12 +1325,8 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "noticing dusk is not a reason to light an empty room");
 	}
 
-	/// <summary>
-	///     One real transition is announced once. A republish that carries no new news — motion in an overridden
-	///     area records occupancy but moves neither the state, the levels, nor the override deadline — resolves to
-	///     a snapshot identical to the last one published, and the identical-consecutive guard must swallow it.
-	///     This is the regression test for the owner seeing a single transition log its line twice.
-	/// </summary>
+	// Regression: one transition logged its line twice. The identical-consecutive guard has to swallow a
+	// republish that resolves to the snapshot already published.
 	[TestMethod]
 	public void A_Repeated_Identical_Snapshot_Is_Published_Only_Once()
 	{
@@ -1443,8 +1338,7 @@ public sealed class AreaControllerTests
 
 		t.Publisher.Snapshots.Clear();
 
-		// Motion while overridden: the deadline is untouched, the state and levels are untouched, only the
-		// last-motion instant moves — and that is deliberately not part of a snapshot's meaning.
+		// Motion while overridden moves only the last-motion instant, which is not part of a snapshot's meaning.
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
 
@@ -1452,10 +1346,7 @@ public sealed class AreaControllerTests
 			"a republish saying the very same thing is suppressed, so one transition is published exactly once");
 	}
 
-	/// <summary>
-	///     The trap in diffing a record: value equality would compare the timestamps too, so every tick would
-	///     differ and the suppression would suppress nothing — a fixed-rate heartbeat wearing a diff's clothes.
-	/// </summary>
+	// Record value equality would compare the timestamps too, so every tick would differ and suppress nothing.
 	[TestMethod]
 	public void A_Quiet_Area_Publishes_Nothing_However_Long_It_Ticks()
 	{
@@ -1495,7 +1386,7 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 	}
 
-	// ===================== house-mode sleep (09 §3.4) =====================
+	// ===================== house-mode sleep =====================
 
 	[TestMethod]
 	public void Sleep_NonRespectingArea_FollowsThePlainTable()
@@ -1534,7 +1425,7 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void Sleep_RespectingArea_WithNoResolvableClamp_LeavesTheTargetAlone()
 	{
-		// Sover has no ClampPeriod, and there is no 'night' period nor one that SetsMode Sover — nothing resolves.
+		// Sover has no ClampPeriod, and there is no 'night' period nor one that SetsMode Sover, so nothing resolves.
 		var periods = new List<TimePeriodConfig>
 		{
 			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
@@ -1549,22 +1440,8 @@ public sealed class AreaControllerTests
 			"with no clamp period resolving, the respecting area is left on the plain evening target");
 	}
 
-	/// <summary>
-	///     The sleep clamp reaches for <i>this room's</i> night, not the house's — the one place a room's levels
-	///     become a ceiling rather than a target.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Somebody up at 03:00 in a room that runs the night at 4 % must get 4 %, not the house's 15. Reading
-	///         the house's night here would quietly hand the room a ceiling it had already said was too bright, and
-	///         the room would be brighter asleep than awake.
-	///     </para>
-	///     <para>
-	///         The clamp period carries no <c>MaxBrightnessPct</c> on purpose, because that is the case where its
-	///         <i>level</i> becomes the ceiling — which is the half a room can move. An explicit cap still wins over
-	///         it, for both the house and the room: a room cannot escape a ceiling the house set deliberately.
-	///     </para>
-	/// </remarks>
+	// The sleep clamp reads this room's night level, not the house's. It is the one place a room's level is a
+	// ceiling instead of a target.
 	[TestMethod]
 	public void Sleep_RespectingArea_ClampsToItsOwnNightLevelRatherThanTheHouses()
 	{
@@ -1643,7 +1520,7 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void PresenceAway_UnaffectedByModeModel()
 	{
-		// No HouseMode configured: raw presence still drives Away exactly as before.
+		// No HouseMode configured, so raw presence drives Away.
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
@@ -1656,12 +1533,9 @@ public sealed class AreaControllerTests
 
 	// ---- a forced mode is never a presence departure -------------------------------------------
 	//
-	// The cabin ran ActivateWhileOn: [input_boolean.occupancy] on Borte and that boolean had been on for hours.
-	// Every settings save rebuilds every area controller, so each edit re-asserted Away and swept the house dark
-	// while the owner stood in it — and the engine's account of itself was "Everyone left the house", while both
-	// person entities read home. These pin the two halves of that sentence being wrong.
+	// A mode forced by an entity used to report itself as "Everyone left the house" while both person entities
+	// read home. Every settings save rebuilds every area controller, so each edit re-asserted it.
 
-	/// <summary>The last report of a started area, which is what any reader actually sees.</summary>
 	private static AreaSnapshot LastReport(Fixture fixture) => fixture.Publisher.Snapshots[^1];
 
 	[TestMethod]
@@ -1718,7 +1592,7 @@ public sealed class AreaControllerTests
 		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 
-		// The boolean goes off. Nobody arrived — the mode simply let go.
+		// The boolean goes off. Nobody arrived; the mode let go.
 		t.House.OnNext(House(modeValue: "Normal"));
 
 		AreaSnapshot report = LastReport(t);
@@ -1741,17 +1615,8 @@ public sealed class AreaControllerTests
 			"somebody genuinely walked in, and that is what an arrival is");
 	}
 
-	/// <summary>
-	///     Somebody walking into a house an entity is holding Away moves presence and moves nothing else — the
-	///     area stays Away, the mode stays Borte — so the tick is the only thing that can correct the standing
-	///     report, and it only does so because <c>IsAnyoneHome</c> counts as meaning.
-	/// </summary>
-	/// <remarks>
-	///     Deliberately asserted on the tick rather than on the house change: an area already Away short-circuits
-	///     out of <c>OnHouseChanged</c> without publishing, which is the right trade for the sweep path and leaves
-	///     one tick of staleness here. Were <c>IsAnyoneHome</c> excluded from the comparison the way the auto-on
-	///     verdict is, the room would sit on "nobody is home" indefinitely.
-	/// </remarks>
+	// Asserted on the tick, not on the house change: an area already Away short-circuits out of OnHouseChanged
+	// without publishing. The correction only lands because IsAnyoneHome counts in HasSameMeaningAs.
 	[TestMethod]
 	public void ComingHomeToAForcedAwayMode_IsCorrectedOnTheNextTick()
 	{
@@ -1760,7 +1625,7 @@ public sealed class AreaControllerTests
 
 		Assert.AreEqual(false, LastReport(t).IsAnyoneHome);
 
-		// The mode does not move — the boolean is still on — but the house fills up again.
+		// The boolean is still on, so the mode does not move, but the house fills up again.
 		t.House.OnNext(House(home: true, kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
 		Advance(t, TimeSpan.FromSeconds(60));
 
@@ -1771,7 +1636,7 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void Migration_LiveCabin_NoHouseMode_UsesBaseline()
 	{
-		// No HouseMode, nobody asleep, no mode selected → the baseline evening period drives, unchanged.
+		// No HouseMode, nobody asleep, no mode selected: the baseline evening period drives.
 		var t = Build(s => s.RespectSleepMode = true);
 		t.House.OnNext(House(modeValue: null));
 
@@ -1781,7 +1646,7 @@ public sealed class AreaControllerTests
 			"with no mode selected and nobody asleep, the baseline evening period drives, exactly as today");
 	}
 
-	// ===================== guest scene hold (09 §3.4) =====================
+	// ===================== guest scene hold =====================
 
 	private static HouseModeConfig GuestSceneMode()
 	{
@@ -1830,8 +1695,8 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 		t.Actuator.Clear();
 
-		// A guest scene is selected while the area is still Away. The scene-hold check runs before the was-Away
-		// recovery, so this must land in SceneHold rather than fire the welcome-home ApplyTarget that would clobber it.
+		// The scene-hold check runs before the was-Away recovery, so a scene selected while Away lands in
+		// SceneHold instead of firing the welcome-home ApplyTarget.
 		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
 
 		Assert.AreEqual(AreaState.SceneHold, t.Area.State, "a scene mode entered from Away lands in SceneHold");
@@ -1854,19 +1719,9 @@ public sealed class AreaControllerTests
 
 	// ===================== movement the engine turned down =====================
 	//
-	// Movement into a blocked room used to publish nothing at all, so the one page that exists to answer "why
-	// did that light not come on" had no row to answer it with. Publishing per blocked movement was deferred for
-	// a real reason — an event every time anyone walks through a sunlit room — so what is asserted here is not
-	// just that the report exists but the bound that makes it affordable.
+	// Movement into a blocked room publishes a report, and the report is bounded: the comparison is on the
+	// refusing gate, so the count over any interval follows gate changes, never footfall.
 
-	/// <summary>
-	///     <b>The churn bound.</b> Forty walks under one unchanged block produce exactly one report.
-	/// </summary>
-	/// <remarks>
-	///     The comparison is on the refusing <i>gate</i>, not on the reading behind it, which is why a drifting lux
-	///     value under one unchanged <c>NotDark</c> cannot produce a second row either. Over any interval the
-	///     number of these reports is bounded by how often the gate itself changes, never by footfall.
-	/// </remarks>
 	[TestMethod]
 	public void Forty_Walks_Under_One_Unchanged_Block_Produce_One_Report()
 	{
@@ -1888,14 +1743,7 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "and still no light, which is the point of the row");
 	}
 
-	/// <summary>
-	///     A lux reading that drifts without crossing the threshold is not a new refusal, and must not be a new row.
-	/// </summary>
-	/// <remarks>
-	///     This is the objection that deferred the feature once: <see cref="AreaSnapshot.AutoOnBlockedBy"/> is kept
-	///     out of <see cref="AreaSnapshot.HasSameMeaningAs"/> so a drifting reading cannot republish every area.
-	///     Bounding on the reason rather than the reading is what keeps that property while still producing the row.
-	/// </remarks>
+	// AutoOnBlockedBy is kept out of HasSameMeaningAs, so a drifting lux reading cannot republish every area.
 	[TestMethod]
 	public void A_Drifting_Reading_Under_One_Unchanged_Reason_Adds_No_Row()
 	{
@@ -1915,13 +1763,7 @@ public sealed class AreaControllerTests
 			"four different readings, one unchanged verdict, nothing new to say");
 	}
 
-	/// <summary>
-	///     A block that changes is news again, and so is a block that returns after the room has actually lit.
-	/// </summary>
-	/// <remarks>
-	///     The second half is what stops the bound from swallowing the spell somebody is looking for: a room that
-	///     was blocked, then lit, then blocked by the same gate again has to report the second spell.
-	/// </remarks>
+	// The bound must not swallow a second spell: blocked, then lit, then blocked by the same gate is two reports.
 	[TestMethod]
 	public void A_Changed_Reason_Reports_Again_And_So_Does_A_Block_That_Returns()
 	{
@@ -1932,7 +1774,7 @@ public sealed class AreaControllerTests
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Motion, "off");
 
-		// Same room, different gate: the television goes on and now outranks the darkness verdict.
+		// Same room, different gate: the television goes on and outranks the darkness verdict.
 		t.Ha.SetState(Blocker, "on");
 		t.Ha.Trigger(Motion, "on");
 
@@ -1962,10 +1804,7 @@ public sealed class AreaControllerTests
 			"the room lit in between, so the refusal that came back is news again rather than a repeat");
 	}
 
-	/// <summary>
-	///     Every gate that can refuse movement produces a report naming itself — including the four the area used
-	///     to return from without publishing anything at all.
-	/// </summary>
+	/// <summary>Every gate that can refuse movement produces a report naming itself.</summary>
 	[TestMethod]
 	public void Every_Refusal_Names_Itself_On_A_Declined_Movement()
 	{

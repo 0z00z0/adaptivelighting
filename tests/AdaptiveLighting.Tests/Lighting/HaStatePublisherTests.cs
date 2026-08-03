@@ -10,9 +10,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The wire contract between <see cref="HaStatePublisher"/> and <see cref="AreaSnapshotEvent"/>: the raw
-///     house-mode string must survive serialise → HA event → <see cref="AreaSnapshotEvent.ToSnapshot"/> so the
-///     dashboard can show "Sover" rather than only the coarse <see cref="HouseMode"/> enum label.
+///     The wire contract between <see cref="HaStatePublisher"/> and <see cref="AreaSnapshotEvent"/>. Fields have
+///     to survive publish, HA event and <see cref="AreaSnapshotEvent.ToSnapshot"/> to reach the dashboard.
 /// </summary>
 [TestClass]
 public sealed class HaStatePublisherTests
@@ -34,7 +33,7 @@ public sealed class HaStatePublisherTests
 		var (type, data) = ha.SentEvents.Single();
 		Assert.AreEqual(HaStatePublisher.EventType, type);
 
-		// Round-trip through JSON exactly as NetDaemon's Event<T>.Data would: serialize the published payload,
+		// Round-trip through JSON the way NetDaemon's Event<T>.Data does: serialize the published payload,
 		// then bind it into the web-side event record and rebuild the snapshot.
 		var json = JsonSerializer.Serialize(data);
 		var wire = JsonSerializer.Deserialize<AreaSnapshotEvent>(json);
@@ -67,12 +66,7 @@ public sealed class HaStatePublisherTests
 		Assert.IsNull(rebuilt!.HouseModeValue, "no select configured → the raw value stays null through the round trip");
 	}
 
-	// ===================== the area id (§6.5) =====================
-
-	/// <summary>
-	///     The area id is the stable join between live state and the document. Names are editable mid-session and
-	///     ids are not, so a reader that matched on the display name lost the room the moment somebody renamed it.
-	/// </summary>
+	// The area id is the stable join between live state and the document. Names are editable mid-session.
 	[TestMethod]
 	public void AreaId_Survives_The_Serialize_Event_ToSnapshot_Round_Trip()
 	{
@@ -98,10 +92,7 @@ public sealed class HaStatePublisherTests
 		Assert.AreEqual("Living room", rebuilt.AreaName, "and the name it is joined to is unchanged");
 	}
 
-	/// <summary>
-	///     The field is additive, so an event from a build that predates it must still produce a snapshot — with a
-	///     null id, which is what sends a reader back to matching on the display name as it always did.
-	/// </summary>
+	// The field is additive: an event from a build that predates it still has to rebuild.
 	[TestMethod]
 	public void An_Event_From_A_Build_Without_An_Area_Id_Still_Yields_A_Snapshot()
 	{
@@ -129,12 +120,6 @@ public sealed class HaStatePublisherTests
 		Assert.IsNull(rebuilt.AreaId, "absent means null, not a broken payload");
 	}
 
-	// ===================== the auto-on gate =====================
-
-	/// <summary>
-	///     The gate verdict and the entity behind it both have to survive the wire, or the activity page is back
-	///     to guessing from the state alone — which is what made it promise lights that never came on.
-	/// </summary>
 	[TestMethod]
 	public void The_Auto_On_Gate_Survives_The_Serialize_Event_ToSnapshot_Round_Trip()
 	{
@@ -158,11 +143,7 @@ public sealed class HaStatePublisherTests
 		Assert.AreEqual("media_player.stue_tv", rebuilt.AutoOnBlockingEntity);
 	}
 
-	/// <summary>
-	///     Additive, exactly as <c>area_id</c> was. An event from a build that never carried the gate must still
-	///     rebuild, with a null verdict — because null is "this report cannot say", and the zero value would be
-	///     the claim that nothing was blocking.
-	/// </summary>
+	// Null verdict means the report cannot say. The zero value would claim nothing was blocking.
 	[TestMethod]
 	public void An_Event_From_A_Build_Without_The_Auto_On_Gate_Rebuilds_With_No_Verdict()
 	{
@@ -186,7 +167,6 @@ public sealed class HaStatePublisherTests
 		Assert.IsNull(rebuilt.AutoOnBlockingEntity);
 	}
 
-	/// <summary>An area configured with explicit entity lists and no area id publishes none, and that is fine.</summary>
 	[TestMethod]
 	public void An_Area_With_No_Registry_Area_Publishes_A_Null_Id()
 	{

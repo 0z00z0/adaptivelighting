@@ -8,20 +8,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     Setting rooms up from Home Assistant — the first start, and every later "set up rooms again".
+///     Setting rooms up from Home Assistant: the first start, and every later "set up rooms again".
 /// </summary>
 /// <remarks>
-///     <para>
-///         The two are one service on purpose, so the warning dialog cannot drift from the rebuild it warns
-///         about. Most of what is asserted here is therefore the pair, not the parts: the plan's counts against
-///         what the rebuild actually destroys, and the untouched rooms against the document they came from.
-///     </para>
-///     <para>
-///         <b>The dialog must never under-warn.</b> A person who is told they will lose two hand-picked lights
-///         and loses three has been lied to, and will not trust the next warning either. That is why the counting
-///         helpers below read the settings off <see cref="AreaConfig"/> by reflection rather than listing them:
-///         a setting added to the model tomorrow is counted here whether or not anybody remembered it.
-///     </para>
+///     The plan's counts are asserted against what the rebuild destroys, never against numbers written here. The
+///     counting helpers read the settings off <see cref="AreaConfig"/> by reflection, so a setting added to the
+///     model tomorrow is counted whether or not anybody remembered it. The warning must never count short.
 /// </remarks>
 [TestClass]
 public sealed class AreaSetupServiceTests
@@ -57,10 +49,6 @@ public sealed class AreaSetupServiceTests
 
 	// ===================== a first run =====================
 
-	/// <summary>
-	///     Discovery does its half of the job and stops. Software installed ten minutes ago turning a bedroom
-	///     light on is the wrong first experience; the owner switches on the rooms they trust it with.
-	/// </summary>
 	[TestMethod]
 	public void A_First_Run_Proposes_Every_Qualifying_Room_Switched_Off()
 	{
@@ -79,11 +67,8 @@ public sealed class AreaSetupServiceTests
 			"a discovered room starts off — and explicitly, never by a flipped default");
 	}
 
-	/// <summary>
-	///     <c>Enabled = false</c> is written on the area, not achieved by flipping <c>Defaults.Enabled</c>.
-	///     Flipping the default would retroactively switch off every room in a house whose document never wrote
-	///     an explicit value, which is a silent regression in an already-running installation.
-	/// </summary>
+	// A discovered room is switched off by writing Enabled = false on the area. Flipping Defaults.Enabled instead
+	// would retroactively switch off every room in a document that never wrote an explicit value.
 	[TestMethod]
 	public void The_Default_Enabledness_Stays_True_So_Existing_Documents_Are_Unaffected()
 	{
@@ -91,7 +76,6 @@ public sealed class AreaSetupServiceTests
 		Assert.IsTrue(AdaptiveLightingConfig.CreateDefault().Defaults.Enabled);
 	}
 
-	/// <summary>A room already in the document is not proposed a second time.</summary>
 	[TestMethod]
 	public void A_Room_The_Document_Already_Has_Is_Not_Proposed_Again()
 	{
@@ -122,10 +106,7 @@ public sealed class AreaSetupServiceTests
 		CollectionAssert.AreEqual(seeded.ToArray(), config.Global.Persons.ToArray());
 	}
 
-	/// <summary>
-	///     A <c>person.*</c> with no device tracker can never resolve to home or away, so it is not a presence
-	///     source and is not seeded. A live house carried exactly such a stray beside the two real people.
-	/// </summary>
+	// A person.* with no device tracker can never resolve to home or away, so it is not a presence source.
 	[TestMethod]
 	public void A_First_Run_Skips_A_Person_That_Has_No_Device_Tracker()
 	{
@@ -143,7 +124,6 @@ public sealed class AreaSetupServiceTests
 		CollectionAssert.AreEqual(seeded.ToArray(), config.Global.Persons.ToArray());
 	}
 
-	/// <summary>A house whose only persons are tracker-less seeds none and leaves the list empty.</summary>
 	[TestMethod]
 	public void A_House_Whose_Only_People_Have_No_Trackers_Seeds_Nobody()
 	{
@@ -158,10 +138,6 @@ public sealed class AreaSetupServiceTests
 		Assert.AreEqual(0, config.Global.Persons.Count);
 	}
 
-	/// <summary>
-	///     A list that names somebody is a decision, and seeding over it would replace the household's answer
-	///     with Home Assistant's.
-	/// </summary>
 	[TestMethod]
 	public void A_People_List_That_Names_Somebody_Is_Left_Exactly_As_It_Is()
 	{
@@ -176,11 +152,7 @@ public sealed class AreaSetupServiceTests
 		CollectionAssert.AreEqual(new[] { "person.espen" }, config.Global.Persons.ToArray());
 	}
 
-	/// <summary>
-	///     The one-way rule, from the other side: a household that empties the list means it, and a later setup
-	///     run must not undo that. Seeding is not part of a re-run at all — the same principle as the one-way
-	///     discovery flag, which is what stops rooms deliberately removed from growing back.
-	/// </summary>
+	// Seeding is not part of a re-run at all, only of a first one.
 	[TestMethod]
 	public void A_Deliberately_Emptied_People_List_Survives_A_Later_Setup_Run()
 	{
@@ -199,11 +171,8 @@ public sealed class AreaSetupServiceTests
 
 	// ===================== a rebuild =====================
 
-	/// <summary>
-	///     Exactly three things survive a rebuild, and all three because they are not discovery's output: the
-	///     room's identity, the owner's power switch, and the levels it runs instead of the schedule. Re-tagging
-	///     lights in HA must not silently switch a room on, nor undim a cellar corridor somebody dimmed on purpose.
-	/// </summary>
+	// The three survivors are the three things discovery has no opinion about. That is the test the exclusion
+	// list in NotASetting applies.
 	[TestMethod]
 	public void A_Ticked_Room_Is_Replaced_By_A_Fresh_Proposal_Keeping_Only_Its_Area_Id_Switch_And_Levels()
 	{
@@ -233,7 +202,6 @@ public sealed class AreaSetupServiceTests
 			"and every changed setting — 'stue' names no role, so nothing is guessed back in");
 	}
 
-	/// <summary>An off room stays off, and a room that never said stays silent.</summary>
 	[TestMethod]
 	public void A_Rebuild_Carries_The_Switch_Through_Whatever_It_Said()
 	{
@@ -252,7 +220,6 @@ public sealed class AreaSetupServiceTests
 			"a room that never wrote a value keeps inheriting one");
 	}
 
-	/// <summary>The rebuild is a fresh proposal, so the role the room's name implies is guessed again.</summary>
 	[TestMethod]
 	public void A_Rebuild_Re_Guesses_The_Role_From_The_Area_Name()
 	{
@@ -271,10 +238,6 @@ public sealed class AreaSetupServiceTests
 
 	// ===================== the warning must never under-warn =====================
 
-	/// <summary>
-	///     The plan and the outcome, asserted against each other rather than against numbers written here: what
-	///     the dialog promises to destroy is exactly what disappears from the document.
-	/// </summary>
 	[TestMethod]
 	public void The_Plans_Counts_Are_Exactly_What_The_Rebuild_Destroys()
 	{
@@ -303,10 +266,7 @@ public sealed class AreaSetupServiceTests
 		Assert.AreEqual(rebuild.HasCustomName, namedBefore && after.Name is null);
 	}
 
-	/// <summary>
-	///     The same claim where the rebuild guesses some of the settings back in. A re-guessed flag is still a
-	///     setting the rebuild threw away, so the warning may over-count — it must never count short.
-	/// </summary>
+	// A re-guessed flag is still a setting the rebuild threw away, so the warning may over-count here.
 	[TestMethod]
 	public void A_Room_Whose_Role_Is_Re_Guessed_Is_Still_Never_Under_Warned()
 	{
@@ -333,11 +293,6 @@ public sealed class AreaSetupServiceTests
 			"every override is destroyed; the two the role guesses back in were destroyed first");
 	}
 
-	/// <summary>
-	///     Every per-room setting the model has counts toward the warning. Read off the type, so a setting added
-	///     to <see cref="AreaConfig"/> without being added to the count fails here rather than quietly shrinking
-	///     the number the owner is shown.
-	/// </summary>
 	[TestMethod]
 	public void Every_Per_Room_Setting_The_Model_Has_Counts_Toward_The_Warning()
 	{
@@ -349,35 +304,24 @@ public sealed class AreaSetupServiceTests
 
 		AdaptiveLightingConfig config = Document(before);
 
-		// The number the editor renders as "n of 21". Anchored so the reflection above cannot pass by finding
-		// nothing, and so a settings model that grew has to be looked at rather than silently accommodated.
-		// Sixteen until the five daylight-brightness settings arrived.
+		// The number the editor renders as "n of 21", anchored so the reflection above cannot pass by finding
+		// nothing, and so a settings model that grew has to be looked at.
 		Assert.AreEqual(21, SettingProperties.Count, "the per-room settings, minus Enabled");
 
 		Assert.AreEqual(SettingProperties.Count, OverridesOf(before).Count, "the fixture set them all");
 		Assert.AreEqual(OverridesOf(before).Count, Plan(config, house, "stue").Rebuilds.Single().OverrideCount);
 	}
 
-	/// <summary>
-	///     The claim itself, with no number in it: fill every field the model has, rebuild, and check that the
-	///     plan's three counts cover every field that actually disappeared.
-	/// </summary>
-	/// <remarks>
-	///     The reflection above guards the <i>settings</i> half — a setting added to <see cref="AreaConfig"/>
-	///     without being added to <c>OverrideCount</c> fails it. Nothing guarded the other half: an entity list
-	///     added to the model and left out of <c>PinnedEntityCount</c> would be destroyed by every rebuild and
-	///     counted by nobody, and the hand-written copy of that formula in this file would agree with the mistake.
-	///     Stated this way the two halves are one assertion, and it does not have to be revisited every time the
-	///     settings model grows.
-	/// </remarks>
+	// The test above guards the settings half. This one guards the entity half: a list added to the model and left
+	// out of PinnedEntityCount would be destroyed by every rebuild and counted by nobody, and PinnedCountOf below,
+	// a hand-written copy of the same formula, would agree with the mistake.
 	[TestMethod]
 	public void Nothing_The_Rebuild_Destroys_Goes_Uncounted()
 	{
 		House house = Build("stue");
 
 		// Everything a rebuild can take. AreaId, Enabled and Levels are the three it gives back, so they are not
-		// losses — each because a fresh proposal has nothing to say about it, which is the test the exclusion
-		// list applies rather than a list of exceptions somebody found convenient.
+		// losses.
 		IReadOnlyList<PropertyInfo> destructible =
 		[.. typeof(AreaConfig)
 			.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -402,8 +346,7 @@ public sealed class AreaSetupServiceTests
 			"a rebuild replaces the room, so every field it carried is gone — 'stue' names no role, so nothing is "
 			+ "guessed back in. A field that now survives is one the plan must stop counting as a loss.");
 
-		// Every entity list is filled with exactly one id, so each destroyed field is worth exactly one count:
-		// a name, an entity, or a setting.
+		// Every entity list holds one id, so each destroyed field is worth one count: a name, an entity, a setting.
 		int warned = rebuild.PinnedEntityCount + rebuild.OverrideCount + (rebuild.HasCustomName ? 1 : 0);
 
 		Assert.IsTrue(
@@ -411,7 +354,6 @@ public sealed class AreaSetupServiceTests
 			$"the warning promised {warned} losses and {destructible.Count} fields went — a warning must never count short");
 	}
 
-	/// <summary><c>Enabled</c> is not counted: it survives, so warning about it would be warning about nothing.</summary>
 	[TestMethod]
 	public void The_Switch_Is_Not_Counted_As_A_Setting_The_Rebuild_Destroys()
 	{
@@ -421,15 +363,8 @@ public sealed class AreaSetupServiceTests
 		Assert.AreEqual(0, Plan(config, house, "stue").Rebuilds.Single().OverrideCount);
 	}
 
-	/// <summary>
-	///     A room tuned only through the newest settings still reports itself as tuned.
-	/// </summary>
-	/// <remarks>
-	///     The editor used to keep a spelled-out twin of this count and was not updated when the five
-	///     daylight-brightness settings arrived, so such a room summarised itself as "all automatic" while the
-	///     re-setup warning correctly counted five. Both surfaces now ask the same method; this pins the case that
-	///     drifted, in the units a reader sees.
-	/// </remarks>
+	// Regression: the editor kept a spelled-out twin of this count and missed the daylight-brightness settings, so
+	// such a room read as "all automatic" while the re-setup warning counted five. Both surfaces now call this.
 	[TestMethod]
 	public void A_Room_Tuned_Only_By_Daylight_Brightness_Does_Not_Read_As_Untouched()
 	{
@@ -448,10 +383,6 @@ public sealed class AreaSetupServiceTests
 
 	// ===================== what a run leaves alone =====================
 
-	/// <summary>
-	///     A run that ticks nothing writes nothing — asserted on the serialised document, because that is the
-	///     thing the owner's next save puts on disk.
-	/// </summary>
 	[TestMethod]
 	public void A_Run_With_Nothing_Ticked_Leaves_The_Document_Byte_Identical()
 	{
@@ -465,7 +396,6 @@ public sealed class AreaSetupServiceTests
 		Assert.AreEqual(before, LightingConfigDocument.Serialize(config));
 	}
 
-	/// <summary>And a room nobody ticked is untouched even while the one beside it is rebuilt.</summary>
 	[TestMethod]
 	public void An_Unticked_Room_Is_Untouched_While_Its_Neighbour_Is_Rebuilt()
 	{
@@ -483,10 +413,6 @@ public sealed class AreaSetupServiceTests
 		Assert.IsNull(config.Areas.Single(area => area.AreaId == "gang").Name, "while its neighbour was rebuilt");
 	}
 
-	/// <summary>
-	///     A room whose lights or motion sensors have gone is reported so the dialog can say so, and kept:
-	///     removing a room stays the owner's explicit act, and the room says why it cannot resolve on its own.
-	/// </summary>
 	[TestMethod]
 	public void A_Room_That_No_Longer_Qualifies_Is_Reported_And_Never_Removed()
 	{
@@ -511,7 +437,7 @@ public sealed class AreaSetupServiceTests
 			"reported, not removed");
 	}
 
-	/// <summary>A room nobody ticked is not reported either — the plan describes this run, not the house.</summary>
+	// The plan describes this run, not the house.
 	[TestMethod]
 	public void A_Room_Outside_The_Run_Is_Neither_Rebuilt_Nor_Reported()
 	{
@@ -529,7 +455,6 @@ public sealed class AreaSetupServiceTests
 		Assert.AreEqual(0, plan.NoLongerQualifying.Count);
 	}
 
-	/// <summary>Planning is a question, not an action: the dialog can be opened and cancelled.</summary>
 	[TestMethod]
 	public void Planning_Changes_Nothing()
 	{
@@ -543,7 +468,6 @@ public sealed class AreaSetupServiceTests
 		Assert.AreEqual(before, LightingConfigDocument.Serialize(config));
 	}
 
-	/// <summary>Rooms are added at the end, so a rebuild never reorders the list the owner is looking at.</summary>
 	[TestMethod]
 	public void New_Rooms_Are_Appended_And_The_Existing_Order_Is_Kept()
 	{
@@ -561,13 +485,8 @@ public sealed class AreaSetupServiceTests
 
 	// ===================== a plan the document has moved on from =====================
 
-	/// <summary>
-	///     A plan is a value somebody holds across an edit. The Areas page keeps the setup panel open beside its
-	///     own "Add a room" and "Discard changes" buttons, so by the time the run is confirmed the document may
-	///     already carry the room the plan meant to add. Adding it anyway leaves two rows for one Home Assistant
-	///     area — which either refuses every save (the validator rejects a duplicate area name) or, once one row
-	///     carries a name of its own, runs two state machines against the same lights.
-	/// </summary>
+	// A plan is a value held across an edit: the setup panel stays open beside the page's own Add a room button.
+	// Two rows for one Home Assistant area either fail validation or run two state machines against one set of lights.
 	[TestMethod]
 	public void A_Room_Added_By_Hand_After_The_Plan_Was_Made_Is_Not_Added_Twice()
 	{
@@ -590,11 +509,8 @@ public sealed class AreaSetupServiceTests
 			"and the owner's own row stands: adding a room is not rebuilding one");
 	}
 
-	/// <summary>
-	///     The same plan applied twice is the same document. Confirming is one click on a panel surrounded by
-	///     other live controls, and appending the plan's own <see cref="AreaConfig"/> instances a second time put
-	///     one object at two indices — so editing either row edited both.
-	/// </summary>
+	// Appending the plan's own AreaConfig instances a second time puts one object at two indices, so editing
+	// either row edits both.
 	[TestMethod]
 	public void Applying_The_Same_Plan_Twice_Leaves_The_Same_Document()
 	{
@@ -614,7 +530,7 @@ public sealed class AreaSetupServiceTests
 
 	// ===================== fixtures and counting =====================
 
-	/// <summary>A person's <c>device_trackers</c> attribute — the presence sources backing them.</summary>
+	/// <summary>A person's <c>device_trackers</c> attribute, the presence sources backing them.</summary>
 	private static Dictionary<string, object> Trackers(params string[] trackerIds) =>
 		new() { ["device_trackers"] = trackerIds };
 
@@ -651,9 +567,8 @@ public sealed class AreaSetupServiceTests
 		nameof(AreaConfig.MotionSensors),
 		nameof(AreaConfig.LuxSensor),
 
-		// Which entity supplies the room's illuminance, in its second form: "the house's outdoor one". It is the
-		// twin of LuxSensor above rather than a behaviour knob, so it is counted as a pinned entity choice — which
-		// also keeps the settings numerator honest against the "n of 21" denominator, which is read off AreaSettings.
+		// The twin of LuxSensor above, so it counts as a pinned entity choice. That also keeps the settings
+		// numerator honest against the "n of 21" denominator, read off AreaSettings.
 		nameof(AreaConfig.FollowOutdoorLux),
 
 		nameof(AreaConfig.IgnoreWhenOn),
@@ -662,14 +577,12 @@ public sealed class AreaSetupServiceTests
 		// Survives the rebuild, so it is never one of the losses.
 		nameof(AreaConfig.Enabled),
 
-		// What the room runs instead of the schedule, period by period. Not a setting in the sense this counts:
-		// the "n of 21" denominator is read off AreaSettings and Levels has no twin there, so counting it would
-		// let a room report overriding more settings than the model has — the same trap FollowOutdoorLux avoids.
-		// It also survives the rebuild, so it is not a loss either.
+		// Levels has no twin in AreaSettings, so counting it would let a room report overriding more settings
+		// than the denominator has. It survives the rebuild too, so it is not a loss either.
 		nameof(AreaConfig.Levels)
 	};
 
-	/// <summary>The per-room settings, taken from the model rather than listed, for the reason in the class remarks.</summary>
+	/// <summary>The per-room settings, read off the model.</summary>
 	private static readonly IReadOnlyList<PropertyInfo> SettingProperties =
 	[.. typeof(AreaConfig)
 		.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -682,15 +595,11 @@ public sealed class AreaSetupServiceTests
 		.Where(property => property.GetValue(area) is not null)
 		.Select(property => property.Name)];
 
-	/// <summary>
-	///     Any non-null value of the property's type, including the entity lists — so a fixture can fill in
-	///     everything a rebuild destroys, not only the settings.
-	/// </summary>
+	/// <summary>Any non-null value of the property's type, entity lists included.</summary>
 	/// <remarks>
-	///     One id per list on purpose: it makes each destroyed field worth exactly one count, which is what lets
-	///     <see cref="Nothing_The_Rebuild_Destroys_Goes_Uncounted"/> compare fields against counts. A property of a
-	///     shape nothing here can fill throws rather than being skipped — a field nobody can fill is a field
-	///     nobody has thought about losing.
+	///     One id per list, so each destroyed field is worth one count and
+	///     <see cref="Nothing_The_Rebuild_Destroys_Goes_Uncounted"/> can compare fields against counts. A shape
+	///     nothing here can fill throws instead of being skipped.
 	/// </remarks>
 	private static object FilledValueFor(PropertyInfo property)
 	{

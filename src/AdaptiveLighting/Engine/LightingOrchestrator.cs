@@ -17,16 +17,9 @@ namespace AdaptiveLighting.Engine;
 ///     house-wide state every area reads.
 /// </summary>
 /// <remarks>
-///     <para>
-///         One orchestrator per host, fanning out to one controller per area. The app model creates exactly one
-///         instance per <c>[NetDaemonApp]</c> class, so "one app per room" is not on the table — and would be the
-///         worse design anyway, since presence, mode and the registry snapshot are all shared.
-///     </para>
-///     <para>
-///         Not a NetDaemon app itself, and deliberately: <c>AdaptiveLighting</c> is never scanned by
-///         <c>AddAppsFromAssembly</c>, so a <c>[NetDaemonApp]</c> attribute here would be silently inert. The
-///         per-project bootstrap constructs this.
-///     </para>
+///     One orchestrator per host, fanning out to one controller per area. Not a NetDaemon app:
+///     <c>AdaptiveLighting</c> is never scanned by <c>AddAppsFromAssembly</c>, so a <c>[NetDaemonApp]</c>
+///     attribute here would be inert. The per-project bootstrap constructs this.
 /// </remarks>
 public sealed class LightingOrchestrator : IDisposable
 {
@@ -59,39 +52,13 @@ public sealed class LightingOrchestrator : IDisposable
 	private PresenceMonitor? _presence;
 	private ModeMonitor? _modes;
 
-	/// <summary>
-	///     The period select, built once here and handed to both directions that can use it.
-	/// </summary>
-	/// <remarks>
-	///     <b>This is the single construction site the authority rule rests on.</b> The calculators are handed
-	///     <see cref="PeriodSelectReader.ReadPeriod"/> and the mode brain is handed the whole reader; exactly one of
-	///     the reader's two delegates is non-null, so "the engine follows the select" and "the engine writes the
-	///     select" are not two flags that could both come out true — they are two branches of one object built from
-	///     one enum. <c>null</c> when no select is configured, which is every house today.
-	/// </remarks>
+	// The single construction site the period authority rests on. Both directions are handed this one object,
+	// which has exactly one of its two delegates assigned. Null when no select is configured.
 	private PeriodSelectReader? _periodSelect;
 
 	private bool _started;
 
 	/// <summary>Creates an orchestrator. Nothing is wired until <see cref="Start"/>.</summary>
-	/// <param name="ha">The HA context every area reads from.</param>
-	/// <param name="registry">Source of areas and labels for discovery.</param>
-	/// <param name="scheduler">The engine's only clock.</param>
-	/// <param name="config">The validated configuration document.</param>
-	/// <param name="actuator">Where light commands go.</param>
-	/// <param name="publisher">Where area snapshots go.</param>
-	/// <param name="notifier">How area failures reach a human.</param>
-	/// <param name="loggerFactory">Builds the loggers for every part of the engine.</param>
-	/// <param name="lastSeen">
-	///     Tracks when each entity was genuinely last heard from, across both a Home Assistant restart and an
-	///     engine restart. Optional: when absent the lux staleness rule falls back to Home Assistant's own
-	///     timestamps, which reset on its restart and cannot tell a dead sensor from a quiet one.
-	/// </param>
-	/// <param name="lastPeriod">
-	///     Where the circadian period the engine is running in is written down, so a restart can tell whether a
-	///     boundary went by while it was stopped. Optional: without one a period's <c>SetsMode</c> is applied only
-	///     at a boundary the engine was running to see.
-	/// </param>
 	public LightingOrchestrator(
 		IHaContext ha,
 		IHaRegistry registry,
@@ -126,17 +93,9 @@ public sealed class LightingOrchestrator : IDisposable
 	///     Empty in the ordinary house.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         Settled once, in <see cref="Start"/>, and never touched again. This is a fact about the Home
-	///         Assistant registry, not about any tick: nothing a room does from one minute to the next can change
-	///         which area a light is filed under, so re-deciding it on the clock would be per-tick work for an
-	///         answer that cannot have moved. It changes when somebody edits the registry, and the engine is rebuilt
-	///         when they do.
-	///     </para>
-	///     <para>
-	///         Held as advice rather than acted on. <see cref="LightAudit.SharedBetweenRooms"/> records why the
-	///         engine goes on commanding the bulb from both rooms; this is the list the household is shown.
-	///     </para>
+	///     Settled once in <see cref="Start"/> and never touched again: which area a light is filed under is a
+	///     registry fact, and the engine is rebuilt when the registry changes. Advice only; the engine still
+	///     commands the bulb from both rooms.
 	/// </remarks>
 	public IReadOnlyList<SuspectLight> SharedLights => _sharedLights;
 
@@ -181,8 +140,8 @@ public sealed class LightingOrchestrator : IDisposable
 				continue;
 			}
 
-			// The union of every area's motion sensors: an option that resets on presence with no explicit sensor
-			// list resets on any of these (09 owner refinement). Collected before the mode monitor is built.
+			// An option resetting on presence with no explicit sensor list resets on any of these. Must be complete
+			// before StartHouseMonitors builds the mode monitor.
 			_motionSensorUnion.UnionWith(resolved!.MotionSensors);
 			running.Add(resolved!);
 			_areas.Add(BuildArea(resolved!, areaConfig));
@@ -198,15 +157,8 @@ public sealed class LightingOrchestrator : IDisposable
 		ReportFailures(failures);
 	}
 
-	/// <summary>
-	///     Every bulb an area will actually put a command on, named the way Home Assistant names it.
-	/// </summary>
-	/// <remarks>
-	///     The resolver's own list is what the area <i>holds</i>; a light group in it stands for the bulbs inside,
-	///     and it is the bulbs that get commanded. Two rooms sharing a bulb through two different groups hold
-	///     nothing in common, so following each id down to its leaves is the only way the sharing is visible at all
-	///     — see <see cref="LightAudit.SharedBetweenRooms"/>.
-	/// </remarks>
+	/// <summary>Every bulb an area will actually put a command on, named the way Home Assistant names it.</summary>
+	// Down to the leaves: two rooms sharing a bulb through two different groups hold no id in common.
 	private RoomUnderReview BulbsOf(ResolvedArea area, AreaEntityResolver resolver)
 	{
 		List<LightUnderReview> bulbs = [];
@@ -220,31 +172,15 @@ public sealed class LightingOrchestrator : IDisposable
 		return new RoomUnderReview(area.Name, bulbs);
 	}
 
-	/// <summary>
-	///     Finds the bulbs two rooms will both be commanding, and says so once for each.
-	/// </summary>
+	/// <summary>Finds the bulbs two rooms will both be commanding, and says so once for each.</summary>
 	/// <remarks>
-	///     <para>
-	///         Once per start, never per tick: which area a light belongs to is a registry fact, and the engine is
-	///         rebuilt whenever the household changes one. So the warning is loud rather than frequent — a line per
-	///         bulb in the log a household reads when something is wrong, and the same advice held on
-	///         <see cref="SharedLights"/> for the surfaces that render it.
-	///     </para>
-	///     <para>
-	///         Every failure here is swallowed on purpose. This is advice about the house, arriving after every room
-	///         has already been resolved and built; a registry that stopped answering between the two must cost the
-	///         advice and not the lighting.
-	///     </para>
+	///     Runs after every room is resolved and built, so any failure here costs the advice and not the lighting.
 	/// </remarks>
-	/// <param name="running">Every room that resolved and is about to be commanded.</param>
-	/// <param name="resolver">Follows each room's lights down to the bulbs they stand for.</param>
-	/// <param name="registry">Where "has Home Assistant put this light in a room?" is answered.</param>
 	private void ReportSharedLights(IReadOnlyList<ResolvedArea> running, AreaEntityResolver resolver, IAreaRegistry registry)
 	{
 		try
 		{
-			// Swept on first use and once. It is a pass over every area in the house, and the ordinary house has no
-			// bulb reaching two rooms to spend one on — so the audit asks only about the bulbs that got that far.
+			// Swept lazily and once: the ordinary house has no shared bulb to spend a whole-house pass on.
 			HashSet<string>? assigned = null;
 
 			bool HasOwnArea(string entityId) => (assigned ??= EntitiesWithAnArea(registry)).Contains(entityId);
@@ -276,33 +212,20 @@ public sealed class LightingOrchestrator : IDisposable
 		return assigned;
 	}
 
-	/// <summary>
-	///     Builds one area's controller.
-	/// </summary>
-	/// <param name="resolved">The area with every entity reference turned into a concrete id.</param>
-	/// <param name="config">
-	///     The document row behind it, for the two things the resolver has no business resolving: the registry area
-	///     id, and the levels this room runs instead of the schedule.
-	/// </param>
 	private AreaController BuildArea(ResolvedArea resolved, AreaConfig config)
 	{
-		// One calculator per area: the periods are house-wide but the sun entity is an area setting, and a
-		// calculator that reads the wrong sun would place every boundary wrong. That it is already per-area is
-		// what makes it the right home for the room's own levels too — see CircadianCalculator's remarks.
+		// One calculator per area: the periods are house-wide but the sun entity is an area setting, and the wrong
+		// sun places every boundary wrong.
 		CircadianCalculator circadian = new(
 			_config.Periods,
 			_config.Global,
 			() => ReadSunTimes(resolved.Settings.SunEntity),
 			config.Levels,
-			// Null unless Home Assistant owns the periods, so a house without the select — every house today —
-			// builds the calculator it always built rather than one carrying an override that answers null.
+			// Null unless Home Assistant owns the periods.
 			_periodSelect?.ReadPeriod);
 
-		// Surface any period the calculator cannot use, so a dropped boundary is a logged warning rather than a
-		// silent hole the table wraps over — the failure behind an area "showing night at 04:16" when its
-		// sun-anchored morning could not be placed. The calculator stays pure and does the logging here, once
-		// each: parse failures are known now (read from DroppedPeriods); sun-anchor failures surface per day, on
-		// the event, deduplicated so a persistently-unresolvable period logs once rather than every tick.
+		// The calculator stays pure and the logging happens here. Parse failures are already known, so drain
+		// DroppedPeriods; sun-anchor failures surface per day through the event.
 		circadian.PeriodDropped += drop => LogDroppedPeriod(resolved.Name, drop);
 		foreach (DroppedPeriod drop in circadian.DroppedPeriods)
 			LogDroppedPeriod(resolved.Name, drop);
@@ -323,8 +246,8 @@ public sealed class LightingOrchestrator : IDisposable
 
 		_logger.LogWarning(
 			"Area {Area}: circadian period '{Period}' (Start '{Start}') is dropped from the table because {Why}. "
-			+ "The remaining periods still cover the day by wrapping, so a boundary that should exist may be missing — "
-			+ "check this period's Start if an area lands in the wrong period.",
+			+ "The remaining periods still cover the day by wrapping, so a boundary that should exist may be missing. "
+			+ "Check this period's Start if an area lands in the wrong period.",
 			areaName, drop.PeriodName, drop.Start, why);
 	}
 
@@ -340,8 +263,7 @@ public sealed class LightingOrchestrator : IDisposable
 			() => ReadSunTimes(_config.Defaults.SunEntity),
 			_motionSensorUnion,
 			_lastPeriod,
-			// The same reader the calculators got. Its own calculator therefore follows the same override, so the
-			// period boundary the mode brain acts on is the one the rooms are lit for.
+			// The same reader the calculators got, so the mode brain acts on the boundary the rooms are lit for.
 			_periodSelect);
 
 		_subscriptions.Add(_presence.Events.SubscribeSafe((PresenceEvent _) => PublishHouseState(), _logger));
@@ -367,14 +289,12 @@ public sealed class LightingOrchestrator : IDisposable
 		if (state == previous)
 			return;
 
-		// Scene apply on entry (09 §3.3): once per entry, never re-asserted. The areas' pause is their own doing —
-		// GoAway skips the sweep and Guest enters SceneHold — this only applies the scene the mode names.
+		// Applied once on entry, never re-asserted. The areas pause themselves; this only fires the scene.
 		if (!string.Equals(previous.ActiveScene, state.ActiveScene, StringComparison.Ordinal)
 			&& state.ActiveScene is { Length: > 0 } scene)
 			_actuator.ActivateScene(scene);
 
-		// The forcing clause is on this line as well as on ModeMonitor's own: this is the line that says the house
-		// went Away, and a reader who finds it has no reason to go looking for a second one that explains why.
+		// The forcing clause repeats ModeMonitor's, because this is the line that says the house went Away.
 		if (state.Forced is { } forced)
 			_logger.LogInformation("House is now {Mode} (kill switch {KillSwitch}). {ForcedMode}",
 				state.Mode, state.KillSwitchActive ? "active" : "inactive", forced.Describe());
@@ -396,13 +316,10 @@ public sealed class LightingOrchestrator : IDisposable
 			$"{failures.Count} of {_config.Areas.Count} areas could not be resolved and are not being managed:<ul>{body}</ul>");
 	}
 
-	/// <summary>
-	///     Reads the day's sun times off the sun entity.
-	/// </summary>
+	/// <summary>Reads the day's sun times off the sun entity.</summary>
 	/// <remarks>
-	///     HA publishes the <i>next</i> rising and setting, so after today's sunrise the value names tomorrow's.
-	///     Its time of day is what a period boundary needs, and sunrise moves by minutes a day — an error far
-	///     below anything a lighting boundary can notice.
+	///     Home Assistant publishes the next rising and setting, so after today's sunrise the value names
+	///     tomorrow's. Only its time of day is used, and sunrise moves by minutes a day.
 	/// </remarks>
 	private SunTimes ReadSunTimes(string sunEntityId)
 	{
@@ -415,9 +332,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 		return new SunTimes(ReadTime(state, NextRisingAttribute), ReadTime(state, NextSettingAttribute));
 
-		// HA publishes these as UTC ISO-8601. AttrDateTimeOffset parses them the same way (invariant culture,
-		// AssumeUniversal|AdjustToUniversal); the period table is written in wall-clock terms, so the boundary
-		// has to land in local time.
+		// UTC ISO-8601 in, local out: the period table is written in wall-clock terms.
 		static TimeOnly? ReadTime(EntityState state, string attribute) =>
 			state.AttrDateTimeOffset(attribute) is { } parsed
 				? TimeOnly.FromDateTime(parsed.ToLocalTime().DateTime)

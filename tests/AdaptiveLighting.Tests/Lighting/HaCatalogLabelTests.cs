@@ -8,10 +8,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     The label options the pickers are built from.
 /// </summary>
 /// <remarks>
-///     Only the empty case can be exercised here: HassModel's <c>Label</c> has no public constructor, so a
-///     populated <c>IHaRegistry</c> cannot be built in a test. The empty case is the one worth pinning anyway —
-///     most houses have never made a label, and a picker that treats "no labels" as a failure rather than as a
-///     state to render is the bug this catalogue method exists to make impossible.
+///     Only the empty case is reachable: HassModel's <c>Label</c> has no public constructor. It is also the
+///     common case, and a picker that reads "no labels" as Home Assistant failing to answer is the bug.
 /// </remarks>
 [TestClass]
 public sealed class HaCatalogLabelTests

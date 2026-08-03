@@ -1,25 +1,19 @@
 namespace AdaptiveLighting.Web.Services;
 
 /// <summary>One choice in a preset dropdown: the number the config stores, and the words a person picks it by.</summary>
-/// <param name="Value">The stored value.</param>
-/// <param name="Label">What the dropdown shows.</param>
 public sealed record PresetChoice(double Value, string Label);
 
 /// <summary>
-///     The preset lists the period editor offers, shared so every brightness dropdown and every colour dropdown
-///     on the page agrees about what the sensible choices are.
+///     The preset lists the period editor offers, shared so every brightness and colour dropdown on the page
+///     agrees about the sensible choices.
 /// </summary>
 /// <remarks>
-///     These are choices, not limits — every dropdown built on them keeps an "enter a value" escape, and a
-///     stored value that is not on the list is shown as its own entry rather than snapped to a neighbour.
-///     Brightness steps follow perception rather than arithmetic: the difference between 1% and 5% is a
-///     different room, the difference between 85% and 90% is nothing, so the list is dense at the dim end and
-///     coarse at the top. The colour stops are the familiar lamp temperatures, named the way bulb boxes name
-///     them — the same 2200K→4500K family the dashboard's Kelvin palette is built on.
+///     Choices, not limits. Every dropdown built on them keeps an "enter a value" escape, and a stored value off
+///     the list is shown as its own entry, never snapped to a neighbour.
 /// </remarks>
 public static class Presets
 {
-	/// <summary>Brightness stops, in percent. Dense where dim, coarse where bright.</summary>
+	/// <summary>Brightness stops, in percent. Dense where dim, coarse where bright, following perception.</summary>
 	public static readonly IReadOnlyList<PresetChoice> BrightnessPct =
 	[
 		new(1, "1 % — the faintest glow"),

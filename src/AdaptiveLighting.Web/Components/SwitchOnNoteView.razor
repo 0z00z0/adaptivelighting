@@ -1,14 +1,8 @@
 @*
-	What a room says for itself the moment somebody switches it on: how many lights "on" now reaches, which of
-	them look like something other than room lighting, and the one setting that narrows what is managed.
+	What a room says for itself once somebody switches it on: how many lights "on" reaches, which of them look
+	like something other than room lighting, and the setting that narrows what is managed.
 
-	Advisory, and after the fact. The switch has already worked — nothing here blocks it, and nothing here has to
-	be answered — so somebody who knows their house carries on without a second click and dismisses this when they
-	feel like it. A dialog in front of the switch would tax every honest two-lamp room forever to catch the rare
-	room that resolves to thirty-four entities including an access point.
-
-	One component rather than two copies, because the house tab's room row and the room page's header raise the
-	same note about the same room, and two copies would eventually word it two ways.
+	Advisory and after the fact. The switch has already worked; nothing here blocks it or has to be answered.
 *@
 
 <div class="notice @(Note.IsWarning ? "warn" : "info") switch-note">
@@ -55,12 +49,9 @@
 	public SwitchOnNote Note { get; set; } = new("", [], [], null);
 
 	/// <summary>
-	///     Where the include-label setting lives, when it is on another page.
+	///     Where the include-label setting lives, when it is on another page. Unset on the House tab, where the
+	///     setting is a fold further down the same section.
 	/// </summary>
-	/// <remarks>
-	///     Left unset on the House tab, where the setting is a fold further down the same section and a link would
-	///     send somebody away from the thing they are already looking at.
-	/// </remarks>
 	[Parameter]
 	public string? AdviceHref { get; set; }
 

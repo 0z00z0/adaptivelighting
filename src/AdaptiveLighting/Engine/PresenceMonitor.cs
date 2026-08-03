@@ -16,14 +16,8 @@ public enum PresenceEvent
 	FirstPersonArrived
 }
 
-/// <summary>
-///     Watches the configured people and reports the two transitions that matter.
-/// </summary>
-/// <remarks>
-///     Leaving is debounced and arriving is not, on purpose. A tracker that flickers to <c>not_home</c> while
-///     somebody is in the garden must not sweep the house dark; somebody walking through the door wants the
-///     light now.
-/// </remarks>
+/// <summary>Watches the configured people and reports the two transitions that matter.</summary>
+/// <remarks>Leaving is debounced, arriving is not.</remarks>
 public sealed class PresenceMonitor : IDisposable
 {
 	private const string PersonDomain = "person";
@@ -42,13 +36,6 @@ public sealed class PresenceMonitor : IDisposable
 	private bool _isAnyoneHome = true;
 	private bool _awayAnnounced;
 
-	/// <summary>
-	///     Creates a monitor over the configured people.
-	/// </summary>
-	/// <param name="ha">Source of state and state changes.</param>
-	/// <param name="scheduler">The clock. Drives the away debounce.</param>
-	/// <param name="global">Supplies the person list and the debounce length.</param>
-	/// <param name="logger">Diagnostics, and the sink for exceptions from the subscriptions.</param>
 	public PresenceMonitor(IHaContext ha, IScheduler scheduler, GlobalConfig global, ILogger logger)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
@@ -76,8 +63,7 @@ public sealed class PresenceMonitor : IDisposable
 	{
 		if (_personEntityIds.Count == 0)
 		{
-			// Without anyone to watch, the house is treated as permanently occupied: an engine that decides
-			// nobody is home and sweeps every light off is far worse than one that never sweeps at all.
+			// No one to watch means permanently occupied. Never sweeping is safer than sweeping wrongly.
 			_logger.LogWarning("No person entities configured or discovered; presence is assumed permanently home.");
 			return;
 		}
@@ -104,8 +90,7 @@ public sealed class PresenceMonitor : IDisposable
 
 	private bool IsHome(string entityId) => _ha.StateIs(entityId, HomeState);
 
-	// Both of these decide under the lock and publish outside it: a subscriber runs arbitrary code, and the
-	// engine should never hold a lock across that.
+	// Both of these decide under _gate and publish outside it. Subscribers run arbitrary code.
 	private void Reevaluate()
 	{
 		bool anyoneHome = _personEntityIds.Any(IsHome);
@@ -122,7 +107,7 @@ public sealed class PresenceMonitor : IDisposable
 			{
 				_awayTimer.Disposable = Disposable.Empty;
 
-				// Somebody returning before the debounce elapsed never left as far as the house is concerned.
+				// Returning before the debounce elapsed means nobody ever left.
 				announceArrival = _awayAnnounced;
 				_awayAnnounced = false;
 			}

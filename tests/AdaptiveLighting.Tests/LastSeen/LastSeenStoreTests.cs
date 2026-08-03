@@ -327,8 +327,8 @@ public sealed class LastSeenStoreTests
 
 	private static void WritePreSplitOther(LastSeenStore store, params (string EntityId, DateTimeOffset LastSeen)[] entities)
 	{
-		// Written by hand rather than through the store, because the store cannot write version 1 any more and the
-		// file this has to cope with is one an installation already has on disk.
+		// Written by hand: the store cannot write version 1 any more, and the file this has to cope with is one
+		// an installation already has on disk.
 		LastSeenDocument document = Document(LastSeenBuckets.Unclassified, Noon,
 			[.. entities.Select(entity => (entity.EntityId, (DateTimeOffset?)entity.LastSeen))]);
 
@@ -407,9 +407,8 @@ public sealed class LastSeenStoreTests
 
 		Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"total: {total} bytes for 300 entities"));
 
-		// Not a benchmark, a guard rail: this is the size that justifies one batched write over any cleverer
-		// scheme, and a change that made it an order of magnitude bigger would deserve a second look. Splitting
-		// further costs one header per new file, which is the only thing that grew.
+		// A guard rail, not a benchmark. This size is what justifies one batched write over any cleverer scheme;
+		// an order of magnitude more would deserve a second look. Splitting further costs one header per file.
 		Assert.IsTrue(total is > 10_000 and < 120_000, $"300 entities came to {total} bytes");
 
 		LastSeenCacheLoad load = store.Load();

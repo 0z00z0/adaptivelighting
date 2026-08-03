@@ -6,7 +6,7 @@ using NetDaemon.AppModel;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The master-switch default (09 §7): the slug <see cref="NetDaemonAppSwitch"/> derives, and the
+///     The master-switch default: the slug <see cref="NetDaemonAppSwitch"/> derives, and the
 ///     <see cref="GlobalConfig.EffectiveKillSwitchEntity"/> view it feeds.
 /// </summary>
 [TestClass]
@@ -15,8 +15,8 @@ public sealed class NetDaemonAppSwitchTests
 	[TestMethod]
 	public void EntityIdForTypeName_MatchesNetDaemonStateManagerSlug()
 	{
-		// Verified against the ids the state manager already emits: NetDaemon → net_daemon, PascalCase words split,
-		// dots become underscores. The expected ids were confirmed against the entities the state manager emits.
+		// The ids the state manager already emits: NetDaemon becomes net_daemon, PascalCase words split, dots
+		// become underscores.
 		Assert.AreEqual(
 			"input_boolean.netdaemon_example_net_daemon_home_adaptive_lighting_app",
 			NetDaemonAppSwitch.EntityIdForTypeName("Example.NetDaemon.Home.AdaptiveLightingApp"));
@@ -41,8 +41,8 @@ public sealed class NetDaemonAppSwitchTests
 	[TestMethod]
 	public void EntityIdFor_UsesTheExplicitNetDaemonAppId_WhenPinned()
 	{
-		// The cabin app pins [NetDaemonApp(Id = "adaptive_lighting")], so its enable switch — and therefore the
-		// defaulted master switch — is the short id, not the full-type-name slug.
+		// The cabin app pins [NetDaemonApp(Id = "adaptive_lighting")], so its enable switch, and with it the
+		// defaulted master switch, is the short id and not the full-type-name slug.
 		Assert.AreEqual(
 			"input_boolean.netdaemon_adaptive_lighting",
 			NetDaemonAppSwitch.EntityIdFor(typeof(PinnedIdApp)));

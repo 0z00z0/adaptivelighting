@@ -1,10 +1,7 @@
 @inherits LayoutComponentBase
 
-@*
-	The sprite is hosted here, once, and never by a page: two copies would mean two elements sharing every
-	glyph id, and a <use> resolves to whichever the browser saw first. Hosting it in the layout also means a
-	page cannot forget it — an icon that renders as an empty box says nothing in the console.
-*@
+@* The sprite is hosted here and never by a page: two copies means two elements per glyph id, and <use>
+   resolves to whichever the browser saw first. A missing sprite renders empty boxes in silence. *@
 <IconSprite />
 
 <div class="shell">

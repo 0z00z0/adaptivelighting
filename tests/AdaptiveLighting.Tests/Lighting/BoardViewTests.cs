@@ -7,34 +7,14 @@ using AdaptiveLighting.Web.Services;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
-/// <summary>
-///     The board's arithmetic and its judgement, tested where they live rather than in markup.
-/// </summary>
-/// <remarks>
-///     <para>
-///         Every one of these fails silently on the page. A block off by a percent is invisible; a room wrongly
-///         called quiet is a room the owner never sees again; a countdown naming the wrong minute is a confident
-///         wrong answer to the one question — "why didn't that light come on" — the board exists to answer.
-///     </para>
-///     <para>
-///         The clock is fixed at 21:37 on a summer evening in +02:00, which is the instant the design was drawn
-///         at, so the numbers below can be checked against it by hand.
-///     </para>
-/// </remarks>
+/// <summary>The board's arithmetic and its judgement, tested outside the markup.</summary>
+/// <remarks>The clock is fixed at 21:37 on a summer evening in +02:00, so every number below can be checked by hand.</remarks>
 [TestClass]
 public sealed class BoardViewTests
 {
 	private static readonly DateTimeOffset Now = new(2026, 7, 27, 21, 37, 0, TimeSpan.FromHours(2));
 
-	/// <summary>
-	///     The house's own time zone, named rather than inherited from the machine.
-	/// </summary>
-	/// <remarks>
-	///     The band turns a period's wall-clock <c>Start</c> into an instant, which cannot be done without a zone.
-	///     Every band test therefore says which one, so the numbers below mean the same thing on a build agent in
-	///     UTC as on the owner's laptop — and so the two clock-change tests can be about Norway's actual
-	///     transitions, which is where this is visible twice a year.
-	/// </remarks>
+	/// <summary>The house's own zone, named so the band tests mean the same on a UTC build agent.</summary>
 	private static readonly TimeZoneInfo Oslo = TimeZoneInfo.FindSystemTimeZoneById("Europe/Oslo");
 
 	/// <summary>The board's own window at <see cref="Now"/>: 17:00 to midnight, seven whole hours.</summary>
@@ -70,10 +50,6 @@ public sealed class BoardViewTests
 
 	// ===================== the window =====================
 
-	/// <summary>
-	///     Both ends snap to the hour. That is what lets the axis carry labelled ticks and the tracks draw their
-	///     gridlines as one repeating background instead of a hairline element per room per hour.
-	/// </summary>
 	[TestMethod]
 	public void The_Window_Snaps_To_Whole_Hours()
 	{
@@ -84,7 +60,6 @@ public sealed class BoardViewTests
 		Assert.AreEqual(7, window.Hours);
 	}
 
-	/// <summary>An instant's position is a straight fraction of the window, and the ends are 0 and 100.</summary>
 	[TestMethod]
 	public void An_Instant_Maps_To_A_Percentage_Of_The_Window()
 	{
@@ -95,7 +70,7 @@ public sealed class BoardViewTests
 		Assert.AreEqual(50, window.PercentAt(At(20, 30)), 1e-9);
 	}
 
-	/// <summary>One tick per hour boundary, both ends included — eight for a seven-hour window.</summary>
+	/// <summary>Both ends are included, so a seven-hour window carries eight ticks.</summary>
 	[TestMethod]
 	public void There_Is_One_Tick_Per_Hour_Boundary()
 	{
@@ -106,7 +81,6 @@ public sealed class BoardViewTests
 		Assert.AreEqual(At(23).AddHours(1), ticks[^1]);
 	}
 
-	/// <summary>Only instants actually on the board are on the board. A deadline past the right edge is not.</summary>
 	[TestMethod]
 	public void An_Instant_Outside_The_Window_Is_Not_Contained()
 	{
@@ -119,10 +93,7 @@ public sealed class BoardViewTests
 
 	// ===================== the lanes =====================
 
-	/// <summary>
-	///     A report covers the stretch from itself to the next one: the engine publishes on transitions, so a
-	///     report is a statement that the room stayed that way until it said otherwise.
-	/// </summary>
+	// The engine publishes on transitions, so a report stands until the next one.
 	[TestMethod]
 	public void A_Report_Covers_The_Time_Up_To_The_Next_One()
 	{
@@ -139,7 +110,6 @@ public sealed class BoardViewTests
 		Assert.AreEqual(1.0 / 7 * 100, blocks[0].WidthPct, 1e-6, "and runs the one hour until the next report");
 	}
 
-	/// <summary>The newest report runs to now, which is what makes the right-hand edge of the board live.</summary>
 	[TestMethod]
 	public void The_Newest_Report_Runs_To_Now()
 	{
@@ -151,10 +121,7 @@ public sealed class BoardViewTests
 		Assert.AreEqual(window.PercentAt(Now) - window.PercentAt(At(21)), blocks[0].WidthPct, 1e-6);
 	}
 
-	/// <summary>
-	///     Nothing is drawn before the oldest report the log still holds. What the room was doing earlier is
-	///     genuinely unknown, and a block reaching back to the left edge would be an invention.
-	/// </summary>
+	/// <summary>What the room was doing before the oldest report in the log is unknown, so it is not drawn.</summary>
 	[TestMethod]
 	public void Nothing_Is_Drawn_Before_The_Oldest_Report()
 	{
@@ -164,7 +131,6 @@ public sealed class BoardViewTests
 		Assert.IsTrue(blocks[0].LeftPct > 40, $"the block began at 20:00, not at the board's left edge (was {blocks[0].LeftPct})");
 	}
 
-	/// <summary>A stretch that began before the board did is clipped to it rather than dropped.</summary>
 	[TestMethod]
 	public void A_Stretch_That_Began_Before_The_Board_Is_Clipped_To_It()
 	{
@@ -178,10 +144,6 @@ public sealed class BoardViewTests
 		Assert.AreEqual(1.0 / 7 * 100, blocks[0].WidthPct, 1e-6, "only the 17:00-18:00 hour is on the board");
 	}
 
-	/// <summary>
-	///     The dark-cockpit rule at the level of one lane: a room that is watching, or a house that is empty,
-	///     draws nothing at all. An empty track beside a busy one is the comparison the board exists to offer.
-	/// </summary>
 	[TestMethod]
 	public void Watching_And_House_Empty_Draw_Nothing()
 	{
@@ -193,10 +155,6 @@ public sealed class BoardViewTests
 		Assert.AreEqual(0, blocks.Count);
 	}
 
-	/// <summary>
-	///     Two reports that say the same thing are one block. Without this a room the engine retuned to the same
-	///     warmth twice grows a hairline seam that reads as two separate visits.
-	/// </summary>
 	[TestMethod]
 	public void Adjacent_Stretches_That_Say_The_Same_Thing_Are_One_Block()
 	{
@@ -213,10 +171,7 @@ public sealed class BoardViewTests
 		Assert.AreEqual(2.0 / 7 * 100, blocks[0].WidthPct, 1e-6, "19:00 to 21:00, as one stretch");
 	}
 
-	/// <summary>
-	///     A retune to a different warmth stays two blocks, because the colour is the fact being reported: the
-	///     evening's step from 4300 K to 2700 K should be visible on the board as a change in the block.
-	/// </summary>
+	/// <summary>Kelvin is part of what a block reports, so the merge above stops at a colour change.</summary>
 	[TestMethod]
 	public void A_Retune_To_A_Different_Warmth_Stays_Two_Blocks()
 	{
@@ -234,10 +189,7 @@ public sealed class BoardViewTests
 		Assert.AreEqual(2700, blocks[1].Kelvin);
 	}
 
-	/// <summary>
-	///     A five-second visit to the hall is still a mark. Left to the true arithmetic it would be a fiftieth of
-	///     a pixel, which is the same as not drawing it — and the hall is exactly the room somebody checks.
-	/// </summary>
+	// There is a minimum width. True arithmetic puts a five-second visit at a fiftieth of a pixel.
 	[TestMethod]
 	public void A_Moment_Long_Visit_Is_Still_Visible()
 	{
@@ -250,10 +202,7 @@ public sealed class BoardViewTests
 		Assert.IsTrue(blocks[0].WidthPct >= 0.4, $"a five-second block was drawn {blocks[0].WidthPct}% wide");
 	}
 
-	/// <summary>
-	///     Kelvin rides only on a lit block. A hand-set room's warmth is not the engine's to report, and colouring
-	///     its block with it would claim the engine chose that light.
-	/// </summary>
+	/// <summary>A hand-set room's warmth is not the engine's to report.</summary>
 	[TestMethod]
 	public void Only_A_Lit_Block_Carries_A_Warmth()
 	{
@@ -267,7 +216,6 @@ public sealed class BoardViewTests
 		Assert.IsNull(blocks[0].Kelvin);
 	}
 
-	/// <summary>Off by hand is hatched rather than filled, because nothing was lit — so it is its own kind.</summary>
 	[TestMethod]
 	public void Off_By_Hand_Is_Its_Own_Kind()
 	{
@@ -277,7 +225,7 @@ public sealed class BoardViewTests
 		Assert.AreEqual(LaneBlockKind.Held, blocks[0].Kind);
 	}
 
-	/// <summary>Entries arrive newest first from the log; the lane has to draw them oldest first regardless.</summary>
+	/// <summary>Entries arrive newest first from the log; the lane draws them oldest first.</summary>
 	[TestMethod]
 	public void Entries_Are_Ordered_Before_They_Are_Drawn()
 	{
@@ -297,7 +245,6 @@ public sealed class BoardViewTests
 
 	// ===================== what happens next =====================
 
-	/// <summary>The dotted mark names the time and what the armed timer will do when it fires.</summary>
 	[TestMethod]
 	public void The_Future_Mark_Names_The_Time_And_What_Happens()
 	{
@@ -311,7 +258,7 @@ public sealed class BoardViewTests
 		Assert.AreEqual(window.PercentAt(resumes), mark.LeftPct, 1e-9);
 	}
 
-	/// <summary>Each state's mark says what that state's timer does — the snapshot deliberately does not carry a verb.</summary>
+	/// <summary>The snapshot carries no verb, so the mark's wording comes from the state.</summary>
 	[TestMethod]
 	public void Each_State_Names_Its_Own_Next_Move()
 	{
@@ -322,7 +269,6 @@ public sealed class BoardViewTests
 		Assert.IsTrue(BoardView.NextMark(Report(AreaState.SuppressedOff, nextChangeAt: At(22)), window, Now)!.Label.EndsWith("listens again", StringComparison.Ordinal));
 	}
 
-	/// <summary>A deadline past the board's right edge is not drawn — the board would be claiming to show it.</summary>
 	[TestMethod]
 	public void A_Deadline_Off_The_Board_Gets_No_Mark()
 	{
@@ -332,14 +278,8 @@ public sealed class BoardViewTests
 		Assert.IsNull(BoardView.NextMark(Report(AreaState.OverriddenOn, nextChangeAt: At(16)), window, Now));
 	}
 
-	/// <summary>
-	///     A deadline that has already passed gets no mark, even though the board still shows that hour.
-	/// </summary>
-	/// <remarks>
-	///     The window reaches four hours back, so a stale snapshot — every snapshot round-trips through Home
-	///     Assistant, and a connection blip is enough — otherwise drew a confident "auto resumes" to the left of
-	///     the now-line: a prediction the board can be seen to have got wrong.
-	/// </remarks>
+	// The window reaches four hours back, so a stale snapshot otherwise drew a prediction to the left of the
+	// now-line. Snapshots round-trip through Home Assistant, and a connection blip is enough to stale one.
 	[TestMethod]
 	public void A_Deadline_Already_Behind_The_Now_Line_Gets_No_Mark()
 	{
@@ -350,7 +290,6 @@ public sealed class BoardViewTests
 		Assert.IsNull(BoardView.NextMark(stale, window, Now));
 	}
 
-	/// <summary>A state with nothing armed gets no mark. So does a state whose timer means nothing to a reader.</summary>
 	[TestMethod]
 	public void A_State_With_No_Armed_Timer_Gets_No_Mark()
 	{
@@ -362,10 +301,6 @@ public sealed class BoardViewTests
 
 	// ===================== the tray =====================
 
-	/// <summary>
-	///     Exactly the states where the engine is not simply following the schedule. A tray that listed the
-	///     nominal ones would be the card grid the board replaced.
-	/// </summary>
 	[TestMethod]
 	public void Only_The_Four_Non_Nominal_States_Are_Exceptions()
 	{
@@ -380,10 +315,7 @@ public sealed class BoardViewTests
 		Assert.IsFalse(BoardView.IsException(AreaState.Disabled));
 	}
 
-	/// <summary>
-	///     A dark room that is waiting but blocked would sit in the board looking like any other quiet room, and
-	///     it is the one the reader came for. It is hoisted despite its nominal state.
-	/// </summary>
+	// A blocked room's state is nominal, so the block has to hoist it separately.
 	[TestMethod]
 	public void A_Dark_Room_That_Will_Not_Light_Is_An_Exception_Despite_Its_Nominal_State()
 	{
@@ -397,10 +329,7 @@ public sealed class BoardViewTests
 		StringAssert.Contains(BoardView.ExceptionLine(television, Now), "media_player.stue_tv is on");
 	}
 
-	/// <summary>
-	///     The refusals that are already announced house-wide, and the ones that are not news, stay out of the
-	///     tray — repeating them once per room would bury the rooms worth reading.
-	/// </summary>
+	/// <summary>A refusal already announced house-wide stays out of the tray.</summary>
 	[TestMethod]
 	public void A_Block_Is_Only_Hoisted_When_It_Is_News_For_That_Room()
 	{
@@ -422,7 +351,6 @@ public sealed class BoardViewTests
 			"an older report that never carried the field is not a claim that nothing was blocking");
 	}
 
-	/// <summary>A blocking entity the wire did not name still says something true.</summary>
 	[TestMethod]
 	public void A_Blocker_With_No_Entity_Id_Is_Still_Named_Honestly()
 	{
@@ -444,18 +372,10 @@ public sealed class BoardViewTests
 	private static ActivityEntry Refused(long sequence, DateTimeOffset at, AutoOnBlock block, string? entity = null) =>
 		new(sequence, Blocked(block, entity) with { Timestamp = at });
 
-	/// <summary>
-	///     <b>The mark exists so a refusing room stops looking like an empty one.</b> A refusal draws no stretch —
-	///     the room was dark before it and dark after — so before this the lane of a room that turned movement
-	///     down was pixel-identical to the lane of a room nobody entered. Those are exactly the two cases somebody
-	///     opens the board to tell apart.
-	/// </summary>
+	/// <summary>The mark exists so a refusing room stops drawing the same empty lane as an unvisited one.</summary>
 	/// <remarks>
-	///     The label is checked against the instant's own local projection rather than against the literal
-	///     "20:30". <see cref="BoardView.Clock"/> renders through <c>ToLocalTime()</c>, so the literal held on a
-	///     Europe/Oslo machine and failed on the UTC build agent with "18:30" — red CI saying nothing about the
-	///     behaviour under test. What the test is really for still holds exactly: one mark, placed where the
-	///     refusal happened, carrying <i>that</i> instant's time and the reason.
+	///     Never assert the literal "20:30" here. BoardView.Clock renders through ToLocalTime, so a literal
+	///     passes on a Europe/Oslo machine and fails on the UTC build agent. Compare against the same projection.
 	/// </remarks>
 	[TestMethod]
 	public void A_Refused_Movement_Is_Marked_Where_It_Happened()
@@ -468,17 +388,14 @@ public sealed class BoardViewTests
 
 		Assert.AreEqual(1, marks.Count);
 
-		// 20:30 is three and a half hours into a seven-hour board. The placement is an offset-independent
-		// comparison of two instants, so it means the same thing in every zone.
+		// 20:30 is three and a half hours into a seven-hour board. Placement compares two instants, so it holds
+		// in every zone.
 		Assert.AreEqual(50, marks[0].LeftPct, 0.01);
 		StringAssert.Contains(marks[0].Label, refusedAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture));
 		StringAssert.Contains(marks[0].Label, "too bright");
 	}
 
-	/// <summary>
-	///     Every gate that is about <em>this room</em> names itself on its mark. A mark saying only "turned down"
-	///     would send the reader to the log for the one word the board had room to carry.
-	/// </summary>
+	/// <summary>Every gate that is about this room names itself on its mark.</summary>
 	[TestMethod]
 	public void Each_Room_Level_Gate_Names_Itself_On_The_Mark()
 	{
@@ -502,17 +419,8 @@ public sealed class BoardViewTests
 			"the blocking entity is the whole point of that gate");
 	}
 
-	/// <summary>
-	///     <b>The master switch and an empty house get no mark at all.</b> They turn every room down at once, so
-	///     drawing them per room gave all seventeen lanes the same tick — and because a refusal makes a lane
-	///     un-quiet, the quiet shelf emptied and every room claimed a row. Seventeen lanes repeating one house
-	///     fact is exactly the wall <see cref="BoardLane.IsQuiet"/> exists to prevent, and it is the same rule
-	///     <see cref="BoardView.IsException"/> already applies to the tray above.
-	/// </summary>
-	/// <remarks>
-	///     Both are still refusals and both still have their row in the log with their reason. This is a
-	///     judgement about which of them earns a mark, not a second opinion about what a refusal is.
-	/// </remarks>
+	// A refusal makes a lane un-quiet, so drawing a house-wide one per room emptied the quiet shelf and gave
+	// every room a row. Both still have their row in the log; this is only about which earns a mark.
 	[TestMethod]
 	public void A_House_Wide_Refusal_Is_Not_Drawn_On_Every_Lane()
 	{
@@ -528,11 +436,8 @@ public sealed class BoardViewTests
 			"a room's own darkness is nobody else's business, and still marked");
 	}
 
-	/// <summary>
-	///     Movement the room acted on is not a refusal, and neither is a report that carries no gate. The board
-	///     asks <see cref="ActivityView.IsDeclinedMotion"/> rather than a copy of it, so the mark and the row it
-	///     sends a reader to can never disagree about what was turned down.
-	/// </summary>
+	// The board asks ActivityView.IsDeclinedMotion, not a copy of it, so a mark and the log row it points at
+	// cannot disagree.
 	[TestMethod]
 	public void Movement_That_Lit_The_Room_Is_Not_A_Refusal()
 	{
@@ -542,23 +447,8 @@ public sealed class BoardViewTests
 		Assert.AreEqual(0, BoardView.Refusals([noGate], Window()).Count, "a report from before the gate was recorded claims nothing");
 	}
 
-	/// <summary>
-	///     Refusals outside the board's window are not drawn, and two too close to be told apart are one mark —
-	///     whatever turned each of them down.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         The gap is deliberately measured on screen rather than on the clock, and deliberately ignores the
-	///         gate. Reports minutes apart are perfectly meaningful and still land inside a pixel of each other on
-	///         a phone; two ticks a pixel apart cannot be told apart by a reader even when they mean different
-	///         things, and keeping the second buys an unreadable mark while stealing the first one's hover.
-	///     </para>
-	///     <para>
-	///         The case that forced it: the suppressed-off path republishes on <i>every</i> movement rather than
-	///         once per change of gate, so a bedroom sensor re-firing under a hand-set off drew dozens of ticks
-	///         as one continuous amber smear. Every one of them is still a row in the log.
-	///     </para>
-	/// </remarks>
+	// The coalescing gap is measured on screen, not on the clock, and it ignores the gate. The suppressed-off
+	// path republishes on every movement, so a re-firing sensor otherwise draws dozens of ticks as one smear.
 	[TestMethod]
 	public void Marks_Stay_Inside_The_Window_And_Never_Land_On_Top_Of_Each_Other()
 	{
@@ -572,7 +462,7 @@ public sealed class BoardViewTests
 
 		Assert.AreEqual(1, together.Count, "the same instant, even for different reasons");
 
-		// A minute apart on a seven-hour board is a quarter of a per cent — under a pixel on a phone.
+		// A minute apart on a seven-hour board is a quarter of a per cent, under a pixel on a phone.
 		Assert.AreEqual(
 			1,
 			BoardView.Refusals([Refused(1, At(20), AutoOnBlock.Sleep), Refused(2, At(20, 1), AutoOnBlock.Sleep)], window).Count,
@@ -585,11 +475,7 @@ public sealed class BoardViewTests
 			"far enough apart to be read as two");
 	}
 
-	/// <summary>
-	///     <b>A room that only refused is not quiet.</b> It draws no stretch and arms no timer, so without this it
-	///     would be folded away under the dark-cockpit rule — hidden by the very emptiness the mark exists to
-	///     break.
-	/// </summary>
+	// A refusing room draws no stretch and arms no timer, so IsQuiet has to count refusals too.
 	[TestMethod]
 	public void A_Room_That_Only_Refused_Is_Not_Folded_Away()
 	{
@@ -602,10 +488,7 @@ public sealed class BoardViewTests
 		Assert.IsFalse(refused.IsQuiet, "something happened and the engine decided against it");
 	}
 
-	/// <summary>
-	///     The warning dim leads: it is the only exception with a deadline measured in seconds. The rest are
-	///     standing conditions, named alphabetically so the tray does not reshuffle on every tick.
-	/// </summary>
+	/// <summary>The warning dim leads; the rest sort by name, so the tray does not reshuffle on every tick.</summary>
 	[TestMethod]
 	public void The_Warning_Dim_Leads_The_Tray()
 	{
@@ -623,7 +506,6 @@ public sealed class BoardViewTests
 		Assert.AreEqual("Kjokken", tray[2].AreaName);
 	}
 
-	/// <summary>A chip says what is happening and when it ends — the second half is the whole reason to look.</summary>
 	[TestMethod]
 	public void A_Tray_Chip_Says_When_It_Ends()
 	{
@@ -635,7 +517,6 @@ public sealed class BoardViewTests
 		StringAssert.Contains(line, BoardView.Clock(resumes));
 	}
 
-	/// <summary>The one deadline worth counting is counted, because it is measured in seconds.</summary>
 	[TestMethod]
 	public void The_Warning_Dim_Is_Counted_In_Seconds()
 	{
@@ -645,10 +526,7 @@ public sealed class BoardViewTests
 		StringAssert.Contains(line, "unless someone moves");
 	}
 
-	/// <summary>
-	///     A room with no armed deadline is a real state, not a fault: an override with no expiry stands until
-	///     somebody resumes it. Every branch has to finish its sentence without one.
-	/// </summary>
+	/// <summary>No armed deadline is a real state: an override with no expiry stands until somebody resumes it.</summary>
 	[TestMethod]
 	public void Every_Exception_Has_Words_For_Having_No_Deadline()
 	{
@@ -661,7 +539,6 @@ public sealed class BoardViewTests
 		}
 	}
 
-	/// <summary>The tray's closing line is the entire reassurance budget, and it has to count correctly.</summary>
 	[TestMethod]
 	public void The_Quiet_Line_Counts_What_The_Tray_Did_Not_Name()
 	{
@@ -674,11 +551,7 @@ public sealed class BoardViewTests
 
 	// ===================== seventeen lanes =====================
 
-	/// <summary>
-	///     Below the budget nothing folds, whatever the rooms are doing. A house with two rooms switched on has
-	///     to look like a board about two rooms — an empty track is the answer there, and hiding both behind a
-	///     footnote would read as a fault rather than as quiet.
-	/// </summary>
+	/// <summary>Below the lane budget nothing folds, whatever the rooms are doing.</summary>
 	[TestMethod]
 	public void Below_The_Budget_Every_Room_Keeps_Its_Lane()
 	{
@@ -690,10 +563,6 @@ public sealed class BoardViewTests
 		Assert.AreEqual(0, quiet.Count);
 	}
 
-	/// <summary>
-	///     Past the budget the quiet rooms fold onto the shelf. This is the answer to seventeen lanes: fourteen
-	///     rooms cost fourteen chips instead of fourteen rows, and the three worth reading are on screen together.
-	/// </summary>
 	[TestMethod]
 	public void Above_The_Budget_The_Quiet_Rooms_Fold()
 	{
@@ -715,10 +584,7 @@ public sealed class BoardViewTests
 			"the busy lanes keep the order they were given");
 	}
 
-	/// <summary>
-	///     Three ways to earn a lane, and they are all different: something happened, something is about to, or
-	///     something is wrong. A room with no history at all but a dotted mark ahead of it still has news.
-	/// </summary>
+	/// <summary>Three separate ways to earn a lane: something happened, something is about to, something is wrong.</summary>
 	[TestMethod]
 	public void History_A_Future_Mark_Or_A_Fault_Each_Earn_A_Lane()
 	{
@@ -750,10 +616,7 @@ public sealed class BoardViewTests
 		Assert.AreEqual(2200, band[^1].Kelvin);
 	}
 
-	/// <summary>
-	///     A sun-anchored boundary the day cannot place is left out, exactly as the engine's own calculator drops
-	///     it. A band showing a period the engine is not running would be worse than a gap.
-	/// </summary>
+	/// <summary>A sun-anchored boundary the day cannot place is dropped, as the engine's calculator drops it.</summary>
 	[TestMethod]
 	public void A_Boundary_The_Day_Cannot_Place_Is_Left_Out()
 	{
@@ -769,7 +632,7 @@ public sealed class BoardViewTests
 		Assert.IsTrue(band.All(segment => segment.Name == "Night"), "polar night left only the fixed boundary");
 	}
 
-	/// <summary>An unparseable start is left out too, rather than placed at midnight and quietly wrong.</summary>
+	/// <summary>An unparseable start is dropped, not placed at midnight.</summary>
 	[TestMethod]
 	public void An_Unparseable_Start_Is_Left_Out()
 	{
@@ -782,10 +645,7 @@ public sealed class BoardViewTests
 		Assert.AreEqual(0, band.Count);
 	}
 
-	/// <summary>
-	///     The window ends at midnight, so a night period that starts on the far side of it has to place. The
-	///     boundaries are laid out for the day before, of and after precisely so this works.
-	/// </summary>
+	// Boundaries are laid out for the day before, of and after, so a period starting past midnight still places.
 	[TestMethod]
 	public void A_Window_That_Reaches_Midnight_Still_Bands()
 	{
@@ -805,16 +665,8 @@ public sealed class BoardViewTests
 
 	// ===================== the schedule band across a clock change =====================
 
-	/// <summary>
-	///     <b>Spring forward.</b> Norway's clocks jump from 02:00 to 03:00 on 29 March 2026, so the six hours the
-	///     board shows are not all the same distance from UTC. The band used to place every boundary at whatever
-	///     offset the window happened to open on, which put a boundary on the far side of the change an hour out.
-	/// </summary>
-	/// <remarks>
-	///     The board opens at 00:00 winter time and runs six hours to 06:00 summer time. "01:30" is still winter
-	///     time, so it belongs ninety minutes in — a quarter of the way along. Placed at the window's own summer
-	///     offset it landed at 8.3%, an hour early.
-	/// </remarks>
+	// Spring forward. Norway's clocks jump 02:00 to 03:00 on 29 March 2026, so the hours the board shows are not
+	// all the same distance from UTC. Placing every boundary at the window's own offset puts one an hour out.
 	[TestMethod]
 	public void A_Boundary_Before_The_Spring_Change_Keeps_Its_Wall_Clock_Time()
 	{
@@ -839,15 +691,7 @@ public sealed class BoardViewTests
 		Assert.AreEqual(100.0 * 4 / 6, band[2].LeftPct, 1e-6, "05:00 is summer time, four hours into the board");
 	}
 
-	/// <summary>
-	///     <b>Fall back.</b> On 25 October 2026 the clocks go from 03:00 back to 02:00, and the same fault appears
-	///     with the sign reversed: a boundary before the change belongs an hour <i>earlier</i> on the board than the
-	///     window's winter offset put it.
-	/// </summary>
-	/// <remarks>
-	///     The board opens at 01:00 summer time and runs six hours to 06:00 winter time. "01:30" is thirty minutes
-	///     in; the old arithmetic drew it at a quarter of the way along.
-	/// </remarks>
+	// Fall back, the same fault with the sign reversed. On 25 October 2026 the clocks go 03:00 back to 02:00.
 	[TestMethod]
 	public void A_Boundary_Before_The_Autumn_Change_Keeps_Its_Wall_Clock_Time()
 	{
@@ -872,7 +716,6 @@ public sealed class BoardViewTests
 		Assert.AreEqual(100.0 * 4 / 6, band[2].LeftPct, 1e-6, "04:00 is winter time, four hours into the board");
 	}
 
-	/// <summary>A sliver of a period is drawn but not named: the name would be wider than the segment it labels.</summary>
 	[TestMethod]
 	public void A_Sliver_Of_A_Period_Is_Not_Named()
 	{
@@ -882,10 +725,7 @@ public sealed class BoardViewTests
 
 	// ===================== warmth =====================
 
-	/// <summary>
-	///     One conversion for the chip, the lamp and the board block. A warm light is redder than a cool one, and
-	///     the clamp holds at both ends so no lamp can drive the curve off its own range.
-	/// </summary>
+	/// <summary>One conversion serves the chip, the lamp and the board block, and it clamps at both ends.</summary>
 	[TestMethod]
 	public void Warmth_Is_One_Conversion_And_It_Is_Clamped()
 	{

@@ -1,29 +1,10 @@
 @*
-	The house-wide circadian table.
-
-	One card per period rather than a seven-column table: the table was wider than the page, and a settings
-	row whose last controls live behind a scrollbar is a settings row somebody never finds. The card's
-	controls wrap on their own grid, so a phone stacks them and a desktop reads them in a line — nothing
-	scrolls sideways and nothing is hidden either way.
-
-	Brightness and colour are preset dropdowns with a typed escape, the start is a structured control that
-	composes the engine's own grammar, and "min/max brightness" say what Floor and Cap never quite did. The
-	real explanations live behind each (i).
-
-	Each period is a collapsible card, like an area: collapsed it is a header — the period's name, when it
-	starts (with the wall-clock time a sun-anchored start resolves to today), and its brightness/warmth at a
-	glance. Expanded, the full editor. Collapsed by default, because a schedule of five periods is read far
-	more often than any one of them is edited.
+	The house-wide circadian table: one collapsible card per period, collapsed by default.
 *@
 @inject HaCatalog Catalog
 
 <div class="periods">
-	@*
-		Said once, at the top, and not repeated per card: it is one fact about the whole table, and a chip on
-		every Start field would be the same sentence five times over the one control it is about. It is a
-		statement rather than a warning — this is a configuration somebody chose, not a fault — but it is not
-		optional, because without it the Start fields below look exactly like Start fields that work.
-	*@
+	@* Said once for the table as a whole: without it the Start fields below look like Start fields that work. *@
 	@if (StartsAreDead)
 	{
 		<p class="notice period-authority">
@@ -37,11 +18,7 @@
 		int position = index;
 
 		<details class="panel period-fold @(ReferenceEquals(period, _activePeriod) ? "active" : "")" @key="period">
-			@*
-				The summary is a header — the name to read, the start (with today's resolved time for a sun
-				boundary), and the level at a glance. The move/remove controls live here too, with
-				stopPropagation so a tap on them reorders or deletes rather than toggling the fold open.
-			*@
+			@* The move/remove controls need stopPropagation, or a tap on them also toggles the fold. *@
 			<summary class="period-summary">
 				<span class="period-title">@DisplayName(period)</span>
 				@if (ReferenceEquals(period, _activePeriod))
@@ -98,10 +75,7 @@
 							</InfoPopover>
 						</span>
 						<select class="cell wide" @bind:get="boundPeriod.SetsMode ?? string.Empty" @bind:set="@(value => SetMode(boundPeriod, value))">
-							@* Never open with the dash: a leading em dash reads as a separator or a greyed-out heading
-						   rather than as the option that is currently chosen. Same "(none — …)" form the pickers
-						   use, so every empty choice on the page is written one way. *@
-						<option value="">(none — leave the house mode unchanged)</option>
+							<option value="">(none — leave the house mode unchanged)</option>
 							@foreach (string mode in HouseModeOptions)
 							{
 								<option value="@mode">@mode</option>
@@ -182,46 +156,30 @@
 	public EventCallback Changed { get; set; }
 
 	/// <summary>
-	///     The house-mode option values a period may belong to (live ∪ configured). Passed from the page so this
-	///     component never talks to <c>HaCatalog</c> itself. Empty leaves the House-mode field hidden.
+	///     The house-mode option values a period may belong to, live and configured. Passed from the page so this
+	///     component never talks to <c>HaCatalog</c> itself. Empty hides the House-mode field.
 	/// </summary>
 	[Parameter]
 	public IReadOnlyList<string> HouseModeOptions { get; set; } = [];
 
-	/// <summary>The house-mode config, for the dynamic help line's sleep-tag check. <c>null</c> hides the field.</summary>
+	/// <summary>The house-mode config. <c>null</c> hides the field.</summary>
 	[Parameter]
 	public HouseModeConfig? HouseMode { get; set; }
 
-	/// <summary>
-	///     The house settings, for the one question this component cannot answer from the period list alone: who
-	///     owns the time of day. <c>null</c> is the pre-2.1 caller, and reads as "this house's own schedule".
-	/// </summary>
+	/// <summary>The house settings, for who owns the time of day. <c>null</c> reads as this house's own schedule.</summary>
 	[Parameter]
 	public GlobalConfig? Global { get; set; }
 
-	/// <summary>Whether a house-mode select is configured — a dead field teaches nothing, so it is hidden otherwise.</summary>
 	private bool HasHouseMode => HouseMode?.Entity is { Length: > 0 };
 
-	/// <summary>
-	///     Whether the Start fields below are actually deciding anything.
-	/// </summary>
-	/// <remarks>
-	///     Under Home Assistant's period authority they are not: the engine takes the period from the dropdown and
-	///     never places one by the clock. Without saying so, this editor is a page whose main control does nothing
-	///     — somebody moves a start time, saves, watches the lights not change, and goes looking for a fault in the
-	///     schedule.
-	/// </remarks>
+	/// <summary>Whether the Start fields below are deciding anything.</summary>
+	// Under Home Assistant's period authority they are not: the engine takes the period from the dropdown and
+	// never places one by the clock.
 	private bool StartsAreDead => Global is not null && Schedule.HomeAssistantDecides(Global);
 
-	/// <summary>
-	///     What the "active now" badge promises, which is a different promise in each of three cases.
-	/// </summary>
-	/// <remarks>
-	///     The third case is the one worth the extra branch, and looking at the page is what found it: under Home
-	///     Assistant's authority with the dropdown standing on an option nothing maps, the engine falls back to the
-	///     clock — so a badge saying "the dropdown is naming this" would be pointing at a period the dropdown has
-	///     never heard of, directly under a line saying start times are not in force.
-	/// </remarks>
+	/// <summary>What the "active now" badge promises, which differs in each of three cases.</summary>
+	// The third case is real: under Home Assistant's authority with the dropdown on an unmapped option the
+	// engine falls back to the clock, so the badge must not claim the dropdown named this period.
 	private string ActiveNowTitle => (StartsAreDead, _namedBySelect) switch
 	{
 		(true, true) => "Home Assistant's dropdown is naming this period right now.",
@@ -229,26 +187,21 @@
 		_ => "This period is in force right now."
 	};
 
-	/// <summary>The period in force right now, so its card carries the "active now" badge and accent edge.</summary>
+	/// <summary>The period in force right now, so its card carries the "active now" badge.</summary>
 	private TimePeriodConfig? _activePeriod;
 
-	/// <summary>Whether the dropdown named it, rather than the clock placing it — see <see cref="ActiveNowTitle"/>.</summary>
+	/// <summary>Whether the dropdown named it, not the clock placing it.</summary>
 	private bool _namedBySelect;
 
 	/// <inheritdoc/>
 	protected override void OnParametersSet() => _activePeriod = ResolveActivePeriod();
 
 	/// <summary>
-	///     The period in force right now: the one the select names under Home Assistant's authority, and otherwise
-	///     the one the clock places. Sun-anchored starts resolve against <c>sun.sun</c> exactly as the header's
-	///     <see cref="StartSummary"/> does, so the running order can differ from the list order.
+	///     The period in force right now: the one the select names under Home Assistant's authority, otherwise
+	///     the one the clock places. Sun-anchored starts resolve against <c>sun.sun</c>, so the running order can
+	///     differ from the list order.
 	/// </summary>
-	/// <remarks>
-	///     The rule itself is <see cref="Schedule.InForceNow"/>'s, because the room page asks the same question of
-	///     the same list — which period is this room running right now — and two copies of "the latest start at or
-	///     before now, wrapping past midnight", or of who is allowed to answer at all, would be believed while they
-	///     drifted.
-	/// </remarks>
+	// The rule is Schedule's, not re-derived here; the room page asks the same question of the same list.
 	private TimePeriodConfig? ResolveActivePeriod()
 	{
 		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
@@ -259,26 +212,22 @@
 		if (Global is null)
 			return Schedule.InForceAt(Periods, sun, now);
 
-		// Two questions, both asked of Schedule and neither re-answered here: which period is running, and
-		// whether the dropdown is what decided it. The badge's hover is the only thing that needs the second.
 		string? value = Catalog.CurrentStateOf(Global.PeriodSelect?.EntityId);
 
-		// Resolved once and kept. InForceNow is NamedBySelect ?? InForceAt, so asking both was asking the same
-		// question twice and throwing the first answer away to keep a bool about it.
+		// InForceNow is NamedBySelect ?? InForceAt, so it is unrolled here to keep the first answer as well as
+		// the second; the badge's hover needs to know which one decided.
 		TimePeriodConfig? named = Schedule.NamedBySelect(Periods, Global, value);
 		_namedBySelect = named is not null;
 
 		return named ?? Schedule.InForceAt(Periods, sun, now);
 	}
 
-	/// <summary>The collapsed header's name: the period's own, or a placeholder for an unnamed row.</summary>
 	private static string DisplayName(TimePeriodConfig period) =>
 		period.Name is { Length: > 0 } name ? name : "unnamed period";
 
 	/// <summary>
-	///     The start, as the header shows it: the raw string, plus the wall-clock time a sun-anchored start
-	///     resolves to today (read from <c>sun.sun</c>, the engine's own truth). An empty or unparseable start
-	///     reads "start not set" rather than a blank.
+	///     The start as the header shows it: the raw string, plus the wall-clock time a sun-anchored start
+	///     resolves to today from <c>sun.sun</c>.
 	/// </summary>
 	private string StartSummary(TimePeriodConfig period)
 	{
@@ -297,7 +246,6 @@
 			: period.Start;
 	}
 
-	/// <summary>The collapsed header's level hint: brightness and colour temperature at a glance.</summary>
 	private static string LevelSummary(TimePeriodConfig period) =>
 		string.Create(CultureInfo.InvariantCulture, $"{Math.Round(period.BrightnessPct)}% · {period.ColorTempKelvin}K");
 
@@ -320,29 +268,13 @@
 	private Task SetMode(TimePeriodConfig period, string? value) =>
 		Set(() => period.SetsMode = string.IsNullOrWhiteSpace(value) ? null : value);
 
-	/// <summary>
-	///     What a period starts as, in the one place that decides it.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Public and static because <see cref="PeriodSelectPanel"/> offers the same "add a period" where a
-	///         dropdown helper has more options than the schedule has periods, and two definitions of "a new period"
-	///         would eventually differ — a household would then get a different starting row depending on which
-	///         button they happened to press.
-	///     </para>
-	///     <para>
-	///         <b>The name is made unique against what is already there, because pressing the button twice is a
-	///         prescribed flow, not a mistake.</b> The period-select panel counts the shortfall out loud — "3 of
-	///         them have no period to point at" — and offers one button, so three presses is what the copy asks
-	///         for. Three rows all called "new period" is two document-level errors (a duplicate name, and two
-	///         periods starting at 12:00) and an unsaveable schedule. On a phone the new cards render above the
-	///         fold, so the household does not even see what they made.
-	///     </para>
-	/// </remarks>
+	/// <summary>What a period starts as, in the one place that decides it. <see cref="PeriodSelectPanel"/> uses it too.</summary>
 	/// <param name="existing">
 	///     The periods already in the document, so the new one can be named apart from them. Omit only where
 	///     there is genuinely nothing to collide with.
 	/// </param>
+	// The name must be unique: pressing "add a period" three times to clear a shortfall of three otherwise
+	// makes three rows called "new period": a duplicate name and two periods at 12:00, both errors.
 	public static TimePeriodConfig NewPeriod(IReadOnlyList<TimePeriodConfig>? existing = null)
 	{
 		const string Stem = "new period";

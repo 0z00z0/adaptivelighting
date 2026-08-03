@@ -10,17 +10,10 @@ namespace AdaptiveLighting.Tests.LastSeen;
 ///     What the split actually produces on a large Home Assistant instance.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The pre-split cache put everything that was not a light, a motion source or a light-level sensor into one
-///         file. On the live house that file was 647 KB against 44 KB for the other three together — 94% of the
-///         bytes in the bucket that was supposed to be the exception. This builds a population with the shape a
-///         large instance actually has, files it by the current rules, and prints what lands where, because the
-///         decision about whether to narrow the split further is a decision about that list.
-///     </para>
-///     <para>
-///         The counts are chosen so the totals land near the live house's measured file sizes, so the printed
-///         numbers can be compared with them directly rather than scaled in somebody's head.
-///     </para>
+///     The pre-split cache put everything that was not a light, a motion source or a light-level sensor into one
+///     file. On the live house that file was 647 KB against 44 KB for the other three together. This builds a
+///     population the shape a large instance really has and prints what lands where; the counts are chosen so the
+///     printed totals compare directly with the live house's measured file sizes.
 /// </remarks>
 [TestClass]
 public sealed class LastSeenLargeHouseTests
@@ -40,9 +33,8 @@ public sealed class LastSeenLargeHouseTests
 	///     One large Home Assistant instance, by domain and device class.
 	/// </summary>
 	/// <remarks>
-	///     Not invented: these are the domains a stock Home Assistant creates and the device classes its own
-	///     integrations declare, in roughly the proportions an instance with energy monitoring, a Zigbee network,
-	///     system monitors and a few hundred helpers ends up with.
+	///     The domains a stock Home Assistant creates and the classes its own integrations declare, in roughly the
+	///     proportions an instance with energy monitoring, Zigbee, system monitors and a few hundred helpers hits.
 	/// </remarks>
 	private static readonly (string Domain, string? DeviceClass, int Count)[] Population =
 	[
@@ -216,7 +208,7 @@ public sealed class LastSeenLargeHouseTests
 				Add(split, bucket, entityId);
 
 				// What the same entity would have been filed under before the catch-all was split. The three
-				// curated rules are unchanged, so this is exactly "curated, or everything else".
+				// curated rules are unchanged, so this is "curated, or everything else".
 				Add(preSplit, LastSeenBuckets.IsCurated(bucket) ? bucket : LastSeenBuckets.Unclassified, entityId);
 			}
 
@@ -254,8 +246,6 @@ public sealed class LastSeenLargeHouseTests
 			}
 		}
 	}
-
-	// ===================== building the house =====================
 
 	private static IEnumerable<(string EntityId, string? DeviceClass)> Enumerate()
 	{
@@ -298,8 +288,7 @@ public sealed class LastSeenLargeHouseTests
 		}
 	}
 
-	// ===================== the list the decision depends on =====================
-
+	/// <summary>Prints the file list the decision about narrowing the split further depends on.</summary>
 	private static void Report(LastSeenStore after, LastSeenStore before, int population)
 	{
 		List<FileInfo> files = [.. after.FilePaths.Select(path => new FileInfo(path)).OrderByDescending(file => file.Length)];

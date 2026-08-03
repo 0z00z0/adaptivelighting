@@ -6,9 +6,8 @@ namespace AdaptiveLighting.Ha;
 ///     Raises persistent notifications in Home Assistant.
 /// </summary>
 /// <remarks>
-///     Uses <c>persistent_notification.create</c> rather than <c>notify.persistent_notification</c> so a
-///     notification id can be supplied: the engine's news is always "here is the current state of the problem",
-///     and re-raising it should replace the last one rather than stack up another card.
+///     Calls <c>persistent_notification.create</c>, not <c>notify.persistent_notification</c>, because only the
+///     former takes a notification id. Re-raising the same problem then replaces its card instead of stacking one.
 /// </remarks>
 public sealed class HaNotifier : INotifier
 {
@@ -17,9 +16,6 @@ public sealed class HaNotifier : INotifier
 	private readonly IHaContext _ha;
 	private readonly ILogger _logger;
 
-	/// <summary>Creates a notifier.</summary>
-	/// <param name="ha">Where the service call goes.</param>
-	/// <param name="logger">Diagnostics. Anything worth notifying about is worth logging too.</param>
 	public HaNotifier(IHaContext ha, ILogger logger)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));

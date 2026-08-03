@@ -10,28 +10,18 @@ namespace AdaptiveLighting.Web.Services;
 ///     <see cref="AdaptiveLighting.Ha.HaStatePublisher"/> writes it.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Every property carries an explicit <see cref="JsonPropertyNameAttribute"/> because NetDaemon's
-///         <c>Event&lt;T&gt;.Data</c> calls <c>Deserialize&lt;T&gt;()</c> with <i>no</i> serializer options —
-///         matching is case-sensitive and exact, so the names here must be the publisher's names verbatim.
-///         This record is the contract between the two halves; if the publisher's payload changes, this
-///         changes with it.
-///     </para>
-///     <para>
-///         This is a deliberately lossy read of an HA event rather than a direct hand-off from the engine.
-///         See <see cref="AreaSnapshotCache"/> for why.
-///     </para>
+///     Every property names itself explicitly because NetDaemon's <c>Event&lt;T&gt;.Data</c> deserializes with no
+///     serializer options: matching is case-sensitive and exact, so these are the publisher's names verbatim.
+///     A field an older build did not publish arrives as <c>null</c>.
 /// </remarks>
 public sealed record AreaSnapshotEvent
 {
-	/// <summary>The area's display name.</summary>
 	[JsonPropertyName("area")]
 	public string? Area { get; init; }
 
 	/// <summary>
 	///     The registry area id behind the display name, or <c>null</c> when the area was configured with explicit
-	///     entity lists and no area. Absent from events published by builds that predate it, which deserializes as
-	///     <c>null</c>: a reader then falls back to matching on <see cref="Area"/>, which is what it did before.
+	///     entity lists and no area. A reader then falls back to matching on <see cref="Area"/>.
 	/// </summary>
 	[JsonPropertyName("area_id")]
 	public string? AreaId { get; init; }
@@ -56,7 +46,6 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("is_dark")]
 	public bool? IsDark { get; init; }
 
-	/// <summary>The active circadian period, or <c>null</c>.</summary>
 	[JsonPropertyName("period")]
 	public string? Period { get; init; }
 
@@ -64,7 +53,6 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("brightness_pct")]
 	public double? BrightnessPct { get; init; }
 
-	/// <summary>The colour temperature last commanded, or <c>null</c>.</summary>
 	[JsonPropertyName("color_temp_kelvin")]
 	public int? ColorTempKelvin { get; init; }
 
@@ -80,36 +68,28 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("last_motion_at")]
 	public DateTimeOffset? LastMotionAt { get; init; }
 
-	/// <summary>When the area's armed timer will act, or <c>null</c> when nothing is scheduled.</summary>
+	/// <summary>When the area's armed timer will act, or <c>null</c> when nothing is armed.</summary>
 	[JsonPropertyName("next_change_at")]
 	public DateTimeOffset? NextChangeAt { get; init; }
 
 	/// <summary>
-	///     When that countdown was armed, or <c>null</c> when nothing is scheduled — the other end of the bar.
-	///     Absent from events published by builds that predate it, which deserializes as <c>null</c>: the card
-	///     then shows the deadline without a bar rather than a bar with an invented start.
+	///     When that countdown was armed, the other end of the bar. <c>null</c> makes the card show the deadline
+	///     without a bar, in place of a bar with an invented start.
 	/// </summary>
 	[JsonPropertyName("next_change_from")]
 	public DateTimeOffset? NextChangeFrom { get; init; }
 
-	/// <summary>
-	///     The raw house-mode option string in effect (<c>Sover</c>, <c>Borte</c>), or <c>null</c> when no select
-	///     is configured. Absent from events published by builds that predate it, which deserializes as <c>null</c>.
-	/// </summary>
+	/// <summary>The raw house-mode option in effect, or <c>null</c> when no select is configured.</summary>
 	[JsonPropertyName("house_mode_value")]
 	public string? HouseModeValue { get; init; }
 
-	/// <summary>
-	///     The darkness gate's reading in words (e.g. <c>lux 86, dark below 40</c>), or <c>null</c> if it never
-	///     consulted the gate. Absent from events published by builds that predate it, which deserializes as <c>null</c>.
-	/// </summary>
+	/// <summary>The darkness gate's reading in words, or <c>null</c> if the gate was never consulted.</summary>
 	[JsonPropertyName("darkness_detail")]
 	public string? DarknessDetail { get; init; }
 
 	/// <summary>
-	///     Which gate was holding auto-on off (an <see cref="AutoOnBlock"/> name), or <c>null</c>. Absent from
-	///     events published by builds that predate it, which deserializes as <c>null</c> — and null here means
-	///     "this report cannot say", never "nothing was blocking", which is a claim it has no grounds for.
+	///     Which gate was holding auto-on off, as an <see cref="AutoOnBlock"/> name. <c>null</c> means this report
+	///     cannot say, never that nothing was blocking.
 	/// </summary>
 	[JsonPropertyName("auto_on_blocked_by")]
 	public string? AutoOnBlockedBy { get; init; }
@@ -119,15 +99,9 @@ public sealed record AreaSnapshotEvent
 	public string? AutoOnBlockingEntity { get; init; }
 
 	/// <summary>
-	///     Rebuilds an <see cref="AreaSnapshot"/> from the wire shape, or returns <c>null</c> when the payload
-	///     does not name an area.
+	///     Rebuilds an <see cref="AreaSnapshot"/> from the wire shape, or <c>null</c> when the payload names no
+	///     area. An unparseable enum name degrades to its zero value; nothing throws.
 	/// </summary>
-	/// <remarks>
-	///     Unparseable enum names degrade to their zero value rather than throwing: a UI that goes blank
-	///     because one event carried a state name it did not recognise would be worse than one that says
-	///     <c>Disabled</c> for a moment.
-	/// </remarks>
-	/// <returns>The reconstructed snapshot, or <c>null</c>.</returns>
 	public AreaSnapshot? ToSnapshot()
 	{
 		if (string.IsNullOrWhiteSpace(Area))
@@ -151,9 +125,8 @@ public sealed record AreaSnapshotEvent
 			HouseModeValue,
 			DarknessDetail,
 			AreaId,
-			// Unlike the enums above, an unreadable or absent value degrades to null rather than to the zero
-			// value: AutoOnBlock's zero is "nothing is blocking", and a report that never carried the field
-			// made no such statement.
+			// Not default, unlike the enums above: AutoOnBlock's zero is "nothing is blocking", which a report that
+			// never carried the field did not say.
 			Enum.TryParse(AutoOnBlockedBy, out AutoOnBlock block) ? block : null,
 			AutoOnBlockingEntity);
 	}

@@ -1,14 +1,8 @@
 @*
-	Orientation in five numbers, and a sixth chip when the helper adopted a house-mode select.
+	The commissioning board's header: five counts, plus a chip when a house-mode select was adopted.
 
-	It is the commissioning board's header rather than one of its steps: it asks nothing. The counts are the
-	resolver's own — after the include label, the group preference and the ghost filter — which is what makes
-	the strip a report of what the engine will actually run rather than an advertisement for what Home Assistant
-	holds.
-
-	Glyphless on purpose. ui-design-c §6.2 refused icons on report rows and kept them for sections; the one
-	glyph here marks the one chip that is a fact rather than a count, so it reads as a different kind of thing
-	instead of as the first of six decorations.
+	The counts are the resolver's own, after the include label, the group preference and the ghost filter, so
+	the strip reports what the engine will run, not what Home Assistant holds.
 *@
 
 <div class="comm-strip" role="list" aria-label="What setting up found">
@@ -20,8 +14,7 @@
 		</div>
 	}
 
-	@* Absent, not zeroed, for a house with no select. A chip reading "— house mode" would invent a missing
-	   thing out of a house that simply has none, which is the cabin this board has to pass through cleanly. *@
+	@* Absent, not zeroed, for a house with no select: a house without one is not missing anything. *@
 	@if (HouseMode is { Length: > 0 } mode)
 	{
 		<div class="comm-fact mode" role="listitem">
@@ -55,22 +48,11 @@
 	[Parameter]
 	public int People { get; set; }
 
-	/// <summary>
-	///     The adopted house-mode select's name, or <c>null</c> when this house has none.
-	/// </summary>
-	/// <remarks>
-	///     The select's <i>friendly name</i>, not its entity id: the strip is read by somebody who has never seen
-	///     an entity id and does not need to start now.
-	/// </remarks>
+	/// <summary>The adopted select's friendly name, not its entity id. <c>null</c> when this house has none.</summary>
 	[Parameter]
 	public string? HouseMode { get; set; }
 
 	/// <summary>The five counted facts, in reading order, each with the word that agrees with its number.</summary>
-	/// <remarks>
-	///     A list rather than five near-identical blocks of markup: they differed only in a number and a noun, and
-	///     three of them carried their own inline plural ternary. The mode chip stays written out below, because it
-	///     genuinely has different markup — a glyph and a name rather than a count.
-	/// </remarks>
 	private IReadOnlyList<(int Count, string Word)> Facts =>
 	[
 		(Rooms, Rooms == 1 ? "room" : "rooms"),

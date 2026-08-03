@@ -6,17 +6,9 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     Which of a room's lights look like something other than room lighting.
 /// </summary>
 /// <remarks>
-///     <para>
-///         The cases below are one live house's <c>stue</c>, which resolves to 34 <c>light.*</c> entities: three
-///         Ubiquiti access-point status LEDs, four relay- and dev-board indicators, five WiZ colour channels of a
-///         lamp already commanded under its own name, and a fridge.
-///     </para>
-///     <para>
-///         <b>The false-positive tests are the important half.</b> This only ever advises, so a light it misses
-///         costs a warning nobody saw; a real lamp it accuses talks somebody out of managing their own light, and
-///         they have no way to tell they were misled. Every rule therefore has a test for what it must <i>not</i>
-///         fire on, and the LED-strip case is the one that made the rules asymmetric.
-///     </para>
+///     The cases are one live house's <c>stue</c>: 34 <c>light.*</c> entities, of which three are access-point
+///     LEDs, four are board indicators, five are WiZ colour channels and one is a fridge. Every rule carries a
+///     test for what it must not fire on; a false accusation is the failure that costs somebody a real lamp.
 /// </remarks>
 [TestClass]
 public sealed class LightAuditTests
@@ -32,7 +24,6 @@ public sealed class LightAuditTests
 
 	// ===================== status and indicator wording =====================
 
-	/// <summary>The relay and dev-board indicators from the live house, all of which say what they are.</summary>
 	[TestMethod]
 	public void Anything_Named_As_A_Status_Or_Indicator_Is_Flagged()
 	{
@@ -42,8 +33,8 @@ public sealed class LightAuditTests
 	}
 
 	/// <summary>
-	///     The status rule runs before the lamp guard, on purpose: <c>lab_taklys_status_led</c> carries "taklys",
-	///     which would otherwise excuse it as a ceiling light.
+	///     Order matters: the status rule runs before the lamp guard, or "taklys" in
+	///     <c>lab_taklys_status_led</c> excuses it as a ceiling light.
 	/// </summary>
 	[TestMethod]
 	public void A_Ceiling_Lights_Status_Led_Is_Still_A_Status_Light()
@@ -51,7 +42,6 @@ public sealed class LightAuditTests
 		StringAssert.Contains(Reason("light.lab_taklys_status_led") ?? "", "status");
 	}
 
-	/// <summary>The friendly name is read too, because a household renames the thing it can see.</summary>
 	[TestMethod]
 	public void The_Friendly_Name_Can_Give_It_Away()
 	{
@@ -60,7 +50,6 @@ public sealed class LightAuditTests
 
 	// ===================== a trailing LED =====================
 
-	/// <summary>The three Ubiquiti hardware LEDs, which say nothing at all except how they end.</summary>
 	[TestMethod]
 	public void Network_Hardware_Leds_Are_Flagged_By_Their_Suffix()
 	{
@@ -69,11 +58,7 @@ public sealed class LightAuditTests
 		Assert.IsTrue(IsFlagged("light.us_8_60w_lab_led"));
 	}
 
-	/// <summary>
-	///     <b>The guard that matters.</b> An LED strip is a real light. Scaring somebody off one is the failure
-	///     this class is careful about, so the suffix has to be the <i>end</i> of the id and the name must not say
-	///     lamp anywhere.
-	/// </summary>
+	/// <summary>An LED strip is a real light, so the suffix must end the id and the name must not say lamp anywhere.</summary>
 	[TestMethod]
 	public void A_Real_Led_Strip_Is_Not_Flagged()
 	{
@@ -82,10 +67,7 @@ public sealed class LightAuditTests
 		Assert.IsFalse(IsFlagged("light.kjokkenbenk_led_spot", "Kjøkkenbenk LED spot"));
 	}
 
-	/// <summary>
-	///     Norwegian writes its lamps as compounds, so the guard matches the end of a word: <c>taklys</c>,
-	///     <c>vegglampe</c> and <c>benkbelysning</c> are all lights, whatever their ids end in.
-	/// </summary>
+	/// <summary>Norwegian writes lamps as compounds, so the guard matches the end of a word, not a whole one.</summary>
 	[TestMethod]
 	public void A_Compound_Norwegian_Lamp_Name_Excuses_The_Suffix()
 	{
@@ -94,7 +76,6 @@ public sealed class LightAuditTests
 		Assert.IsFalse(IsFlagged("light.kjokken_benkbelysning_led"));
 	}
 
-	/// <summary>An id that merely contains "led" in the middle is not a suffix, and is left alone.</summary>
 	[TestMethod]
 	public void Led_In_The_Middle_Of_A_Name_Is_Not_A_Suffix()
 	{
@@ -103,10 +84,7 @@ public sealed class LightAuditTests
 
 	// ===================== colour channels =====================
 
-	/// <summary>
-	///     A WiZ bulb publishes itself plus one entity per channel. Commanding the channels alongside the lamp
-	///     fights the lamp, so each channel is flagged and the reason names the parent.
-	/// </summary>
+	/// <summary>A WiZ bulb publishes itself plus one entity per channel, and commanding a channel fights the lamp.</summary>
 	[TestMethod]
 	public void A_Colour_Channel_Is_Flagged_When_Its_Lamp_Is_In_The_Room()
 	{
@@ -122,10 +100,6 @@ public sealed class LightAuditTests
 		Assert.IsFalse(IsFlagged("light.stue_vegglys", "Stue vegglys", room), "the lamp itself is the real light");
 	}
 
-	/// <summary>
-	///     A one-letter suffix on its own is far too thin a thing to accuse a light over, so the parent has to be
-	///     in the room. A lamp genuinely called "…W" that nobody duplicates is left alone.
-	/// </summary>
 	[TestMethod]
 	public void A_Channel_Suffix_Without_Its_Lamp_Is_Not_Flagged()
 	{
@@ -135,7 +109,6 @@ public sealed class LightAuditTests
 
 	// ===================== appliances =====================
 
-	/// <summary>The fridge, which is a light inside a machine and not a light in a room.</summary>
 	[TestMethod]
 	public void An_Appliance_Light_Is_Flagged()
 	{
@@ -143,8 +116,8 @@ public sealed class LightAuditTests
 	}
 
 	/// <summary>
-	///     <i>Oven</i> is Norwegian for "above", so <c>light.oven_gang</c> is the upstairs hallway. The appliance
-	///     list deliberately does not carry the bare word, and a substring match would have caught it anyway.
+	///     "Oven" is Norwegian for above, so <c>light.oven_gang</c> is the upstairs hallway. The appliance list
+	///     does not carry the bare word, and a substring match would catch it.
 	/// </summary>
 	[TestMethod]
 	public void An_Ordinary_Room_Light_Is_Not_Mistaken_For_An_Appliance()
@@ -155,7 +128,6 @@ public sealed class LightAuditTests
 
 	// ===================== the ordinary room =====================
 
-	/// <summary>Most rooms hold nothing but lamps, and the usual answer is silence.</summary>
 	[TestMethod]
 	public void A_Room_Of_Ordinary_Lamps_Raises_Nothing()
 	{
@@ -169,7 +141,6 @@ public sealed class LightAuditTests
 		Assert.AreEqual(0, suspects.Count);
 	}
 
-	/// <summary>Review keeps the order it was given, so a warning lists lights in the order the engine holds them.</summary>
 	[TestMethod]
 	public void Review_Reports_Suspects_In_The_Order_Given()
 	{
@@ -190,14 +161,9 @@ public sealed class LightAuditTests
 	private static RoomUnderReview Room(string name, params string[] entityIds) =>
 		new(name, [.. entityIds.Select(entityId => Light(entityId))]);
 
-	/// <summary>Nothing in the house has an area of its own — the case every assertion below turns on.</summary>
+	/// <summary>No light in the house has an area of its own. Every assertion below turns on that.</summary>
 	private static bool Homeless(string entityId) => false;
 
-	/// <summary>
-	///     <b>The finding, and it is one finding.</b> Two rooms both command the bulb, so the advice names both and
-	///     is raised once — a household reading it needs to know which two rooms are fighting, which is precisely
-	///     what one entry per room would leave out of each half.
-	/// </summary>
 	[TestMethod]
 	public void A_Bulb_Two_Rooms_Command_Earns_One_Piece_Of_Advice_Naming_Both()
 	{
@@ -214,10 +180,6 @@ public sealed class LightAuditTests
 		StringAssert.Contains(shared[0].Reason, "Kjøkken");
 	}
 
-	/// <summary>
-	///     The advice names the fix in the household's terms and nothing else. Nobody wrote their light groups
-	///     thinking about overlap, so a sentence about group topology is one nobody can act on.
-	/// </summary>
 	[TestMethod]
 	public void The_Advice_Says_To_Give_The_Bulb_An_Area_And_Nothing_About_Groups()
 	{
@@ -236,10 +198,6 @@ public sealed class LightAuditTests
 				$"the household never wrote their groups thinking about {word}, so the advice must not either");
 	}
 
-	/// <summary>
-	///     Three rooms is the same finding with a longer list, not three findings — and the list reads as a
-	///     sentence rather than as a dump.
-	/// </summary>
 	[TestMethod]
 	public void Three_Rooms_Sharing_A_Bulb_Are_All_Named_In_One_Piece_Of_Advice()
 	{
@@ -250,11 +208,7 @@ public sealed class LightAuditTests
 		StringAssert.Contains(shared[0].Reason, "Bad, Gang and Stue");
 	}
 
-	/// <summary>
-	///     A bulb Home Assistant <i>has</i> put in a room is somebody else's problem: that is the case the resolver's
-	///     own cross-area clip already catches and warns about, and saying it twice in two vocabularies is how a
-	///     reader ends up believing they are two different faults.
-	/// </summary>
+	/// <summary>A bulb with its own area is already caught by the resolver's cross-area clip, which warns about it.</summary>
 	[TestMethod]
 	public void A_Bulb_With_A_Room_Of_Its_Own_Is_Left_To_The_Cross_Area_Rule()
 	{
@@ -265,7 +219,7 @@ public sealed class LightAuditTests
 		Assert.AreEqual(0, shared.Count);
 	}
 
-	/// <summary>One room reaching the same bulb twice — through its group and again on its own — is one room.</summary>
+	/// <summary>One room reaches the bulb twice when it holds both the group and the bulb itself.</summary>
 	[TestMethod]
 	public void A_Bulb_Reached_Twice_By_One_Room_Is_Not_Shared()
 	{
@@ -275,7 +229,6 @@ public sealed class LightAuditTests
 		Assert.AreEqual(0, shared.Count, "one room commanding it twice is still one room");
 	}
 
-	/// <summary>The ordinary house, where every room has its own lamps and there is nothing to say.</summary>
 	[TestMethod]
 	public void Rooms_That_Share_Nothing_Raise_Nothing()
 	{
@@ -285,7 +238,6 @@ public sealed class LightAuditTests
 		Assert.AreEqual(0, shared.Count);
 	}
 
-	/// <summary>Every reason is a sentence a person can weigh, because weighing it is all they can do.</summary>
 	[TestMethod]
 	public void Every_Reason_Reads_As_Words()
 	{

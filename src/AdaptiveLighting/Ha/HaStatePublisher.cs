@@ -2,14 +2,7 @@ using AdaptiveLighting.Abstractions;
 
 namespace AdaptiveLighting.Ha;
 
-/// <summary>
-///     Publishes area snapshots as Home Assistant events, and logs them.
-/// </summary>
-/// <remarks>
-///     An HA event is enough to build an automation or a dashboard on, and costs nothing when nobody listens.
-///     A per-area MQTT entity would be friendlier to the HA UI and is the obvious next step — which is the
-///     whole reason this sits behind <see cref="IStatePublisher"/> rather than inside the state machine.
-/// </remarks>
+/// <summary>Publishes area snapshots as Home Assistant events, and logs them.</summary>
 public sealed class HaStatePublisher : IStatePublisher
 {
 	/// <summary>The event type area snapshots are published under.</summary>
@@ -18,9 +11,6 @@ public sealed class HaStatePublisher : IStatePublisher
 	private readonly IHaContext _ha;
 	private readonly ILogger _logger;
 
-	/// <summary>Creates a publisher.</summary>
-	/// <param name="ha">Where the events go.</param>
-	/// <param name="logger">The second sink: the log line is what you read when the event bus is not open.</param>
 	public HaStatePublisher(IHaContext ha, ILogger logger)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
@@ -37,14 +27,14 @@ public sealed class HaStatePublisher : IStatePublisher
 			snapshot.AreaName, snapshot.State, snapshot.Reason, snapshot.Mode, snapshot.IsDark,
 			snapshot.PeriodName, snapshot.BrightnessPct, snapshot.ColorTempKelvin);
 
-		// Called from inside an area's lock, so a throw here would take the area's thread with it. There is
-		// nothing useful to do about a failed event either way: the log line above already carries the news.
+		// Called from inside an area's lock, so a throw here takes the area's thread with it. The log line above
+		// already carries the news.
 		try
 		{
+			// Fields here are only ever added, never renamed or removed: consumers bind them by name.
 			_ha.SendEvent(EventType, new
 			{
 				area = snapshot.AreaName,
-				// Additive: a consumer that never learned about area_id keeps reading `area` exactly as before.
 				area_id = snapshot.AreaId,
 				state = snapshot.State.ToString(),
 				reason = snapshot.Reason.ToString(),
@@ -61,16 +51,10 @@ public sealed class HaStatePublisher : IStatePublisher
 				next_change_at = snapshot.NextChangeAt,
 				next_change_from = snapshot.NextChangeFrom,
 				darkness_detail = snapshot.DarknessDetail,
-				// Additive, exactly as area_id was: a consumer that never learned about the auto-on gate reads
-				// every field it already knew unchanged, and sees them as absent rather than as "nothing blocks".
 				auto_on_blocked_by = snapshot.AutoOnBlockedBy?.ToString(),
 				auto_on_blocking_entity = snapshot.AutoOnBlockingEntity,
-				// Additive again: which of this room's levels it names for itself during this period, absent on a
-				// consumer's side rather than reading as "none" if they never learned about it.
 				levels_from_room = snapshot.LevelsFromRoom?.ToString(),
-				// Presence, and what is holding the house mode. Flattened rather than nested so a template or an
-				// automation trigger can read one field without walking an object: `mode` says Away, and these say
-				// whether that is an empty house or an entity holding the mode over a full one.
+				// Flat, not nested, so an automation trigger can read one field without walking an object.
 				is_anyone_home = snapshot.IsAnyoneHome,
 				mode_forced_kind = snapshot.Forced?.Kind.ToString(),
 				mode_forced_option = snapshot.Forced?.OptionValue,

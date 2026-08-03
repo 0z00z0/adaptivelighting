@@ -1,16 +1,12 @@
 @*
-	A number chosen from sensible presets, with typing as the escape rather than the default.
-
-	The same shape as EntityPicker on purpose: the dropdown is the primary path, the free number field is one
-	click away behind the same "Enter a value" / "Pick from list" toggle, and a stored value that is not on
-	the preset list is shown as its own selected entry rather than being snapped to a neighbour — a filter is
-	never a reason for a configured value to silently change.
+	A number chosen from presets, with a free number field one click away behind the same toggle EntityPicker
+	uses. A stored value not on the list is shown as its own entry, never snapped to a neighbour.
 *@
 
 <span class="preset">
 	@if (_manual)
 	{
-		@* Invariant, always — see Invariant below. A number written into an HTML attribute is not prose. *@
+		@* Invariant, always. See Invariant below. *@
 		<input class="cell num" type="number" step="@Invariant(Step)" min="@Invariant(Min)" max="@Invariant(Max)" value="@Invariant(Value)" @onchange="OnTyped" />
 		@if (Unit is { Length: > 0 })
 		{
@@ -37,11 +33,9 @@
 </span>
 
 @code {
-	/// <summary>The current value.</summary>
 	[Parameter]
 	public double Value { get; set; }
 
-	/// <summary>Raised with the new value.</summary>
 	[Parameter]
 	public EventCallback<double> ValueChanged { get; set; }
 
@@ -69,8 +63,8 @@
 
 	private bool IsUnlisted => !Options.Any(option => Matches(option.Value, Value));
 
-	// Keys are invariant strings of the value itself, so the select round-trips without an index that would
-	// go stale when a custom entry appears.
+	// Keys are invariant strings of the value, so the select round-trips without an index that would go stale
+	// when a custom entry appears.
 	private static string Key(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
 	private string Custom(double value) =>
@@ -78,15 +72,9 @@
 
 	private static bool Matches(double left, double right) => Math.Abs(left - right) < 0.001;
 
-	/// <summary>
-	///     A number bound for an HTML attribute.
-	/// </summary>
-	/// <remarks>
-	///     Razor renders a bare <c>@double</c> attribute through <c>object.ToString()</c>, which is the current
-	///     culture's. A Norwegian host writes 62.5 as <c>value="62,5"</c>, which is not a number to any browser: the
-	///     field renders empty over a value that exists, and a <c>step</c> or <c>min</c> in the same shape silently
-	///     drops the constraint. The same reason <c>Stepper</c> formats its own, and the board its percentages.
-	/// </remarks>
+	/// <summary>A number bound for an HTML attribute.</summary>
+	// Razor renders a bare @double through the current culture. Under nb-NO 62.5 becomes value="62,5", which
+	// no browser reads as a number: the field shows empty, and a step or min in that shape drops silently.
 	private static string Invariant(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
 
 	private void ToggleMode() => _manual = !_manual;

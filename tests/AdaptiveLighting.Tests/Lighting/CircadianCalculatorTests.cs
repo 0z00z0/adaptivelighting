@@ -7,8 +7,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     The circadian table: which period is active, what it targets, how the caps bite, and how the blend runs.
 /// </summary>
 /// <remarks>
-///     A pure function of (periods, sun times, instant), so these tests need no fakes and no scheduler at all —
-///     the instant is simply an argument. That is the whole point of the delegate the calculator takes.
+///     A pure function of periods, sun times and instant, so these tests need no fakes and no scheduler; the
+///     instant is an argument.
 /// </remarks>
 [TestClass]
 public sealed class CircadianCalculatorTests
@@ -28,10 +28,7 @@ public sealed class CircadianCalculatorTests
 		IReadOnlyList<RoomLevelOverride>? levels = null) =>
 		new(periods ?? Table, new GlobalConfig { SmoothTransitions = false }, () => sun ?? SunTimes.Unknown, levels);
 
-	/// <summary>
-	///     What is left of the clamp once a period's configurable floor and ceiling are gone: the physical bound.
-	///     A lamp cannot be set to 140 % or to -5, and that is not a preference anybody may configure away.
-	/// </summary>
+	/// <summary>Only the physical bound is left; the per-period floor and ceiling were cut.</summary>
 	[TestMethod]
 	public void Clamp_Honours_The_Physical_Range_And_Nothing_Else()
 	{
@@ -120,7 +117,7 @@ public sealed class CircadianCalculatorTests
 			new() { Name = "night", Start = "22:30", BrightnessPct = 15 }
 		};
 
-		// Polar night: there is no sunrise to anchor to. The fixed period must still cover the whole day.
+		// Polar night: no sunrise to anchor to, so the fixed period covers the day alone.
 		Assert.AreEqual("night", Stepped(table, SunTimes.Unknown).GetTarget(At(12))!.PeriodName);
 	}
 
@@ -138,21 +135,19 @@ public sealed class CircadianCalculatorTests
 		var calc = new CircadianCalculator(table, new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown);
 		calc.PeriodDropped += raised.Add;
 
-		// The unparseable period is known at construction — before any evaluation, before any subscriber — so it
-		// is read off DroppedPeriods rather than the event.
+		// An unparseable Start is known at construction, before any subscriber exists, so it surfaces on the
+		// DroppedPeriods property. An unplaceable sun anchor surfaces on evaluation, through the event.
 		CollectionAssert.Contains(
 			calc.DroppedPeriods.ToList(),
 			new DroppedPeriod("broken", "half past tea", PeriodDropReason.Unparseable),
 			"an unparseable Start is surfaced up front, so a vanished period is not a silent hole");
 
-		// The sun-anchored 'dawn' cannot be placed with unknown sun times: that surfaces on evaluation, via the event.
 		calc.GetTarget(At(12));
 		CollectionAssert.Contains(
 			raised,
 			new DroppedPeriod("dawn", "sunrise", PeriodDropReason.Unresolvable),
 			"a sun-anchored period with no sun data is surfaced once it is evaluated");
 
-		// Dedupe: a whole day of ticks against the same unresolvable boundary must not surface it again.
 		for (var i = 0; i < 1440; i++)
 			calc.GetTarget(At(12));
 
@@ -177,7 +172,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void Halfway_Through_The_Blend_The_Target_Is_Halfway_Between_The_Periods()
 	{
-		// 18:15 is 15 of 30 blend minutes past the evening boundary: halfway from day (90/4500) to evening (70/2700).
+		// 18:15 is 15 of 30 blend minutes past the boundary: halfway from day (90/4500) to evening (70/2700).
 		var target = Blended().GetTarget(At(18, 15))!;
 
 		Assert.AreEqual("evening", target.PeriodName, "the period being arrived at is the one that names the target");
@@ -290,7 +285,6 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual(RoomLevelSource.Brightness | RoomLevelSource.ColorTemp, target.FromRoom);
 	}
 
-	/// <summary>Keyed by name, so the room's levels follow the period they were written about — and match it as every other period lookup does, ignoring case.</summary>
 	[TestMethod]
 	public void A_Rooms_Levels_Match_Their_Period_By_Name_Ignoring_Case()
 	{
@@ -302,7 +296,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Rooms_Levels_Naming_No_Period_Change_Nothing_And_Cost_Nothing()
 	{
-		// Almost always a period that has been renamed. The validator reports it; here it is simply never matched.
+		// Almost always a renamed period. The validator warns; the engine never matches it.
 		var levels = new List<RoomLevelOverride> { new() { Period = "kveld", BrightnessPct = 40 } };
 
 		var target = Stepped(levels: levels).GetTarget(At(20))!;
@@ -324,7 +318,6 @@ public sealed class CircadianCalculatorTests
 			"first wins, matching the warning the validator raises about it");
 	}
 
-	/// <summary>An empty row must not shadow a later row that actually says something.</summary>
 	[TestMethod]
 	public void An_Empty_Row_Does_Not_Shadow_A_Later_Row_For_The_Same_Period()
 	{
@@ -337,21 +330,12 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual(40d, Stepped(levels: levels).GetTarget(At(20))!.BrightnessPct);
 	}
 
-	// ===================== the period's caps still bind a room =====================
-
-
-
-
 	// ===================== blending across a boundary a room owns one side of =====================
 
 	/// <summary>
-	///     <b>The part most likely to be quietly wrong.</b> What is interpolated must be the room's own two
-	///     endpoints, not the house's.
+	///     The room's own endpoints are what gets interpolated. Blending the house's and replacing afterwards puts
+	///     a step where the blend exists to remove one.
 	/// </summary>
-	/// <remarks>
-	///     Blending the house's endpoints and replacing the result afterwards would put a step exactly where the
-	///     blend exists to remove one: the room would run the house's level right up to the boundary and then jump.
-	/// </remarks>
 	[TestMethod]
 	public void A_Blend_Into_An_Overridden_Period_Arrives_At_The_Rooms_Level_Not_The_Houses()
 	{
@@ -365,7 +349,6 @@ public sealed class CircadianCalculatorTests
 		Assert.AreNotEqual(80d, target.BrightnessPct, "80 is the house's blend — reaching it means the room was applied too late");
 	}
 
-	/// <summary>The other side of the same boundary: the period being left is read through the room too.</summary>
 	[TestMethod]
 	public void A_Blend_Out_Of_An_Overridden_Period_Departs_From_The_Rooms_Level()
 	{
@@ -380,7 +363,6 @@ public sealed class CircadianCalculatorTests
 			"the flag describes the period being arrived at, which this room does not override");
 	}
 
-	/// <summary>Independence survives the blend: an overridden brightness must not drag the colour off the house's curve.</summary>
 	[TestMethod]
 	public void A_Blend_Interpolates_The_Two_Values_Independently()
 	{
@@ -394,7 +376,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Blend_Across_Midnight_Departs_From_The_Rooms_Wrapped_Level()
 	{
-		// 07:15 arrives at day from the wrapped night period, which this room runs at 5 rather than 15.
+		// 07:15 arrives at day from the wrapped night period; this room runs that night at 5, not 15.
 		var levels = new List<RoomLevelOverride> { new() { Period = "night", BrightnessPct = 5 } };
 
 		Assert.AreEqual(47.5, Blended(levels: levels).GetTarget(At(7, 15))!.BrightnessPct, 0.001,
@@ -405,9 +387,8 @@ public sealed class CircadianCalculatorTests
 	// ===================== the sleep clamp reaches the room's night, not the house's =====================
 
 	/// <summary>
-	///     A room that runs the night dimmer than the house means it at 03:00 too. The sleep clamp reads its
-	///     ceiling off this, so a version that returned the house's night would hand the room a ceiling it had
-	///     already said was too bright.
+	///     The sleep clamp reads its ceiling off this call, so returning the house's night would hand a room a
+	///     ceiling brighter than the one it asked for.
 	/// </summary>
 	[TestMethod]
 	public void GetPeriodTarget_Reaches_The_Rooms_Levels_For_That_Period()
@@ -456,7 +437,7 @@ public sealed class CircadianCalculatorTests
 
 	// ===================== the period override (Home Assistant decides) =====================
 
-	/// <summary>A calculator following a dropdown rather than the clock. Blending on, so the step is visible.</summary>
+	/// <summary>A calculator following a dropdown instead of the clock, with blending on so a step is visible.</summary>
 	private static CircadianCalculator Following(
 		Func<string?> periodOverride,
 		IReadOnlyList<RoomLevelOverride>? levels = null) =>
@@ -474,10 +455,6 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual(2200, calc.GetTarget(At(12))!.ColorTempKelvin);
 	}
 
-	/// <summary>
-	///     The name and the levels come from one resolution, so a card and a lamp cannot disagree about which
-	///     period is in force.
-	/// </summary>
 	[TestMethod]
 	public void Override_MakesActivePeriodNameAndGetTargetAgree()
 	{
@@ -501,10 +478,6 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual("night", calc.ActivePeriodName(At(23)));
 	}
 
-	/// <summary>
-	///     A mapping the validator refuses and the reader reports falls back rather than taking the room dark. Both
-	///     halves are already said out loud; commanding nothing on top of that would cost a room over a typo.
-	/// </summary>
 	[TestMethod]
 	public void Override_NamingNoConfiguredPeriod_FallsBackToTheSchedule()
 	{
@@ -522,8 +495,8 @@ public sealed class CircadianCalculatorTests
 	}
 
 	/// <summary>
-	///     The room's own levels still apply — <c>LevelsOf</c> is inside <c>GetPeriodTarget</c>, which is the whole
-	///     reason the override routes through it rather than reading the period's raw values.
+	///     <c>LevelsOf</c> sits inside <c>GetPeriodTarget</c>. The override routes through it for that reason,
+	///     never through the period's raw values.
 	/// </summary>
 	[TestMethod]
 	public void Override_StillAppliesTheRoomsOwnLevels()
@@ -538,9 +511,8 @@ public sealed class CircadianCalculatorTests
 	}
 
 	/// <summary>
-	///     <b>The step is intended.</b> A selected period began the instant somebody moved the dropdown, so there is
-	///     no boundary time to interpolate away from; a synthetic one would be the engine easing toward a period
-	///     already in force. Pinned so nobody "fixes" it into a blend later.
+	///     The step is intended. A selected period has no boundary time to interpolate away from. Pinned so
+	///     nobody turns it into a blend later.
 	/// </summary>
 	[TestMethod]
 	public void Override_IsAStep_NotABlend()
@@ -560,8 +532,8 @@ public sealed class CircadianCalculatorTests
 	}
 
 	/// <summary>
-	///     The sleep clamp asks for a period <i>by name</i>, and a caller that named one must get the one it named —
-	///     otherwise a house that selected "day" would have its night clamp quietly hand back the day's levels.
+	///     The sleep clamp asks for a period by name. If the override reached here, a house that selected "day"
+	///     would have its night clamp hand back the day's levels.
 	/// </summary>
 	[TestMethod]
 	public void Override_DoesNotReachGetPeriodTarget()

@@ -6,11 +6,6 @@ namespace AdaptiveLighting.Tests.Lighting;
 /// <summary>
 ///     What a room runs instead of the schedule, as the levels card reads and writes it.
 /// </summary>
-/// <remarks>
-///     The two failures worth guarding are both silent. A table that writes a row for every period it draws pins
-///     values nobody chose and the schedule stops reaching the room; a table that drops a row for a period that
-///     has been renamed throws the room's levels away at the moment they most look like a mistake.
-/// </remarks>
 [TestClass]
 public sealed class RoomLevelsTests
 {
@@ -25,16 +20,9 @@ public sealed class RoomLevelsTests
 	private static AreaConfig Room() => new() { AreaId = "kontor" };
 
 	/// <summary>
-	///     The card reads the row the engine reads: the first that states something, not simply the first.
+	///     Regression: the card and <c>CircadianCalculator.LevelsOf</c> disagreed here. Both now skip empty rows
+	///     before taking the first match. Reachable only on a hand-edited file; save normalises empty rows away.
 	/// </summary>
-	/// <remarks>
-	///     <b>The page and the engine disagreed on exactly this input.</b> <c>CircadianCalculator.LevelsOf</c>
-	///     skips empty rows before taking the first match; the card took the first row whatever it held. A
-	///     hand-edited file with a cleared row above a real one therefore ran at the real one's level while the
-	///     card showed the schedule's, labelled it "the schedule's", and offered no way to revert an override it
-	///     had decided did not exist. Only reachable on a hand-edited file — the app's own save normalises empty
-	///     rows away — which is the one file where nothing else would explain it.
-	/// </remarks>
 	[TestMethod]
 	public void A_Cleared_Row_Does_Not_Hide_The_Real_One_Below_It()
 	{
@@ -52,7 +40,6 @@ public sealed class RoomLevelsTests
 			"and has to call it the room's, or there is no control to undo it with");
 	}
 
-	/// <summary>A room that says nothing runs the schedule, and every row says so.</summary>
 	[TestMethod]
 	public void A_Room_With_No_Levels_Of_Its_Own_Shows_The_Schedule_Throughout()
 	{
@@ -71,13 +58,6 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(4500, rows[1].ColorTempKelvin);
 	}
 
-	/// <summary>
-	///     The two values are independent: overriding one leaves the other following the schedule.
-	/// </summary>
-	/// <remarks>
-	///     The coupling this rules out is the one the schema's own remarks name — filling both in because the
-	///     type has two fields, after which a schedule edit silently stops reaching half the room.
-	/// </remarks>
 	[TestMethod]
 	public void Setting_One_Value_Leaves_The_Other_Following_The_Schedule()
 	{
@@ -93,7 +73,6 @@ public sealed class RoomLevelsTests
 		Assert.IsNull(room.Levels.Single().ColorTempKelvin, "and it is stored as null, not as today's number");
 	}
 
-	/// <summary>Drawing four rows must not write four rows.</summary>
 	[TestMethod]
 	public void Reading_The_Table_Writes_Nothing()
 	{
@@ -105,13 +84,6 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(0, room.Levels.Count);
 	}
 
-	/// <summary>
-	///     Clearing the last value on a row removes the row, rather than leaving one that says nothing.
-	/// </summary>
-	/// <remarks>
-	///     A row left behind would be counted as an override by everything that reads the list, so the room would
-	///     report itself as disagreeing with a schedule it now follows exactly.
-	/// </remarks>
 	[TestMethod]
 	public void Clearing_The_Last_Value_Drops_The_Row()
 	{
@@ -129,7 +101,6 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(0, RoomLevels.OwnCount(Day(), room));
 	}
 
-	/// <summary>Clearing returns the row to the schedule rather than pinning today's number.</summary>
 	[TestMethod]
 	public void Clearing_Returns_The_Row_To_Whatever_The_Schedule_Says_Next()
 	{
@@ -146,14 +117,7 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(LevelSource.Schedule, row.Brightness);
 	}
 
-	/// <summary>
-	///     A room may pin the value the schedule already has, and that is a decision the table must keep showing.
-	/// </summary>
-	/// <remarks>
-	///     Provenance is read off the schema's <c>null</c>, never guessed by comparing numbers: pinning 70 % while
-	///     the schedule also says 70 % is a choice taken precisely so a later change to the schedule leaves this
-	///     room alone.
-	/// </remarks>
+	/// <summary>Provenance comes from the schema's null. Comparing numbers would erase a room that pins 70 % over 70 %.</summary>
 	[TestMethod]
 	public void A_Value_Equal_To_The_Schedules_Is_Still_The_Rooms_Own()
 	{
@@ -166,7 +130,6 @@ public sealed class RoomLevelsTests
 		Assert.IsTrue(row.IsOwn);
 	}
 
-	/// <summary>A period the room names but the schedule no longer has is reported, not dropped.</summary>
 	[TestMethod]
 	public void A_Renamed_Period_Leaves_An_Orphan_That_Is_Shown_And_Named()
 	{
@@ -184,7 +147,6 @@ public sealed class RoomLevelsTests
 		Assert.IsTrue(orphan.Says.Contains("25", StringComparison.Ordinal), "it says what removing it would throw away");
 	}
 
-	/// <summary>And it can be removed, so an override that survived a rename is not a trap.</summary>
 	[TestMethod]
 	public void An_Orphan_Can_Be_Removed()
 	{
@@ -197,12 +159,9 @@ public sealed class RoomLevelsTests
 	}
 
 	/// <summary>
-	///     Matching follows the engine's own precedent for a period name, which is case-insensitive.
+	///     Period names match case-insensitively, as the engine matches them. Ordinal matching would orphan every
+	///     row for a recased period while the engine went on applying it.
 	/// </summary>
-	/// <remarks>
-	///     Ordinal matching would make a period recased in the schedule orphan every room's levels for it, while
-	///     the engine went on applying them — a surface disagreeing with the engine about which rows are live.
-	/// </remarks>
 	[TestMethod]
 	public void A_Recased_Period_Name_Still_Finds_The_Rooms_Row()
 	{
@@ -213,7 +172,6 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(0, RoomLevels.Orphans(Day(), room).Count);
 	}
 
-	/// <summary>Editing the same period twice edits one row rather than adding another.</summary>
 	[TestMethod]
 	public void Two_Edits_To_One_Period_Are_One_Row()
 	{
@@ -231,7 +189,6 @@ public sealed class RoomLevelsTests
 
 
 
-	/// <summary>An empty row already in the file is neither counted nor reported as an orphan.</summary>
 	[TestMethod]
 	public void A_Row_That_Says_Nothing_Is_Ignored_Wherever_It_Came_From()
 	{
@@ -242,13 +199,7 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(0, RoomLevels.Orphans(Day(), room).Count);
 	}
 
-	/// <summary>
-	///     The count is of periods on screen, so it can never disagree with the marks in the table.
-	/// </summary>
-	/// <remarks>
-	///     Counting the stored rows would include one kept for a period that no longer exists, and the card would
-	///     read "1 of 4 periods are this room's own" over four rows with no mark on any of them.
-	/// </remarks>
+	/// <summary>The count is of periods on screen, so it cannot disagree with the marks in the table.</summary>
 	[TestMethod]
 	public void An_Orphan_Is_Not_Counted_Among_The_Periods_On_Screen()
 	{
@@ -263,7 +214,6 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(1, RoomLevels.OwnCount(Day(), room));
 	}
 
-	/// <summary>A hand-edited file with two rows for one period reads the first, stably.</summary>
 	[TestMethod]
 	public void Two_Rows_For_One_Period_Read_As_The_First()
 	{
@@ -274,13 +224,7 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(10, RoomLevels.Rows(Day(), room).Single(r => r.Period == "dag").BrightnessPct);
 	}
 
-	/// <summary>
-	///     A row carrying values but no period name reaches the surface, and is named for what it is.
-	/// </summary>
-	/// <remarks>
-	///     Normalisation drops a row that says nothing; a row that says something under no name survives it. Shown
-	///     as its blank name it would be a remove button beside an empty space.
-	/// </remarks>
+	/// <summary>Normalisation drops a row that says nothing; a row that says something under no name survives it.</summary>
 	[TestMethod]
 	public void A_Row_With_No_Period_Name_Is_Reported_And_Called_Something()
 	{
@@ -293,7 +237,6 @@ public sealed class RoomLevelsTests
 		Assert.IsTrue(orphan.Name.Length > 0, "but it is not drawn as a blank");
 	}
 
-	/// <summary>A schedule with no periods has nothing to draw, and no room disagrees with it.</summary>
 	[TestMethod]
 	public void An_Empty_Schedule_Draws_No_Rows()
 	{

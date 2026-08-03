@@ -2,100 +2,46 @@ namespace AdaptiveLighting.Engine;
 
 /// <summary>
 ///     One light as the audit reads it: the id the engine would command, and the name a person would recognise.
+///     <c>Name</c> is the <c>friendly_name</c>, or the entity id when it has none.
 /// </summary>
-/// <param name="EntityId">The <c>light.*</c> entity id.</param>
-/// <param name="Name">
-///     Home Assistant's <c>friendly_name</c>, or the entity id when it has none. Read as well as the id because a
-///     household renames the thing it can see, and an access point renamed "Stue" should stop reading as a lamp.
-/// </param>
 public sealed record LightUnderReview(string EntityId, string Name);
 
 /// <summary>
-///     One light the audit is not convinced is a light, and why, in a person's words.
+///     One light the audit is not convinced is a light, and why, in a person's words. <c>Reason</c> is never a
+///     rule id: the reader has to be able to judge the guess.
 /// </summary>
-/// <param name="EntityId">The entity id.</param>
-/// <param name="Name">Its friendly name.</param>
-/// <param name="Reason">
-///     What made it suspect, written to be read beside the name. Never a rule id: the reader has to be able to
-///     judge the guess, because a guess is all this is.
-/// </param>
 public sealed record SuspectLight(string EntityId, string Name, string Reason);
 
 /// <summary>
-///     One room as the cross-room half of the audit reads it: what it is called, and every bulb it ends up
-///     commanding.
+///     One room as the cross-room half of the audit reads it. <c>Lights</c> holds bulbs with groups already
+///     followed down to their members, because two rooms reaching one bulb through two different groups settle on
+///     two different ids and have nothing in common to compare.
 /// </summary>
-/// <param name="Room">The room's display name — what the advice will call it, so it must be the name a person knows.</param>
-/// <param name="Lights">
-///     The bulbs the room actually commands, with light groups already followed down to their members — not the
-///     ids <see cref="AreaEntityResolver"/> settled on. The difference is the whole case: two rooms reaching one
-///     bulb through two different groups settle on two different ids and have nothing in common to compare, while
-///     the bulb underneath is commanded by both.
-/// </param>
 public sealed record RoomUnderReview(string Room, IReadOnlyList<LightUnderReview> Lights);
 
 /// <summary>
 ///     Looks over the lights a room would command and points at the ones that are probably not room lighting.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Advice, never a filter.</b> One live house has a <c>stue</c> area that resolves to 34 lights, among
-///         them three Ubiquiti access-point status LEDs, four relay- and dev-board indicators, five WiZ colour
-///         channels of a lamp the room already commands under its own name, and a fridge. Switching that room on
-///         commands all of them. But Home Assistant's <c>entity_category</c> — the field that would settle it — is
-///         not exposed by HassModel 26.21.0 (<c>EntityRegistration</c> offers <c>Id</c>, <c>Name</c>, <c>Area</c>,
-///         <c>Device</c>, <c>Labels</c>, <c>Platform</c> and <c>Options</c>, and no category), so everything here
-///         is a heuristic on an id and a name. A heuristic may point; it may never quietly drop a light. The
-///         household knows its own house and this does not.
-///     </para>
-///     <para>
-///         <b>The failure that matters is the false positive.</b> Somebody talked out of managing a real lamp
-///         because this called it an indicator is worse off than before, and has no way to tell they were misled.
-///         So the rules are asymmetric on purpose: a word that <i>accuses</i> has to match a whole word, while a
-///         word that <i>excuses</i> need only appear inside one — Norwegian writes its lamps as <c>taklys</c>,
-///         <c>vegglampe</c> and <c>benkbelysning</c>, and a guard that missed those would flag the ceiling light.
-///     </para>
-///     <para>
-///         Pure, and expected to be tuned. These are one house's patterns; somebody reading them against their own
-///         house should be able to see what each rule is for and change it.
-///     </para>
+///     Advice, never a filter. Home Assistant's <c>entity_category</c>, the field that would settle it, is not
+///     exposed by HassModel 26.21.0, so everything here is a heuristic on an id and a name. The rules are
+///     asymmetric: a word that accuses must match a whole word, while a word that excuses need only appear inside
+///     one, because Norwegian writes its lamps as <c>taklys</c> and <c>benkbelysning</c>.
 /// </remarks>
 public static class LightAudit
 {
-	/// <summary>
-	///     Words that only ever describe a device reporting on itself.
-	/// </summary>
-	/// <remarks>
-	///     No room lamp is called a status or an indicator, in either language this house speaks, so this is the
-	///     one rule trusted against the friendly name as well as the id, and the one that runs first. It is what
-	///     catches <c>light.lab_taklys_status_led</c> and <c>light.lab_taklys_indikator</c> — both of which carry
-	///     <i>taklys</i> (ceiling light) and would otherwise be excused by the lamp guard below.
-	/// </remarks>
+	// Trusted against the friendly name as well as the id, and run first: light.lab_taklys_status_led carries
+	// "taklys" and the lamp guard below would otherwise excuse it.
 	private static readonly string[] StatusWords = ["status", "indicator", "indikator"];
 
-	/// <summary>
-	///     Words that say a thing is a lamp, which stand the <c>_led</c> rule down.
-	/// </summary>
-	/// <remarks>
-	///     The guard for the false positive that matters. An LED strip, an LED spot and an LED panel are real
-	///     lights whose names carry the same three letters as an access point's indicator; a name that says what
-	///     it illuminates has already answered the question the suffix was asking.
-	/// </remarks>
+	// These stand the _led rule down. An LED strip, spot or panel is a real light.
 	private static readonly string[] LampWords =
 	[
 		"lys", "lampe", "lamp", "light", "strip", "stripe", "spot", "bulb", "pære", "paere", "downlight", "pendel"
 	];
 
-	/// <summary>
-	///     Things that plug in and happen to expose a light.
-	/// </summary>
-	/// <remarks>
-	///     A fridge's interior bulb is the live case (<c>light.kjoleskap_colour_light</c>), and it is the same
-	///     class of mistake as the illuminance sensor inside the same fridge that <c>AreaEntityResolver</c>
-	///     already has a story about. Deliberately short and specific. Bare <c>oven</c> is <b>not</b> here even
-	///     though the appliance is: <i>oven</i> is Norwegian for "above", so <c>light.oven_gang</c> is the upstairs
-	///     hallway, and a list that accused it would be exactly the false positive this class is careful about.
-	/// </remarks>
+	// Things that plug in and happen to expose a light. Short and specific. Bare "oven" is not here: it is
+	// Norwegian for "above", so light.oven_gang is the upstairs hallway.
 	private static readonly string[] ApplianceWords =
 	[
 		"kjoleskap", "kjoeleskap", "kjøleskap", "fridge", "refrigerator", "freezer", "fryser",
@@ -104,26 +50,14 @@ public static class LightAudit
 		"printer"
 	];
 
-	/// <summary>
-	///     Suffixes a colour-capable lamp is split into by some integrations.
-	/// </summary>
-	/// <remarks>
-	///     WiZ publishes a bulb as itself plus one entity per channel — <c>_r</c>, <c>_g</c>, <c>_b</c>, <c>_w</c>
-	///     and an <c>_on_off</c> — so a room holding <c>light.stue_vegglys</c> also holds five sub-entities of it,
-	///     and commanding the channels alongside the lamp fights the lamp. Flagged only when the parent is in the
-	///     same room: a one-letter suffix on its own is far too thin a thing to accuse a light over.
-	/// </remarks>
+	// WiZ publishes a bulb as itself plus one entity per channel, and commanding the channels fights the lamp.
+	// Flagged only when the parent is in the same room: a one-letter suffix alone is too thin to accuse on.
 	private static readonly string[] ChannelSuffixes = ["_r", "_g", "_b", "_w", "_on_off"];
 
 	/// <summary>
-	///     The lights in <paramref name="lights"/> that look like something other than room lighting.
+	///     The lights in <paramref name="lights"/> that look like something other than room lighting, in the order
+	///     given. Empty is the usual answer.
 	/// </summary>
-	/// <param name="lights">
-	///     Every light the room would command, as the resolver settled it — groups already preferred over their
-	///     members, so a flagged entity is one that really would be driven.
-	/// </param>
-	/// <returns>One entry per suspect, in the order given. Empty when nothing looks wrong, which is the usual answer.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="lights"/> is <c>null</c>.</exception>
 	public static IReadOnlyList<SuspectLight> Review(IReadOnlyList<LightUnderReview> lights)
 	{
 		ArgumentNullException.ThrowIfNull(lights);
@@ -140,15 +74,12 @@ public static class LightAudit
 
 	/// <summary>
 	///     Why <paramref name="light"/> looks wrong, or <c>null</c> when it looks like a light.
+	///     <paramref name="present"/> is every entity id in the same room, for the colour-channel sibling check.
 	/// </summary>
 	/// <remarks>
-	///     Ordered, and the order is load-bearing: the status rule runs before the lamp guard, so a ceiling light's
-	///     status LED is still caught by the word that describes the entity rather than excused by the word that
-	///     describes its device.
+	///     The order is load-bearing: the status rule runs before the lamp guard, so a ceiling light's status LED
+	///     is caught by the word describing the entity and not excused by the word describing its device.
 	/// </remarks>
-	/// <param name="light">The light to judge.</param>
-	/// <param name="present">Every entity id in the same room, for the colour-channel rule's sibling check.</param>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static string? ReasonFor(LightUnderReview light, IReadOnlySet<string> present)
 	{
 		ArgumentNullException.ThrowIfNull(light);
@@ -156,9 +87,8 @@ public static class LightAudit
 
 		string id = ObjectIdOf(light.EntityId);
 
-		// A light with no friendly name arrives named by its own entity id, and the domain in front of it is the
-		// word "light" — which the lamp guard below would read as a description and use to excuse every hardware
-		// LED in the house. Read as the object id in that case rather than as somebody's prose.
+		// A light with no friendly name arrives named by its entity id, whose domain is the word "light", and the
+		// lamp guard would read that as a description and excuse every hardware LED in the house.
 		string name = string.Equals(light.Name, light.EntityId, StringComparison.Ordinal) ? id : Normalise(light.Name);
 
 		if (HasWord(id, StatusWords) || HasWord(name, StatusWords))
@@ -167,8 +97,7 @@ public static class LightAudit
 		if (ChannelParentOf(light.EntityId, present) is { Length: > 0 } parent)
 			return $"one colour channel of {ObjectIdOf(parent)}, which this room already commands as a whole lamp";
 
-		// Read off the id, not the name: an entity id is the slug an integration generated, so a trailing "_led"
-		// there is a naming convention rather than a person's description of their lamp.
+		// Off the id, not the name: a trailing "_led" in a generated slug is a convention, not a description.
 		if (id.EndsWith("_led", StringComparison.Ordinal) && !SuggestsLamp(id) && !SuggestsLamp(name))
 			return "the name ends in LED, the usual mark of a hardware status light";
 
@@ -182,40 +111,12 @@ public static class LightAudit
 	///     The bulbs more than one room will command, because Home Assistant has not put them in a room at all.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         <b>The gap the per-area rules cannot see.</b> <see cref="AreaEntityResolver"/> drops a light group
-	///         that reaches into <i>another</i> area, and settles overlapping groups against each other within one
-	///         area. Neither catches a bulb that belongs to no area: it is not foreign to either room, because it is
-	///         not anybody's, so both rooms resolve it through their own group and both command it. What follows is
-	///         two rooms setting each other's brightness and each switching the other's lamp off on its own vacancy
-	///         timer.
-	///     </para>
-	///     <para>
-	///         <b>Advice, and only advice — the same doctrine as the rest of this class.</b> The engine goes on
-	///         commanding the bulb from both rooms, because the alternative is choosing a room for it and leaving
-	///         the other one dark, and a bulb dropped from a room is a worse fault than a bulb commanded twice. So
-	///         this says so, loudly, and names the one thing the household can do about it.
-	///     </para>
-	///     <para>
-	///         One entry per bulb, never one per room: the finding is that <i>these</i> rooms share <i>this</i>
-	///         light, and saying it once in both rooms' words is a fact, while saying it once per room is the same
-	///         fact twice with half of it missing each time.
-	///     </para>
+	///     The gap the per-area rules cannot see. <see cref="AreaEntityResolver"/> drops a group reaching into
+	///     another area and settles overlapping groups within one area; neither catches a bulb belonging to no
+	///     area, so both rooms resolve it and both command it. One entry per bulb, never one per room.
+	///     <paramref name="hasOwnArea"/> is asked only about bulbs that already failed the cheap test, because
+	///     answering it sweeps the registry.
 	/// </remarks>
-	/// <param name="rooms">
-	///     Every room the engine is running, with the bulbs each commands. A room listed twice, or a bulb a room
-	///     reaches by two routes, counts once — the question is how many <i>rooms</i> command it.
-	/// </param>
-	/// <param name="hasOwnArea">
-	///     Whether Home Assistant has put the entity in an area of its own. Asked only about bulbs that already
-	///     failed the cheap test, because answering it means a sweep of the registry and the ordinary house has no
-	///     shared bulb to spend one on.
-	/// </param>
-	/// <returns>
-	///     One entry per shared bulb, in the order the rooms named them. Empty in the ordinary house, which is the
-	///     usual answer.
-	/// </returns>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static IReadOnlyList<SuspectLight> SharedBetweenRooms(
 		IReadOnlyList<RoomUnderReview> rooms,
 		Func<string, bool> hasOwnArea)
@@ -235,7 +136,7 @@ public static class LightAudit
 					order.Add(light.EntityId);
 				}
 
-				// One room holding the same bulb twice — through a group and again on its own — is one room.
+				// One room holding the same bulb twice, through a group and again on its own, is one room.
 				if (!seen.Rooms.Contains(room.Room, StringComparer.Ordinal))
 					seen.Rooms.Add(room.Room);
 			}
@@ -255,21 +156,12 @@ public static class LightAudit
 		return shared;
 	}
 
-	/// <summary>
-	///     Why a bulb is being flagged, and what to do, in the household's own terms.
-	/// </summary>
-	/// <remarks>
-	///     Says nothing about light groups, overlap or how discovery reached the bulb. Nobody wrote their groups
-	///     thinking about any of that, and a sentence about topology is one nobody can act on; a sentence about
-	///     giving a light a room is one they can act on in Home Assistant in ten seconds. Lower case and no full
-	///     stop, because every reason in this class is read as the second half of a line that begins with the
-	///     light's own name.
-	/// </remarks>
+	// Lower case and no full stop: every reason here is read as the second half of a line starting with the
+	// light's own name.
 	private static string SharedReason(IReadOnlyList<string> rooms) =>
-		$"commanded by {Join(rooms)} at once, because Home Assistant has not put it in a room of its own — "
+		$"commanded by {Join(rooms)} at once, because Home Assistant has not put it in a room of its own; "
 		+ "give it an area there and only that room will switch it on and off";
 
-	/// <summary>"a and b", "a, b and c" — a list of rooms somebody reads rather than parses.</summary>
 	private static string Join(IReadOnlyList<string> names) => names.Count switch
 	{
 		1 => names[0],
@@ -277,9 +169,7 @@ public static class LightAudit
 		_ => $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}"
 	};
 
-	/// <summary>
-	///     The entity id this one is a colour channel of, when that entity is in the room too; <c>null</c> otherwise.
-	/// </summary>
+	/// <summary>The entity this one is a colour channel of, when that entity is in the room too.</summary>
 	private static string? ChannelParentOf(string entityId, IReadOnlySet<string> present)
 	{
 		foreach (string suffix in ChannelSuffixes)
@@ -297,7 +187,7 @@ public static class LightAudit
 		return null;
 	}
 
-	/// <summary>The part after the domain — <c>light.stue_taklys</c> becomes <c>stue_taklys</c> — normalised.</summary>
+	// The normalised part after the domain: light.stue_taklys becomes stue_taklys.
 	private static string ObjectIdOf(string entityId)
 	{
 		int dot = entityId.IndexOf('.', StringComparison.Ordinal);
@@ -305,10 +195,7 @@ public static class LightAudit
 		return Normalise(dot >= 0 ? entityId[(dot + 1)..] : entityId);
 	}
 
-	/// <summary>
-	///     A name as the word rules read it: lower-cased, with everything that is not a letter or digit turned into
-	///     an underscore, so "Status LED" and <c>status_led</c> are the same two words.
-	/// </summary>
+	// Lower-cased, non-alphanumerics to underscores, so "Status LED" and status_led are the same two words.
 	private static string Normalise(string text)
 	{
 		char[] letters = new char[text.Length];
@@ -319,27 +206,13 @@ public static class LightAudit
 		return new string(letters);
 	}
 
-	/// <summary>
-	///     Whether a normalised name carries one of <paramref name="words"/> as a whole underscore-separated word.
-	/// </summary>
-	/// <remarks>
-	///     Whole words, never substrings, because this is the accusing half. <c>oppvask</c> — dishwasher — lives
-	///     inside <c>oppvaskbenk_lys</c>, which is the light over the sink, and a substring match would have this
-	///     class calling it a machine.
-	/// </remarks>
+	// The accusing half: whole underscore-separated words, never substrings. "oppvask" (dishwasher) lives inside
+	// oppvaskbenk_lys, the light over the sink.
 	private static bool HasWord(string normalised, string[] words) =>
 		Words(normalised).Any(segment => words.Contains(segment, StringComparer.Ordinal));
 
-	/// <summary>
-	///     Whether a normalised name says "lamp" anywhere in it.
-	/// </summary>
-	/// <remarks>
-	///     The excusing half, and deliberately generous where <see cref="HasWord"/> is strict: a substring is
-	///     enough, because Norwegian buries the word inside the compound — <c>taklys</c>, <c>vegglampe</c>,
-	///     <c>benkbelysning</c>, none of which a whole-word or even an ends-with rule catches. Over-matching here
-	///     costs a warning nobody needed to see; under-matching calls a real ceiling light a status indicator, and
-	///     only one of those is worth being wrong about.
-	/// </remarks>
+	// The excusing half, generous where HasWord is strict: Norwegian buries the word inside the compound, as in
+	// taklys and benkbelysning.
 	private static bool SuggestsLamp(string normalised) =>
 		LampWords.Any(word => normalised.Contains(word, StringComparison.Ordinal));
 

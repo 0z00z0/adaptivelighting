@@ -1,42 +1,29 @@
 namespace AdaptiveLighting.Configuration;
 
-/// <summary>
-///     The pure save-time normaliser: drops deprecated fields once they are provably redundant, so a document
-///     that adopts the house-mode model stops carrying inert legacy keys — but never before that, because
-///     dropping a field a live path still needs is exactly the silent break this project was bitten by.
-/// </summary>
+/// <summary>The save-time normaliser: drops deprecated and empty fields once they are provably redundant.</summary>
 /// <remarks>
-///     Applied by <see cref="Hosting.LightingEngineHost.Save"/> before validation. The startup load path does
-///     <b>not</b> normalise: a hand-edited file must never be rewritten by the act of booting.
+///     Runs on save only, from <see cref="Hosting.LightingEngineHost.Save"/> and before validation. The load path
+///     must never rewrite a hand-edited file.
 /// </remarks>
 public static class ConfigNormalizer
 {
-	/// <summary>
-	///     Returns a document with redundant deprecated fields dropped. Mutates and returns <paramref name="config"/>
-	///     in place — the caller passes the object it is about to serialise, and the drops are the intended change.
-	/// </summary>
-	/// <param name="config">The document to normalise.</param>
-	/// <returns>The same instance, normalised.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="config"/> is <c>null</c>.</exception>
+	/// <summary>Mutates and returns <paramref name="config"/> in place. The drops are the intended change.</summary>
 	public static AdaptiveLightingConfig Normalize(AdaptiveLightingConfig config)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
 		GlobalConfig global = config.Global;
 
-		// The retired Either reads as Lux everywhere the engine acts on it; written out as Lux, it stops being
-		// read as anything. This is what makes the member a migration rather than a permanent second name for the
-		// same rule — a file passes through here on its first save and never says Either again.
+		// Written out as Lux, so a file passes through here on its first save and never says Either again.
 		if (config.Defaults.Darkness is DarknessSource.Either)
 			config.Defaults.Darkness = DarknessSource.Lux;
 
 		foreach (AreaConfig retiring in config.Areas.Where(area => area.Darkness is DarknessSource.Either))
 			retiring.Darkness = DarknessSource.Lux;
 
-		// Drop pure-default option rows (Kind: Normal, no scene/clamp/reset) EXCEPT the designated Normal row, so
-		// the document stays minimal but the single reset target stays explicit (09 §6). A row a period's SetsMode
-		// names is kept whatever it carries: dropping it would leave that SetsMode pointing at no option, which the
-		// validator then rejects — a save that unmakes itself.
+		// Drop pure-default option rows, except the designated Normal row and any row a period's SetsMode names.
+		// Dropping a named row would leave that SetsMode pointing at nothing, which the validator rejects: a save
+		// that unmakes itself.
 		if (global.HouseMode is { } mode)
 		{
 			HouseModeOptionConfig? normal = mode.NormalOption;
@@ -57,30 +44,20 @@ public static class ConfigNormalizer
 			&& houseMode.Options.Count == 0)
 			global.HouseMode = null;
 
-		// The period select gets the same two-step treatment, and for the same reason the HouseMode drop above
-		// exists: an editor that binds the object into existence to draw a form must not leave a PeriodSelect:
-		// block in the file of a household that never adopted the feature. A row saying nothing goes first, so a
-		// block that held only cleared rows can then be recognised as empty and go too.
+		// Two steps, so a block that held only cleared rows can then be recognised as empty and dropped too.
 		if (global.PeriodSelect is { } periodSelect)
 		{
 			periodSelect.Options.RemoveAll(option => option.IsEmpty);
 
-			// Authority is deliberately not consulted: it defaults to AdaptiveLighting and means nothing at all
-			// without an entity, so a block carrying only a non-default Authority is still a block saying nothing.
+			// Authority is not consulted: it means nothing without an entity, so a block carrying only a non-default
+			// Authority is still a block saying nothing.
 			if (string.IsNullOrWhiteSpace(periodSelect.Entity) && periodSelect.Options.Count == 0)
 				global.PeriodSelect = null;
 		}
 
-		// A levels row with neither value set says nothing at all, and an editor that draws a row per period
-		// produces one the moment somebody clears both fields. Dropped on save so the file records only the
-		// periods a room actually disagrees about — which is also what makes "this room has levels" a question the
-		// document can answer by looking. The engine ignores an empty row either way, so this is tidying, not a
-		// behaviour change, and it happens on save alone: a hand-edited file is never rewritten by booting.
-		// Repaired rather than dereferenced, because Levels is the one collection here a caller can plausibly hand
-		// in null: AreaSetupService.Apply carries it through from the area it rebuilt. The rest of this method
-		// dereferences Areas, Periods and HouseMode.Options unguarded and deliberately — those are structural, the
-		// deserialiser repairs them, and a null there means a caller built an AdaptiveLightingConfig by hand and
-		// skipped its initialisers. This guard is not a general null-safety policy for Save; it is one field.
+		// Levels is null-coalesced where Areas, Periods and HouseMode.Options are dereferenced bare: those are
+		// structural and the deserialiser repairs them, whereas AreaSetupService.Apply can hand Levels through as
+		// null from the area it rebuilt.
 		foreach (AreaConfig area in config.Areas)
 		{
 			area.Levels ??= [];

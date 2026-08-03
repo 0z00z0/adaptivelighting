@@ -2,41 +2,21 @@ using AdaptiveLighting.Configuration;
 
 namespace AdaptiveLighting.Web.Services;
 
-/// <summary>
-///     One house mode as the House tab reads it: its name, what it is, and what it does said as a sentence.
-/// </summary>
-/// <remarks>
-///     The name is carried beside the sentence rather than inside it so the card can set it in bold — the
-///     mock-up's own rendering, and the thing an eye scans a list of four modes for. Keeping it out of the
-///     sentence also keeps the sentence a sentence: it starts with a verb and reads on from whatever the name
-///     happens to be, in a house whose modes are called Hjemme and Borte rather than Home and Away.
-/// </remarks>
-/// <param name="Name">The option value, exactly as the Home Assistant select reports it.</param>
-/// <param name="Kind">The one behaviour the option carries.</param>
+/// <summary>One house mode as the House tab reads it: its name, what it is, and what it does said as a sentence.</summary>
+/// <param name="Name">The option value, as the Home Assistant select reports it. Carried beside the sentence, not
+///     inside it, so the sentence can open on a verb whatever the option happens to be called.</param>
 /// <param name="Sentences">The sentence, as the one-item list <c>SentenceView</c> takes.</param>
 public sealed record ModeLine(string Name, ModeKind Kind, IReadOnlyList<Sentence> Sentences);
 
 /// <summary>
-///     The house's own behaviour — its modes, its schedule blending and its idea of an empty house — written as
-///     the same readable prose a room's settings are written in.
+///     The house's own behaviour written as prose: its modes, its schedule blending, its idea of an empty house.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <see cref="AreaSentences"/> covers the settings a room can override, and the House tab renders those
-///         over the document's defaults with no extra code. What it does <i>not</i> cover is everything that only
-///         exists house-wide: what each mode means, how periods hand over, how long an empty house stays empty.
-///         Those are the sentences here.
-///     </para>
-///     <para>
-///         Pure, for the reason the room sentences are pure: this repo has no Razor render harness, and a
-///         sentence assembled inside markup is a sentence nothing can assert about. A mode sentence that renders
-///         the wrong knob is a setting nobody can find — and the mode sentences are the only place several of
-///         these values are ever read as English.
-///     </para>
+///     <see cref="AreaSentences"/> covers the settings a room can override, which the House tab renders over the
+///     document's defaults. Only what exists house-wide is here.
 /// </remarks>
 public static class HouseSentences
 {
-	/// <summary>The prefix every per-mode token key carries, so a page can tell one from an area setting.</summary>
 	private const string ModePrefix = "mode";
 
 	/// <summary>The shortlist offered for how long an empty house stays empty before the rooms react.</summary>
@@ -51,21 +31,13 @@ public static class HouseSentences
 	public static IReadOnlyList<TokenChoice> GraceChoices { get; } =
 		TokenChoices.DurationsInMinutes(0, 5, 15, 30);
 
-	/// <summary>
-	///     How lights cross a period boundary, as one value rather than as a switch beside a number.
-	/// </summary>
-	/// <remarks>
-	///     <c>SmoothTransitions</c> and <c>BlendMinutes</c> are one decision in the schema's clothing: blending
-	///     off and blending over zero minutes are the same instruction, and a switch that greys out a number box
-	///     spends two controls saying what one word says. Zero carries "step at the boundary"; anything else
-	///     carries the minutes and turns blending on.
-	/// </remarks>
-	/// <param name="global">The document's house-wide settings.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="global"/> is <c>null</c>.</exception>
+	/// <summary>How lights cross a period boundary, as one value instead of a switch beside a number.</summary>
 	public static Sentence Blend(GlobalConfig global)
 	{
 		ArgumentNullException.ThrowIfNull(global);
 
+		// SmoothTransitions and BlendMinutes are folded into one token keyed on BlendMinutes. Zero carries "step at
+		// the boundary", so whoever applies the edit has to set the switch from the number too.
 		int minutes = global.SmoothTransitions ? Math.Max(0, global.BlendMinutes) : 0;
 
 		return SentenceBuilder.Start("Lights ")
@@ -78,13 +50,7 @@ public static class HouseSentences
 			.Build();
 	}
 
-	/// <summary>
-	///     The blend options, always including the value the document actually holds.
-	/// </summary>
-	/// <remarks>
-	///     A shortlist that omits the current value opens with nothing ticked, which reads as a control that has
-	///     lost its own state. A house blending over 22 minutes gets 22 minutes offered alongside the curated set.
-	/// </remarks>
+	/// <summary>The blend options, always including the value the document holds so the popover opens on it.</summary>
 	/// <param name="minutes">The blend in minutes; zero means the lights step at the boundary.</param>
 	public static IReadOnlyList<TokenChoice> BlendChoices(int minutes)
 	{
@@ -100,8 +66,6 @@ public static class HouseSentences
 	}
 
 	/// <summary>How long everyone has to be gone before the rooms treat the house as empty.</summary>
-	/// <param name="global">The document's house-wide settings.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="global"/> is <c>null</c>.</exception>
 	public static Sentence AwayDebounce(GlobalConfig global)
 	{
 		ArgumentNullException.ThrowIfNull(global);
@@ -116,27 +80,10 @@ public static class HouseSentences
 			.Build();
 	}
 
-	/// <summary>
-	///     One sentence per house-mode option: what it does, what turns it on, and what ends it.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         The summary layer over <c>HouseModeOptions</c>, which stays underneath with every field. Only the
-	///         two values a house actually tunes are tokens here — how long the house must be still before Away
-	///         arms itself, and the grace in which your own departure does not cancel it. Everything else is
-	///         prose, because a scene id and a period name are picked from what Home Assistant has rather than
-	///         from a shortlist.
-	///     </para>
-	///     <para>
-	///         An option carrying no behaviour at all still gets a sentence. A mode that does nothing is exactly
-	///         the thing somebody is looking for when they open this card, and silence would read as "not
-	///         configured yet" rather than as "configured to do nothing".
-	///     </para>
-	/// </remarks>
+	/// <summary>One sentence per house-mode option: what it does, what turns it on, and what ends it.</summary>
 	/// <param name="houseMode">The house-mode block, or <c>null</c> when no select is configured.</param>
 	/// <param name="periods">The circadian table, for resolving a sleep option's clamp period.</param>
 	/// <returns>One line per configured option, in the document's own order.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="periods"/> is <c>null</c>.</exception>
 	public static IReadOnlyList<ModeLine> Modes(HouseModeConfig? houseMode, IReadOnlyList<TimePeriodConfig> periods)
 	{
 		ArgumentNullException.ThrowIfNull(periods);
@@ -158,24 +105,14 @@ public static class HouseSentences
 
 	/// <summary>The token key one mode option's setting is carried under.</summary>
 	/// <param name="index">The option's position in <c>HouseModeConfig.Options</c>.</param>
-	/// <param name="property">The <see cref="HouseModeOptionConfig"/> property name.</param>
 	public static string ModeKey(int index, string property) =>
 		$"{ModePrefix}:{index.ToString(CultureInfo.InvariantCulture)}:{property}";
 
-	/// <summary>
-	///     Reads a mode token key back into the option it names and the setting it changes.
-	/// </summary>
-	/// <remarks>
-	///     The area sentences can key on an <c>AreaSettings</c> property name alone because there is one room per
-	///     page. A house has several modes on one card, so the key has to carry which — and the page that applies
-	///     the edit must not parse that string itself, or the two halves of the encoding live in two files.
-	/// </remarks>
-	/// <param name="key">The token's key.</param>
-	/// <param name="index">The option's position.</param>
-	/// <param name="property">The <see cref="HouseModeOptionConfig"/> property name.</param>
+	/// <summary>Reads a mode token key back into the option it names and the setting it changes.</summary>
 	/// <returns>Whether the key named a mode option's setting.</returns>
 	public static bool TryReadModeKey(string? key, out int index, out string property)
 	{
+		// Both halves of the encoding stay here. A page that split the key itself would be the second copy.
 		index = -1;
 		property = string.Empty;
 
@@ -196,11 +133,9 @@ public static class HouseSentences
 	}
 
 	/// <param name="isResetTarget">
-	///     Whether this is the option <see cref="HouseModeConfig.NormalOption"/> returns — not merely one whose kind
-	///     is Normal. <see cref="HouseModeOptionConfig.Kind"/> defaults to <see cref="ModeKind.Normal"/>, so every
-	///     option adopted from the helper that the document had not seen before is Normal, and a list can hold
-	///     several. Only the first is the reset target; a sentence that promised the house returned to each of them
-	///     would state something that is true of at most one.
+	///     Whether this is the option <see cref="HouseModeConfig.NormalOption"/> returns. Not the same as having
+	///     kind Normal: <see cref="HouseModeOptionConfig.Kind"/> defaults to Normal, so a list can hold several and
+	///     only the first is the reset target.
 	/// </param>
 	private static Sentence Mode(HouseModeOptionConfig option, int index, IReadOnlyList<TimePeriodConfig> periods, bool isResetTarget)
 	{
@@ -252,14 +187,7 @@ public static class HouseSentences
 				AutoAwayChoices)
 			.Text(", then "));
 
-	/// <summary>
-	///     The clauses about what ends a mode, joined as English joins them.
-	/// </summary>
-	/// <remarks>
-	///     Built as a list and then written, rather than appended one by one, because the joining word depends on
-	///     how many there turn out to be — and a sentence reading "ends when someone comes home and, when Morning
-	///     starts" is a bug in the product rather than in a helper.
-	/// </remarks>
+	/// <summary>The clauses about what ends a mode, joined as English joins them.</summary>
 	private static void Ends(SentenceBuilder builder, HouseModeOptionConfig option, int index)
 	{
 		if (option.Kind == ModeKind.Normal)

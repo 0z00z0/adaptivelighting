@@ -5,8 +5,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The note recording which circadian period the engine was last running in: where it lands, what it survives,
-///     and what a bad one costs.
+///     The note recording which circadian period the engine was last running in: where it lands, what it
+///     survives, and what a bad one costs.
 /// </summary>
 [TestClass]
 public sealed class LastPeriodStoreTests
@@ -38,9 +38,7 @@ public sealed class LastPeriodStoreTests
 		}
 	}
 
-	/// <summary>
-	///     The file takes its name from the configuration document, so two houses in one directory cannot collide.
-	/// </summary>
+	// Named after the configuration document, so two houses in one directory cannot collide.
 	[TestMethod]
 	public void The_File_Takes_Its_Name_From_The_Configuration_Document()
 	{
@@ -50,7 +48,6 @@ public sealed class LastPeriodStoreTests
 		Assert.AreEqual(Path.Combine(temp.Path, "b1.last-period.json"), temp.Store().FilePath);
 	}
 
-	/// <summary>A first run has nothing to recall, and that is not an error.</summary>
 	[TestMethod]
 	public void A_Missing_File_Loads_As_Nothing_Recalled()
 	{
@@ -72,15 +69,7 @@ public sealed class LastPeriodStoreTests
 		Assert.AreEqual("morning", temp.Store().Load(), "read by a fresh store, which is what a restart does");
 	}
 
-	/// <summary>
-	///     A corrupt file is inert: it loads as "we do not know" and does not throw.
-	/// </summary>
-	/// <remarks>
-	///     The bar this exists for: a blank <c>Areas:</c> line once took the host down unrecoverably. A note nobody
-	///     can parse must cost the note and nothing else, and the caller reads the same <c>null</c> a first run does
-	///     — because "we could not read it" and "there was nothing to read" are the same answer to the only question
-	///     being asked.
-	/// </remarks>
+	// A note nobody can parse costs the note and nothing else. Unreadable and absent both load as null.
 	[TestMethod]
 	public void A_Corrupt_File_Loads_As_Nothing_Recalled_Without_Throwing()
 	{
@@ -100,7 +89,7 @@ public sealed class LastPeriodStoreTests
 		Assert.IsNull(store.Load(), "and a file that never had one is the same");
 	}
 
-	/// <summary>A hand-edited file with comments and a trailing comma still reads, exactly as the cache files do.</summary>
+	// Comments and a trailing comma are allowed here, as they are in the cache files.
 	[TestMethod]
 	public void A_Hand_Edited_File_Still_Reads()
 	{
@@ -118,7 +107,6 @@ public sealed class LastPeriodStoreTests
 		Assert.AreEqual("evening", store.Load(), "trimmed, because the name is compared against the table's");
 	}
 
-	/// <summary>The previous note is kept as .bak, the same way the configuration document and the cache are.</summary>
 	[TestMethod]
 	public void A_Rewrite_Keeps_The_Previous_Note_As_A_Backup()
 	{
@@ -133,7 +121,6 @@ public sealed class LastPeriodStoreTests
 		StringAssert.Contains(File.ReadAllText(store.FilePath + ".bak"), "evening");
 	}
 
-	/// <summary>A write into a directory that does not exist yet creates it rather than failing.</summary>
 	[TestMethod]
 	public void A_Missing_Directory_Is_Created()
 	{
@@ -145,7 +132,7 @@ public sealed class LastPeriodStoreTests
 		Assert.AreEqual("night", store.Load());
 	}
 
-	/// <summary>The file says what it is, so somebody who finds it does not take it for their settings.</summary>
+	// The file says what it is, so nobody finding it takes it for their settings.
 	[TestMethod]
 	public void The_File_Explains_Itself()
 	{

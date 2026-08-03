@@ -6,15 +6,7 @@ using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Web.Services;
 
-/// <summary>
-///     One house mode the UI can show, and possibly flip.
-/// </summary>
-/// <param name="Label">Human name for the toggle.</param>
-/// <param name="Description">What flipping it actually does to the engine.</param>
 /// <param name="EntityId">The configured entity. Always from the config document, never from a request.</param>
-/// <param name="IsOn">Whether the entity currently reads <c>on</c>.</param>
-/// <param name="IsAvailable">Whether Home Assistant knows the entity at all.</param>
-/// <param name="CanToggle">Whether the entity's domain supports <c>turn_on</c>/<c>turn_off</c>.</param>
 /// <param name="Meaning">What the current state means for the engine, in words.</param>
 public sealed record ModeToggle(
 	string Label,
@@ -26,15 +18,10 @@ public sealed record ModeToggle(
 	string Meaning);
 
 /// <summary>
-///     What a mode would do to the lights, resolved for right now — read-only, so the card can say what a mode
-///     <i>means</i> before anyone selects it. There is one shared circadian table now, so every field is derived
-///     from that single table and the engine's own period/sun maths; nothing here is written back.
+///     What a mode would do to the lights, resolved for right now, so a card can say what a mode means before
+///     anyone selects it. Read-only, and derived from the one shared circadian table.
 /// </summary>
-/// <param name="ActivePeriodName">The period active at "now", or <c>null</c> when none can be placed.</param>
-/// <param name="PreviewBrightness">The active period's target brightness, or <c>null</c> when off / unresolved.</param>
-/// <param name="PreviewKelvin">The active period's target colour temperature, or <c>null</c> when off / unresolved.</param>
-/// <param name="IsOffPreview">Whether the swatch should read "dark": an Away mode pauses/sweeps the areas.</param>
-/// <param name="EffectSummary">What the mode does to the areas, in words — the away sweep, the sleep clamp, or the period in use.</param>
+/// <param name="IsOffPreview">Whether the swatch should read "dark": an Away mode pauses and sweeps the areas.</param>
 public sealed record ModePreview(
 	string? ActivePeriodName,
 	double? PreviewBrightness,
@@ -43,13 +30,9 @@ public sealed record ModePreview(
 	string EffectSummary);
 
 /// <summary>One live option of the house-mode select, with the single kind and reset summary the config gave it.</summary>
-/// <param name="Value">The option string as the select reports it.</param>
-/// <param name="Kind">The option's one behaviour: Normal, Sleep, Away or Guest.</param>
-/// <param name="IsCurrent">Whether the select currently stands on this option.</param>
 /// <param name="Scene">The <c>scene.*</c> applied on entry, for Away/Guest; <c>null</c> otherwise or when unset.</param>
-/// <param name="ClampPeriod">The resolved sleep-clamp period name, for Sleep; <c>null</c> otherwise or when none resolves.</param>
+/// <param name="ClampPeriod">The resolved sleep-clamp period name, for Sleep; <c>null</c> otherwise.</param>
 /// <param name="ResetSummary">A one-line summary of the reset triggers, or <c>null</c> for a Normal option.</param>
-/// <param name="Preview">What this mode would drive right now — the card's at-a-glance content.</param>
 public sealed record HouseModeOptionView(
 	string Value,
 	ModeKind Kind,
@@ -60,21 +43,16 @@ public sealed record HouseModeOptionView(
 	ModePreview Preview);
 
 /// <summary>
-///     The derived house state the modes produce, for the live hero: the one kind the current option carries, which
-///     is exactly what the engine's <see cref="Engine.ModeMonitor"/> reads as <c>ActiveKind</c> — so the hero and
-///     the engine can never disagree.
+///     The derived house state the modes produce, for the live hero: the same <c>ActiveKind</c> the engine's
+///     <see cref="Engine.ModeMonitor"/> reads.
 /// </summary>
-/// <param name="ActiveKind">The current option's kind, or <see cref="ModeKind.Normal"/> when none / unavailable.</param>
-/// <param name="IsAvailable">Whether Home Assistant answered — when false the state is "unknown, not off".</param>
+/// <param name="IsAvailable">Whether Home Assistant answered. When false the state is "unknown", not "off".</param>
 public sealed record HouseDerivedState(ModeKind ActiveKind, bool IsAvailable);
 
 /// <summary>The house-mode select as the Modes page shows it: its options, current value, and Normal-fallback note.</summary>
 /// <param name="Entity">The configured <c>input_select</c>. Always from the config document, never from a request.</param>
-/// <param name="CurrentValue">The select's current option, or <c>null</c> when unknown / unavailable.</param>
-/// <param name="Options">The live options (∪ configured), each with its kind and whether it is current.</param>
-/// <param name="NoNormalOption">Whether no option is marked Normal, so there is no reset target and every reset is a no-op.</param>
-/// <param name="NormalFallbackValue">The reset target's value (<see cref="HouseModeConfig.NormalOption"/>), or <c>null</c> when none is Normal.</param>
-/// <param name="IsAvailable">Whether Home Assistant knows the select at all.</param>
+/// <param name="Options">The live options unioned with the configured ones, each with its kind.</param>
+/// <param name="NoNormalOption">Whether no option is marked Normal, so there is no reset target and resets no-op.</param>
 public sealed record HouseModeView(
 	string Entity,
 	string? CurrentValue,
@@ -84,37 +62,20 @@ public sealed record HouseModeView(
 	bool IsAvailable);
 
 /// <summary>
-///     The engine's master switch as a page (the dashboard) shows it: the toggle to flip, plus whether adaptive
-///     lighting is currently commanding, phrased for a reader who does not know what a kill switch is.
+///     The engine's master switch as the dashboard shows it: the toggle to flip, plus whether adaptive lighting is
+///     currently commanding.
 /// </summary>
-/// <remarks>
-///     This is a read-only projection of the single <see cref="ModeToggle"/> <see cref="GetToggles"/> already
-///     resolves from the configuration document — it adds no write path. The one write remains
-///     <see cref="Toggle(ModeToggle)"/>, called with <see cref="Toggle"/> below, which re-resolves the entity
-///     against the config before acting.
-/// </remarks>
-/// <param name="Toggle">The underlying toggle, resolved from config; the only thing <see cref="ModeService.Toggle"/> will act on.</param>
-/// <param name="AdaptiveLightingOn">Whether the engine is currently allowed to command lights (the switch read in its configured polarity).</param>
-/// <param name="IsAvailable">Whether Home Assistant knows the switch entity at all.</param>
-/// <param name="IsReady">Whether Home Assistant answered — when false the state is "unknown", not "off".</param>
+/// <remarks>A read-only projection; it adds no write path. The one write is <see cref="ModeService.Toggle"/>.</remarks>
+/// <param name="AdaptiveLightingOn">Whether the engine may command, with the switch read in its configured polarity.</param>
+/// <param name="IsReady">Whether Home Assistant answered. When false the state is "unknown", not "off".</param>
 public sealed record MasterSwitchView(
 	ModeToggle Toggle,
 	bool AdaptiveLightingOn,
 	bool IsAvailable,
 	bool IsReady);
 
-/// <summary>
-///     One watched person, for the dashboard's who's-home panel: read-only.
-/// </summary>
-/// <remarks>
-///     Mirrors what the engine's <see cref="Engine.PresenceMonitor"/> actually watches, so the panel and the
-///     Home/Away decision can never show different people. There is no write path attached to this — it is a
-///     projection of state the engine already reads.
-/// </remarks>
-/// <param name="EntityId">The person or device-tracker entity, from the config's person list or the <c>person</c> domain.</param>
-/// <param name="Name">Home Assistant's <c>friendly_name</c>, or the id when it has none.</param>
-/// <param name="IsHome">Whether the entity currently reads <c>home</c> — the same comparison the monitor makes.</param>
-/// <param name="IsAvailable">Whether Home Assistant knew the entity at all; <c>false</c> renders as "unknown", not "away".</param>
+/// <summary>One watched person, for the dashboard's who's-home panel. Read-only.</summary>
+/// <param name="IsAvailable">Whether Home Assistant knew the entity; <c>false</c> renders as "unknown", not "away".</param>
 public sealed record PersonView(string EntityId, string Name, bool IsHome, bool IsAvailable);
 
 /// <summary>
@@ -122,20 +83,18 @@ public sealed record PersonView(string EntityId, string Name, bool IsHome, bool 
 ///     and how many lights it would drive.
 /// </summary>
 /// <remarks>
-///     A projection rather than the <see cref="AreaConfig"/> itself. The document behind it is the cached copy
-///     every read on the page shares, and handing a page a mutable room would invite an edit outside the save
-///     pipeline that is deliberately the only write path. The dashboard only ever looks.
+///     A projection, not the <see cref="AreaConfig"/> itself. The document behind it is a cached copy shared by
+///     every read on the page, and handing a page a mutable room invites an edit outside the save pipeline, which
+///     is the only write path.
 /// </remarks>
 /// <param name="AreaId">
 ///     The registry area id, or <c>null</c> for a room configured with explicit entities. This is how a live
-///     report is matched back to the room that produced it — ids survive a rename mid-session, names do not.
+///     report is matched back to the room that produced it: ids survive a rename mid-session, names do not.
 /// </param>
-/// <param name="Name">The room's display name, which is also the fallback match for a report with no id.</param>
-/// <param name="IsEnabled">Its effective enablement, following the document's inheritance.</param>
+/// <param name="Name">The room's display name, and the fallback match for a report with no id.</param>
 /// <param name="LightCount">
-///     How many lights the room would drive — the length of its own pinned list when it has one, discovery's
-///     answer otherwise. 0 when Home Assistant has not answered yet, which is why the first-run chips show a
-///     count only when there is one to show.
+///     How many lights the room would drive: its pinned list when it has one, discovery's answer otherwise.
+///     0 when Home Assistant has not answered yet.
 /// </param>
 public sealed record RoomView(string? AreaId, string Name, bool IsEnabled, int LightCount);
 
@@ -143,33 +102,22 @@ public sealed record RoomView(string? AreaId, string Name, bool IsEnabled, int L
 ///     Reads and flips the house mode entities named in the configuration document.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>This is the whole of the UI's write surface, and it is deliberately tiny.</b> The engine's
-///         modes are Home Assistant entities, so "editing" them is a service call on an entity HA already
-///         owns — there is no config file to persist and no engine state to mutate. The state change flows
-///         back through the engine's normal <c>ModeMonitor</c> path; this class does not tell the engine
-///         anything.
-///     </para>
-///     <para>
-///         The entity ids come exclusively from <see cref="AdaptiveLightingConfig"/>. A caller cannot name
-///         an entity: <see cref="ToggleAsync"/> takes a <see cref="ModeToggle"/> that this class built, and
-///         re-resolves it against the config before calling. That is what keeps this from being a general
-///         service-call proxy, which is the thing it must never become.
-///     </para>
+///     The whole of the UI's write surface. Entity ids come only from <see cref="AdaptiveLightingConfig"/>: a
+///     caller cannot name one, because <see cref="Toggle"/> re-resolves against the config before calling. That is
+///     what keeps this from becoming a general service-call proxy. The state change flows back through the
+///     engine's normal <c>ModeMonitor</c> path; this class tells the engine nothing.
 /// </remarks>
 public sealed class ModeService
 {
-	/// <summary>Domains this service is willing to call <c>turn_on</c>/<c>turn_off</c> on.</summary>
-	/// <remarks>
-	///     <c>binary_sensor</c> is a legitimate mode entity for the engine to <i>read</i>, but nothing can
-	///     write to one — it is shown, and shown as untoggleable, rather than offered and then failing.
-	/// </remarks>
+	/// <summary>
+	///     Domains this service is willing to call <c>turn_on</c>/<c>turn_off</c> on. <c>binary_sensor</c> is a
+	///     legitimate mode entity to read but nothing can write to one, so it renders as untoggleable.
+	/// </summary>
 	private static readonly string[] ToggleableDomains = ["input_boolean", "switch", "light", "fan"];
 
-	/// <summary>The domain the who's-home panel falls back to, matching <see cref="Engine.PresenceMonitor"/>.</summary>
+	// Both match Engine.PresenceMonitor. If they drift, the panel shows different people from the ones whose
+	// presence drives Home and Away.
 	private const string PersonDomain = "person";
-
-	/// <summary>The state a person entity reads when home, matching <see cref="Engine.PresenceMonitor"/>.</summary>
 	private const string HomeState = "home";
 
 	private readonly IHaContext _ha;
@@ -178,8 +126,8 @@ public sealed class ModeService
 	private readonly LightingEngineHost _engine;
 	private readonly ILogger<ModeService> _logger;
 
-	// The live document, cached against the store file's last-write time so the per-second dashboard ticker
-	// costs a stat, not a YAML parse. See the Config property for why this reads the store, not IAppConfig.
+	// Cached against the store file's last-write time, so the per-second dashboard ticker costs a stat, not a
+	// YAML parse.
 	private AdaptiveLightingConfig? _cachedConfig;
 	private DateTimeOffset? _cachedStamp;
 
@@ -187,19 +135,13 @@ public sealed class ModeService
 	///     Whether Home Assistant's state cache answered the last time <see cref="GetToggles"/> asked.
 	/// </summary>
 	/// <remarks>
-	///     Kestrel starts serving the moment the process is up, but NetDaemon connects to Home Assistant
-	///     asynchronously and its state cache throws until that finishes. So this page is reachable, by
-	///     design, in a window where no entity state exists — and again any time Home Assistant is down.
-	///     That is a normal condition to render, not an error to throw on.
+	///     Kestrel serves the moment the process is up, but NetDaemon connects asynchronously and its state cache
+	///     throws until that finishes. Every page here is reachable in that window, and again whenever Home
+	///     Assistant is down, so this is a condition to render, not an error to throw on.
 	/// </remarks>
 	public bool IsHomeAssistantReady { get; private set; } = true;
 
-	/// <summary>Creates the service.</summary>
-	/// <param name="ha">The HA context the toggles act through.</param>
 	/// <param name="config">The bound configuration document; the only source of entity ids.</param>
-	/// <param name="catalog">Reads the select's live options — both are scoped, so lifetimes match.</param>
-	/// <param name="engine">The engine host, for the built-in master switch that a blank <c>KillSwitchEntity</c> defaults to (09 §7).</param>
-	/// <param name="logger">Where failed service calls go.</param>
 	public ModeService(IHaContext ha, IAppConfig<AdaptiveLightingConfig> config, HaCatalog catalog, LightingEngineHost engine, ILogger<ModeService> logger)
 	{
 		ArgumentNullException.ThrowIfNull(config);
@@ -213,22 +155,14 @@ public sealed class ModeService
 	}
 
 	/// <summary>
-	///     The live configuration document — the same file the engine and the config editor read — re-read
+	///     The live configuration document, the same file the engine and the config editor read, re-read
 	///     whenever it changes on disk. Falls back to the NetDaemon-bound seed only before anything has ever been
 	///     saved (the store file does not exist yet).
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         The dashboard must show what the operator configured, not what NetDaemon bound at process start.
-	///         <c>IAppConfig&lt;AdaptiveLightingConfig&gt;</c> is frozen at startup and — since the engine moved its
-	///         source of truth to the external store — no longer reflects a UI save, so a house mode added after the
-	///         host started would be invisible here. That is exactly the "the dashboard shows nothing" bug: reading
-	///         the store instead keeps this service, the engine and the editor on one document.
-	///     </para>
-	///     <para>
-	///         Cached against the file's last-write time so the per-second ticker costs a stat, not a parse. A parse
-	///         failure keeps the last good document (or the seed) rather than blanking the page mid-save.
-	///     </para>
+	///     Reads the store, never <c>IAppConfig</c>. That is frozen at process start and no longer reflects a UI
+	///     save, so anything configured since the host started would be invisible here. A parse failure keeps the
+	///     last good document instead of blanking the page mid-save.
 	/// </remarks>
 	private AdaptiveLightingConfig Config
 	{
@@ -257,21 +191,19 @@ public sealed class ModeService
 	}
 
 	/// <summary>
-	///     Copies the engine's built-in enable switch (09 §7) onto the shared config before every read.
+	///     Copies the engine's built-in enable switch onto the shared config before every read.
 	/// </summary>
 	/// <remarks>
-	///     Read live, not once at construction: this service is scoped while <see cref="LightingEngineHost"/> is a
-	///     singleton, and a scope can be built before the per-host bootstrap calls <c>Attach</c>. Copying once would
-	///     freeze <c>DefaultKillSwitchEntity</c> at <c>null</c> for that scope, so the master switch would never
-	///     appear until a page reload. Assigning on each read lets it show the moment Home Assistant connects.
+	///     On every read, not once at construction. This service is scoped while <see cref="LightingEngineHost"/>
+	///     is a singleton, so a scope can be built before the bootstrap calls <c>Attach</c>; copying once freezes
+	///     <c>DefaultKillSwitchEntity</c> at <c>null</c> and the master switch never appears until a page reload.
 	/// </remarks>
 	private void SyncDefaultKillSwitch() => Config.Global.DefaultKillSwitchEntity = _engine.DefaultKillSwitchEntity;
 
 	/// <summary>
-	///     The modes this host has configured, with their current state. Unconfigured modes are absent
-	///     rather than shown as disabled — the engine treats them as permanently inactive, and so does this.
+	///     The modes this host has configured, with their current state. An unconfigured mode is absent rather
+	///     than disabled, matching the engine, which treats it as permanently inactive.
 	/// </summary>
-	/// <returns>The configured toggles, in a fixed order.</returns>
 	public IReadOnlyList<ModeToggle> GetToggles()
 	{
 		SyncDefaultKillSwitch();
@@ -279,16 +211,15 @@ public sealed class ModeService
 		var toggles = new List<ModeToggle>(1);
 		GlobalConfig global = Config.Global;
 
-		// Readiness is re-probed on every call, but this method must never clobber a false that GetHouseMode
-		// set: when a house-mode select is configured, GetHouseMode owns the reset-to-true and this method only
-		// downgrades (its TryGetState probes below set false on failure). With no select, GetHouseMode returns
-		// before touching readiness, so this method is the sole owner and resets — otherwise a stale false could
-		// never clear once the connection recovers.
+		// One method owns the reset of IsHomeAssistantReady to true. With a select configured that is
+		// GetHouseMode and this one only downgrades; with no select GetHouseMode returns before touching it, so
+		// this one resets. Reset from both and a real disconnection gets masked; from neither and a stale false
+		// never clears.
 		if (global.HouseMode?.Entity is not { Length: > 0 })
 			IsHomeAssistantReady = true;
 
-		// The master switch, and only the master switch. A blank KillSwitchEntity defaults to the app's own enable
-		// switch (09 §7), so this now always renders — the polarity is forced to enabled-flag while defaulted.
+		// A blank KillSwitchEntity defaults to the app's own enable switch, and the polarity is forced to
+		// enabled-flag while defaulted.
 		if (global.EffectiveKillSwitchEntity is { Length: > 0 } killSwitch)
 		{
 			var defaulted = global.KillSwitchIsDefaulted;
@@ -312,14 +243,12 @@ public sealed class ModeService
 	}
 
 	/// <summary>
-	///     The engine's master switch, projected for the dashboard: the toggle to flip and whether adaptive
-	///     lighting is currently commanding. <c>null</c> before the built-in default resolves (pre-Attach), the
-	///     same window in which <see cref="GetToggles"/> returns nothing.
+	///     The engine's master switch, projected for the dashboard. <c>null</c> before the built-in default
+	///     resolves, the same window in which <see cref="GetToggles"/> returns nothing.
 	/// </summary>
 	/// <remarks>
-	///     A pure read built on <see cref="GetToggles"/>, so it shares its config-resolution and readiness
-	///     bookkeeping and introduces no new write surface. <see cref="MasterSwitchView.AdaptiveLightingOn"/>
-	///     folds the switch's polarity in: an enabled-flag reads on to command, a kill switch reads inverted.
+	///     <see cref="MasterSwitchView.AdaptiveLightingOn"/> folds the polarity in: an enabled-flag reads on to
+	///     command, a kill switch reads inverted.
 	/// </remarks>
 	public MasterSwitchView? GetMasterSwitch()
 	{
@@ -335,9 +264,9 @@ public sealed class ModeService
 	}
 
 	/// <summary>
-	///     The house-mode select's live options and current value, or <c>null</c> when none is configured.
+	///     The house-mode select's live options and current value, or <c>null</c> when none is configured. The
+	///     options are the live ones unioned with the configured, so a disconnected HA cannot blank a known one.
 	/// </summary>
-	/// <remarks>The options are the live ones (∪ configured), so a disconnected HA cannot blank a known option.</remarks>
 	public HouseModeView? GetHouseMode()
 	{
 		SyncDefaultKillSwitch();
@@ -358,14 +287,12 @@ public sealed class ModeService
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.ToList();
 
-		// The preview is resolved for a single instant and one set of sun times, read once, so every card on the
-		// page describes the same "now". The sun times are the engine's own truth (sun.sun), not a re-derivation.
+		// One instant and one set of sun times, read once, so every card on the page describes the same "now".
 		(TimeOnly? sunrise, TimeOnly? sunset) = _catalog.SunTimesToday();
 		var sun = new SunTimes(sunrise, sunset);
 		DateTimeOffset now = DateTimeOffset.Now;
 
-		// The resolved period target is identical for every non-Away option, so resolve it once here rather than
-		// building a CircadianCalculator per card. Away ignores it (its swatch is dark) and passes null through.
+		// Identical for every non-Away option, so one calculator serves the whole page, not one per card.
 		LightTarget? sharedTarget = Calculator(Config, sun, PeriodSelectValue()).GetTarget(now);
 
 		var options = values
@@ -391,9 +318,8 @@ public sealed class ModeService
 			})
 			.ToList();
 
-		// No option is marked Normal, so there is no reset target at all (the engine no longer falls back to a tagged
-		// option — it no-ops). Sourced from NormalOption so the banner, the cards and the engine agree: when it is
-		// null the note says resets will not fire, and NormalFallbackValue carries that same (absent) target.
+		// No Normal option means no reset target at all; the engine no-ops instead of falling back to a tagged
+		// one. Sourced from NormalOption so the banner, the cards and the engine agree.
 		var noNormal = values.Count > 0 && houseMode.NormalOption is null;
 
 		return new HouseModeView(
@@ -406,9 +332,8 @@ public sealed class ModeService
 	}
 
 	/// <summary>
-	///     A one-line summary of an option's reset triggers, naming the Normal target — the same information the
-	///     ModeMonitor acts on, phrased for the card (09 §5.4). <c>null</c> is not returned here; a triggerless
-	///     option gets the "no reset trigger" line so a forgotten Borte reads as fixable rather than blank.
+	///     A one-line summary of an option's reset triggers, naming the Normal target. Never <c>null</c>: a
+	///     triggerless option gets its own line, so a forgotten away mode reads as fixable, not blank.
 	/// </summary>
 	private static string ResetSummary(HouseModeOptionConfig? option, HouseModeConfig houseMode)
 	{
@@ -429,8 +354,7 @@ public sealed class ModeService
 		if (parts.Count == 0)
 			return "stays until you switch the house back yourself";
 
-		// No Normal option → the engine has nothing to reset to and the trigger will not fire. Say so, so the card
-		// agrees with the engine's no-op rather than promising a reset that never happens.
+		// With no Normal option the engine has nothing to reset to and the trigger will not fire.
 		return normal is { Length: > 0 }
 			? $"switches back to {normal} {string.Join("; ", parts)}"
 			: $"would switch back {string.Join("; ", parts)}, but no option is marked Normal — fix this under Configuration → House modes";
@@ -439,15 +363,9 @@ public sealed class ModeService
 	private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
 	/// <summary>
-	///     The derived house state the live hero shows: the one kind the current option carries — the same
-	///     <c>ActiveKind</c> the engine's <see cref="Engine.ModeMonitor"/> reads.
+	///     The derived house state the live hero shows. Only downgrades <see cref="IsHomeAssistantReady"/>, never
+	///     resets it, so calling it after <see cref="GetHouseMode"/> cannot mask a disconnection that found.
 	/// </summary>
-	/// <remarks>
-	///     This only ever reads, and only the select the config named. It never resets
-	///     <see cref="IsHomeAssistantReady"/> to true — it only downgrades on a failed read — so calling it after
-	///     <see cref="GetHouseMode"/> / <see cref="GetToggles"/> cannot mask a real disconnection those methods
-	///     discovered.
-	/// </remarks>
 	public HouseDerivedState GetHouseState()
 	{
 		SyncDefaultKillSwitch();
@@ -462,23 +380,10 @@ public sealed class ModeService
 	}
 
 	/// <summary>
-	///     The people the engine watches for Home/Away, with their current presence — read-only, for the
-	///     dashboard's who's-home panel.
+	///     The people the engine watches for Home/Away. Resolution mirrors <see cref="Engine.PresenceMonitor"/>:
+	///     the configured persons when non-empty, otherwise the whole <c>person</c> domain. Only downgrades
+	///     readiness, never resets it.
 	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Resolution mirrors <see cref="Engine.PresenceMonitor"/> exactly: the configured
-	///         <see cref="GlobalConfig.Persons"/> when non-empty, otherwise every entity in the <c>person</c>
-	///         domain. That is what makes the panel honest — it shows the same people whose presence actually
-	///         drives Home and Away, configured <c>device_tracker.*</c> entries included.
-	///     </para>
-	///     <para>
-	///         Adds no write path. Every state read goes through <see cref="TryGetState"/>, so a disconnected Home
-	///         Assistant renders each person as "unknown" rather than throwing; like <see cref="GetHouseState"/> it
-	///         only ever downgrades readiness, never resets it.
-	///     </para>
-	/// </remarks>
-	/// <returns>One entry per watched person, in configuration / discovery order.</returns>
 	public IReadOnlyList<PersonView> GetPeople()
 	{
 		IReadOnlyList<string> entityIds;
@@ -495,8 +400,7 @@ public sealed class ModeService
 			}
 			catch (InvalidOperationException)
 			{
-				// The entity registry is not up yet — the same window every read here tolerates. An empty list
-				// renders the panel's "no people to watch" state, not a crash.
+				// The registry is not up yet. An empty list renders the panel's "no people to watch" state.
 				IsHomeAssistantReady = false;
 				return [];
 			}
@@ -518,21 +422,9 @@ public sealed class ModeService
 	}
 
 	/// <summary>
-	///     The rooms the document names, in document order — read-only, for the dashboard.
+	///     The rooms the document names, in document order. The dashboard reads this, not the live reports,
+	///     because a room a disconnected Home Assistant has never reported still counts.
 	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Three questions on the dashboard need the document rather than the live reports: which cards to show
-	///         (only rooms the owner switched on), how many rooms are hidden (the footer's count), and whether the
-	///         house is waiting for its first choice (the first-run state). All three are about what the owner
-	///         decided, and a switched-off room a disconnected Home Assistant has never reported still counts.
-	///     </para>
-	///     <para>
-	///         Adds no write path and no second source of truth: the document is the same cached copy the rest of
-	///         this service reads, re-read only when the file changes on disk.
-	///     </para>
-	/// </remarks>
-	/// <returns>One entry per configured room, in the order the document lists them.</returns>
 	public IReadOnlyList<RoomView> GetRooms()
 	{
 		AdaptiveLightingConfig config = Config;
@@ -548,37 +440,25 @@ public sealed class ModeService
 	}
 
 	/// <summary>
-	///     How many lights a room drives: its own list when it pins one, discovery's count otherwise.
+	///     How many lights a room drives. A pinned list replaces discovery for that room entirely, so counting
+	///     discovery's lights for a hand-picked room names a number the engine will never use.
 	/// </summary>
-	/// <remarks>
-	///     A pinned list replaces discovery for that room entirely (<c>AreaEntityResolver.TryResolve</c>), so
-	///     counting discovery's lights for a hand-picked room would name a number the engine will never use.
-	/// </remarks>
 	private int LightCountOf(AreaConfig area, GlobalConfig global) =>
 		area.Lights is { Count: > 0 } pinned ? pinned.Count : _catalog.LightCountIn(area.AreaId, global);
 
 	/// <summary>
-	///     What a mode would drive right now: the period active at <paramref name="now"/> on the one shared table,
-	///     that period's target, and what the mode does to the areas — all read-only.
+	///     What a mode would drive right now: the active period, its target, and what it does to the areas.
 	/// </summary>
 	/// <remarks>
-	///     Pure with respect to time and Home Assistant: the instant and the day's sun times are arguments, and
-	///     the period maths is the engine's own <see cref="CircadianCalculator"/>, so this cannot drift from what
-	///     the engine would resolve for the same inputs. An Away mode pauses/sweeps the areas, so its swatch is
-	///     "dark" rather than a period colour; Sleep, Guest and Normal render the resolved period. The effect line's
-	///     counts honour each area's overrides of <see cref="AdaptiveLightingConfig.Defaults"/> and count only
-	///     enabled areas, matching the engine's <c>IsEngineAllowed</c> gate.
+	///     Pure with respect to time and Home Assistant: the instant and the sun times are arguments, and the
+	///     period maths is the engine's own <see cref="CircadianCalculator"/>. The counts honour each area's
+	///     overrides and only enabled areas, matching the engine's <c>IsEngineAllowed</c> gate.
 	/// </remarks>
-	/// <param name="config">The bound document — the only source of periods, defaults and areas.</param>
-	/// <param name="kind">The option's kind, which decides the swatch and the effect line.</param>
-	/// <param name="now">The instant to resolve the active period at.</param>
 	/// <param name="sun">The day's sun times, for placing sun-anchored boundaries.</param>
 	/// <param name="periodSelectValue">
-	///     What the period select currently reads, or <c>null</c> when there is none, it cannot be read, or this
-	///     house's own schedule decides. Under <see cref="PeriodAuthority.HomeAssistant"/> the engine takes the
-	///     period from here and never from the clock, so a preview that resolved from the clock anyway would show
-	///     a card the lights disagree with. Passed in rather than read, so this stays as pure as
-	///     <paramref name="sun"/> already made it.
+	///     What the period select reads, or <c>null</c> when this house's own schedule decides. Under
+	///     <see cref="PeriodAuthority.HomeAssistant"/> the engine takes the period from here and never from the
+	///     clock, so a preview resolved from the clock would show a card the lights disagree with.
 	/// </param>
 	public static ModePreview ComputePreview(
 		AdaptiveLightingConfig config,
@@ -590,7 +470,7 @@ public sealed class ModeService
 		ArgumentNullException.ThrowIfNull(config);
 		ArgumentNullException.ThrowIfNull(sun);
 
-		// Away beats everything: the areas pause/sweep, so there is no period colour to resolve and the swatch is dark.
+		// Away beats everything: the areas pause and sweep, so there is no period colour to resolve.
 		if (kind == ModeKind.Away)
 			return BuildPreview(config, kind, null);
 
@@ -598,23 +478,12 @@ public sealed class ModeService
 	}
 
 	/// <summary>
-	///     A calculator that resolves the period the way the engine's does — from the select when Home Assistant
+	///     A calculator that resolves the period the way the engine's does: from the select when Home Assistant
 	///     owns the time of day, from the clock otherwise.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         The whole reason this exists is that <c>new CircadianCalculator(periods, global, sun)</c> was written
-	///         twice here, and neither copy knew about the select: under
-	///         <see cref="PeriodAuthority.HomeAssistant"/> both would have gone on placing periods by clock time
-	///         while every room in the house ran whatever the dropdown said.
-	///     </para>
-	///     <para>
-	///         The name is resolved once and closed over rather than read live, because a preview describes one
-	///         instant and every card on the page has to describe the same one — the same reason
-	///         <c>GetHouseMode</c> reads the sun times and "now" once. Resolving through
-	///         <see cref="Schedule.NamedBySelect"/> also means an unmapped or dead mapping falls back to the
-	///         schedule here for exactly the reason it does in the engine.
-	///     </para>
+	///     One place, because a calculator built without the select places periods by clock time while every room
+	///     runs the dropdown. The name is resolved once and closed over, so every card describes one instant.
 	/// </remarks>
 	private static CircadianCalculator Calculator(AdaptiveLightingConfig config, SunTimes sun, string? periodSelectValue)
 	{
@@ -628,9 +497,9 @@ public sealed class ModeService
 	///     What the period select reads right now, or <c>null</c> when this house's own schedule decides.
 	/// </summary>
 	/// <remarks>
-	///     Deliberately <c>null</c> under <see cref="PeriodAuthority.AdaptiveLighting"/> rather than the select's
-	///     value: there the engine <i>writes</i> that select as a mirror of what its schedule resolved, and reading
-	///     it back as an input would let a stale mirror decide what the page shows.
+	///     <c>null</c> under <see cref="PeriodAuthority.AdaptiveLighting"/>, never the select's value: there the
+	///     engine writes that select as a mirror of what its schedule resolved, so reading it back as an input
+	///     lets a stale mirror decide what the page shows.
 	/// </remarks>
 	private string? PeriodSelectValue() =>
 		Schedule.HomeAssistantDecides(Config.Global)
@@ -638,12 +507,9 @@ public sealed class ModeService
 			: null;
 
 	/// <summary>
-	///     Turns a kind and a pre-resolved circadian <paramref name="target"/> into the preview. Split from
-	///     <see cref="ComputePreview"/> so the card loop can resolve the shared target once and reuse it across every
-	///     non-Away option — one CircadianCalculator per page, not one per card.
+	///     Split from <see cref="ComputePreview"/> so the card loop resolves one target and reuses it across every
+	///     non-Away option.
 	/// </summary>
-	/// <param name="config">The document, for the area-effect counts.</param>
-	/// <param name="kind">The option's kind, which decides the swatch and the effect line.</param>
 	/// <param name="target">The resolved period target, or <c>null</c> for Away and when no period places.</param>
 	private static ModePreview BuildPreview(AdaptiveLightingConfig config, ModeKind kind, LightTarget? target)
 	{
@@ -665,7 +531,6 @@ public sealed class ModeService
 			effect);
 	}
 
-	/// <summary>The guest behaviour, in words: normal lighting runs (the panel appends the scene when one is set).</summary>
 	private static string GuestEffect(AdaptiveLightingConfig config)
 	{
 		var count = EnabledAreaSettings(config).Count();
@@ -708,19 +573,16 @@ public sealed class ModeService
 			? $"everyday lighting — the \"{name}\" period right now"
 			: "everyday lighting";
 
-	/// <summary>The effective settings of every enabled area: defaults merged with the area's own overrides.</summary>
 	private static IEnumerable<AreaSettings> EnabledAreaSettings(AdaptiveLightingConfig config) =>
 		config.Areas
 			.Select(area => area.Effective(config.Defaults))
 			.Where(settings => settings.Enabled);
 
 	/// <summary>
-	///     Sets the house mode. Re-resolves the entity from config (never the request), verifies the domain is
-	///     <c>input_select</c> and the option is one of the select's live options, then <c>select_option</c>.
+	///     Sets the house mode. Re-resolves the entity from config, never the request, verifies the domain and
+	///     that the option is one of the select's live options, then calls <c>select_option</c>.
 	/// </summary>
-	/// <param name="option">The option to select. Verified against the live list before any service call.</param>
 	/// <returns><c>true</c> when the call was dispatched; <c>false</c> when refused or HA is not connected.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="option"/> is <c>null</c>.</exception>
 	public bool SelectHouseMode(string option)
 	{
 		ArgumentNullException.ThrowIfNull(option);
@@ -756,12 +618,7 @@ public sealed class ModeService
 		}
 	}
 
-	/// <summary>
-	///     Flips <paramref name="toggle"/> by calling <c>turn_on</c>/<c>turn_off</c> on its entity.
-	/// </summary>
 	/// <param name="toggle">A toggle previously returned by <see cref="GetToggles"/>.</param>
-	/// <returns><c>true</c> when the call was dispatched; <c>false</c> when it was refused or HA is not connected.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="toggle"/> is <c>null</c>.</exception>
 	public bool Toggle(ModeToggle toggle)
 	{
 		ArgumentNullException.ThrowIfNull(toggle);
@@ -769,8 +626,8 @@ public sealed class ModeService
 		// Resolve the built-in master switch live, so a toggle of it is recognised even before a page read did.
 		SyncDefaultKillSwitch();
 
-		// Re-resolve against the config rather than trusting the argument. The argument came from a browser,
-		// and this method must be incapable of calling a service on an entity the config never named.
+		// The argument came from a browser. This method must be incapable of calling a service on an entity the
+		// config never named, so the id is re-resolved, never trusted.
 		if (!IsConfiguredModeEntity(toggle.EntityId))
 		{
 			_logger.LogWarning(
@@ -799,7 +656,6 @@ public sealed class ModeService
 		}
 		catch (InvalidOperationException exception)
 		{
-			// Thrown by the HA context when there is no live connection. Expected when the host runs standalone.
 			_logger.LogWarning(exception, "Could not toggle {EntityId}: no connection to Home Assistant.", toggle.EntityId);
 			return false;
 		}
@@ -809,13 +665,9 @@ public sealed class ModeService
 		string.Equals(entityId, Config.Global.EffectiveKillSwitchEntity, StringComparison.Ordinal);
 
 	/// <summary>
-	///     Reads an entity's state, treating an uninitialised state cache as "no state" rather than as a fault.
+	///     Reads an entity's state, treating an uninitialised state cache as "no state", not as a fault.
+	///     <c>IHaContext.GetState</c> throws until NetDaemon's initial connection completes.
 	/// </summary>
-	/// <remarks>
-	///     <c>IHaContext.GetState</c> throws <see cref="InvalidOperationException"/> until NetDaemon's initial
-	///     connection to Home Assistant completes. Left uncaught that is a 500 on a page whose whole job is to
-	///     say what the modes are doing — including saying "I cannot tell you yet".
-	/// </remarks>
 	private EntityState? TryGetState(string entityId)
 	{
 		try

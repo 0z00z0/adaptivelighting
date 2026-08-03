@@ -1,14 +1,8 @@
 @*
-	The house-mode cell of the board's house bar: the mode the house is in right now, and a row of pill buttons
-	to switch it. It is the only caller of ModeService.SelectHouseMode now that the standalone Modes page is
-	gone — and it adds no write path of its own. Everything shown is read-only enrichment (the current value,
-	the meaning line, the reset summary), and the single action is the existing config-resolved SelectHouseMode,
-	which re-resolves the entity against the configuration before it acts. The parent (Dashboard) owns the data
-	and the write; this component renders and reports the click.
+	The house-mode cell of the board's house bar: the mode the house is in, and pills to switch it.
 
-	It used to be a card of its own, three rows tall, with the meaning as a permanent line. It is now one cell of
-	one strip and the meaning is the value's own hover: the board's chrome is measured against the lanes it
-	displaces, and what each mode does is written out properly on the House tab.
+	This component adds no write path. The parent owns the data and calls ModeService.SelectHouseMode, which
+	re-resolves the entity against the configuration before it acts; everything here is read-only.
 *@
 
 <div class="housebar-cell">
@@ -22,8 +16,6 @@
 	}
 	else
 	{
-		@* The mode's own meaning is the title rather than a line of its own: it is reference material, it costs
-		   two rows of the board's chrome every visit, and the House tab now says it in full for every mode. *@
 		<div class="housebar-main">
 			<span class="housebar-value @(Available ? null : "unknown")" title="@MeaningLine">
 				@(Available ? houseMode.CurrentValue : "unknown")
@@ -64,30 +56,26 @@
 	[Parameter, EditorRequired]
 	public HouseModeView? HouseMode { get; set; }
 
-	/// <summary>The failure text of the last switch attempt, shown under the row until the next successful switch.</summary>
+	/// <summary>The failure text of the last switch attempt, shown until the next successful switch.</summary>
 	[Parameter]
 	public string? Message { get; set; }
 
-	/// <summary>A transient confirmation shown after a switch is requested; the dashboard's ticker clears it after a few seconds.</summary>
+	/// <summary>A transient confirmation; the dashboard's ticker clears it after a few seconds.</summary>
 	[Parameter]
 	public string? Confirmation { get; set; }
 
-	/// <summary>Raised with the option to switch to. The parent calls the config-resolved <c>SelectHouseMode</c> and re-reads.</summary>
+	/// <summary>Raised with the option to switch to. The parent calls <c>SelectHouseMode</c> and re-reads.</summary>
 	[Parameter]
 	public EventCallback<string> OnSelect { get; set; }
 
-	/// <summary>Whether the current mode can actually be shown: Home Assistant answered and the option is a usable value.</summary>
+	/// <summary>Whether the mode can be shown: Home Assistant answered and the option is a usable value.</summary>
 	private bool Available => HouseMode is { IsAvailable: true, CurrentValue: { Length: > 0 } };
 
 	/// <summary>The option the select currently stands on, or <c>null</c> when unknown.</summary>
 	private HouseModeOptionView? Current =>
 		HouseMode?.Options.FirstOrDefault(option => option.IsCurrent);
 
-	/// <summary>
-	///     One plain sentence for the current mode: what it does, plus its reset summary when one exists.
-	///     A rewrite of the old Modes-page "drives" line (10 §3, table D13–D15), reading the current option's own
-	///     kind, scene and clamp rather than a per-card preview.
-	/// </summary>
+	/// <summary>One sentence for the current mode: what it does, plus its reset summary when one exists.</summary>
 	private string? MeaningLine
 	{
 		get
@@ -107,18 +95,18 @@
 	private static string Describe(HouseModeOptionView option) => option.Kind switch
 	{
 		ModeKind.Away => option.Scene is { Length: > 0 } scene
-			? $"runs the {scene} scene and pauses automatic lighting"          // D13
-			: option.Preview.EffectSummary,                                    // D14 — reuse the away-sweep line
+			? $"runs the {scene} scene and pauses automatic lighting"
+			: option.Preview.EffectSummary,
 		ModeKind.Guest => option.Scene is { Length: > 0 } scene
-			? $"{option.Preview.EffectSummary}, plus the {scene} scene"        // D10
-			: option.Preview.EffectSummary,                                    // D10
+			? $"{option.Preview.EffectSummary}, plus the {scene} scene"
+			: option.Preview.EffectSummary,
 		ModeKind.Sleep => option.ClampPeriod is { Length: > 0 } clamp
-			? $"night levels (\"{clamp}\" period) in the rooms that sleep"     // D15
-			: "night levels — but no night period is set (see Configuration → Schedule)", // D15
-		_ => option.Preview.EffectSummary                                      // D12 — everyday lighting
+			? $"night levels (\"{clamp}\" period) in the rooms that sleep"
+			: "night levels — but no night period is set (see Configuration → Schedule)",
+		_ => option.Preview.EffectSummary
 	};
 
-	/// <summary>Capitalises the first letter and ensures a trailing full stop, so the clauses read as sentences.</summary>
+	/// <summary>Capitalises the first letter and ensures a trailing full stop.</summary>
 	private static string Sentence(string text)
 	{
 		if (text.Length == 0)

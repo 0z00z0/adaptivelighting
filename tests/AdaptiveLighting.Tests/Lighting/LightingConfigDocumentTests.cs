@@ -7,16 +7,10 @@ namespace AdaptiveLighting.Tests.Lighting;
 /// <summary>
 ///     Round-trip tests for the YAML loader.
 /// </summary>
-/// <remarks>
-///     These exist because the UI now writes this file. A viewer that mis-parses shows a wrong number; a
-///     writer that mis-parses destroys the household's configuration and then serialises the damage back over
-///     the only copy. The round trip is the property that makes the write path safe to press, so it is tested
-///     against a document that has every shape in the schema in it, not a happy-path stub.
-/// </remarks>
 [TestClass]
 public sealed class LightingConfigDocumentTests
 {
-	/// <summary>A document exercising every shape the schema has: sun-anchored periods, caps, explicit lists, overrides.</summary>
+	/// <summary>A document with every shape in the schema: sun-anchored periods, explicit lists, overrides.</summary>
 	private static AdaptiveLightingConfig Populated() => new()
 	{
 		ConfigName = "Adaptive lighting [test]",
@@ -155,22 +149,6 @@ public sealed class LightingConfigDocumentTests
 
 	// ===================== the darkness threshold, and what saying nothing means =====================
 
-	/// <summary>
-	///     A room counts as dark below <b>1000 lx</b>, and a document that never mentions the threshold gets that.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Asserted on a document with no <c>LuxThreshold</c> key at all rather than on <c>new AreaSettings()</c>
-	///         alone, because that — not an explicit value — is what every existing file looks like, and "the
-	///         default" is only worth anything if it is what an absent value means.
-	///     </para>
-	///     <para>
-	///         The number itself is the owner's product decision. The reading a room gates on is usually a shaded
-	///         outdoor sensor, measured at 1000–3706 lx through the day and 1–3 at night; against the old 40 lx
-	///         every room read "not dark" from first light to dusk while sitting dark. Better to light up too early
-	///         than never.
-	///     </para>
-	/// </remarks>
 	[TestMethod]
 	public void A_Document_That_Never_Mentions_A_Lux_Threshold_Counts_As_Dark_Below_1000()
 	{
@@ -192,14 +170,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(1000d, read.Config.Areas[0].Effective(read.Config.Defaults).LuxThreshold);
 	}
 
-	/// <summary>
-	///     Following the house's outdoor sensor is opt-in, and a document that never mentions it does not.
-	/// </summary>
-	/// <remarks>
-	///     The fallback it replaced was silent, so this is the assertion that says what the silence now means: a
-	///     room that says nothing has no lux reading, and the lux half of its gate stops holding it back. Round
-	///     tripped as well, because a setting that cannot survive a save is a setting nobody can rely on.
-	/// </remarks>
 	[TestMethod]
 	public void Following_The_Outdoor_Sensor_Is_Off_Until_A_Room_Says_Otherwise()
 	{
@@ -283,12 +253,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(expected.Enabled, actual.Enabled);
 	}
 
-	/// <summary>
-	///     The single most destructive round-trip bug available: null means "inherit Defaults", and a
-	///     serialiser that wrote nulls back as concrete values would freeze every area at whatever the defaults
-	///     happened to be on the day somebody first pressed Save. Every later edit to Defaults would then do
-	///     nothing, silently, for reasons nobody could see in the file.
-	/// </summary>
+	// Null means "inherit Defaults". A serialiser that writes nulls back as concrete values freezes every area at
+	// the defaults of the day somebody first saved, and later edits to Defaults then do nothing.
 	[TestMethod]
 	public void RoundTrip_LeavesInheritedAreaSettingsNull()
 	{
@@ -321,10 +287,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsNull(area.Enabled);
 	}
 
-	/// <summary>
-	///     An empty MotionDeviceClasses list means "the built-in set". Serialising the resolved fallback would
-	///     turn "no opinion" into three device classes the operator never chose, permanently, on the first save.
-	/// </summary>
+	// An empty MotionDeviceClasses list means the built-in set. Writing the resolved fallback back would pin three
+	// device classes nobody chose, on the first save.
 	[TestMethod]
 	public void Serialize_DoesNotWriteComputedProperties()
 	{
@@ -344,7 +308,6 @@ public sealed class LightingConfigDocumentTests
 			reloaded.Global.EffectiveMotionDeviceClasses.ToList());
 	}
 
-	/// <summary>Round-tripping twice must be a fixed point: a save that keeps changing the file is a save nobody can review.</summary>
 	[TestMethod]
 	public void Serialize_IsStableAcrossRepeatedRoundTrips()
 	{
@@ -385,7 +348,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(0, config.Periods.Count);
 	}
 
-	/// <summary>The file the household hand-edited before the UI existed must still load in the UI.</summary>
 	[TestMethod]
 	public void RoundTrip_NoHouseMode_EmitsNoHouseModeOrModeKeys()
 	{
@@ -401,11 +363,6 @@ public sealed class LightingConfigDocumentTests
 	/// <summary>
 	///     Levels survive a write and a read: both values, only one, and a row for a period that no longer exists.
 	/// </summary>
-	/// <remarks>
-	///     Worth its own test rather than a line in the area round trip, because these are the first per-room rows
-	///     the schema has carried — every other per-room field is a scalar — and a list of objects is exactly the
-	///     shape a serialiser flattens quietly.
-	/// </remarks>
 	[TestMethod]
 	public void RoundTrip_PreservesARoomsLevels()
 	{
@@ -435,7 +392,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual("kveld", reloaded.Levels[3].Period, "a row naming no configured period survives the trip too");
 	}
 
-	/// <summary>IsEmpty is derived, so it must never reach the file and be read back as a value.</summary>
 	[TestMethod]
 	public void Serialize_DoesNotWriteTheDerivedIsEmptyFlag()
 	{
@@ -447,15 +403,7 @@ public sealed class LightingConfigDocumentTests
 			new System.Text.RegularExpressions.Regex("IsEmpty"));
 	}
 
-	/// <summary>
-	///     A document written before this feature existed has no <c>Levels</c> key, and must load as a room with no
-	///     levels rather than as anything else.
-	/// </summary>
-	/// <remarks>
-	///     Worth asserting because <c>IgnoreUnmatchedProperties</c> makes an unknown key silence rather than an
-	///     error — which cuts both ways, and the way it cuts here is that nothing would have told us if the key had
-	///     been misspelled in the model.
-	/// </remarks>
+	// IgnoreUnmatchedProperties makes an unknown key silence, so a misspelled Levels in the model reports nothing.
 	[TestMethod]
 	public void A_Document_With_No_Levels_Key_Loads_As_A_Room_That_Follows_The_Schedule()
 	{
@@ -475,10 +423,7 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsTrue(ConfigValidator.Validate(read.Config).IsValid);
 	}
 
-	/// <summary>
-	///     A bare <c>Levels:</c> assigns null over the model's initialiser, which would take the room's controller
-	///     down at build time — the same one-blank-line failure the structural repair exists for.
-	/// </summary>
+	// A bare Levels: assigns null over the model's initialiser and takes the room's controller down at build time.
 	[TestMethod]
 	public void A_Blank_Levels_Key_Is_Read_As_No_Levels_Rather_Than_Null()
 	{
@@ -498,7 +443,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(0, read.Config.Areas[0].Levels.Count);
 	}
 
-	/// <summary>And a bare <c>-</c> under it leaves a null element, which is dropped rather than read as a nameless row.</summary>
 	[TestMethod]
 	public void A_Blank_Levels_Entry_Is_Dropped_Rather_Than_Read_As_A_Nameless_Row()
 	{
@@ -548,12 +492,8 @@ public sealed class LightingConfigDocumentTests
 			"SetsMode survives the round trip");
 	}
 
-	/// <summary>
-	///     The kill-switch views are in-memory only: <see cref="GlobalConfig.DefaultKillSwitchEntity"/> is the
-	///     built-in switch the host injects at start, and <see cref="GlobalConfig.EffectiveKillSwitchEntity"/> is a
-	///     read-only view. Serialising either would write the resolved fallback back into the file as if it had been
-	///     chosen, so the document must carry neither.
-	/// </summary>
+	// Both kill-switch views are in-memory only: one is injected by the host at start, the other is derived.
+	// Writing either back puts a resolved fallback in the file as if somebody had chosen it.
 	[TestMethod]
 	public void Serialize_DoesNotWriteTheDefaultedOrEffectiveKillSwitch()
 	{
@@ -602,10 +542,7 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsTrue(config.Areas.Single().RespectSleepMode);
 	}
 
-	/// <summary>
-	///     The top-level key is a fully qualified type name, so extracting this library for distribution renamed
-	///     it. Every document already on disk must keep loading, or an upgrade silently orphans a working house.
-	/// </summary>
+	// The top-level key is a fully qualified type name, so extracting this library for distribution renamed it.
 	[TestMethod]
 	public void A_Document_Written_Under_A_Previous_Namespace_Still_Loads()
 	{
@@ -630,10 +567,8 @@ public sealed class LightingConfigDocumentTests
 
 	// ===================== the pre-2.0 Zones → Areas key translation =====================
 	//
-	// Every one of these guards the same failure, which is the reason the translation exists: Deserialize binds
-	// with IgnoreUnmatchedProperties, so a document still saying "Zones:" against a model that only has "Areas"
-	// would bind to zero areas — no exception, no warning, no lights, and nothing in the log to look at. These
-	// tests are what stops that shipping.
+	// Deserialize binds with IgnoreUnmatchedProperties, so a document still saying "Zones:" against a model that
+	// only has "Areas" binds to zero areas: no exception, no warning, no lights, nothing in the log.
 
 	/// <summary>A document as the two live houses wrote it: the pre-2.0 key names, all through.</summary>
 	private const string LegacySchema =
@@ -668,33 +603,9 @@ public sealed class LightingConfigDocumentTests
 		      SkipAwaySweep: true
 		""";
 
-	/// <summary>
-	///     <b>A retired enum value has to be translated, where a retired key can simply be ignored.</b>
-	///     <c>IgnoreUnmatchedProperties</c> passes over a key this application no longer has and the property
-	///     keeps its default; an unknown enum <i>value</i> is a parse failure, so a house whose file still says
-	///     <c>Darkness: Either</c> would not load at all. That is the difference between this cut and the three
-	///     beside it in the 2026-07 simplification, and it is why the pre-pass gained a value table.
-	/// </summary>
-	/// <remarks>
-	///     It becomes <c>Lux</c>, not <c>Sun</c>: the lux half was the part doing the work, and a room with no
-	///     sensor counts as dark under both, so nothing that was lighting stops.
-	/// </remarks>
-	/// <summary>
-	///     <b>The retired name still parses, and this is the test that was missing.</b>
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Deleting the enum member took a live house's dashboard down with
-	///         <c>FormatException: Either is not a valid value for DarknessSource</c>. The document reader had a
-	///         translation pre-pass; NetDaemon's own configuration binder, which reads the app's YAML into the same
-	///         type, does not and cannot be given one. Only one of the two readers was covered.
-	///     </para>
-	///     <para>
-	///         So the member survives as a name. This asserts the property of it that matters to <i>any</i> binder:
-	///         the string parses. Nothing here goes through <c>LightingConfigDocument</c>, deliberately — that is
-	///         the reader that was already safe.
-	///     </para>
-	/// </remarks>
+	// An unmatched key is silence, but an unknown enum value is a parse failure. NetDaemon's own configuration
+	// binder reads the same type and has no translation pre-pass, so the member has to survive as a name.
+	// Nothing here goes through LightingConfigDocument: that reader was already safe.
 	[TestMethod]
 	public void The_Retired_Either_Still_Parses_For_Any_Binder()
 	{
@@ -703,9 +614,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(DarknessSource.Either, parsed);
 	}
 
-	/// <summary>
-	///     And having parsed, it leaves on the next save: the member is a migration, not a second name for Lux.
-	/// </summary>
 	[TestMethod]
 	public void A_Saved_Document_Stops_Saying_Either()
 	{
@@ -776,7 +684,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual("22:30", read.Config.Periods[1].Start);
 	}
 
-	/// <summary>The flag is about the file, not about the schema: a current document must not claim to have been translated.</summary>
 	[TestMethod]
 	public void A_Document_Written_In_The_Current_Schema_Reports_No_Legacy_Keys()
 	{
@@ -800,11 +707,6 @@ public sealed class LightingConfigDocumentTests
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex("ZonesAutoDiscovered"));
 	}
 
-	/// <summary>
-	///     A hand-edited file carrying both names said two things, and the reader has to pick one. The current
-	///     schema's name wins — it is the one a current editor produced — and the load says so out loud, because
-	///     silently dropping half a document is how somebody loses rooms they thought they had configured.
-	/// </summary>
 	[TestMethod]
 	public void A_Document_Carrying_Both_Key_Names_Keeps_The_Current_One_And_Warns()
 	{
@@ -842,10 +744,6 @@ public sealed class LightingConfigDocumentTests
 			$"each warning must name both keys, or nobody can find them in the file. Got: {string.Join(" | ", logger.Warnings)}");
 	}
 
-	/// <summary>
-	///     The whole migration, end to end: the file two houses have on disk, read, written back, and read again.
-	///     The second read is the one that matters — it must find nothing left to translate.
-	/// </summary>
 	[TestMethod]
 	public void A_Legacy_Document_Read_Written_And_Read_Again_Lands_On_The_Current_Schema()
 	{
@@ -867,11 +765,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual("Adaptive lighting [Home]", second.Config.ConfigName);
 	}
 
-	/// <summary>
-	///     The legacy names themselves are matched case-insensitively, so a hand-edited <c>zones:</c> is not a
-	///     household that loses its rooms. Only the two legacy names: the surrounding keys are the binder's
-	///     business and it matches those exactly, before and after this change alike.
-	/// </summary>
+	// Only the two legacy names are matched case-insensitively. Every surrounding key is the binder's, and it
+	// matches those case-sensitively.
 	[TestMethod]
 	public void The_Legacy_Key_Names_Are_Matched_Whatever_Case_The_File_Used()
 	{
@@ -890,12 +785,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsTrue(read.Config.Global.AreasAutoDiscovered);
 	}
 
-	/// <summary>
-	///     The two migrations compound: a house that has not been upgraded since before the library was extracted
-	///     has a document under the <i>old namespace key</i> carrying the <i>old schema</i>. Both have to be
-	///     recognised on the same read, or the section is never found, its <c>Zones:</c> is never translated, and
-	///     the house loads with no rooms — which is the failure this whole translation exists to prevent.
-	/// </summary>
+	// The two migrations compound: the old namespace key carrying the old schema. Both have to be recognised on
+	// one read, or the section is never found and its Zones: is never translated.
 	[TestMethod]
 	public void A_Document_Under_A_Previous_Namespace_Still_Has_Its_Pre_2_0_Keys_Translated()
 	{
@@ -920,12 +811,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsTrue(read.Config.Global.AreasAutoDiscovered);
 	}
 
-	/// <summary>
-	///     A hand-edit that empties a section leaves the key behind, and <c>Areas:</c> with nothing under it is
-	///     valid YAML for "this key is null". YamlDotNet honours that literally and assigns null straight over the
-	///     property's initialiser, so a type that says it is never null comes back null anyway — and the first
-	///     thing to read it throws. The document must load as if the emptied section had simply been absent.
-	/// </summary>
+	// A key with nothing under it is valid YAML for null. YamlDotNet assigns that null over the property's
+	// initialiser, so a non-nullable type comes back null and the first reader throws.
 	[TestMethod]
 	public void A_Section_Emptied_By_Hand_Loads_As_Absent_Rather_Than_As_Null()
 	{
@@ -956,10 +843,7 @@ public sealed class LightingConfigDocumentTests
 			GlobalConfig.DefaultMotionDeviceClasses.Count, config.Global.EffectiveMotionDeviceClasses.Count);
 	}
 
-	/// <summary>
-	///     The same failure one level down: an emptied <c>Options:</c> under a configured house mode. Worth its own
-	///     test because the house-mode list is read by the normaliser on every save, not only by the engine.
-	/// </summary>
+	// The same failure one level down. This list is read by the normaliser on every save, not only by the engine.
 	[TestMethod]
 	public void An_Emptied_House_Mode_Option_List_Loads_As_No_Options()
 	{
@@ -976,11 +860,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(0, config.Global.HouseMode.Options.Count);
 	}
 
-	/// <summary>
-	///     The same failure again, under the period select. Its own test because this list is read on the hottest
-	///     path in the engine — every area's every evaluation goes through the mapping — so a null here is not one
-	///     exception but one per room per tick, out of a method documented never to throw.
-	/// </summary>
+	// And again under the period select. Every area's every evaluation goes through this mapping, so a null here
+	// is one exception per room per tick, out of a method documented never to throw.
 	[TestMethod]
 	public void An_Emptied_Period_Select_Option_List_Loads_As_No_Options()
 	{
@@ -999,7 +880,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsNull(config.Global.PeriodSelect.PeriodFor("Kveld"), "and the mapping answers rather than throwing");
 	}
 
-	/// <summary>And a bare <c>-</c> among the rows is dropped rather than read as a mapping of nothing to nothing.</summary>
 	[TestMethod]
 	public void A_Blank_Period_Select_Row_Is_Dropped()
 	{
@@ -1019,11 +899,7 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual("evening", config.Global.PeriodSelect.PeriodFor("Kveld"));
 	}
 
-	/// <summary>
-	///     <c>Authority</c> is an enum, and an enum value is the one thing a document can carry that stops the app
-	///     rather than being ignored — see <see cref="PeriodAuthority"/>. Both spellings must bind, and the numeral
-	///     must keep meaning what it meant.
-	/// </summary>
+	// An enum value is the one thing a document can carry that stops the app instead of being ignored.
 	[TestMethod]
 	public void Period_Select_Authority_Binds_By_Name_And_By_Ordinal()
 	{
@@ -1042,10 +918,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(PeriodAuthority.HomeAssistant, Read("1"));
 	}
 
-	/// <summary>
-	///     The ordinals themselves, pinned. They are compile-time constants inlined into consuming assemblies, so a
-	///     renumbering silently changes what an already-built binary — and an already-written file — mean.
-	/// </summary>
+	// Ordinals are compile-time constants inlined into consuming assemblies. Renumbering silently changes what an
+	// already-built binary, and an already-written file, mean.
 	[TestMethod]
 	public void Period_Authority_Ordinals_Are_Fixed()
 	{
@@ -1067,11 +941,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsNull(config.Global.PeriodSelect, "no PeriodSelect block → property null, and OmitNull writes none back");
 	}
 
-	/// <summary>
-	///     A bare <c>-</c> left behind by a half-finished edit is a list entry holding nothing at all. It has to be
-	///     read as absent: substituting an empty room or period would invent one the file never named, and the
-	///     validator would then stop the whole document over a stray dash.
-	/// </summary>
+	// Substituting an empty room or period for a bare dash invents one the file never named, and the validator
+	// then stops the document over a stray dash.
 	[TestMethod]
 	public void A_Blank_List_Entry_Is_Read_As_Absent_Rather_Than_As_A_Nameless_Room()
 	{
@@ -1103,12 +974,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual("light.stue", config.Areas.Single().Lights!.Single());
 	}
 
-	/// <summary>
-	///     The both-keys rule is "the current key wins" — but only a key the binder can actually read is a key that
-	///     can win. YamlDotNet matches property names exactly, so a hand-edited <c>areas:</c> in lower case binds to
-	///     nothing. Treating it as the current key dropped <c>Zones:</c>, the one name of the two that still carried
-	///     the household's rooms, and the house loaded with none.
-	/// </summary>
+	// The current key wins, but only a key the binder can read can win. YamlDotNet matches property names
+	// case-sensitively, so a hand-edited lower-case areas: binds to nothing.
 	[TestMethod]
 	public void A_Legacy_Key_Is_Never_Dropped_For_A_Current_Key_The_Binder_Cannot_Read()
 	{
@@ -1128,13 +995,8 @@ public sealed class LightingConfigDocumentTests
 			"the legacy key still binds, because the lower-case one never could");
 	}
 
-	/// <summary>
-	///     The translation belongs to this document's section and stops there. A YAML file may hold another
-	///     NetDaemon app's configuration beside this one, and <c>Zones:</c> is a perfectly good key for an app that
-	///     manages Home Assistant's GPS zones. Renaming it made that section bind against this schema's area list
-	///     and fail, so a file that loaded fine stopped loading at all — and it raised the migration flag, which
-	///     rewrites the file with only this document's section in it.
-	/// </summary>
+	// The translation stops at this document's section. A YAML file may hold another NetDaemon app beside this
+	// one, and Zones: is a good key for an app managing Home Assistant's GPS zones.
 	[TestMethod]
 	public void A_Legacy_Key_In_Another_Apps_Section_Is_Neither_Renamed_Nor_Treated_As_A_Migration()
 	{
@@ -1155,7 +1017,7 @@ public sealed class LightingConfigDocumentTests
 			"and nothing here needs migrating: the only Zones: in the file belongs to somebody else");
 	}
 
-	/// <summary>Captures what was logged, because "and it warns" is half of the both-keys contract.</summary>
+	/// <summary>Captures everything logged at warning or above.</summary>
 	private sealed class RecordingLogger : ILogger
 	{
 		private readonly List<string> _warnings = [];

@@ -8,67 +8,22 @@
 @inject ILogger<ConfigEditor> Logger
 
 @*
-	The House tab — everything that isn't one room: what every room starts with, the day's schedule, the modes,
-	the people, and the engine itself.
+	The House tab: everything that is not one room. Four sections behind a rail, one shown at a time.
 
-	It used to be a viewer, which meant it was an ornament: the thing it displayed could only be changed by
-	editing YAML over SSH and restarting the host, so the page's own existence made nothing possible. It now
-	reads and writes the document, validates before writing, and rebuilds the running engine in place afterwards.
+	The rooms are a list, not an editor. Each row opens /room/{areaId}, which is the only place a room's settings
+	are edited; a second inline editor here could not stay equivalent and did not.
 
-	The page has four sections — Areas, Schedule, House modes, House — and shows one at a time behind a section
-	rail rather than stacking them into one endless scroll: on a phone the old page was several screens of
-	unrelated knobs before the house-wide settings even began. The sections are named after things a person can
-	point at, not after where a value is stored, and anything rarely touched folds away at the bottom of its
-	section rather than into a top-level "Advanced" drawer.
-
-	WHAT DECIDES WHICH SECTION. Areas is a list of rooms. House holds the settings there is exactly one of — the
-	defaults every room starts with, how lights and sensors are found, the house's name, its people, the master
-	switch, the fine tuning. Schedule and House modes are their own sections because they are big and distinct.
-	The earlier rule was "a setting lives under the noun it changes", which put the all-rooms defaults and the
-	discovery labels in Areas; it does not discriminate, because the schedule and the modes change how rooms
-	behave too. See the comment above the House section for the whole argument.
-
-	THE DISCLOSURE MODEL, the same one the room page uses. Each card leads with the thing said as English, with
-	the values inline and clickable, and keeps the full detail underneath for somebody who came for a specific
-	knob: the all-rooms defaults are four sentences over an All-settings reveal, the schedule is a chart and a
-	blend sentence over the period table, and each house mode is one sentence over the field-by-field editor.
-	Overlap between a sentence and the rows below it is intended — the sentence is how somebody reads the house,
-	the rows are how somebody finds a setting by what it changes.
-
-	THE ROOMS ARE A LIST, NOT AN EDITOR. Each room is one row that opens its own page at /room/{areaId}, where
-	its live state, its evidence and all twenty-one of its settings are. The inline per-room editor this page
-	used to host is gone: two editors for one room could not stay equivalent, and did not — the old one offered
-	no rows at all for the five daylight-brightness settings, so a room tuned on the new page had values the old
-	one could neither show nor change. What the list keeps is what only a list can do: the power switch on each
-	room, the live-state edge colour, the floor grouping and its per-floor bulk switch, and the two acts that
-	are about the set of rooms rather than about one of them.
-
-	THE WRITE PATH — deliberately still the save bar, where the room page chose to debounce.
-	A room-page edit changes one room; every edit here changes something every room inherits, and Save rebuilds
-	every area controller in the house. Three things follow from that and all three point the same way:
-
-	  - The batch is real. "Switch on this floor" is six rooms in one press, and "Set up rooms again" rebuilds
-	    several at once — its warning dialog says in so many words that nothing is written until Save and that
-	    Discard changes undoes it. Instant apply would make an owner-approved warning untrue.
-	  - Not every control here is constrained. The house name, the device-class set and the write-only NetDaemon
-	    user id are free text, and the argument that makes per-change apply safe elsewhere ("no interaction can
-	    produce an invalid document") does not hold for them. The user id in particular is applied on save by
-	    design, and a debounce would write it half-typed.
-	  - Regret costs more. A mis-dragged default is live in seventeen rooms, and Discard changes is a stronger
-	    answer than a one-deep undo: it puts the whole document back to what is on disk.
-
-	So the save bar stays, it stays sticky, and every token popover says what it promises — applies when you
-	save, Discard changes puts it back. No new write path either way: Save goes to LightingEngineHost, which
-	validates, writes one file, re-reads it and rebuilds the engine.
+	The write path is the save bar, not the room page's debounce. Every edit here changes something every room
+	inherits, "switch on this floor" is a real batch whose warning promises nothing is written until Save, and
+	several controls (the house name, the device-class set, the NetDaemon user id) are free text a debounce would
+	write half-typed. Save goes to LightingEngineHost, which validates, writes one file, re-reads and rebuilds.
 
 	Two properties this page must never lose:
 
-	  - Token safety. It binds AdaptiveLightingConfig and nothing else. It never injects IConfiguration, and
-	    it must never be widened to render one: the root configuration carries the Home Assistant long-lived
-	    token, and this document does not. NetDaemonUserId is in the document, and is rendered as set/not-set
-	    only — never its value, in either direction.
-	  - One write surface. Save goes to LightingEngineHost, which writes exactly one file whose path was
-	    resolved server-side at start-up. Nothing on this page names a path, and nothing it posts can.
+	  - Token safety. It binds AdaptiveLightingConfig and nothing else, never IConfiguration: the root
+	    configuration carries the Home Assistant long-lived token and this document does not. NetDaemonUserId is
+	    rendered as set or not-set, never its value, in either direction.
+	  - One write surface. Nothing on this page names a file path, and nothing it posts can.
 *@
 
 <PageTitle>The house &mdash; Adaptive lighting</PageTitle>
@@ -94,11 +49,7 @@ else
 		and the engine itself. Changes apply as soon as you save &mdash; no restart needed.
 	</p>
 
-	@* ---------------------------------------------------------------------------------------------
-	   Where the file lives, and whether a deploy will eat it. Worth a permanent panel rather than a
-	   footnote: a person editing a document that the next publish silently reverts would conclude the
-	   UI is broken, and would be right.
-	   --------------------------------------------------------------------------------------------- *@
+	@* Permanent, not a footnote: a document the next deploy silently reverts makes the UI look broken. *@
 	@if (Location.Warning is { Length: > 0 })
 	{
 		<div class="notice warn">
@@ -108,13 +59,8 @@ else
 	}
 
 	@*
-		The engine and the connection, above the rail and only when one of them is wrong.
-
-		The shipped page carried a three-row status panel on every visit to say that everything was fine, which
-		is the same reassurance budget the board's chrome was spending. What could not move into a fold is the
-		part that is a problem report: a stopped engine and an unreachable Home Assistant both explain why an
-		edit did not reach the house, and an explanation that hides with a section somebody is not looking at
-		explains nothing. The full detail — the file, its backup, the managed-room count — lives under House.
+		Above the rail, so it cannot hide with a section nobody is looking at. Both of these explain why an edit
+		did not reach the house. The full detail lives under House.
 	*@
 	@if (!Engine.IsRunning || !HomeAssistantIsAnswering)
 	{
@@ -133,19 +79,14 @@ else
 		</div>
 	}
 
-	@* --------------------------------------------------------------------------------------------- *@
-	@* Only while there is something to say: an unsaved edit, a refusal to explain, or a confirmation to
-	   deliver. A bar that is always there says nothing by being there, and this one now floats over the
-	   content — permanent furniture in front of the page is worse than no furniture at all. *@
+	@* Only while there is something to say. It floats over the content, so it must not be permanent. *@
 	@if (ShowSaveBar)
 	{
 	<div class="savebar">
 		<button type="button" class="primary" @onclick="Save" disabled="@_busy">Save and apply</button>
 		<button type="button" @onclick="Reload" disabled="@_busy">Discard changes</button>
 
-		@* Validation errors and a refused/failed save stay put until they are resolved — they are the reason the
-		   document is not safe, and a message that names the problem must not vanish on a timer. Only the SUCCESS
-		   confirmation is transient: it is rendered separately below and auto-dismisses. *@
+		@* Errors and refused saves stay until resolved. Only the success confirmation below is transient. *@
 		@if (_liveValidation is { IsValid: false })
 		{
 			<span class="savebar-note bad">
@@ -164,10 +105,8 @@ else
 	</div>
 	}
 
-	@* The validator already returns precise, actionable messages. They are shown verbatim: restating them
-	   here would mean two descriptions of one rule, and the one on this page would be the one that rots.
-	   They also sit above the section rail on purpose — an error in a section you are not looking at
-	   still refuses the save, so it must not be able to hide with its section. *@
+	@* Validator messages verbatim, and above the rail: an error in a section you are not looking at still
+	   refuses the save, so it must not hide with its section. *@
 	@if (_liveValidation is { } validation && (validation.Errors.Count > 0 || validation.AreaErrors.Count > 0))
 	{
 		<div class="notice @(validation.IsValid ? "warn" : "bad")">
@@ -195,13 +134,7 @@ else
 	}
 
 	<div class="config-layout">
-		@* On a desktop this is a rail beside the content; on a phone it collapses to a row of chips
-		   above it — a thumb finds a chip, not a cramped sidebar.
-
-		   Each section carries its glyph here and again on its own header. That pair is the whole of the icon
-		   set's job on this page: the mark is what a section is recognised by before its label is read, and
-		   repeating it on the header confirms you arrived where you pressed. The room rows below stay text —
-		   §6.2 refused glyphs on rows, and seventeen rooms with a mark each is texture, not information. *@
+		@* A rail on a desktop, a row of chips on a phone. Each section's glyph repeats on its own header. *@
 		<nav class="config-nav" aria-label="Configuration sections">
 			<button type="button" class="config-nav-link @(ActiveClass(Section.Areas))" @onclick="() => Show(Section.Areas)">
 				<Icon Name="@Glyph.Areas" Class="config-nav-icon" />
@@ -235,8 +168,7 @@ else
 					<p class="lede">
 						Rooms not listed here are never touched. Lights and sensors are found automatically from Home
 						Assistant's areas &mdash; open a room to see what was found and to change how it behaves.
-						@* The two groups that moved out of here. A thread rather than a silent absence: somebody who
-						   knew where they were has to be told where they went, once, on the page they left. *@
+						@* Two groups moved to House; the thread says where, once, on the page they left. *@
 						What every room starts with, and which lights count as a room's, are under
 						<button type="button" class="thread" @onclick="() => Show(Section.House)">House</button>.
 					</p>
@@ -257,11 +189,8 @@ else
 					</p>
 				}
 
-				@*
-					Adding a room is picking one of the Home Assistant areas that has no room yet. It used to append a
-					blank row whose only purpose was to make you choose an area inside it; asking first means the room
-					arrives already knowing what it is, and a room that already exists is never offered twice.
-				*@
+				@* Adding a room is picking a Home Assistant area that has no room yet, so it arrives knowing what
+				   it is and an existing room is never offered twice. *@
 				@if (_addingRoom)
 				{
 					<div class="panel house-add">
@@ -296,9 +225,8 @@ else
 									 Cancelled="@CloseSetup" />
 				}
 
-				@* Floors come from the registry through the shared grouping helper, so this list and the board's lanes
-				   can never disagree about which room is upstairs. A house with no floors gets one unnamed group and
-				   therefore no headers at all — exactly the flat list it had before floors existed. *@
+				@* Through the shared grouping helper, so this list and the board's lanes cannot disagree about which
+				   room is upstairs. A house with no floors gets one unnamed group and no headers. *@
 				@foreach (FloorGroup<AreaConfig> group in _areaGroups)
 				{
 					FloorGroup<AreaConfig> floor = group;
@@ -318,9 +246,8 @@ else
 							bool enabled = AreaView.IsEnabled(current, _config.Defaults);
 
 							<div class="room-row @AreaView.EdgeClass(enabled, LiveStateOf(current))" @key="current">
-								@* The switch is the room's power state, so it is a switch and it is on the row where a
-								   hand reaches for it. It stays outside the link: a control inside an anchor is neither
-								   valid markup nor a thing a thumb can aim at without also navigating. *@
+								@* Outside the link: a control inside an anchor is invalid markup and cannot be tapped
+								   without also navigating. *@
 								<button type="button"
 										class="switch @(enabled ? "on" : null)"
 										role="switch"
@@ -343,8 +270,8 @@ else
 								}
 								else
 								{
-									@* No page to open: either the room names no Home Assistant area, or it does but has
-									   not been saved yet, and the room page reads the file rather than this document. *@
+									@* No page to open: the room names no area, or it does but is unsaved, and the room
+									   page reads the file rather than this document. *@
 									<span class="room-open room-open-shut">
 										<span class="area-title">@RoomName(current)</span>
 										@if (current.AreaId is { Length: > 0 } pending)
@@ -354,12 +281,9 @@ else
 										}
 										else
 										{
-											@* A room that names no area has no address, so its own page cannot exist and
-											   everything on it would be out of reach. The picker is the way back: name the
-											   area and the room becomes an ordinary room with an ordinary page. Only a
-											   hand-edited document reaches this state — every path that proposes a room
-											   proposes it with an area id — but a document that reaches it must not become
-											   uneditable. *@
+											@* Only a hand-edited document reaches this state; every path that proposes a room
+											   gives it an area id. The picker is the way back, so such a document does not
+											   become uneditable. *@
 											<span class="badge bad">no area</span>
 											<span class="area-summary-hint">@HouseView.RoomSummary(current)</span>
 											<span class="room-adopt">
@@ -375,9 +299,8 @@ else
 								}
 							</div>
 
-							@* What the switch above just did, said under the row it belongs to rather than in a dialog
-							   in front of it. A sibling of the row, not a child: the row is a switch beside a link, and
-							   a block of chips inside it would break both. *@
+							@* A sibling of the row, not a child: the row is a switch beside a link, and a block of
+							   chips inside it breaks both. *@
 							@if (SwitchOnNoteFor(current) is { } switchOn)
 							{
 								<SwitchOnNoteView Note="@switchOn" Dismissed="@(() => DismissSwitchOnNote(current))" />
@@ -391,8 +314,7 @@ else
 					<div class="empty">No rooms yet. Add one to get started.</div>
 				}
 
-				@* Where the board's footer thread lands. The rooms are in the list above with their own switches, so
-				   this line counts them rather than listing them a second time. *@
+				@* Where the board's footer thread lands. Counts them; the list above already names them. *@
 				@if (HouseView.SwitchedOffLine(_config.Areas, _config.Defaults) is { Length: > 0 } switchedOff)
 				{
 					<p class="rooms-off">@switchedOff</p>
@@ -407,9 +329,7 @@ else
 					</p>
 				</header>
 
-				@* No glyph on this card head: the section's own header now carries i-schedule, and the card
-				   begins about a hundred pixels under it. Two of one mark that close is the repetition §6.2
-				   refused, and of the two the header is the one the rail points at. *@
+				@* No glyph on this card head: the section header a hundred pixels above already carries it. *@
 				<section class="panel room-card house-card">
 					<div class="room-card-head">
 						<span class="room-card-title">Through the day</span>
@@ -420,9 +340,8 @@ else
 						<DaylightChart Periods="@_config.Periods" Location="@_homeLocation" />
 					</div>
 
-					@* Blending belongs to the schedule, not to a timing grab-bag: it is entirely about what happens at
-					   the boundaries the chart above draws. One token rather than a switch beside a number — blending
-					   off and blending over nothing are the same instruction. *@
+					@* One token, not a switch beside a number: blending off and blending over nothing are the same
+					   instruction. *@
 					<div class="room-sentences">
 						<SentenceView Sentences="@_blendSentence"
 									  Edited="@OnGlobalEdited"
@@ -437,10 +356,7 @@ else
 							   HouseMode="@_config.Global.HouseMode"
 							   Global="@_config.Global" />
 
-				@* Under the table, not over it. The overwhelming majority of houses never adopt this, and the
-				   schedule is what somebody came to this section for; a fold whose header says what it is for is
-				   findable without spending the top of the page on it. Open when it is already in use, because
-				   then it is not an offer any more — it is the thing deciding what the table above means. *@
+				@* Under the table, and open only when already in use: then it is what decides what the table means. *@
 				<GroupFold Title="Connect existing Selection from Home Assistant (must be an Input-Select)"
 						   Description="@PeriodSelectSummary"
 						   Open="@(_config.Global.PeriodSelect?.EntityId is not null)">
@@ -460,10 +376,7 @@ else
 			}
 			else if (_section == Section.HouseModes)
 			{
-				@* House modes are their own room now, not a group buried in Global. One dropdown helper carries the
-				   house's modes; each option is tagged with what it means to the engine. Every binding and handler
-				   here is exactly the one that lived under Global — SetHouseModeEntity, the live-options catalog, and
-				   OnHouseModeOptionsChanged — moved verbatim. *@
+				@* One dropdown helper carries the house's modes; each option is tagged with what it means. *@
 				<header class="section-head">
 					<h2><Icon Name="@Glyph.Modes" Class="ic-head" />House modes</h2>
 					<p class="lede">
@@ -499,22 +412,11 @@ else
 					</div>
 
 					@*
-						Where the helper's list and this one part company, and the one control that closes the gap.
+						Where the helper's list and this one part company. It reports and offers; it never adopts by
+						itself, because the thing it would rewrite unasked is the list every mode hangs off.
 
-						Picking a helper has always rebuilt the list from it — but only on the pick, so a house whose
-						helper was chosen months ago and has since gained an option had no way to ask for it. The
-						missing piece was never the rebuild; it was something visible to press. This is that, and it
-						reuses UseHelperOptions → AdoptHelperOptions rather than repeating the merge, so an option the
-						helper still offers keeps its whole configuration here for the same reason it does there.
-
-						It reports and offers; it never acts by itself. A document that changed because a page was
-						opened is the behaviour this project has refused everywhere else, and it would be a worse
-						version of it here — the thing it would rewrite unasked is the list every mode hangs off.
-
-						All three states are said out loud, including the two that ask for nothing. "The lists match"
-						is the answer to the question somebody came to this section with, and an unreachable Home
-						Assistant has to say so rather than show a stale call to action over an empty list it cannot
-						tell from an empty helper.
+						All three states render, including the two that ask for nothing: an unreachable Home Assistant
+						cannot tell an empty helper from no answer, so it must say so instead of showing a stale offer.
 					*@
 					@if (_config.Global.HouseMode?.Entity is { Length: > 0 } modeEntity)
 					{
@@ -522,8 +424,8 @@ else
 						{
 							<div class="notice warn modes-sync">
 								<strong>@HouseModeSync.Title(_helperDiff)</strong>
-								@* The entity leads its sentence rather than ending it: a <code> chip carries its own
-								   padding, so a full stop set directly after one floats a space away from it. *@
+								@* The entity leads the sentence: a <code> chip's own padding floats a trailing full
+								   stop a space away from it. *@
 								<span>The helper <code>@modeEntity</code> now offers something else. @HouseModeSync.Summary(_helperDiff)</span>
 								<span>
 									An option the helper still offers keeps everything you set on it &mdash; what it
@@ -555,14 +457,10 @@ else
 					}
 				</div>
 
-				@* What the modes actually do, in one sentence each, above the field-by-field editor that changes
-				   everything else about them. The two values a house actually tunes — how long it must be still
-				   before a mode arms itself, and the grace in which your own leaving doesn't cancel it — are
-				   tokens here; the rest is prose, because a scene and a period are picked from what Home
-				   Assistant has rather than from a shortlist. *@
+				@* One sentence per mode, over the field-by-field editor. The two tunable durations are tokens; a
+				   scene and a period are prose, because they are picked from what Home Assistant has. *@
 				@if (_modeLines.Count > 0)
 				{
-					@* No glyph here either, for the reason above: i-modes is on the House modes header. *@
 					<section class="panel room-card house-card">
 						<div class="room-card-head">
 							<span class="room-card-title">What each mode does</span>
@@ -590,8 +488,7 @@ else
 					</section>
 				}
 
-				@* The option cards render at section level, not inside a form .field-control, so they stretch to the
-				   full width the period cards use rather than shrinking to their content. *@
+				@* At section level, not inside a .field-control, so the cards stretch to full width. *@
 				@if (_config.Global.HouseMode?.Entity is { Length: > 0 })
 				{
 					<header class="section-head subsection">
@@ -620,55 +517,16 @@ else
 			else
 			{
 				@*
-					House holds the settings there is exactly one of.
+					House holds the settings there is exactly one of. That is the membership rule: there is one
+					Defaults block and one of each label and device-class setting in the whole document, and no
+					per-room twin of any of them.
 
-					That is the membership rule, and it is what settles an argument this page got wrong once. The
-					original rule was "a setting lives under the noun it changes", which put the all-rooms defaults
-					and the discovery labels under Areas because they change how rooms behave. But that test does
-					not discriminate: the schedule changes how rooms behave, so do the house modes, and both have
-					sections of their own. The owner's test does — Areas is a LIST OF ROOMS, and these are
-					singular. There is exactly one Defaults block and exactly one of each label and device-class
-					setting in the whole document; a per-room exclude label does not exist. So they are here, with
-					the house's name, its people, the master switch and the fine tuning.
+					Every group here is a GroupFold, with no exceptions and none open by default: the section is its
+					own table of contents. Ordered by what you come back to, then what you set once, then what you
+					read only when something looks wrong.
 
-					It was also a findability bug: in a house of seventeen rooms across six floor groups, both sat
-					far below the fold of a list nobody scrolls to the bottom of. They lead this section now for
-					the same reason — they are the two most substantial things in it.
-
-					Schedule and House modes keep their own sections because they are big and distinct, not
-					because the rule excludes them.
-
-					Behind one fold at the bottom, never in a section of its own, are the internals. "Advanced" as
-					a place answered "how confident do I need to be?"; it never answered "where do I look?".
-
-					EVERY GROUP IS THE SAME KIND OF THING. The section arrived in two batches, and it showed: the
-					two groups that moved in from Areas kept the room page's always-open card, while the ones that
-					grew here were folds. Two mechanisms for one list of groups means the page has no answer to
-					"can I close this?" — so there is one mechanism, GroupFold, and no exceptions. The card heads
-					lost their glyphs with the cards, which is what §6.2 asked for on this page in the first place:
-					seven repeated marks down one column are texture, not information.
-
-					ALL COLLAPSED. The whole section is its own table of contents — seven titled lines a person can
-					read in one screen and then open the one they came for. Nothing starts open, including the
-					all-rooms defaults: leading the order already says they are the main thing, and a group that
-					opens itself would push everything after it off the screen, which is the state this restructure
-					was called to fix.
-
-					THE ORDER: what you come back to, then what you set once, then what you only read when
-					something looks wrong.
-
-					  1. Every room starts with these  — the baseline every room page is read against.
-					  2. Finding lights & sensors      — which lights that baseline reaches. Read with 1.
-					  3. People                        — changes when the household does.
-					  4. Master switch                 — pointed at an entity once; flipped day to day on the board.
-					  5. House name                    — typed at setup, then never.
-					  6. Fine tuning                   — the internals.
-					  7. This installation             — read-only, and only when something is wrong.
-
-					The problem report this ordering does NOT contain is the engine/connection warning and the
-					validation errors: both stay above the section rail, where a fault cannot hide inside a group
-					nobody opened. "This installation" is the calm version of the same facts, which is why it can
-					fold.
+					The engine and connection warning and the validation errors stay above the section rail, where a
+					fault cannot hide inside a group nobody opened.
 				*@
 				<header class="section-head">
 					<h2><Icon Name="@Glyph.House" Class="ic-head" />House</h2>
@@ -678,17 +536,7 @@ else
 					</p>
 				</header>
 
-				@* --------------------------------------------------------------------------------------------
-				   What every room starts with, in the same two layers the room page uses: the sentences, then
-				   the same settings again as rows. First in the section, with the discovery labels under it: one
-				   says how a room behaves by default, the other says which lights that reaches, and they are read
-				   together.
-
-				   Flush, because everything inside already spans the fold: the sentences, the reveal bar that
-				   carries its own background and rule, and the two columns of settings groups under it. Opening
-				   it is the third disclosure level on this page — sentences, then All settings, then a group —
-				   which is one more than the room page has and the price of the section fitting on a screen.
-				   -------------------------------------------------------------------------------------------- *@
+				@* Flush, because everything inside already spans the fold. *@
 				<GroupFold Title="Every room starts with these"
 						   Description="How long lights stay on, how a room decides it's dark, and how it behaves. A room's own settings win."
 						   Flush="true">
@@ -730,8 +578,8 @@ else
 									@if (open)
 									{
 										<div class="sgroup-body">
-											@* These values ARE the house, so there is no inherit tag and no road back: a
-											   SettingRow with no house text renders neither. *@
+											@* These values are the house, so there is no inherit tag and no road back:
+											   a SettingRow with no house text renders neither. *@
 											@foreach (RoomSetting setting in current.Settings.Where(item => item.AppliesTo(_config.Defaults)))
 											{
 												RoomSetting item = setting;
@@ -784,8 +632,7 @@ else
 
 															@if (string.Equals(item.Key, nameof(AreaSettings.LuxBrightnessGamma), StringComparison.Ordinal))
 															{
-																@* The one setting that is a shape rather than a quantity. The number stays
-																   in the stepper where it can be changed; the curve says what it means. *@
+																@* A shape, not a quantity: the stepper changes it, the glyph says what it means. *@
 																<CurveGlyph Exponent="@RoomSettings.Shown(null, _config.Defaults, item.Key)"
 																			Label="@CurvePath.Describe(RoomSettings.Shown(null, _config.Defaults, item.Key))" />
 															}
@@ -801,29 +648,15 @@ else
 					}
 				</GroupFold>
 
-				@* One include label, one exclude label, one motion label, one device-class set — for the whole
-				   house, with no per-room twin of any of them, which is what makes this a House setting rather
-				   than an Areas one. Folded because it is read once and then forgotten, not because it is
-				   frightening. *@
 				<GroupFold Title="Finding lights &amp; sensors"
 						   Description="Which lights this app may manage, what counts as a sensor, and where the house reads the daylight."
 						   Open="@(Engine.SharedLights.Count > 0)">
 					@*
-						Bulbs two rooms both command. The engine finds these as it builds and hangs them off
-						LightingEngineHost.SharedLights; the cause is always the same one, a light Home Assistant
-						has put in no room of its own that a group in each of two rooms reaches down to.
+						Bulbs more than one room commands, found by the engine as it builds and hung off
+						LightingEngineHost.SharedLights. The fold opens itself when there is one; a warning inside a
+						closed drawer is shown to nobody.
 
-						Shown here, once, rather than on each room's page. It is a fact about the house — and the
-						advice names both rooms, so a per-room copy would say the same sentence twice on two pages
-						while a reader fixes it in a third place, Home Assistant. This section is already where
-						"which lights count as a room's" is settled, which is exactly the question it raises.
-
-						The fold opens itself when there is one. Folded is right for a section read once and then
-						forgotten; it is not right for a warning, and a warning inside a closed drawer is shown to
-						nobody — least of all to somebody who by definition does not know to go looking for it.
-
-						Said as "more than one room", not "two": the engine flags a bulb from two claimants upward,
-						and the reason beneath names all of them.
+						"More than one room", not "two": the engine flags a bulb from two claimants upward.
 					*@
 					@if (Engine.SharedLights is { Count: > 0 } sharedLights)
 					{
@@ -836,9 +669,8 @@ else
 							<ul>
 								@foreach (SuspectLight shared in sharedLights)
 								{
-									@* Id beside the name, as SwitchOnNoteView orders it — the reason is a full
-									   sentence ending in advice, and an entity id trailing after it reads as
-									   part of that advice. *@
+									@* Id beside the name, as SwitchOnNoteView orders it: the reason ends in advice,
+									   and a trailing entity id reads as part of that advice. *@
 									<li><strong>@shared.Name</strong> <code>@shared.EntityId</code> &mdash; @shared.Reason</li>
 								}
 							</ul>
@@ -907,12 +739,8 @@ else
 						</div>
 					</div>
 
-					@*
-						The outdoor sensor sits here rather than under the all-rooms Darkness group, per ui-design-c §4:
-						it is an input the house discovers darkness with, and grouping it with the other "how rooms find
-						things" settings leaves one fewer home for sensor-ish settings. A deliberate small deviation from
-						area-restructure §3.1, flagged there and again here.
-					*@
+					@* The outdoor sensor lives here, not under the all-rooms Darkness group: it is an input the house
+					   discovers darkness with. *@
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">Outdoor light-level sensor
@@ -995,8 +823,7 @@ else
 					</details>
 				</GroupFold>
 
-				@* Who the house watches to decide Home and Away. The sentence carries how long everyone must be
-				   gone before the house counts as empty; the field carries who counts at all. *@
+				@* The sentence carries how long everyone must be gone; the field carries who counts at all. *@
 				<GroupFold Title="People"
 						   Description="Whose presence decides Home and Away, and how long before the house counts as empty.">
 					<SentenceView Sentences="@_awaySentence"
@@ -1028,13 +855,8 @@ else
 					</div>
 				</GroupFold>
 
-				@* The switch is picked from whatever Home Assistant has. That deliberately does not care how it got
-				   there — a hand-made helper today, or the enable switch NetDaemon's state manager publishes for
-				   this app, which is the built-in default when nothing is chosen.
-
-				   It folds like every other group here, and folding it hides nothing urgent: whether automatic
-				   lighting is on right now is said by the board's On/Off control and by the warning above the rail.
-				   What is here is which entity that switch is, and which way round it reads — chosen once. *@
+				@* Picked from whatever Home Assistant has: a hand-made helper, or the enable switch NetDaemon's state
+				   manager publishes for this app, which is the built-in default when nothing is chosen. *@
 				<GroupFold Title="Master switch"
 						   Description="Which switch pauses all automatic lighting, and which way round it reads.">
 					<p class="group-note">
@@ -1061,8 +883,8 @@ else
 						</div>
 						@if (string.IsNullOrWhiteSpace(_config.Global.KillSwitchEntity))
 						{
-							@* Defaulted: the built-in switch is by definition an enabled-flag, so the polarity dropdown is
-							   hidden and the concrete id is shown instead. *@
+							@* The built-in switch is an enabled-flag by definition, so the polarity dropdown is hidden
+							   and the concrete id shown instead. *@
 							<div class="field-help">
 								@if (_config.Global.EffectiveKillSwitchEntity is { Length: > 0 } builtIn)
 								{
@@ -1081,9 +903,8 @@ else
 						}
 						else
 						{
-							@* Bound through strings rather than straight to the bool: @bind writes "True"/"False" into
-							   the element, neither option matches, and the select renders with nothing chosen — which
-							   is exactly the control that must never be ambiguous about which way round it reads. *@
+							@* Bound through strings, not straight to the bool: @bind writes "True"/"False", neither
+							   option matches, and the select renders with nothing chosen. *@
 							<div class="field-control">
 								<select class="cell wide"
 										@bind:get="@(_config.Global.KillSwitchActiveWhenOff ? "true" : "false")"
@@ -1100,9 +921,7 @@ else
 					</div>
 				</GroupFold>
 
-				@* One field, and a fold of its own rather than a line inside Fine tuning — where it used to sit,
-				   and where nobody looking for what their house is called would think to open. A name is not a
-				   tuning knob, and the section's own lede promises "what this house is called". *@
+				@* One field, and a fold of its own: a name is not a tuning knob. *@
 				<GroupFold Title="House name"
 						   Description="What this house is called in logs and notifications.">
 					<div class="field">
@@ -1119,12 +938,8 @@ else
 
 				<GroupFold Title="Fine tuning"
 						   Description="How often rooms re-check, how the engine tells its own changes from a person's, and how close is close enough.">
-					@* -----------------------------------------------------------------------------------------
-					   NetDaemonUserId is write-only here, on purpose. It is rendered as set/not-set and never as
-					   its value, in either direction — the input starts empty and only overwrites what is stored
-					   if something is typed into it. Nothing on this page, and nothing in the markup it sends,
-					   ever carries the current value.
-					   ----------------------------------------------------------------------------------------- *@
+					@* NetDaemonUserId is write-only: rendered as set or not-set, never as its value, in either
+					   direction. The input starts empty and overwrites the stored value only when typed into. *@
 					<div class="field">
 						<div class="field-head">
 							<label class="field-label">NetDaemon user id
@@ -1201,9 +1016,6 @@ else
 
 				</GroupFold>
 
-				@* Where the file lives and whether the engine is running: the two facts that explain why an edit here
-				   did or did not reach the house. Below the settings because they are read once, when something is
-				   wrong, rather than on every visit. *@
 				<GroupFold Title="This installation"
 						   Description="Whether the engine is running, whether Home Assistant is answering, and where the settings file is kept.">
 					<div class="status-row">
@@ -1248,15 +1060,7 @@ else
 }
 
 @code {
-	/// <summary>
-	///     The page's four sections. One is shown at a time; the rail switches.
-	/// </summary>
-	/// <remarks>
-	///     Four, not five: a setting now lives under the noun it changes, so there is no <c>Defaults</c> beside
-	///     <c>Areas</c> (the all-rooms settings <i>are</i> area settings, and are a card inside it) and no
-	///     <c>Advanced</c> at all (its contents went to the section whose noun they change, each behind that
-	///     section's own fold). "Advanced" answered "how confident must I be?"; it never answered "where do I look?".
-	/// </remarks>
+	/// <summary>The page's four sections. One is shown at a time; the rail switches.</summary>
 	private enum Section
 	{
 		Areas,
@@ -1265,14 +1069,7 @@ else
 		House
 	}
 
-	/// <summary>
-	///     What every token popover on this page promises.
-	/// </summary>
-	/// <remarks>
-	///     There is no default for this in <c>SentenceView</c> on purpose: only the page knows whether a pick waits
-	///     behind a save bar or applies by itself, and a promise about saving is the worst kind of thing to be
-	///     wrong about. This page waits, and names its own undo.
-	/// </remarks>
+	// SentenceView has no default for this on purpose: only the page knows whether a pick waits behind a save bar.
 	private const string TokenNote = "Applies when you save. Discard changes puts it back.";
 
 	private AdaptiveLightingConfig _config = new();
@@ -1283,15 +1080,12 @@ else
 	private bool _busy;
 	private Section _section = Section.Areas;
 
-	// A successful save is confirmed transiently: the message shows, then clears itself after a few seconds, so
-	// the save bar does not carry a stale "Engine rebuilt" indefinitely. Validation errors and failed saves are
-	// NOT transient — they render through _liveValidation / _result and stay until resolved.
+	// Only the success confirmation is transient. Errors and failed saves render through _liveValidation and
+	// _result, and stay until resolved.
 	private string? _saveConfirmation;
 	private CancellationTokenSource? _confirmationCts;
 
-	// The registry is read once per page load rather than once per area: the lists are identical for every
-	// area, and asking Home Assistant for every light once per area per render is how a page with six areas
-	// becomes slow for no reason.
+	// Read once per page load, not once per area: the lists are identical for every area.
 	private IReadOnlyList<AreaOption> _areas = [];
 	private IReadOnlyList<AreaOption> _addableAreas = [];
 	private IReadOnlyList<EntityOption> _luxSensors = [];
@@ -1308,52 +1102,43 @@ else
 	private IReadOnlyList<string> _houseModeOptionValues = [];
 	private string? _activeModeValue;
 
-	// The period helper's own live options and current value. Read separately from the house mode's: they are two
-	// different helpers, and checking one document's option strings against the other's list would report renames
-	// that never happened.
+	// Read separately from the house mode's: two different helpers, and comparing one document's option strings
+	// against the other's list reports renames that never happened.
 	private IReadOnlyList<string> _livePeriodSelectOptions = [];
 	private string? _activePeriodValue;
 
-	// How the configured mode list stands against the helper's own, recomputed with the document. Starts as "cannot
-	// compare", which is what a page that has not read anything yet honestly knows.
+	// Starts as "cannot compare", which is what a page that has read nothing yet knows.
 	private HouseModeOptionsDiff _helperDiff = new(false, [], []);
 	private (double Latitude, double Longitude)? _homeLocation;
 	private IReadOnlyList<LabelOption> _labelOptions = [];
 	private IReadOnlyList<string> _sensorDeviceClasses = [];
 	private IReadOnlyList<string> _motionDeviceClassChoices = [];
 
-	// The sentences, rebuilt with the document rather than during render: a projection asked for once per
-	// keystroke on a page that re-renders on every keystroke is work nobody sees.
+	// Rebuilt with the document, not during render: this page re-renders on every keystroke.
 	private IReadOnlyList<Sentence> _blendSentence = [];
 	private IReadOnlyList<Sentence> _awaySentence = [];
 	private IReadOnlyList<ModeLine> _modeLines = [];
 
-	// The room list, grouped by the floor each area sits on. Recomputed whenever the document changes rather than
-	// during render: grouping asks the registry for a floor per area, and Blazor re-renders this page on every
-	// keystroke in it.
+	// Also rebuilt with the document: grouping asks the registry for a floor per area.
 	private IReadOnlyList<FloorGroup<AreaConfig>> _areaGroups = [];
 
-	// What each room is called, by reference, recomputed with the document for the same reason the groups are.
 	private readonly Dictionary<AreaConfig, string> _roomNames = [];
 
-	// What each room is doing right now, for the row's edge colour, keyed by area id with a name fallback — the
-	// same join the snapshot cache itself uses. Read from the cache rather than subscribed to: this page is an
-	// editor, and a live re-render mid-edit buys a livelier edge at the cost of the thing being edited.
+	// Keyed by area id with a name fallback, the same join the snapshot cache uses. Read from the cache, never
+	// subscribed to: a live re-render mid-edit costs the thing being edited.
 	private IReadOnlyDictionary<string, AreaState> _liveStates = new Dictionary<string, AreaState>(StringComparer.Ordinal);
 
-	// The re-setup flow. Null means the panel is closed; otherwise these are the rooms it opens with ticked —
-	// every room from the section header, one from inside a room's page.
+	// Null means the re-setup panel is closed; otherwise these are the rooms it opens with ticked.
 	private IReadOnlyCollection<string>? _setupScope;
 	private string? _setupNote;
 
-	// Adding a room: which area it will be, and the ids added since the last save. A room the file does not
-	// have yet cannot be opened, because the room page reads the document from disk rather than from here.
+	// _unsaved holds rooms added since the last save. They cannot be opened: the room page reads the document from
+	// disk, not from here.
 	private bool _addingRoom;
 	private string? _addAreaId;
 	private readonly HashSet<string> _unsaved = new(StringComparer.Ordinal);
 
-	// What each room's switch had to say when it was last turned on, and which of those have been read. Per visit
-	// rather than persisted: this is advice about the house as it is right now, not a preference.
+	// Per visit, never persisted: advice about the house as it is right now.
 	private readonly Dictionary<string, SwitchOnNote> _switchOnNotes = new(StringComparer.Ordinal);
 	private readonly HashSet<string> _switchOnRead = new(StringComparer.Ordinal);
 
@@ -1362,24 +1147,17 @@ else
 	private readonly HashSet<string> _openedGroups = new(StringComparer.Ordinal);
 
 	/// <summary>
-	///     Whether Home Assistant is actually answering, as opposed to merely not throwing.
+	///     Whether Home Assistant is answering, as opposed to merely not throwing.
 	/// </summary>
 	/// <remarks>
-	///     These are different, and the difference matters. <see cref="HaCatalog.IsHomeAssistantReady"/> reports
-	///     that a read threw, which is what NetDaemon's state cache does before its first connection completes.
-	///     But the <i>registry</i> does not throw when it has nothing — it answers with an empty list. So a host
-	///     that cannot reach Home Assistant at all renders a page where every picker is empty, nothing has
-	///     thrown, and the status panel would cheerfully say nothing is wrong. Checking that something actually
-	///     came back is the only signal that covers both.
+	///     <see cref="HaCatalog.IsHomeAssistantReady"/> only reports whether a read threw. The registry does not throw
+	///     when it has nothing; it answers with an empty list. Checking that something came back covers both.
 	/// </remarks>
 	private bool HomeAssistantIsAnswering =>
 		Catalog.IsHomeAssistantReady && (_areas.Count > 0 || _luxSensors.Count > 0 || _switches.Count > 0);
 
 	/// <summary>
-	///     Which section to open on load, taken from the URL (<c>?section=housemodes</c>). Lets another page
-	///     deep-link straight to a room: the board's "set up a house mode" link lands on House modes rather
-	///     than the default Areas. An absent or unrecognised value leaves the default. Read once on load — after
-	///     that the section rail owns which room is showing.
+	///     Which section to open on load, from <c>?section=</c>. Read once; after that the rail owns the choice.
 	/// </summary>
 	[Parameter]
 	[SupplyParameterFromQuery(Name = "section")]
@@ -1398,12 +1176,8 @@ else
 	///     The section a <c>?section=</c> value names, or <c>null</c> when it names none.
 	/// </summary>
 	/// <remarks>
-	///     The renamed sections answer to their old names as well. A bookmark or a phone shortcut is somebody's
-	///     saved intent, and every restructure so far moved contents rather than deleting them — landing somewhere
-	///     with no explanation would look like the link broke. Each alias points at wherever its contents are now,
-	///     which is the only rule this list has: <c>defaults</c> follows the all-rooms settings to House, where
-	///     they went when House took over the settings there is exactly one of; <c>advanced</c> and <c>people</c>
-	///     were already there.
+	///     Renamed sections keep answering to their old names, each alias pointing at wherever its contents are now.
+	///     Old bookmarks land somewhere sensible instead of looking broken.
 	/// </remarks>
 	private static Section? Resolve(string? query)
 	{
@@ -1452,8 +1226,7 @@ else
 		Revalidate();
 		MarkClean();
 
-		// After the catalog, because it needs what discovery resolved; after MarkClean, because raising a note
-		// is not an edit and must not arm the save bar.
+		// After the catalog, which it needs; after MarkClean, because raising a note must not arm the save bar.
 		RaiseStandingNotes();
 	}
 
@@ -1467,12 +1240,11 @@ else
 
 	private void LoadCatalog()
 	{
-		// The document has just been re-read, so the registry is re-read with it: the catalog caches discovery
-		// per load, and a stale answer next to a fresh document would be the worst of both.
+		// The catalog caches discovery per load, so a re-read document needs a re-read registry.
 		Catalog.Invalidate();
 
-		// Areas are labelled with what discovery resolves in each — lights, motion, lux — so the conventions
-		// discovery reads have to come from the document being edited rather than from a default.
+		// Areas are labelled with what discovery resolves in each, so the conventions come from the document being
+		// edited, not from a default.
 		_areas = Catalog.Areas(_config.Global);
 		_labelOptions = Catalog.LabelOptions();
 		_sunEntities = Catalog.EntitiesInDomains("sun");
@@ -1490,17 +1262,16 @@ else
 		_homeLocation = HomeGeo.TryRead();
 		_sensorDeviceClasses = Catalog.SensorDeviceClasses();
 
-		// Offer what discovery would accept, so an explicit list is a correction to discovery rather than a
-		// parallel universe of every binary sensor in the house.
+		// Offer what discovery would accept, so an explicit list corrects discovery instead of listing every binary
+		// sensor in the house.
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _config.Global.EffectiveMotionDeviceClasses]);
 		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_config.Global.IlluminanceDeviceClass]);
 
-		// The presence-reset override picker: the motion sensors discovery would find, plus person entities — the
-		// same set 09 §5.1 specifies, so a household can name a person's arrival or a specific sensor's turn-on.
+		// The presence-reset override picker: discovered motion sensors plus person entities.
 		_presenceEntities = [.. _motionSensors.Concat(Catalog.EntitiesInDomains("person"))];
 
-		// The union of what this house reports and what the engine defaults to: a household that has no
-		// occupancy sensor today may buy one tomorrow, and the built-in classes must stay tickable.
+		// Union with the engine's defaults, so the built-in classes stay tickable in a house that reports none of
+		// them today.
 		_motionDeviceClassChoices =
 		[
 			.. Catalog.BinarySensorDeviceClasses()
@@ -1511,22 +1282,11 @@ else
 	}
 
 	/// <summary>
-	///     Re-reads the document's own verdict on itself, and with it everything the page derives from the
-	///     document: its sentences, which floor each room is on, what each room is doing, and which areas are
-	///     still free to add.
-	/// </summary>
-	/// <remarks>
-	///     Every edit already routes through here, so hanging the derived views off it means they can never be one
-	///     edit behind what is on screen — and it costs a dictionary of at most a few dozen rooms.
-	/// </remarks>
-	/// <summary>
 	///     Whether the document in memory differs from the one on disk.
 	/// </summary>
 	/// <remarks>
-	///     Measured by comparing the serialised document against a snapshot taken the last time the two were
-	///     known to agree, rather than by a flag each edit path remembers to set. There are a dozen ways to
-	///     change this document — a token, a switch, a picker, adding a room, a re-setup — and a flag would
-	///     eventually be forgotten on one of them, leaving somebody's edit with no way to save it.
+	///     Compared against a serialised snapshot, never set by a flag each edit path remembers. A dozen paths change
+	///     this document, and one that forgot the flag would leave an edit with no way to save it.
 	/// </remarks>
 	private bool _dirty;
 
@@ -1538,9 +1298,8 @@ else
 	///     confirmation still on screen.
 	/// </summary>
 	/// <remarks>
-	///     <see cref="_userIdInput"/> is asked for separately because it is deliberately <i>not</i> part of the
-	///     document until the save applies it, so a half-typed id leaves <see cref="_dirty"/> false. Without this
-	///     the one field whose whole purpose is to be written would be the one field with no way to write it.
+	///     <see cref="_userIdInput"/> is checked separately: it is not part of the document until the save applies it,
+	///     so a typed id leaves <see cref="_dirty"/> false and would otherwise have no way to be written.
 	/// </remarks>
 	private bool ShowSaveBar =>
 		_dirty
@@ -1548,7 +1307,7 @@ else
 		|| _saveConfirmation is { Length: > 0 }
 		|| _result is { Written: false };
 
-	/// <summary>Records the document as matching the file — after a load, and after a save that wrote.</summary>
+	/// <summary>Records the document as matching the file, after a load and after a save that wrote.</summary>
 	private void MarkClean()
 	{
 		_cleanDocument = Snapshot();
@@ -1558,11 +1317,7 @@ else
 	/// <summary>
 	///     The document as text, or <c>null</c> when it cannot be serialised.
 	/// </summary>
-	/// <remarks>
-	///     A document that will not serialise is one the page cannot compare and cannot save, so it counts as
-	///     changed: showing the bar and letting the save report the real error beats hiding the bar and leaving
-	///     somebody with no button.
-	/// </remarks>
+	/// <remarks>Null counts as changed, so the bar shows and the save reports the real error.</remarks>
 	private string? Snapshot()
 	{
 		try
@@ -1585,9 +1340,8 @@ else
 		_awaySentence = [HouseSentences.AwayDebounce(_config.Global)];
 		_modeLines = HouseSentences.Modes(_config.Global.HouseMode, _config.Periods);
 
-		// Recomputed here rather than at each of the places that could move it — picking a helper, adopting its
-		// list, editing an option, a reload. Every one of those already ends in a Revalidate, and a comparison
-		// refreshed at some of them would be a call to action that outlived what it was calling for.
+		// Recomputed here, not at each place that could move it: they all end in a Revalidate, and a comparison
+		// refreshed at only some of them outlives what it was calling for.
 		_helperDiff = HouseModeSync.Compare(_config.Global.HouseMode, _liveSelectOptions);
 		_addableAreas = HouseView.Unconfigured(_areas, _config.Areas);
 		RegroupAreas();
@@ -1598,16 +1352,14 @@ else
 	///     Groups the rooms by floor through the helper the board shares, so the two pages can never disagree.
 	/// </summary>
 	/// <remarks>
-	///     A registry that has not connected throws rather than answering, and a settings page that refused to
-	///     render its rooms because Home Assistant was still starting would be useless exactly when somebody is
-	///     trying to fix that. One unnamed group is the floorless degradation the design already specifies, so the
-	///     failure mode is simply today's flat list.
+	///     A registry that has not connected throws instead of answering, so GroupOrFlat degrades to one unnamed
+	///     group and the list renders flat instead of not at all.
 	/// </remarks>
 	private void RegroupAreas()
 	{
 		_areaGroups = FloorGrouping.GroupOrFlat(_config.Areas, area => area.AreaId, Catalog.AreaRegistry);
 
-		// Names come from the same registry read as the floors, and stale for exactly as long: until the next edit.
+		// Names come from the same registry read as the floors, and go stale at the same moment: the next edit.
 		_roomNames.Clear();
 
 		foreach (AreaConfig area in _config.Areas)
@@ -1629,9 +1381,8 @@ else
 	///     What a room is doing right now, or <c>null</c> when nothing has been heard about it.
 	/// </summary>
 	/// <remarks>
-	///     By area id first, because ids do not change while a page is open and display names do. The name fallback
-	///     covers a room configured with explicit entities and no area id, and events from builds published before
-	///     snapshots carried an id.
+	///     By area id first: ids do not change while a page is open and display names do. The name fallback covers a
+	///     room configured with explicit entities and events from builds whose snapshots carried no id.
 	/// </remarks>
 	private AreaState? LiveStateOf(AreaConfig area)
 	{
@@ -1647,27 +1398,19 @@ else
 	///     A room's own page, or <c>null</c> when there is nothing to open yet.
 	/// </summary>
 	/// <remarks>
-	///     A room with no Home Assistant area has no route at all. A room that has one but was added since the
-	///     last save has no page <i>yet</i>: the room page loads the document from disk, so following the link
-	///     would land on "no such room" and read as a broken list rather than as an unsaved edit.
+	///     A room with no area has no route. A room added since the last save has none yet: the room page loads from
+	///     disk, so the link would land on "no such room".
 	/// </remarks>
 	private string? RoomLink(AreaConfig area) =>
 		area.AreaId is { Length: > 0 } areaId && !_unsaved.Contains(areaId) ? HouseView.RoomHref(areaId) : null;
 
 	/// <summary>
-	///     What a room is called in this list.
+	///     What a room is called in this list, matching the board, the log and the room's own page.
 	/// </summary>
 	/// <remarks>
-	///     Resolved through <see cref="HouseView.DisplayName(AreaConfig, IAreaRegistry)"/> — which is
-	///     <see cref="AreaNaming"/>'s order with this page's own placeholder on the end — so a room that states no
-	///     name of its own reads as "Kjøkken" rather than as <c>kjokken</c>, and reads the same here as it does on
-	///     the board, in the log and on its own page.
-	///     <para>
-	///         Read from the map built with the document rather than asked per render, for the reason the floor
-	///         groups are: each row asks three times, this page re-renders on every keystroke, and the registry
-	///         <i>throws</i> rather than answering until Home Assistant has connected. A room added since the last
-	///         rebuild falls back to the document alone, which is one render behind and never wrong.
-	///     </para>
+	///     Read from the map built with the document, not per render: each row asks three times, this page re-renders
+	///     on every keystroke, and the registry throws until Home Assistant has connected. A room added since the last
+	///     rebuild falls back to the document alone, one render behind and never wrong.
 	/// </remarks>
 	private string RoomName(AreaConfig area) =>
 		_roomNames.TryGetValue(area, out string? name) ? name : HouseView.DisplayName(area, null);
@@ -1677,13 +1420,9 @@ else
 		: "Off — this room is watched but its lights are never changed.";
 
 	/// <summary>
-	///     Flips a room's power switch.
+	///     Flips a room's power switch, writing an explicit true or false and never null.
 	/// </summary>
-	/// <remarks>
-	///     Writes an explicit <c>true</c> or <c>false</c>, never <c>null</c>: inheritance stays for documents that
-	///     predate the switch, but a decision somebody just made with their thumb belongs in the file as itself.
-	///     And it is an edit like any other — it arms the save bar rather than saving.
-	/// </remarks>
+	/// <remarks>An edit like any other: it arms the save bar, it does not save.</remarks>
 	private void ToggleEnabled(AreaConfig area)
 	{
 		bool switchingOn = !AreaView.IsEnabled(area, _config.Defaults);
@@ -1697,36 +1436,15 @@ else
 	}
 
 	/// <summary>
-	///     Rebuilds every standing note: the note for a room that is <b>already</b> on, when what it commands
-	///     looks wrong.
+	///     Rebuilds every standing note: the note for a room that is already on, when what it commands looks wrong.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         <b>The note only ever fired on the press, so a room switched on last week never showed one.</b> The
-	///         audit that finds status LEDs and colour channels among a room's lamps ran exactly once, at the
-	///         moment somebody flipped the switch, and its answer was thrown away when the page closed. A house
-	///         set up before the audit existed — or before a lamp was added to a group — could never be told.
-	///     </para>
-	///     <para>
-	///         <b>The bar is higher here than on the press, and deliberately so.</b> Switching a room on raises a
-	///         note whenever the room commands more than one light, because "here is what you have just switched
-	///         on" is worth reading once. Opening the page is not a question, so a room that merely commands
-	///         several lamps says nothing: on this owner's house eight rooms follow the defaults, and eight
-	///         unprompted panels would be the page shouting on arrival. Only a note that is a
-	///         <see cref="SwitchOnNote.IsWarning"/> — a light the audit actually doubts — earns the interruption.
-	///     </para>
-	///     <para>
-	///         <b>It clears first, and every path that re-reads the document calls it.</b> A note describes the
-	///         document as it was when the note was raised, so one held across a re-read is a claim about a file
-	///         that is no longer open: pressing <i>Discard changes</i> after switching a room on left "Stue is on,
-	///         and will command 3 lights" sitting under a switch the discard had just put back to off, and saving
-	///         the fix for a note went on showing the count the fix had just changed. Rebuilding is also what makes
-	///         a save that <i>creates</i> a suspicion say so.
-	///     </para>
-	///     <para>
-	///         Dismissal survives the rebuild, exactly as on the press: <see cref="_switchOnRead"/> is the reader's
-	///         own decision about this visit, and re-reading a file is not them changing their mind.
-	///     </para>
+	///     The bar is higher here than on the press. A press raises a note for any room commanding more than one
+	///     light; opening the page is not a question, so only <see cref="SwitchOnNote.IsWarning"/> earns a panel.
+	///
+	///     It clears first, and every path that re-reads the document must call it: a note describes the document as
+	///     it was when raised, so one held across a re-read is a claim about a file that is no longer open.
+	///     <see cref="_switchOnRead"/> survives the rebuild; re-reading a file is not the reader changing their mind.
 	/// </remarks>
 	private void RaiseStandingNotes()
 	{
@@ -1751,10 +1469,8 @@ else
 	///     What this room's switch has to say for itself, or <c>null</c> when there is nothing worth saying.
 	/// </summary>
 	/// <remarks>
-	///     One place, because the standing pass and the press ask the same question of the same room and differ
-	///     only in which answers they bother the reader with. Two copies of the argument list would drift on the
-	///     first change to how a room's lights are resolved, and the two surfaces would then disagree about a
-	///     house neither of them can be wrong about separately.
+	///     One place: the standing pass and the press ask the same question and differ only in which answers they
+	///     surface. A second copy of the argument list drifts on the first change to how a room's lights resolve.
 	/// </remarks>
 	private SwitchOnNote? NoteFor(AreaConfig area) => SwitchOnWarning.For(
 		RoomName(area),
@@ -1767,22 +1483,16 @@ else
 	///     Works out what a room now commands and, when there is something to say, says it under the room's row.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         Advisory and after the fact — see <see cref="SwitchOnWarning"/>. The switch has already taken
-	///         effect; nothing here can stop it, and a room switched on by <i>Switch on this floor</i> deliberately
-	///         raises nothing, because six notes at once is a wall rather than a warning.
-	///     </para>
-	///     <para>
-	///         Computed on the press rather than during render. It runs the engine's own resolver over the room,
-	///         which reads a state per candidate entity — per-render that would be a page that stutters for text
-	///         nobody has asked for yet.
-	///     </para>
+	///     Advisory and after the fact: the switch has already taken effect. A room switched on by "Switch on this
+	///     floor" raises nothing, because six notes at once is a wall.
+	///
+	///     Computed on the press, never during render: it runs the engine's resolver over the room, reading a state
+	///     per candidate entity.
 	/// </remarks>
 	private void RaiseSwitchOnNote(AreaConfig area)
 	{
 		string key = KeyOf(area);
 
-		// Somebody who has read this room's note and flipped its switch twice has not asked the question twice.
 		if (_switchOnRead.Contains(key))
 			return;
 
@@ -1804,10 +1514,7 @@ else
 	/// <summary>
 	///     How a room is keyed while the page is open: its area id, or its position for a row that names none.
 	/// </summary>
-	/// <remarks>
-	///     A document may carry a room with no area id at all — only a hand-edited file reaches that state, but it
-	///     must still be able to hold a note of its own rather than share one with every other nameless row.
-	/// </remarks>
+	/// <remarks>A positional key moves when a row is removed. See <see cref="ForgetPositionalNotes"/>.</remarks>
 	private string KeyOf(AreaConfig area) =>
 		area.AreaId is { Length: > 0 } areaId ? areaId : $"#{_config.Areas.IndexOf(area)}";
 
@@ -1815,10 +1522,7 @@ else
 	private string FloorAction(FloorGroup<AreaConfig> floor) =>
 		AreaView.AllEnabled(floor.Items, _config.Defaults) ? "Switch off this floor" : "Switch on this floor";
 
-	/// <summary>
-	///     Switches every room on a floor, as an edit: explicit values written into the document, save bar armed,
-	///     nothing written to disk.
-	/// </summary>
+	/// <summary>Switches every room on a floor, as an edit: the save bar arms, nothing reaches disk.</summary>
 	private void SwitchFloor(FloorGroup<AreaConfig> floor)
 	{
 		AreaView.SwitchAll(floor.Items, !AreaView.AllEnabled(floor.Items, _config.Defaults));
@@ -1846,14 +1550,9 @@ else
 	///     Adds a room for one Home Assistant area.
 	/// </summary>
 	/// <remarks>
-	///     Switched off explicitly, exactly as discovery proposes rooms: software that starts commanding lights in
-	///     a room the moment it is named is the first experience this design spent a work package removing.
-	///     <para>
-	///         <b>The area's name is not copied in.</b> It used to be, because a nameless room rendered as its
-	///         slug; the name is now resolved from the registry wherever it is shown, so writing it would freeze
-	///         the room at whatever the area happened to be called today and stop a rename in Home Assistant ever
-	///         arriving. What is written is what discovery writes — an area id and a switch — and nothing else.
-	///     </para>
+	///     Switched off explicitly, as discovery proposes rooms. The area's name is not copied in: names resolve from
+	///     the registry wherever they are shown, so writing one would freeze the room at today's name. What is written
+	///     is an area id and a switch, nothing else.
 	/// </remarks>
 	private void AddRoom(string? areaId)
 	{
@@ -1873,9 +1572,8 @@ else
 	///     Gives a room with no Home Assistant area one, which is also what gives it a page.
 	/// </summary>
 	/// <remarks>
-	///     Marked unsaved like a newly added room: the room page reads the document from disk, so the link only
-	///     works once the file says the same thing this page does. The area's name is not copied in, for the same
-	///     reason it is not in <see cref="AddRoom"/> — the row now reads its name from the registry.
+	///     Marked unsaved like a newly added room: the room page reads from disk, so the link works only once the file
+	///     agrees. The area's name is not copied in, for the reason given on <see cref="AddRoom"/>.
 	/// </remarks>
 	private void AdoptArea(AreaConfig area, string? areaId)
 	{
@@ -1888,22 +1586,12 @@ else
 	}
 
 	/// <summary>
-	///     Drops a room the list cannot open.
+	///     Takes a room out of the document, and with it every note keyed by where a room sits.
 	/// </summary>
 	/// <remarks>
-	///     Removing a room is the room page's own act, at the bottom of the page past everything it would throw
-	///     away. A room with no Home Assistant area has no page, so it would otherwise be unreachable and
-	///     unremovable — old documents that list entities explicitly and name no area are exactly that case.
-	/// </remarks>
-	/// <summary>
-	///     Takes a room out of the document, and with it every note that was keyed by where a room sits.
-	/// </summary>
-	/// <remarks>
-	///     <see cref="KeyOf"/> falls back to the row's position for a room with no area id, and a removal has just
-	///     moved every row after this one. Left alone, the survivor that slid into the removed row's index would
-	///     render the removed room's note — its name, its lights — under its own name, and a dismissal recorded
-	///     against a position would silence whichever room landed there. Positions cannot be re-keyed, so they go;
-	///     the notes for rooms that do have an area id are unaffected, because an id does not move.
+	///     Removing a room is normally the room page's act; this covers a room with no area, which has no page. The
+	///     removal moves every row after it, and <see cref="KeyOf"/> falls back to a row's position, so the survivor
+	///     that slides into the removed index would inherit its note and its dismissal. Positions cannot be re-keyed.
 	/// </remarks>
 	private void RemoveArea(AreaConfig area)
 	{
@@ -1912,7 +1600,7 @@ else
 		Revalidate();
 	}
 
-	/// <summary>Drops every note and dismissal keyed by a row's position rather than by an area id.</summary>
+	/// <summary>Drops every note and dismissal keyed by a row's position instead of an area id.</summary>
 	private void ForgetPositionalNotes()
 	{
 		foreach (string key in _switchOnNotes.Keys.Where(IsPositional).ToList())
@@ -1925,13 +1613,7 @@ else
 
 	// ===================== the all-rooms settings =====================
 
-	/// <summary>
-	///     Whether a section of the detail view is open — which, until somebody opens one, is none of them.
-	/// </summary>
-	/// <remarks>
-	///     The same rule the room page's <i>All settings</i> follows, and for the same reason: folded, the headings
-	///     are what a reader meets, and the structure is legible before any of it has to be read.
-	/// </remarks>
+	/// <summary>Whether a section of the detail view is open. None are, until one is opened.</summary>
 	private bool IsOpen(RoomSettingGroup group) => _openedGroups.Contains(group.Title);
 
 	private void Toggle(RoomSettingGroup group)
@@ -1944,12 +1626,9 @@ else
 		string.Equals(RoomSettings.Choice(null, _config.Defaults, key).ToString(), choice.Value, StringComparison.Ordinal);
 
 	/// <summary>
-	///     Applies one edit from the all-rooms sentences.
+	///     Applies one edit from the all-rooms sentences. A key it cannot apply means the sentence and the page have
+	///     drifted apart, so it is logged instead of silently ignored.
 	/// </summary>
-	/// <remarks>
-	///     A key this page cannot apply is a sentence and a page that have drifted apart. Silently doing nothing
-	///     would look like a dead control, so it is logged where it can be found.
-	/// </remarks>
 	private void OnDefaultEdited(SentenceEdit edit)
 	{
 		if (!RoomSettings.Apply(_config.Defaults, edit))
@@ -1991,12 +1670,12 @@ else
 	// ===================== the house's own sentences =====================
 
 	/// <summary>
-	///     Applies an edit from a house-wide sentence — the schedule's blend and the away debounce.
+	///     Applies an edit from a house-wide sentence: the schedule's blend and the away debounce.
 	/// </summary>
 	/// <remarks>
-	///     Blending is one value in two properties: zero minutes means the lights step at the boundary, which is
-	///     what <c>SmoothTransitions</c> off already meant. The minute count is left alone when blending is
-	///     switched off, so turning it back on restores what it was rather than a zero nobody chose.
+	///     Blending is one value across two properties. Zero minutes means the lights step at the boundary, which is
+	///     what <c>SmoothTransitions</c> off already meant, and the minute count is left alone when it is switched
+	///     off so turning it back on restores what it was.
 	/// </remarks>
 	private void OnGlobalEdited(SentenceEdit edit)
 	{
@@ -2024,13 +1703,9 @@ else
 	}
 
 	/// <summary>
-	///     Applies an edit from a mode sentence.
+	///     Applies an edit from a mode sentence. The key carries which option it belongs to.
 	/// </summary>
-	/// <remarks>
-	///     The key carries which option it belongs to, because a house has several modes on one card. It is read
-	///     back by <see cref="HouseSentences.TryReadModeKey"/> rather than parsed here, so both halves of the
-	///     encoding stay in one file.
-	/// </remarks>
+	/// <remarks>Decoded by <see cref="HouseSentences.TryReadModeKey"/>, never parsed here: one file owns both halves.</remarks>
 	private void OnModeEdited(SentenceEdit edit)
 	{
 		if (!HouseSentences.TryReadModeKey(edit.Key, out int index, out string property)
@@ -2070,8 +1745,8 @@ else
 	// ===================== setting rooms up again =====================
 
 	/// <summary>
-	///     Whether setting rooms up again can be offered: it rebuilds each room from the registry, so a registry
-	///     that is not answering means the button would produce an empty plan and a confusing dialog.
+	///     Whether setting rooms up again can be offered. It rebuilds from the registry, so a registry that is not
+	///     answering would produce an empty plan.
 	/// </summary>
 	private bool CanSetUpAgain => HomeAssistantIsAnswering && _setupScope is null;
 
@@ -2084,18 +1759,12 @@ else
 
 	private void CloseSetup() => _setupScope = null;
 
-	/// <summary>Plans a setup run for the panel. Pure — nothing is changed until the plan is confirmed.</summary>
+	/// <summary>Plans a setup run for the panel. Pure; nothing changes until the plan is confirmed.</summary>
 	private SetupPlan PlanSetup(IReadOnlyCollection<string> scope) => Catalog.PlanSetup(_config, scope);
 
 	/// <summary>
-	///     Carries out a confirmed setup run.
+	///     Carries out a confirmed setup run against the in-memory document, arming the save bar like any other edit.
 	/// </summary>
-	/// <remarks>
-	///     The mutation is the engine's own <see cref="AreaSetupService.Apply"/>, so a rebuild from this page and a
-	///     rebuild on first start are the same code. It touches the in-memory document only: the save bar is armed
-	///     exactly as any other edit arms it, <em>Discard changes</em> is still the undo, and the one write path
-	///     stays the one write path.
-	/// </remarks>
 	private void ApplySetup(SetupPlan plan)
 	{
 		AreaSetupService.Apply(_config, plan);
@@ -2136,22 +1805,21 @@ else
 	{
 		_busy = true;
 
-		// Drop any lingering success toast up front, so a refused save is never shown next to a stale confirmation.
+		// Drop any lingering success toast, so a refused save is never shown next to a stale confirmation.
 		_confirmationCts?.Cancel();
 		_saveConfirmation = null;
 
 		try
 		{
-			// Only now, and only if something was typed. An untouched box must leave the stored value alone —
-			// the page never had it to give back.
+			// Only if something was typed: an untouched box must leave the stored value alone, since the page never
+			// had it to give back.
 			if (!string.IsNullOrWhiteSpace(_userIdInput))
 			{
 				_config.Global.NetDaemonUserId = _userIdInput.Trim();
 				_userIdInput = null;
 			}
 
-			// Read the file's timestamp before the save so we can confirm the write actually advanced it — the
-			// reassurance is grounded in the file changing on disk, not merely in the call returning.
+			// Read before the save, so the confirmation below can check the file's timestamp actually advanced.
 			DateTimeOffset? writtenBefore = Engine.Store.LastWrittenUtc;
 
 			_result = Engine.Save(_config);
@@ -2159,14 +1827,11 @@ else
 
 			if (_result.Written)
 			{
-				// Confirm the bytes landed: re-read the on-disk timestamp and show it. A successful Written save
-				// always advances it; showing the concrete time is what turns "I pressed save" into "it is saved".
 				DateTimeOffset? writtenAfter = Engine.Store.LastWrittenUtc;
 				string savedAt = writtenAfter is { } utc ? utc.ToLocalTime().ToString("HH:mm:ss") : "now";
 				bool advanced = writtenAfter is { } a && (writtenBefore is not { } b || a >= b);
 
-				// The success message is transient: hand it to the toast and clear _result so the persistent
-				// note never restates it. A refused/failed save keeps _result and shows it until resolved.
+				// _result is cleared so the persistent note never restates the toast. A refused save keeps it.
 				ShowSaveConfirmation(advanced
 					? $"Saved ✓  Written to {System.IO.Path.GetFileName(Engine.Store.FilePath)} at {savedAt}."
 					: "Saved, but the file timestamp did not change — check the log.");
@@ -2176,15 +1841,13 @@ else
 				_unsaved.Clear();
 				_setupNote = null;
 
-				// Re-read so the page shows what is actually on disk, formatting and all, rather than the
-				// object it happened to be holding.
+				// Re-read so the page shows what is on disk, formatting and all.
 				_config = Engine.Store.Load();
 				LoadCatalog();
 				Revalidate();
 				MarkClean();
 
-				// The saved document is a different house from the one the notes describe — that is the whole
-				// point of having saved. Same order and same reason as in Reload().
+				// Same order and same reason as Reload: after the catalog, after MarkClean.
 				RaiseStandingNotes();
 			}
 		}
@@ -2199,10 +1862,9 @@ else
 	}
 
 	/// <summary>
-	///     Shows the success confirmation, then clears it after a few seconds. Fire-and-forget: the delay must not
-	///     block the save. A fresh token supersedes any in-flight timer, so rapid saves never leave an early clear
-	///     hiding a later confirmation.
+	///     Shows the success confirmation, then clears it after a few seconds.
 	/// </summary>
+	/// <remarks>A fresh token supersedes any in-flight timer, so rapid saves cannot clear a later confirmation.</remarks>
 	private void ShowSaveConfirmation(string message)
 	{
 		_saveConfirmation = message;
@@ -2260,9 +1922,8 @@ else
 
 	private void SetIncludeLabel(string? value) => SetLabel(() => _config.Global.IncludeLabel = value);
 
-	// Exclude and motion are non-nullable in the model — they ship with a default label — so "none" is written as
-	// an empty string rather than a null. Empty is what "no label" already meant to the resolver: no entity can
-	// carry a nameless label, so nothing matches, which is the whole meaning of switching the field off.
+	// Exclude and motion are non-nullable in the model, so "none" is written as an empty string, not null. The
+	// resolver already reads empty as no label: no entity can carry a nameless label, so nothing matches.
 	private void SetExcludeLabel(string? value) => SetLabel(() => _config.Global.ExcludeLabel = value ?? string.Empty);
 
 	private void SetMotionLabel(string? value) => SetLabel(() => _config.Global.MotionLabel = value ?? string.Empty);
@@ -2271,10 +1932,9 @@ else
 	///     Writes a label field and rebuilds what depends on it.
 	/// </summary>
 	/// <remarks>
-	///     Discovery reads these labels, so an area's "2 lights, 1 motion, 1 lux" summary is only true for the
-	///     labels that were in effect when it was counted. The catalog's own discovery cache notices the change by
-	///     itself (its key includes the labels); the area list is a snapshot this page took, so it has to be retaken
-	///     — the same reason the motion device classes rebuild it.
+	///     Discovery reads these labels, so an area's counts are only true for the labels in effect when they were
+	///     counted. The catalog's cache keys on the labels and notices by itself; the area list is this page's own
+	///     snapshot and has to be retaken.
 	/// </remarks>
 	private void SetLabel(Action mutate)
 	{
@@ -2321,24 +1981,17 @@ else
 	///     Picks the helper that carries the time of day, and re-reads what that helper offers.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         The panel writes every other field of <c>PeriodSelect</c> itself; this one stays here because it is
-	///         the only field whose value changes what the panel is <i>drawn from</i> — a different helper has
-	///         different live options and a different current value, and only the page reads the catalog.
-	///     </para>
-	///     <para>
-	///         The mappings are deliberately <b>not</b> rebuilt from the new helper, where the house-mode picker
-	///         does adopt. The two lists are different kinds of thing: a mode option carries its whole behaviour
-	///         (its kind, its scene, its resets) and losing it is expensive, whereas a period mapping is one string
-	///         pointing at another and adopting a new helper's options would silently invent mappings nobody chose.
-	///         What survives shows as a row; what does not shows as a rename, with the one pick that moves it.
-	///     </para>
+	///     The panel writes every other <c>PeriodSelect</c> field itself. This one is here because it changes what the
+	///     panel is drawn from, and only the page reads the catalog.
+	///
+	///     The mappings are not rebuilt from the new helper, where the house-mode picker does adopt. A period mapping
+	///     is one string pointing at another, so adopting would invent mappings nobody chose.
 	/// </remarks>
 	private void SetPeriodSelectEntity(string? value)
 	{
 		if (string.IsNullOrWhiteSpace(value))
 		{
-			// Leave the object — the mappings may still be wanted; ConfigNormalizer drops it on save if empty.
+			// Leave the object; the mappings may still be wanted. ConfigNormalizer drops it on save if empty.
 			if (_config.Global.PeriodSelect is { } existing)
 				existing.Entity = null;
 		}
@@ -2354,13 +2007,9 @@ else
 	}
 
 	/// <summary>
-	///     The period-select fold's header line: what the pairing is doing, without opening it.
+	///     The period-select fold's header line. It carries the direction, because that is what decides whether the
+	///     start times in the table above mean anything.
 	/// </summary>
-	/// <remarks>
-	///     A fold whose header only repeats its title is a fold nobody can decide whether to open. The one fact
-	///     worth carrying is the direction, because it is what decides whether the start times in the table above
-	///     mean anything.
-	/// </remarks>
 	private string PeriodSelectSummary
 	{
 		get
@@ -2378,41 +2027,22 @@ else
 	}
 
 	/// <summary>
-	///     Rebuilds the mode list from the helper — on the pick, and on request from the panel that says what it
-	///     would change.
+	///     Rebuilds the mode list from the helper, on the pick and on request from the panel.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         Without this the list is whatever the <i>previous</i> helper had. Picking a new dropdown left the old
-	///         one's options sitting under it, each still claiming to say what a mode does — so the section described
-	///         a helper the house no longer uses, and the only way to correct it was to edit the file.
-	///     </para>
-	///     <para>
-	///         The merge itself is <see cref="HouseModeSync.Adopt"/> and not a copy of it. Both callers have to keep
-	///         a surviving option's whole configuration, and both have to refuse an empty live list; two copies of
-	///         that would be two chances to get one of them wrong, on the one edit that can destroy a mode's
-	///         settings.
-	///     </para>
+	///     The merge is <see cref="HouseModeSync.Adopt"/>, never a copy of it. Both callers must keep a surviving
+	///     option's whole configuration and both must refuse an empty live list; this is the one edit that can destroy
+	///     a mode's settings.
 	/// </remarks>
 	private void AdoptHelperOptions() => HouseModeSync.Adopt(_config.Global.HouseMode, _liveSelectOptions);
 
 	/// <summary>
-	///     Takes the helper's option list on request — the visible, deliberate half of what picking a helper does
-	///     silently.
+	///     Takes the helper's option list on request: the explicit half of what picking a helper does silently.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         <see cref="AdoptHelperOptions"/> is called rather than reimplemented, which is the whole point: the
-	///         rule that an option the helper still offers keeps its kind, its scene and its resets is written once
-	///         and both paths obey it. Everything after is what any other edit on this page does — the document is
-	///         changed in memory, the save bar arms itself, and <em>Discard changes</em> is still the undo.
-	///     </para>
-	///     <para>
-	///         Reachable only from the panel that says what it would do, and that panel only appears when the two
-	///         lists actually differ and Home Assistant has answered. <see cref="AdoptHelperOptions"/> refuses an
-	///         empty live list on its own account as well, so a connection that drops between the render and the
-	///         click cannot empty the list.
-	///     </para>
+	///     Reachable only from the panel, which appears only when the lists differ and Home Assistant has answered.
+	///     <see cref="AdoptHelperOptions"/> refuses an empty live list on its own account too, so a connection lost
+	///     between render and click cannot empty the list.
 	/// </remarks>
 	private void UseHelperOptions()
 	{
@@ -2439,10 +2069,8 @@ else
 				string.Equals(existing, deviceClass, StringComparison.OrdinalIgnoreCase));
 		}
 
-		// The motion picker's contents depend on this, so it has to be rebuilt rather than left showing the
-		// entities the previous answer would have found. So do the area labels: discovery reads these classes,
-		// so an area's motion count is only true for the set that was in effect when it was counted. The presence
-		// override picker is built from the motion sensors too, so it goes stale the same way if not rebuilt.
+		// All three depend on the class set: the motion picker's contents, the area labels discovery counts, and the
+		// presence override picker, which is built from the motion sensors.
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _config.Global.EffectiveMotionDeviceClasses]);
 		_presenceEntities = [.. _motionSensors.Concat(Catalog.EntitiesInDomains("person"))];
 		_areas = Catalog.Areas(_config.Global);
@@ -2452,10 +2080,8 @@ else
 	private string Name(string entityId) => Catalog.FriendlyNameOf(entityId) ?? entityId;
 
 	/// <summary>
-	///     The empty-picker note, chosen by whether Home Assistant is actually answering. This page knows the
-	///     reason a list is empty and the component does not: when connected, an empty domain gets an honest
-	///     "you have none of these yet — here's how to make one" (<paramref name="noneYet"/>); when not, the
-	///     note names the real cause instead of blaming a healthy connection.
+	///     The empty-picker note. This page knows why a list is empty and the component does not, so a lost connection
+	///     is not reported as an empty domain.
 	/// </summary>
 	private string EmptyNote(string noneYet) => HomeAssistantIsAnswering
 		? noneYet

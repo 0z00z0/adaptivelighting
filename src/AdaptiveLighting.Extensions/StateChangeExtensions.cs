@@ -2,13 +2,8 @@ using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Extensions;
 
-/// <summary>
-///     Questions about a non-generic <see cref="StateChange"/>, the shape the engine subscribes in.
-/// </summary>
-/// <remarks>
-///     Null-tolerant throughout: a change whose <c>New</c> is absent answers <c>false</c>/<c>null</c> rather than
-///     throwing, the convention the whole library follows.
-/// </remarks>
+/// <summary>Questions about a non-generic <see cref="StateChange"/>, the shape the engine subscribes in.</summary>
+/// <remarks>Null-tolerant: a change with no <c>New</c> answers false or null, never throws.</remarks>
 public static class StateChangeExtensions
 {
 	/// <summary>Whether the new state reads on. <c>false</c> when there is no new state.</summary>

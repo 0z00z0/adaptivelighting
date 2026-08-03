@@ -8,15 +8,9 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The Areas section's decisions, tested where they live rather than in markup.
+///     The Areas section's decisions: which colour a room's edge takes, what the floor bulk action writes, and
+///     how many settings the override count is counting.
 /// </summary>
-/// <remarks>
-///     This repo has no Razor render-test harness and deliberately does not gain one, so the parts of the settings
-///     list worth being sure about were extracted as pure functions: which colour a room's edge takes, what the
-///     floor bulk action does to the document, and how many settings "n of 16" is counting. Each of those is a
-///     thing that would be wrong silently — a wrong edge colour reads as a lie about the room, a wrong bulk
-///     mutation switches lights on in rooms nobody chose.
-/// </remarks>
 [TestClass]
 public sealed class AreaViewTests
 {
@@ -25,12 +19,8 @@ public sealed class AreaViewTests
 
 	// ===================== the override count =====================
 
-	/// <summary>
-	///     Sixteen, and sixteen for a reason: every setting a room can override except <c>Enabled</c>, which the
-	///     header switch took over. Counted from the model rather than asserted as a bare number, so a setting
-	///     added to <see cref="AreaSettings"/> tomorrow fails this test instead of quietly making the editor's
-	///     "n of 16" and the re-setup warning both wrong.
-	/// </summary>
+	// Counted off the model, never written as a literal, so a property added to AreaSettings fails here instead
+	// of quietly making the editor's "n of N" and the re-setup warning both wrong.
 	[TestMethod]
 	public void The_Override_Count_Is_Every_Room_Setting_But_The_Switch()
 	{
@@ -45,8 +35,7 @@ public sealed class AreaViewTests
 		Assert.AreEqual(overridable.Length, AreaView.OverridableSettingCount,
 			"the denominator in 'n of 16 changed' is every per-room setting except the header switch");
 
-		// And every one of them really is overridable on the room, or the editor would be offering a count of
-		// settings it cannot actually change.
+		// And every one really is overridable on the room, or the editor counts settings it cannot change.
 		foreach (string name in overridable)
 		{
 			Assert.IsNotNull(typeof(AreaConfig).GetProperty(name),
@@ -59,9 +48,6 @@ public sealed class AreaViewTests
 
 	// ===================== the edge colour =====================
 
-	/// <summary>
-	///     The settings list borrows the dashboard's families so both pages describe one room one way.
-	/// </summary>
 	[TestMethod]
 	public void The_Edge_Follows_The_Dashboards_Colour_Families()
 	{
@@ -74,17 +60,13 @@ public sealed class AreaViewTests
 		Assert.AreEqual("family-idle", AreaView.EdgeClass(true, AreaState.SceneHold));
 	}
 
-	/// <summary>A room nothing has been heard about is idle, not blank: the page opens before the first report.</summary>
+	// The page opens before the first report arrives.
 	[TestMethod]
 	public void A_Room_With_No_Snapshot_Yet_Renders_Idle()
 	{
 		Assert.AreEqual("family-idle", AreaView.EdgeClass(true, null));
 	}
 
-	/// <summary>
-	///     A switched-off room is flat grey whatever the engine last said about it. The edge must never contradict
-	///     the switch beside it — "the engine is acting here" next to an off switch is two answers to one question.
-	/// </summary>
 	[TestMethod]
 	public void A_Switched_Off_Room_Is_Flat_Grey_Whatever_It_Last_Did()
 	{
@@ -96,7 +78,6 @@ public sealed class AreaViewTests
 
 	// ===================== enablement =====================
 
-	/// <summary>Inheritance still reads: a room that states nothing follows the all-rooms setting.</summary>
 	[TestMethod]
 	public void A_Room_That_States_Nothing_Follows_All_Rooms()
 	{
@@ -109,11 +90,8 @@ public sealed class AreaViewTests
 		Assert.IsTrue(AreaView.IsEnabled(Room("stue", enabled: true), off));
 	}
 
-	/// <summary>
-	///     The bulk action writes explicit values on every room it touches. Never <c>null</c>: inheritance stays
-	///     for documents that predate the switch, but a decision somebody just made with a button belongs in the
-	///     file as itself — left inheriting, it would silently follow a later change to the all-rooms default.
-	/// </summary>
+	// The bulk action writes explicit values, never null. Left inheriting, a room would silently follow a later
+	// change to the all-rooms default.
 	[TestMethod]
 	public void Switching_A_Floor_Writes_Explicit_Values_Everywhere()
 	{
@@ -129,10 +107,6 @@ public sealed class AreaViewTests
 		Assert.IsTrue(floor.All(area => area.Enabled == false));
 	}
 
-	/// <summary>
-	///     What the floor's action offers next. An empty group is never "all on", or a floor with no rooms would
-	///     offer to switch nothing off.
-	/// </summary>
 	[TestMethod]
 	public void A_Floor_Offers_Switching_Off_Only_When_Every_Room_Is_On()
 	{
@@ -146,10 +120,7 @@ public sealed class AreaViewTests
 
 	// ===================== floor headers =====================
 
-	/// <summary>
-	///     The degradation rule, from the renderer's side: a house with no floors is one unnamed group and gets no
-	///     headers at all, so it never learns the feature exists. "Other rooms" is therefore never the only heading.
-	/// </summary>
+	// A house with no floors is one unnamed group, so "Other rooms" is never the only heading.
 	[TestMethod]
 	public void A_House_With_No_Floors_Gets_No_Headers()
 	{

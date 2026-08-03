@@ -8,9 +8,8 @@ namespace AdaptiveLighting.Tests.Extensions;
 ///     The attribute and state readers lifted from the engine's former <c>AttributeReader</c>.
 /// </summary>
 /// <remarks>
-///     States are arranged through <see cref="FakeHaContext"/>, which round-trips them through JSON — so the
-///     attribute bag is a <see cref="System.Text.Json.JsonElement"/>, exactly the shape production sees off the
-///     Home Assistant client.
+///     States come through <see cref="FakeHaContext"/>, so the attribute bag is a
+///     <see cref="System.Text.Json.JsonElement"/>, the shape production sees off the Home Assistant client.
 /// </remarks>
 [TestClass]
 public sealed class EntityStateExtensionsTests

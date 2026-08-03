@@ -6,33 +6,12 @@
 @inject ILogger<Activity> Logger
 
 @*
-	The engine's recent decisions, newest first: what each room did, when, and — the reason this page exists —
-	why it declined to do anything. The owner's question was "why didn't that light come on", and the answer is
-	a lux reading beside the threshold it was compared against; that line is the point of the timeline, so
-	ActivityView.Describe builds it and a test asserts it.
+	The engine's recent decisions, newest first, read from ActivityLog. The timeline begins when the add-on
+	started, not when the house did.
 
-	The source is the same adaptive_lighting_area event stream the dashboard already receives. Nothing new is
-	subscribed and no log file is read: AreaSnapshotCache keeps the newest report per room for the cards and
-	ActivityLog keeps the last few hundred, in order, for this page. What that inherits is worth stating —
-	the timeline begins when the add-on started, not when the house did, and it holds only what Home Assistant
-	delivered.
-
-	Unlike the dashboard, this page does not hide rooms the owner switched off. The cards answer "what is my
-	house doing", where a switched-off room is not part of the answer; this answers "what happened", and a
-	report quietly dropped would be indistinguishable from a room that never reported.
-
-	Two filters sit above it and compose: a room, and the categories a report falls into. Background tasks
-	start switched off, which is what makes a quiet log readable — and is also why the filters state their own
-	count and carry a way back. Everything they hide is still held; hidden and absent are not the same, and a
-	page that let them look the same would be lying in exactly the way this one exists to stop.
-
-	One report is not always one row. A house-wide event — a change of mode, the house emptying or filling, the
-	master switch — is published by every switched-on room, correctly, because each room really did re-evaluate
-	itself. Rendered one row per report it read as though each room had changed the house's mode, and it got
-	worse with every room switched on. So ActivityView.Rows collapses a run of house-wide reports that say the
-	same thing into a single row belonging to the house rather than to any room. That is a change to what is
-	drawn and not to what is recorded: the counts below, the chips above and the log itself are all still about
-	reports.
+	One report is not one row: a house-wide event is published by every switched-on room, so ActivityView.Rows
+	collapses a run of identical house-wide reports into one row. That affects rendering only. The counts, the
+	chips and the log are all still about reports.
 *@
 
 <PageTitle>Activity &mdash; Adaptive lighting</PageTitle>
@@ -45,11 +24,7 @@
 
 @if (_entries.Count > 0)
 {
-	@*
-		The two filters, together, above the timeline. They are shown as one block because they compose: the
-		chips count what the chosen room did, so narrowing the room re-reads every chip. Neither reaches the
-		log — both are applied to the list already read out of it.
-	*@
+	@* Neither filter reaches the log; both narrow the list already read out of it. *@
 	<div class="log-filters">
 		<div class="log-bar">
 			<label class="log-filter">
@@ -64,13 +39,8 @@
 			</label>
 
 			@*
-				The one live control on the page. New reports are counted as they arrive but are not inserted:
-				a timeline that grows under the person reading it moves the line they were on, and this page is
-				read exactly when something has gone wrong and somebody is trying to hold two facts at once.
-				So the count updates by itself and the list only ever changes when a hand asks it to.
-
-				It counts arrivals, never arrivals-that-match. A report landing in a category somebody has
-				switched off must not raise a number they can then hunt for and never find.
+				New reports are counted as they arrive but never inserted; the list only changes when this is
+				pressed. The count is of arrivals, not arrivals that match the filters.
 			*@
 			@if (Pending > 0)
 			{
@@ -78,12 +48,7 @@
 			}
 		</div>
 
-		@*
-			Chips rather than a list of checkboxes behind a control: every category is readable without opening
-			anything, and switching one is one tap. Each carries its own count within the chosen room, so a
-			category with nothing in it says so rather than leading to a blank page. The tick is a filled square
-			against a hollow one — shape as well as brass, so the state survives greyscale and a bright screen.
-		*@
+		@* Each chip's count is within the chosen room, not the house. *@
 		<div class="log-cats" role="group" aria-label="Show these categories">
 			<span class="log-filter-label">Show</span>
 
@@ -101,12 +66,7 @@
 			}
 		</div>
 
-		@*
-			A filtered page that looks like an empty one is the same failure as a report the log lost, so the
-			filters say what they are holding back and offer the single tap out of it. Not said here when the
-			filters hid everything: the panel below then carries the same sentence at full size, and two
-			identical ways out one above the other read as two different ones.
-		*@
+		@* Suppressed when everything is hidden: the empty panel below then carries the same sentence. *@
 		@if (_visible.Count > 0 && HiddenNote is { Length: > 0 } hidden)
 		{
 			<p class="log-hidden">
@@ -119,12 +79,7 @@
 
 @if (_entries.Count == 0)
 {
-	@*
-		Nothing recorded — which is a normal state, not a fault, and has to say which normal state it is. A
-		house that has just been set up has every room switched off by design, and a quiet house genuinely can
-		go a long time without a single transition. Left as a blank panel, all three of those read as broken
-		software.
-	*@
+	@* Three different normal states reach here; each names itself, because none of them is a fault. *@
 	<div class="empty">
 		@if (!Engine.IsAttached)
 		{
@@ -156,7 +111,7 @@
 }
 else if (_inRoom.Count == 0)
 {
-	@* The room has nothing left in the buffer at all — a different quiet from the categories hiding it. *@
+	@* The room has nothing left in the buffer at all, which is not the same as the categories hiding it. *@
 	<div class="empty">
 		<strong>Nothing from @_room is still being held.</strong>
 		<p>Its older reports may have been dropped to make room. The rest of the house is still here.</p>
@@ -165,11 +120,6 @@ else if (_inRoom.Count == 0)
 }
 else if (_visible.Count == 0)
 {
-	@*
-		The fourth quiet, and the only one that is the reader's own doing. It must not borrow the wording of
-		"nothing has happened yet": reports are being held, they are only being held back, and the difference
-		is one tap wide.
-	*@
 	<div class="empty">
 		<strong>Every report is in a category you switched off.</strong>
 		<p>
@@ -183,8 +133,8 @@ else if (_visible.Count == 0)
 }
 else
 {
-	@* "Today" is read against the clock at render time, not at page load: a page left open past midnight
-	   must not go on heading yesterday's entries Today. *@
+	@* Now is read at render time, not page load: a page left open past midnight must not keep heading
+	   yesterday's entries Today. *@
 	@foreach (ActivityDay day in ActivityView.GroupByDay(_rows, DateTimeOffset.Now))
 	{
 		<div class="floor-head">
@@ -200,9 +150,7 @@ else
 							  title="@Full(row.At)">@Clock(row.At)</time>
 						@if (row.IsAboutTheHouse)
 						{
-							@* The house changed mode once; every switched-on room published it. Naming one of them
-							   here would say that room did it, so the row names none — and the hover says which
-							   rooms it was assembled from, which is the one fact the missing name took with it. *@
+							@* Every switched-on room published this one change, so the row names none of them. *@
 							<span class="log-room log-room-house" title="@ActivityView.ReportedBy(row)">@HouseLabel(row)</span>
 						}
 						else
@@ -230,17 +178,16 @@ else
 	private IReadOnlyList<ActivityEntry> _inRoom = [];
 	private IReadOnlyList<ActivityEntry> _visible = [];
 
-	// What the timeline actually draws: the visible reports with each house-wide run collapsed into one row. Kept
-	// beside _visible rather than replacing it, because the two answer different questions — the counts and the
-	// hidden note are about reports, and only the rendering is about rows.
+	// What the timeline draws. Kept beside _visible, not replacing it: the counts and the hidden note are about
+	// reports, only the rendering is about rows.
 	private IReadOnlyList<ActivityRow> _rows = [];
 
 	private IReadOnlyList<ActivityFilterChip> _chips = [];
 	private string _room = ActivityView.AllRooms;
 	private ActivityCategory _categories = ActivityView.DefaultCategories;
 
-	// How many reports the buffer was holding when it was last read, before the non-events were sifted out. Only
-	// the footer wants it, and only to say whether the buffer has started dropping its oldest.
+	// What the buffer held at the last read, before non-events were sifted out. Only the footer reads it, to say
+	// whether the buffer has started dropping its oldest.
 	private int _recorded;
 
 	private long _shownThrough;
@@ -251,19 +198,14 @@ else
 	{
 		ShowNew();
 
-		// Sampled, and deliberately not used to re-read the log: a burst of transitions must not cost a burst
-		// of renders, and the render it does cause only moves the "new reports" count. Blazor's diff leaves
-		// every row already on the page untouched, so nothing shifts while somebody is reading it.
+		// Sampled, and it must not re-read the log: the render it causes only moves the "new reports" count.
 		_subscription = Cache.Changes
 			.Sample(TimeSpan.FromSeconds(1))
 			.SubscribeSafe(_ => InvokeAsync(StateHasChanged), Logger);
 	}
 
 	/// <summary>How many reports have arrived since the timeline was last drawn.</summary>
-	/// <remarks>
-	///     A subtraction of sequence numbers rather than a count of entries, so it stays right once the oldest
-	///     entries have been evicted: the buffer forgets, the counter does not.
-	/// </remarks>
+	/// <remarks>Sequence numbers, not a count of entries, so eviction from the buffer cannot skew it.</remarks>
 	private long Pending => Log.Newest - _shownThrough;
 
 	private string PendingWord => Pending == 1 ? "1 new report — show it" : $"{Pending} new reports — show them";
@@ -272,17 +214,8 @@ else
 	///     Draws everything the log is holding and moves the read mark to the newest report.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         One <see cref="ActivityLog.Read"/>, never the two properties in turn: a report landing between two
-	///         separately-locked reads would be marked as shown while being absent from the list that was shown, and
-	///         nothing would offer it again until the next report happened to arrive.
-	///     </para>
-	///     <para>
-	///         Sifted through <see cref="ActivityView.Shown"/> the moment it is read, so the counts, the chips, the
-	///         hidden note and the timeline are all about one set of reports. What the buffer actually holds is kept
-	///         beside it for the footer, which is the one line whose job is to say when reports have started falling
-	///         off the end.
-	///     </para>
+	///     One <see cref="ActivityLog.Read"/>, never the two properties in turn. A report landing between two
+	///     separately locked reads would be marked shown while absent from the list that was shown.
 	/// </remarks>
 	private void ShowNew()
 	{
@@ -296,14 +229,10 @@ else
 	}
 
 	/// <summary>
-	///     Both filters, applied to what is already drawn rather than by re-reading the log, so changing one
-	///     shows a narrower slice of the same timeline and not a silently refreshed one.
+	///     Both filters, applied to what is already drawn. Never re-reads the log, so changing a filter cannot
+	///     silently refresh the timeline.
 	/// </summary>
-	/// <remarks>
-	///     The room narrows first and the categories narrow what it left, which is also the order the two are
-	///     counted in: the chips describe the chosen room, so somebody looking at one room sees what that room
-	///     has done rather than what the house has.
-	/// </remarks>
+	/// <remarks>Room narrows first; the chips then count within that room.</remarks>
 	private void ApplyFilter()
 	{
 		_inRoom = ActivityView.InRoom(_entries, _room);
@@ -312,21 +241,14 @@ else
 		_chips = ActivityView.Chips(_inRoom, _categories);
 	}
 
-	/// <summary>
-	///     What stands where a room name would on a house-wide row: the house, and how many rooms it came from.
-	/// </summary>
-	/// <remarks>
-	///     Counted in the open rather than only in the hover, because the count is the answer to the question the
-	///     stack of identical rows used to raise — a reader who never hovers is exactly the one it misled.
-	/// </remarks>
+	/// <summary>What stands where a room name would on a house-wide row.</summary>
 	private static string HouseLabel(ActivityRow row) =>
 		row.Rooms.Count > 1 ? $"House · {row.Rooms.Count} rooms" : "House";
 
-	/// <summary>A chip's classes: whether it is letting rows through, and whether it has any to let through.</summary>
 	private static string ChipClass(ActivityFilterChip chip) =>
 		$"log-cat{(chip.IsOn ? " on" : string.Empty)}{(chip.Count == 0 ? " empty" : string.Empty)}";
 
-	/// <summary>Switches one category on or off, leaving every other choice — including the room — alone.</summary>
+	/// <summary>Switches one category on or off, leaving the room choice alone.</summary>
 	private void Toggle(ActivityCategory category)
 	{
 		_categories ^= category;
@@ -334,13 +256,9 @@ else
 	}
 
 	/// <summary>
-	///     The one tap back to the whole timeline: every category on, every room shown.
+	///     Every category on, every room shown. Does not re-read the log; the "new reports" button stays the only
+	///     thing that moves the list.
 	/// </summary>
-	/// <remarks>
-	///     It deliberately does not re-read the log. Somebody pressing this is asking to see what is being held
-	///     back from them, and quietly folding in reports that arrived since would change two things at once —
-	///     the "new reports" button stays the only thing that moves the list.
-	/// </remarks>
 	private void ShowEverything()
 	{
 		_room = ActivityView.AllRooms;
@@ -351,10 +269,7 @@ else
 	/// <summary>What the filters are keeping off the page, or <c>null</c> when they are keeping nothing off it.</summary>
 	private string? HiddenNote => ActivityView.HiddenNote(_entries.Count, _visible.Count, _room, _categories);
 
-	/// <summary>
-	///     What the page is holding, and the cap it is held to. Said out loud because the alternative is a reader
-	///     concluding that nothing happened before the oldest line, when in fact the oldest lines were dropped.
-	/// </summary>
+	/// <summary>What the page is holding, and the cap it is held to.</summary>
 	private string FootLine
 	{
 		get

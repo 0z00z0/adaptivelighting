@@ -1,10 +1,6 @@
 @*
-	A number that is allowed to be absent.
-
-	A period's Floor and Cap are double? where null means "no clamp", and an ordinary number input cannot
-	say that: blank reads as 0, and 0% is a real and very different instruction. So the switch is explicit,
-	and turning it on seeds a plausible value rather than starting at zero — a cap of 0 would black out the
-	house, and it is not what anybody reaching for this control meant.
+	A number that is allowed to be absent. A plain number input cannot say that: blank reads as 0, and 0 % is
+	a real instruction. Hence the explicit switch, and the seed value when it is turned on.
 *@
 
 <div class="nullable">
@@ -17,7 +13,7 @@
 		}
 		else
 		{
-			@* Invariant, always — see Invariant below. A number written into an HTML attribute is not prose. *@
+			@* Invariant, always. See Invariant below. *@
 			<input class="cell num" type="number" step="1" min="0" max="100" value="@Invariant(value)" @onchange="OnTyped" />
 		}
 	}
@@ -60,14 +56,8 @@
 		return ValueChanged.InvokeAsync(value);
 	}
 
-	/// <summary>
-	///     A number bound for an HTML attribute.
-	/// </summary>
-	/// <remarks>
-	///     Razor renders a bare <c>@double</c> attribute through <c>object.ToString()</c>, which is the current
-	///     culture's. A Norwegian host writes 12.5 as <c>value="12,5"</c>, which is not a number to any browser, and
-	///     the box then renders empty over a clamp that is really set — the worst possible reading of a control whose
-	///     whole point is telling "unset" from "set to something". The same reason <c>Stepper</c> formats its own.
-	/// </remarks>
+	/// <summary>A number bound for an HTML attribute.</summary>
+	// Razor renders a bare @double through the current culture. Under nb-NO 12.5 becomes value="12,5", no
+	// browser reads that as a number, and the box shows empty over a clamp that is really set.
 	private static string Invariant(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
 }

@@ -5,9 +5,8 @@ using AdaptiveLighting.LastSeen;
 namespace AdaptiveLighting.Tests.LastSeen;
 
 /// <summary>
-///     Which file a record is written to. The three curated rules mirror the engine's room resolution and are
-///     unchanged by the split; everything else is filed by its own device class, then by its domain, and the
-///     fallback is load-bearing: a device class nobody predicted must still be tracked.
+///     Which file a record is written to. The three curated rules mirror the engine's room resolution; everything
+///     else is filed by its device class, then by its domain. A class nobody predicted must still be tracked.
 /// </summary>
 [TestClass]
 public sealed class LastSeenBucketsTests
@@ -113,8 +112,8 @@ public sealed class LastSeenBucketsTests
 	[TestMethod]
 	public void Nothing_Is_Dropped_However_Strange_The_Entity_Is()
 	{
-		// The fallback is required, not tidy: an entity whose class is absent or surprising is the one most likely
-		// to be misbehaving, so it is filed and tracked in full rather than discarded.
+		// An entity whose class is absent or surprising is the one most likely to be misbehaving, so it is filed
+		// and tracked in full.
 		Assert.AreEqual(LastSeenBuckets.Unclassified, LastSeenBuckets.Classify("not an entity id", null, null, Options));
 		Assert.AreEqual(LastSeenBuckets.Unclassified, LastSeenBuckets.Classify(".no_domain", null, null, Options));
 		Assert.AreEqual(LastSeenBuckets.Unclassified, LastSeenBuckets.Classify("", null, null, Options));
@@ -167,7 +166,7 @@ public sealed class LastSeenBucketsTests
 	[TestMethod]
 	public void Two_Classes_That_Sanitise_Alike_Do_Not_Share_A_File()
 	{
-		// The dropped characters are exactly where a collision would come from: one file holding two classes'
+		// The dropped characters are where a collision comes from: one file holding two classes'
 		// histories is the quiet data loss the whole module exists to avoid.
 		string[] tokens =
 		[
@@ -221,7 +220,7 @@ public sealed class LastSeenBucketsTests
 		foreach (string bucket in new[] { "illuminance", "motion", "light", "other", "temperature", "input_boolean" })
 			Assert.AreEqual(bucket, LastSeenBuckets.FromToken(LastSeenBuckets.FileToken(bucket)), bucket);
 
-		// A fingerprinted name cannot be reversed, and says so rather than inventing a key.
+		// A fingerprinted name cannot be reversed, and says so instead of inventing a key.
 		Assert.AreEqual(LastSeenBuckets.Unclassified, LastSeenBuckets.FromToken("kitchenambient-ac1c86f6"));
 		Assert.AreEqual(LastSeenBuckets.Unclassified, LastSeenBuckets.FromToken(null));
 		Assert.AreEqual(LastSeenBuckets.Unclassified, LastSeenBuckets.FromToken("  "));

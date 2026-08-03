@@ -11,9 +11,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     it folds to nothing, and how loudly it complains about an option nobody mapped.
 /// </summary>
 /// <remarks>
-///     The direction tests are the load-bearing ones. Exactly one of the two delegates is ever non-null, because
-///     the failure the other way — the engine writing the select while also following it — is the one nobody could
-///     debug from the outside: the dropdown would fight every hand that moved it.
+///     Only one of the two delegates is ever non-null. The engine writing the select while also following it
+///     is undebuggable from the outside: the dropdown fights every hand that moves it.
 /// </remarks>
 [TestClass]
 public sealed class PeriodSelectReaderTests
@@ -69,7 +68,7 @@ public sealed class PeriodSelectReaderTests
 		Assert.AreEqual(Select, PeriodSelectReader.For(new FakeHaContext(), global, NullLogger.Instance)!.Entity);
 	}
 
-	// ---- exactly one direction, decided once ---------------------------------------------------
+	// ---- one direction only, decided once ------------------------------------------------------
 
 	[TestMethod]
 	public void HomeAssistantAuthority_GrantsTheReadAndNothingElse()
@@ -162,10 +161,7 @@ public sealed class PeriodSelectReaderTests
 			"an option nothing maps leaves the rooms on the schedule rather than guessing at one");
 	}
 
-	/// <summary>
-	///     Read once per area per tick, so an unmapped option would otherwise write a line per area per minute for
-	///     as long as somebody left the dropdown there.
-	/// </summary>
+	// Read once per area per tick. Without the tripwire an unmapped option writes a line per area per minute.
 	[TestMethod]
 	public void CurrentPeriodName_WarnsOncePerDistinctUnmappedValue()
 	{
@@ -202,11 +198,10 @@ public sealed class PeriodSelectReaderTests
 			"the writing direction needs it too, or its mirror write could never be idempotent");
 	}
 
-	/// <summary>Counts warnings, so the once-per-value tripwire can be asserted without matching on text.</summary>
+	/// <summary>Counts warnings, so the once-per-value tripwire is asserted without matching on text.</summary>
 	/// <remarks>
-	///     Counts <c>Warning</c> <i>and above</i>. An equality test would let an error through uncounted, so a
-	///     regression that promoted the unmapped-value line from a warning to an error would read here as the
-	///     tripwire having gone quiet — the assertion passing for the opposite of the reason it was written.
+	///     Warning and above, not equality. Promote the line to an error and an equality test would read as the
+	///     tripwire having gone quiet.
 	/// </remarks>
 	private sealed class WarningRecorder : ILogger
 	{

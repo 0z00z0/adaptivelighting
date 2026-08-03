@@ -12,9 +12,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     Who changed the light: the two heuristics, and the precedence between them.
 /// </summary>
 /// <remarks>
-///     This is the class the whole design leans on. Get it wrong in one direction and the engine fights the
-///     household; wrong in the other and it overrides itself on every fade. Both failure modes have already
-///     happened once, and both have a test here.
+///     Wrong one way and the engine fights the household; wrong the other and it overrides itself on every fade.
+///     Both have happened, and both have a test here.
 /// </remarks>
 [TestClass]
 public sealed class OverrideDetectorTests
@@ -73,12 +72,8 @@ public sealed class OverrideDetectorTests
 		Assert.AreEqual(ChangeOrigin.Automation, origin);
 	}
 
-	/// <summary>
-	///     The precedence bug. A script a person started carries BOTH a user id and a parent id. Checking the
-	///     user first read every scripted change as a person in the app — which made
-	///     <c>TreatAutomationsAsManual: false</c> a no-op, because nothing was ever classified as an automation.
-	///     The parent is what says "something else set this level", so the parent is checked first.
-	/// </summary>
+	// Regression: a script a person started carries both ids. Reading the user first classified every scripted
+	// change as a person, which made TreatAutomationsAsManual: false a no-op.
 	[TestMethod]
 	public void A_Change_Carrying_Both_A_User_And_A_Parent_Is_An_Automation_Not_A_User()
 	{
@@ -149,11 +144,8 @@ public sealed class OverrideDetectorTests
 		Assert.AreEqual(ChangeOrigin.PhysicalDevice, origin, "a window that never closes means nothing is ever an override");
 	}
 
-	/// <summary>
-	///     The night-fade bug, at the unit. A 30 s fade emits attribute changes for 30 s; a fixed 8 s window
-	///     called the last 22 s of our own fade a human at the dimmer. The window is the echo window PLUS the
-	///     transition, and this test pins the sum.
-	/// </summary>
+	// Regression: a 30 s fade emits changes for 30 s, and a fixed 8 s window read the last 22 s of our own fade
+	// as a human at the dimmer. The window is the echo window plus the transition.
 	[TestMethod]
 	public void The_Expectation_Window_Spans_The_Commands_Own_Transition()
 	{

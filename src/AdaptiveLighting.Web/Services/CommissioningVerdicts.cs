@@ -3,7 +3,7 @@ using AdaptiveLighting.Engine;
 
 namespace AdaptiveLighting.Web.Services;
 
-/// <summary>Which colour a roll-call note carries — the state families the rest of the app already speaks.</summary>
+/// <summary>Which colour a roll-call note carries.</summary>
 public enum VerdictTone
 {
 	/// <summary>A fact about the room. Neutral; the everyday case.</summary>
@@ -14,36 +14,20 @@ public enum VerdictTone
 }
 
 /// <summary>One note on a roll-call row.</summary>
-/// <param name="Text">What it says, in the words the row has room for.</param>
-/// <param name="Tone">Which colour it carries.</param>
 public sealed record Verdict(string Text, VerdictTone Tone);
 
 /// <summary>
 ///     One proposed room as the roll-call draws it: the counts, the notes, and the sentences its unfold shows.
 /// </summary>
 /// <remarks>
-///     <para>
-///         Assembled once per document, not once per second. The board re-renders on the dashboard's one-second
-///         tick, and rebuilding this would put a full <c>AreaEntityResolver</c> run per room per tick behind a
-///         page nobody is reading that fast. What genuinely moves — the room's live light level — is read off
-///         <see cref="Resolved"/> at render time, which costs one state read per sensor.
-///     </para>
-///     <para>
-///         The <see cref="AreaConfig"/> itself is deliberately not carried. The row is what the table draws; the
-///         document is the board's, and handing a component a mutable room would invite an edit outside the one
-///         write path the commit button is.
-///     </para>
+///     Assembled once per document, not on the dashboard's one-second tick; rebuilding it would run
+///     <c>AreaEntityResolver</c> per room per second. What moves is read off <see cref="Resolved"/> at render time.
+///     The <see cref="AreaConfig"/> is not carried, so a component cannot edit around the commit button.
 /// </remarks>
-/// <param name="Key">The room's identity across the board, the draft and the document — <see cref="CommissioningDraft.RoomKey"/>.</param>
+/// <param name="Key">The room's identity across the board, the draft and the document.</param>
 /// <param name="AreaId">The registry area id, or <c>null</c> for a room configured with explicit entities.</param>
-/// <param name="Name">The room's display name, as every other surface says it.</param>
-/// <param name="LightCount">How many lights the room would command.</param>
-/// <param name="MotionCount">How many motion sensors it resolves.</param>
 /// <param name="Notes">The row's verdict chips, worst first. Empty means the row says <see cref="CommissioningVerdicts.ReadyWord"/>.</param>
-/// <param name="Sentences">
-///     The room's behaviour, through <see cref="AreaSentences.ForArea"/> — the real token machinery, rendered
-///     read-only, so the deferred editable unfold is a switch rather than a rewrite (§2.5).
-/// </param>
+/// <param name="Sentences">The room's behaviour, through <see cref="AreaSentences.ForArea"/>, rendered read-only.</param>
 /// <param name="Resolved">What discovery makes of the room, or <c>null</c> when it cannot resolve at all.</param>
 public sealed record CommissioningRow(
 	string Key,
@@ -60,52 +44,18 @@ public sealed record CommissioningRow(
 ///     underneath about the rooms that are not in it.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Every note here is read off the document, never re-derived.</b> The role guesses are the flags
-///         <c>AreaAutoDiscovery</c> already wrote and <see cref="AreaSentences"/> already renders as a room's
-///         fourth sentence, so "bedroom manners" on a row and the sentence in that row's unfold cannot disagree.
-///         Nothing in this file decides whether a room would light: that is the engine's, and a page that
-///         re-answered it would be a second opinion nobody reconciles.
-///     </para>
-///     <para>
-///         <b>"Ready" is quiet.</b> A row with nothing to say says one muted word, not a green tick — seventeen
-///         celebrations is the reassurance dashboard this design refuses (§8). The phone drops the word entirely,
-///         which is a CSS decision rather than one made here: the projection stays the same at both widths so
-///         nothing has to be asserted twice.
-///     </para>
-///     <para>
-///         Pure, and asserted rather than screenshotted, like every other projection here.
-///     </para>
+///     Every note is read off the document, never re-derived. Nothing here decides whether a room would light;
+///     that is the engine's answer.
 /// </remarks>
 public static class CommissioningVerdicts
 {
 	/// <summary>The word a row with nothing to say carries.</summary>
 	public const string ReadyWord = "Ready";
 
-	/// <summary>
-	///     The notes one proposed room earns.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         Ordered worst-first: a light that looks like a router LED is the one thing on the row somebody has to
-	///         act on, and a reader scanning seventeen rows reads the first chip on each. The role guesses follow,
-	///         because they explain rather than ask.
-	///     </para>
-	///     <para>
-	///         <b>Having no light-level sensor is deliberately not a note.</b> It was one, and on a real house it
-	///         fired on thirteen of seventeen rows — an identical chip repeated down the table is texture, not
-	///         information, and it duplicated the muted dash in the Light level column an inch to its left. The
-	///         consequence a dash cannot carry is said once instead, under the table, by
-	///         <see cref="NoSensorLine"/>.
-	///     </para>
-	/// </remarks>
+	/// <summary>The notes one proposed room earns, worst first.</summary>
 	/// <param name="area">The proposed room, whose <c>null</c> properties mean "inherit".</param>
-	/// <param name="defaults">The document's all-rooms settings.</param>
-	/// <param name="luxSensorCount">How many illuminance sensors discovery finds in the room.</param>
 	/// <param name="suspectCount">How many of the room's commanded lights <c>LightAudit</c> flags. 0 until the impostor sheet ships.</param>
-	/// <param name="lightCount">How many lights the room would command.</param>
 	/// <returns>The notes, worst first. Empty means the row says <see cref="ReadyWord"/>.</returns>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static IReadOnlyList<Verdict> For(
 		AreaConfig area,
 		AreaSettings defaults,
@@ -119,14 +69,8 @@ public static class CommissioningVerdicts
 		AreaSettings effective = area.Effective(defaults);
 		List<Verdict> notes = [];
 
-		// A room with nothing to command is the one row that must never fall through to "Ready". Without this the
-		// notes list comes back empty — no lights means no suspects, and the other notes are about settings, not
-		// about hardware — and an empty list is exactly how this table says a room is good to go. The owner then
-		// switches on a room that can never light, and the board has told them it was ready.
-		//
-		// It is not a first-boot-only case: this same surface is what a household sees after switching every room
-		// off again, against a document that may be months old. A motion sensor renamed or removed in Home
-		// Assistant since discovery ran is enough.
+		// Must come first and return. No lights means no suspects and the rest of the notes are about settings, so
+		// the list would come back empty, and an empty list is how this table says the room is good to go.
 		if (lightCount == 0)
 		{
 			notes.Add(new Verdict("no lights found — switching this on will do nothing", VerdictTone.Warn));
@@ -143,8 +87,7 @@ public static class CommissioningVerdicts
 				VerdictTone.Warn));
 		}
 
-		// A room whose own LuxSensor is pinned reads one sensor whatever discovery found, so the ambiguity the
-		// average note describes is already settled and saying it would be wrong.
+		// A pinned LuxSensor reads one sensor whatever discovery found, so there is no average to warn about.
 		if (luxSensorCount > 1 && area.LuxSensor is not { Length: > 0 })
 			notes.Add(new Verdict($"reads the average of {luxSensorCount} sensors", VerdictTone.Info));
 
@@ -161,48 +104,22 @@ public static class CommissioningVerdicts
 	}
 
 	/// <summary>
-	///     Whether a room judges darkness by a light-level sensor it does not have — which the engine reads as
+	///     Whether a room judges darkness by a light-level sensor it does not have, which the engine reads as
 	///     "dark", so movement alone lights the room whatever the hour.
 	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         <c>IlluminanceGate</c>'s own rule: on <see cref="DarknessSource.Lux"/> a gate with nothing to read is
-	///         not a gate, and the room counts as dark. A room set to <see cref="DarknessSource.Sun"/> or
-	///         <see cref="DarknessSource.Always"/> is not missing anything by having no sensor, so it is not counted.
-	///     </para>
-	///     <para>
-	///         <b><see cref="DarknessSource.Either"/> counts too, and must be named explicitly here.</b> The gate
-	///         answers <c>Lux or Either</c> identically in all three of its arms, but this predicate ran against
-	///         <c>Lux</c> alone and so stayed silent about the retired value. It is not an unreachable case:
-	///         <see cref="ConfigNormalizer"/> rewrites <c>Either</c> to <c>Lux</c> <i>only on save</i> — the load
-	///         path deliberately does not, so a hand-edited or pre-2.x document reaches the board still saying
-	///         <c>Either</c>, and the board reads exactly that document. The room the line exists to warn about was
-	///         the one room it left out.
-	///     </para>
-	/// </remarks>
-	/// <param name="area">The proposed room.</param>
-	/// <param name="defaults">The document's all-rooms settings.</param>
-	/// <param name="luxSensorCount">How many illuminance sensors discovery finds in the room.</param>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
 	public static bool CountsAsDarkForWantOfASensor(AreaConfig area, AreaSettings defaults, int luxSensorCount)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 		ArgumentNullException.ThrowIfNull(defaults);
 
+		// Either is retired but still parses, and IlluminanceGate answers it as Lux in every arm. Any predicate
+		// over Darkness has to name it alongside Lux or it stays silent about the rooms it exists to warn about.
 		return luxSensorCount == 0
 			&& area.LuxSensor is not { Length: > 0 }
 			&& area.Effective(defaults).Darkness is DarknessSource.Lux or DarknessSource.Either;
 	}
 
-	/// <summary>
-	///     The line under the table about the rooms with no light-level sensor, or <c>null</c> when every room has
-	///     one.
-	/// </summary>
-	/// <remarks>
-	///     Said once rather than on every row it applies to. On a house with five sensors and seventeen rooms the
-	///     per-row version was thirteen identical chips restating the muted dash beside them; what a dash cannot
-	///     say is the consequence, and the consequence is one fact about the house rather than twelve about rooms.
-	/// </remarks>
+	/// <summary>The line under the table about the rooms with no light-level sensor, said once for the house.</summary>
 	/// <param name="count">How many rooms <see cref="CountsAsDarkForWantOfASensor"/> is true of.</param>
 	public static string? NoSensorLine(int count) => count switch
 	{
@@ -213,17 +130,8 @@ public static class CommissioningVerdicts
 			+ "them. Give them one in Home Assistant, or set how they decide they are dark on their own pages."
 	};
 
-	/// <summary>
-	///     The line under the table about rooms discovery looked at and left out, or <c>null</c> when there are
-	///     none.
-	/// </summary>
-	/// <remarks>
-	///     Discovery's rule is strict — a room needs a light <b>and</b> something that senses movement — and the
-	///     rooms it refuses are simply absent, which reads as the app having missed them. One muted sentence turns
-	///     an invisible decision into an inspectable one, and names the fix rather than the rule.
-	/// </remarks>
+	/// <summary>The line under the table about rooms discovery looked at and left out.</summary>
 	/// <param name="names">The rooms that have lights but nothing that senses movement, in display order.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="names"/> is <c>null</c>.</exception>
 	public static string? NearMiss(IReadOnlyList<string> names)
 	{
 		ArgumentNullException.ThrowIfNull(names);
@@ -238,11 +146,7 @@ public static class CommissioningVerdicts
 		return $"{subject} {verb} this out — give {them} a motion sensor in Home Assistant and press Set up rooms again.";
 	}
 
-	/// <summary>
-	///     What the commit button says, which is also the whole progress model: the button counts, and there is no
-	///     progress bar anywhere.
-	/// </summary>
-	/// <param name="picked">How many rooms are switched on in the draft.</param>
+	/// <summary>What the commit button says, which is also the whole progress model.</summary>
 	public static string CommitLabel(int picked) => picked switch
 	{
 		0 => "Switch on the rooms you pick",
@@ -250,15 +154,7 @@ public static class CommissioningVerdicts
 		_ => $"Switch on {picked} rooms"
 	};
 
-	/// <summary>
-	///     The line under the button about the rooms left off, or <c>null</c> when every room was picked.
-	/// </summary>
-	/// <remarks>
-	///     Says where they went, not merely how many there are. A room left off is not lost — it keeps its own
-	///     switch under House — and somebody who does not know that reads the button as a one-way door.
-	/// </remarks>
-	/// <param name="picked">How many rooms are switched on.</param>
-	/// <param name="total">How many rooms the table lists.</param>
+	/// <summary>The line under the button about the rooms left off, saying where they went.</summary>
 	public static string? RestLine(int picked, int total)
 	{
 		int rest = total - picked;
@@ -271,7 +167,7 @@ public static class CommissioningVerdicts
 		};
 	}
 
-	/// <summary>"a", "a and b", "a, b and c" — a list somebody reads rather than parses.</summary>
+	/// <summary>"a", "a and b", "a, b and c".</summary>
 	private static string Join(IReadOnlyList<string> names) => names.Count switch
 	{
 		1 => names[0],

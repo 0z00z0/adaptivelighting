@@ -16,10 +16,8 @@ public sealed class IlluminanceGateTests
 	private const string Lux = "sensor.area_lux";
 	private const string Sun = "sun.sun";
 
-	/// <summary>
-	///     The gate's clock. An instance field, so the tests that wind it forward cannot disturb the ones that do
-	///     not — MSTest builds a fresh instance per test method, and a shared static would make that untrue.
-	/// </summary>
+	// The gate's clock. Instance, not static: MSTest builds a fresh instance per test, so the tests that wind it
+	// forward cannot disturb the ones that do not.
 	private DateTimeOffset _now = new(2026, 7, 28, 12, 0, 0, TimeSpan.Zero);
 
 	private IlluminanceGate Build(
@@ -48,10 +46,7 @@ public sealed class IlluminanceGateTests
 			ha, luxSensors, settings, staleAfter ?? TimeSpan.Zero, () => _now, logger ?? NullLogger.Instance, lastSeen);
 	}
 
-	/// <summary>
-	///     Counts warnings, because the warning is now the only thing that tells a room with dead sensors from a
-	///     room that never had one — the verdict no longer does.
-	/// </summary>
+	/// <summary>Counts warnings, the only thing telling a room with dead sensors from one that never had any.</summary>
 	private sealed class WarningCounter : ILogger
 	{
 		public int Warnings { get; private set; }
@@ -95,15 +90,7 @@ public sealed class IlluminanceGateTests
 
 	// ===================== the default =====================
 
-	/// <summary>
-	///     A room that configures nothing gates on lux alone, and a room with no sensor therefore always lights.
-	/// </summary>
-	/// <remarks>
-	///     The owner's rule in one test: use the light sensor where there is one, and where there is none always
-	///     light. The default used to be <see cref="DarknessSource.Either"/>, whose sun half overruled a good
-	///     reading at dusk and put a sun clause into every explanation the gate wrote. Asserted at high noon, which
-	///     is where the two defaults disagree.
-	/// </remarks>
+	// Asserted at high noon, the only place the current default and the retired Either disagree.
 	[TestMethod]
 	public void A_Room_That_Configures_Nothing_Gates_On_Lux_Alone()
 	{
@@ -149,10 +136,7 @@ public sealed class IlluminanceGateTests
 		StringAssert.Contains(detail, "40", "the detail names the configured threshold");
 	}
 
-	/// <summary>
-	///     Hysteresis is what stops a sensor resting on the threshold from strobing the room. It takes 40 lux to
-	///     become dark and 50 to stop being dark, so 45 keeps whichever verdict it already had.
-	/// </summary>
+	/// <summary>It takes 40 lux to become dark and 50 to stop being dark, so 45 keeps whichever verdict it had.</summary>
 	[TestMethod]
 	public void Hysteresis_Holds_The_Verdict_Across_The_Threshold()
 	{
@@ -177,14 +161,6 @@ public sealed class IlluminanceGateTests
 			"a Norwegian host must read a YAML-shaped number the same way an English one does");
 	}
 
-	/// <summary>
-	///     A reading nothing can parse is no reading, and no reading is dark whatever the sun is doing.
-	/// </summary>
-	/// <remarks>
-	///     <b>This test's contract changed: it used to assert a fall back to the sun.</b> The owner's rule is that a
-	///     room with nothing to read counts as dark however the reading came to be missing, so an <c>unavailable</c>
-	///     sensor at noon now lights the room rather than deferring to a sun that says it is the middle of the day.
-	/// </remarks>
 	[TestMethod]
 	public void An_Unparseable_Reading_Is_Dark_Whatever_The_Sun_Says()
 	{
@@ -194,15 +170,6 @@ public sealed class IlluminanceGateTests
 			"high noon, and the room's only sensor will not read: still dark, because there is nothing to refuse on");
 	}
 
-	/// <summary>
-	///     A room with no lux sensor is simply dark, whatever the sun is doing.
-	/// </summary>
-	/// <remarks>
-	///     <b>This test's contract changed, and the daylight case is the whole of it.</b> It used to assert that
-	///     such a room fell back to sun elevation, which was true and is no longer: the owner's rule is that no
-	///     sensor means nothing for the lux gate to refuse on, so movement lights the room. Better to light up too
-	///     early than never. A room that wants a reading names one, or follows the house's outdoor sensor.
-	/// </remarks>
 	[TestMethod]
 	public void No_Lux_Sensor_At_All_Is_Simply_Dark()
 	{
@@ -212,19 +179,8 @@ public sealed class IlluminanceGateTests
 			"high noon, no sensor: the room still counts as dark rather than falling back to the sun");
 	}
 
-	/// <summary>
-	///     The retired <see cref="DarknessSource.Either"/> does not merely parse — it decides as
-	///     <see cref="DarknessSource.Lux"/> does, and consults no sun.
-	/// </summary>
-	/// <remarks>
-	///     <b>The gap this closes.</b> The retirement was covered by two document tests: that the name still parses
-	///     for either binder, and that a save rewrites it. Neither touches the gate. Delete
-	///     <c>or DarknessSource.Either</c> from the switch in <see cref="IlluminanceGate"/> and the whole suite
-	///     stays green while every such room falls to the default arm, holds its previous verdict and never changes
-	///     again — a room frozen dark or frozen light, forever, with nothing failing. Asserted at a sun elevation
-	///     the old behaviour would have answered differently, because that is the only place the two can be told
-	///     apart.
-	/// </remarks>
+	// Nothing else covers the gate's Either arms. Delete "or DarknessSource.Either" from the switch in
+	// IlluminanceGate and every such room falls to the default arm, holds its last verdict and never changes again.
 	[TestMethod]
 	public void The_Retired_Either_Decides_As_Lux_And_Never_Asks_The_Sun()
 	{
@@ -234,9 +190,8 @@ public sealed class IlluminanceGateTests
 		Assert.IsFalse(bright.IsDarkEnough(),
 			"the reading says bright, and Either now has no sun half to overrule it with");
 
-		// Pinned POSITIVELY, not just as "says nothing about the sun". DarknessDetail has its own Either arm, and
-		// deleting that one alone drops the room to "unknown darkness source" — which also contains no "sun", so a
-		// negative assertion stays green while every such room's explanation goes to nonsense forever.
+		// Pinned positively. DarknessDetail has its own Either arm, and deleting that one alone drops the room to
+		// "unknown darkness source", which also contains no "sun": a negative assertion alone would stay green.
 		StringAssert.Contains(bright.DarknessDetail(), "lux 500",
 			"the reading itself, which is what Lux's explanation carries");
 		StringAssert.Contains(bright.DarknessDetail(), "dark below 40",
@@ -249,15 +204,6 @@ public sealed class IlluminanceGateTests
 			"a dark reading at high noon is still dark: the lux half is the only half");
 	}
 
-	/// <summary>
-	///     A broken sensor now reaches the same verdict as no sensor, and the difference survives only as a warning.
-	/// </summary>
-	/// <remarks>
-	///     <b>This test's contract changed: it used to assert that the two cases decided differently.</b> They no
-	///     longer do — both are dark — but they are still worth telling apart, because a room that never had a sensor
-	///     is a supported arrangement while a room whose sensor has stopped answering is somebody's battery, radio or
-	///     integration. So the distinction moved into the log, and that is what is asserted here.
-	/// </remarks>
 	[TestMethod]
 	public void A_Broken_Sensor_Decides_Like_No_Sensor_But_Warns()
 	{
@@ -275,14 +221,6 @@ public sealed class IlluminanceGateTests
 
 	// ===================== several sensors: the average =====================
 
-	/// <summary>
-	///     Two sensors are averaged rather than chosen between. The area used to use neither.
-	/// </summary>
-	/// <remarks>
-	///     Refusing was defensible while the alternative was picking one arbitrarily — a real house offered the
-	///     probe inside its fridge as a candidate — but it left a better-instrumented room strictly worse off than
-	///     a bare one, which is how eight of seventeen rooms once stopped working.
-	/// </remarks>
 	[TestMethod]
 	public void Two_Sensors_Are_Averaged_Geometrically()
 	{
@@ -309,10 +247,7 @@ public sealed class IlluminanceGateTests
 		Assert.AreEqual(100d, gate.ReadLux()!.Value, 1e-9, "three decades centred on the middle one");
 	}
 
-	/// <summary>
-	///     The geometric mean multiplies, so one zero would drag a bright room to pitch dark. Non-positive
-	///     readings are dropped before the average — and a room of nothing but them really is 0.
-	/// </summary>
+	/// <summary>Non-positive readings are dropped before the average, but a room of nothing but them reads 0.</summary>
 	[TestMethod]
 	public void A_Zero_Reading_Does_Not_Drag_The_Whole_Room_To_Zero()
 	{
@@ -343,13 +278,6 @@ public sealed class IlluminanceGateTests
 
 	// ===================== several sensors: the dead ones =====================
 
-	/// <summary>
-	///     A sensor that has not reported for longer than the window is dropped, and the fresh one decides.
-	/// </summary>
-	/// <remarks>
-	///     A stuck sensor keeps its last value for ever, so without this it would drag the room's average with it
-	///     for as long as nobody noticed. Asserted with a stale reading that would flip the verdict if it counted.
-	/// </remarks>
 	[TestMethod]
 	public void A_Stale_Sensor_Is_Dropped_And_The_Fresh_One_Decides()
 	{
@@ -358,8 +286,7 @@ public sealed class IlluminanceGateTests
 		ha.SetStateReportedAt("sensor.stuck", "10000", start);
 		ha.SetStateReportedAt("sensor.live", "5", start);
 
-		// Built first, then the clock runs on: the grace period is measured from here, so the rule only comes
-		// alive once the engine has been watching for longer than the window.
+		// Built first, then the clock runs on: the grace period is measured from construction.
 		IlluminanceGate gate = BuildMany(
 			ha, DarknessSource.Lux, ["sensor.stuck", "sensor.live"], staleAfter: TimeSpan.FromHours(2));
 
@@ -370,11 +297,8 @@ public sealed class IlluminanceGateTests
 		Assert.IsTrue(gate.IsDarkEnough());
 	}
 
-	/// <summary>
-	///     <b>The trap in the timestamp choice.</b> A sensor sitting at a steady 3 lx all night is the healthiest
-	///     thing in a dark room, and <c>LastChanged</c> would condemn it for being consistent. The rule reads
-	///     <c>LastUpdated</c>, which moves whenever Home Assistant heard from the entity at all.
-	/// </summary>
+	// Staleness reads LastUpdated, which moves whenever Home Assistant heard from the entity. LastChanged would
+	// condemn a sensor sitting at a steady 3 lx all night for being consistent.
 	[TestMethod]
 	public void A_Sensor_Reporting_The_Same_Value_Over_And_Over_Is_Not_Dead()
 	{
@@ -392,13 +316,6 @@ public sealed class IlluminanceGateTests
 		Assert.AreEqual(3d, gate.ReadLux()!.Value, 1e-9, "a constant reading is a working sensor, not a dead one");
 	}
 
-	/// <summary>
-	///     Every sensor stale leaves the room with no usable reading, and a room with no reading is dark.
-	/// </summary>
-	/// <remarks>
-	///     <b>This test's contract changed: the sun used to answer here.</b> Asserted against a high sun, which is
-	///     the case that tells the two rules apart — the old one left a house of dead sensors unlit all day.
-	/// </remarks>
 	[TestMethod]
 	public void Every_Sensor_Stale_Is_Dark_Rather_Than_Sun_Dependent()
 	{
@@ -418,7 +335,6 @@ public sealed class IlluminanceGateTests
 	}
 
 
-	/// <summary>The window is the house's to set, and zero switches the rule off entirely.</summary>
 	[TestMethod]
 	public void The_Staleness_Window_Is_Configurable()
 	{
@@ -440,14 +356,8 @@ public sealed class IlluminanceGateTests
 			"zero switches the rule off for a house whose sensors genuinely report rarely");
 	}
 
-	/// <summary>
-	///     Nothing is condemned before the engine has been watching for as long as the window itself.
-	/// </summary>
-	/// <remarks>
-	///     Home Assistant resets every entity's timestamps when it restarts. Measured on one live instance 2.3
-	///     hours after a restart, a flat two-hour rule would have called most of the house dead — so "it has not
-	///     reported since we started watching" has to be told apart from "we have not been watching long".
-	/// </remarks>
+	// Home Assistant resets every entity's timestamps when it restarts. Measured on a live instance 2.3 hours
+	// after a restart, a flat two-hour rule called most of the house dead.
 	[TestMethod]
 	public void Nothing_Is_Called_Dead_Before_The_Engine_Has_Watched_Long_Enough()
 	{
@@ -465,7 +375,6 @@ public sealed class IlluminanceGateTests
 		Assert.IsNull(gate.ReadLux(), "once it has watched for longer than the window, silence means something");
 	}
 
-	/// <summary>A state with no timestamp at all is absence of evidence, not evidence of death.</summary>
 	[TestMethod]
 	public void A_State_With_No_Timestamp_Is_Not_Stale()
 	{
@@ -480,7 +389,6 @@ public sealed class IlluminanceGateTests
 		Assert.AreEqual(42d, gate.ReadLux()!.Value);
 	}
 
-	/// <summary>The detail line says how many sensors answered, which is the only place a dead one is visible.</summary>
 	[TestMethod]
 	public void DarknessDetail_Counts_The_Sensors_Behind_An_Average()
 	{
@@ -518,7 +426,7 @@ public sealed class IlluminanceGateTests
 			"an absent sun entity is not a reason to floodlight the house at noon");
 	}
 
-	// ===================== either / always =====================
+	// ===================== always =====================
 
 
 
@@ -534,10 +442,6 @@ public sealed class IlluminanceGateTests
 
 
 
-	/// <summary>
-	///     Under <see cref="DarknessSource.Lux"/> a room whose sensors have all gone quiet says so, and says what
-	///     follows from it — with no sun clause, because the sun was never asked.
-	/// </summary>
 	[TestMethod]
 	public void Lux_With_No_Usable_Reading_Explains_Itself_Without_The_Sun()
 	{
@@ -552,10 +456,8 @@ public sealed class IlluminanceGateTests
 
 	// ===================== the reading itself =====================
 
-	/// <summary>
-	///     The gate is the one place the area's lux is read, so that anything else needing the number — the
-	///     daylight brightness adjustment — is guaranteed to be looking at the same sensor as the darkness verdict.
-	/// </summary>
+	// The gate is the single read path for an area's lux, so the daylight brightness adjustment cannot end up
+	// looking at a different sensor from the darkness verdict.
 	[TestMethod]
 	public void ReadLux_Hands_Back_The_Sensors_Number()
 	{
@@ -569,10 +471,8 @@ public sealed class IlluminanceGateTests
 		Assert.IsNull(Build(Ha(lux: "unavailable"), DarknessSource.Lux).ReadLux());
 	}
 
-	/// <summary>
-	///     It takes a reading; it does not record one. The adjustment reads lux on every tick, and if that counted
-	///     as a verdict it would rewrite what the auto-on block log says the gate last decided and why.
-	/// </summary>
+	// ReadLux takes a reading; it does not record one. The adjustment calls it on every tick, and a recorded
+	// reading would rewrite what the auto-on block log says the gate last decided.
 	[TestMethod]
 	public void ReadLux_Does_Not_Disturb_What_The_Gate_Reports()
 	{
@@ -585,10 +485,7 @@ public sealed class IlluminanceGateTests
 		Assert.AreEqual(before, gate.DarknessDetail());
 	}
 
-	/// <summary>
-	///     Reading lux is not the same question as gating on it. A hallway may well decide darkness from the sun
-	///     while still following an outdoor lux sensor for its level, so the reading is available in every mode.
-	/// </summary>
+	/// <summary>Reading lux is not the same question as gating on it, so the reading works in every mode.</summary>
 	[TestMethod]
 	public void ReadLux_Works_Whatever_The_Darkness_Source_Is()
 	{
@@ -596,17 +493,9 @@ public sealed class IlluminanceGateTests
 		Assert.AreEqual(800d, Build(Ha(lux: "800"), DarknessSource.Always).ReadLux());
 	}
 
-	/// <summary>
-	///     The tracker's verdict outranks Home Assistant's own timestamp, in both directions.
-	/// </summary>
-	/// <remarks>
-	///     Home Assistant resets every entity's <c>LastUpdated</c> when it restarts, so shortly afterwards a sensor
-	///     that died last week and one that reported a minute before the restart look identical — measured on a live
-	///     house where the oldest timestamp anywhere was the restart itself, 2.3 hours old. A gate reading only that
-	///     field therefore trusts a dead sensor and, once the grace period lapses, doubts a healthy quiet one. These
-	///     two cases are the whole reason the tracker exists, so they are asserted against a fresh timestamp and an
-	///     ancient one respectively — each the opposite of the answer the tracker gives.
-	/// </remarks>
+	// After a restart a sensor that died last week and one that reported a minute earlier carry the same
+	// LastUpdated. The two cases here are asserted against a fresh timestamp and an ancient one, each the
+	// opposite of the tracker's answer.
 	[TestMethod]
 	public void The_Tracker_Decides_Staleness_Rather_Than_Home_Assistants_Own_Timestamp()
 	{

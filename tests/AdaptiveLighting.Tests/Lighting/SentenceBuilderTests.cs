@@ -6,15 +6,12 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     The primitive two later pages build their own sentences with.
 /// </summary>
 /// <remarks>
-///     Area sentences have their own tests; these cover the shapes a page will reach for that no area sentence
-///     uses yet — a yes/no in prose, a clause that only exists while its gate is on, and a figure standing in for
-///     a value no wording explains. Each is asserted here so a page agent can trust the behaviour rather than
-///     discover it.
+///     Area sentences have their own tests. These cover the shapes no area sentence uses yet: a yes/no in prose,
+///     a gated clause, and a figure standing in for a value no wording explains.
 /// </remarks>
 [TestClass]
 public sealed class SentenceBuilderTests
 {
-	/// <summary>Prose and values come out in the order they were written.</summary>
 	[TestMethod]
 	public void A_Sentence_Reads_In_The_Order_It_Was_Built()
 	{
@@ -27,9 +24,6 @@ public sealed class SentenceBuilderTests
 		Assert.AreEqual(3, sentence.Parts.Count);
 	}
 
-	/// <summary>
-	///     A yes/no is written as what it means here, so the sentence reads in both states.
-	/// </summary>
 	[TestMethod]
 	public void A_Toggle_Is_Written_As_Its_Meaning_Not_As_On_Or_Off()
 	{
@@ -46,7 +40,7 @@ public sealed class SentenceBuilderTests
 				.Build();
 	}
 
-	/// <summary>A toggle carries a value a page can apply without parsing English.</summary>
+	// A page applies the carried value; it never parses the English.
 	[TestMethod]
 	public void A_Toggle_Offers_Both_States_As_Values()
 	{
@@ -60,14 +54,6 @@ public sealed class SentenceBuilderTests
 		Assert.IsTrue(token.Choices.Any(choice => choice.Value == "false" && choice.Text == "off words"));
 	}
 
-	/// <summary>
-	///     A setting that cannot take effect is not written at all.
-	/// </summary>
-	/// <remarks>
-	///     How this model says "that only matters while this is on". Greying the clause out would still spend the
-	///     reader's attention on it, still invite the tap, and still have to explain itself; the sentence simply
-	///     gets shorter, and grows back on the tap that turns the gate on.
-	/// </remarks>
 	[TestMethod]
 	public void A_Gated_Clause_Exists_Only_While_Its_Gate_Is_On()
 	{
@@ -88,7 +74,7 @@ public sealed class SentenceBuilderTests
 				.Build();
 	}
 
-	/// <summary>A gated clause is not merely hidden — it is never built, so nothing can render it by accident.</summary>
+	// An off gate builds no token at all, so nothing downstream can render one by accident.
 	[TestMethod]
 	public void A_Gate_That_Is_Off_Leaves_No_Token_Behind()
 	{
@@ -99,7 +85,6 @@ public sealed class SentenceBuilderTests
 		Assert.AreEqual(0, sentence.Parts.OfType<SentenceToken>().Count());
 	}
 
-	/// <summary>A figure stands in the prose and reads aloud as words.</summary>
 	[TestMethod]
 	public void A_Figure_Reads_Aloud_As_Its_Alt_Text()
 	{
@@ -111,7 +96,6 @@ public sealed class SentenceBuilderTests
 		Assert.AreEqual("spread a straight, even rise between them.", sentence.PlainText);
 	}
 
-	/// <summary>A choice is written in the words its own shortlist uses, so the popover ticks what the sentence says.</summary>
 	[TestMethod]
 	public void A_Choice_Is_Written_In_Its_Shortlists_Own_Words()
 	{
@@ -122,9 +106,6 @@ public sealed class SentenceBuilderTests
 		Assert.AreEqual("the sun", token.Text);
 	}
 
-	/// <summary>
-	///     A value the shortlist does not offer is written as itself rather than silently shown as another.
-	/// </summary>
 	[TestMethod]
 	public void A_Value_Outside_The_Shortlist_Is_Written_As_Itself()
 	{
@@ -135,7 +116,6 @@ public sealed class SentenceBuilderTests
 		Assert.AreEqual("moon", token.Text, "a document holding something unexpected should say so");
 	}
 
-	/// <summary>The road back is kept only where there is somewhere to go back to.</summary>
 	[TestMethod]
 	public void Only_An_Owned_Value_Carries_The_Road_Back()
 	{
@@ -149,7 +129,6 @@ public sealed class SentenceBuilderTests
 				.Build().Parts[0]).HouseText;
 	}
 
-	/// <summary>Nulls where a builder needs something are a programming error, not a silently empty sentence.</summary>
 	[TestMethod]
 	public void The_Builder_Refuses_Nothing_To_Build_With()
 	{

@@ -20,15 +20,11 @@ public enum SaveStatus
 	Failed
 }
 
-/// <summary>
-///     The outcome of a save.
-/// </summary>
-/// <param name="Status">What happened.</param>
-/// <param name="Validation">
-///     The validator's verdict on the submitted document. On <see cref="SaveStatus.Rejected"/> this is why.
-///     On <see cref="SaveStatus.Saved"/> it may still carry area errors: those cost an area, not the save.
-/// </param>
-/// <param name="Message">A sentence for the operator. Never a restatement of <paramref name="Validation"/>.</param>
+/// <summary>The outcome of a save.</summary>
+/// <remarks>
+///     On <see cref="SaveStatus.Saved"/> the validation may still carry area errors: those cost an area, not the
+///     save. <c>Message</c> is a sentence for the operator, never a restatement of the validation.
+/// </remarks>
 public sealed record SaveResult(SaveStatus Status, ValidationResult Validation, string Message)
 {
 	/// <summary>Whether the document reached disk.</summary>
@@ -40,31 +36,10 @@ public sealed record SaveResult(SaveStatus Status, ValidationResult Validation, 
 ///     replace it.
 /// </summary>
 /// <remarks>
-///     <para>
-///         <b>Why this exists.</b> The engine used to be built inside the per-host <c>[NetDaemonApp]</c> bootstrap,
-///         which meant the orchestrator's lifetime was the app's lifetime and nothing outside the app could touch
-///         it. A UI that saves configuration has to be able to say "that document is now the truth, rebuild" —
-///         so the lifetime moves here, to a singleton both the bootstrap and the web UI can reach, and the
-///         bootstrap becomes the thing that hands over Home Assistant and starts the first load.
-///         <see cref="LightingOrchestrator"/> was made <see cref="IDisposable"/> with airtight subscription
-///         cleanup for exactly this; <see cref="Reload"/> is the seam finally being used.
-///     </para>
-///     <para>
-///         <b>The engine no longer throws on a bad document, and that is a deliberate reversal.</b> The original
-///         design had the bootstrap throw, putting the app into <c>ApplicationState.Error</c> so the failure was
-///         loud. But an app in <c>Error</c> has been disposed along with its DI scope, and its <c>IHaContext</c>
-///         with it — which would leave this host holding a dead Home Assistant connection and no way to rebuild
-///         anything. The browser could then save a corrected file and still not start the engine, which is the
-///         one thing this whole feature exists to do. So a bad document now leaves the host attached, running,
-///         and reporting itself as faulted: the persistent notification in Home Assistant still fires, the errors
-///         are still logged, and the web UI shows them — but the process stays in a state a human can fix from
-///         the browser.
-///     </para>
-///     <para>
-///         Token safety: nothing here reads <c>IConfiguration</c>. The file path arrives already resolved on
-///         <see cref="LightingConfigStore"/>, and the only configuration object this class ever touches is
-///         <see cref="AdaptiveLightingConfig"/>, which carries no credentials.
-///     </para>
+///     A bad document never throws out of here. An app put into <c>ApplicationState.Error</c> is disposed along
+///     with its DI scope and its <c>IHaContext</c>, which would leave this host holding a dead connection and no
+///     way to rebuild once the browser saved a corrected file. Instead the host stays attached and reports itself
+///     faulted, with the notification, the log and the web UI all still saying so.
 /// </remarks>
 public sealed class LightingEngineHost : IDisposable
 {
@@ -79,17 +54,12 @@ public sealed class LightingEngineHost : IDisposable
 
 	/// <summary>
 	///     Handed to the mode brain, so a period boundary that went by while the engine was stopped is not lost.
+	///     Built here, not injected: its path comes from <see cref="LightingConfigStore.FilePath"/>.
 	/// </summary>
-	/// <remarks>
-	///     Built here rather than injected, because its path comes from <see cref="LightingConfigStore.FilePath"/>
-	///     which this class already holds — so no host has to register anything to get the behaviour, and the file
-	///     lands beside the document wherever a host has put it. <c>null</c> if it could not even be constructed,
-	///     which costs the note and nothing else.
-	/// </remarks>
 	private readonly ILastPeriodStore? _lastPeriod;
 
-	// Every transition of the orchestrator goes through this. A save from one browser tab and a save from
-	// another must not interleave a Dispose with a Start.
+	// Every transition of the orchestrator goes through this: two browser tabs saving must not interleave a
+	// Dispose with a Start.
 	private readonly Lock _gate = new();
 
 	private IHaContext? _ha;
@@ -99,13 +69,9 @@ public sealed class LightingEngineHost : IDisposable
 	private LightingOrchestrator? _orchestrator;
 
 	/// <summary>Creates the host. Nothing runs until <see cref="Attach"/> and <see cref="Reload"/>.</summary>
-	/// <param name="store">The configuration document, and the only file this host reads or writes.</param>
-	/// <param name="loggerFactory">Builds the loggers for every part of the engine.</param>
-	/// <param name="lastSeen">
-	///     Tracks when each entity was genuinely last heard from. Optional so a test can build a host without
-	///     one; when absent the gates fall back to Home Assistant's own timestamps, which reset on its restart.
-	/// </param>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	/// <remarks>
+	///     Without <c>lastSeen</c> the gates fall back to Home Assistant's own timestamps, which reset on its restart.
+	/// </remarks>
 	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen = null)
 	{
 		_lastSeen = lastSeen;
@@ -119,8 +85,7 @@ public sealed class LightingEngineHost : IDisposable
 		}
 		catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
 		{
-			// A path this class cannot write beside is not a reason to have no engine. The store never throws once
-			// built; this covers only building it, and the cost of failing is one behaviour, not the house.
+			// A path this class cannot write beside is not a reason to have no engine.
 			_logger.LogWarning(exception,
 				"Could not place the note recording which circadian period the engine is in, beside {Path}. A period's "
 				+ "house mode will be applied only at a boundary the engine is running to see.",
@@ -128,62 +93,46 @@ public sealed class LightingEngineHost : IDisposable
 		}
 	}
 
-	/// <summary>The configuration file this host reads and writes.</summary>
 	public LightingConfigStore Store => _store;
 
 	/// <summary>
-	///     The app's built-in enable switch (09 §7), from <see cref="Attach"/>, or <c>null</c> before the per-host
-	///     bootstrap has handed it over. Readers use it as the kill switch whenever the document leaves
-	///     <c>KillSwitchEntity</c> unset; it is never written to YAML.
+	///     The app's built-in enable switch, or <c>null</c> before <see cref="Attach"/>. Used as the kill switch
+	///     whenever the document leaves <c>KillSwitchEntity</c> unset; never written to YAML.
 	/// </summary>
 	public string? DefaultKillSwitchEntity => _defaultKillSwitchEntity;
 
 	/// <summary>
-	///     Whether the per-host <c>[NetDaemonApp]</c> bootstrap has handed over Home Assistant yet. When
-	///     <c>false</c> the UI can still edit and save, but nothing can be started or validated against the
-	///     registry.
+	///     Whether the bootstrap has handed over Home Assistant yet. When <c>false</c> the UI can still edit and
+	///     save, but nothing can be started or validated against the registry.
 	/// </summary>
 	public bool IsAttached => _ha is not null;
 
-	/// <summary>Whether an orchestrator is currently running.</summary>
 	public bool IsRunning => _orchestrator is not null;
 
 	/// <summary>How many areas resolved and are being commanded. Zero while faulted.</summary>
 	public int RunningAreaCount => _orchestrator?.Areas.Count ?? 0;
 
 	/// <summary>
-	///     The bulbs more than one room commands, because Home Assistant has not put them in a room of their own,
-	///     as the running engine found them. Empty while faulted, and empty in the ordinary house.
+	///     The bulbs more than one room commands, as the running engine found them. Empty while faulted, and empty
+	///     in the ordinary house.
 	/// </summary>
-	/// <remarks>
-	///     Forwarded rather than recomputed: the finding is made once, when the engine starts, because it is a fact
-	///     about the Home Assistant registry rather than about any tick. It surfaces here because this is the
-	///     singleton the browser holds, so a page can show the advice without a second opinion about which lights
-	///     the engine drives.
-	/// </remarks>
+	/// <remarks>Forwarded, never recomputed: the finding is made once, at engine start.</remarks>
 	public IReadOnlyList<SuspectLight> SharedLights => _orchestrator?.SharedLights ?? [];
 
-	/// <summary>The validator's verdict from the last load, or <c>null</c> before the first one.</summary>
 	public ValidationResult? LastValidation { get; private set; }
 
-	/// <summary>Why the engine is not running, or <c>null</c> when it is.</summary>
 	public string? Fault { get; private set; }
 
-	/// <summary>When the engine last started, or <c>null</c> if it never has.</summary>
 	public DateTimeOffset? LastStartedUtc { get; private set; }
 
 	/// <summary>
 	///     Hands this host the Home Assistant connection it rebuilds against. Called once, by the per-host
 	///     <c>[NetDaemonApp]</c> bootstrap, which is the only thing the app model gives a live scope to.
 	/// </summary>
-	/// <param name="ha">The HA context the engine reads and commands through.</param>
-	/// <param name="registry">Source of areas and labels for area discovery.</param>
-	/// <param name="scheduler">The engine's only clock.</param>
-	/// <param name="defaultKillSwitchEntity">
-	///     The app's built-in enable switch (09 §7), from <see cref="NetDaemonAppSwitch.EntityIdFor"/>. Used in
-	///     memory as the kill switch whenever the document leaves <c>KillSwitchEntity</c> unset; never written to YAML.
-	/// </param>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	/// <remarks>
+	///     <c>defaultKillSwitchEntity</c> comes from <see cref="NetDaemonAppSwitch.EntityIdFor"/> and is held in
+	///     memory only, never written to YAML.
+	/// </remarks>
 	public void Attach(IHaContext ha, IHaRegistry registry, IScheduler scheduler, string? defaultKillSwitchEntity = null)
 	{
 		ArgumentNullException.ThrowIfNull(ha);
@@ -216,15 +165,13 @@ public sealed class LightingEngineHost : IDisposable
 	}
 
 	/// <summary>
-	///     Reads the current document from disk and, if it can be run, replaces the running engine with one
-	///     built on it.
+	///     Reads the current document from disk and, if it can be run, replaces the running engine with one built
+	///     on it.
 	/// </summary>
 	/// <remarks>
-	///     Never throws. A configuration this host cannot run is a state to report, not an exception to
-	///     propagate — the caller is either a NetDaemon app whose death would take the connection with it, or a
+	///     Never throws. The caller is either a NetDaemon app whose death would take the connection with it, or a
 	///     Razor component rendering a page.
 	/// </remarks>
-	/// <returns>What happened, in the same shape a save reports.</returns>
 	public SaveResult Reload()
 	{
 		lock (_gate)
@@ -263,21 +210,10 @@ public sealed class LightingEngineHost : IDisposable
 	///     Writes a document that loaded through the pre-2.0 key names straight back out in the current schema.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         On the first load rather than on the next save, and before the engine is built: a house that never
-	///         opens the web UI would otherwise keep a file only <c>LegacyKeys</c> can read, indefinitely, and the
-	///         translation table's job would quietly become permanent instead of transitional.
-	///     </para>
-	///     <para>
-	///         The write goes through <see cref="LightingConfigStore.Save"/> — which keeps the file it replaced at
-	///         <see cref="LightingConfigStore.BackupPath"/> — precisely so this needs no backup mechanism of its
-	///         own: the pre-migration document survives at the path the Configuration page already shows.
-	///     </para>
-	///     <para>
-	///         A failed write is a warning, not a fault. The document in memory is the same either way, so the
-	///         engine still starts on it; a read-only <c>/config</c> just means the translation happens again on
-	///         the next start, which is exactly what it is for.
-	///     </para>
+	///     On first load, before the engine is built, so a house that never opens the web UI does not depend on the
+	///     translation table for ever. The write goes through <see cref="LightingConfigStore.Save"/>, so the
+	///     pre-migration file survives at <see cref="LightingConfigStore.BackupPath"/>. A failed write only warns:
+	///     the in-memory document is the same either way.
 	/// </remarks>
 	private void RewriteInCurrentSchema(AdaptiveLightingConfig config)
 	{
@@ -301,26 +237,19 @@ public sealed class LightingEngineHost : IDisposable
 
 	/// <summary>How long to let Home Assistant's state cache fill before discovering areas.</summary>
 	/// <remarks>
-	///     Discovery used to run inline in <see cref="Reload"/>, and it was wrong: the reload happens immediately
-	///     after <see cref="Attach"/>, when NetDaemon has connected but its state cache is still filling. The
-	///     resolver drops any entity without a state — a registry row with no state is not a device — so an early
-	///     scan sees a partial house, proposes a partial set of rooms, and the once-only flag then locks that in.
-	///     Observed on a real installation: four rooms that plainly had lights and motion were missed because their
-	///     entities had not arrived yet. Waiting costs nothing — the area list is empty either way — and is the
-	///     difference between discovering a house and discovering whatever happened to load first.
+	///     Discovery must not run inline in <see cref="Reload"/>. The reload follows <see cref="Attach"/> at once,
+	///     while NetDaemon's state cache is still filling, and the resolver drops any entity without a state, so an
+	///     early scan proposes a partial set of rooms and the once-only flag locks that in.
 	/// </remarks>
 	private static readonly TimeSpan DiscoverySettle = TimeSpan.FromSeconds(30);
 
 	private IDisposable? _discovery;
 	private bool _discoveryScheduled;
 
-	/// <summary>
-	///     Arms the one-time area discovery: only when the document has no areas and has never been scanned.
-	/// </summary>
+	/// <summary>Arms the one-time area discovery: only when the document has no areas and has never been scanned.</summary>
 	/// <remarks>
-	///     Does nothing before <see cref="Attach"/> — the registry is the whole input — so the reload that follows
-	///     Attach is what arms it. The flag makes it once-only: a household that deliberately removes every area
-	///     must not find them grown back after a restart.
+	///     Does nothing before <see cref="Attach"/>, since the registry is the whole input. Once-only, so a household
+	///     that removes every area does not find them grown back after a restart.
 	/// </remarks>
 	private void ScheduleAreaDiscoveryIfNeeded(AdaptiveLightingConfig config)
 	{
@@ -338,18 +267,12 @@ public sealed class LightingEngineHost : IDisposable
 		_discovery = _scheduler.Schedule(DiscoverySettle, RunAreaDiscovery);
 	}
 
-	/// <summary>
-	///     The scheduled callback. Exists only to make sure nothing thrown by discovery reaches the scheduler.
-	/// </summary>
+	/// <summary>The scheduled callback. Exists to stop anything thrown by discovery reaching the scheduler.</summary>
 	/// <remarks>
-	///     This runs on a timer thread half a minute after start-up, with no caller to catch anything: an exception
-	///     out of here is unobserved, and on a thread-pool scheduler an unobserved exception ends the process — the
-	///     whole Home Assistant host, not just the lighting engine. And it is not hypothetical. The settle delay is
-	///     a guess at how long Home Assistant needs; a house on a slow link can still be filling its registry when
-	///     the timer fires, and NetDaemon's registry throws <see cref="InvalidOperationException"/> until its first
-	///     connection completes — which <see cref="KnownAreaIds"/> and <see cref="LabelsInUse"/> in this same class
-	///     already catch for exactly that reason. Discovery finding nothing is a thing to log and try again next
-	///     start; it is never a reason to take the house down.
+	///     Runs on a timer thread with no caller to catch anything, and on a thread-pool scheduler an unobserved
+	///     exception ends the whole host. Reachable: NetDaemon's registry throws
+	///     <see cref="InvalidOperationException"/> until its first connection completes, which the settle delay only
+	///     guesses at.
 	/// </remarks>
 	private void RunAreaDiscovery()
 	{
@@ -367,9 +290,8 @@ public sealed class LightingEngineHost : IDisposable
 
 	/// <summary>Proposes areas from the area registry, saves them, and rebuilds on the result.</summary>
 	/// <remarks>
-	///     The rules themselves live in <see cref="AreaSetupService"/>, so that a first run and the owner pressing
-	///     "Set up rooms again" are the same code observed twice. What is left here is the once-only part: re-read,
-	///     plan, apply, seed the people, set the flag, save.
+	///     The rules live in <see cref="AreaSetupService"/>, so a first run and "Set up rooms again" are the same
+	///     code. What is here is the once-only part.
 	/// </remarks>
 	private void RunAreaDiscoveryCore()
 	{
@@ -378,8 +300,8 @@ public sealed class LightingEngineHost : IDisposable
 			if (_ha is null || _registry is null)
 				return;
 
-			// Re-read rather than trusting the document captured when this was armed: half a minute is plenty of
-			// time for somebody to have added a room from the UI, and discovery must not overwrite that.
+			// Re-read, never the document captured when this was armed: half a minute is plenty of time for somebody
+			// to have added a room from the UI.
 			AdaptiveLightingConfig config;
 			try
 			{
@@ -398,14 +320,12 @@ public sealed class LightingEngineHost : IDisposable
 			AreaEntityResolver resolver = new(
 				_ha, areas, config.Global, _loggerFactory.CreateLogger<AreaEntityResolver>());
 
-			// Nothing to rebuild: this path only runs on a document with no areas at all, so the scope is empty and
-			// the plan is entirely NewAreas. The re-run from the UI is the same call with rooms ticked.
+			// Empty scope: this path only runs on a document with no areas, so the plan is entirely NewAreas.
 			SetupPlan plan = AreaSetupService.Plan(config, areas, resolver, []);
 
 			if (plan.NewAreas.Count == 0)
 			{
-				// The flag deliberately stays unset. Finding nothing is far more likely to mean "asked too early"
-				// than "this house has no lit rooms", and looking again on the next start costs nothing.
+				// The flag stays unset: finding nothing usually means the scan was too early.
 				_logger.LogInformation(
 					"No Home Assistant area has both a light and a motion sensor yet. Add rooms under Configuration → Areas, or restart to look again.");
 				return;
@@ -414,12 +334,10 @@ public sealed class LightingEngineHost : IDisposable
 			AreaSetupService.Apply(config, plan);
 			config.Global.AreasAutoDiscovered = true;
 
-			// Only at first setup, never on a re-run: a household that deliberately empties the list must find it
-			// still empty next start, the same one-way principle as the flag above.
+			// First setup only, never a re-run: an emptied list must stay empty next start.
 			IReadOnlyList<string> seeded = AreaSetupService.SeedPersons(config, _ha);
 
-			// The house mode is part of the same "look before asking" idea: most houses already have the dropdown,
-			// and only its meaning needs stating. Never overwrites one the household has already chosen.
+			// Never overwrites a select the household has already chosen.
 			if (config.Global.HouseMode?.Entity is not { Length: > 0 })
 				config.Global.HouseMode = HouseModeAutoDetect.Detect(_ha, _loggerFactory.CreateLogger(typeof(HouseModeAutoDetect)));
 
@@ -429,9 +347,8 @@ public sealed class LightingEngineHost : IDisposable
 			}
 			catch (LightingConfigException exception)
 			{
-				// Areas was empty on the way in, so clearing restores exactly what was loaded; the people list is
-				// only cleared when this run is what filled it, or a document that already named somebody would
-				// come out of a failed write having forgotten them.
+				// Areas was empty on the way in, so clearing restores what was loaded. Persons is cleared only when
+				// this run filled it, or a document that already named somebody would come out having forgotten them.
 				config.Areas.Clear();
 
 				if (seeded.Count > 0)
@@ -456,26 +373,17 @@ public sealed class LightingEngineHost : IDisposable
 		}
 	}
 
-	/// <summary>
-	///     Validates <paramref name="config"/>, writes it, and rebuilds the engine on it.
-	/// </summary>
+	/// <summary>The only write path: normalise, validate, write, re-read, rebuild every area controller.</summary>
 	/// <remarks>
-	///     The order is the point: a document with document-level errors is refused <i>before</i> anything
-	///     reaches the disk, so a bad save cannot leave the host unable to start next time. Area-level errors do
-	///     not refuse the save — an area naming an entity Home Assistant has since renamed must cost that area,
-	///     not the household's ability to fix the rest of the file.
+	///     The order matters. Document-level errors are refused before anything reaches the disk, so a bad save
+	///     cannot leave the host unable to start next time. Area-level errors do not refuse the save.
 	/// </remarks>
-	/// <param name="config">The edited document.</param>
-	/// <returns>What happened, with the validator's own messages attached.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="config"/> is <c>null</c>.</exception>
 	public SaveResult Save(AdaptiveLightingConfig config)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
 		lock (_gate)
 		{
-			// Normalise before validating and writing: a document that has adopted the house-mode model sheds its
-			// now-redundant deprecated keys, but only once they are provably safe to drop (07 §5.3).
 			config = ConfigNormalizer.Normalize(config);
 
 			ValidationResult validation = Validate(config);
@@ -504,31 +412,25 @@ public sealed class LightingEngineHost : IDisposable
 				return new SaveResult(SaveStatus.Failed, validation, exception.Message);
 			}
 
-			// Re-read rather than applying the in-memory object. It costs one file read and it means a save is
-			// only reported as successful once the bytes on disk parse back into a document the engine accepts —
-			// which is the property that actually matters after a restart.
+			// Re-read, never the in-memory object: a save is reported successful only once the bytes on disk parse
+			// back into a document the engine accepts, which is what matters after a restart.
 			return ApplyCore(_store.Load());
 		}
 	}
 
 	/// <summary>
-	///     Validates <paramref name="config"/> against what Home Assistant currently knows, without saving
-	///     anything. This is what the editor calls to show problems before the operator commits to them.
+	///     Validates <paramref name="config"/> against what Home Assistant currently knows, without saving anything.
+	///     Referential checks are skipped when HA is not connected.
 	/// </summary>
-	/// <param name="config">The document to check.</param>
-	/// <returns>The validator's verdict. Referential checks are skipped when HA is not connected.</returns>
-	/// <exception cref="ArgumentNullException"><paramref name="config"/> is <c>null</c>.</exception>
 	public ValidationResult Validate(AdaptiveLightingConfig config)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
-		// Resolve the built-in master switch in memory (09 §7) before validating: it is what
-		// EffectiveKillSwitchEntity — and therefore every reader, including the validator — sees when the document
-		// leaves KillSwitchEntity unset. Never written back to the document.
+		// Resolved in memory before validating, because it is what EffectiveKillSwitchEntity, and so the validator,
+		// sees when the document leaves KillSwitchEntity unset. Never written back.
 		config.Global.DefaultKillSwitchEntity = _defaultKillSwitchEntity;
 
-		// Both selects' live options, read separately: they are two different helpers, and checking one document's
-		// option strings against the other's list would report renames that never happened.
+		// The two selects are different helpers, so their live options are read separately.
 		return ConfigValidator.Validate(
 			config,
 			KnownEntityIds(),
@@ -538,13 +440,11 @@ public sealed class LightingEngineHost : IDisposable
 			LiveSelectOptions(config.Global.PeriodSelect?.EntityId));
 	}
 
-	/// <summary>Stops the engine and drops the Home Assistant connection.</summary>
 	public void Dispose()
 	{
 		lock (_gate)
 		{
-			// An armed discovery holds the scheduler; letting it fire against a torn-down host would resurrect
-			// work after shutdown.
+			// An armed discovery holds the scheduler and would resurrect work after shutdown.
 			_discovery?.Dispose();
 			_discovery = null;
 
@@ -576,8 +476,7 @@ public sealed class LightingEngineHost : IDisposable
 				"Adaptive lighting configuration is invalid, engine stopped:{NewLine}{Validation}",
 				Environment.NewLine, validation);
 
-			// Notify as well as log: the log only reaches whoever is tailing the add-on, and this is the
-			// failure nobody notices otherwise.
+			// Notify as well as log: the log only reaches whoever is tailing the add-on.
 			Notify(validation);
 
 			return new SaveResult(SaveStatus.Failed, validation, "Saved, but nothing can run on these settings.");
@@ -621,11 +520,8 @@ public sealed class LightingEngineHost : IDisposable
 		}
 		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
 		{
-			// A rebuild that throws must not take the process, or the web UI that could fix it, down with it —
-				// whatever the exception. A narrower filter here once let a NullReferenceException from mode
-				// construction escape to the Blazor circuit, where the save silently rendered nothing. Every failure
-				// is now caught (bar the two unrecoverable ones), logged with its stack trace, and reported as a
-				// failed save the operator can see.
+			// Broad on purpose. A narrower filter once let a NullReferenceException from mode construction escape to
+			// the Blazor circuit, where the save silently rendered nothing.
 			StopCore();
 			Fault = $"Adaptive lighting could not start: {exception.Message}";
 			_logger.LogError(exception, "The lighting engine failed to start.");
@@ -651,14 +547,14 @@ public sealed class LightingEngineHost : IDisposable
 		}
 		catch (InvalidOperationException exception)
 		{
-			// No live connection. Reporting the config problem must not become a second, different problem.
+			// No live connection. Reporting the config problem must not become a second problem.
 			_logger.LogWarning(exception, "Could not post the invalid-configuration notification to Home Assistant.");
 		}
 	}
 
 	/// <summary>
-	///     Every entity id Home Assistant knows, or <c>null</c> when it cannot be asked — which the validator
-	///     reads as "skip the referential checks" rather than "nothing exists".
+	///     Every entity id Home Assistant knows, or <c>null</c> when it cannot be asked. The validator reads
+	///     <c>null</c> as "skip the referential checks", not as "nothing exists".
 	/// </summary>
 	private IReadOnlyCollection<string>? KnownEntityIds()
 	{
@@ -692,14 +588,12 @@ public sealed class LightingEngineHost : IDisposable
 	}
 
 	/// <summary>
-	///     Every label at least one entity carries, listed by id <i>and</i> by name, or <c>null</c> when the
-	///     registry cannot be read — which the validator reads as "skip the include-label check".
+	///     Every label at least one entity carries, by id and by name, or <c>null</c> when the registry cannot be
+	///     read.
 	/// </summary>
 	/// <remarks>
 	///     Both forms, because <see cref="AdaptiveLighting.Extensions.RegistryExtensions.LabelsOf"/> matches either
-	///     way and the validator must not warn about a label the resolver would happily have found. Labels nobody
-	///     carries are left out on purpose: a label that exists in Home Assistant but is on no entity filters every
-	///     light out just as thoroughly as a typo, and that is precisely the case worth warning about.
+	///     way. Labels nobody carries are left out: one on no entity filters every light out as thoroughly as a typo.
 	/// </remarks>
 	private IReadOnlyCollection<string>? LabelsInUse()
 	{
@@ -725,8 +619,8 @@ public sealed class LightingEngineHost : IDisposable
 	}
 
 	/// <summary>
-	///     The live <c>options</c> of the configured house-mode select, or <c>null</c> when there is no select, no
-	///     connection, or the attribute cannot be read — which the validator reads as "skip the live-option warnings".
+	///     The live <c>options</c> of a select, or <c>null</c> when there is no select, no connection, or the
+	///     attribute cannot be read. The validator reads <c>null</c> as "skip the live-option warnings".
 	/// </summary>
 	private IReadOnlyCollection<string>? LiveSelectOptions(string? entityId)
 	{

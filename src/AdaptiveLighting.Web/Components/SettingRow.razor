@@ -1,14 +1,7 @@
 @*
-	One setting in the detail view: what it is called, what it changes, where its value came from, and the
-	control that changes it.
-
-	The provenance line under the help is the row's real work. An amber dot beside the label says "this room
-	decided this"; the line under it offers the only road back — clearing the room's value so it follows the
-	house again, which is a different act from typing the house's current number in. A row with no dot says
-	"house setting" instead, so the two cases are one sentence apart rather than one blank apart.
-
-	The control is the caller's, because the row does not know whether the setting is a span, a proportion, a
-	choice or a switch. What the row owns is the shape they all sit in, so twenty-one settings read as one list.
+	One setting in the detail view: its name, what it changes, where its value came from, and the caller's own
+	control. The revert button clears the room's value so it follows the house again, a different act
+	from typing the house's current number in.
 *@
 
 <div class="srow @(IsOwn ? "srow-own" : null)">
@@ -52,24 +45,13 @@
 	[Parameter]
 	public bool IsOwn { get; set; }
 
-	/// <summary>
-	///     The house's value, already written, or <c>null</c> where there is no house above this setting.
-	/// </summary>
-	/// <remarks>
-	///     Naming the number in the button rather than saying "reset" is the difference between an action
-	///     somebody can predict and one they have to try. It is also the only place the house's value appears on
-	///     a page about one room.
-	/// </remarks>
+	/// <summary>The house's value, already written, or <c>null</c> where there is no house above this setting.</summary>
 	[Parameter]
 	public string? HouseText { get; set; }
 
-	/// <summary>
-	///     Raised when the reader asks this setting to follow the house again.
-	/// </summary>
-	/// <remarks>
-	///     The handler must clear the room's property — not copy <see cref="HouseText"/>'s number into it — so
-	///     the room keeps following the house the next time the house changes.
-	/// </remarks>
+	/// <summary>Raised when the reader asks this setting to follow the house again.</summary>
+	// The handler must clear the room's property, not copy HouseText's number into it, so the room keeps
+	// following the house the next time the house changes.
 	[Parameter]
 	public EventCallback Reverted { get; set; }
 

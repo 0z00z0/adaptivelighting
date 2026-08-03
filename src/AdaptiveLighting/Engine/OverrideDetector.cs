@@ -25,22 +25,11 @@ public enum ChangeOrigin
 	Unknown
 }
 
-/// <summary>
-///     Decides whether a light changed because of us or because of somebody else.
-/// </summary>
+/// <summary>Decides whether a light changed because of us or because of somebody else.</summary>
 /// <remarks>
-///     <para>
-///         There is no clean answer available. <c>IHaContext.CallService</c> is fire-and-forget and does not hand
-///         back the context id of the call it made, so the engine cannot simply compare context ids and know. Two
-///         imperfect heuristics are therefore combined.
-///     </para>
-///     <para>
-///         The primary one is expectation correlation: the controller declares each command before sending it, and
-///         a change on that light consistent with the declaration and arriving inside the echo window is ours. The
-///         secondary one reads <see cref="EntityState.Context"/>. Neither is sufficient alone; together they are
-///         wrong mostly in the safe direction, where a human's change within a few seconds of ours is mistaken for
-///         our own echo and the area simply keeps automating.
-///     </para>
+///     <c>IHaContext.CallService</c> is fire-and-forget and hands back no context id, so two heuristics are
+///     combined: an expectation declared before each command, and <see cref="EntityState.Context"/>. They fail in
+///     the safe direction, mistaking a human change within seconds of ours for our own echo.
 /// </remarks>
 public sealed class OverrideDetector
 {
@@ -49,9 +38,6 @@ public sealed class OverrideDetector
 	private readonly Dictionary<string, Expectation> _expectations = new(StringComparer.OrdinalIgnoreCase);
 	private readonly object _gate = new();
 
-	/// <summary>Creates a detector reading its window and policy from <paramref name="global"/>.</summary>
-	/// <param name="global">Supplies the echo window, the NetDaemon user id and the automation policy.</param>
-	/// <param name="scheduler">The clock. The engine has no other.</param>
 	public OverrideDetector(GlobalConfig global, IScheduler scheduler)
 	{
 		_global = global ?? throw new ArgumentNullException(nameof(global));
@@ -63,10 +49,8 @@ public sealed class OverrideDetector
 	///     <see cref="Abstractions.ILightActuator.Apply"/>, or the engine will mistake its own work for a human's.
 	/// </summary>
 	/// <remarks>
-	///     The window covers the command's own transition as well as the echo window. A light fading over 15
-	///     seconds reports attribute changes for those 15 seconds, and every one of them is ours; a window that
-	///     closed first would have the engine mistake the tail of its own fade for a human at the dimmer and
-	///     override itself — on every night retarget.
+	///     The window covers the transition as well as the echo window. A 15-second fade reports attribute changes
+	///     for 15 seconds, and a shorter window would read the tail of the engine's own fade as a human.
 	/// </remarks>
 	public void ExpectCommand(string entityId, LightCommand command)
 	{
@@ -94,13 +78,11 @@ public sealed class OverrideDetector
 			string.Equals(context.UserId, ourUserId, StringComparison.Ordinal))
 			return ChangeOrigin.Self;
 
-		// A parent context means something else caused this, and that something is an automation — whether or
-		// not a user id came along for the ride. Checked before the user id precisely because a script started
-		// by a person carries both, and it is the script that set the level.
+		// Checked before the user id: a script started by a person carries both, and the script set the level.
 		if (context.ParentId is not null)
 			return ChangeOrigin.Automation;
 
-		// No user and no parent: nothing created this on anyone's behalf, so the device reported it itself.
+		// No user and no parent: the device reported it itself.
 		return context.UserId is null ? ChangeOrigin.PhysicalDevice : ChangeOrigin.HaUser;
 	}
 
@@ -125,8 +107,7 @@ public sealed class OverrideDetector
 				return false;
 			}
 
-			// The expectation is kept until it expires rather than consumed: one turn_on produces a burst of
-			// changes as brightness and colour settle, and every one of them is still our own echo.
+			// Kept until it expires, not consumed: one turn_on produces a burst of changes as the light settles.
 			return expectation.Command.On == (newState?.IsOn() ?? false);
 		}
 	}

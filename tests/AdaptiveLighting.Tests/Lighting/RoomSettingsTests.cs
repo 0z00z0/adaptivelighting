@@ -11,18 +11,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 ///     between what a control shows and what the document stores.
 /// </summary>
 /// <remarks>
-///     <para>
-///         There is no Razor render harness in this repo and there is not going to be one, so the parts of the
-///         room page worth being sure about live outside its markup. Three of them would be wrong silently and
-///         expensively: a setting that belongs to no section is a setting nobody can find, a provenance guessed
-///         from the value erases the overrides somebody set deliberately, and a unit conversion off by a factor
-///         of sixty writes a ten-second timeout where ten minutes was asked for with nothing on screen looking
-///         wrong.
-///     </para>
-///     <para>
-///         The section membership is asserted against the schema rather than against a list, so a setting added
-///         to <see cref="AreaSettings"/> tomorrow fails here instead of quietly going homeless.
-///     </para>
+///     There is no Razor render harness in this repo, so what the room page is worth being sure about is asserted
+///     outside its markup.
 /// </remarks>
 [TestClass]
 public sealed class RoomSettingsTests
@@ -34,10 +24,6 @@ public sealed class RoomSettingsTests
 
 	// ===================== the sections =====================
 
-	/// <summary>
-	///     Every overridable setting has a section, and the sections invent none. A setting the detail view does
-	///     not carry is a setting reachable from nowhere.
-	/// </summary>
 	[TestMethod]
 	public void Every_Overridable_Setting_Belongs_To_Exactly_One_Section()
 	{
@@ -51,11 +37,6 @@ public sealed class RoomSettingsTests
 		CollectionAssert.AllItemsAreUnique(sectioned, "a setting in two sections is a setting somebody looks for twice");
 	}
 
-	/// <summary>
-	///     The set of overridable settings is derived from the schema, not written down — the same reading
-	///     <see cref="AreaView.OverridableSettingCount"/> takes, so "n of 21" cannot mean two different things on
-	///     two surfaces.
-	/// </summary>
 	[TestMethod]
 	public void The_Settings_Are_Read_Off_The_Schema_Rather_Than_Listed()
 	{
@@ -76,11 +57,6 @@ public sealed class RoomSettingsTests
 			"the room's power switch owns Enabled, so it is not one of the settings the detail view offers");
 	}
 
-	/// <summary>
-	///     No section carries a say in whether it starts open, because none of them does. Four of the five used to,
-	///     so revealing <i>All settings</i> unrolled four sections at once and the structure — the thing that makes
-	///     twenty-one settings findable — was several screens of controls rather than five headings.
-	/// </summary>
 	[TestMethod]
 	public void A_Section_Has_No_Say_In_Whether_It_Starts_Open()
 	{
@@ -89,11 +65,8 @@ public sealed class RoomSettingsTests
 			"a flag every section sets the same way is a default the pages should not each have to read");
 	}
 
-	/// <summary>
-	///     The movement section is named once. The room page appends <i>Blocked while on</i> to it — a movement rule
-	///     that is a list of entities rather than an overridable setting, so it cannot be a <see cref="RoomSetting"/>
-	///     and has to be matched by title — and a rename that missed the page would drop the control silently.
-	/// </summary>
+	// The room page appends "Blocked while on" to this section by matching the title string, because that rule is a
+	// list of entities and cannot be a RoomSetting. A rename that missed the page drops the control silently.
 	[TestMethod]
 	public void The_Movement_Section_Is_Named_Once()
 	{
@@ -103,7 +76,6 @@ public sealed class RoomSettingsTests
 			"the constant the room page matches on has to name exactly one section");
 	}
 
-	/// <summary>Every section says what is in it, so a folded one is still readable.</summary>
 	[TestMethod]
 	public void Every_Section_And_Setting_Says_What_It_Is_For()
 	{
@@ -121,10 +93,6 @@ public sealed class RoomSettingsTests
 		}
 	}
 
-	/// <summary>
-	///     The overlap with the sentences is deliberate: a value in a sentence is also a row, because the sentence
-	///     is how somebody reads the room and the row is how somebody finds a setting by what it changes.
-	/// </summary>
 	[TestMethod]
 	public void Every_Value_The_Sentences_Show_Is_Also_A_Row()
 	{
@@ -137,11 +105,6 @@ public sealed class RoomSettingsTests
 
 	// ===================== provenance =====================
 
-	/// <summary>
-	///     A room that pins the house's own number has still made a decision, and the amber dot must say so.
-	///     Comparing values instead would erase exactly the overrides somebody set on purpose, so that a later
-	///     change to the house leaves this room alone.
-	/// </summary>
 	[TestMethod]
 	public void Provenance_Is_Read_Off_Null_Never_Guessed_From_The_Value()
 	{
@@ -154,7 +117,6 @@ public sealed class RoomSettingsTests
 		Assert.IsFalse(RoomSettings.IsOwn(room, nameof(AreaSettings.PreOffSeconds)));
 	}
 
-	/// <summary>The count follows the schema's nullables, whatever their type.</summary>
 	[TestMethod]
 	public void The_Count_Covers_Every_Kind_Of_Setting()
 	{
@@ -170,10 +132,6 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual(5, RoomSettings.OwnCount(room), "an int, a double, a bool, an enum and a string all count");
 	}
 
-	/// <summary>
-	///     Reverting clears the room's value so it follows the house again — never copies today's number in.
-	///     Asserted for every setting, because one that could not be reverted would be a one-way door.
-	/// </summary>
 	[TestMethod]
 	public void Every_Setting_Can_Be_Sent_Back_To_Following_The_House()
 	{
@@ -194,10 +152,7 @@ public sealed class RoomSettingsTests
 
 	// ===================== reading and writing values =====================
 
-	/// <summary>
-	///     A proportion is stored as a 0-1 factor and shown as a percentage. A stepper offering 0.05 steps of an
-	///     unnamed fraction is a control nobody can read, so the conversion happens once, here.
-	/// </summary>
+	/// <summary>A proportion is stored as a 0-1 factor and shown as a percentage.</summary>
 	[TestMethod]
 	public void A_Proportion_Is_Shown_And_Stored_In_Different_Units()
 	{
@@ -212,7 +167,6 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual("30 %", RoomSettings.Describe(room, House, nameof(AreaSettings.PreOffBrightnessFactor)));
 	}
 
-	/// <summary>A whole-number setting rounds rather than truncates: a half-step has to land somewhere.</summary>
 	[TestMethod]
 	public void A_Whole_Number_Setting_Rounds_Rather_Than_Truncates()
 	{
@@ -223,10 +177,6 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual(91, room.VacancyTimeoutSeconds);
 	}
 
-	/// <summary>
-	///     A value is held to the setting's own limits wherever it came from, so the keyboard escape hatch cannot
-	///     reach somewhere the arrows refuse to.
-	/// </summary>
 	[TestMethod]
 	public void A_Value_Is_Bounded_Whether_It_Was_Stepped_Or_Typed()
 	{
@@ -242,10 +192,6 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual(-90, room.SunElevationThreshold!.Value, 0.0001);
 	}
 
-	/// <summary>
-	///     Every value is written the way the sentences write it, so a reader meets one vocabulary rather than a
-	///     row and a sentence disagreeing about what 600 means.
-	/// </summary>
 	[TestMethod]
 	public void A_Value_Is_Written_The_Way_The_Sentences_Write_It()
 	{
@@ -262,11 +208,7 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual("sun.sun", RoomSettings.Describe(room, House, nameof(AreaSettings.SunEntity)));
 	}
 
-	/// <summary>
-	///     The conversions are invariant, whatever the machine's culture. On a <c>nb-NO</c> host a half written
-	///     "0,5" and parsed back would become five — a room dimming to 500 % of its brightness, or timing out
-	///     five times too late.
-	/// </summary>
+	// Locale trap: under nb-NO a half written "0,5" and parsed back becomes five.
 	[TestMethod]
 	public void The_Conversions_Survive_A_Comma_Decimal_Culture()
 	{
@@ -290,14 +232,8 @@ public sealed class RoomSettingsTests
 
 	// ===================== a value that spans decades =====================
 
-	/// <summary>
-	///     A light level is bounded by what a sensor can report, and typed rather than stepped.
-	/// </summary>
-	/// <remarks>
-	///     The bound is the hardware's: illuminance sensors report 0–65 535 lx. The control follows from the same
-	///     numbers rather than from a flag, because it is arithmetic — a five-lux step needs 7 992 presses to get
-	///     from 40 to 40 000, and no other step is both usable at 3 lx and usable at 30 000.
-	/// </remarks>
+	// The bound is the hardware's: illuminance sensors report 0-65535 lx. Which control is drawn follows from the
+	// range itself, not from a flag on the setting.
 	[TestMethod]
 	public void A_Light_Level_Is_Bounded_By_The_Sensor_And_Typed_Rather_Than_Stepped()
 	{
@@ -311,10 +247,6 @@ public sealed class RoomSettingsTests
 		}
 	}
 
-	/// <summary>
-	///     Nothing else changes control. A stepper is right for a timeout and for a percentage, and the wide box
-	///     must not leak onto a setting whose whole range fits in one grain.
-	/// </summary>
 	[TestMethod]
 	public void Only_The_Light_Levels_Span_Decades()
 	{
@@ -334,7 +266,6 @@ public sealed class RoomSettingsTests
 		Assert.IsFalse(RoomSettings.SpansDecades(0, 100), "so is a percentage");
 	}
 
-	/// <summary>A number inside the range is taken as typed, including at either end of it.</summary>
 	[TestMethod]
 	public void A_Typed_Number_Inside_The_Range_Is_Taken()
 	{
@@ -351,13 +282,7 @@ public sealed class RoomSettingsTests
 			"a box that was tabbed through picks up whitespace and that is not a mistake");
 	}
 
-	/// <summary>
-	///     A number outside the range is refused and the refusal says what happened.
-	/// </summary>
-	/// <remarks>
-	///     Never clamped. Turning 70 000 into 65 535 without a word answers a question nobody asked, and leaves
-	///     somebody looking at a number they did not type with no way to tell it from a typo of their own.
-	/// </remarks>
+	// Refused, never clamped. SetShown clamps; ReadNumber does not, and the two are easy to conflate.
 	[TestMethod]
 	public void A_Typed_Number_Outside_The_Range_Is_Refused_And_Says_So()
 	{
@@ -374,7 +299,6 @@ public sealed class RoomSettingsTests
 		StringAssert.Contains(under.Refusal, "-5 lx");
 	}
 
-	/// <summary>Something that is not a number, and an empty box, both change nothing and both say why.</summary>
 	[TestMethod]
 	public void An_Unreadable_Entry_Changes_Nothing_And_Says_Why()
 	{
@@ -393,22 +317,9 @@ public sealed class RoomSettingsTests
 		StringAssert.Contains(words.Refusal, "dark", "the refusal quotes what was actually typed");
 	}
 
-	/// <summary>
-	///     A value typed on the owner's own machine round-trips, and every number this control writes is invariant.
-	/// </summary>
-	/// <remarks>
-	///     <para>
-	///         <c>nb-NO</c> writes decimals with a comma and groups thousands with a non-breaking space. Two things
-	///         have to survive that. A typed "62,5" has to reach the document as 62.5 rather than as 625; and every
-	///         number this control writes back out — the bound in a refusal, the value in an HTML attribute — has to
-	///         be invariant, because <c>value="62,5"</c> is not a number to any browser and renders as an empty box
-	///         over a value that is really set. This project has already shipped that bug once.
-	///     </para>
-	///     <para>
-	///         The invariant pass runs first and without thousands separators, on purpose: allowing them would read
-	///         "1,5" as fifteen before the Norwegian pass ever saw it.
-	///     </para>
-	/// </remarks>
+	// nb-NO writes decimals with a comma and groups thousands with a non-breaking space. Every number written back
+	// out must be invariant: value="62,5" is not a number to a browser and renders as an empty box.
+	// The invariant pass runs first and without thousands separators, or "1,5" reads as fifteen.
 	[TestMethod]
 	public void A_Value_Typed_Under_A_Comma_Decimal_Culture_Round_Trips()
 	{
@@ -445,17 +356,6 @@ public sealed class RoomSettingsTests
 
 	// ===================== the gates =====================
 
-	/// <summary>
-	///     A setting that cannot take effect is not drawn at all. Greying it out still spends the reader's
-	///     attention, still invites the tap and still has to explain itself; the row comes back on the same tap
-	///     that turns its gate on.
-	/// </summary>
-	/// <remarks>
-	///     The sun threshold is drawn for the two rules that read the sun, and for neither of the two that do not.
-	///     It used to be drawn for a Sensor room as well, because a room whose lux sensors said nothing fell back to
-	///     the sun; that fallback is gone — such a room now counts as dark — so the row would be a control that
-	///     changes nothing, which is exactly what this rule exists to keep off the page.
-	/// </remarks>
 	[TestMethod]
 	public void A_Setting_That_Cannot_Take_Effect_Is_Not_Drawn()
 	{
@@ -478,11 +378,8 @@ public sealed class RoomSettingsTests
 		Assert.IsTrue(startLux.AppliesTo(new AreaSettings { LuxBrightnessEnabled = true }));
 	}
 
-	/// <summary>
-	///     No help line still promises the sun as a fallback for a room whose light-level sensors say nothing. That
-	///     fallback is gone, and a help line that outlives the behaviour it describes is worse than none — this is
-	///     the sentence a reader consults precisely when a room is behaving unexpectedly in the dark.
-	/// </summary>
+	// A sensor room with nothing to read counts as dark; it no longer falls back to the sun. Help text is the only
+	// place that behaviour is described to a reader, so it is asserted here.
 	[TestMethod]
 	public void No_Help_Line_Still_Promises_The_Sun_As_A_Fallback()
 	{
@@ -499,7 +396,6 @@ public sealed class RoomSettingsTests
 			"the reader who can no longer see the sun row has to learn what a sensor room does with nothing to read");
 	}
 
-	/// <summary>A setting with no gate is always drawn.</summary>
 	[TestMethod]
 	public void An_Ungated_Setting_Is_Always_Drawn()
 	{
@@ -509,10 +405,6 @@ public sealed class RoomSettingsTests
 
 	// ===================== applying a sentence edit =====================
 
-	/// <summary>
-	///     Every value the sentences offer can be applied. A key the page cannot apply renders as a control that
-	///     does nothing when tapped, which is the one failure mode a sentence-driven surface must not have.
-	/// </summary>
 	[TestMethod]
 	public void Every_Sentence_Token_Can_Be_Applied()
 	{
@@ -535,10 +427,7 @@ public sealed class RoomSettingsTests
 		}
 	}
 
-	/// <summary>
-	///     A duration token carries seconds; some of the settings it edits are stored in minutes. Getting this
-	///     backwards writes a two-minute hold where two hours was picked, and nothing on screen looks wrong.
-	/// </summary>
+	// A duration token always carries seconds; some of the settings it edits are stored in minutes.
 	[TestMethod]
 	public void An_Edit_Is_Stored_In_The_Unit_The_Schema_Wants()
 	{
@@ -557,7 +446,6 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual(DarknessSource.Always, room.Darkness);
 	}
 
-	/// <summary>An edit the page cannot apply says so rather than silently doing nothing.</summary>
 	[TestMethod]
 	public void An_Unknown_Edit_Is_Refused_Rather_Than_Swallowed()
 	{
@@ -570,11 +458,7 @@ public sealed class RoomSettingsTests
 
 	// ===================== the house's own copy of the same settings =====================
 
-	/// <summary>
-	///     The House tab writes the very same settings against <see cref="AreaSettings"/>, and the conversion
-	///     between what a control shows and what the document stores has to be the same one — a warning dim
-	///     written as 50 in the house and 0.5 in a room is two documents that disagree about the same word.
-	/// </summary>
+	// The House tab writes the same settings against AreaSettings, through the same shown-to-stored conversion.
 	[TestMethod]
 	public void The_House_Writes_A_Shown_Value_The_Way_A_Room_Does()
 	{
@@ -596,7 +480,6 @@ public sealed class RoomSettingsTests
 		}
 	}
 
-	/// <summary>A house value is bounded by the same limits a room's is, including through the keyboard escape hatch.</summary>
 	[TestMethod]
 	public void A_House_Value_Is_Held_To_The_Settings_Own_Bounds()
 	{
@@ -611,7 +494,7 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual(1, house.VacancyTimeoutSeconds, "the lights cannot stay on for a negative time");
 	}
 
-	/// <summary>Flags and entities land on the house's non-nullable twins, with empty meaning none rather than null.</summary>
+	// AreaSettings has no null to fall back to, so "none" is the empty string on the house side.
 	[TestMethod]
 	public void The_House_Writes_Flags_And_Entities()
 	{
@@ -628,10 +511,6 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual(string.Empty, house.SunEntity, "the house has no null to fall back to, so none is written as empty");
 	}
 
-	/// <summary>
-	///     A sentence edit applies to the house exactly as it applies to a room — the same unit conversions,
-	///     so the two surfaces cannot write different values for one pick.
-	/// </summary>
 	[TestMethod]
 	public void A_Sentence_Edit_Applies_To_The_House_As_It_Does_To_A_Room()
 	{
@@ -668,7 +547,6 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual(DarknessSource.Always, house.Darkness);
 	}
 
-	/// <summary>An unknown key is refused rather than silently swallowed, so a drifted sentence can be logged.</summary>
 	[TestMethod]
 	public void The_House_Refuses_A_Key_It_Cannot_Apply()
 	{

@@ -1,24 +1,9 @@
 @*
-	One value inside a sentence, rendered as the control that changes it.
+	One value inside a sentence, rendered as the control that changes it: bold when not editable, a flip for a
+	yes/no, otherwise a token that opens a shortlist.
 
-	Three renderings, decided by what the value is rather than by a flag the caller passes:
-
-	  · not editable here      — the value in bold. The House tab's defaults read this way, because editing a
-	                             default is the rarer act and its row is one tap below.
-	  · a yes/no               — a token that flips where it stands. Two states do not deserve a popover: it
-	                             would cost a tap and a re-read for a decision already made.
-	  · anything else          — a token that opens a curated shortlist.
-
-	Keyboard and thumb, both. It is a real <button>, so Enter and Space work and the tab order is the reading
-	order; Escape closes the popover; on a phone the popover becomes a sheet above the bottom edge, because a
-	token near the right margin would otherwise open a card half off the screen.
-
-	No script. The page is served under a strict content policy and the rest of this UI already does its
-	disclosure in plain CSS and Blazor — the cost is that clicking elsewhere on the page does not dismiss the
-	popover, which is the same trade InfoPopover already makes, and the reason the token itself closes it.
-
-	The wrapper is position: relative (.tok-host). A popover anchored to a container that is not a positioning
-	context lands in the page's bottom-left corner — a bug this project has fixed once already.
+	The wrapper .tok-host must stay position: relative. A popover anchored to a container that is not a
+	positioning context lands in the page's bottom-left corner; this has been fixed here once already.
 *@
 
 @if (!Editable || !Token.Editable)
@@ -93,15 +78,9 @@ else
 	[Parameter]
 	public EventCallback<SentenceEdit> Edited { get; set; }
 
-	/// <summary>
-	///     Raised when the reader asks to follow the house again, carrying the token's key.
-	/// </summary>
-	/// <remarks>
-	///     A separate callback from <see cref="Edited"/> because they are different edits to the document:
-	///     picking the house's current value writes that number into the room, while reverting clears the
-	///     property so the room follows the house from now on — including the next time the house changes.
-	///     One callback carrying both would force every page to guess which was meant.
-	/// </remarks>
+	/// <summary>Raised when the reader asks to follow the house again, carrying the token's key.</summary>
+	// Separate from Edited: picking the house's current value writes that number into the room, while
+	// reverting clears the property so the room follows the house the next time the house changes.
 	[Parameter]
 	public EventCallback<string> Reverted { get; set; }
 
@@ -111,13 +90,7 @@ else
 
 	private bool _open;
 
-	/// <summary>
-	///     Named for a screen reader, which does not get the sentence around it.
-	/// </summary>
-	/// <remarks>
-	///     "10 min" read on its own is not a control anybody can operate. The label plus the value is, and the
-	///     provenance is spoken rather than left to an amber dot nothing announces.
-	/// </remarks>
+	/// <summary>Named for a screen reader, which does not get the sentence around it or see the amber dot.</summary>
 	private string AccessibleName =>
 		Token.Origin == TokenOrigin.Own
 			? $"{Token.Label}: {Token.Text}, this room's own setting"
@@ -132,13 +105,7 @@ else
 		_ => Token.Label
 	};
 
-	/// <summary>
-	///     A toggle flips; everything else opens its shortlist.
-	/// </summary>
-	/// <remarks>
-	///     A toggle with no second option would be a dead control, so a malformed one falls back to the popover
-	///     rather than silently doing nothing when tapped.
-	/// </remarks>
+	/// <summary>A toggle flips; everything else, including a malformed toggle, opens its shortlist.</summary>
 	private Task OnActivate()
 	{
 		if (Token.Kind == TokenKind.Toggle && Token.Choices.Count == 2)
@@ -163,15 +130,9 @@ else
 		return Edited.InvokeAsync(EditFor(choice));
 	}
 
-	/// <summary>
-	///     The edit an option asks for, which is not always an edit to this token's own setting.
-	/// </summary>
-	/// <remarks>
-	///     An option may answer the sentence's question by changing something else: "off" on a lux threshold is
-	///     the room deciding by the sun instead, and a number cannot say that without a sentinel value the whole
-	///     document would then have to understand. The redirect rides on the option, so the page still receives
-	///     one ordinary edit and needs no special case.
-	/// </remarks>
+	/// <summary>The edit an option asks for, not always an edit to this token's own setting.</summary>
+	// An option may answer the question by changing something else: "off" on a lux threshold sets the room to
+	// decide by the sun. The redirect rides on the option, so the page still receives one ordinary edit.
 	private SentenceEdit EditFor(TokenChoice choice) =>
 		new(choice.Key ?? Token.Key, choice.Kind ?? Token.Kind, choice.Value);
 
@@ -182,14 +143,8 @@ else
 		return Reverted.InvokeAsync(Token.Key);
 	}
 
-	/// <summary>
-	///     Which option is the current one, matched on the words rather than the value.
-	/// </summary>
-	/// <remarks>
-	///     The token carries its value already formatted, and the shortlist formats its own the same way, so the
-	///     written forms match exactly when the values do. Comparing the carried strings instead would call
-	///     "0.5" and "0.50" different values and tick neither.
-	/// </remarks>
+	/// <summary>Which option is the current one, matched on the formatted words, not the raw value.</summary>
+	// Token and shortlist format the same way, so the written forms match when the values do.
 	private bool IsCurrent(TokenChoice choice) => string.Equals(choice.Text, Token.Text, StringComparison.Ordinal);
 
 	private void OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)

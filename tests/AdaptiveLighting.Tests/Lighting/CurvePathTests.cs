@@ -5,12 +5,11 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The response curve drawn beside a setting that is a shape rather than a quantity.
+///     The response curve drawn beside a setting whose value is a shape, not a quantity.
 /// </summary>
 /// <remarks>
-///     Geometry generated inside markup is geometry nothing can assert about, and the failure mode here is
-///     quiet: a curve drawn upside down is perfectly plausible on screen and says the exact opposite of the
-///     number beside it.
+///     A curve drawn upside down looks plausible on screen and says the opposite of the number beside it, so
+///     the geometry lives outside the markup where it can be asserted.
 /// </remarks>
 [TestClass]
 public sealed class CurvePathTests
@@ -24,7 +23,6 @@ public sealed class CurvePathTests
 				double.Parse(pair[1], CultureInfo.InvariantCulture)))
 	];
 
-	/// <summary>The curve spans the box corner to corner: nothing in at the bottom left, everything at the top right.</summary>
 	[TestMethod]
 	public void The_Curve_Runs_From_Nothing_To_Everything()
 	{
@@ -36,7 +34,6 @@ public sealed class CurvePathTests
 		Assert.AreEqual(0, points[^1].Y, 1e-9);
 	}
 
-	/// <summary>A brightening curve never falls, whatever its shape.</summary>
 	[TestMethod]
 	public void The_Curve_Only_Ever_Rises()
 	{
@@ -52,9 +49,6 @@ public sealed class CurvePathTests
 		}
 	}
 
-	/// <summary>
-	///     Above one holds back before climbing; below one lifts early. The picture has to match the words.
-	/// </summary>
 	[TestMethod]
 	public void A_High_Exponent_Holds_Back_And_A_Low_One_Lifts_Early()
 	{
@@ -64,13 +58,7 @@ public sealed class CurvePathTests
 		Assert.IsTrue(Points(CurvePath.Power(0.4))[6].Y < straight, "lifting early means already high in the middle");
 	}
 
-	/// <summary>
-	///     Past a point the shape stops carrying information, so the drawing stops changing.
-	/// </summary>
-	/// <remarks>
-	///     A glyph is a hint at a glance. An exponent of 40 renders as an indistinguishable right angle long
-	///     before the arithmetic stops working, and clamping keeps a mistyped number from drawing a lie.
-	/// </remarks>
+	// An exponent of 40 draws as a right angle long before the arithmetic stops working, so it is clamped.
 	[TestMethod]
 	public void An_Extreme_Exponent_Is_Clamped_To_A_Shape_Still_Worth_Drawing()
 	{
@@ -78,16 +66,12 @@ public sealed class CurvePathTests
 		Assert.AreEqual(CurvePath.Power(0.1), CurvePath.Power(0.0001));
 	}
 
-	/// <summary>A curve needs at least its two ends.</summary>
 	[TestMethod]
 	public void One_Point_Is_Not_A_Curve()
 	{
 		Assert.ThrowsException<ArgumentOutOfRangeException>(() => CurvePath.Power(1, samples: 1));
 	}
 
-	/// <summary>
-	///     The path is invariant, because SVG is: a comma decimal separator would silently break every curve.
-	/// </summary>
 	[TestMethod]
 	public void The_Path_Is_Written_Invariantly_Whatever_The_Machine_Speaks()
 	{
@@ -106,7 +90,6 @@ public sealed class CurvePathTests
 		}
 	}
 
-	/// <summary>The curve says what it is, for a reader who cannot see it.</summary>
 	[TestMethod]
 	public void The_Curve_Describes_Itself_In_Words()
 	{

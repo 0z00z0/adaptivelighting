@@ -8,8 +8,7 @@ using Microsoft.Reactive.Testing;
 namespace AdaptiveLighting.Tests.LastSeen;
 
 /// <summary>
-///     The module's whole reason for existing: a Home Assistant restart resets every timestamp in the house, and
-///     the record must not believe it.
+///     A Home Assistant restart resets every timestamp in the house, and the record must not believe it.
 /// </summary>
 [TestClass]
 public sealed class LastSeenTrackerTests
@@ -64,8 +63,8 @@ public sealed class LastSeenTrackerTests
 		public void Advance(TimeSpan span) => Scheduler.AdvanceBy(span.Ticks);
 
 		/// <summary>
-		///     A house with a realistic spread of timestamps: one sensor dead for a week, the rest reporting at
-		///     staggered intervals. The spread is what tells a running house from one that has just restarted.
+		///     One sensor dead for a week, the rest staggered. The spread is what tells a running house from one
+		///     that has just restarted.
 		/// </summary>
 		public void SeedHouse(int motionSensors = 19)
 		{
@@ -105,8 +104,8 @@ public sealed class LastSeenTrackerTests
 
 		fixture.Advance(TimeSpan.FromMinutes(10));
 
-		// Home Assistant restarts: every timestamp in the house collapses to one instant, which is exactly what was
-		// measured on the live house — 51 motion sensors all reading the same 2.3 hours.
+		// A restart collapses every timestamp in the house to one instant. Measured on the live house: 51 motion
+		// sensors all reading the same 2.3 hours.
 		DateTimeOffset restart = fixture.Now;
 		fixture.Ha.RestartHomeAssistant(restart);
 		fixture.Tick();
@@ -145,8 +144,7 @@ public sealed class LastSeenTrackerTests
 		fixture.Ha.RestartHomeAssistant(fixture.Now);
 		fixture.Tick();
 
-		// Two minutes in, well inside the five-minute grace. A restore arriving this late is indistinguishable
-		// from this, which is why neither is believed.
+		// Two minutes in, inside the five-minute grace. A late restore looks the same, so neither is believed.
 		fixture.Advance(TimeSpan.FromMinutes(2));
 		fixture.Ha.Set(Dead, "on", fixture.Now, "motion");
 		fixture.Tick();
@@ -225,8 +223,8 @@ public sealed class LastSeenTrackerTests
 
 		using LastSeenTracker tracker = fixture.Started();
 
-		// 3 lx all night. The state string never moves; Home Assistant's timestamp does, because the sensor keeps
-		// reporting. Counting only value changes would call this healthy sensor dead by morning.
+		// 3 lx all night. The state string never moves, Home Assistant's timestamp does. Counting value changes
+		// alone would call this healthy sensor dead by morning.
 		DateTimeOffset lastReport = default;
 
 		for (int minute = 0; minute < 5; minute++)
@@ -329,8 +327,8 @@ public sealed class LastSeenTrackerTests
 
 		using LastSeenTracker tracker = fixture.Started();
 
-		// Guards the DateTime/DateTimeOffset conversion: a timestamp that arrives without a UTC marker and is read
-		// as local time would be silently hours out, and every threshold with it.
+		// The DateTime/DateTimeOffset conversion: a timestamp arriving without a UTC marker and read as local
+		// time is silently hours out, and every threshold with it.
 		Assert.AreEqual(TimeSpan.FromDays(7), tracker.SilenceOf(Dead));
 	}
 
@@ -581,8 +579,8 @@ public sealed class LastSeenTrackerTests
 		using Fixture fixture = new();
 		fixture.SeedHouse();
 
-		// A spread of the shapes a real instance has: classed sensors, classless ones, odd domains, and a device
-		// class that has to be sanitised before it can be a file name.
+		// The shapes a real instance has: classed sensors, classless ones, odd domains, and a device class that
+		// has to be sanitised before it can be a file name.
 		fixture.Ha.Set("light.kitchen", "on", fixture.Now - TimeSpan.FromMinutes(3));
 		fixture.Ha.Set("sensor.washing_machine", "42", fixture.Now - TimeSpan.FromMinutes(3), "power");
 		fixture.Ha.Set("sensor.hall_temperature", "21", fixture.Now - TimeSpan.FromMinutes(4), "temperature");
@@ -631,8 +629,8 @@ public sealed class LastSeenTrackerTests
 
 		Assert.IsTrue(before.Count >= 5, $"the split should have given each class its own file, and produced {before.Count}");
 
-		// One sensor reports. With dozens of files rather than four, rebuilding all of them would multiply the
-		// write cost by the number of classes in the house for no gain at all.
+		// One sensor reports. Rebuilding every file would multiply the write cost by the number of classes in
+		// the house, and there are dozens of them now, not four.
 		fixture.Advance(TimeSpan.FromMinutes(1));
 		fixture.Ha.Set("sensor.washing_machine", "43", fixture.Now, "power");
 		fixture.Advance(fixture.Options.FlushInterval);
@@ -653,8 +651,8 @@ public sealed class LastSeenTrackerTests
 
 		DateTimeOffset heardAt = Noon - TimeSpan.FromHours(3);
 
-		// Older in Home Assistant than in the cache, so anything the cache carried over is visible rather than
-		// immediately overwritten by a fresh census.
+		// Older in Home Assistant than in the cache, so what the cache carried over stays visible instead of
+		// being overwritten by the first census.
 		fixture.Ha.Set("sensor.washing_machine", "0", Noon - TimeSpan.FromHours(5), "power");
 		fixture.Ha.Set("person.espen", "home", Noon - TimeSpan.FromHours(5));
 

@@ -1,17 +1,8 @@
 @*
-	What a room is doing, as a shape and a colour that agree.
+	What a room is doing, as a shape and a colour that agree. Every state that means something has its own
+	outline, so colour is never the only carrier; the quiet states get a dot and no glyph.
 
-	This is an accessibility fix wearing a design's clothes. The shipped UI told lit-by-the-engine from
-	set-by-hand from switched-off by colour alone — nothing to a colourblind reader, nothing in a greyscale
-	screenshot, and nothing on a phone held in sunlight. Every state that means something now has its own
-	outline; the colour agrees with the shape instead of carrying the whole message.
-
-	One component, so all four page surfaces say it identically. Four hand-rolled versions would drift, and
-	the drift would be one house described four ways.
-
-	The quiet states get a dot and no glyph. That is the dark-cockpit rule carried into iconography: in a
-	house of seventeen rooms, fourteen are watching and nothing else, and fourteen repeated marks are
-	texture. Shapes appear where something is happening.
+	One component, used by all four page surfaces.
 *@
 
 <span class="state-chip @Mark.Family @(Bare ? "state-bare" : null) @(Kelvin is not null && StateGlyph.TakesKelvinTint(State) ? "state-kelvin" : null)"
@@ -40,29 +31,18 @@
 	public AreaState State { get; set; }
 
 	/// <summary>
-	///     The colour temperature the room was actually commanded to, when there is one.
+	///     The colour temperature the room was commanded to. Ignored unless
+	///     <see cref="StateGlyph.TakesKelvinTint"/> says the state carries one; every other state keeps the
+	///     semantic colour and invents no warmth.
 	/// </summary>
-	/// <remarks>
-	///     Used only where it is a fact: a room the engine is holding lit reports the Kelvin it chose, and a
-	///     2200 K night dim beside a 4500 K midday white should be visibly different rooms. Every other state has
-	///     no warmth of its own, so the chip keeps the semantic colour rather than inventing one — which is why
-	///     this is ignored unless <see cref="StateGlyph.TakesKelvinTint"/> says the state carries a Kelvin.
-	/// </remarks>
 	[Parameter]
 	public int? Kelvin { get; set; }
 
 	/// <summary>Whether the chip says the state in words as well as in shape. On by default.</summary>
-	/// <remarks>
-	///     Turned off where the row already names what is happening — a lane whose label is the room and whose
-	///     track is the evidence needs the mark and not a third statement of the same fact.
-	/// </remarks>
 	[Parameter]
 	public bool ShowWord { get; set; } = true;
 
-	/// <summary>
-	///     The mark alone: no well, no word, no padding. For a dense list where the shape only has to agree
-	///     with what is already written beside it.
-	/// </summary>
+	/// <summary>The mark alone: no well, no word, no padding, for a dense list.</summary>
 	[Parameter]
 	public bool Bare { get; set; }
 
@@ -74,15 +54,7 @@
 
 	private bool ShowsWord => ShowWord && !Bare;
 
-	/// <summary>
-	///     A lit room's mark takes the light's own warmth, by the usual blackbody approximation.
-	/// </summary>
-	/// <remarks>
-	///     Decoration derived from data: the engine's Kelvin is the source and no palette is hard-coded, which
-	///     is the same rule the dashboard's lamp already follows. The conversion itself lives in
-	///     <see cref="KelvinColour"/> so a chip, a lamp and a board block can never report two different warmths
-	///     for one room.
-	/// </remarks>
+	/// <summary>A lit room's mark takes the light's own warmth, converted by <see cref="KelvinColour"/>.</summary>
 	private string? KelvinStyle =>
 		Kelvin is { } kelvin && StateGlyph.TakesKelvinTint(State)
 			? $"--state-kelvin: {KelvinColour.Css(kelvin)};"

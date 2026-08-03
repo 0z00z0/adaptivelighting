@@ -8,10 +8,8 @@ using Microsoft.Reactive.Testing;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The orchestrator's house-wide seam: the scene apply on entry to an Away/Guest mode (09 §3.3), driven
-///     through the real <see cref="ModeMonitor"/> with a <see cref="TestScheduler"/>. The scene is applied once
-///     per entry via <see cref="AdaptiveLighting.Abstractions.ILightActuator.ActivateScene"/> and
-///     never re-asserted.
+///     The orchestrator's house-wide seam: the scene applied on entry to an Away or Guest mode, driven through
+///     the real <see cref="ModeMonitor"/> with a <see cref="TestScheduler"/>. Once per entry, never re-asserted.
 /// </summary>
 [TestClass]
 public sealed class LightingOrchestratorTests
@@ -98,14 +96,8 @@ public sealed class LightingOrchestratorTests
 		CollectionAssert.DoesNotContain(t.Actuator.Scenes, "scene.normal");
 	}
 
-	// ===================== a light two rooms both command =====================
-
-	/// <summary>
-	///     Start-up looks across the rooms once and says what it found: two rooms commanding one light, named as
-	///     advice a page can render and as a single warning in the log. Once per light per run — this is a fact
-	///     about the Home Assistant registry, so re-deciding it on the clock would be per-tick work for an answer
-	///     that cannot have moved.
-	/// </summary>
+	// Decided at start-up, once per light per run. The registry cannot move underneath, so re-deciding on the
+	// clock would be per-tick work for the same answer.
 	[TestMethod]
 	public void Two_Rooms_Commanding_One_Light_Are_Reported_Once_At_Start_Up()
 	{
@@ -158,7 +150,6 @@ public sealed class LightingOrchestratorTests
 			"one warning per light per run, not one per room and not one per tick");
 	}
 
-	/// <summary>A house whose rooms share nothing says nothing, which is the ordinary case.</summary>
 	[TestMethod]
 	public void Rooms_With_Their_Own_Lights_Report_No_Sharing()
 	{
@@ -190,11 +181,7 @@ public sealed class LightingOrchestratorTests
 		Assert.AreEqual(0, orchestrator.SharedLights.Count);
 	}
 
-	/// <summary>
-	///     Captures the warnings the engine writes, because "and it says so out loud" is half of what the shared-light
-	///     finding is for — the household never opens the log unless something is wrong, so the line has to be there
-	///     when they do, and exactly once.
-	/// </summary>
+	/// <summary>Captures the warnings the engine writes.</summary>
 	private sealed class RecordingLoggerFactory : ILoggerFactory
 	{
 		private readonly List<string> _warnings = [];

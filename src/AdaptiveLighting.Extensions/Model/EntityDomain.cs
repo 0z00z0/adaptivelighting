@@ -1,9 +1,8 @@
 namespace AdaptiveLighting.Extensions;
 
 /// <summary>
-///     The Home Assistant domains the old fluent style enumerated, kept for continuity with
-///     <see cref="EntityIdExtensions.DomainEnum"/>. String domains cover every current call site; this exists
-///     only for code that prefers an enum.
+///     Home Assistant domains as an enum, for <see cref="EntityIdExtensions.DomainEnum"/>. Members are parsed from
+///     the entity id by name, so a rename changes what parses.
 /// </summary>
 public enum EntityDomain
 {

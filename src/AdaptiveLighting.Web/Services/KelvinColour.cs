@@ -4,31 +4,18 @@ namespace AdaptiveLighting.Web.Services;
 ///     A commanded colour temperature as a CSS colour.
 /// </summary>
 /// <remarks>
-///     <para>
-///         One conversion, because the warmth of a room is reported in three places at once — the state chip's
-///         glyph, the board's blocks and the room lamp — and three approximations of the blackbody curve would
-///         eventually disagree about what 2700 K looks like. A reader seeing two different oranges for one room
-///         has no way to tell which is the light and which is the bug.
-///     </para>
-///     <para>
-///         The curve is the usual Tanner Helland approximation, clamped to the range a lamp can actually be told
-///         to produce. Above roughly 6000 K it returns something very near white, which is right as light and
-///         nearly invisible as ink — see <c>--kelvin-weight</c> in <c>app.css</c> for how the light theme keeps
-///         it legible without losing the hue.
-///     </para>
+///     The one conversion in the UI: the state chip, the board's blocks and the room lamp all report a room's
+///     warmth, and three approximations of the blackbody curve would disagree about 2700 K. The Tanner Helland
+///     approximation, clamped to what a lamp can be told to produce. Near white above 6000 K, which
+///     <c>--kelvin-weight</c> in <c>app.css</c> keeps legible in the light theme.
 /// </remarks>
 public static class KelvinColour
 {
-	/// <summary>The warm end the curve is clamped to.</summary>
 	public const int Warmest = 1500;
 
-	/// <summary>The cool end the curve is clamped to.</summary>
 	public const int Coolest = 6600;
 
-	/// <summary>
-	///     <paramref name="kelvin"/> as an <c>rgb(…)</c> string, clamped to <see cref="Warmest"/>–<see cref="Coolest"/>.
-	/// </summary>
-	/// <param name="kelvin">The colour temperature the engine commanded.</param>
+	/// <summary>A commanded temperature as an <c>rgb(…)</c> string, clamped to the two ends above.</summary>
 	public static string Css(int kelvin)
 	{
 		double k = Math.Clamp(kelvin, Warmest, Coolest) / 100.0;

@@ -5,12 +5,10 @@ namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
 ///     The structured start control composes strings; the engine's <see cref="PeriodStart.TryParse"/> consumes
-///     them. These tests close that loop: every string the UI can generate must parse, and must parse back to
-///     exactly the boundary the person chose.
+///     them. Every string the UI can generate has to parse back to the boundary the person chose.
 /// </summary>
 /// <remarks>
-///     This is the round-trip that makes the picker safe to ship: the stored format is unchanged, only the way
-///     of writing it is new, and the proof is the engine's own parser — not a lookalike — accepting the output.
+///     The parser here is the engine's own, not a lookalike. That is the point of the round trip.
 /// </remarks>
 [TestClass]
 public sealed class PeriodStartTextTests

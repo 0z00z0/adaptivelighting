@@ -4,13 +4,10 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     What the commissioning board's one commit does to a document — and, far more often, what it deliberately
-///     does not.
+///     What the commissioning board's one commit does to a document, and mostly what it does not.
 /// </summary>
 /// <remarks>
-///     The load-bearing property is that an unanswered sheet leaves the document byte-identical, because that is
-///     what makes abandoning the board halfway safe and what makes a second visit a review rather than an
-///     interrogation. Nearly every test here asserts an absence.
+///     An unanswered sheet leaves the document byte-identical. Nearly every test here asserts an absence.
 /// </remarks>
 [TestClass]
 public sealed class CommissioningDraftTests
@@ -37,10 +34,6 @@ public sealed class CommissioningDraftTests
 
 	// ===================== nothing answered =====================
 
-	/// <summary>
-	///     An untouched draft changes nothing at all. This is the whole promise of the awaiting state: somebody who
-	///     opens the board, reads it and closes the tab has not altered their house.
-	/// </summary>
 	[TestMethod]
 	public void An_Untouched_Draft_Changes_Nothing()
 	{
@@ -55,7 +48,6 @@ public sealed class CommissioningDraftTests
 		Assert.IsTrue(config.Areas.TrueForAll(area => area.Enabled == false));
 	}
 
-	/// <summary>Rooms nobody picked keep the switched-off state discovery wrote — they are not re-stated, either.</summary>
 	[TestMethod]
 	public void Rooms_Left_Alone_Keep_Discoverys_Own_Value()
 	{
@@ -73,7 +65,7 @@ public sealed class CommissioningDraftTests
 
 	// ===================== the identity sheet =====================
 
-	/// <summary>A typed name reaches the document trimmed.</summary>
+	// The name reaches the document trimmed.
 	[TestMethod]
 	public void House_Name_Is_Staged_Then_Written()
 	{
@@ -86,7 +78,7 @@ public sealed class CommissioningDraftTests
 		Assert.AreEqual("B1", config.ConfigName);
 	}
 
-	/// <summary>Clearing the box clears the document's name rather than pinning the placeholder into it.</summary>
+	// Clearing the box clears the name; the placeholder is not pinned into the document.
 	[TestMethod]
 	public void Cleared_House_Name_Clears_The_Document()
 	{
@@ -99,7 +91,6 @@ public sealed class CommissioningDraftTests
 		Assert.IsNull(config.ConfigName);
 	}
 
-	/// <summary>The empty-house delay is written as picked.</summary>
 	[TestMethod]
 	public void Away_Debounce_Is_Written_When_Picked()
 	{
@@ -112,7 +103,6 @@ public sealed class CommissioningDraftTests
 		Assert.AreEqual(15, config.Global.AwayDebounceMinutes);
 	}
 
-	/// <summary>Evicting the car leaves the people who live here, and only them.</summary>
 	[TestMethod]
 	public void Dropping_A_Person_Writes_The_Rest()
 	{
@@ -125,7 +115,6 @@ public sealed class CommissioningDraftTests
 		CollectionAssert.AreEqual(new[] { "person.espen", "person.nora" }, config.Global.Persons);
 	}
 
-	/// <summary>Toggling somebody out and back in again is not an answer, so the list is not pinned.</summary>
 	[TestMethod]
 	public void Toggling_A_Person_Back_In_Leaves_The_List_Alone()
 	{
@@ -140,11 +129,8 @@ public sealed class CommissioningDraftTests
 		Assert.AreEqual(0, config.Global.Persons.Count, "an empty list means 'watch everyone', and nothing was decided.");
 	}
 
-	/// <summary>
-	///     The case the watched list exists for: a house that configured no people is watching every
-	///     <c>person.*</c> Home Assistant knows, so evicting the car has to pin the rest. Filtering the document's
-	///     own empty list would silently do nothing and the car would keep the house permanently occupied.
-	/// </summary>
+	// An empty Persons list means watch every person.* HA knows, so dropping one has to pin the rest.
+	// Filtering the document's own empty list does nothing, and the car keeps the house occupied.
 	[TestMethod]
 	public void Dropping_A_Person_From_An_Undeclared_House_Pins_The_Rest()
 	{
@@ -160,7 +146,6 @@ public sealed class CommissioningDraftTests
 
 	// ===================== the mode sheet =====================
 
-	/// <summary>Keeping the adopted select is the do-nothing answer: the select is already in the document.</summary>
 	[TestMethod]
 	public void Keeping_The_House_Mode_Writes_Nothing()
 	{
@@ -173,7 +158,6 @@ public sealed class CommissioningDraftTests
 		Assert.IsNotNull(config.Global.HouseMode);
 	}
 
-	/// <summary>Detaching drops the select, which is the one thing this sheet can change.</summary>
 	[TestMethod]
 	public void Detaching_Drops_The_House_Mode()
 	{
@@ -186,7 +170,6 @@ public sealed class CommissioningDraftTests
 		Assert.IsNull(config.Global.HouseMode);
 	}
 
-	/// <summary>A house with no mode at all passes straight through — the cabin has none, and must commit cleanly.</summary>
 	[TestMethod]
 	public void A_House_With_No_Mode_Commits_Cleanly()
 	{
@@ -203,7 +186,6 @@ public sealed class CommissioningDraftTests
 
 	// ===================== the roll-call =====================
 
-	/// <summary>A picked room is written switched on explicitly, never left to inherit a decision somebody made.</summary>
 	[TestMethod]
 	public void A_Picked_Room_Is_Written_On()
 	{
@@ -219,7 +201,6 @@ public sealed class CommissioningDraftTests
 		Assert.IsTrue(config.Areas[2].Enabled);
 	}
 
-	/// <summary>Un-picking a room before commit leaves it off; the switch is a toggle, not a one-way latch.</summary>
 	[TestMethod]
 	public void Un_Picking_A_Room_Leaves_It_Off()
 	{
@@ -234,7 +215,6 @@ public sealed class CommissioningDraftTests
 		Assert.AreEqual(0, draft.PickedCount);
 	}
 
-	/// <summary>The floor header's bulk action picks a whole floor, and can put it back.</summary>
 	[TestMethod]
 	public void A_Floor_Can_Be_Picked_And_Dropped_As_One()
 	{
@@ -247,10 +227,7 @@ public sealed class CommissioningDraftTests
 		Assert.AreEqual(0, draft.PickedCount);
 	}
 
-	/// <summary>
-	///     A room configured with explicit entities has no area id, so it is keyed by its display name — otherwise
-	///     it would be unswitchable from the one surface that exists to switch rooms on.
-	/// </summary>
+	// A room with explicit entities has no area id, so the key falls back to the display name.
 	[TestMethod]
 	public void A_Room_Without_An_Area_Id_Is_Keyed_By_Name()
 	{
@@ -270,7 +247,7 @@ public sealed class CommissioningDraftTests
 
 	// ===================== the checklist's own reads =====================
 
-	/// <summary>Picking rooms is not "answering a sheet": the offer to save answers alone must not appear for it.</summary>
+	// Picking rooms is not answering a sheet, so the save-answers offer must stay hidden.
 	[TestMethod]
 	public void Picking_Rooms_Is_Not_An_Answered_Sheet()
 	{

@@ -1,9 +1,7 @@
 @*
-	The root component. Lives in the RCL rather than in the host so that a host's entire web payload is
-	the program.cs call to MapRazorComponents<App>() — a host adopts this by copying that call.
+	The root component. Lives in the RCL, not the host, so a host's whole web payload is one
+	MapRazorComponents<App>() call in program.cs.
 *@
-@* No hard-coded theme: app.css defines a dark palette and a light override behind
-   prefers-color-scheme, so a browser that has chosen nothing still follows the device. *@
 <!DOCTYPE html>
 <html lang="en">
 
@@ -13,16 +11,14 @@
 	<base href="/" />
 	<title>Adaptive lighting</title>
 	@*
-		Both assets carry ?v=. Without it a browser that has app.css cached keeps using it after a deploy,
-		which is how a fixed layout stays broken on the one machine the house is actually read on — and it is
-		the deployed machine, so nobody sees it while developing. See Build below for what the token is.
+		Every asset carries ?v=. Without it a browser keeps its cached app.css after a deploy, so a fixed layout
+		stays broken on the deployed machine and looks fine on the development one.
 	*@
 	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Web/app.css?v={Build}")" />
 	<link rel="icon" type="image/svg+xml" href="_content/AdaptiveLighting.Web/favicon.svg" />
 	@*
-		Blocking, in <head>, above the body: the server paints this page, so a theme read after render arrives
-		one repaint too late. This puts data-theme on <html> before the body is parsed. data-themes is the
-		allow-list, so an id from a withdrawn theme falls back to the device rather than to no palette at all.
+		Blocking and above the body on purpose. The server paints this page, so a theme applied after render arrives
+		a repaint late. data-themes is the allow-list: an id from a withdrawn theme falls back to the device.
 	*@
 	<script src="@($"_content/AdaptiveLighting.Web/theme.js?v={Build}")" data-themes="@AppThemes.DataThemeIds"></script>
 	<HeadOutlet @rendermode="InteractiveServer" />
@@ -30,12 +26,7 @@
 
 <body>
 	<Routes @rendermode="InteractiveServer" />
-	@*
-		At the end of the body, not in <head>: unlike theme.js this decides nothing about the first paint, and a
-		second blocking request there would delay every page for a chart that appears on one. Versioned all the
-		same — a cached copy of the drag helper against a newer component is the same class of bug as a stale
-		stylesheet, and just as invisible on the machine it was developed on.
-	*@
+	@* End of body: this decides nothing about the first paint, and it is needed on one page. *@
 	<script src="@($"_content/AdaptiveLighting.Web/lux-curve.js?v={Build}")"></script>
 	<script src="_framework/blazor.web.js"></script>
 </body>
@@ -44,20 +35,11 @@
 
 @code {
 	/// <summary>
-	///     What this build is, as a short token to hang on the asset URLs.
+	///     The cache-busting token on every asset URL.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         Source Link stamps the informational version as <c>0.1.0-preview.1+&lt;commit sha&gt;</c>, so the
-	///         short sha after the <c>+</c> is a build identity that changes whenever the library is built from a
-	///         different commit — including a commit that only touched <c>app.css</c>. A version number alone
-	///         would not: it is bumped per release, and two deploys off the same preview would share a URL.
-	///     </para>
-	///     <para>
-	///         Computed once, statically, because it can never change while the process lives, and it is read on
-	///         every page render. A repository with no sha falls back to the bare version, which is still better
-	///         than no token at all.
-	///     </para>
+	///     The commit sha Source Link puts after the '+' in the informational version, because the version number
+	///     alone is bumped per release and two deploys off one preview would share a URL.
 	/// </remarks>
 	private static readonly string Build = BuildToken();
 

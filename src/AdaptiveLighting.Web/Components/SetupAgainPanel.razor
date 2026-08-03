@@ -1,14 +1,8 @@
 @*
-	Setting rooms up again: pick the rooms, read exactly what it costs, then rebuild.
+	Setting rooms up again: pick the rooms, read what it costs, then rebuild. There is no merge, so every line
+	in the warning is computed from the plan the engine will carry out.
 
-	Two steps, in that order, because the warning is the point. The owner's decision was to warn clearly rather
-	than preserve cleverly — there is no merge and no guessing which edits were deliberate — which only works if
-	the warning is concrete. So every line here is computed from the plan the engine will actually carry out:
-	the hand-picked entities, the changed settings and the custom name a rebuild destroys, counted. A room with
-	nothing to lose says so, because "are you sure?" without stakes is noise.
-
-	Nothing here writes. Confirming mutates the in-memory document and arms the ordinary save bar, exactly like
-	typing in any other field; "Discard changes" is still the undo.
+	Nothing here writes. Confirming mutates the in-memory document and arms the ordinary save bar.
 *@
 
 <div class="panel setup-panel">
@@ -90,9 +84,8 @@
 			<p>@added</p>
 		}
 
-		@* What happens after the confirmation is the host page's business, not this component's: the settings page
-		   arms its save bar, the room page applies and saves by itself. A promise about saving is the worst kind
-		   of thing to be wrong about, so the page that knows says it. *@
+		@* What confirming commits to is the host page's business: the settings page arms its save bar, the room
+		   page applies and saves by itself. Hence CommitNote, in place of a default sentence here. *@
 		<p class="hint">
 			Rooms stay switched on or off as they are now. Rooms you didn't tick are untouched.
 			@if (CommitNote is { Length: > 0 } commitNote)
@@ -115,38 +108,25 @@
 </div>
 
 @code {
-	/// <summary>Which half of the flow is showing.</summary>
 	private enum Step
 	{
 		Pick,
 		Confirm
 	}
 
-	/// <summary>The document being edited. Read for the room list and the names the warning quotes; never written here.</summary>
+	/// <summary>The document being edited. Read for the room list and the names the warning quotes; never written.</summary>
 	[Parameter, EditorRequired]
 	public AdaptiveLightingConfig Config { get; set; } = new();
 
-	/// <summary>
-	///     The area ids ticked when the panel opens: every room from the Areas header, one from inside a room.
-	/// </summary>
+	/// <summary>The area ids ticked when the panel opens.</summary>
 	[Parameter]
 	public IReadOnlyCollection<string> PreTicked { get; set; } = [];
 
-	/// <summary>
-	///     Works out what a given scope would do. Supplied by the page, which owns the registry connection, so this
-	///     component never reaches for Home Assistant itself.
-	/// </summary>
+	/// <summary>Works out what a scope would do. Supplied by the page, which owns the registry connection.</summary>
 	[Parameter, EditorRequired]
 	public Func<IReadOnlyCollection<string>, SetupPlan> PlanFor { get; set; } = _ => new SetupPlan([], [], []);
 
-	/// <summary>
-	///     Resolves an area id to the name Home Assistant shows.
-	/// </summary>
-	/// <remarks>
-	///     Needed for two lists, not one: the rooms this run would add, which the document does not have yet, and
-	///     the rooms it would rebuild, most of which name no <see cref="AreaConfig.Name"/> of their own and would
-	///     otherwise be ticked by their slug. Supplied by the page, which owns the registry connection.
-	/// </remarks>
+	/// <summary>Resolves an area id to the name Home Assistant shows. Supplied by the page.</summary>
 	[Parameter]
 	public Func<string, string>? NameOf { get; set; }
 
@@ -160,13 +140,8 @@
 
 	/// <summary>
 	///     What the host page does with the rebuild once it is confirmed. Left unset, the warning keeps the save
-	///     bar's wording, which is what the settings page needs.
+	///     bar's wording. Only the page knows whether confirming arms a save bar or writes at once.
 	/// </summary>
-	/// <remarks>
-	///     Only the page knows whether confirming arms a save bar or writes at once, and this sentence is a
-	///     promise about somebody's configuration file. A default that was wrong on one of the two pages would be
-	///     worse than no sentence at all.
-	/// </remarks>
 	[Parameter]
 	public string? CommitNote { get; set; }
 
@@ -176,13 +151,13 @@
 	private IReadOnlyList<SetupWarningLine> _lines = [];
 	private Step _step = Step.Pick;
 
-	/// <summary>The rooms a rebuild can act on: one that names no area has nothing for discovery to rebuild it from.</summary>
+	/// <summary>The rooms a rebuild can act on. One that names no area has nothing to be rebuilt from.</summary>
 	private IReadOnlyList<AreaConfig> Rebuildable =>
 		[.. Config.Areas.Where(area => area.AreaId is { Length: > 0 })];
 
 	private int Skipped => Config.Areas.Count - Rebuildable.Count;
 
-	/// <summary>Whether confirming would do nothing at all — no room ticked, and no new room to add.</summary>
+	/// <summary>Whether confirming would do nothing: no room ticked, and no new room to add.</summary>
 	private bool Nothing => _ticked.Count == 0 && (_plan?.NewAreas.Count ?? 0) == 0;
 
 	private string? NewRoomsNote => _plan is null ? null : SetupWarning.NewRooms(_plan, NameOf);
@@ -193,8 +168,7 @@
 		foreach (string areaId in PreTicked)
 			_ticked.Add(areaId);
 
-		// Planned once on open so the pick step can already name the rooms this run would add — they are the same
-		// whatever is ticked, and saying so up front is what makes "always included" not feel like a surprise.
+		// The rooms this run would add are the same whatever is ticked, so the pick step can name them already.
 		_plan = PlanFor(_ticked);
 	}
 
@@ -208,8 +182,7 @@
 
 	private void Preview()
 	{
-		// Re-planned against what is actually ticked: the plan shown in the warning must be the plan applied, or
-		// the counts would describe a rebuild nobody asked for.
+		// Re-planned against what is ticked: the plan the warning counts must be the plan Confirm applies.
 		_plan = PlanFor(_ticked);
 		_lines = SetupWarning.Lines(_plan, Config);
 		_step = Step.Confirm;

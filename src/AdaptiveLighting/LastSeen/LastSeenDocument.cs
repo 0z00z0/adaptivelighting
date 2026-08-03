@@ -6,30 +6,19 @@ namespace AdaptiveLighting.LastSeen;
 /// <summary>
 ///     One entity's line in the cache.
 /// </summary>
-/// <param name="LastSeen">
-///     When there was last trustworthy evidence the entity is alive, or <c>null</c> for "never had any". A record
-///     with no last-seen time is still worth keeping: it says the module has been watching this entity since
-///     <paramref name="TrackedSince"/> and has heard nothing it could believe, which is a different statement from
-///     never having met it.
-/// </param>
+/// <param name="LastSeen">When there was last trustworthy evidence the entity is alive, or <c>null</c> for never.</param>
 /// <param name="TrackedSince">
-///     When this module first met the entity. Not evidence of anything — it is what ageing and eviction fall back
-///     to for a record that has no last-seen time, so that an entity which never reports cannot linger for ever.
+///     When this module first met the entity. Not evidence; ageing and eviction fall back to it for a record with no
+///     last-seen time.
 /// </param>
 public sealed record LastSeenEntry(
 	[property: JsonPropertyName("lastSeen")] DateTimeOffset? LastSeen,
 	[property: JsonPropertyName("trackedSince")] DateTimeOffset TrackedSince);
 
-/// <summary>
-///     One cache file: the records for a single bucket, plus enough context for a person who opens it to know what
-///     they are looking at.
-/// </summary>
+/// <summary>One cache file: the records for a single bucket, plus enough context to read it unaided.</summary>
 /// <remarks>
-///     JSON rather than the engine's YAML, and deliberately: this is machine-written, high-churn and disposable,
-///     the opposite of the configuration document in every respect that matters. It sits in the same directory
-///     because that directory is the one thing on a Home Assistant box that survives a redeploy — the deploy folder
-///     is wiped and re-copied every time, so a cache kept there would be destroyed on exactly the schedule it exists
-///     to survive.
+///     Lives in the configuration document's directory, not the deploy folder. The deploy folder is wiped and
+///     re-copied every redeploy, which is the schedule this cache exists to survive.
 /// </remarks>
 public sealed class LastSeenDocument
 {
@@ -44,9 +33,8 @@ public sealed class LastSeenDocument
 	///     The current document version. Bumped only when an older file could be misread.
 	/// </summary>
 	/// <remarks>
-	///     Version 1 split four ways, with one catch-all bucket named <c>other</c>. Version 2 splits the catch-all
-	///     by device class, so a version-1 file claiming <c>other</c> is not a bucket but a pile awaiting
-	///     redistribution — which is the one thing a reader has to tell apart, and the only reason this moved.
+	///     Version 1's <c>other</c> is a pile awaiting redistribution; version 2's is a real bucket. Telling those
+	///     apart is the only thing the version is read for.
 	/// </remarks>
 	public const int CurrentVersion = 2;
 
@@ -64,23 +52,12 @@ public sealed class LastSeenDocument
 	public int Version { get; set; } = CurrentVersion;
 
 	/// <summary>
-	///     Which bucket this file holds, as a word — a device class, a domain, or one of the three curated names.
+	///     Which bucket this file holds: a device class, a domain, or one of the three curated names.
 	/// </summary>
 	/// <remarks>
-	///     <para>
-	///         Still called <c>kind</c> on disk, because files written before the split already carry that name and
-	///         a rename would cost their history for nothing. In here it is the bucket key, which is the truth: the
-	///         file name is a <i>sanitised</i> form of this and can be fingerprinted, so the key survives only here.
-	///     </para>
-	///     <para>
-	///         It is a hint about where a record was last filed, not the truth about what the entity is — that is
-	///         re-derived from Home Assistant on the next census — so a key from an older or newer build must not
-	///         cost the history in the file.
-	///     </para>
-	///     <para>
-	///         <c>null</c> for a file that does not say, which is a different thing from one that says "the
-	///         catch-all": the loader falls back to the file's own name for the first and believes the second.
-	///     </para>
+	///     Named <c>kind</c> on disk because pre-split files carry that name. This is the only place the unsanitised
+	///     key survives; the file name may be fingerprinted. Null means the file did not say, which the loader treats
+	///     differently from a file that says <c>other</c>.
 	/// </remarks>
 	[JsonPropertyName("kind")]
 	[JsonPropertyOrder(-1)]
@@ -94,9 +71,8 @@ public sealed class LastSeenDocument
 	///     The module's estimate of when Home Assistant last started, repeated in every file.
 	/// </summary>
 	/// <remarks>
-	///     Repeated rather than kept in a file of its own, so that no bucket depends on another bucket existing. It
-	///     only ever moves forwards, which makes merging trivial: the loader takes the newest value it finds across
-	///     all the files and is right regardless of which of them was written most recently.
+	///     Repeated so no bucket depends on another existing. It moves forwards only, so the loader can just take the
+	///     newest value across all files.
 	/// </remarks>
 	[JsonPropertyName("homeAssistantStarted")]
 	public DateTimeOffset? HomeAssistantStarted { get; set; }

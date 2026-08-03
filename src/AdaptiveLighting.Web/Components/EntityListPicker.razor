@@ -1,9 +1,6 @@
 @*
-	A list of entities, built by picking rather than by typing a YAML sequence.
-
-	Chips rather than a multi-select box: a browser multi-select needs ctrl-click to add a second item and
-	silently loses the whole list if you forget, which is a miserable way to lose an explicit Lights list.
-	Add one at a time, remove one at a time, and what you have is always visible.
+	A list of entities as chips: added one at a time, removed one at a time, always visible. A browser
+	multi-select needs ctrl-click for a second item and silently drops the list without it.
 *@
 
 <div class="list-picker">
@@ -25,8 +22,7 @@
 		</ul>
 	}
 
-	@* Its own row, below the chips, with its own class: the add control and the chips it feeds must never
-	   share a line or crowd each other — this exact control has been photographed overlapping its chips. *@
+	@* Its own row below the chips, with its own class: this control has been seen overlapping them. *@
 	<div class="picker picker-addrow">
 		@if (_manual || !HasOptions)
 		{
@@ -39,10 +35,8 @@
 		}
 		else
 		{
-			@* Discovery's own answer first and unheaded, then everything else under a heading. The order is the
-			   claim: the first block is what this room resolves to today, and a household picking by hand is
-			   almost always reaching for one of those or for the bulbs inside one of them. An optgroup rather
-			   than a disabled option, so the browser renders it as a heading and a keyboard cannot land on it. *@
+			@* Discovery's answer first and unheaded, everything else under a heading. An optgroup and not a
+			   disabled option, so the browser renders it as a heading and a keyboard cannot land on it. *@
 			<select class="picker-select" @bind:get="string.Empty" @bind:set="OnPicked">
 				<option value="">@AddLabel</option>
 				@foreach (EntityOption option in Available)
@@ -77,7 +71,7 @@
 	[Parameter]
 	public IReadOnlyList<string> Value { get; set; } = [];
 
-	/// <summary>Raised with the whole new list whenever it changes.</summary>
+	/// <summary>Raised with the complete new list whenever it changes.</summary>
 	[Parameter]
 	public EventCallback<IReadOnlyList<string>> ValueChanged { get; set; }
 
@@ -87,17 +81,12 @@
 
 	/// <summary>
 	///     Everything else the field could use, offered under <see cref="OthersLabel"/> below <see cref="Options"/>.
+	///     Kept separate because <see cref="Options"/> is what the room resolves to as it stands, usually a light
+	///     group, and this is what that answer swallowed or a label kept out.
 	/// </summary>
-	/// <remarks>
-	///     Two lists rather than one sorted list, because the split is the information. <see cref="Options"/> is
-	///     what the room resolves to as it stands — a light group, most often — and this is what that answer
-	///     swallowed or a label kept out. Merged, the one entity worth picking would sit alphabetically among the
-	///     twenty it stands for.
-	/// </remarks>
 	[Parameter]
 	public IReadOnlyList<EntityOption> Others { get; set; } = [];
 
-	/// <summary>The heading above <see cref="Others"/>, in words the caller is in a position to be right about.</summary>
 	[Parameter]
 	public string OthersLabel { get; set; } = "Everything else";
 
@@ -105,29 +94,23 @@
 	[Parameter]
 	public string EmptyLabel { get; set; } = "Nothing listed.";
 
-	/// <summary>The dropdown's prompt.</summary>
 	[Parameter]
 	public string AddLabel { get; set; } = "Add…";
 
-	/// <summary>Example id shown in the free-text fallback.</summary>
 	[Parameter]
 	public string Placeholder { get; set; } = "domain.entity_id";
 
 	/// <summary>
-	///     Why there is nothing to pick, in words the caller is in a position to be right about.
+	///     Why there is nothing to pick. The caller says, because an empty list usually means it was filtered to
+	///     an area, which this component cannot tell from a disconnected Home Assistant.
 	/// </summary>
-	/// <remarks>
-	///     Dropping to a text box with no explanation invites the reading "this house has no lights". It usually
-	///     means the list has been filtered to an area, which the caller knows and this component does not.
-	/// </remarks>
 	[Parameter]
 	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
 
-	/// <summary>Resolves an id to a friendly name for the chips. Optional.</summary>
 	[Parameter]
 	public Func<string, string>? NameResolver { get; set; }
 
-	/// <summary>Whether Home Assistant knows an id. Drives the "unknown" chip styling. Optional.</summary>
+	/// <summary>Whether Home Assistant knows an id. Drives the "unknown" chip styling.</summary>
 	[Parameter]
 	public Func<string, bool>? KnownResolver { get; set; }
 
@@ -136,8 +119,7 @@
 
 	private bool HasOptions => Options.Count > 0 || Others.Count > 0;
 
-	// Already-chosen entities are not offered again: adding the same light twice would have the engine
-	// command it twice per tick, and there is no reading of the config where that is what somebody meant.
+	// Already-chosen entities are not offered again: the same light listed twice is commanded twice per tick.
 	private IReadOnlyList<EntityOption> Available => Unpicked(Options);
 
 	private IReadOnlyList<EntityOption> AvailableOthers => Unpicked(Others);

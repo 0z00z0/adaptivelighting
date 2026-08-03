@@ -1,16 +1,9 @@
 @*
-	A room's behaviour as readable prose, with the values inline and editable.
+	A room's behaviour as prose, with the values inline and editable.
 
-	The design's central move: reading what a room does and changing it are the same act. A form of
-	seventeen numeric fields assumes somebody who remembers what VacancyTimeoutSeconds meant; a sentence
-	assumes only that they can read English, which is the whole argument for this surface existing.
-
-	It renders sentences; it does not build them. The projection from a document to prose is a pure function
-	(AreaSentences, and whatever a page writes with SentenceBuilder) precisely so it can be tested — this repo
-	has no Razor render harness, and a sentence assembled inside markup is a sentence nothing can assert about.
-
-	It also does not save. Every edit leaves through a callback and the page decides what it means; the
-	existing validate-then-write pipeline stays the one way configuration reaches disk.
+	It renders sentences and does not build them: the projection from document to prose is a pure function
+	(AreaSentences, SentenceBuilder) so it can be tested, and this repo has no Razor render harness. It does
+	not save either; every edit leaves through a callback.
 *@
 
 <div class="sentences">
@@ -55,47 +48,27 @@
 	[Parameter, EditorRequired]
 	public IReadOnlyList<Sentence> Sentences { get; set; } = [];
 
-	/// <summary>
-	///     Whether the values are controls or just words.
-	/// </summary>
-	/// <remarks>
-	///     The House tab renders its defaults with this off: the same sentences, values in bold, because editing
-	///     a default is rarer and its rows are one tap below. Turning it off is also the honest rendering of a
-	///     room nobody may change — a switched-off room's page, or a read-only view.
-	/// </remarks>
+	/// <summary>Whether the values are controls or just words. Off renders the same sentences in bold.</summary>
 	[Parameter]
 	public bool Editable { get; set; } = true;
 
 	/// <summary>
-	///     Raised when a value is picked. The page applies it and saves; nothing here writes anything.
+	///     Raised when a value is picked. The key is the setting's property name, so a handler reads
+	///     <c>case nameof(AreaSettings.VacancyTimeoutSeconds)</c> and cannot drift from the schema silently.
 	/// </summary>
-	/// <remarks>
-	///     The key is the setting's property name, so a handler reads
-	///     <c>case nameof(AreaSettings.VacancyTimeoutSeconds)</c> and cannot drift from the schema without the
-	///     compiler noticing.
-	/// </remarks>
 	[Parameter]
 	public EventCallback<SentenceEdit> Edited { get; set; }
 
-	/// <summary>
-	///     Raised when the reader asks a value to follow the house again, carrying the setting's key.
-	/// </summary>
-	/// <remarks>
-	///     Distinct from an edit on purpose: the handler should clear the room's property — write <c>null</c> —
-	///     rather than copy the house's current number into the room, so the room keeps following the house the
-	///     next time the house changes.
-	/// </remarks>
+	/// <summary>Raised when the reader asks a value to follow the house again, carrying the setting's key.</summary>
+	// The handler must clear the room's property, not copy the house's current number into it, so the room
+	// keeps following the house the next time the house changes.
 	[Parameter]
 	public EventCallback<string> Reverted { get; set; }
 
 	/// <summary>
-	///     One line in each popover about when a pick takes effect, or nothing.
+	///     One line in each popover about when a pick takes effect. Left to the page: a room editor behind the
+	///     save bar and a surface that applies at once need different sentences.
 	/// </summary>
-	/// <remarks>
-	///     Left to the page because only the page knows. A room editor behind the save bar should say so; a
-	///     surface that applies at once should promise the undo. A default sentence here would be wrong on one
-	///     of them, and a promise about saving is the worst kind of thing to be wrong about.
-	/// </remarks>
 	[Parameter]
 	public string? Note { get; set; }
 

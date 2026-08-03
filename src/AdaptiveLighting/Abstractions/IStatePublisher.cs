@@ -3,37 +3,32 @@ using AdaptiveLighting.Engine;
 namespace AdaptiveLighting.Abstractions;
 
 /// <summary>
-///     Everything worth knowing about an area at one instant. Published on every transition — and whenever the
-///     published truth moves without one, such as motion pushing a vacancy deadline back — so the state machine
-///     is observable from outside the process. An invisible state machine is one nobody can trust.
+///     Everything worth knowing about an area at one instant. Published on every transition, and whenever the
+///     published truth moves without one, so the state machine is observable from outside the process.
 /// </summary>
-/// <remarks>
-///     Fields that the engine has not evaluated yet are <c>null</c>, never a default dressed as a fact. The
-///     first snapshot after start-up knows almost nothing, and it must say so: a dashboard that renders an
-///     unevaluated darkness verdict as "too light" while the room sits dark teaches people not to read it.
-/// </remarks>
+/// <remarks>Anything the engine has not evaluated yet is <c>null</c>, never a default dressed as a fact.</remarks>
 /// <param name="AreaName">The area's display name.</param>
 /// <param name="State">The state the area has just entered, or re-entered.</param>
-/// <param name="Reason">Why.</param>
+/// <param name="Reason">Why the area entered the state.</param>
 /// <param name="Mode">The house mode at that instant.</param>
 /// <param name="KillSwitchActive">Whether the engine was muzzled.</param>
 /// <param name="IsDark">What the darkness gate said when last consulted, or <c>null</c> if it never has been.</param>
-/// <param name="PeriodName">The circadian period in effect at this instant, or <c>null</c> when none resolves.</param>
-/// <param name="BrightnessPct">The brightness of the engine's standing command, or <c>null</c> when that command was "off" or none was ever sent.</param>
+/// <param name="PeriodName">The circadian period in effect, or <c>null</c> when none resolves.</param>
+/// <param name="BrightnessPct">The brightness of the standing command, or <c>null</c> when that command was "off" or none was sent.</param>
 /// <param name="ColorTempKelvin">The colour temperature of the standing command, or <c>null</c>.</param>
-/// <param name="Timestamp">Scheduler time of the snapshot — not wall-clock time, so tests read what they set.</param>
-/// <param name="LastCommandAt">When the engine last commanded this area's lights, or <c>null</c> if it has not since it started. Distinguishes "the lights were sent off" from "the lights were left exactly as found".</param>
+/// <param name="Timestamp">Scheduler time, not wall-clock time, so tests read what they set.</param>
+/// <param name="LastCommandAt">When the engine last commanded these lights. Distinguishes "sent off" from "left as found".</param>
 /// <param name="LastMotionAt">When motion was last seen, or <c>null</c> if none has been seen since start-up.</param>
-/// <param name="NextChangeAt">When the area's armed timer will act — the vacancy timeout, the pre-off grace, the override expiry or the suppression reset, whichever the current state carries — or <c>null</c> when nothing is scheduled. What it will do is implied by <paramref name="State"/>.</param>
-/// <param name="NextChangeFrom">When the countdown behind <paramref name="NextChangeAt"/> was armed, or <c>null</c> when nothing is scheduled. Together they are both ends of the countdown, which is what lets a reader render elapsed-versus-remaining rather than a bare deadline. Not derivable from the other timestamps: <paramref name="Timestamp"/> and <paramref name="LastMotionAt"/> both move on republishes that re-arm nothing.</param>
-/// <param name="HouseModeValue">The raw house-mode option string in effect (<c>Sover</c>, <c>Borte</c>), or <c>null</c> when no select is configured. Beside <paramref name="Mode"/> so a card can say "Sover", not just "Sleep".</param>
-/// <param name="DarknessDetail">The darkness gate's reading in words the last time it was consulted (e.g. <c>lux 86, dark below 40</c>), or <c>null</c> if it never has been. Lets a card say <i>why</i> a bright vacant area is waiting rather than just that it is. Descriptive, like <paramref name="Reason"/>: excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/> so a drifting lux reading does not republish on its own.</param>
-/// <param name="AreaId">The HA registry area id this area was built from, or <c>null</c> when it was configured with explicit entity lists and no area. This is the stable join between a snapshot and the document that produced it: <paramref name="AreaName"/> is editable mid-session and an id is not, so a reader that matched on the name alone lost the area the moment somebody renamed a room. Excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/>: it identifies the area rather than describing its state, and cannot change without the area being rebuilt anyway.</param>
-/// <param name="AutoOnBlockedBy">Which gate would refuse to light this area for movement at this instant, <see cref="AutoOnBlock.None"/> when none would, or <c>null</c> from a build that predates the field. Two of the refusals — a sleeping house, and an <c>IgnoreWhenOn</c> entity that is on — leave the area in <see cref="AreaState.AutoVacant"/> looking exactly like an area that is merely waiting, so a reader holding only <paramref name="State"/> and <paramref name="IsDark"/> would confidently promise a light that will not come on. Descriptive, like <paramref name="DarknessDetail"/>: excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/>, so a television switching on does not by itself republish every area it blocks.</param>
-/// <param name="AutoOnBlockingEntity">The entity id holding auto-on off when <paramref name="AutoOnBlockedBy"/> is <see cref="AutoOnBlock.EntityOn"/>, and <c>null</c> otherwise. Named rather than counted: "something is on" leaves the reader hunting through the room, which is the dead end this field exists to end.</param>
-/// <param name="LevelsFromRoom">Which of this room's two levels it names for itself during <paramref name="PeriodName"/>, rather than taking from the schedule — <see cref="RoomLevelSource.None"/> for the overwhelming majority of rooms, and <c>null</c> from a build that predates the field. A statement about the period rather than about the standing command, exactly as <paramref name="PeriodName"/> is: a room card can say "this room runs the night at 8 %" whether or not the engine has commanded anything yet. Optional so every existing construction site — and every consumer of the published event — carries on unchanged, the same way <paramref name="AreaId"/> and <paramref name="AutoOnBlockedBy"/> were added.</param>
-/// <param name="IsAnyoneHome">What presence said at this instant, or <c>null</c> from a build that predates the field. <paramref name="Mode"/> alone cannot answer it: <see cref="HouseMode.Away"/> is presence <i>or</i> an away-kind option, so a reader holding only the mode cannot tell an empty house from a full one the mode has shut. It said "nobody is home yet" to somebody standing in the room for an hour, which is what this field exists to stop.</param>
-/// <param name="Forced">What is holding the house on its mode when the select's own value is not the answer — an <c>ActivateWhileOn</c> entity, or the no-motion rule — and <c>null</c> when nothing is. Carried rather than re-derived, on the same rule as <paramref name="AutoOnBlockedBy"/>: the engine is the only thing that knows which entity it read, and a second copy of that lookup is how a page comes to name a cause the engine never checked.</param>
+/// <param name="NextChangeAt">When the area's armed timer will act, or <c>null</c> when nothing is scheduled. What it will do is implied by <paramref name="State"/>.</param>
+/// <param name="NextChangeFrom">When that countdown was armed. Not derivable from the other timestamps: <paramref name="Timestamp"/> and <paramref name="LastMotionAt"/> both move on republishes that re-arm nothing.</param>
+/// <param name="HouseModeValue">The raw option string in effect (<c>Sover</c>, <c>Borte</c>), or <c>null</c> when no select is configured.</param>
+/// <param name="DarknessDetail">The gate's reading in words (<c>lux 86, dark below 40</c>). Descriptive, so excluded from <see cref="AreaSnapshot.HasSameMeaningAs"/>.</param>
+/// <param name="AreaId">The stable join between a snapshot and the document that produced it: <paramref name="AreaName"/> is editable mid-session and an id is not.</param>
+/// <param name="AutoOnBlockedBy">Which gate would refuse to light this area for movement, <see cref="AutoOnBlock.None"/> when none would, or <c>null</c> from a build predating the field. A sleeping house and an <c>IgnoreWhenOn</c> entity both leave the area in <see cref="AreaState.AutoVacant"/> looking like one merely waiting.</param>
+/// <param name="AutoOnBlockingEntity">The entity holding auto-on off when <paramref name="AutoOnBlockedBy"/> is <see cref="AutoOnBlock.EntityOn"/>, and <c>null</c> otherwise.</param>
+/// <param name="LevelsFromRoom">Which of the room's two levels it names for itself during <paramref name="PeriodName"/>. A statement about the period, not the standing command. <c>null</c> from a build predating the field.</param>
+/// <param name="IsAnyoneHome">What presence said. <paramref name="Mode"/> cannot answer it, because <see cref="HouseMode.Away"/> is presence or an away-kind option. <c>null</c> from a build predating the field.</param>
+/// <param name="Forced">What holds the house on its mode when the select's value is not the answer, and <c>null</c> when nothing does. Carried, never re-derived: only the engine knows which entity it read.</param>
 public sealed record AreaSnapshot(
 	string AreaName,
 	AreaState State,
@@ -58,58 +53,16 @@ public sealed record AreaSnapshot(
 	bool? IsAnyoneHome = null,
 	ForcedMode? Forced = null)
 {
-	/// <summary>
-	///     Whether <paramref name="other"/> says the same thing about the area as this snapshot does — the
-	///     state, the conditions the engine read, what it is holding the lights at, and what it is waiting for.
-	/// </summary>
+	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
-	///     <para>
-	///         <b>Not record equality, deliberately.</b> A <see cref="AreaSnapshot"/> is a record, so <c>==</c>
-	///         compares the "as of" fields too — and every one of those moves on every tick. Diffing on record
-	///         equality would therefore never suppress anything, and the periodic evaluation would degenerate
-	///         into exactly the fixed-rate heartbeat it exists to avoid. This compares meaning: <see cref="Timestamp"/>,
-	///         <see cref="LastCommandAt"/> and <see cref="LastMotionAt"/> are excluded because they date the
-	///         snapshot rather than describe the area.
-	///     </para>
-	///     <para>
-	///         <see cref="Reason"/> is excluded for the same reason: it explains how the area arrived somewhere,
-	///         not where it is. Two snapshots reached by different routes that agree on everything else are the
-	///         same news, and the second is not worth publishing.
-	///     </para>
-	///     <para>
-	///         <see cref="LastMotionAt"/> being excluded has one honest consequence: motion in an area too bright
-	///         to light updates the engine's record of it, and no tick will republish for that alone. That is the
-	///         intended trade — the alternative is an event every time anyone walks through a sunlit room.
-	///     </para>
-	///     <para>
-	///         <see cref="AutoOnBlockedBy"/> is excluded on the same trade. It is a verdict rather than an "as of"
-	///         field, but including it would republish every area a television blocks the moment it is switched on,
-	///         and again when it goes off. Each report still carries the verdict that held when it was published,
-	///         which is what a timeline row needs; what it does not do is generate rows of its own.
-	///     </para>
-	///     <para>
-	///         The one report that does turn on this field — movement into a blocked room — is published past this
-	///         comparison rather than through it, and carries its own bound: one row per change of the refusing
-	///         gate, not one per movement. See <c>AreaController.ReportDeclinedMotion</c>. That is deliberately a
-	///         stricter rule than including the field here would have been, which is what makes the exclusion above
-	///         still the right trade.
-	///     </para>
-	///     <para>
-	///         <see cref="LevelsFromRoom"/> <i>is</i> compared, and costs nothing to compare: for a running area it
-	///         is a pure function of <see cref="PeriodName"/>, which is compared already, and the room's overrides
-	///         cannot change under a live controller — a save rebuilds every one of them.
-	///     </para>
-	///     <para>
-	///         <see cref="IsAnyoneHome"/> and <see cref="Forced"/> are compared too, and for the reason the
-	///         exclusions above do not apply to them: each carries a case <see cref="Mode"/> cannot show at all.
-	///         Somebody walking back into a house an <c>ActivateWhileOn</c> entity is holding Away moves presence
-	///         and moves nothing else — that is precisely the news worth publishing, and excluding these would
-	///         leave the room sitting on a report that says the house is empty. Neither drifts: they change a
-	///         handful of times a day, when the mode's cause changes.
-	///     </para>
+	///     Not record equality: <c>==</c> compares the "as of" fields, every one of which moves on every tick, so
+	///     diffing on it would suppress nothing and the periodic evaluation would degenerate into a heartbeat.
+	///     <see cref="Timestamp"/>, <see cref="LastCommandAt"/>, <see cref="LastMotionAt"/> and <see cref="Reason"/>
+	///     are excluded: they date the snapshot, they do not describe the area. <see cref="DarknessDetail"/> and
+	///     <see cref="AutoOnBlockedBy"/> are excluded so a drifting lux reading, or a television switching on, does
+	///     not republish every area it touches; movement into a blocked room is published past this comparison, by
+	///     <c>AreaController.ReportDeclinedMotion</c>, which bounds itself to one row per change of gate.
 	/// </remarks>
-	/// <param name="other">The snapshot to compare against, typically the last one published for this area.</param>
-	/// <returns><c>true</c> when the two carry the same news; <c>false</c> when something worth publishing moved.</returns>
 	public bool HasSameMeaningAs(AreaSnapshot? other) =>
 		other is not null &&
 		State == other.State &&
@@ -127,10 +80,7 @@ public sealed record AreaSnapshot(
 		Forced == other.Forced;
 }
 
-/// <summary>
-///     Where area snapshots go. A no-op implementation is a legitimate choice; the interface exists so the
-///     transport (HA event today, an MQTT entity later) can change without the engine noticing.
-/// </summary>
+/// <summary>Where area snapshots go. A no-op implementation is a legitimate choice.</summary>
 public interface IStatePublisher
 {
 	/// <summary>Publishes <paramref name="snapshot"/>. Must not throw: it is called from inside the area's lock.</summary>

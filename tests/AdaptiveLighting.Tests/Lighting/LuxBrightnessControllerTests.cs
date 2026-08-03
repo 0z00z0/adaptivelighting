@@ -9,14 +9,12 @@ using Microsoft.Reactive.Testing;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     The daylight brightness adjustment as the area actually uses it: which sensor it reads, when it is
-///     re-evaluated, and what still outranks it.
+///     The daylight brightness adjustment as the area uses it: which sensor it reads, when it is re-evaluated,
+///     and what still outranks it.
 /// </summary>
 /// <remarks>
-///     The area gates on <see cref="DarknessSource.Always"/> throughout, which is not a dodge but the owner's
-///     case: a hallway with no daylight of its own, lit on motion whatever the hour, whose level should follow
-///     the sun outside. It also keeps the two questions apart — "may the engine light this room" is the darkness
-///     gate's, and a bright reading answering it "no" would hide everything this file is about.
+///     Every fixture gates on <see cref="DarknessSource.Always"/>. Any other source lets a bright reading answer
+///     "do not light this room", which would hide what these tests are about.
 /// </remarks>
 [TestClass]
 public sealed class LuxBrightnessControllerTests
@@ -33,7 +31,7 @@ public sealed class LuxBrightnessControllerTests
 		BehaviorSubject<HouseState> House,
 		AreaController Area);
 
-	/// <summary>The cabin's helper shape, for the one test that needs sleep to outrank the sun.</summary>
+	/// <summary>The house-mode helper, for the one test that needs sleep to outrank the sun.</summary>
 	private static HouseModeConfig SoverMode() => new()
 	{
 		Entity = "input_select.husmodus",
@@ -45,14 +43,8 @@ public sealed class LuxBrightnessControllerTests
 	};
 
 	/// <summary>
-	///     A started area at 20:00 — inside "evening", whose 70 % is the number every assertion here moves from.
+	///     A started area at 20:00, inside "evening", whose 70 % is the number every assertion here moves from.
 	/// </summary>
-	/// <param name="tweak">The area's settings, curve included.</param>
-	/// <param name="lux">What the area's own lux sensor reads.</param>
-	/// <param name="luxSensor">The area's own sensor, or <c>null</c> for a room that resolved none.</param>
-	/// <param name="outdoorLux">The house-wide outdoor sensor's reading, or <c>null</c> to leave it unconfigured.</param>
-	/// <param name="followOutdoorLux">Whether the room asked to read the house's outdoor sensor when it has none of its own.</param>
-	/// <param name="houseMode">The house-mode helper, for the sleep-clamp test.</param>
 	private static Fixture Build(
 		Action<AreaSettings>? tweak = null,
 		string lux = "5",
@@ -123,11 +115,6 @@ public sealed class LuxBrightnessControllerTests
 
 	// ===================== off is off =====================
 
-	/// <summary>
-	///     The one that protects the houses already running this. Broad daylight on the sensor, and the room is
-	///     commanded the period's own 70 % — the same number it would have been commanded before the setting
-	///     existed.
-	/// </summary>
 	[TestMethod]
 	public void With_The_Feature_Off_A_Blazing_Sensor_Changes_Nothing()
 	{
@@ -170,7 +157,6 @@ public sealed class LuxBrightnessControllerTests
 		Assert.AreEqual(85, commanded, 1e-9, "70 % plus half of the 30 points of headroom");
 	}
 
-	/// <summary>A reading that is not a number is a room with no reading, not a room that fails.</summary>
 	[TestMethod]
 	public void An_Unavailable_Sensor_Falls_Back_To_The_Schedule()
 	{
@@ -179,16 +165,8 @@ public sealed class LuxBrightnessControllerTests
 
 	// ===================== which sensor =====================
 
-	/// <summary>
-	///     The feature as it was asked for: one outdoor sensor brightening a hallway that has none of its own —
-	///     now that the hallway has said it wants that.
-	/// </summary>
-	/// <remarks>
-	///     <b>This test's contract changed: the opt-in is the new half of it.</b> The outdoor sensor used to reach
-	///     every sensorless room automatically, which is the fallback the owner removed. The daylight curve reads
-	///     whatever the darkness gate reads — one sensor per room, one answer — so a room that does not follow the
-	///     outdoor sensor gets no reading here either, which the test below pins.
-	/// </remarks>
+	// The curve reads whatever the darkness gate reads: one sensor per room. The outdoor sensor is opt-in, so a
+	// room that has not asked gets no reading at all, which the test below pins.
 	[TestMethod]
 	public void A_Room_That_Follows_The_Outdoor_Sensor_Brightens_With_It()
 	{
@@ -201,7 +179,6 @@ public sealed class LuxBrightnessControllerTests
 		Assert.AreEqual(100d, CommandedOnMotion(area));
 	}
 
-	/// <summary>And a room that did not ask keeps the schedule's brightness, because it has no reading to follow.</summary>
 	[TestMethod]
 	public void A_Room_That_Did_Not_Ask_Keeps_The_Schedules_Brightness()
 	{
@@ -214,7 +191,6 @@ public sealed class LuxBrightnessControllerTests
 			"blazing outside, but this room never asked to look — so the schedule stands, as it did before the feature existed");
 	}
 
-	/// <summary>The room's own sensor wins, exactly as it does for the darkness verdict — one resolution, one answer.</summary>
 	[TestMethod]
 	public void A_Room_With_Its_Own_Sensor_Ignores_The_Outdoor_One()
 	{
@@ -236,11 +212,8 @@ public sealed class LuxBrightnessControllerTests
 
 	// ===================== the tick is what notices =====================
 
-	/// <summary>
-	///     Nothing subscribes to the lux sensor, so the periodic tick is the only thing that can see the sun come
-	///     out. If the adjustment were applied when a command is built rather than when the target is resolved,
-	///     a hallway would brighten on the next motion event and never before — which in a hallway is never.
-	/// </summary>
+	// Nothing subscribes to the lux sensor, so the periodic tick is the only thing that sees the sun come out.
+	// The adjustment has to be applied when the target is resolved, not when a command is built.
 	[TestMethod]
 	public void The_Tick_Retargets_When_It_Gets_Brighter_Outside()
 	{
@@ -257,10 +230,7 @@ public sealed class LuxBrightnessControllerTests
 	// ===================== what still outranks it =====================
 
 
-	/// <summary>
-	///     Sleep is the stronger of the two statements. An afternoon nap under a bright sky must land on the night
-	///     rules, which is only guaranteed if the clamp runs after the adjustment rather than before it.
-	/// </summary>
+	// Ordering: the sleep clamp runs after the daylight adjustment, or an afternoon nap keeps the raised level.
 	[TestMethod]
 	public void The_Sleep_Clamp_Beats_A_Bright_Reading()
 	{
@@ -280,11 +250,7 @@ public sealed class LuxBrightnessControllerTests
 		Assert.AreEqual(15d, area.Actuator.Last?.BrightnessPct, "and asleep, the night period's own level takes it back");
 	}
 
-	/// <summary>
-	///     The pre-off warning is a fraction of whatever the room is actually holding, so in a bright hallway it
-	///     dims from the raised level rather than from the schedule's — otherwise the "speak now" dim would be
-	///     invisible on exactly the days the room is brightest.
-	/// </summary>
+	// The pre-off dim is a fraction of what the room is holding, not of the schedule's level.
 	[TestMethod]
 	public void The_Pre_Off_Dim_Is_Half_Of_The_Raised_Level()
 	{

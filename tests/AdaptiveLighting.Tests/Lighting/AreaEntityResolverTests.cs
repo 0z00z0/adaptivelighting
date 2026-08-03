@@ -6,9 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
-/// <summary>
-///     Discovery: turning an area id into concrete entity ids, and refusing to guess when it cannot.
-/// </summary>
+/// <summary>Discovery: turning an area id into concrete entity ids, and refusing to guess when it cannot.</summary>
 [TestClass]
 public sealed class AreaEntityResolverTests
 {
@@ -43,11 +41,8 @@ public sealed class AreaEntityResolverTests
 
 	// ===================== the registry lists rows, not devices =====================
 
-	/// <summary>
-	///     Regression found on a live instance: discovery called <c>light.router_socket_status_led</c> and a water
-	///     sensor's indicator LED "room lighting". They are registry rows for disabled entities — no state at
-	///     all — and the engine would have flashed the router's LED on motion in the annex.
-	/// </summary>
+	// Regression: a disabled entity is still a registry row and still comes back from EntitiesInArea, with no
+	// state at all. Discovery called a router's status LED room lighting.
 	[TestMethod]
 	public void A_Registry_Entry_With_No_State_Is_Not_A_Light()
 	{
@@ -56,7 +51,7 @@ public sealed class AreaEntityResolverTests
 		registry.Areas["tilbygg"] = ["light.tilbygg_taklys", "light.router_socket_status_led", "binary_sensor.tilbygg_motion"];
 		ha.SetState("light.tilbygg_taklys", "off");
 		ha.SetState("binary_sensor.tilbygg_motion", "off", new() { ["device_class"] = "motion" });
-		// light.router_socket_status_led deliberately has no state: it is a disabled registry row.
+		// light.router_socket_status_led has no state at all: a disabled registry row.
 
 		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out var area, out _);
 
@@ -81,10 +76,7 @@ public sealed class AreaEntityResolverTests
 			"a light the engine cannot reach is a light it cannot dim");
 	}
 
-	/// <summary>
-	///     A light stuck on <c>unknown</c> has never reported — indistinguishable from absent — so it is dropped
-	///     exactly as an <c>unavailable</c> one is. The owner asked that dead sensors stay out of pre-population.
-	/// </summary>
+	/// <summary>A light stuck on <c>unknown</c> has never reported, so it is dropped like an unavailable one.</summary>
 	[TestMethod]
 	public void An_Unknown_Light_Is_Not_Discovered_Any_More_Than_An_Unavailable_One()
 	{
@@ -116,10 +108,7 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.AreEqual(new[] { "binary_sensor.live" }, area!.MotionSensors.ToArray());
 	}
 
-	/// <summary>
-	///     one live instance's tilbygg has two illuminance sensors, one of them permanently unavailable. Counting the dead one
-	///     would make the area ambiguous and cost the whole room over a sensor that reports nothing.
-	/// </summary>
+	// Counting a permanently unavailable sensor would make the area ambiguous and cost it its lux gate.
 	[TestMethod]
 	public void A_Dead_Lux_Sensor_Does_Not_Make_The_Area_Ambiguous()
 	{
@@ -137,11 +126,7 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.AreEqual(new[] { "sensor.annex_illuminance" }, area!.LuxSensors.ToArray());
 	}
 
-	/// <summary>
-	///     With nothing else to go on the name is the area id, which is the only fact left. It used to be the
-	///     <i>first</i> fallback, so every auto-discovered room reported itself to the board and the log as its
-	///     slug; the registry now gets asked first, and this is what a registry with no name for the area leaves.
-	/// </summary>
+	// The area id is the last fallback, not the first: the registry is asked before it.
 	[TestMethod]
 	public void An_Unnamed_Area_Falls_Back_To_The_Area_Id()
 	{
@@ -156,11 +141,7 @@ public sealed class AreaEntityResolverTests
 		Assert.AreEqual("stue", area!.Name);
 	}
 
-	/// <summary>
-	///     The name the engine puts in every snapshot, and through it the board's lanes, the activity log's room
-	///     column and the room page. Discovery writes only an area id, so this is the whole reason a room that was
-	///     never named by hand can still be called Kjeller - Bad rather than <c>kjeller_bad</c>.
-	/// </summary>
+	// Discovery writes only an area id, so the registry name is what every snapshot and every page shows.
 	[TestMethod]
 	public void An_Area_Is_Named_As_Home_Assistant_Names_It()
 	{
@@ -176,7 +157,6 @@ public sealed class AreaEntityResolverTests
 		Assert.AreEqual("Kjeller - Bad", area!.Name);
 	}
 
-	/// <summary>A name in the document is the owner overruling Home Assistant, and the registry does not override it.</summary>
 	[TestMethod]
 	public void A_Configured_Name_Outranks_The_Registrys()
 	{
@@ -231,15 +211,11 @@ public sealed class AreaEntityResolverTests
 
 	// ===================== light groups as a real house builds them =====================
 	//
-	// "Prefer the group" is only simple while every group is one level deep, sits inside one area and shares no
-	// bulb with its neighbour. All three assumptions fail on one live instance, and each failure hands the same
-	// bulb to two commands — or, worse, hands one room's bulbs to another room's motion sensor.
+	// "Prefer the group" is simple only while every group is one level deep, sits inside one area and shares no
+	// bulb with its neighbour. Real houses break all three, and each break hands the same bulb to two commands.
 
-	/// <summary>
-	///     Nesting must be followed all the way down, not one hop. The one-hop rule only ever worked because the
-	///     inner group happened to sit in the same area, so its own members were collected in passing; unassign it
-	///     and the leaf bulbs survive alongside the outer group that already commands them.
-	/// </summary>
+	// Membership is transitive. A one-hop rule leaves the leaf bulbs alongside the outer group that already
+	// commands them whenever the intermediate group sits in no area.
 	[TestMethod]
 	public void A_Nested_Group_Beats_Its_Leaf_Bulbs_Even_When_The_Inner_Group_Is_Not_In_The_Area()
 	{
@@ -247,7 +223,7 @@ public sealed class AreaEntityResolverTests
 		FakeAreaRegistry registry = new();
 		registry.Areas["stue"] = ["light.stuelys_alle", "light.stue_tak_1", "light.stue_tak_2", "binary_sensor.m"];
 		ha.SetState("light.stuelys_alle", "off", new() { ["entity_id"] = new[] { "light.stue_taklys" } });
-		// light.stue_taklys is the intermediate group, and it is deliberately in no area at all.
+		// light.stue_taklys is the intermediate group, and it is in no area at all.
 		ha.SetState("light.stue_taklys", "off", new() { ["entity_id"] = new[] { "light.stue_tak_1", "light.stue_tak_2" } });
 		ha.SetState("light.stue_tak_1", "off");
 		ha.SetState("light.stue_tak_2", "off");
@@ -260,12 +236,8 @@ public sealed class AreaEntityResolverTests
 			"membership is transitive, so the outer group holds the bulbs whether or not the inner group is in the room");
 	}
 
-	/// <summary>
-	///     The living room's "all lights" group holds the kitchen's group on one live instance, so preferring it
-	///     would put the living room in charge of the kitchen: the two rooms take turns setting each other's
-	///     brightness, and the first vacancy timeout to fire switches the lights off on whoever is in the other
-	///     room. The area boundary wins, and the room falls back to the group that stays inside it.
-	/// </summary>
+	// A group reaching into another area would put one room in charge of the other: they take turns setting each
+	// other's brightness, and the first vacancy timeout switches the lights off on whoever is in the other room.
 	[TestMethod]
 	public void A_Group_Reaching_Into_Another_Area_Loses_To_The_Lights_The_Area_Owns()
 	{
@@ -301,10 +273,7 @@ public sealed class AreaEntityResolverTests
 		StringAssert.Contains(logger.Warnings[0], "light.stuelys_alle");
 	}
 
-	/// <summary>
-	///     The clip has a floor: a room whose only light is a reaching group keeps it. A shared bulb is a fault, a
-	///     dark room is a bigger one, and the warning is then the only signal the household gets.
-	/// </summary>
+	/// <summary>The cross-area clip has a floor: a room whose only light is a reaching group keeps it.</summary>
 	[TestMethod]
 	public void A_Reaching_Group_Is_Kept_When_It_Is_All_The_Area_Has()
 	{
@@ -326,11 +295,8 @@ public sealed class AreaEntityResolverTests
 		Assert.AreEqual(1, logger.Warnings.Count, "and says so, because nothing else will");
 	}
 
-	/// <summary>
-	///     Two hallway groups on one live instance share three of their bulbs while containing neither the other,
-	///     so the old rule dropped neither and commanded those three twice. The widest group wins; the narrower one
-	///     is traded for the bulb only it holds, because a bulb missing from its room is worse than a doubled call.
-	/// </summary>
+	// Two groups that share bulbs while containing neither the other. The widest wins; the narrower one is
+	// traded for the bulb only it holds, because a bulb missing from its room is worse than a doubled call.
 	[TestMethod]
 	public void Overlapping_Sibling_Groups_Command_No_Bulb_Twice_And_Lose_None()
 	{
@@ -368,11 +334,8 @@ public sealed class AreaEntityResolverTests
 		StringAssert.Contains(logger.Warnings[0], "light.wiz_rgbw", "the bulb that changed hands has to be named");
 	}
 
-	/// <summary>
-	///     Home Assistant will let a household build a group that contains itself. Walking that without a visited
-	///     set never returns, and a resolver that hangs takes the whole house with it, so the walk visits each id
-	///     once and a loop that reaches no bulb stands for itself.
-	/// </summary>
+	// Home Assistant lets a household build a group that contains itself. LeavesOf walks under a visited set;
+	// without one this never returns, and a resolver that hangs takes the whole house with it.
 	[TestMethod]
 	[Timeout(10000)]
 	public void A_Light_Group_That_Contains_Itself_Terminates_And_Still_Lights_The_Room()
@@ -394,13 +357,8 @@ public sealed class AreaEntityResolverTests
 			"a two-hop loop folds into one of its halves, a self-member still commands the bulb it holds");
 	}
 
-	/// <summary>
-	///     A group's membership is whatever Home Assistant put in the attribute, and the overlap rule promotes the
-	///     bulbs only one group holds into the room's own list. A member outside the <c>light</c> domain arriving
-	///     that way became an id the area hands to the actuator, which calls <c>light.turn_on</c> unconditionally —
-	///     a service call Home Assistant rejects, on every command, for ever. Discovery filters the domain; a bulb
-	///     entering by the back door gets the same filter.
-	/// </summary>
+	// The overlap rule promotes members into the room's own list, so it has to re-apply the domain filter. The
+	// actuator calls light.turn_on unconditionally, and a promoted switch is a call HA rejects on every command.
 	[TestMethod]
 	public void A_Group_Member_Outside_The_Light_Domain_Is_Not_Promoted_On_Its_Own()
 	{
@@ -423,17 +381,10 @@ public sealed class AreaEntityResolverTests
 
 	// ===================== the same rules, for motion and illuminance =====================
 	//
-	// "Groups are not prioritised when they exist. Should be the same for lights, motion and luminance." The
-	// machinery below is literally the same code, so these tests exist to pin that it is reached from all three
-	// domains and that each domain's own consequences follow — a motion group and its members fire the area two
-	// or three times per movement, and an illuminance group and its members weight one instrument twice in the
-	// area's average.
+	// One body of code serves all three domains. These pin that it is reached from each of them, and that each
+	// domain's consequence follows: a motion group and its members fire the area two or three times per
+	// movement, and an illuminance group and its members weight one instrument twice in the area's average.
 
-	/// <summary>
-	///     <b>The bug that stopped the whole house reacting.</b> Measured on one live instance (2026-07-28):
-	///     <c>binary_sensor.kontor_trening_bevegelse</c> is a <c>motion</c> group of two sensors, and the office
-	///     subscribed to all three — so one wave of a hand fired the area three times.
-	/// </summary>
 	[TestMethod]
 	public void A_Motion_Group_Wins_Over_Its_Members()
 	{
@@ -462,7 +413,6 @@ public sealed class AreaEntityResolverTests
 			"a group and its members are the same movement two or three times over");
 	}
 
-	/// <summary>Nesting is followed for motion exactly as it is for lights — one walk, one copy of it.</summary>
 	[TestMethod]
 	public void A_Nested_Motion_Group_Beats_Its_Leaf_Sensors()
 	{
@@ -474,7 +424,7 @@ public sealed class AreaEntityResolverTests
 			["device_class"] = "motion",
 			["entity_id"] = new[] { "binary_sensor.inner" }
 		});
-		// The intermediate group is deliberately in no area at all.
+		// The intermediate group is in no area at all.
 		ha.SetState("binary_sensor.inner", "off", new()
 		{
 			["device_class"] = "motion",
@@ -491,10 +441,6 @@ public sealed class AreaEntityResolverTests
 			"membership is transitive, whether or not the intermediate group sits in the room");
 	}
 
-	/// <summary>
-	///     Overlapping motion groups: the widest wins and the sensor only the narrower one holds is kept on its
-	///     own, so nothing fires twice and no corner of the room stops being watched.
-	/// </summary>
 	[TestMethod]
 	public void Overlapping_Motion_Groups_Fire_Nothing_Twice_And_Lose_No_Sensor()
 	{
@@ -528,10 +474,7 @@ public sealed class AreaEntityResolverTests
 		StringAssert.Contains(logger.Warnings[0], "motion", "and name which kind of group it settled");
 	}
 
-	/// <summary>
-	///     A motion group reaching into another room would light this one whenever somebody moved in that one, so
-	///     the area boundary clips it — the same rule, and the same code, as for lights.
-	/// </summary>
+	/// <summary>A motion group reaching into another room would light this one on that one's movement.</summary>
 	[TestMethod]
 	public void A_Motion_Group_Reaching_Into_Another_Area_Loses_To_The_Sensors_The_Area_Owns()
 	{
@@ -558,10 +501,6 @@ public sealed class AreaEntityResolverTests
 		StringAssert.Contains(logger.Warnings[0], "kjokken");
 	}
 
-	/// <summary>
-	///     A motion group that contains itself must terminate, exactly as a light group must: a resolver that
-	///     hangs on a misconfiguration takes the whole house down with it.
-	/// </summary>
 	[TestMethod]
 	[Timeout(10000)]
 	public void A_Motion_Group_That_Contains_Itself_Terminates_And_Still_Watches_The_Room()
@@ -583,11 +522,8 @@ public sealed class AreaEntityResolverTests
 			"a two-hop loop folds into one of its halves, a self-member still watches the sensor it holds");
 	}
 
-	/// <summary>
-	///     An illuminance group and the sensors inside it are one reading under three names. Preferring the group
-	///     is what turns three candidates into one answer — and it is the shape that used to make an area
-	///     "ambiguous" and cost it its lux gate entirely.
-	/// </summary>
+	// An illuminance group and its members are one reading under three names. This shape used to make an area
+	// ambiguous and cost it its lux gate.
 	[TestMethod]
 	public void An_Illuminance_Group_Wins_Over_Its_Members_And_Settles_The_Room()
 	{
@@ -649,14 +585,9 @@ public sealed class AreaEntityResolverTests
 
 	// ===================== one entity per piece of hardware =====================
 	//
-	// Measured on one live instance (2026-07-28): five light entities in `kontor` are one RGBW fixture, and the
-	// engine commanded all five. Groups have no device; every duplicate does — so the device is both the signal
-	// and its own guard, and it is exact where a suffix convention could only guess.
+	// Five light entities can be one RGBW fixture, and the engine commanded all five. Groups have no device of
+	// their own; every duplicate channel does, so the device id is both the signal and its own guard.
 
-	/// <summary>
-	///     The office, as measured: a group of two channels, the fixture's own combined entity, and two more
-	///     channels — five entities, one device. The group covers that device, so the group is the whole answer.
-	/// </summary>
 	[TestMethod]
 	public void A_Group_Claims_Its_Devices_So_Loose_Entities_On_The_Same_Fixture_Drop()
 	{
@@ -678,7 +609,7 @@ public sealed class AreaEntityResolverTests
 			registry.Devices[channel] = "2c97a05e";
 		}
 
-		// The group helper: no device of its own, which is what a group is in the registry.
+		// The group helper carries no device of its own.
 		ha.SetState("light.kontorlys_alle", "off",
 			new() { ["entity_id"] = new[] { "light.kontor_taklys_nw", "light.kontor_taklys_ww" } });
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
@@ -693,10 +624,7 @@ public sealed class AreaEntityResolverTests
 		Assert.AreEqual(1, logger.Warnings.Count, "and the four entities that folded into it are named");
 	}
 
-	/// <summary>
-	///     With no group over them, the combined entity wins its own channels: the id its siblings extend with an
-	///     underscore is how Home Assistant names the parent of an RGBW fixture.
-	/// </summary>
+	/// <summary>Home Assistant names the parent of an RGBW fixture as the id its channels extend.</summary>
 	[TestMethod]
 	public void Without_A_Group_The_Parent_Entity_Wins_Its_Own_Colour_Channels()
 	{
@@ -719,10 +647,7 @@ public sealed class AreaEntityResolverTests
 			"the parent is named first and the channels extend it, whatever order the registry lists them in");
 	}
 
-	/// <summary>
-	///     Two lamps on two devices stay two lamps. The rule collapses hardware, not names — <c>stue_tak_1</c> and
-	///     <c>stue_tak_2</c> read alike and are not the same fixture.
-	/// </summary>
+	/// <summary>The rule collapses hardware, not names.</summary>
 	[TestMethod]
 	public void Two_Lamps_On_Two_Devices_Are_Still_Two_Lamps()
 	{
@@ -744,12 +669,8 @@ public sealed class AreaEntityResolverTests
 			"one entity per device: the second lamp is a second device and keeps its place");
 	}
 
-	/// <summary>
-	///     <b>Motion is deliberately exempt, and the asymmetry is the point.</b> A device is one lamp but it is a
-	///     <i>controller</i>, not one sensor: a multi-zone presence sensor exposes genuinely different detection
-	///     zones on one device, and collapsing them makes the room blind wherever the dropped entity was watching.
-	///     A group is the household saying "these are one"; a shared device is not.
-	/// </summary>
+	// Motion is exempt from the device rule. One device is one lamp, but it is a controller, not one sensor: a
+	// multi-zone presence sensor exposes different zones, and collapsing them blinds the room.
 	[TestMethod]
 	public void Two_Motion_Zones_On_One_Controller_Are_Both_Kept()
 	{
@@ -769,10 +690,8 @@ public sealed class AreaEntityResolverTests
 			"losing coverage is silent and is the very failure this change exists to end; a doubled command is not");
 	}
 
-	/// <summary>
-	///     Illuminance <i>is</i> device-deduplicated, because the area now averages its sensors and one instrument
-	///     exposed twice would carry double weight in that mean.
-	/// </summary>
+	// Illuminance is device-deduplicated: the area averages its sensors, so one instrument exposed twice would
+	// carry double weight in that mean.
 	[TestMethod]
 	public void Two_Illuminance_Entities_On_One_Instrument_Count_Once()
 	{
@@ -795,10 +714,6 @@ public sealed class AreaEntityResolverTests
 			"two instruments, two votes — the same instrument twice would be one room's opinion counted twice");
 	}
 
-	/// <summary>
-	///     A house whose registry knows no devices at all behaves exactly as it did before the rule existed. That
-	///     is every fixture written before this change, and both live houses' entities that carry no device.
-	/// </summary>
 	[TestMethod]
 	public void A_House_With_No_Device_Information_Is_Untouched_By_The_Rule()
 	{
@@ -834,15 +749,11 @@ public sealed class AreaEntityResolverTests
 
 	// ===================== the include label =====================
 	//
-	// "Only manage lights carrying this label" is strictly opt-in, and the whole point of these tests is that
-	// opting out is the default nobody has to write down. Every document ever written predates the setting, so
-	// anything other than "null manages everything" would change what those documents mean under their owners.
+	// The setting is opt-in. Every document written before it exists says nothing, so null has to keep meaning
+	// "manage every light found" or those files change meaning under their owners.
 
-	/// <summary>
-	///     Asserted on a document that has no <c>IncludeLabel</c> key at all, because that — not an explicit
-	///     null — is what every existing file looks like. A default that only held for the value nobody writes
-	///     would be no guarantee at all.
-	/// </summary>
+	// Asserted on a document with no IncludeLabel key at all, not on an explicit null: that is what an existing
+	// file looks like.
 	[TestMethod]
 	public void A_Document_That_Never_Mentions_An_Include_Label_Manages_Every_Light()
 	{
@@ -894,10 +805,7 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.AreEqual(new[] { "light.blessed" }, area!.Lights.ToArray());
 	}
 
-	/// <summary>
-	///     "Never touch" must never lose an argument. Include selects candidates; exclude then removes, so a light
-	///     wearing both labels stays out — the setting whose whole name is a prohibition cannot be outvoted.
-	/// </summary>
+	/// <summary>Include selects candidates and exclude then removes, so a light wearing both stays out.</summary>
 	[TestMethod]
 	public void The_Exclude_Label_Beats_The_Include_Label_On_The_Same_Light()
 	{
@@ -916,10 +824,6 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.AreEqual(new[] { "light.blessed" }, area!.Lights.ToArray());
 	}
 
-	/// <summary>
-	///     An explicit pick is the owner overruling the rules, exactly as it already overrules discovery. Both
-	///     labels are rules, so neither gets a veto over a list somebody wrote out by hand.
-	/// </summary>
 	[TestMethod]
 	public void An_Explicit_Lights_List_Bypasses_Both_Labels()
 	{
@@ -959,10 +863,7 @@ public sealed class AreaEntityResolverTests
 		StringAssert.Contains(error!, "stue");
 	}
 
-	/// <summary>
-	///     The other half of the message above: a room with no lights at all must not be told to go and label
-	///     them. That sends a household hunting for lights Home Assistant never put in the room.
-	/// </summary>
+	/// <summary>The other half of the message above: a room with no lights must not be told to go and label them.</summary>
 	[TestMethod]
 	public void A_Room_With_No_Lights_At_All_Is_Not_Blamed_On_The_Include_Label()
 	{
@@ -978,10 +879,8 @@ public sealed class AreaEntityResolverTests
 			"there was nothing for the label to filter out, so the label is not the problem");
 	}
 
-	/// <summary>
-	///     Lights only. Motion and lux sensors are inputs, not things the engine commands, and filtering them too
-	///     would leave a half-labelled house silently deaf — lights it may drive, and no sensor to tell it when.
-	/// </summary>
+	// The label applies to lights only. Filtering sensors too leaves a half-labelled house deaf: lights it may
+	// drive, and nothing to tell it when.
 	[TestMethod]
 	public void The_Include_Label_Does_Not_Filter_Motion_Or_Lux_Sensors()
 	{
@@ -1056,13 +955,8 @@ public sealed class AreaEntityResolverTests
 
 	// ===================== MotionDeviceClasses: the config-binder trap =====================
 
-	/// <summary>
-	///     The default is empty and empty means the built-in three. The property cannot simply carry the three
-	///     values, because the .NET configuration binder APPENDS bound list items to a non-empty default instead
-	///     of replacing it — a YAML list of three bound to six, and no edit to the YAML could ever remove a
-	///     default. These four tests pin that whole contract: leave it empty and get the defaults, set it and get
-	///     exactly what you set.
-	/// </summary>
+	// The default must stay empty. The .NET configuration binder appends bound list items to a non-empty
+	// default instead of replacing it, so a YAML list of three would bind to six.
 	[TestMethod]
 	public void An_Empty_MotionDeviceClasses_Means_The_Built_In_Defaults()
 	{
@@ -1175,10 +1069,8 @@ public sealed class AreaEntityResolverTests
 
 		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var ambiguous, out _);
 
-		// Neither guess nor refuse — and, since the owner asked for an average, neither drop them. Picking one
-		// would gate the room on a sensor that may have nothing to do with its daylight (a real house offered the
-		// probe inside its fridge as a candidate); refusing left a room with two sensors strictly worse off than a
-		// room with none, and disabled 8 of 17 rooms on that same house. Both survive, and the gate averages them.
+		// Both survive and the gate averages them. Picking one would gate the room on a sensor with nothing to do
+		// with its daylight; refusing once disabled 8 of 17 rooms on a live house.
 		Assert.IsTrue(ok, "several lux sensors must not disable the room");
 		CollectionAssert.AreEquivalent(new[] { "sensor.lux_a", "sensor.lux_b" }, ambiguous!.LuxSensors.ToArray(),
 			"two plain sensors with no group and no shared device are two real instruments in one room");
@@ -1218,9 +1110,8 @@ public sealed class AreaEntityResolverTests
 
 	// ===================== ExcludeEntities: dropping one discovered entity per room =====================
 	//
-	// The per-room escape hatch: a sensor that sits in the room's HA area but should not drive its lighting — a
-	// fridge's own illuminance probe was the motivating case. It filters discovery only; an explicit list is the
-	// owner already overruling discovery by hand and is not re-filtered by it.
+	// The per-room escape hatch for a sensor that sits in the room's HA area but should not drive its lighting.
+	// It filters discovery only. An explicit list already overrules discovery and is not re-filtered by it.
 
 	[TestMethod]
 	public void An_Excluded_Discovered_Entity_Is_Absent_From_The_Resolved_Room()
@@ -1243,10 +1134,6 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.AreEqual(new[] { "binary_sensor.keep" }, area.MotionSensors.ToArray());
 	}
 
-	/// <summary>
-	///     An explicit list is the owner overruling discovery by hand, so the per-room exclude does not re-filter
-	///     it — exactly as the exclude label and the include label do not touch an explicit list.
-	/// </summary>
 	[TestMethod]
 	public void An_Explicit_Lights_List_Is_Not_Filtered_By_ExcludeEntities()
 	{
@@ -1265,10 +1152,6 @@ public sealed class AreaEntityResolverTests
 			"a hand-picked light stays; ExcludeEntities filters discovery, not the owner's explicit list");
 	}
 
-	/// <summary>
-	///     Excluding the only lux sensor leaves the room resolving without one — the already-handled case where a
-	///     room decides darkness from the outdoor sensor or the sun — rather than failing.
-	/// </summary>
 	[TestMethod]
 	public void Excluding_The_Only_Lux_Sensor_Leaves_The_Room_Resolving_Without_One()
 	{
@@ -1288,10 +1171,7 @@ public sealed class AreaEntityResolverTests
 			"the excluded sensor is gone, and a room with no lux sensor is simply dark");
 	}
 
-	/// <summary>
-	///     Excluding one of two lux candidates disambiguates rather than leaving the area on the sun: the exclude
-	///     is applied to the candidate list before the count decides, so the surviving sensor is chosen outright.
-	/// </summary>
+	// The exclude is applied to the candidate list before the count decides.
 	[TestMethod]
 	public void Excluding_One_Of_Two_Lux_Sensors_Chooses_The_Other()
 	{
@@ -1314,10 +1194,8 @@ public sealed class AreaEntityResolverTests
 
 	// ===================== DiscoverArea: what the configuration page is allowed to show =====================
 	//
-	// The area picker labels every area with what a room there would resolve to, and the entity pickers offer
-	// the area's entities rather than the whole house. Both go through DiscoverArea, so these tests are what
-	// stops the page and the engine drifting apart: if the page can be shown an entity here that TryResolve
-	// would drop, the page is lying about what will happen.
+	// The area picker and the entity pickers both go through DiscoverArea. These stop the page and the engine
+	// drifting apart: an entity the page offers that TryResolve would drop is a lie about what will happen.
 
 	[TestMethod]
 	public void DiscoverArea_Offers_Exactly_What_TryResolve_Would_Use()
@@ -1340,11 +1218,7 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.AreEqual(new[] { "sensor.stue_lux" }, found.LuxSensors.ToArray());
 	}
 
-	/// <summary>
-	///     The regression this whole change is about: the picker offered every entity in the instance, so a
-	///     living-room light list offered an ESP dev board's status LED. The engine never would have — and now
-	///     neither does the picker, because it asks the engine.
-	/// </summary>
+	// Regression: the picker offered every entity in the instance, including ones discovery drops.
 	[TestMethod]
 	public void DiscoverArea_Does_Not_Offer_A_Ghost_The_Engine_Would_Drop()
 	{
@@ -1378,11 +1252,8 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.AreEqual(new[] { "light.stue_group" }, found.Lights.ToArray());
 	}
 
-	/// <summary>
-	///     The lux picker exists to break a tie, so DiscoverArea has to hand back every candidate rather than
-	///     the one TryResolve would settle on. An area with two lux sensors offers two, and refusing to guess
-	///     stays the resolver's job.
-	/// </summary>
+	// Asymmetry: DiscoverArea hands back every lux candidate, where TryResolve settles on one. The picker is
+	// how a household breaks the tie.
 	[TestMethod]
 	public void DiscoverArea_Reports_Every_Lux_Candidate_Rather_Than_Choosing_One()
 	{
@@ -1421,13 +1292,9 @@ public sealed class AreaEntityResolverTests
 
 	// ===================== a bulb that belongs to no room =====================
 
-	/// <summary>
-	///     <b>The gap the cross-area clip cannot close, reproduced on the real path.</b> Two rooms, each with its
-	///     own light group, and one bulb in both groups that Home Assistant has put in neither room. Nothing here
-	///     fires: the bulb is not foreign to either area, because it is not anybody's, so both rooms keep their own
-	///     group and both end up commanding it. The two rooms settle on two different ids, which is why the sharing
-	///     is only visible once each id is followed down to the bulbs it stands for.
-	/// </summary>
+	// The gap the cross-area clip cannot close. A bulb in two rooms' groups but in no area is foreign to
+	// neither, so both rooms keep their group. The two rooms settle on different ids, so the sharing shows up
+	// only once each id is followed down to the bulbs it stands for.
 	[TestMethod]
 	public void A_Bulb_With_No_Room_Of_Its_Own_Is_Commanded_By_Both_Groups_That_Hold_It()
 	{
@@ -1470,10 +1337,7 @@ public sealed class AreaEntityResolverTests
 		StringAssert.Contains(shared[0].Reason, "Kjøkken");
 	}
 
-	/// <summary>
-	///     The same two rooms, with the bulb filed under one of them. Nothing is raised here, because this is the
-	///     case the cross-area clip already owns — and it does own it: the living room drops its reaching group.
-	/// </summary>
+	/// <summary>The same two rooms, with the bulb filed under one of them, which the cross-area clip owns.</summary>
 	[TestMethod]
 	public void A_Bulb_Filed_Under_One_Of_The_Rooms_Is_Not_This_Rules_Business()
 	{
@@ -1501,11 +1365,7 @@ public sealed class AreaEntityResolverTests
 		Assert.AreEqual(0, shared.Count, "the kitchen's bulb is the kitchen's, and the clip already said so");
 	}
 
-	/// <summary>
-	///     What the orchestrator hands the audit: a room, and every bulb its resolved lights stand for, each named
-	///     the way Home Assistant names it. Mirrors <c>LightingOrchestrator.BulbsOf</c>, which is the only caller
-	///     in the engine.
-	/// </summary>
+	/// <summary>A room and every bulb its resolved lights stand for. Mirrors <c>LightingOrchestrator.BulbsOf</c>.</summary>
 	private static RoomUnderReview BulbsOf(string room, ResolvedArea area, AreaEntityResolver resolver, FakeHaContext ha)
 	{
 		List<LightUnderReview> bulbs = [];
@@ -1529,10 +1389,7 @@ public sealed class AreaEntityResolverTests
 		Assert.AreEqual(0, found.LuxSensors.Count);
 	}
 
-	/// <summary>
-	///     Captures what was logged, because a group rule that quietly changes which bulbs a room commands is only
-	///     defensible while it says so out loud — "and it warns" is half of each cross-area and overlap contract.
-	/// </summary>
+	/// <summary>Captures warnings: "and it warns" is half of each cross-area and overlap contract.</summary>
 	private sealed class RecordingLogger : ILogger
 	{
 		private readonly List<string> _warnings = [];

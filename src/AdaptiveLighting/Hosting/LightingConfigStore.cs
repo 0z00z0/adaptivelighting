@@ -4,24 +4,11 @@ using AdaptiveLighting.Configuration;
 
 namespace AdaptiveLighting.Hosting;
 
-/// <summary>
-///     The one file the lighting UI is allowed to write, and the only way it writes it.
-/// </summary>
+/// <summary>The one file the lighting UI is allowed to write, and the only way it writes it.</summary>
 /// <remarks>
-///     <para>
-///         <b>The path is not a parameter of anything a browser can reach.</b> It is resolved once, server-side,
-///         when this store is registered, and it is immutable thereafter. Nothing on the write path takes a path,
-///         a file name, or a fragment of one from a request. That is the whole reason this class exists rather
-///         than a <c>File.WriteAllText</c> at the call site: the write surface is exactly one file, and it is
-///         decided here.
-///     </para>
-///     <para>
-///         <b>Writes are crash-safe.</b> The new document goes to a temp file in the same directory and is then
-///         moved into place, so a process death mid-write cannot leave a half-written config that would stop the
-///         host booting. The previous version is kept as <c>.bak</c> — one generation, which is what you want when
-///         a save turns out to have been a mistake and what you do not want to grow without bound in
-///         <c>/config</c>.
-///     </para>
+///     The path is resolved once, server-side, and is immutable. Nothing on the write path takes a path or a
+///     fragment of one from a request. Writes go to a temp file and are moved into place, so a process death
+///     mid-write cannot leave a half-written config; one previous generation is kept as <c>.bak</c>.
 /// </remarks>
 public sealed class LightingConfigStore
 {
@@ -29,15 +16,11 @@ public sealed class LightingConfigStore
 
 	private readonly ILogger<LightingConfigStore> _logger;
 
-	// Serialises concurrent saves from two browser tabs. The engine rebuild that follows a save is separately
-	// guarded in LightingEngineHost; this lock is only about the bytes on disk.
+	// Only about the bytes on disk. The engine rebuild that follows a save is guarded separately, in
+	// LightingEngineHost.
 	private readonly Lock _gate = new();
 
-	/// <summary>Creates a store over one fixed file.</summary>
-	/// <param name="filePath">Absolute path of the configuration document. Resolved server-side by the host.</param>
-	/// <param name="logger">Where reads and writes are recorded.</param>
-	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
-	/// <exception cref="ArgumentException"><paramref name="filePath"/> is blank.</exception>
+	/// <summary>Creates a store over one fixed file. The host resolves <c>filePath</c> server-side.</summary>
 	public LightingConfigStore(string filePath, ILogger<LightingConfigStore> logger)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
@@ -48,7 +31,7 @@ public sealed class LightingConfigStore
 		BackupPath = FilePath + ".bak";
 	}
 
-	/// <summary>The document's absolute path. A path, not a secret: safe to show in the UI, and worth showing.</summary>
+	/// <summary>The document's absolute path. A path, not a secret: safe to show in the UI.</summary>
 	public string FilePath { get; }
 
 	/// <summary>Where <see cref="Save"/> leaves the previous version.</summary>
@@ -63,23 +46,13 @@ public sealed class LightingConfigStore
 	/// <summary>When the document was last written, or <c>null</c> when it does not exist.</summary>
 	public DateTimeOffset? LastWrittenUtc => Exists ? File.GetLastWriteTimeUtc(FilePath) : null;
 
-	/// <summary>
-	///     Reads the document from disk, for callers that do not care how it was written.
-	/// </summary>
-	/// <returns>The parsed document.</returns>
 	/// <exception cref="LightingConfigException">The file is missing, unreadable, or not a valid document.</exception>
 	public AdaptiveLightingConfig Load() => Read().Config;
 
 	/// <summary>
-	///     Reads the document from disk and reports whether it had to be translated out of the pre-2.0 schema
-	///     to be read at all.
+	///     Reads the document and reports whether it had to be translated out of the pre-2.0 schema to be read at
+	///     all. Only <see cref="LightingEngineHost.Reload"/> acts on the flag.
 	/// </summary>
-	/// <remarks>
-	///     Separate from <see cref="Load"/> because exactly one caller acts on the flag —
-	///     <see cref="LightingEngineHost.Reload"/>, which rewrites such a file in the current schema — and every
-	///     other read would only have to say <c>.Config</c> to ignore it.
-	/// </remarks>
-	/// <returns>The parsed document and the translation flag.</returns>
 	/// <exception cref="LightingConfigException">The file is missing, unreadable, or not a valid document.</exception>
 	public DocumentReadResult Read()
 	{
@@ -115,16 +88,8 @@ public sealed class LightingConfigStore
 		}
 	}
 
-	/// <summary>
-	///     Writes <paramref name="config"/> to disk, keeping one backup of what was there before.
-	/// </summary>
-	/// <remarks>
-	///     This does not validate. Validation is <see cref="LightingEngineHost.Save"/>'s job, because refusing an
-	///     invalid document is a decision about the engine, not about the file system — and a store that validated
-	///     would tempt a caller into thinking a successful write meant a working engine.
-	/// </remarks>
-	/// <param name="config">The document to write.</param>
-	/// <exception cref="ArgumentNullException"><paramref name="config"/> is <c>null</c>.</exception>
+	/// <summary>Writes <paramref name="config"/> to disk, keeping one backup of what was there before.</summary>
+	/// <remarks>Does not validate: that is <see cref="LightingEngineHost.Save"/>'s job, so a write is not a working engine.</remarks>
 	/// <exception cref="LightingConfigException">The file could not be written.</exception>
 	public void Save(AdaptiveLightingConfig config)
 	{
@@ -134,9 +99,8 @@ public sealed class LightingConfigStore
 
 		lock (_gate)
 		{
-			// GetRandomFileName rather than a fixed ".tmp": two saves racing on a fixed temp name would have the
-			// second one truncate the first one's file out from under it, which is the exact failure the temp
-			// file was there to prevent.
+			// GetRandomFileName, not a fixed ".tmp": on a fixed name two racing saves truncate each other, which is
+			// the failure the temp file exists to prevent.
 			string directory = Path.GetDirectoryName(FilePath)
 				?? throw new LightingConfigException($"'{FilePath}' has no directory to write into.");
 			string temporary = Path.Combine(directory, $".{Path.GetFileName(FilePath)}.{Path.GetRandomFileName()}.tmp");
@@ -147,9 +111,8 @@ public sealed class LightingConfigStore
 				File.WriteAllText(temporary, yaml, Utf8NoBom);
 
 				if (File.Exists(FilePath))
-					// One call: replace the target and move the old contents to the backup. The alternative —
-					// copy to .bak, then write the target — has a window where the config is gone and the backup
-					// is the only copy.
+					// One call: replace the target and move the old contents to the backup, leaving no window in
+					// which the backup is the only copy.
 					File.Replace(temporary, FilePath, BackupPath, ignoreMetadataErrors: true);
 				else
 					File.Move(temporary, FilePath);

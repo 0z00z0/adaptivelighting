@@ -1,13 +1,6 @@
 @*
-	A response curve, small enough to sit inside a sentence.
-
-	For the settings that are a shape rather than a quantity — a shaping exponent, a blend, a ramp. The number
-	stays in its token, where it can be changed; this sits beside it and says what the number means, which is
-	something no wording of the sentence manages in fewer than three clauses.
-
-	Drawn in the page's own stroke grammar rather than as a chart: a 2px accent line on a hairline baseline,
-	the same two weights the board's now-line and its gridlines use. It is a mark, not a graph — no axes, no
-	ticks, nothing to read off it.
+	A response curve small enough to sit inside a sentence, for the settings that are a shape and not a
+	quantity. A mark, not a graph: no axes, no ticks, nothing to read off it.
 *@
 
 <svg class="curve-glyph @Class"
@@ -27,11 +20,10 @@
 	[Parameter, EditorRequired]
 	public double Exponent { get; set; } = 1;
 
-	/// <summary>What the curve means, for a screen reader. <c>CurvePath.Describe</c> words it if you have nothing better.</summary>
+	/// <summary>What the curve means, for a screen reader. <c>CurvePath.Describe</c> words it.</summary>
 	[Parameter]
 	public string? Label { get; set; }
 
-	/// <summary>Extra classes, for a caller that wants it larger than the inline default.</summary>
 	[Parameter]
 	public string? Class { get; set; }
 }

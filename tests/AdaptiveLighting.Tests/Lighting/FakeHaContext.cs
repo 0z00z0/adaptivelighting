@@ -13,10 +13,8 @@ public sealed record ServiceCall(string Domain, string Service, ServiceTarget? T
 ///     A hand-written <see cref="IHaContext"/>: a state dictionary, a subject of changes, and a list of calls.
 /// </summary>
 /// <remarks>
-///     Hand-written because there is no NetDaemon testing package to take this from. The states are built by
-///     round-tripping JSON rather than by constructing <see cref="EntityState"/> directly — its attribute bag is
-///     a <see cref="JsonElement"/> and the ctor will not take a dictionary, so JSON is the only honest way in,
-///     and it has the happy side effect of exercising the same deserialisation path the real client uses.
+///     States go in through JSON because <see cref="EntityState"/> holds its attributes as a
+///     <see cref="JsonElement"/> and the constructor takes no dictionary. Do not try to build one directly.
 /// </remarks>
 public sealed class FakeHaContext : IHaContext
 {
@@ -24,10 +22,8 @@ public sealed class FakeHaContext : IHaContext
 	private readonly Subject<Event> _events = new();
 	private readonly Dictionary<string, EntityState> _states = new(StringComparer.Ordinal);
 
-	/// <summary>Every service call made through this context, in order.</summary>
 	public List<ServiceCall> Calls { get; } = [];
 
-	/// <summary>Every event sent through this context, in order.</summary>
 	public List<(string Type, object? Data)> SentEvents { get; } = [];
 
 	IObservable<Event> IHaContext.Events => _events;
@@ -37,17 +33,13 @@ public sealed class FakeHaContext : IHaContext
 		_states[entityId] = Build(entityId, state, attributes, context);
 
 	/// <summary>
-	///     Sets a state that Home Assistant last heard about at <paramref name="lastUpdated"/>.
+	///     Sets a state that Home Assistant last heard about at <paramref name="lastUpdated"/>. Only the staleness
+	///     rule reads it; an absent timestamp is not read as death.
 	/// </summary>
-	/// <remarks>
-	///     Only the staleness rule reads that timestamp, so every other fixture leaves it absent — which is also
-	///     what a state with no <c>last_updated</c> in its payload looks like, and is deliberately <i>not</i> read
-	///     as death.
-	/// </remarks>
 	public void SetStateReportedAt(string entityId, string state, DateTimeOffset lastUpdated, Dictionary<string, object>? attributes = null) =>
 		_states[entityId] = Build(entityId, state, attributes, context: null, lastUpdated);
 
-	/// <summary>Sets a state and pushes the change, exactly as Home Assistant would.</summary>
+	/// <summary>Sets a state and pushes the change, as Home Assistant would.</summary>
 	public void Trigger(string entityId, string newState, Dictionary<string, object>? attributes = null, Context? context = null)
 	{
 		_states.TryGetValue(entityId, out var old);
@@ -76,32 +68,23 @@ public sealed class FakeHaContext : IHaContext
 		return json.Deserialize<EntityState>()!;
 	}
 
-	/// <inheritdoc/>
 	public IObservable<StateChange> StateAllChanges() => _changes;
 
-	/// <inheritdoc/>
 	public EntityState? GetState(string entityId) => _states.GetValueOrDefault(entityId);
 
-	/// <inheritdoc/>
 	public IReadOnlyList<Entity> GetAllEntities() => [.. _states.Keys.Select(id => new Entity(this, id))];
 
-	/// <inheritdoc/>
 	public void CallService(string domain, string service, ServiceTarget? target = null, object? data = null) =>
 		Calls.Add(new ServiceCall(domain, service, target, data));
 
-	/// <inheritdoc/>
 	public Task<JsonElement?> CallServiceWithResponseAsync(string domain, string service, ServiceTarget? target = null, object? data = null) =>
 		Task.FromResult<JsonElement?>(null);
 
-	/// <inheritdoc/>
 	public Area? GetAreaFromEntityId(string entityId) => null;
 
-	/// <inheritdoc/>
 	public Entity Entity(string entityId) => new(this, entityId);
 
-	/// <inheritdoc/>
 	public EntityRegistration? GetEntityRegistration(string entityId) => null;
 
-	/// <inheritdoc/>
 	public void SendEvent(string eventType, object? data) => SentEvents.Add((eventType, data));
 }

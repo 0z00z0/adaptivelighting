@@ -12,10 +12,8 @@ namespace AdaptiveLighting.Tests.LastSeen;
 ///     thing the last-seen cache reads and the shared <c>FakeHaContext</c> does not model.
 /// </summary>
 /// <remarks>
-///     The states are built by round-tripping the wire format — including the <c>+00:00</c> offset Home Assistant
-///     actually publishes — rather than by constructing <see cref="EntityState"/> directly. That exercises the same
-///     deserialisation the real client uses, which matters here more than usual: the whole module turns on those
-///     timestamps arriving as the instants Home Assistant meant.
+///     States go in through the wire format, offset and all, so the timestamps arrive by the same deserialisation
+///     the real client uses. This module turns on those instants being right.
 /// </remarks>
 internal sealed class StampedHaContext : IHaContext
 {
@@ -48,7 +46,7 @@ internal sealed class StampedHaContext : IHaContext
 		_states[entityId] = json.Deserialize<EntityState>()!;
 	}
 
-	/// <summary>Puts an entity in the house with no timestamp at all, which Home Assistant never actually does.</summary>
+	/// <summary>Puts an entity in the house with no timestamp, which Home Assistant never actually does.</summary>
 	public void SetWithoutStamp(string entityId, string state)
 	{
 		JsonElement json = JsonSerializer.SerializeToElement(new
@@ -68,44 +66,33 @@ internal sealed class StampedHaContext : IHaContext
 			Set(entityId, _states[entityId].State ?? "on", startedAt, DeviceClassOf(entityId));
 	}
 
-	/// <summary>Removes an entity, as Home Assistant does when a device is deleted.</summary>
 	public void Remove(string entityId) => _states.Remove(entityId);
 
 	/// <summary>Fires a raw Home Assistant event, for the <c>homeassistant_start</c> path.</summary>
 	public void FireEvent(string eventType) => _events.OnNext(new Event { EventType = eventType });
 
-	/// <summary>The device class an entity was set up with, so a restart can preserve it.</summary>
 	public string? DeviceClassOf(string entityId) => _states.TryGetValue(entityId, out EntityState? state)
 		? state.AttrString("device_class")
 		: null;
 
-	/// <inheritdoc/>
 	public IObservable<StateChange> StateAllChanges() => _changes;
 
-	/// <inheritdoc/>
 	public EntityState? GetState(string entityId) => _states.GetValueOrDefault(entityId);
 
-	/// <inheritdoc/>
 	public IReadOnlyList<Entity> GetAllEntities() => [.. _states.Keys.Select(id => new Entity(this, id))];
 
-	/// <inheritdoc/>
 	public void CallService(string domain, string service, ServiceTarget? target = null, object? data = null) =>
 		Calls.Add($"{domain}.{service}");
 
-	/// <inheritdoc/>
 	public Task<JsonElement?> CallServiceWithResponseAsync(string domain, string service, ServiceTarget? target = null, object? data = null) =>
 		Task.FromResult<JsonElement?>(null);
 
-	/// <inheritdoc/>
 	public Area? GetAreaFromEntityId(string entityId) => null;
 
-	/// <inheritdoc/>
 	public Entity Entity(string entityId) => new(this, entityId);
 
-	/// <inheritdoc/>
 	public EntityRegistration? GetEntityRegistration(string entityId) => null;
 
-	/// <inheritdoc/>
 	public void SendEvent(string eventType, object? data) => Calls.Add($"event:{eventType}");
 
 	/// <summary>Home Assistant's wire format for a timestamp, offset and all.</summary>

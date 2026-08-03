@@ -8,18 +8,11 @@ namespace AdaptiveLighting.Tests.Lighting;
 /// <summary>
 ///     How a value is written into a sentence, and how it comes back.
 /// </summary>
-/// <remarks>
-///     The whole case for sentences is that a room's behaviour should reread itself cold to somebody who has
-///     forgotten the vocabulary. "600 s" fails that and "10 min" passes it, so the writing rules are the feature
-///     rather than a detail of the markup — and a token that says "10 min" while carrying <c>10</c> would set a
-///     ten-second timeout with nothing on screen looking wrong. Both halves are asserted here.
-/// </remarks>
 [TestClass]
 public sealed class TokenFormatTests
 {
 	// ===================== durations =====================
 
-	/// <summary>The unit ladder: seconds, then minutes, then hours, each as soon as it is the exact one.</summary>
 	[TestMethod]
 	public void A_Duration_Is_Written_In_The_Largest_Unit_That_Stays_Exact()
 	{
@@ -32,9 +25,6 @@ public sealed class TokenFormatTests
 		Assert.AreEqual("2 h", TokenFormat.Duration(7200));
 	}
 
-	/// <summary>
-	///     Exactness before brevity: a value somebody set is shown back to them, not rounded to a nicer one.
-	/// </summary>
 	[TestMethod]
 	public void A_Duration_That_Does_Not_Divide_Keeps_Its_Remainder()
 	{
@@ -43,7 +33,6 @@ public sealed class TokenFormatTests
 		Assert.AreEqual("1 h 1 min 1 s", TokenFormat.Duration(3661));
 	}
 
-	/// <summary>A timeout cannot run backwards, and a sentence should not offer to read as though it could.</summary>
 	[TestMethod]
 	public void A_Duration_Of_Nothing_Or_Less_Is_Zero_Seconds()
 	{
@@ -51,7 +40,6 @@ public sealed class TokenFormatTests
 		Assert.AreEqual("0 s", TokenFormat.Duration(-30));
 	}
 
-	/// <summary>The settings the schema keeps in minutes go through the same ladder.</summary>
 	[TestMethod]
 	public void Minutes_Reach_The_Same_Words_As_Seconds()
 	{
@@ -61,7 +49,6 @@ public sealed class TokenFormatTests
 
 	// ===================== proportions and quantities =====================
 
-	/// <summary>A number, a space, a percent sign — the SI convention and the shipped UI's own habit.</summary>
 	[TestMethod]
 	public void A_Proportion_Is_Written_With_Its_Sign()
 	{
@@ -71,7 +58,7 @@ public sealed class TokenFormatTests
 		Assert.AreEqual("50 %", TokenFormat.PercentFromFraction(0.5), "the schema's 0-1 factors convert");
 	}
 
-	/// <summary>A space before the unit, except the degree sign, which typography sets tight.</summary>
+	// The degree sign sets tight. Every other unit takes a space.
 	[TestMethod]
 	public void A_Quantity_Carries_Its_Unit_The_Way_A_Reader_Expects()
 	{
@@ -84,13 +71,7 @@ public sealed class TokenFormatTests
 
 	// ===================== the round trip =====================
 
-	/// <summary>
-	///     The one failure this whole layer exists to prevent: words and carried value disagreeing.
-	/// </summary>
-	/// <remarks>
-	///     A shortlist that wrote "10 min" and handed back <c>10</c> would set a ten-second timeout, and every
-	///     surface in the app would look correct while the room went dark eight seconds after someone walked in.
-	/// </remarks>
+	// A shortlist that writes "10 min" and hands back 10 sets a ten-second timeout, and every surface looks right.
 	[TestMethod]
 	public void What_A_Choice_Says_And_What_It_Carries_Mean_The_Same_Thing()
 	{
@@ -106,7 +87,6 @@ public sealed class TokenFormatTests
 			"the schema stores a 0-1 factor, so the edit has to offer one");
 	}
 
-	/// <summary>Minutes-shaped settings come back as minutes without the page doing arithmetic.</summary>
 	[TestMethod]
 	public void An_Edit_Reads_Back_As_Minutes_For_The_Settings_Stored_That_Way()
 	{
@@ -115,7 +95,6 @@ public sealed class TokenFormatTests
 		Assert.AreEqual(120, new SentenceEdit("k", TokenKind.Duration, twoHours.Value).Minutes);
 	}
 
-	/// <summary>A toggle carries a yes/no that survives the trip through a string.</summary>
 	[TestMethod]
 	public void An_Edit_Reads_Back_As_A_Flag()
 	{
@@ -124,7 +103,6 @@ public sealed class TokenFormatTests
 		Assert.IsFalse(new SentenceEdit("k", TokenKind.Toggle, "").Flag, "nonsense is not truth");
 	}
 
-	/// <summary>A choice built from an enum comes back as that enum's member.</summary>
 	[TestMethod]
 	public void An_Edit_Reads_Back_As_An_Enum_Member()
 	{
@@ -139,16 +117,8 @@ public sealed class TokenFormatTests
 
 	// ===================== culture =====================
 
-	/// <summary>
-	///     The house this runs in is Norwegian, and <c>nb-NO</c> writes decimals with a comma.
-	/// </summary>
-	/// <remarks>
-	///     Two things would break if formatting followed the current culture. The words would read as typos —
-	///     "12,5 %" inside an otherwise English sentence — and, far worse, the carried value would stop
-	///     round-tripping: written "0,5" on the host and parsed back with an invariant parser, a half becomes a
-	///     five, and the warning dim goes to 500 %. Written down as a test because it is invisible on the
-	///     developer's machine and certain on the owner's.
-	/// </remarks>
+	// nb-NO writes decimals with a comma. Follow the current culture and "0,5" parses back as five, so the
+	// warning dim goes to 500 %. Invisible on the developer's machine, certain on the owner's.
 	[TestMethod]
 	public void Values_Are_Written_And_Carried_Invariantly_Whatever_The_Machine_Speaks()
 	{
