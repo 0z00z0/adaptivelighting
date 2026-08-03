@@ -12,26 +12,13 @@
 *@
 
 <div class="comm-strip" role="list" aria-label="What setting up found">
-	<div class="comm-fact" role="listitem">
-		<div class="n">@Rooms</div>
-		<div class="w">@(Rooms == 1 ? "room" : "rooms")</div>
-	</div>
-	<div class="comm-fact" role="listitem">
-		<div class="n">@Lights</div>
-		<div class="w">@(Lights == 1 ? "light" : "lights")</div>
-	</div>
-	<div class="comm-fact" role="listitem">
-		<div class="n">@Motion</div>
-		<div class="w">motion</div>
-	</div>
-	<div class="comm-fact" role="listitem">
-		<div class="n">@LightLevel</div>
-		<div class="w">light-level</div>
-	</div>
-	<div class="comm-fact" role="listitem">
-		<div class="n">@People</div>
-		<div class="w">@(People == 1 ? "person" : "people")</div>
-	</div>
+	@foreach ((int Count, string Word) fact in Facts)
+	{
+		<div class="comm-fact" role="listitem">
+			<div class="n">@fact.Count</div>
+			<div class="w">@fact.Word</div>
+		</div>
+	}
 
 	@* Absent, not zeroed, for a house with no select. A chip reading "— house mode" would invent a missing
 	   thing out of a house that simply has none, which is the cabin this board has to pass through cleanly. *@
@@ -77,4 +64,19 @@
 	/// </remarks>
 	[Parameter]
 	public string? HouseMode { get; set; }
+
+	/// <summary>The five counted facts, in reading order, each with the word that agrees with its number.</summary>
+	/// <remarks>
+	///     A list rather than five near-identical blocks of markup: they differed only in a number and a noun, and
+	///     three of them carried their own inline plural ternary. The mode chip stays written out below, because it
+	///     genuinely has different markup — a glyph and a name rather than a count.
+	/// </remarks>
+	private IReadOnlyList<(int Count, string Word)> Facts =>
+	[
+		(Rooms, Rooms == 1 ? "room" : "rooms"),
+		(Lights, Lights == 1 ? "light" : "lights"),
+		(Motion, "motion"),
+		(LightLevel, "light-level"),
+		(People, People == 1 ? "person" : "people")
+	];
 }

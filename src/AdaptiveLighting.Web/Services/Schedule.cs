@@ -22,6 +22,12 @@ public static class Schedule
 	///     authority and no select is a document the engine runs entirely off its own schedule — and a page that
 	///     read the authority alone would announce that start times were dead while the engine was still obeying
 	///     them.
+	///     <para>
+	///         Tested through <see cref="PeriodSelectConfig.EntityId"/> and not the raw <c>Entity</c>, so this asks
+	///         the identical question <see cref="PeriodSelectReader.For"/> asks. <c>Entity.Length: &gt; 0</c> accepts
+	///         an entity of nothing but spaces, which is precisely the document where the two would have answered
+	///         differently.
+	///     </para>
 	/// </remarks>
 	/// <param name="global">Supplies <see cref="GlobalConfig.PeriodSelect"/>.</param>
 	/// <exception cref="ArgumentNullException"><paramref name="global"/> is <c>null</c>.</exception>
@@ -29,7 +35,7 @@ public static class Schedule
 	{
 		ArgumentNullException.ThrowIfNull(global);
 
-		return global.PeriodSelect is { Authority: PeriodAuthority.HomeAssistant, Entity.Length: > 0 };
+		return global.PeriodSelect is { Authority: PeriodAuthority.HomeAssistant, EntityId: not null };
 	}
 
 	/// <summary>

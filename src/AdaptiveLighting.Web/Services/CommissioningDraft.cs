@@ -48,12 +48,6 @@ public sealed class CommissioningDraft
 	/// </remarks>
 	public bool? KeepHouseMode { get; private set; }
 
-	/// <summary>The rooms switched on, by the key <see cref="RoomKey"/> builds.</summary>
-	public IReadOnlyCollection<string> PickedRooms => _picked;
-
-	/// <summary>The people toggled out of the house, by entity id.</summary>
-	public IReadOnlyCollection<string> DroppedPersons => _dropped;
-
 	/// <summary>How many rooms are switched on — the number the commit button counts.</summary>
 	public int PickedCount => _picked.Count;
 

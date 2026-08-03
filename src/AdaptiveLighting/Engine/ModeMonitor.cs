@@ -225,12 +225,6 @@ public sealed class ModeMonitor : IDisposable
 	}
 
 	/// <summary>
-	///     The first option (in list order) any of whose <see cref="HouseModeOptionConfig.ActivateWhileOn"/> entities
-	///     is currently on, or <c>null</c> when none is.
-	/// </summary>
-	private HouseModeOptionConfig? ActivatedOption => ActivatedNow?.Option;
-
-	/// <summary>
 	///     What is forcing the effective mode, or <c>null</c> when the select's own value is the whole story.
 	/// </summary>
 	/// <remarks>
@@ -279,7 +273,7 @@ public sealed class ModeMonitor : IDisposable
 	///     wins over the select's value, else the select decides exactly as before. Empty ActivateWhileOn lists
 	///     leave this equal to the select-standing option, so the mode is behaviour-neutral without them.
 	/// </summary>
-	private HouseModeOptionConfig? EffectiveOption => ActivatedOption ?? CurrentOption;
+	private HouseModeOptionConfig? EffectiveOption => ActivatedNow?.Option ?? CurrentOption;
 
 	/// <summary>The kind of the effective option; <see cref="ModeKind.Normal"/> when nothing classifies.</summary>
 	public ModeKind ActiveKind => EffectiveOption?.Kind ?? ModeKind.Normal;
@@ -514,7 +508,7 @@ public sealed class ModeMonitor : IDisposable
 		// fact two ways. It is still passed as a property, not concatenated, so a structured sink keeps it whole.
 		_logger.LogInformation(
 			"{ForcedMode} The house-mode select reads '{Select}' and is being overridden — this is not a presence departure.",
-			forced.Describe(), CurrentModeValue ?? "(nothing)");
+			sentence, CurrentModeValue ?? "(nothing)");
 	}
 
 	// Auto-away by inactivity: any option with ActivateAfterNoMotionMinutes watches the house-wide motion union and,

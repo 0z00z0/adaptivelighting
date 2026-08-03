@@ -656,14 +656,7 @@ else
 		// degradation FloorGrouping already specifies, so the failure mode is a flat board — the lanes are what
 		// somebody came here for, and refusing to draw them because floors were unavailable would trade the
 		// whole page for a decoration.
-		try
-		{
-			_groups = FloorGrouping.Group(lanes, lane => lane.AreaId, Catalog.AreaRegistry);
-		}
-		catch (InvalidOperationException)
-		{
-			_groups = lanes.Count == 0 ? [] : [new FloorGroup<BoardLane>(null, lanes)];
-		}
+		_groups = FloorGrouping.GroupOrFlat(lanes, lane => lane.AreaId, Catalog.AreaRegistry);
 
 		ReadSchedule();
 	}

@@ -76,6 +76,40 @@ public static class FloorGrouping
 		return [.. floored, new FloorGroup<T>(null, floorless)];
 	}
 
+	/// <summary>
+	///     <see cref="Group"/>, degrading to one unnamed group when the registry cannot answer at all.
+	/// </summary>
+	/// <remarks>
+	///     <b>A flat table beats no table, and that is a policy rather than a catch.</b> A registry that has not
+	///     connected throws instead of answering, and each of the three screens that group rooms had written the same
+	///     <c>try</c>/<c>catch</c> around <see cref="Group"/> over its own <typeparamref name="T"/> — three copies of
+	///     one decision, so a fourth surface would get it subtly wrong or forget it and take the page down over a
+	///     dropped connection. The degradation rule already lives in this class; only its failure case was outside it.
+	/// </remarks>
+	/// <typeparam name="T">Whatever the screen is showing.</typeparam>
+	/// <param name="items">The things to group.</param>
+	/// <param name="areaIdOf">The area id of one item, or <c>null</c> when it has none.</param>
+	/// <param name="registry">Where the floor of an area comes from. May be unreachable.</param>
+	/// <returns>The groups, or one unnamed group holding everything when the floors cannot be read.</returns>
+	/// <exception cref="ArgumentNullException">Any argument is <c>null</c>.</exception>
+	public static IReadOnlyList<FloorGroup<T>> GroupOrFlat<T>(
+		IEnumerable<T> items,
+		Func<T, string?> areaIdOf,
+		IAreaRegistry registry)
+	{
+		ArgumentNullException.ThrowIfNull(items);
+
+		try
+		{
+			return Group(items, areaIdOf, registry);
+		}
+		catch (InvalidOperationException)
+		{
+			List<T> all = [.. items];
+			return all.Count == 0 ? [] : [new FloorGroup<T>(null, all)];
+		}
+	}
+
 	private static AreaFloor? FloorOf<T>(T item, Func<T, string?> areaIdOf, IAreaRegistry registry) =>
 		areaIdOf(item) is { Length: > 0 } areaId ? registry.FloorOf(areaId) : null;
 }

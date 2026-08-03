@@ -88,7 +88,7 @@
 		@if (!IsAvailable && IsReady)
 		{
 			<div class="notice bad periodselect-warning">
-				<strong>Home Assistant doesn't know <code>@Select!.Entity</code>.</strong>
+				<strong>Home Assistant doesn't know <code>@Select!.EntityId</code>.</strong>
 				<span>@UnavailableNote</span>
 			</div>
 		}
@@ -114,7 +114,7 @@
 			</div>
 		}
 
-		@if (LiveValues.Count == 0)
+		@if (_liveValues.Count == 0)
 		{
 			<div class="empty">
 				@if (IsReady)
@@ -130,7 +130,7 @@
 		else
 		{
 			<div class="periodselect-rows">
-				@foreach (string live in LiveValues)
+				@foreach (string live in _liveValues)
 				{
 					@* Captured per iteration: the handlers below outlive the loop, and a closure over the loop
 					   variable would map every row to whichever option happened to be last. *@
@@ -275,7 +275,7 @@
 	///     and <c>PeriodSelectReader.For</c> builds nothing without an entity — so an authority radio over a blank
 	///     entity would be a control with no effect at all.
 	/// </remarks>
-	private bool HasEntity => Select?.Entity is { Length: > 0 };
+	private bool HasEntity => Select?.EntityId is not null;
 
 	/// <summary>Which side currently owns the time of day.</summary>
 	private PeriodAuthority Authority => Select?.Authority ?? PeriodAuthority.AdaptiveLighting;
@@ -284,23 +284,27 @@
 	private IReadOnlyList<PeriodSelectOptionConfig> Options => Select?.Options ?? [];
 
 	/// <summary>The helper's live options, blank-free and de-duplicated the way every value here is compared.</summary>
-	private List<string> LiveValues
-	{
-		get
-		{
-			List<string> values = [];
+	/// <remarks>
+	///     <para>
+	///         Resolved once per parameter set rather than on each read. It was a property running a nested-loop
+	///         de-dupe, and the markup reaches it a dozen times per render — directly, and again through
+	///         <see cref="Shortfall"/>, <see cref="Orphans"/> and <see cref="UnmappedLiveValues"/>, the last of which
+	///         is read twice inside the orphan loop without depending on the orphan.
+	///     </para>
+	///     <para>
+	///         Safe to cache because it is a pure function of the <see cref="LiveOptions"/> parameter. The lists that
+	///         read <i>it</i> stay properties, because they also read <see cref="Options"/>, which this component
+	///         mutates between renders — caching those would serve a stale table after an edit.
+	///     </para>
+	/// </remarks>
+	private List<string> _liveValues = [];
 
-			foreach (string live in LiveOptions.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()))
-				if (!values.Any(existing => Eq(existing, live)))
-					values.Add(live);
-
-			return values;
-		}
-	}
+	/// <inheritdoc/>
+	protected override void OnParametersSet() => _liveValues = HouseModeSync.Clean(LiveOptions);
 
 	/// <summary>Live options no mapping names yet — what an orphan can be moved onto in one pick.</summary>
 	private List<string> UnmappedLiveValues =>
-		[.. LiveValues.Where(value => Find(value) is null)];
+		[.. _liveValues.Where(value => Find(value) is null)];
 
 	/// <summary>
 	///     Stored mappings the helper no longer offers: the rename case.
@@ -315,7 +319,7 @@
 	{
 		get
 		{
-			List<string> live = LiveValues;
+			List<string> live = _liveValues;
 
 			return live.Count == 0
 				? []
@@ -337,7 +341,7 @@
 		&& Select?.PeriodFor(ActiveValue) is not { Length: > 0 };
 
 	/// <summary>How many live options cannot be mapped, because the schedule has fewer periods than the helper has options.</summary>
-	private int Shortfall => Math.Max(0, LiveValues.Count - Periods.Count);
+	private int Shortfall => Math.Max(0, _liveValues.Count - Periods.Count);
 
 	/// <summary>Whether the helper stands on this option right now.</summary>
 	private bool IsActive(string value) => ActiveValue is { Length: > 0 } && Eq(ActiveValue, value);
@@ -370,9 +374,26 @@
 			.. Periods
 				.Select(period => period.Name)
 				.Where(name => !string.IsNullOrWhiteSpace(name))
-				.Where(name => !taken.Any(other => Eq(other, name)))
+				.Where(name => !taken.Any(other => NamesPeriod(name, other)))
 		];
 	}
+
+	/// <summary>
+	///     Whether a mapping's stored period text names the schedule period called <paramref name="periodName"/>.
+	/// </summary>
+	/// <remarks>
+	///     <b>Trims the mapping's side only, because that is what the document does.</b>
+	///     <see cref="ConfigValidator"/>, <see cref="Schedule.NamedBySelect"/> and
+	///     <c>CircadianCalculator.OverriddenPeriod</c> all match a trimmed <c>Option.Period</c> against a raw
+	///     <c>TimePeriodConfig.Name</c>. This editor used its own <see cref="Eq"/>, which trims both — so a period
+	///     named <c>"night "</c> mapped to <c>"night"</c> read as an ordinary valid choice here while the validator
+	///     refused the whole document and the engine quietly fell back to the clock. An editor that disagrees with
+	///     the validator about what it just accepted is worse than one that offers less.
+	/// </remarks>
+	/// <param name="periodName">A period's name, exactly as the schedule carries it.</param>
+	/// <param name="chosen">A mapping's stored period text.</param>
+	private static bool NamesPeriod(string? periodName, string? chosen) =>
+		string.Equals(periodName, chosen?.Trim(), StringComparison.OrdinalIgnoreCase);
 
 	/// <summary>Whether a stored choice names a period the schedule no longer has, so the dropdown must still show it.</summary>
 	/// <remarks>
@@ -380,7 +401,7 @@
 	///     dropdown that had quietly reset itself would leave the refusal with nothing on screen to explain it.
 	/// </remarks>
 	private bool IsDeadPeriod(string chosen) =>
-		chosen is { Length: > 0 } && !Periods.Any(period => Eq(period.Name, chosen));
+		chosen is { Length: > 0 } && !Periods.Any(period => NamesPeriod(period.Name, chosen));
 
 	/// <summary>What the radio's help line says, which is a different sentence for each direction.</summary>
 	private string AuthorityHelp => Authority is PeriodAuthority.HomeAssistant
@@ -404,7 +425,7 @@
 	{
 		get
 		{
-			int options = LiveValues.Count;
+			int options = _liveValues.Count;
 			int periods = Periods.Count;
 			string shortfall = Shortfall == 1 ? "one of them has" : $"{Shortfall} of them have";
 

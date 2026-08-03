@@ -111,17 +111,12 @@
 						@if (row.Resolved is { } resolved)
 						{
 							<div class="room-gear">
-								@foreach (string entityId in resolved.Lights)
+								@foreach ((string Modifier, IReadOnlyList<string> Ids) kind in Gear(resolved))
 								{
-									<span class="gchip gchip-light"><span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code></span>
-								}
-								@foreach (string entityId in resolved.MotionSensors)
-								{
-									<span class="gchip gchip-motion"><span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code></span>
-								}
-								@foreach (string entityId in resolved.LuxSensors)
-								{
-									<span class="gchip gchip-lux"><span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code></span>
+									@foreach (string entityId in kind.Ids)
+									{
+										<span class="gchip @kind.Modifier"><span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code></span>
+									}
 								}
 							</div>
 						}
@@ -253,4 +248,20 @@
 
 	/// <summary>Home Assistant's name for an entity, falling back to the id it cannot name.</summary>
 	private string Name(string entityId) => Catalog.FriendlyNameOf(entityId) ?? entityId;
+
+	/// <summary>
+	///     A room's discovered hardware as the unfold draws it: each kind with the chip modifier that colours it.
+	/// </summary>
+	/// <remarks>
+	///     One loop over three kinds rather than three loops differing in a single token. A fourth kind of sensor
+	///     becomes a row in this list instead of a fourth block of markup that has to be kept identical to the
+	///     others by eye.
+	/// </remarks>
+	/// <param name="resolved">What discovery made of the room.</param>
+	private static (string Modifier, IReadOnlyList<string> Ids)[] Gear(ResolvedArea resolved) =>
+	[
+		("gchip-light", resolved.Lights),
+		("gchip-motion", resolved.MotionSensors),
+		("gchip-lux", resolved.LuxSensors)
+	];
 }

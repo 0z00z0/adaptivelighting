@@ -5902,13 +5902,7 @@ h1[tabindex="-1"]:focus {
 	line-height: 1.15;
 }
 
-.comm-fact .w {
-	font-size: var(--text-xs);
-	font-weight: 700;
-	letter-spacing: var(--label-track);
-	text-transform: uppercase;
-	color: var(--muted);
-}
+/* .comm-fact .w is styled with the other micro-labels further down this block. */
 
 .comm-fact.mode {
 	display: flex;
@@ -6025,11 +6019,8 @@ h1[tabindex="-1"]:focus {
 	cursor: pointer;
 }
 
-.sheet-actions button.primary {
-	background: var(--accent);
-	border-color: var(--accent);
-	color: var(--accent-ink);
-}
+/* .sheet-actions button.primary was here, restating background/border-color/color from button.primary
+   above. Same element, same three declarations, no override — deleted rather than kept in step. */
 
 .comm-sheet .smallprint,
 .commit-after .smallprint,
@@ -6038,6 +6029,10 @@ h1[tabindex="-1"]:focus {
 	color: var(--muted);
 }
 
+/* The wizard's micro-label. Written out twice inside this block — once for the findings strip, once for the
+   sheets and legend — as byte-identical declarations 25 lines apart. The roll-call column heads are the same
+   recipe at slightly different values and are deliberately still their own rule, above. */
+.comm-fact .w,
 .comm-sheet .lab,
 .comm-label .lab,
 .legend .lab {
@@ -6115,6 +6110,9 @@ h1[tabindex="-1"]:focus {
 	padding: var(--space-3) var(--space-4) var(--space-1);
 }
 
+/* NOT folded into the shared micro-label rule below, though it is the same recipe. This hardcodes 10.5px and
+   0.12em where the tokens are 11px and 0.14em, so adopting them is a real change to these column heads rather
+   than a no-op tidy — and it has not been looked at. Left as it renders today; see the follow-up. */
 .comm-cols span {
 	font-size: 10.5px;
 	letter-spacing: 0.12em;
@@ -6275,10 +6273,9 @@ h1[tabindex="-1"]:focus {
 	cursor: pointer;
 }
 
-.bigbtn:disabled {
-	opacity: 0.4;
-	cursor: default;
-}
+/* No .bigbtn:disabled. It set opacity 0.4 where button:disabled sets 0.45, which made the commit button the
+   one disabled control in the app that faded differently from every other one. .bigbtn carries the size
+   deltas only; the disabled look is the app's. */
 
 .commit-after .smallprint {
 	display: block;

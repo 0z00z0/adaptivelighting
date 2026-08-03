@@ -1274,10 +1274,10 @@ public static class ActivityView
 	///         a build that predates the field carries <c>null</c>, and <c>null</c> means say what this page always
 	///         said — an older payload cannot support "somebody is home" any better than it supports the opposite.
 	///     </para>
-	/// </remarks>
-	/// <remarks>
-	///     Internal rather than private because <see cref="RoomFacts"/> says it too, and the room page and the
-	///     timeline naming one cause two ways is the failure this whole class of field exists to stop.
+	///     <para>
+	///         Internal rather than private because <see cref="RoomFacts"/> says it too, and the room page and the
+	///         timeline naming one cause two ways is the failure this whole class of field exists to stop.
+	///     </para>
 	/// </remarks>
 	/// <param name="snapshot">A report whose away gate is shut over an occupied house.</param>
 	/// <exception cref="ArgumentNullException"><paramref name="snapshot"/> is <c>null</c>.</exception>

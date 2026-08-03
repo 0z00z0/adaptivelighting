@@ -1040,13 +1040,20 @@ else
 		// Through InForceNow, not InForceAt: under Home Assistant's period authority the engine stops placing
 		// periods by the clock altogether, and a badge that went on doing it would mark the row this room is not
 		// running.
+		// The select is read only when it is allowed to decide. This runs on the one-second ticker, and under the
+		// default authority InForceNow discards the value immediately — so an unguarded read was a Home Assistant
+		// lookup per second per open room page, thrown away. ModeService.PeriodSelectValue already guards it this way.
 		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
+		string? selectValue = Schedule.HomeAssistantDecides(_document.Global)
+			? Catalog.CurrentStateOf(_document.Global.PeriodSelect?.EntityId)
+			: null;
+
 		_activePeriod = Schedule.InForceNow(
 			_document.Periods,
 			_document.Global,
 			new SunTimes(sunrise, sunset),
 			TimeOnly.FromDateTime(_now.LocalDateTime),
-			Catalog.CurrentStateOf(_document.Global.PeriodSelect?.EntityId));
+			selectValue);
 
 		_liveLux = _preview.Resolved is { } resolved ? Catalog.LuxIn(resolved, _document.Global) : null;
 	}

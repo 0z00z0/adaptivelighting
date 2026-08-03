@@ -263,9 +263,12 @@
 		// whether the dropdown is what decided it. The badge's hover is the only thing that needs the second.
 		string? value = Catalog.CurrentStateOf(Global.PeriodSelect?.EntityId);
 
-		_namedBySelect = Schedule.NamedBySelect(Periods, Global, value) is not null;
+		// Resolved once and kept. InForceNow is NamedBySelect ?? InForceAt, so asking both was asking the same
+		// question twice and throwing the first answer away to keep a bool about it.
+		TimePeriodConfig? named = Schedule.NamedBySelect(Periods, Global, value);
+		_namedBySelect = named is not null;
 
-		return Schedule.InForceNow(Periods, Global, sun, now, value);
+		return named ?? Schedule.InForceAt(Periods, sun, now);
 	}
 
 	/// <summary>The collapsed header's name: the period's own, or a placeholder for an unnamed row.</summary>

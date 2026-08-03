@@ -39,7 +39,6 @@ public sealed record Verdict(string Text, VerdictTone Tone);
 /// <param name="Name">The room's display name, as every other surface says it.</param>
 /// <param name="LightCount">How many lights the room would command.</param>
 /// <param name="MotionCount">How many motion sensors it resolves.</param>
-/// <param name="LuxCount">How many illuminance sensors it resolves.</param>
 /// <param name="Notes">The row's verdict chips, worst first. Empty means the row says <see cref="CommissioningVerdicts.ReadyWord"/>.</param>
 /// <param name="Sentences">
 ///     The room's behaviour, through <see cref="AreaSentences.ForArea"/> — the real token machinery, rendered
@@ -52,7 +51,6 @@ public sealed record CommissioningRow(
 	string Name,
 	int LightCount,
 	int MotionCount,
-	int LuxCount,
 	IReadOnlyList<Verdict> Notes,
 	IReadOnlyList<Sentence> Sentences,
 	ResolvedArea? Resolved);
@@ -167,9 +165,20 @@ public static class CommissioningVerdicts
 	///     "dark", so movement alone lights the room whatever the hour.
 	/// </summary>
 	/// <remarks>
-	///     <c>IlluminanceGate</c>'s own rule: on <see cref="DarknessSource.Lux"/> a gate with nothing to read is
-	///     not a gate, and the room counts as dark. A room set to <see cref="DarknessSource.Sun"/> or
-	///     <see cref="DarknessSource.Always"/> is not missing anything by having no sensor, so it is not counted.
+	///     <para>
+	///         <c>IlluminanceGate</c>'s own rule: on <see cref="DarknessSource.Lux"/> a gate with nothing to read is
+	///         not a gate, and the room counts as dark. A room set to <see cref="DarknessSource.Sun"/> or
+	///         <see cref="DarknessSource.Always"/> is not missing anything by having no sensor, so it is not counted.
+	///     </para>
+	///     <para>
+	///         <b><see cref="DarknessSource.Either"/> counts too, and must be named explicitly here.</b> The gate
+	///         answers <c>Lux or Either</c> identically in all three of its arms, but this predicate ran against
+	///         <c>Lux</c> alone and so stayed silent about the retired value. It is not an unreachable case:
+	///         <see cref="ConfigNormalizer"/> rewrites <c>Either</c> to <c>Lux</c> <i>only on save</i> — the load
+	///         path deliberately does not, so a hand-edited or pre-2.x document reaches the board still saying
+	///         <c>Either</c>, and the board reads exactly that document. The room the line exists to warn about was
+	///         the one room it left out.
+	///     </para>
 	/// </remarks>
 	/// <param name="area">The proposed room.</param>
 	/// <param name="defaults">The document's all-rooms settings.</param>
@@ -182,7 +191,7 @@ public static class CommissioningVerdicts
 
 		return luxSensorCount == 0
 			&& area.LuxSensor is not { Length: > 0 }
-			&& area.Effective(defaults).Darkness == DarknessSource.Lux;
+			&& area.Effective(defaults).Darkness is DarknessSource.Lux or DarknessSource.Either;
 	}
 
 	/// <summary>

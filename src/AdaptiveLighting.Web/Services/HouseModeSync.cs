@@ -203,7 +203,14 @@ public static class HouseModeSync
 	}
 
 	/// <summary>Trimmed, non-blank, and named once each — the shape both sides of the comparison are read in.</summary>
-	private static List<string> Clean(IEnumerable<string?> values) =>
+	/// <remarks>
+	///     Public because the period-select panel reads a helper's live options in exactly this shape, and had grown
+	///     its own nested-loop copy of it. One reading of "what the dropdown is offering" rather than two that agree
+	///     until somebody changes the trimming in one of them.
+	/// </remarks>
+	/// <param name="values">Raw option strings as Home Assistant reported them.</param>
+	/// <exception cref="ArgumentNullException"><paramref name="values"/> is <c>null</c>.</exception>
+	public static List<string> Clean(IEnumerable<string?> values) =>
 	[
 		.. values
 			.Where(value => !string.IsNullOrWhiteSpace(value))

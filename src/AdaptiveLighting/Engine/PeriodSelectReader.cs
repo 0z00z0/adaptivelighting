@@ -43,7 +43,7 @@ public sealed class PeriodSelectReader
 		_config = config;
 		_logger = logger;
 
-		Entity = config.Entity!.Trim();
+		Entity = config.EntityId!;
 
 		// The single branch. Everything downstream reads which delegate it was handed, and nothing anywhere asks
 		// the authority a second time.
@@ -70,12 +70,17 @@ public sealed class PeriodSelectReader
 		ArgumentNullException.ThrowIfNull(global);
 		ArgumentNullException.ThrowIfNull(logger);
 
-		return global.PeriodSelect is { Entity: { Length: > 0 } } select
+		return global.PeriodSelect is { EntityId: not null } select
 			? new PeriodSelectReader(ha, select, logger)
 			: null;
 	}
 
-	/// <summary>The select's entity id. Never blank: a configuration without one produces no reader at all.</summary>
+	/// <summary>The select's entity id, trimmed. Never blank: a configuration without one produces no reader at all.</summary>
+	/// <remarks>
+	///     The guard in <see cref="For"/> tests <see cref="PeriodSelectConfig.EntityId"/> rather than the raw
+	///     <see cref="PeriodSelectConfig.Entity"/>, so an entity of nothing but spaces produces no reader instead of a
+	///     reader that would spend the run asking Home Assistant about the empty string.
+	/// </remarks>
 	public string Entity { get; }
 
 	/// <summary>

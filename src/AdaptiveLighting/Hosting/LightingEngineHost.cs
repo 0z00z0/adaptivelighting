@@ -535,7 +535,7 @@ public sealed class LightingEngineHost : IDisposable
 			KnownAreaIds(),
 			LiveSelectOptions(config.Global.HouseMode?.Entity),
 			LabelsInUse(),
-			LiveSelectOptions(config.Global.PeriodSelect?.Entity));
+			LiveSelectOptions(config.Global.PeriodSelect?.EntityId));
 	}
 
 	/// <summary>Stops the engine and drops the Home Assistant connection.</summary>

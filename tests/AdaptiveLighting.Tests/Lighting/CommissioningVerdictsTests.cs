@@ -92,6 +92,27 @@ public sealed class CommissioningVerdictsTests
 		Assert.AreEqual(0, CommissioningVerdicts.For(room, Defaults, 0, 0, 1).Count);
 	}
 
+	/// <summary>
+	///     The retired <c>Either</c> counts exactly as <c>Lux</c> does, because the engine's gate does.
+	/// </summary>
+	/// <remarks>
+	///     Not a hypothetical value to be tidy about. <c>IlluminanceGate</c> answers <c>Lux or Either</c> identically
+	///     in all three of its arms, and <c>ConfigNormalizer</c> rewrites <c>Either</c> away <b>only on save</b> — the
+	///     load path deliberately leaves a hand-edited document alone. The board reads that un-normalised document, so
+	///     a pre-2.x room saying <c>Either</c> with no sensor lights on movement all day while the line under the table
+	///     omitted it. The one room the warning exists for was the one it did not count.
+	/// </remarks>
+	[TestMethod]
+	public void The_Retired_Either_Counts_As_Dark_Just_As_Lux_Does()
+	{
+		AreaConfig legacy = new() { AreaId = "kjellerbod", Darkness = DarknessSource.Either };
+
+		Assert.IsTrue(CommissioningVerdicts.CountsAsDarkForWantOfASensor(legacy, Defaults, 0));
+
+		AreaSettings inherited = new() { Darkness = DarknessSource.Either };
+		Assert.IsTrue(CommissioningVerdicts.CountsAsDarkForWantOfASensor(new AreaConfig { AreaId = "bod" }, inherited, 0));
+	}
+
 	/// <summary>A room with a sensor, or with one pinned by hand, is not counted either.</summary>
 	[TestMethod]
 	public void A_Room_With_A_Sensor_Is_Not_Counted()

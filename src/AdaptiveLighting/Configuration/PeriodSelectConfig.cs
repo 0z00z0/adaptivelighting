@@ -104,11 +104,19 @@ public class PeriodSelectConfig
 	///     silently stop the house following the time of day.
 	/// </remarks>
 	/// <param name="value">The select's current option string.</param>
-	public string? PeriodFor(string? value) =>
-		value is { Length: > 0 }
-			? Options.FirstOrDefault(option =>
-				string.Equals(option.Value?.Trim(), value.Trim(), StringComparison.OrdinalIgnoreCase))?.Period?.Trim()
-			: null;
+	public string? PeriodFor(string? value)
+	{
+		if (value is not { Length: > 0 })
+			return null;
+
+		// Trimmed once, outside the predicate. Inside it the needle was re-trimmed - a fresh string - for every
+		// option examined, and this runs per area per evaluation once a house follows the select.
+		string needle = value.Trim();
+
+		return Options
+			.FirstOrDefault(option => string.Equals(option.Value?.Trim(), needle, StringComparison.OrdinalIgnoreCase))
+			?.Period?.Trim();
+	}
 
 	/// <summary>
 	///     The select option standing for <paramref name="periodName"/>, or <c>null</c> when no row names it.
@@ -118,11 +126,17 @@ public class PeriodSelectConfig
 	///     a duplicate period, matching how every other name lookup in this document resolves one.
 	/// </remarks>
 	/// <param name="periodName">The period the engine's own schedule resolved.</param>
-	public string? OptionFor(string? periodName) =>
-		periodName is { Length: > 0 }
-			? Options.FirstOrDefault(option =>
-				string.Equals(option.Period?.Trim(), periodName.Trim(), StringComparison.OrdinalIgnoreCase))?.Value?.Trim()
-			: null;
+	public string? OptionFor(string? periodName)
+	{
+		if (periodName is not { Length: > 0 })
+			return null;
+
+		string needle = periodName.Trim();
+
+		return Options
+			.FirstOrDefault(option => string.Equals(option.Period?.Trim(), needle, StringComparison.OrdinalIgnoreCase))
+			?.Value?.Trim();
+	}
 }
 
 /// <summary>One select option, and the engine period it stands for.</summary>

@@ -344,7 +344,6 @@
 				AreaNaming.DisplayName(area, Catalog.AreaRegistry),
 				lights,
 				motion,
-				lux,
 				// suspectCount is 0 until the impostor sheet ships. The projection takes it as an argument rather
 				// than reaching for LightAudit here, so wiring that sheet in later is one call site, not a rewrite.
 				CommissioningVerdicts.For(area, _config.Defaults, lux, suspectCount: 0, lights),
@@ -354,16 +353,9 @@
 
 		_rows = rows;
 
-		// A registry that has not connected throws rather than answering. One unnamed group is FloorGrouping's own
-		// degradation rule, so the failure mode is a flat table — which is the thing somebody came here to operate.
-		try
-		{
-			_groups = FloorGrouping.Group(rows, row => row.AreaId, Catalog.AreaRegistry);
-		}
-		catch (InvalidOperationException)
-		{
-			_groups = rows.Count == 0 ? [] : [new FloorGroup<CommissioningRow>(null, rows)];
-		}
+		// A registry that has not connected throws rather than answering, and a flat table is the thing somebody came
+		// here to operate. The degradation is FloorGrouping's own rule, not this page's.
+		_groups = FloorGrouping.GroupOrFlat(rows, row => row.AreaId, Catalog.AreaRegistry);
 
 		_modes = HouseSentences.Modes(_config.Global.HouseMode, _config.Periods);
 		_houseModeEntity = _config.Global.HouseMode?.Entity;

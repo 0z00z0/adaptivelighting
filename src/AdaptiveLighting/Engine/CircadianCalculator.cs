@@ -232,7 +232,7 @@ public sealed class CircadianCalculator
 		// Asked before the clock is consulted at all, so the override and ActivePeriodName can never disagree about
 		// which period is in force — the caps, the reported name and the levels are one answer or none.
 		if (OverriddenPeriod() is { } forced)
-			return GetPeriodTarget(forced.Name);
+			return TargetOf(forced);
 
 		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = ResolveBoundaries();
 		if (boundaries.Count == 0)
@@ -280,8 +280,17 @@ public sealed class CircadianCalculator
 	public LightTarget? GetPeriodTarget(string periodName)
 	{
 		TimePeriodConfig? period = _periods.FirstOrDefault(p => string.Equals(p.Name, periodName, StringComparison.OrdinalIgnoreCase));
-		return period is null ? null : ToTarget(period, LevelsOf(period));
+		return period is null ? null : TargetOf(period);
 	}
+
+	/// <summary>The target of a period already in hand, without looking it up by name again.</summary>
+	/// <remarks>
+	///     <see cref="GetTarget"/> holds the resolved <see cref="TimePeriodConfig"/> the moment
+	///     <see cref="OverriddenPeriod"/> returns, and used to throw it away and ask
+	///     <see cref="GetPeriodTarget"/> to find the same object a second time. Two scans is the cheap half of the
+	///     cost; the expensive half is that the name-match rule then lived in two places on one path.
+	/// </remarks>
+	private LightTarget TargetOf(TimePeriodConfig period) => ToTarget(period, LevelsOf(period));
 
 	/// <summary>
 	///     What <paramref name="period"/> runs at in this room: the schedule's levels, with whichever of the two the

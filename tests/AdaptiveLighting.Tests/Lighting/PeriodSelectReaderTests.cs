@@ -203,6 +203,11 @@ public sealed class PeriodSelectReaderTests
 	}
 
 	/// <summary>Counts warnings, so the once-per-value tripwire can be asserted without matching on text.</summary>
+	/// <remarks>
+	///     Counts <c>Warning</c> <i>and above</i>. An equality test would let an error through uncounted, so a
+	///     regression that promoted the unmapped-value line from a warning to an error would read here as the
+	///     tripwire having gone quiet — the assertion passing for the opposite of the reason it was written.
+	/// </remarks>
 	private sealed class WarningRecorder : ILogger
 	{
 		public int Warnings { get; private set; }
@@ -213,7 +218,7 @@ public sealed class PeriodSelectReaderTests
 
 		public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
 		{
-			if (logLevel == LogLevel.Warning)
+			if (logLevel >= LogLevel.Warning)
 				Warnings++;
 		}
 

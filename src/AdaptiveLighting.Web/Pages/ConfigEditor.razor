@@ -443,13 +443,13 @@ else
 				   then it is not an offer any more — it is the thing deciding what the table above means. *@
 				<GroupFold Title="Connect existing Selection from Home Assistant (must be an Input-Select)"
 						   Description="@PeriodSelectSummary"
-						   Open="@(_config.Global.PeriodSelect?.Entity is { Length: > 0 })">
+						   Open="@(_config.Global.PeriodSelect?.EntityId is not null)">
 					<PeriodSelectPanel Global="@_config.Global"
 									   Periods="@_config.Periods"
 									   InputSelects="@_inputSelects"
 									   LiveOptions="@_livePeriodSelectOptions"
 									   ActiveValue="@_activePeriodValue"
-									   IsAvailable="@Catalog.Knows(_config.Global.PeriodSelect?.Entity)"
+									   IsAvailable="@Catalog.Knows(_config.Global.PeriodSelect?.EntityId)"
 									   IsReady="@HomeAssistantIsAnswering"
 									   EmptyNote="@EmptyNote("No dropdown helpers yet — make one in Home Assistant under Settings → Devices & services → Helpers, or type an id.")"
 									   NameResolver="@Name"
@@ -1485,8 +1485,8 @@ else
 		_liveSelectOptions = Catalog.SelectOptionsOf(_config.Global.HouseMode?.Entity);
 		_activeModeValue = Catalog.CurrentStateOf(_config.Global.HouseMode?.Entity);
 		_houseModeOptionValues = HouseModeOptionValues();
-		_livePeriodSelectOptions = Catalog.SelectOptionsOf(_config.Global.PeriodSelect?.Entity);
-		_activePeriodValue = Catalog.CurrentStateOf(_config.Global.PeriodSelect?.Entity);
+		_livePeriodSelectOptions = Catalog.SelectOptionsOf(_config.Global.PeriodSelect?.EntityId);
+		_activePeriodValue = Catalog.CurrentStateOf(_config.Global.PeriodSelect?.EntityId);
 		_homeLocation = HomeGeo.TryRead();
 		_sensorDeviceClasses = Catalog.SensorDeviceClasses();
 
@@ -1605,14 +1605,7 @@ else
 	/// </remarks>
 	private void RegroupAreas()
 	{
-		try
-		{
-			_areaGroups = FloorGrouping.Group(_config.Areas, area => area.AreaId, Catalog.AreaRegistry);
-		}
-		catch (InvalidOperationException)
-		{
-			_areaGroups = _config.Areas.Count == 0 ? [] : [new FloorGroup<AreaConfig>(null, [.. _config.Areas])];
-		}
+		_areaGroups = FloorGrouping.GroupOrFlat(_config.Areas, area => area.AreaId, Catalog.AreaRegistry);
 
 		// Names come from the same registry read as the floors, and stale for exactly as long: until the next edit.
 		_roomNames.Clear();
@@ -2355,8 +2348,8 @@ else
 			(_config.Global.PeriodSelect ??= new PeriodSelectConfig()).Entity = value;
 		}
 
-		_livePeriodSelectOptions = Catalog.SelectOptionsOf(_config.Global.PeriodSelect?.Entity);
-		_activePeriodValue = Catalog.CurrentStateOf(_config.Global.PeriodSelect?.Entity);
+		_livePeriodSelectOptions = Catalog.SelectOptionsOf(_config.Global.PeriodSelect?.EntityId);
+		_activePeriodValue = Catalog.CurrentStateOf(_config.Global.PeriodSelect?.EntityId);
 		Revalidate();
 	}
 
@@ -2372,7 +2365,7 @@ else
 	{
 		get
 		{
-			if (_config.Global.PeriodSelect?.Entity is not { Length: > 0 } entity)
+			if (_config.Global.PeriodSelect?.EntityId is not { } entity)
 				return "not connected — the schedule's start times decide the time of day";
 
 			int mapped = _config.Global.PeriodSelect.Options.Count(option => !option.IsEmpty);
