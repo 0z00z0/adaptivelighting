@@ -75,6 +75,8 @@ public sealed class LightingConfigDocumentTests
 				MotionSensors = ["binary_sensor.outdoor_mmwave"],
 				LuxSensor = "sensor.outdoor_illuminance",
 				IgnoreWhenOn = ["binary_sensor.projector"],
+				SceneOnMotion = "scene.uteplass_ankomst",
+				SceneWhenEmpty = "scene.uteplass_natt",
 				VacancyTimeoutSeconds = 1800,
 				PreOffSeconds = 60,
 				PreOffBrightnessFactor = 0.25,
@@ -234,6 +236,8 @@ public sealed class LightingConfigDocumentTests
 		CollectionAssert.AreEqual(expected.MotionSensors, actual.MotionSensors);
 		Assert.AreEqual(expected.LuxSensor, actual.LuxSensor);
 		CollectionAssert.AreEqual(expected.IgnoreWhenOn, actual.IgnoreWhenOn);
+		Assert.AreEqual(expected.SceneOnMotion, actual.SceneOnMotion);
+		Assert.AreEqual(expected.SceneWhenEmpty, actual.SceneWhenEmpty);
 		Assert.AreEqual(expected.VacancyTimeoutSeconds, actual.VacancyTimeoutSeconds);
 		Assert.AreEqual(expected.PreOffSeconds, actual.PreOffSeconds);
 		Assert.AreEqual(expected.PreOffBrightnessFactor, actual.PreOffBrightnessFactor);
@@ -269,6 +273,8 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsNull(area.MotionSensors);
 		Assert.IsNull(area.LuxSensor);
 		Assert.IsNull(area.IgnoreWhenOn);
+		Assert.IsNull(area.SceneOnMotion);
+		Assert.IsNull(area.SceneWhenEmpty);
 		Assert.IsNull(area.VacancyTimeoutSeconds);
 		Assert.IsNull(area.PreOffSeconds);
 		Assert.IsNull(area.PreOffBrightnessFactor);
