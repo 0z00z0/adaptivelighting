@@ -636,7 +636,7 @@ else
 
 														case RoomControl.Choice:
 															<div class="seg" role="group" aria-label="@item.Label">
-																@foreach (TokenChoice option in RoomSettings.DarknessOptions)
+																@foreach (TokenChoice option in RoomSettings.ChoicesFor(item.Key))
 																{
 																	TokenChoice choice = option;
 																	<button type="button"
@@ -1659,7 +1659,7 @@ else
 	}
 
 	private bool IsCurrentChoice(string key, TokenChoice choice) =>
-		string.Equals(RoomSettings.Choice(null, _config.Defaults, key).ToString(), choice.Value, StringComparison.Ordinal);
+		string.Equals(RoomSettings.ChoiceName(null, _config.Defaults, key), choice.Value, StringComparison.Ordinal);
 
 	/// <summary>
 	///     Applies one edit from the all-rooms sentences. A key it cannot apply means the sentence and the page have
@@ -1790,7 +1790,10 @@ else
 	{
 		_setupNote = null;
 		CloseAdd();
-		_setupScope = [.. _config.Areas.Select(area => area.AreaId).OfType<string>().Where(areaId => areaId.Length > 0)];
+
+		// Opens with nothing ticked; the panel's Include all is how every room is chosen. Pre-ticking made the
+		// destructive answer the default one, on a panel whose whole job is to say what a rebuild destroys.
+		_setupScope = [];
 	}
 
 	private void CloseSetup() => _setupScope = null;

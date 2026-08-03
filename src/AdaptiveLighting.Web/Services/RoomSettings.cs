@@ -489,26 +489,32 @@ public static class RoomSettings
 			RoomControl.Fraction => TokenFormat.Percent(Shown(room, defaults, key)),
 			RoomControl.Number => TokenFormat.Number(Shown(room, defaults, key), setting.Unit),
 			RoomControl.Flag => Flag(room, defaults, key) ? "yes" : "no",
-			RoomControl.Choice => Word(Choice(room, defaults, key)),
+			RoomControl.Choice => Word(key, ChoiceName(room, defaults, key)),
 			_ => Entity(room, defaults, key) is { Length: > 0 } entity ? entity : "none"
 		};
 	}
 
-	/// <summary>The value of the one enum-valued setting, following the room's inheritance.</summary>
-	/// <remarks>
-	///     The last resort is the house's own value, never a literal. The house property is not nullable so the
-	///     pattern always matches, but a literal here would be a second copy of a default that has moved before.
-	/// </remarks>
-	public static DarknessSource Choice(AreaConfig? room, AreaSettings defaults, string key)
+	/// <summary>The shortlist a choice-typed setting offers.</summary>
+	// Keyed. This returned DarknessOptions for every choice-typed setting, which was right while darkness was the
+	// only one; the warmth setting then rendered Sensor/Sun/Always and wrote a darkness rule when picked.
+	public static IReadOnlyList<TokenChoice> ChoicesFor(string key) =>
+		string.Equals(key, nameof(AreaSettings.ColorControl), StringComparison.Ordinal)
+			? ColorControlOptions
+			: DarknessOptions;
+
+	/// <summary>The chosen member of an enum-valued setting, by name, following the room's inheritance.</summary>
+	/// <remarks>The name rather than the typed value, so one signature serves every enum-valued setting.</remarks>
+	public static string ChoiceName(AreaConfig? room, AreaSettings defaults, string key)
 	{
 		ArgumentNullException.ThrowIfNull(defaults);
 
-		return Effective(room, defaults, key) is DarknessSource source ? source : defaults.Darkness;
+		return Effective(room, defaults, key)?.ToString() ?? "";
 	}
 
-	public static string Word(DarknessSource source) =>
-		DarknessOptions.FirstOrDefault(option => string.Equals(option.Value, source.ToString(), StringComparison.Ordinal))?.Text
-		?? source.ToString();
+	/// <summary>How a choice-typed setting's current value is worded.</summary>
+	public static string Word(string key, string value) =>
+		ChoicesFor(key).FirstOrDefault(option => string.Equals(option.Value, value, StringComparison.Ordinal))?.Text
+		?? value;
 
 	/// <summary>
 	///     Applies one sentence-token edit to a room.

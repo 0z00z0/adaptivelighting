@@ -20,6 +20,12 @@
 		}
 		else
 		{
+			@* A label around the box, never a control inside one. Same shape and wording as the first-run board's. *@
+			<label class="setup-all">
+				<input type="checkbox" @bind:get="IncludesEveryRoom" @bind:set="SetIncludeAll" />
+				Include all
+			</label>
+
 			<ul class="setup-rooms">
 				@foreach (AreaConfig area in Rebuildable)
 				{
@@ -178,6 +184,21 @@
 			_ticked.Add(areaId);
 		else
 			_ticked.Remove(areaId);
+	}
+
+	/// <summary>Whether every rebuildable room is ticked. An empty list is not "all": nothing has been included.</summary>
+	private bool IncludesEveryRoom =>
+		Rebuildable.Count > 0 && Rebuildable.All(area => _ticked.Contains(area.AreaId!));
+
+	private void SetIncludeAll(bool include)
+	{
+		_ticked.Clear();
+
+		if (!include)
+			return;
+
+		foreach (AreaConfig area in Rebuildable)
+			_ticked.Add(area.AreaId!);
 	}
 
 	private void Preview()

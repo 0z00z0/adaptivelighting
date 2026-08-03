@@ -6595,3 +6595,18 @@ h1[tabindex="-1"]:focus {
 }
 
 /* ===== end colour + include all ===== */
+
+/* ===== re-setup include all ===== */
+
+/* Matches .comm-all on the first-run board, minus the margin-left:auto: this one heads a list rather than
+   sharing a row with a label. */
+.setup-all {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-bottom: var(--space-3);
+	font-size: var(--text-sm);
+	cursor: pointer;
+}
+
+/* ===== end re-setup include all ===== */
