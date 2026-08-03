@@ -202,7 +202,7 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.Darkness),
 					"How the room decides it's dark",
-					"What has to say dark before movement lights the room. Sensor never looks at the sun — and a room with no light-level sensor, or whose sensors have all stopped reporting, counts as dark and lights on movement. Sun reads the sun's height instead; Either lights on whichever says dark first. Always dark skips the check, for a windowless room.",
+					"What has to say dark before movement lights the room. Sensor never looks at the sun, and a room with no light-level sensor, or whose sensors have all stopped reporting, counts as dark and lights on movement. Sun reads the sun's height instead. Always dark skips the check, for a windowless room.",
 					RoomControl.Choice),
 				new RoomSetting(
 					nameof(AreaSettings.LuxThreshold),
