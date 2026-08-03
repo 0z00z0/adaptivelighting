@@ -31,6 +31,7 @@ namespace AdaptiveLighting.Abstractions;
 /// <param name="Forced">What holds the house on its mode when the select's value is not the answer, and <c>null</c> when nothing does. Carried, never re-derived: only the engine knows which entity it read.</param>
 /// <param name="IsHeldLit">Whether a <c>KeepLitWhenOn</c> entity is stopping the engine switching this area's lights off. <c>false</c> means nothing is; <c>null</c> from a build predating the field means the area cannot say.</param>
 /// <param name="HeldLitBy">The entity doing the holding when <paramref name="IsHeldLit"/> is <c>true</c>, and <c>null</c> otherwise.</param>
+/// <param name="SceneApplied">The room's own scene the area is sitting on, from <c>SceneOnMotion</c> or <c>SceneWhenEmpty</c>, and <c>null</c> when the engine is aiming the lights itself. Not the house's Guest scene, which <see cref="AreaState.SceneHold"/> reports.</param>
 public sealed record AreaSnapshot(
 	string AreaName,
 	AreaState State,
@@ -55,7 +56,8 @@ public sealed record AreaSnapshot(
 	bool? IsAnyoneHome = null,
 	ForcedMode? Forced = null,
 	bool? IsHeldLit = null,
-	string? HeldLitBy = null)
+	string? HeldLitBy = null,
+	string? SceneApplied = null)
 {
 	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
@@ -84,6 +86,7 @@ public sealed record AreaSnapshot(
 		Nullable.Equals(LevelsFromRoom, other.LevelsFromRoom) &&
 		Nullable.Equals(IsAnyoneHome, other.IsAnyoneHome) &&
 		Nullable.Equals(IsHeldLit, other.IsHeldLit) &&
+		string.Equals(SceneApplied, other.SceneApplied, StringComparison.Ordinal) &&
 		Forced == other.Forced;
 }
 

@@ -559,6 +559,8 @@ public sealed class AreaSetupServiceTests
 		+ (area.IgnoreWhenOnInverted is not null ? 1 : 0)
 		+ (area.KeepLitWhenOn?.Count ?? 0)
 		+ (area.KeepLitWhenOnInverted is not null ? 1 : 0)
+		+ (area.SceneOnMotion is { Length: > 0 } ? 1 : 0)
+		+ (area.SceneWhenEmpty is { Length: > 0 } ? 1 : 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>Property names that are the room's identity or its entity lists, not one of its settings.</summary>
@@ -582,6 +584,10 @@ public sealed class AreaSetupServiceTests
 		// twin, so they count as pinned rather than as overrides.
 		nameof(AreaConfig.IgnoreWhenOnInverted),
 		nameof(AreaConfig.KeepLitWhenOnInverted),
+
+		// Per-room entity choices with no twin in AreaSettings, so they are pinned entities, not overrides.
+		nameof(AreaConfig.SceneOnMotion),
+		nameof(AreaConfig.SceneWhenEmpty),
 
 		// Survives the rebuild, so it is never one of the losses.
 		nameof(AreaConfig.Enabled),

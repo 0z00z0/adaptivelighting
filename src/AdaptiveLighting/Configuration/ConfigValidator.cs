@@ -706,12 +706,36 @@ public static class ConfigValidator
 			result.AddAreaError(area.DisplayName,
 				$"AreaId '{areaId}' is not a registry area id. AreaId is the slug, not the display name. Known area ids: {string.Join(", ", knownAreaIds.Order(StringComparer.Ordinal))}.");
 
+		ValidateAreaScenes(area, knownEntityIds, result);
+
 		if (knownEntityIds is null)
 			return;
 
 		foreach (string entityId in EnumerateAreaEntities(area))
 			if (!knownEntityIds.Contains(entityId))
 				result.AddAreaError(area.DisplayName, $"Names '{entityId}', which Home Assistant does not know. Check it for typos, or remove it.");
+	}
+
+	/// <summary>The two per-room scenes. A bad one warns: the room still lights, by its own levels.</summary>
+	private static void ValidateAreaScenes(
+		AreaConfig area,
+		IReadOnlyCollection<string>? knownEntityIds,
+		ValidationResult result)
+	{
+		foreach ((string field, string? scene) in new[]
+		{
+			(nameof(AreaConfig.SceneOnMotion), area.SceneOnMotion),
+			(nameof(AreaConfig.SceneWhenEmpty), area.SceneWhenEmpty)
+		})
+		{
+			if (scene is not { Length: > 0 })
+				continue;
+
+			if (!scene.HasDomain("scene"))
+				result.AddWarning($"[{area.DisplayName}] {field} names '{scene}', which is not a scene entity, so it will never run.");
+			else if (knownEntityIds is not null && !knownEntityIds.Contains(scene))
+				result.AddWarning($"[{area.DisplayName}] {field} names '{scene}', which Home Assistant does not know. Check it for typos, or remove it.");
+		}
 	}
 
 	private static IEnumerable<string> EnumerateAreaEntities(AreaConfig area)

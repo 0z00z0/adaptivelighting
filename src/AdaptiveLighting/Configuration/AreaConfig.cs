@@ -60,6 +60,15 @@ public class AreaConfig
 	/// <summary>Read <see cref="KeepLitWhenOn"/> the other way: hold the lights on while they are <i>off</i>.</summary>
 	public bool? KeepLitWhenOnInverted { get; set; }
 
+	/// <summary>A scene run in place of this room's own levels when movement lights it.</summary>
+	// Replaces the command, never the gates: every auto-on gate is consulted first and a refusal runs nothing.
+	public string? SceneOnMotion { get; set; }
+
+	/// <summary>A scene run in place of switching this room off when it goes empty.</summary>
+	// The room settles here and stays lit, so the pre-off warning dim does not run. The leaving sweep is a
+	// different event and still switches the room off.
+	public string? SceneWhenEmpty { get; set; }
+
 	/// <summary>
 	///     Entity ids discovery must skip for this room, such as a fridge's internal illuminance sensor sitting in
 	///     the room's HA area.

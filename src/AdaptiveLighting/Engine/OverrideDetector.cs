@@ -58,7 +58,22 @@ public sealed class OverrideDetector
 
 		TimeSpan window = TimeSpan.FromSeconds(_global.SelfEchoWindowSeconds + (command.TransitionSeconds ?? 0));
 		lock (_gate)
-			_expectations[entityId] = new Expectation(command, _scheduler.Now + window);
+			_expectations[entityId] = new Expectation(command.On, _scheduler.Now + window);
+	}
+
+	/// <summary>
+	///     Declares a scene about to be run on <paramref name="entityId"/>, without saying where it will leave it.
+	/// </summary>
+	/// <remarks>
+	///     A scene's own light changes carry neither a user nor a parent, which is
+	///     <see cref="ChangeOrigin.PhysicalDevice"/>. The polarity is unknown because the scene's contents are, so
+	///     this expectation matches on or off alike, and only for the length of the window.
+	/// </remarks>
+	public void ExpectScene(string entityId, double transitionSeconds)
+	{
+		TimeSpan window = TimeSpan.FromSeconds(_global.SelfEchoWindowSeconds + transitionSeconds);
+		lock (_gate)
+			_expectations[entityId] = new Expectation(null, _scheduler.Now + window);
 	}
 
 	/// <summary>Attributes <paramref name="change"/> to an origin.</summary>
@@ -108,9 +123,10 @@ public sealed class OverrideDetector
 			}
 
 			// Kept until it expires, not consumed: one turn_on produces a burst of changes as the light settles.
-			return expectation.Command.On == (newState?.IsOn() ?? false);
+			return expectation.On is not { } on || on == (newState?.IsOn() ?? false);
 		}
 	}
 
-	private sealed record Expectation(LightCommand Command, DateTimeOffset ExpiresAt);
+	// On is null for a scene, whose contents the engine cannot read, so either polarity is its own echo.
+	private sealed record Expectation(bool? On, DateTimeOffset ExpiresAt);
 }

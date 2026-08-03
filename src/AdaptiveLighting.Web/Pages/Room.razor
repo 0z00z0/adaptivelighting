@@ -392,6 +392,30 @@ else
 											</label>
 										}
 									</SettingRow>
+
+									<SettingRow Label="Run a scene instead, on movement"
+												Help="When movement would light this room, it runs this scene instead of setting its own brightness and warmth, and leaves it alone afterwards. Everything that can refuse to light the room still refuses — the master switch, this room's switch, an empty house, sleep, too much daylight, a blocker above. A scene is what happens instead of switching on, never a reason to.">
+										<EntityPicker Value="@room.SceneOnMotion"
+													  ValueChanged="@(value => Set(() => room.SceneOnMotion = value))"
+													  Options="@_scenes"
+													  NameResolver="@Name"
+													  KnownResolver="@Catalog.Knows"
+													  NoneLabel="(this room's own brightness and warmth)"
+													  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+													  Placeholder="scene.stue_kveld" />
+									</SettingRow>
+
+									<SettingRow Label="Run a scene instead, when empty"
+												Help="When the room has been empty long enough to go off, it runs this scene and stays there — atmospheric lighting rather than darkness. The warning dim before switching off does not run, since nothing is about to go off. Leaving the house still switches the room off, and switching it off by hand still works.">
+										<EntityPicker Value="@room.SceneWhenEmpty"
+													  ValueChanged="@(value => Set(() => room.SceneWhenEmpty = value))"
+													  Options="@_scenes"
+													  NameResolver="@Name"
+													  KnownResolver="@Catalog.Knows"
+													  NoneLabel="(switch the lights off)"
+													  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+													  Placeholder="scene.stue_natt" />
+									</SettingRow>
 								}
 							</div>
 						}
@@ -737,6 +761,7 @@ else
 	private IReadOnlyList<EntityOption> _luxSensors = [];
 	private IReadOnlyList<EntityOption> _blockers = [];
 	private IReadOnlyList<EntityOption> _sunEntities = [];
+	private IReadOnlyList<EntityOption> _scenes = [];
 
 	// What the pick-by-hand lists offer. Rebuilt when the room changes, not read in a getter: each of these reads a
 	// friendly name per entity and this page redraws once a second.
@@ -832,6 +857,7 @@ else
 		_areas = Catalog.Areas(_document.Global);
 		_sunEntities = Catalog.EntitiesInDomains("sun");
 		_blockers = Catalog.EntitiesInDomains("binary_sensor", "input_boolean", "switch", "media_player");
+		_scenes = Catalog.EntitiesInDomains("scene");
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _document.Global.EffectiveMotionDeviceClasses]);
 		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_document.Global.IlluminanceDeviceClass]);
 		_lights = Catalog.EntitiesInDomains("light");

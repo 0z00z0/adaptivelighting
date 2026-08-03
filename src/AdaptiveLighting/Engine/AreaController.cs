@@ -68,6 +68,10 @@ public sealed class AreaController : IDisposable
 	// Nothing else would ever run it again, so OnTick settles it once the hold releases.
 	private bool _offHeldBack;
 
+	// The scene the area is sitting on, or null. Set by ApplyScene and cleared by Send: any light command is the
+	// engine aiming the room itself, which the scene no longer describes.
+	private string? _standingScene;
+
 	private bool _disposed;
 
 	/// <summary>Creates a controller for one resolved area.</summary>
@@ -232,7 +236,7 @@ public sealed class AreaController : IDisposable
 					ForgetDeclinedMotion();
 					Enter(AreaState.AutoActive, TransitionReason.Motion);
 					RestartVacancyTimer();
-					ApplyTarget(TransitionReason.Motion);
+					LightUp(TransitionReason.Motion);
 					return;
 
 				case AreaState.AutoVacant:
@@ -246,7 +250,7 @@ public sealed class AreaController : IDisposable
 					ForgetDeclinedMotion();
 					Enter(AreaState.AutoActive, TransitionReason.Motion);
 					RestartVacancyTimer();
-					ApplyTarget(TransitionReason.Motion);
+					LightUp(TransitionReason.Motion);
 					return;
 
 				default:
@@ -379,8 +383,10 @@ public sealed class AreaController : IDisposable
 				return;
 			}
 
-			// A mode switch is a command: retarget an active area when the kind or the mode value moved.
+			// A mode switch is a command: retarget an active area when the kind or the mode value moved. A room
+			// sitting on its own scene is not retargeted, on the same rule the tick follows.
 			if (_state == AreaState.AutoActive
+				&& _standingScene is null
 				&& (previous.ActiveKind != house.ActiveKind
 					|| !string.Equals(previous.ModeValue, house.ModeValue, StringComparison.OrdinalIgnoreCase)))
 				ApplyTarget(TransitionReason.HouseModeChanged);
@@ -413,7 +419,8 @@ public sealed class AreaController : IDisposable
 			if (_offHeldBack && HoldingLit() is null && SettleHeldBackOff())
 				return;
 
-			if (_state == AreaState.AutoActive)
+			// A standing scene is the room's look, so nothing here re-aims it.
+			if (_state == AreaState.AutoActive && _standingScene is null)
 			{
 				LightTarget? target = ResolveTarget();
 
@@ -447,6 +454,16 @@ public sealed class AreaController : IDisposable
 			return;
 		}
 
+		// Nothing is about to go off, so there is nothing to warn about and the dim would be a step to nowhere.
+		if (_area.SceneWhenEmpty is { Length: > 0 })
+		{
+			_nextChangeAt = null;
+			_nextChangeFrom = null;
+			Enter(AreaState.AutoVacant, TransitionReason.VacancyTimeout);
+			SettleEmpty(TransitionReason.VacancyTimeout);
+			return;
+		}
+
 		Enter(AreaState.PreOff, TransitionReason.VacancyTimeout);
 
 		// Armed before the dim, so the snapshot announcing PreOff already carries its own deadline.
@@ -477,7 +494,7 @@ public sealed class AreaController : IDisposable
 		_nextChangeAt = null;
 		_nextChangeFrom = null;
 		Enter(AreaState.AutoVacant, TransitionReason.PreOffElapsed);
-		TurnOff(TransitionReason.PreOffElapsed);
+		SettleEmpty(TransitionReason.PreOffElapsed);
 	}
 
 	private void OnOverrideExpired()
@@ -506,7 +523,7 @@ public sealed class AreaController : IDisposable
 				return;
 			}
 
-			TurnOff(TransitionReason.OverrideExpired);
+			SettleEmpty(TransitionReason.OverrideExpired);
 		}
 	}
 
@@ -757,7 +774,7 @@ public sealed class AreaController : IDisposable
 
 			case AreaState.AutoVacant:
 				// Where an expiring override left the area: still lit, with nothing else armed to switch it off.
-				TurnOff(TransitionReason.OverrideExpired);
+				SettleEmpty(TransitionReason.OverrideExpired);
 				return true;
 
 			default:
@@ -854,6 +871,56 @@ public sealed class AreaController : IDisposable
 		Publish(reason);
 	}
 
+	/// <summary>Lights the area for movement: its scene when it names one, otherwise the period's levels.</summary>
+	private void LightUp(TransitionReason reason)
+	{
+		if (_area.SceneOnMotion is { Length: > 0 } scene)
+		{
+			ApplyScene(scene, reason);
+			return;
+		}
+
+		ApplyTarget(reason);
+	}
+
+	/// <summary>
+	///     What this area does when it goes empty: its scene when it names one, otherwise off.
+	/// </summary>
+	/// <remarks>
+	///     The single answer to "what was this area about to do", so the off a <c>KeepLitWhenOn</c> hold refused
+	///     settles as a scene for a room that names one. The leaving sweep does not come through here: an empty
+	///     house is not a room going empty.
+	/// </remarks>
+	private void SettleEmpty(TransitionReason reason)
+	{
+		if (_area.SceneWhenEmpty is { Length: > 0 } scene)
+		{
+			ApplyScene(scene, reason);
+			return;
+		}
+
+		TurnOff(reason);
+	}
+
+	private void ApplyScene(string sceneId, TransitionReason reason)
+	{
+		RefreshDarkness();
+
+		// Declared before the call, as a command would be: the scene's own light changes carry neither a user nor
+		// a parent, which the detector reads as a hand at the switch.
+		foreach (string light in _area.Lights)
+			_detector.ExpectScene(light, TransitionSeconds());
+
+		_actuator.ActivateScene(sceneId);
+
+		_standingScene = sceneId;
+		_lastTarget = null;
+		_lastCommand = null;
+		_lastCommandAt = _scheduler.Now;
+
+		Publish(reason);
+	}
+
 	private void TurnOff(TransitionReason reason)
 	{
 		RefreshDarkness();
@@ -865,6 +932,8 @@ public sealed class AreaController : IDisposable
 
 	private void Send(LightCommand command)
 	{
+		_standingScene = null;
+
 		foreach (string light in _area.Lights)
 		{
 			// Always declared before sending: a command reaching HA before the expectation that explains it
@@ -993,7 +1062,8 @@ public sealed class AreaController : IDisposable
 			_house.IsAnyoneHome,
 			_house.Forced,
 			heldLitBy is not null,
-			heldLitBy);
+			heldLitBy,
+			_standingScene);
 	}
 
 	/// <summary>Resolves and caches the period for <paramref name="now"/>, unless that instant is already cached.</summary>

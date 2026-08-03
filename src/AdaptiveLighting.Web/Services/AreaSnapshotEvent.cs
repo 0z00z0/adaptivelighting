@@ -109,6 +109,10 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("held_lit_by")]
 	public string? HeldLitBy { get; init; }
 
+	/// <summary>The room's own scene the area is sitting on, or <c>null</c> when the engine is aiming it itself.</summary>
+	[JsonPropertyName("scene_applied")]
+	public string? SceneApplied { get; init; }
+
 	/// <summary>
 	///     Rebuilds an <see cref="AreaSnapshot"/> from the wire shape, or <c>null</c> when the payload names no
 	///     area. An unparseable enum name degrades to its zero value; nothing throws.
@@ -141,6 +145,7 @@ public sealed record AreaSnapshotEvent
 			Enum.TryParse(AutoOnBlockedBy, out AutoOnBlock block) ? block : null,
 			AutoOnBlockingEntity,
 			IsHeldLit: IsHeldLit,
-			HeldLitBy: HeldLitBy);
+			HeldLitBy: HeldLitBy,
+			SceneApplied: SceneApplied);
 	}
 }

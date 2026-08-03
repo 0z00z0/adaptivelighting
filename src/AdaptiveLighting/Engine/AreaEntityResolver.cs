@@ -31,6 +31,12 @@ public sealed record ResolvedArea(
 	/// <summary>Whether <see cref="KeepLitWhenOn"/> applies while its entities read off instead of on.</summary>
 	public bool KeepLitWhenOnInverted { get; init; }
 
+	/// <summary>A scene run in place of this area's levels when movement lights it, or <c>null</c>.</summary>
+	public string? SceneOnMotion { get; init; }
+
+	/// <summary>A scene run in place of switching this area off when it goes empty, or <c>null</c>.</summary>
+	public string? SceneWhenEmpty { get; init; }
+
 	/// <summary>How this area's warmth is commanded, with <see cref="ColorControl.Auto"/> already decided.</summary>
 	/// <remarks>
 	///     Null capability means no light could be read, which is not evidence that none has a colour temperature,
@@ -185,11 +191,17 @@ public sealed class AreaEntityResolver
 		{
 			KeepLitWhenOn = [.. area.KeepLitWhenOn ?? []],
 			IgnoreWhenOnInverted = area.IgnoreWhenOnInverted == true,
-			KeepLitWhenOnInverted = area.KeepLitWhenOnInverted == true
+			KeepLitWhenOnInverted = area.KeepLitWhenOnInverted == true,
+			SceneOnMotion = Trimmed(area.SceneOnMotion),
+			SceneWhenEmpty = Trimmed(area.SceneWhenEmpty)
 		};
 
 		return true;
 	}
+
+	// A blank scene id would reach scene.turn_on, which throws on one, from inside an area's lock.
+	private static string? Trimmed(string? entityId) =>
+		string.IsNullOrWhiteSpace(entityId) ? null : entityId.Trim();
 
 	/// <summary>Whether any of <paramref name="lights"/> advertises a colour temperature, or <c>null</c> when none said.</summary>
 	/// <remarks>
