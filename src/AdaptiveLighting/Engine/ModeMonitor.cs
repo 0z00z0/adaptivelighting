@@ -39,14 +39,13 @@ public sealed class ModeMonitor : IDisposable
 	private readonly Func<SunTimes> _sunTimes;
 	private readonly IReadOnlyCollection<string> _areaMotionSensors;
 
-	// Which sensors may start each StartsOnMotion period. A null value means any watched sensor; an empty set is a
-	// period naming rooms none of whose sensors resolved, which can never fire. Empty under Home Assistant's
-	// period authority, so the dropdown stays the only boundary.
+	// Which sensors may start each held period. A null value means any watched sensor; an empty set is a period
+	// naming rooms none of whose sensors resolved, which can never fire.
 	private readonly Dictionary<string, IReadOnlySet<string>?> _motionStartPeriods = new(StringComparer.OrdinalIgnoreCase);
 
-	// The local day each period was last entered, by whichever path entered it. Motion may not start a period the
-	// day has already seen.
-	private readonly Dictionary<string, DateOnly> _enteredOn = new(StringComparer.OrdinalIgnoreCase);
+	// Shared with every area's calculator: which periods wait for movement, and which have begun today. The only
+	// writer, and the reason the rooms and this monitor cannot disagree about whether a period has started.
+	private readonly MotionPeriodLatch _motionPeriods;
 
 	/// <summary>
 	///     Where the period the engine is running in is written down, so the next start can tell whether a boundary
@@ -109,6 +108,9 @@ public sealed class ModeMonitor : IDisposable
 	///     Whichever of <paramref name="periodSelect"/>'s two directions is live is the one this uses: its read
 	///     delegate goes into this monitor's own calculator, or this writes the select. The reader is what makes
 	///     those mutually exclusive.
+	///     <paramref name="motionPeriods"/> must be the same instance every area's calculator was built with, or the
+	///     rooms and this monitor answer differently about whether a held period has begun. Omitting it builds one
+	///     from <paramref name="periods"/>, which is what the tests and any host with a single monitor want.
 	/// </remarks>
 	public ModeMonitor(
 		IHaContext ha,
@@ -120,7 +122,8 @@ public sealed class ModeMonitor : IDisposable
 		IReadOnlyCollection<string> areaMotionSensors,
 		ILastPeriodStore? lastPeriod = null,
 		PeriodSelectReader? periodSelect = null,
-		IReadOnlyDictionary<string, IReadOnlyList<string>>? motionSensorsByArea = null)
+		IReadOnlyDictionary<string, IReadOnlyList<string>>? motionSensorsByArea = null,
+		MotionPeriodLatch? motionPeriods = null)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
@@ -132,19 +135,21 @@ public sealed class ModeMonitor : IDisposable
 		_lastPeriod = lastPeriod;
 		_periodSelect = periodSelect;
 
-		_circadian = new CircadianCalculator(periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod);
+		_motionPeriods = motionPeriods ?? MotionPeriodLatch.For(periods, global);
 
-		// The one branch the motion-start rule rests on, mirroring PeriodSelectReader's: under Home Assistant's
-		// period authority the dropdown is the boundary, so the table is left empty and motion starts nothing.
-		if (periodSelect?.ReadPeriod is null)
-			BuildMotionStartPeriods(motionSensorsByArea);
+		_circadian = new CircadianCalculator(
+			periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod, _motionPeriods.IsHeldBack);
+
+		BuildMotionStartPeriods(motionSensorsByArea);
 	}
 
+	// Only periods the latch holds. That is where the authority branch lives, so a dropdown-owned house builds no
+	// rows here and motion starts nothing.
 	private void BuildMotionStartPeriods(IReadOnlyDictionary<string, IReadOnlyList<string>>? motionSensorsByArea)
 	{
 		foreach (TimePeriodConfig period in _periods)
 		{
-			if (!period.StartsOnMotion || period.Name is not { Length: > 0 })
+			if (!_motionPeriods.Holds(period.Name))
 				continue;
 
 			if (period.StartsOnMotionAreas.Count == 0)
@@ -315,13 +320,16 @@ public sealed class ModeMonitor : IDisposable
 			_started = true;
 			_activatedAt = _scheduler.Now;
 			_lastMotionAt = _scheduler.Now;
-			_previousPeriodName = _circadian.ActivePeriodName(_scheduler.Now);
 			_startPeriodModePending = true;
 
 			// Read once: the answer is about the run that ended, and a later read finds what this run wrote over
 			// it. A file read under _gate is safe only here, before the subscriptions and the tick exist.
 			_periodAtLastRun = ReadPeriodAtLastRun();
 			_persistedPeriodName = _periodAtLastRun;
+
+			// Before ActivePeriodName: seeding may put a held period back in the table.
+			SeedPeriodLatch(_scheduler.Now);
+			_previousPeriodName = _circadian.ActivePeriodName(_scheduler.Now);
 		}
 
 		if (_global.EffectiveKillSwitchEntity is { Length: > 0 } killSwitch)
@@ -352,6 +360,7 @@ public sealed class ModeMonitor : IDisposable
 		}
 
 		AnnounceDormantModeRules();
+		AnnounceHeldPeriods();
 		SubscribePresenceResets();
 		SubscribeActivationSensors();
 		SubscribeMotion();
@@ -430,6 +439,27 @@ public sealed class ModeMonitor : IDisposable
 			_logger.LogInformation(
 				"The mode resets are dormant while Home Assistant decides the house mode; nothing here returns {Select} to Normal.",
 				houseMode.EntityId);
+	}
+
+	/// <summary>Names the periods that will not begin on the clock, and says so when the rule is stood down.</summary>
+	private void AnnounceHeldPeriods()
+	{
+		if (!_periods.Any(period => period.StartsOnMotion))
+			return;
+
+		if (_motionPeriods.HeldPeriods.Count == 0)
+		{
+			_logger.LogInformation(
+				"StartsOnMotion is dormant while Home Assistant decides the time of day; the period select is the only "
+				+ "boundary and movement does not start a period.");
+			return;
+		}
+
+		foreach (string period in _motionPeriods.HeldPeriods)
+			_logger.LogInformation(
+				"Period '{Period}' does not begin at its Start; the period before it keeps running until somebody moves, "
+				+ "and the next period's Start overtakes it if nobody does.",
+				period);
 	}
 
 	private void SubscribePresenceResets()
@@ -590,10 +620,13 @@ public sealed class ModeMonitor : IDisposable
 	/// <remarks>
 	///     Under _gate for the reason <see cref="OnTick"/> gives: this runs on Home Assistant's thread, and a
 	///     transition read but not claimed is entered twice.
+	///     Asked of the schedule, not of what is in force: the period movement may start is the one the calculators
+	///     are holding out of the table, so <see cref="CircadianCalculator.ActivePeriodName"/> still names the
+	///     period before it.
 	///     Two bounds, and both are load-bearing. A period is never placed before its own <c>Start</c>, so the
 	///     wrapped case (night still running at 02:00) is refused and the 06:30 period cannot fire on a 02:00 trip
-	///     to the kitchen; and once per local day, whichever path entered it, so walking back in at lunch does not
-	///     re-fire <see cref="TimePeriodConfig.SetsMode"/> over a mode somebody chose since.
+	///     to the kitchen; and once per local day, so walking back in at lunch does not re-fire
+	///     <see cref="TimePeriodConfig.SetsMode"/> over a mode somebody chose since.
 	/// </remarks>
 	private void StartPeriodOnMotion(string sensor, DateTimeOffset now)
 	{
@@ -611,16 +644,16 @@ public sealed class ModeMonitor : IDisposable
 
 		lock (_gate)
 		{
-			periodName = _circadian.ActivePeriodName(now);
+			periodName = _circadian.ScheduledPeriodName(now);
 
+			// TryBegin last: it claims the day, so nothing after it may refuse the start.
 			start = periodName is { Length: > 0 }
 				&& MotionMayStart(periodName, sensor)
-				&& !(_enteredOn.TryGetValue(periodName, out DateOnly entered) && entered == today)
-				&& StartHasPassed(periodName, now);
+				&& StartHasPassed(periodName, now)
+				&& _motionPeriods.TryBegin(periodName, today);
 
 			if (start)
 			{
-				_enteredOn[periodName!] = today;
 				_previousPeriodName = periodName;
 				_startPeriodModePending = false;
 			}
@@ -650,8 +683,38 @@ public sealed class ModeMonitor : IDisposable
 		return start!.Resolve(_sunTimes()) is { } resolved && resolved <= TimeOnly.FromTimeSpan(now.TimeOfDay);
 	}
 
-	// The note names a period and it is not this one. Asked by the tick's day latch and by the restart path, which
-	// is the only one of the two that also logs.
+	/// <summary>
+	///     Seeds the latch, under _gate, from what this run already knows: the period the clock places now has
+	///     begun as far as this run is concerned.
+	/// </summary>
+	/// <remarks>
+	///     Restarting inside a period is not an entry, so a later movement must not re-fire its
+	///     <see cref="TimePeriodConfig.SetsMode"/> or its period-start reset over a mode a person chose.
+	///     A period that waits for movement is seeded only when the note on disk says the last run was already
+	///     inside it. Without the note there is no evidence it ever began, and the house waits for movement as it
+	///     would have without the restart.
+	/// </remarks>
+	private void SeedPeriodLatch(DateTimeOffset now)
+	{
+		if (_circadian.ScheduledPeriodName(now) is not { Length: > 0 } scheduled)
+			return;
+
+		if (_motionPeriods.Holds(scheduled)
+			&& !string.Equals(_periodAtLastRun, scheduled, StringComparison.OrdinalIgnoreCase))
+			return;
+
+		_motionPeriods.MarkBegun(scheduled, InstanceDay(scheduled, now));
+	}
+
+	// The local day the running instance of this period began on. A Start still ahead of now belongs to yesterday's
+	// instance, which is the one the table's wrap puts in force.
+	private DateOnly InstanceDay(string periodName, DateTimeOffset now)
+	{
+		DateOnly today = DateOnly.FromDateTime(now.Date);
+		return StartHasPassed(periodName, now) ? today : today.AddDays(-1);
+	}
+
+	// The note names a period and it is not this one.
 	private static bool BoundaryWentByWhileDown(string? previousRun, string periodName) =>
 		previousRun is { Length: > 0 } && !string.Equals(previousRun, periodName, StringComparison.OrdinalIgnoreCase);
 
@@ -804,14 +867,8 @@ public sealed class ModeMonitor : IDisposable
 			if (entered || applyOnStart)
 				_startPeriodModePending = false;
 
-			// Written from both paths, so the motion rule can tell a period the day has already begun from one it
-			// has not. The restart path counts only when the note actually says a boundary went by: a latch on a
-			// start that applied nothing would leave motion unable to start the period at all.
-			bool began = entered
-				|| (applyOnStart && BoundaryWentByWhileDown(_periodAtLastRun, currentPeriodName!));
-
-			if (began && currentPeriodName is { Length: > 0 })
-				_enteredOn[currentPeriodName] = DateOnly.FromDateTime(now.Date);
+			// Nothing latches a period here: the clock can only enter one the latch already lets through, and
+			// Start seeded whichever period this run came up inside.
 		}
 
 		if (entered)

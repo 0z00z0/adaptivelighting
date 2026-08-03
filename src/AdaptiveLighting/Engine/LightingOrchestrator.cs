@@ -61,6 +61,10 @@ public sealed class LightingOrchestrator : IDisposable
 	// which has exactly one of its two delegates assigned. Null when no select is configured.
 	private PeriodSelectReader? _periodSelect;
 
+	// One latch for the house: every area's calculator reads it and the mode brain writes it, so no two of them can
+	// disagree about whether a period that waits for movement has begun.
+	private MotionPeriodLatch? _motionPeriods;
+
 	private bool _started;
 
 	/// <summary>Creates an orchestrator. Nothing is wired until <see cref="Start"/>.</summary>
@@ -126,6 +130,9 @@ public sealed class LightingOrchestrator : IDisposable
 				"Period select {Entity}: {Authority} decides the time of day.",
 				select.Entity,
 				select.ReadPeriod is not null ? "Home Assistant" : "adaptive lighting (the select mirrors the schedule)");
+
+		// Also before the areas: their calculators leave a held period out of the table until this says it began.
+		_motionPeriods = MotionPeriodLatch.For(_config.Periods, _config.Global);
 
 		HaAreaRegistry registry = new(_registry);
 		AreaEntityResolver resolver = new(
@@ -231,7 +238,8 @@ public sealed class LightingOrchestrator : IDisposable
 			() => ReadSunTimes(resolved.Settings.SunEntity),
 			config.Levels,
 			// Null unless Home Assistant owns the periods.
-			_periodSelect?.ReadPeriod);
+			_periodSelect?.ReadPeriod,
+			_motionPeriods!.IsHeldBack);
 
 		// The calculator stays pure and the logging happens here. Parse failures are already known, so drain
 		// DroppedPeriods; sun-anchor failures surface per day through the event.
@@ -274,7 +282,9 @@ public sealed class LightingOrchestrator : IDisposable
 			_lastPeriod,
 			// The same reader the calculators got, so the mode brain acts on the boundary the rooms are lit for.
 			_periodSelect,
-			_motionSensorsByArea);
+			_motionSensorsByArea,
+			// The same latch, for the same reason.
+			_motionPeriods);
 
 		_subscriptions.Add(_presence.Events.SubscribeSafe((PresenceEvent _) => PublishHouseState(), _logger));
 		_subscriptions.Add(_modes.Changed.SubscribeSafe((Unit _) => PublishHouseState(), _logger));

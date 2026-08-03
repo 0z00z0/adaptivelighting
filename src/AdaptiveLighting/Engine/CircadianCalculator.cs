@@ -57,7 +57,10 @@ public sealed record DroppedPeriod(string PeriodName, string Start, PeriodDropRe
 ///     <see cref="LevelsOf"/> is the single place a room's effective level is decided.
 ///     Under <see cref="PeriodAuthority.HomeAssistant"/> a dropdown, not the clock, decides which period is in
 ///     force, and <see cref="OverriddenPeriod"/> is the one point both public answers go through.
-///     <see cref="GetPeriodTarget"/> sits outside that: a caller naming a period gets the one it named.
+///     A period that waits for movement is left out of the table until it has begun, so the previous period keeps
+///     running and the next period's start overtakes it.
+///     <see cref="GetPeriodTarget"/> sits outside both: a caller naming a period gets the one it named, which is
+///     what the sleep clamp needs.
 /// </remarks>
 public sealed class CircadianCalculator
 {
@@ -67,6 +70,10 @@ public sealed class CircadianCalculator
 
 	// Null except under HomeAssistant period authority: not installed at all, not installed and answering null.
 	private readonly Func<string?>? _periodOverride;
+
+	// Answers whether a period that waits for movement has still not begun on the local day its instance would
+	// have started. Installed by the host, so this stays a predicate and never reads motion.
+	private readonly Func<string, DateOnly, bool>? _heldBack;
 
 	// First row wins on a duplicate, matching what the validator reports.
 	private readonly Dictionary<string, RoomLevelOverride> _roomLevels;
@@ -92,18 +99,22 @@ public sealed class CircadianCalculator
 	///     are never matched, and the validator reports the rename.
 	///     <paramref name="periodOverride"/> comes from <see cref="PeriodSelectReader.ReadPeriod"/> and nothing
 	///     else. <c>null</c> resolves from the schedule.
+	///     <paramref name="periodHeldBack"/> comes from <see cref="MotionPeriodLatch.IsHeldBack"/>. <c>null</c>
+	///     places every period on its own <c>Start</c>.
 	/// </remarks>
 	public CircadianCalculator(
 		IReadOnlyList<TimePeriodConfig> periods,
 		GlobalConfig global,
 		Func<SunTimes> sunTimes,
 		IReadOnlyList<RoomLevelOverride>? roomLevels = null,
-		Func<string?>? periodOverride = null)
+		Func<string?>? periodOverride = null,
+		Func<string, DateOnly, bool>? periodHeldBack = null)
 	{
 		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_sunTimes = sunTimes ?? throw new ArgumentNullException(nameof(sunTimes));
 		_periodOverride = periodOverride;
+		_heldBack = periodHeldBack;
 
 		Dictionary<string, RoomLevelOverride> levels = new(StringComparer.OrdinalIgnoreCase);
 
@@ -147,7 +158,7 @@ public sealed class CircadianCalculator
 		if (OverriddenPeriod() is { } forced)
 			return TargetOf(forced);
 
-		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = ResolveBoundaries();
+		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = ResolveBoundaries(now);
 		if (boundaries.Count == 0)
 			return null;
 
@@ -229,13 +240,23 @@ public sealed class CircadianCalculator
 		if (OverriddenPeriod() is { } forced)
 			return forced.Name;
 
-		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = ResolveBoundaries();
-		if (boundaries.Count == 0)
-			return null;
-
-		int index = ActiveIndex(boundaries, TimeOnly.FromTimeSpan(now.TimeOfDay));
-		return boundaries[index].Period.Name;
+		return NameAt(ResolveBoundaries(now), now);
 	}
+
+	/// <summary>
+	///     The period the clock alone places at <paramref name="now"/>, ignoring both the override and whether a
+	///     period that waits for movement has begun.
+	/// </summary>
+	/// <remarks>
+	///     Not an answer about what the lights are doing: this is the period movement would be offered, which is the
+	///     one <see cref="ActivePeriodName"/> is holding back. Only <see cref="ModeMonitor"/>'s motion rule asks.
+	/// </remarks>
+	public string? ScheduledPeriodName(DateTimeOffset now) => NameAt(ResolveBoundaries(now, respectHold: false), now);
+
+	private static string? NameAt(List<(TimeOnly Start, TimePeriodConfig Period)> boundaries, DateTimeOffset now) =>
+		boundaries.Count == 0
+			? null
+			: boundaries[ActiveIndex(boundaries, TimeOnly.FromTimeSpan(now.TimeOfDay))].Period.Name;
 
 	/// <summary>
 	///     The period an override names, or <c>null</c> when there is no override or it names nothing this table
@@ -250,16 +271,30 @@ public sealed class CircadianCalculator
 			? _periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase))
 			: null;
 
-	private List<(TimeOnly Start, TimePeriodConfig Period)> ResolveBoundaries()
+	/// <summary>
+	///     The day's placeable boundaries, sorted. A period still waiting for movement is absent, so the wrap keeps
+	///     the previous period running and the next period's own start overtakes it.
+	/// </summary>
+	private List<(TimeOnly Start, TimePeriodConfig Period)> ResolveBoundaries(DateTimeOffset now, bool respectHold = true)
 	{
 		SunTimes sunTimes = _sunTimes();
 		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = new(_parsedStarts.Count);
+		TimeOnly timeOfDay = TimeOnly.FromTimeSpan(now.TimeOfDay);
+		DateOnly today = DateOnly.FromDateTime(now.Date);
 
 		// A sun-anchored boundary the sun entity cannot place is dropped, not guessed at. The table still covers
 		// the day by wrapping, so the drop is reported or the wrap is silent.
 		foreach ((PeriodStart? start, TimePeriodConfig? period) in _parsedStarts)
 			if (start.Resolve(sunTimes) is { } resolved)
+			{
+				// A boundary still ahead of us belongs to the instance that began yesterday, which is the one the
+				// wrap puts in force. Asking about today would ask about a period that has not come round yet.
+				if (respectHold
+					&& _heldBack?.Invoke(period.Name, resolved <= timeOfDay ? today : today.AddDays(-1)) == true)
+					continue;
+
 				boundaries.Add((resolved, period));
+			}
 			else
 				RecordDrop(new DroppedPeriod(period.Name, period.Start, PeriodDropReason.Unresolvable), raiseEvent: true);
 

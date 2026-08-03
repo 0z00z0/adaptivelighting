@@ -24,15 +24,14 @@ public class TimePeriodConfig
 	public string Start { get; set; } = "";
 
 	/// <summary>
-	///     Let movement pull this period forward, so it begins when somebody first walks in rather than on the
-	///     clock alone.
+	///     This period does not begin at its <see cref="Start"/>. The period before it keeps running until somebody
+	///     moves, and then this one begins for the whole house: levels, warmth and <see cref="SetsMode"/> together.
 	/// </summary>
 	/// <remarks>
-	///     Bounded two ways, and both matter. Motion can only bring the period forward to <b>at most its own
-	///     <see cref="Start"/></b>, so morning cannot fire on a 02:00 trip to the kitchen; and it fires <b>once
-	///     per local day</b>, so walking back in at lunch does not restart it. Without the first bound the
-	///     period table stops meaning anything; without the second, a period would re-enter all day and re-fire
-	///     its <see cref="SetsMode"/> with it.
+	///     Bounded three ways. Movement can only start it once its own <see cref="Start"/> has come round, so
+	///     morning cannot fire on a 02:00 trip to the kitchen; it starts once per local day, so walking back in at
+	///     lunch does not restart it; and the next period's own <see cref="Start"/> overtakes it, so an empty house
+	///     is never stranded on last night's levels.
 	/// </remarks>
 	public bool StartsOnMotion { get; set; }
 
