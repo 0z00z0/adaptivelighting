@@ -349,8 +349,8 @@ else
 								   above, but it is a movement rule and belongs in this section. *@
 								@if (string.Equals(current.Title, RoomSettings.MovementSection, StringComparison.Ordinal))
 								{
-									<SettingRow Label="Blocked while on"
-												Help="While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Offered from the whole house, since a blocker often belongs to no room.">
+									<SettingRow Label="Don't switch on while"
+												Help="The room won't light itself while any of these is on: a projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Tick the box for the opposite, so it holds while they are off — for a &quot;lighting allowed&quot; switch you turn off. Offered from the whole house, since a blocker often belongs to no room.">
 										<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
 														  ValueChanged="@(value => SetList(value, list => room.IgnoreWhenOn = list))"
 														  Options="@_blockers"
@@ -359,6 +359,38 @@ else
 														  EmptyLabel="Nothing blocks this room."
 														  AddLabel="Add a blocker…"
 														  Placeholder="binary_sensor.projector_is_on" />
+
+										@if (room.IgnoreWhenOn is { Count: > 0 })
+										{
+											<label class="gate-invert">
+												<input type="checkbox"
+													   checked="@(room.IgnoreWhenOnInverted is true)"
+													   @onchange="args => SetInvert(args.Value is true, value => room.IgnoreWhenOnInverted = value)" />
+												while these are off instead
+											</label>
+										}
+									</SettingRow>
+
+									<SettingRow Label="Don't switch off while"
+												Help="The room won't turn its own lights off while any of these is on, so the countdown, the warning dim and the leaving sweep leave it alone: a meeting light, a guest switch. It never turns anything on, and switching off by hand still works. Tick the box for the opposite, so it holds while they are off.">
+										<EntityListPicker Value="@(room.KeepLitWhenOn ?? [])"
+														  ValueChanged="@(value => SetList(value, list => room.KeepLitWhenOn = list))"
+														  Options="@_blockers"
+														  NameResolver="@Name"
+														  KnownResolver="@Catalog.Knows"
+														  EmptyLabel="Nothing holds this room's lights on."
+														  AddLabel="Add one…"
+														  Placeholder="input_boolean.meeting" />
+
+										@if (room.KeepLitWhenOn is { Count: > 0 })
+										{
+											<label class="gate-invert">
+												<input type="checkbox"
+													   checked="@(room.KeepLitWhenOnInverted is true)"
+													   @onchange="args => SetInvert(args.Value is true, value => room.KeepLitWhenOnInverted = value)" />
+												while these are off instead
+											</label>
+										}
 									</SettingRow>
 								}
 							</div>
@@ -1257,6 +1289,16 @@ else
 		// An empty list and a null list are different instructions: null means "discover", [] would mean "this
 		// room has no lights", which is never what clearing the last chip meant.
 		assign(value.Count == 0 ? null : [.. value]);
+
+		return MarkDirty();
+	}
+
+	/// <summary>Sets a gate's polarity, storing <c>null</c> rather than <c>false</c> for the ordinary reading.</summary>
+	// Null keeps the key out of the file for every room that never inverted one, the same rule SetList follows
+	// for an empty list.
+	private Task SetInvert(bool inverted, Action<bool?> assign)
+	{
+		assign(inverted ? true : null);
 
 		return MarkDirty();
 	}

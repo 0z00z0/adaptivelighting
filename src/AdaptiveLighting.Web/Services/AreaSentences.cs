@@ -248,8 +248,16 @@ public static class AreaSentences
 		if (effective.WelcomeHome)
 			clauses.Add("welcomes the first person home");
 
+		// Both gates read their polarity, or the sentence says the opposite of what the room does.
 		if (area?.IgnoreWhenOn is { Count: > 0 })
-			clauses.Add("is left alone while its blocker is on");
+			clauses.Add(area.IgnoreWhenOnInverted is true
+				? "does not light itself while its blocker is off"
+				: "does not light itself while its blocker is on");
+
+		if (area?.KeepLitWhenOn is { Count: > 0 })
+			clauses.Add(area.KeepLitWhenOnInverted is true
+				? "stays lit while its hold is off"
+				: "stays lit while its hold is on");
 
 		return clauses.Count == 0
 			? null

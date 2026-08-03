@@ -245,6 +245,7 @@ public static class LightingConfigDocument
 			repaired |= DropBlanks(area.Lights);
 			repaired |= DropBlanks(area.MotionSensors);
 			repaired |= DropBlanks(area.IgnoreWhenOn);
+			repaired |= DropBlanks(area.KeepLitWhenOn);
 			repaired |= DropBlanks(area.ExcludeEntities);
 
 			repaired |= NullSafeList(area.Levels, out List<RoomLevelOverride> levels);

@@ -64,6 +64,10 @@ public sealed class AreaController : IDisposable
 	private AutoOnBlock? _reportedDecline;
 	private string? _reportedDeclineEntity;
 
+	// A hold-lit entity refused the engine's own off after the countdown that would have sent it had already fired.
+	// Nothing else would ever run it again, so OnTick settles it once the hold releases.
+	private bool _offHeldBack;
+
 	private bool _disposed;
 
 	/// <summary>Creates a controller for one resolved area.</summary>
@@ -404,6 +408,11 @@ public sealed class AreaController : IDisposable
 			// that is otherwise idle.
 			RefreshDarkness();
 
+			// Before the retarget below: an area whose hold has just released is on its way off, and commanding it
+			// to this instant's levels first would be a visible flash.
+			if (_offHeldBack && HoldingLit() is null && SettleHeldBackOff())
+				return;
+
 			if (_state == AreaState.AutoActive)
 			{
 				LightTarget? target = ResolveTarget();
@@ -423,31 +432,52 @@ public sealed class AreaController : IDisposable
 	private void OnVacancyTimeout()
 	{
 		lock (_gate)
+			VacancyTimedOut();
+	}
+
+	private void VacancyTimedOut()
+	{
+		if (_state != AreaState.AutoActive)
+			return;
+
+		// The warning dim is a step towards off, so a held area does not take it either.
+		if (HoldingLit() is { } holder)
 		{
-			if (_state != AreaState.AutoActive)
-				return;
-
-			Enter(AreaState.PreOff, TransitionReason.VacancyTimeout);
-
-			// Armed before the dim, so the snapshot announcing PreOff already carries its own deadline.
-			ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_area.Settings.PreOffSeconds), OnPreOffElapsed);
-
-			ApplyTarget(TransitionReason.VacancyTimeout, _area.Settings.PreOffBrightnessFactor);
+			HoldOffBack(holder, TransitionReason.VacancyTimeout);
+			return;
 		}
+
+		Enter(AreaState.PreOff, TransitionReason.VacancyTimeout);
+
+		// Armed before the dim, so the snapshot announcing PreOff already carries its own deadline.
+		ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_area.Settings.PreOffSeconds), OnPreOffElapsed);
+
+		ApplyTarget(TransitionReason.VacancyTimeout, _area.Settings.PreOffBrightnessFactor);
 	}
 
 	private void OnPreOffElapsed()
 	{
 		lock (_gate)
-		{
-			if (_state != AreaState.PreOff)
-				return;
+			PreOffElapsed();
+	}
 
-			_nextChangeAt = null;
-			_nextChangeFrom = null;
-			Enter(AreaState.AutoVacant, TransitionReason.PreOffElapsed);
-			TurnOff(TransitionReason.PreOffElapsed);
+	private void PreOffElapsed()
+	{
+		if (_state != AreaState.PreOff)
+			return;
+
+		// Held at the dimmed level, which is still lit. Restoring the full target would be the engine commanding
+		// a room up, which the hold never does.
+		if (HoldingLit() is { } holder)
+		{
+			HoldOffBack(holder, TransitionReason.PreOffElapsed);
+			return;
 		}
+
+		_nextChangeAt = null;
+		_nextChangeFrom = null;
+		Enter(AreaState.AutoVacant, TransitionReason.PreOffElapsed);
+		TurnOff(TransitionReason.PreOffElapsed);
 	}
 
 	private void OnOverrideExpired()
@@ -469,6 +499,13 @@ public sealed class AreaController : IDisposable
 			}
 
 			Enter(AreaState.AutoVacant, TransitionReason.OverrideExpired);
+
+			if (HoldingLit() is { } holder)
+			{
+				HoldOffBack(holder, TransitionReason.OverrideExpired);
+				return;
+			}
+
 			TurnOff(TransitionReason.OverrideExpired);
 		}
 	}
@@ -522,6 +559,12 @@ public sealed class AreaController : IDisposable
 		{
 			_logger.LogDebug("{Area} opted out of the leaving sweep.", Name);
 			Publish(reason);
+			return;
+		}
+
+		if (HoldingLit() is { } holder)
+		{
+			HoldOffBack(holder, reason);
 			return;
 		}
 
@@ -644,13 +687,77 @@ public sealed class AreaController : IDisposable
 		if (_area.Settings.SleepBlocksAutoOn && _house.Mode == HouseMode.Sleep)
 			return AutoOnBlock.Sleep;
 
-		if (_area.IgnoreWhenOn.FirstOrDefault(_ha.IsOn) is { } blocking)
+		if (FirstThatApplies(_area.IgnoreWhenOn, _area.IgnoreWhenOnInverted) is { } blocking)
 		{
 			blocker = blocking;
 			return AutoOnBlock.EntityOn;
 		}
 
 		return dark ? AutoOnBlock.None : AutoOnBlock.NotDark;
+	}
+
+	/// <summary>The first of <paramref name="entities"/> whose state applies, or <c>null</c> when none does.</summary>
+	/// <remarks>
+	///     <c>IsOff</c> is not <c>!IsOn</c>: both are false for an absent, unavailable or unknown entity, so one that
+	///     cannot be read applies under neither polarity. A vanished helper must pin a room neither dark nor lit.
+	/// </remarks>
+	private string? FirstThatApplies(IReadOnlyList<string> entities, bool inverted)
+	{
+		Func<string, bool> applies = inverted ? _ha.IsOff : _ha.IsOn;
+		return entities.FirstOrDefault(applies);
+	}
+
+	/// <summary>
+	///     The entity holding this area's lights on, or <c>null</c> when none is.
+	/// </summary>
+	/// <remarks>
+	///     Suppresses the engine's own off-commands only. It never turns anything on, and a hand at the switch is
+	///     still obeyed, so <see cref="OnLightChanged"/> does not consult it.
+	/// </remarks>
+	private string? HoldingLit() => FirstThatApplies(_area.KeepLitWhenOn, _area.KeepLitWhenOnInverted);
+
+	/// <summary>
+	///     Records that a hold refused an off the engine had already counted down to, and publishes the area without
+	///     the deadline it is no longer keeping.
+	/// </summary>
+	private void HoldOffBack(string holder, TransitionReason reason)
+	{
+		_logger.LogDebug("{Area}: {Holder} is holding the lights on, so {Reason} commands nothing.", Name, holder, reason);
+
+		_offHeldBack = true;
+		_nextChangeAt = null;
+		_nextChangeFrom = null;
+		Publish(reason);
+	}
+
+	/// <summary>Runs the off a hold refused, once it has released. Called from the tick and nowhere else.</summary>
+	/// <returns><c>true</c> when it acted and published; the caller must not publish over it.</returns>
+	private bool SettleHeldBackOff()
+	{
+		_offHeldBack = false;
+
+		switch (_state)
+		{
+			case AreaState.AutoActive:
+				VacancyTimedOut();
+				return true;
+
+			case AreaState.PreOff:
+				PreOffElapsed();
+				return true;
+
+			case AreaState.Away:
+				TurnOff(AwayReason());
+				return true;
+
+			case AreaState.AutoVacant:
+				// Where an expiring override left the area: still lit, with nothing else armed to switch it off.
+				TurnOff(TransitionReason.OverrideExpired);
+				return true;
+
+			default:
+				return false;
+		}
 	}
 
 	/// <summary>Re-reads the darkness gate, keeping the verdict the snapshot and the fade length both use.</summary>
@@ -773,8 +880,12 @@ public sealed class AreaController : IDisposable
 	private double TransitionSeconds() =>
 		_lastDarkVerdict == true ? _area.Settings.NightTransitionSeconds : _area.Settings.DayTransitionSeconds;
 
-	private void RestartVacancyTimer() =>
+	// Clears the held-back off: a fresh countdown supersedes the spent one the hold refused.
+	private void RestartVacancyTimer()
+	{
+		_offHeldBack = false;
 		ArmCountdown(_vacancyTimer, TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds), OnVacancyTimeout);
+	}
 
 	private void RestartSuppressionTimer() =>
 		ArmCountdown(_suppressionTimer, TimeSpan.FromMinutes(_area.Settings.VacancyResetMinutes), OnSuppressionLifted);
@@ -790,6 +901,7 @@ public sealed class AreaController : IDisposable
 
 	private void CancelAutoTimers()
 	{
+		_offHeldBack = false;
 		_nextChangeAt = null;
 		_nextChangeFrom = null;
 		_vacancyTimer.Disposable = Disposable.Empty;
@@ -850,6 +962,8 @@ public sealed class AreaController : IDisposable
 		// room-levels flag describes that period, not the standing command.
 		ResolvePeriodAt(_scheduler.Now);
 
+		string? heldLitBy = HoldingLit();
+
 		return new AreaSnapshot(
 			Name,
 			_state,
@@ -872,7 +986,9 @@ public sealed class AreaController : IDisposable
 			blocker,
 			_resolvedLevelsFromRoom,
 			_house.IsAnyoneHome,
-			_house.Forced);
+			_house.Forced,
+			heldLitBy is not null,
+			heldLitBy);
 	}
 
 	/// <summary>Resolves and caches the period for <paramref name="now"/>, unless that instant is already cached.</summary>

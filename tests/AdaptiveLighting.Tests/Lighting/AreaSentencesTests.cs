@@ -312,15 +312,44 @@ public sealed class AreaSentencesTests
 			AreaSentences.ForArea(room, Defaults())[2].PlainText);
 	}
 
+	// Was "is left alone while its blocker is on". That was unambiguous while blocking auto-on was the only gate;
+	// with a hold that keeps the lights on, "left alone" no longer says which of the two a reader is looking at.
 	[TestMethod]
-	public void A_Blocker_Earns_Its_Own_Clause()
+	public void A_Blocker_Says_Which_Direction_It_Blocks()
 	{
 		AreaConfig room = Room();
 		room.IgnoreWhenOn = ["media_player.projector"];
 
 		Assert.AreEqual(
-			"This room is left alone while its blocker is on.",
+			"This room does not light itself while its blocker is on.",
 			AreaSentences.ForArea(room, Defaults())[2].PlainText);
+	}
+
+	[TestMethod]
+	public void Each_Gate_Reads_Its_Own_Polarity()
+	{
+		AreaConfig inverted = Room();
+		inverted.IgnoreWhenOn = ["input_boolean.lighting_allowed"];
+		inverted.IgnoreWhenOnInverted = true;
+
+		Assert.AreEqual(
+			"This room does not light itself while its blocker is off.",
+			AreaSentences.ForArea(inverted, Defaults())[2].PlainText);
+
+		AreaConfig held = Room();
+		held.KeepLitWhenOn = ["input_boolean.meeting"];
+
+		Assert.AreEqual(
+			"This room stays lit while its hold is on.",
+			AreaSentences.ForArea(held, Defaults())[2].PlainText);
+
+		AreaConfig heldInverted = Room();
+		heldInverted.KeepLitWhenOn = ["input_boolean.meeting"];
+		heldInverted.KeepLitWhenOnInverted = true;
+
+		Assert.AreEqual(
+			"This room stays lit while its hold is off.",
+			AreaSentences.ForArea(heldInverted, Defaults())[2].PlainText);
 	}
 
 	[TestMethod]

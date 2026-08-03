@@ -6610,3 +6610,18 @@ h1[tabindex="-1"]:focus {
 }
 
 /* ===== end re-setup include all ===== */
+
+/* ===== gate polarity ===== */
+
+/* Sits under the entity list inside a SettingRow, so it indents with the chips rather than the label. */
+.gate-invert {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-top: var(--space-2);
+	font-size: var(--text-sm);
+	color: var(--muted);
+	cursor: pointer;
+}
+
+/* ===== end gate polarity ===== */

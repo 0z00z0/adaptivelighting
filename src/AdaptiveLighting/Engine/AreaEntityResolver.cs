@@ -22,6 +22,15 @@ public sealed record ResolvedArea(
 	bool FollowOutdoorLux = false,
 	bool? LightsSupportColorTemp = null)
 {
+	/// <summary>Entities that stop the engine switching this area's lights off while they apply.</summary>
+	public IReadOnlyList<string> KeepLitWhenOn { get; init; } = [];
+
+	/// <summary>Whether <see cref="IgnoreWhenOn"/> applies while its entities read off instead of on.</summary>
+	public bool IgnoreWhenOnInverted { get; init; }
+
+	/// <summary>Whether <see cref="KeepLitWhenOn"/> applies while its entities read off instead of on.</summary>
+	public bool KeepLitWhenOnInverted { get; init; }
+
 	/// <summary>How this area's warmth is commanded, with <see cref="ColorControl.Auto"/> already decided.</summary>
 	/// <remarks>
 	///     Null capability means no light could be read, which is not evidence that none has a colour temperature,
@@ -169,7 +178,13 @@ public sealed class AreaEntityResolver
 				name, ColorTempMode);
 
 		resolved = new ResolvedArea(
-			name, settings, lights, motion, lux, [.. area.IgnoreWhenOn ?? []], area.FollowOutdoorLux == true, colorTemp);
+			name, settings, lights, motion, lux, [.. area.IgnoreWhenOn ?? []], area.FollowOutdoorLux == true, colorTemp)
+		{
+			KeepLitWhenOn = [.. area.KeepLitWhenOn ?? []],
+			IgnoreWhenOnInverted = area.IgnoreWhenOnInverted == true,
+			KeepLitWhenOnInverted = area.KeepLitWhenOnInverted == true
+		};
+
 		return true;
 	}
 

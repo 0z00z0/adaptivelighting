@@ -29,6 +29,8 @@ namespace AdaptiveLighting.Abstractions;
 /// <param name="LevelsFromRoom">Which of the room's two levels it names for itself during <paramref name="PeriodName"/>. A statement about the period, not the standing command. <c>null</c> from a build predating the field.</param>
 /// <param name="IsAnyoneHome">What presence said. <paramref name="Mode"/> cannot answer it, because <see cref="HouseMode.Away"/> is presence or an away-kind option. <c>null</c> from a build predating the field.</param>
 /// <param name="Forced">What holds the house on its mode when the select's value is not the answer, and <c>null</c> when nothing does. Carried, never re-derived: only the engine knows which entity it read.</param>
+/// <param name="IsHeldLit">Whether a <c>KeepLitWhenOn</c> entity is stopping the engine switching this area's lights off. <c>false</c> means nothing is; <c>null</c> from a build predating the field means the area cannot say.</param>
+/// <param name="HeldLitBy">The entity doing the holding when <paramref name="IsHeldLit"/> is <c>true</c>, and <c>null</c> otherwise.</param>
 public sealed record AreaSnapshot(
 	string AreaName,
 	AreaState State,
@@ -51,7 +53,9 @@ public sealed record AreaSnapshot(
 	string? AutoOnBlockingEntity = null,
 	RoomLevelSource? LevelsFromRoom = null,
 	bool? IsAnyoneHome = null,
-	ForcedMode? Forced = null)
+	ForcedMode? Forced = null,
+	bool? IsHeldLit = null,
+	string? HeldLitBy = null)
 {
 	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
@@ -62,6 +66,8 @@ public sealed record AreaSnapshot(
 	///     <see cref="AutoOnBlockedBy"/> are excluded so a drifting lux reading, or a television switching on, does
 	///     not republish every area it touches; movement into a blocked room is published past this comparison, by
 	///     <c>AreaController.ReportDeclinedMotion</c>, which bounds itself to one row per change of gate.
+	///     <see cref="IsHeldLit"/> is compared and <see cref="HeldLitBy"/> is not: whether the area's own off-command
+	///     is suspended is news, which entity of several is doing it is description.
 	/// </remarks>
 	public bool HasSameMeaningAs(AreaSnapshot? other) =>
 		other is not null &&
@@ -77,6 +83,7 @@ public sealed record AreaSnapshot(
 		Nullable.Equals(NextChangeFrom, other.NextChangeFrom) &&
 		Nullable.Equals(LevelsFromRoom, other.LevelsFromRoom) &&
 		Nullable.Equals(IsAnyoneHome, other.IsAnyoneHome) &&
+		Nullable.Equals(IsHeldLit, other.IsHeldLit) &&
 		Forced == other.Forced;
 }
 

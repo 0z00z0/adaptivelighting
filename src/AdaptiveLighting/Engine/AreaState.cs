@@ -109,7 +109,10 @@ public enum AutoOnBlock
 	/// <summary>The house is asleep and this area is set not to light itself while it is.</summary>
 	Sleep,
 
-	/// <summary>One of the area's <c>IgnoreWhenOn</c> entities is on. Which one is published beside this.</summary>
+	/// <summary>
+	///     One of the area's <c>IgnoreWhenOn</c> entities applies: on, or off under <c>IgnoreWhenOnInverted</c>.
+	///     Which one is published beside this.
+	/// </summary>
 	EntityOn,
 
 	/// <summary>The darkness gate says it is too bright.</summary>

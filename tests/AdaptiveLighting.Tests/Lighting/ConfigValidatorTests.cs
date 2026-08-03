@@ -512,6 +512,23 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
+	public void An_Unknown_Blocking_Or_Holding_Entity_Costs_The_Area_The_Same_Way()
+	{
+		var config = Minimal();
+		config.Areas =
+		[
+			new() { Name = "Z", AreaId = "stue", IgnoreWhenOn = ["input_boolean.ghost"] },
+			new() { Name = "Y", AreaId = "stue", KeepLitWhenOn = ["input_boolean.ghost"] }
+		];
+
+		var result = ConfigValidator.Validate(config, knownEntityIds: ["input_boolean.real"], knownAreaIds: ["stue"]);
+
+		Assert.IsTrue(result.IsValid, "neither list can take the house down");
+		Assert.AreEqual(2, result.AreaErrors.Count, "the room that holds its lights on is checked like the one that blocks them");
+		Assert.AreEqual(result.AreaErrors[0].Message, result.AreaErrors[1].Message, "and says the same thing about the same id");
+	}
+
+	[TestMethod]
 	public void An_Unknown_Global_Entity_Is_A_Document_Error()
 	{
 		// Asymmetric with the kill switch, which fails open and only warns.

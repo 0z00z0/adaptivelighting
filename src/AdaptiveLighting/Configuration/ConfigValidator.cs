@@ -450,6 +450,14 @@ public static class ConfigValidator
 				result.AddWarning(
 					$"HouseMode option '{option.Value}' lists ActivateWhileOn entities, which are dormant while "
 					+ "HouseMode.Authority is HomeAssistant — only the dropdown moves the house.");
+
+			// The fourth rule. A reset writes the select back to Normal, so it stands down with the rest; the
+			// engine and the pages both count it, and a validator that named three of four disagreed with both.
+			if (option.Kind != ModeKind.Normal
+				&& (option.ResetOnPeriodStart is { Length: > 0 } || option.ResetPresenceSensors.Count > 0))
+				result.AddWarning(
+					$"HouseMode option '{option.Value}' carries a reset trigger, which is dormant while "
+					+ "HouseMode.Authority is HomeAssistant — a reset writes the select, and the engine never does.");
 		}
 	}
 
@@ -706,6 +714,9 @@ public static class ConfigValidator
 
 		foreach (string blocker in area.IgnoreWhenOn ?? [])
 			yield return blocker;
+
+		foreach (string holder in area.KeepLitWhenOn ?? [])
+			yield return holder;
 
 		if (area.LuxSensor is { Length: > 0 } lux)
 			yield return lux;
