@@ -11,6 +11,38 @@ under one version, because they are compiled against each other.
 
 ### Added
 
+- **A room can run a scene instead of switching on, and another instead of switching off.** Two
+  optional per-room dropdowns under *Movement*: *Run a scene instead, on movement* and *Run a scene
+  instead, when empty*. Both are off by default, and a room that sets neither behaves exactly as it
+  did. The point of the pair is a room that drops to atmospheric lighting when it empties rather than
+  going dark.
+  - Each replaces **one** transition and nothing else. A movement scene replaces the brightness and
+    warmth the room would have been commanded to, and the engine then leaves it alone: neither the
+    circadian tick nor a house-mode change re-aims a room while its scene stands. An empty scene
+    replaces the switch-off at the vacancy timeout, and the warning dim that precedes it does not run,
+    because nothing is about to go off.
+  - They are independent. Only the empty scene means the room lights normally and then settles to
+    atmosphere; only the movement scene means the room runs the scene on entry and still dims and goes
+    off as it always did.
+  - **Every gate that could refuse to light the room still refuses.** The master switch, the room's own
+    switch, an empty house, sleep, the darkness gate and `IgnoreWhenOn` are all consulted first. A
+    scene is what happens instead of a command the engine had already decided to make, never a reason
+    to make one.
+  - **Leaving the house still switches the room off.** An empty house is not a room going empty, and an
+    atmospheric scene must not keep a room lit in one. `SkipAwaySweep` keeps its meaning for rooms that
+    want it.
+  - **`KeepLitWhenOn` blocks the empty scene exactly as it blocks a normal switch-off.** While the hold
+    applies the room does neither and stays lit as it was; when the hold releases, the deferred
+    transition that lands is whatever that room's off-transition now is, so for a room with an empty
+    scene it is the scene. A refused *leaving sweep* still settles as a switch-off.
+  - A hand at the switch still wins: switching a scened room off by hand is obeyed, and nothing
+    relights it. The scene's own light changes are declared to the override detector first, or the room
+    would read them as somebody at the wall.
+  - The engine publishes `scene_applied` on `adaptive_lighting_area` while a room is sitting on one of
+    its scenes, and reports no brightness or colour temperature with it, because it commanded none.
+  - A scene the room names that is not a `scene.*` entity, or that Home Assistant does not know, is a
+    **warning**. The room still lights, by its own levels.
+
 - **An honest record of when each entity was last heard from**, in a new `AdaptiveLighting.LastSeen`
   module, because Home Assistant cannot answer that question about itself. `last_updated` and
   `last_changed` are Home Assistant's own bookkeeping and it resets them on every restart: measured on a

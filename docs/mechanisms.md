@@ -315,6 +315,48 @@ light level, because the engine did not turn them on and switching them off is n
 `AdoptedAtStartup` carries no commanded levels, because there was no command. A row or snapshot must not
 invent brightness or kelvin figures for it.
 
+### A room's two scenes each replace one transition, and nothing else
+
+`SceneOnMotion` and `SceneWhenEmpty` are per-room and independent. Each replaces one command the engine had
+**already decided to make**. Neither is a reason to make one, and neither is a gate.
+
+| Transition | Without a scene | With one |
+|---|---|---|
+| Movement lights the room (`AutoVacant` → `AutoActive`, and motion rescuing `PreOff`) | `ApplyTarget` | `SceneOnMotion`, then the room is not re-aimed |
+| Vacancy timeout | warning dim, then off | `SceneWhenEmpty`, no dim, room stays lit |
+| Override expires into an empty room | off | `SceneWhenEmpty` |
+| Leaving sweep | off | **off** |
+
+The leaving sweep is the deliberate exception: an empty house is not a room going empty, and an atmospheric
+scene must not keep a room lit in one. `SkipAwaySweep` keeps its existing meaning for rooms that want that.
+
+The warning dim is skipped only for `SceneWhenEmpty`. It exists to warn that the lights are about to go out,
+and for such a room they are not. A room with only `SceneOnMotion` still dims and still goes off.
+
+`AreaController.SettleEmpty` is the single answer to "what is this room's off-transition", so the off a
+`KeepLitWhenOn` hold refused settles as a scene for a room that names one. The hold is consulted at the same
+point for both: while it applies the room does neither, and stays lit as it was. The empty scene is not a way
+around the hold. `SettleHeldBackOff`'s `Away` branch stays a `TurnOff`, because the sweep it refused was a
+sweep.
+
+`_standingScene` is what stops the room being re-aimed: it is set by `ApplyScene`, cleared by `Send`, and
+guards the retarget in both `OnTick` and the house-mode branch of `OnHouseChanged`. A light command is the
+engine aiming the room itself, which the scene no longer describes.
+
+Two consequences that follow and were accepted:
+
+- The scene's own light changes carry neither a user nor a parent, which is `OverrideDetector`'s definition
+  of `PhysicalDevice`. Without an expectation declared for them a scened room overrides itself on the spot.
+  `ExpectScene` declares one with **no polarity**, because the scene's contents cannot be read, so a scene
+  that leaves a light off is still the engine's own work for the length of the echo window. After that a hand
+  at the switch wins again, as it always did.
+- A room lit by its empty scene raises its own illuminance, so the darkness gate may then refuse to auto-on
+  for movement. That is already true of any `KeepLitWhenOn` room and is not special-cased.
+
+`AreaSnapshot.SceneApplied` names the scene the room is sitting on. `BrightnessPct` and `ColorTempKelvin` are
+null while it stands, because the engine commanded no levels and must not invent them. It is not the house's
+Guest scene, which `AreaState.SceneHold` reports.
+
 ### Staleness culling is illuminance only, and generalising it would break the house
 
 `LuxSensorStaleAfterMinutes` exists because a room averages its illuminance sensors, and one dead sensor stuck
