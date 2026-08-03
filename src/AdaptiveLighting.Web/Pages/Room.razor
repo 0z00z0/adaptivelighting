@@ -491,7 +491,13 @@ else
 					}
 				</div>
 
-				@if (resolved.LuxSensors.Count == 0)
+				@*
+					Through the same predicate the commissioning board uses, not off the sensor count alone. Counting
+					sensors told a room set to judge by the sun, or one with a hand-pinned sensor, that it counted as
+					dark all day — which is the gate's rule for neither of them. Two pages a click apart disagreeing
+					about one room is the thing the shared predicate exists to stop.
+				*@
+				@if (CommissioningVerdicts.CountsAsDarkForWantOfASensor(room, _document.Defaults, resolved.LuxSensors.Count))
 				{
 					<p class="room-card-foot">No light-level sensor here &mdash; the room counts as dark, so movement lights it.</p>
 				}
