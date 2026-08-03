@@ -247,8 +247,7 @@ public class AreaSettings
 
 /// <summary>How a room's warmth reaches its lights.</summary>
 /// <remarks>
-///     Ordinals pinned, no member renamed or removed, for the reason <see cref="DarknessSource"/> gives: an
-///     unknown enum value is a <see cref="FormatException"/> at start-up, not a silently ignored key.
+///     Ordinals pinned, no member renamed or removed, for the reason <see cref="DarknessSource"/> gives.
 /// </remarks>
 public enum ColorControl
 {
@@ -269,6 +268,14 @@ public enum ColorControl
 	EqualChannels = 2
 }
 
+/// <summary>Which signal an area consults to decide it is dark enough to light.</summary>
+/// <remarks>
+///     Ordinals are pinned and no member may be renamed or removed. Two readers bind this type: the engine's own
+///     deserializer, which has a legacy pre-pass, and NetDaemon's binder on the app YAML, which cannot have one. An
+///     unknown key is silence; an unknown enum value is a <see cref="FormatException"/> at start-up. Which entity
+///     supplies the lux reading is a separate question, answered by <see cref="AreaConfig.LuxSensor"/> or
+///     <see cref="AreaConfig.FollowOutdoorLux"/>.
+/// </remarks>
 public enum DarknessSource
 {
 	/// <summary>Lux only, and the default. A room with no sensor, or with none still answering, is simply dark.</summary>

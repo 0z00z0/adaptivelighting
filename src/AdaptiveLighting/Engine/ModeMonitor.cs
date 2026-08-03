@@ -424,7 +424,9 @@ public sealed class ModeMonitor : IDisposable
 			_logger.LogInformation(
 				"ActivateWhileOn is dormant while Home Assistant decides the house mode; the select's own value is the whole story.");
 
-		if (houseMode.Options.Any(option => option.HasResetTrigger))
+		// Kind-filtered, as SubscribePresenceResets and OnPeriodEntered both are: a Normal option's reset never
+		// fired under either authority, so naming it here reports a rule that was not switched off.
+		if (houseMode.Options.Any(option => option.Kind != ModeKind.Normal && option.HasResetTrigger))
 			_logger.LogInformation(
 				"The mode resets are dormant while Home Assistant decides the house mode; nothing here returns {Select} to Normal.",
 				houseMode.EntityId);

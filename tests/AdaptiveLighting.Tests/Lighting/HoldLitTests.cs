@@ -184,6 +184,28 @@ public sealed class HoldLitTests
 		Assert.IsTrue(t.Actuator.Last is { On: false }, "an empty house does not keep a room lit once the hold lets go");
 	}
 
+	// The sweep the hold refused belongs to a house that has since come back. WelcomeHome is off by default, so
+	// coming home leaves the area in AutoVacant with no vacancy timer to clear the held-back off; without that
+	// clear the hold releasing later swept a room in an occupied house.
+	[TestMethod]
+	public void A_Sweep_Held_Back_While_Away_Is_Dropped_Once_The_House_Comes_Home()
+	{
+		Fixture t = Lit([Holder], seed: ha => ha.SetState(Holder, "on"));
+
+		t.House.OnNext(new HouseState(false, ModeKind.Normal, false));
+		Assert.AreEqual(AreaState.Away, t.Area.State);
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "the hold refused the leaving sweep");
+
+		t.House.OnNext(new HouseState(true, ModeKind.Normal, false));
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
+
+		t.Ha.SetState(Holder, "off");
+		Advance(t, OneTick);
+
+		Assert.AreEqual(0, t.Actuator.Applied.Count,
+			"the house is home again, so the hold letting go must not run the leaving sweep it refused");
+	}
+
 	[TestMethod]
 	public void An_Expiring_Override_Leaves_A_Held_Area_Alone_Until_The_Hold_Releases()
 	{

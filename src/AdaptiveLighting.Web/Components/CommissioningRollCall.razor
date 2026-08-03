@@ -163,6 +163,10 @@
 	/// <summary>Which rows are unfolded, by key. Several at once, so two rooms can be compared side by side.</summary>
 	private readonly HashSet<string> _open = new(StringComparer.Ordinal);
 
+	/// <inheritdoc/>
+	protected override void OnParametersSet() =>
+		_allKeys = [.. Groups.SelectMany(group => group.Items).Select(row => row.Key)];
+
 	private Task Toggle(string key)
 	{
 		Draft.ToggleRoom(key);
@@ -186,7 +190,10 @@
 	private bool AllPicked(FloorGroup<CommissioningRow> group) => Draft.IncludesAll(group.Items.Select(row => row.Key));
 
 	/// <summary>Every room on the board, floors flattened, in the order they are drawn.</summary>
-	private IReadOnlyList<string> AllKeys => [.. Groups.SelectMany(group => group.Items).Select(row => row.Key)];
+	// Settled per parameter set: the markup reads it twice a render, and it is a pure function of Groups.
+	private IReadOnlyList<string> AllKeys => _allKeys;
+
+	private IReadOnlyList<string> _allKeys = [];
 
 	private bool IncludesEveryRoom => Draft.IncludesAll(AllKeys);
 

@@ -441,7 +441,10 @@ public static class ConfigValidator
 
 		foreach (HouseModeOptionConfig option in houseMode.Options)
 		{
-			if (option.ActivateAfterNoMotionMinutes is not null)
+			// The same predicates ModeMonitor stands down on, member for member. A rule that was never live under
+			// either authority is not dormant, and saying it is sends somebody looking for an automation that
+			// never ran: Normal is exempt from both no-motion and reset, and a zero minute count arms nothing.
+			if (option.Kind != ModeKind.Normal && option.ActivateAfterNoMotionMinutes is > 0)
 				result.AddWarning(
 					$"HouseMode option '{option.Value}' sets ActivateAfterNoMotionMinutes, which is dormant while "
 					+ "HouseMode.Authority is HomeAssistant — only the dropdown moves the house.");
@@ -451,10 +454,10 @@ public static class ConfigValidator
 					$"HouseMode option '{option.Value}' lists ActivateWhileOn entities, which are dormant while "
 					+ "HouseMode.Authority is HomeAssistant — only the dropdown moves the house.");
 
-			// The fourth rule. A reset writes the select back to Normal, so it stands down with the rest; the
-			// engine and the pages both count it, and a validator that named three of four disagreed with both.
-			if (option.Kind != ModeKind.Normal
-				&& (option.ResetOnPeriodStart is { Length: > 0 } || option.ResetPresenceSensors.Count > 0))
+			// The fourth rule. A reset writes the select back to Normal, so it stands down with the rest.
+			// HasResetTrigger, not the sensor list: presence is gated on ResetOnPresence alone, so sensors listed
+			// with the toggle off are inert and the toggle on with no sensors is live.
+			if (option.Kind != ModeKind.Normal && option.HasResetTrigger)
 				result.AddWarning(
 					$"HouseMode option '{option.Value}' carries a reset trigger, which is dormant while "
 					+ "HouseMode.Authority is HomeAssistant — a reset writes the select, and the engine never does.");

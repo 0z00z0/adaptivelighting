@@ -252,6 +252,14 @@ public static class LightingConfigDocument
 			area.Levels = levels;
 		}
 
+		// Never null in the model, and the normaliser clears it on every save, so a hand-emptied key would throw
+		// there before the engine ever read it.
+		foreach (TimePeriodConfig period in periods)
+		{
+			repaired |= NullSafeList(period.StartsOnMotionAreas, out List<string> startsOnMotionAreas);
+			period.StartsOnMotionAreas = startsOnMotionAreas;
+		}
+
 		if (repaired)
 			logger?.LogWarning(
 				"The configuration document has empty sections or blank list entries — a key with nothing under it, "

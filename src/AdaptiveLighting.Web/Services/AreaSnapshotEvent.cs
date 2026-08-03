@@ -99,6 +99,17 @@ public sealed record AreaSnapshotEvent
 	public string? AutoOnBlockingEntity { get; init; }
 
 	/// <summary>
+	///     Whether a <c>KeepLitWhenOn</c> entity was suspending the engine's own off-command. <c>null</c> from a
+	///     build that did not publish it.
+	/// </summary>
+	[JsonPropertyName("is_held_lit")]
+	public bool? IsHeldLit { get; init; }
+
+	/// <summary>The entity doing the holding, or <c>null</c>.</summary>
+	[JsonPropertyName("held_lit_by")]
+	public string? HeldLitBy { get; init; }
+
+	/// <summary>
 	///     Rebuilds an <see cref="AreaSnapshot"/> from the wire shape, or <c>null</c> when the payload names no
 	///     area. An unparseable enum name degrades to its zero value; nothing throws.
 	/// </summary>
@@ -128,6 +139,8 @@ public sealed record AreaSnapshotEvent
 			// Not default, unlike the enums above: AutoOnBlock's zero is "nothing is blocking", which a report that
 			// never carried the field did not say.
 			Enum.TryParse(AutoOnBlockedBy, out AutoOnBlock block) ? block : null,
-			AutoOnBlockingEntity);
+			AutoOnBlockingEntity,
+			IsHeldLit: IsHeldLit,
+			HeldLitBy: HeldLitBy);
 	}
 }

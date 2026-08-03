@@ -53,6 +53,8 @@ public sealed class HaStatePublisher : IStatePublisher
 				darkness_detail = snapshot.DarknessDetail,
 				auto_on_blocked_by = snapshot.AutoOnBlockedBy?.ToString(),
 				auto_on_blocking_entity = snapshot.AutoOnBlockingEntity,
+				is_held_lit = snapshot.IsHeldLit,
+				held_lit_by = snapshot.HeldLitBy,
 				levels_from_room = snapshot.LevelsFromRoom?.ToString(),
 				// Flat, not nested, so an automation trigger can read one field without walking an object.
 				is_anyone_home = snapshot.IsAnyoneHome,

@@ -843,6 +843,29 @@ public sealed class LightingConfigDocumentTests
 			GlobalConfig.DefaultMotionDeviceClasses.Count, config.Global.EffectiveMotionDeviceClasses.Count);
 	}
 
+	// The same failure inside a period. ConfigNormalizer clears or rewrites this list on every save, and the
+	// validator and ModeMonitor both walk it, so a null reaches three readers before the engine lights anything.
+	[TestMethod]
+	public void An_Emptied_StartsOnMotionAreas_Loads_As_No_Rooms()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Periods:
+			    - Name: morning
+			      Start: "06:30"
+			      StartsOnMotion: true
+			      StartsOnMotionAreas:
+			""").Config;
+
+		Assert.IsNotNull(config.Periods.Single().StartsOnMotionAreas, "an emptied key must not come back as null");
+		Assert.AreEqual(0, config.Periods.Single().StartsOnMotionAreas.Count);
+
+		// The normaliser is where it threw: it rewrites the list whenever StartsOnMotion is on.
+		ConfigNormalizer.Normalize(config);
+		Assert.AreEqual(0, config.Periods.Single().StartsOnMotionAreas.Count);
+	}
+
 	// The same failure one level down. This list is read by the normaliser on every save, not only by the engine.
 	[TestMethod]
 	public void An_Emptied_House_Mode_Option_List_Loads_As_No_Options()

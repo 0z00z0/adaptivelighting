@@ -69,6 +69,9 @@ public sealed class AreaEntityResolver
 	private const string GroupMembersAttribute = "entity_id";
 	private const string SupportedColorModesAttribute = "supported_color_modes";
 	private const string ColorTempMode = "color_temp";
+
+	// The modes that give equal channels somewhere to land. Nothing else counts as evidence against kelvin.
+	private static readonly string[] ColourChannelModes = ["rgb", "rgbw", "rgbww", "hs", "xy"];
 	private const string UnavailableState = "unavailable";
 	private const string UnknownState = "unknown";
 
@@ -196,7 +199,7 @@ public sealed class AreaEntityResolver
 	/// </remarks>
 	private bool? ColorTempCapabilityOf(List<string> lights)
 	{
-		bool anyAnswered = false;
+		bool anyColourChannel = false;
 
 		foreach (string light in lights)
 		{
@@ -204,13 +207,17 @@ public sealed class AreaEntityResolver
 			if (modes.Count == 0)
 				continue;
 
-			anyAnswered = true;
-
 			if (modes.Contains(ColorTempMode, StringComparer.OrdinalIgnoreCase))
 				return true;
+
+			// Only a fixture with somewhere to put equal channels is evidence for them. A brightness-only dimmer
+			// answers this attribute and offers no colour at all, and reading it as "no colour temperature" would
+			// take the kelvin away from every room holding one beside a real lamp.
+			if (ColourChannelModes.Any(mode => modes.Contains(mode, StringComparer.OrdinalIgnoreCase)))
+				anyColourChannel = true;
 		}
 
-		return anyAnswered ? false : null;
+		return anyColourChannel ? false : null;
 	}
 
 	/// <summary>Why an area yielded no lights, in the words that name the fix.</summary>

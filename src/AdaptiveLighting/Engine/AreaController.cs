@@ -577,6 +577,11 @@ public sealed class AreaController : IDisposable
 	/// </summary>
 	private void ComeHome(TransitionReason reason)
 	{
+		// The sweep a hold refused was the leaving sweep, and the house is no longer leaving. Without this the
+		// hold releasing later settles an off nobody asked for, since WelcomeHome is off by default and the
+		// branch below that re-arms the vacancy timer never runs.
+		_offHeldBack = false;
+
 		Enter(AreaState.AutoVacant, reason);
 
 		if (!_area.Settings.WelcomeHome || !CanAutoOn(out _))

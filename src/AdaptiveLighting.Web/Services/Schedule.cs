@@ -172,10 +172,12 @@ public static class ModeAuthority
 		List<HouseModeOptionConfig> options = global.HouseMode!.Options;
 
 		// A reset writes the select back to Normal, so ModeMonitor stands it down with the three that set it.
+		// Normal is exempt from no-motion and reset in the engine, so counting it here would name a rule that was
+		// never firing under either authority.
 		return new DormantModeRules(
 			periods.Count(period => period.SetsMode is { Length: > 0 }),
 			options.Count(option => option.ActivateWhileOn.Count > 0),
-			options.Count(option => option.ActivateAfterNoMotionMinutes is > 0),
+			options.Count(option => option.Kind != ModeKind.Normal && option.ActivateAfterNoMotionMinutes is > 0),
 			options.Count(option => option.Kind != ModeKind.Normal && option.HasResetTrigger));
 	}
 }
