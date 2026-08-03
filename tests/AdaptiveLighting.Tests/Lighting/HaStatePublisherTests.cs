@@ -168,6 +168,27 @@ public sealed class HaStatePublisherTests
 	}
 
 	[TestMethod]
+	public void The_Room_Scene_Survives_The_Serialize_Event_ToSnapshot_Round_Trip()
+	{
+		FakeHaContext ha = new();
+		HaStatePublisher publisher = new(ha, NullLogger.Instance);
+
+		AreaSnapshot snapshot = new(
+			"Stue", AreaState.AutoVacant, TransitionReason.VacancyTimeout, HouseMode.Home,
+			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: null, ColorTempKelvin: null,
+			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
+			NextChangeFrom: null, AreaId: "stue", SceneApplied: "scene.stue_natt");
+
+		publisher.Publish(snapshot);
+
+		string json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(json)!.ToSnapshot();
+
+		Assert.IsNotNull(rebuilt);
+		Assert.AreEqual("scene.stue_natt", rebuilt!.SceneApplied);
+	}
+
+	[TestMethod]
 	public void An_Area_With_No_Registry_Area_Publishes_A_Null_Id()
 	{
 		FakeHaContext ha = new();

@@ -197,6 +197,8 @@ public sealed class AreaSetupServiceTests
 		Assert.IsNull(after.MotionSensors);
 		Assert.IsNull(after.LuxSensor);
 		Assert.IsNull(after.IgnoreWhenOn);
+		Assert.IsNull(after.SceneOnMotion, "and the two scenes it ran");
+		Assert.IsNull(after.SceneWhenEmpty);
 		Assert.IsNull(after.ExcludeEntities, "and the per-room exclusions");
 		CollectionAssert.AreEqual(Array.Empty<string>(), OverridesOf(after).ToArray(),
 			"and every changed setting — 'stue' names no role, so nothing is guessed back in");
@@ -543,6 +545,8 @@ public sealed class AreaSetupServiceTests
 		MotionSensors = [$"binary_sensor.{areaId}_m"],
 		LuxSensor = $"sensor.{areaId}_lux",
 		IgnoreWhenOn = [$"media_player.{areaId}"],
+		SceneOnMotion = $"scene.{areaId}_ankomst",
+		SceneWhenEmpty = $"scene.{areaId}_natt",
 		ExcludeEntities = [$"sensor.{areaId}_fridge_lux"],
 		VacancyTimeoutSeconds = 900,
 		PreOffSeconds = 45,

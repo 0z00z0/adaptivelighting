@@ -324,6 +324,70 @@ public sealed class ConfigValidatorTests
 		StringAssert.Contains(result.ToString(), "Stue", "the household needs to know which room to go and fix");
 	}
 
+	// ===================== the two per-room scenes =====================
+
+	// A room whose scene is wrong still lights, by its own levels, so nothing here may stop the house.
+	[TestMethod]
+	public void A_Room_Scene_Outside_The_Scene_Domain_Warns_And_Never_Errors()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", SceneOnMotion = "light.stue_tak" }];
+
+		ValidationResult result = ConfigValidator.Validate(config, knownEntityIds: ["light.stue_tak"]);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(0, result.AreaErrors.Count);
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("SceneOnMotion", StringComparison.Ordinal)
+			&& w.Contains("not a scene entity", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void A_Room_Scene_Home_Assistant_Does_Not_Know_Warns_And_Never_Errors()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", SceneWhenEmpty = "scene.gone" }];
+
+		ValidationResult result = ConfigValidator.Validate(config, knownEntityIds: ["scene.still_here"]);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(0, result.AreaErrors.Count, "a renamed scene costs the atmosphere, not the room");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("SceneWhenEmpty", StringComparison.Ordinal)
+			&& w.Contains("does not know", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void Two_Good_Room_Scenes_Warn_About_Nothing()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas =
+		[
+			new()
+			{
+				Name = "Stue",
+				AreaId = "stue",
+				SceneOnMotion = "scene.stue_kveld",
+				SceneWhenEmpty = "scene.stue_natt"
+			}
+		];
+
+		ValidationResult result = ConfigValidator.Validate(config, knownEntityIds: ["scene.stue_kveld", "scene.stue_natt"]);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(0, result.Warnings.Count);
+	}
+
+	// The domain check needs no registry, so it still runs when Home Assistant has not answered.
+	[TestMethod]
+	public void The_Domain_Check_Runs_With_No_Known_Entities_At_All()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", SceneWhenEmpty = "script.stue_natt" }];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("not a scene entity", StringComparison.Ordinal)));
+	}
+
 	// ===================== the daylight brightness curve =====================
 
 	[TestMethod]
