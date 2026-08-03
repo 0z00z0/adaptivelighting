@@ -23,6 +23,28 @@ public class TimePeriodConfig
 	/// </summary>
 	public string Start { get; set; } = "";
 
+	/// <summary>
+	///     Let movement pull this period forward, so it begins when somebody first walks in rather than on the
+	///     clock alone.
+	/// </summary>
+	/// <remarks>
+	///     Bounded two ways, and both matter. Motion can only bring the period forward to <b>at most its own
+	///     <see cref="Start"/></b>, so morning cannot fire on a 02:00 trip to the kitchen; and it fires <b>once
+	///     per local day</b>, so walking back in at lunch does not restart it. Without the first bound the
+	///     period table stops meaning anything; without the second, a period would re-enter all day and re-fire
+	///     its <see cref="SetsMode"/> with it.
+	/// </remarks>
+	public bool StartsOnMotion { get; set; }
+
+	/// <summary>
+	///     Which rooms' movement may start it. Empty means any room the engine watches.
+	/// </summary>
+	/// <remarks>
+	///     Area ids, matched the way every other area reference is. Naming the kitchen keeps a bedroom sensor at
+	///     06:05 from starting the morning for the whole house.
+	/// </remarks>
+	public List<string> StartsOnMotionAreas { get; set; } = [];
+
 	public double BrightnessPct { get; set; } = 80;
 
 	public int ColorTempKelvin { get; set; } = 3500;

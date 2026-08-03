@@ -67,6 +67,9 @@ public class AreaConfig
 	/// <inheritdoc cref="AreaSettings.Darkness"/>
 	public DarknessSource? Darkness { get; set; }
 
+	/// <inheritdoc cref="AreaSettings.ColorControl"/>
+	public ColorControl? ColorControl { get; set; }
+
 	/// <summary>
 	///     What this room does instead of the schedule, period by period. Empty means it follows the schedule
 	///     everywhere, which is the overwhelming majority of rooms.
@@ -146,6 +149,7 @@ public class AreaConfig
 			OverrideDurationMinutes = OverrideDurationMinutes ?? defaults.OverrideDurationMinutes,
 			VacancyResetMinutes = VacancyResetMinutes ?? defaults.VacancyResetMinutes,
 			Darkness = Darkness ?? defaults.Darkness,
+			ColorControl = ColorControl ?? defaults.ColorControl,
 			LuxThreshold = LuxThreshold ?? defaults.LuxThreshold,
 			LuxHysteresis = LuxHysteresis ?? defaults.LuxHysteresis,
 			LuxBrightnessEnabled = LuxBrightnessEnabled ?? defaults.LuxBrightnessEnabled,

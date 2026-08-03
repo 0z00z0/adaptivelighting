@@ -16,10 +16,56 @@ public enum ModeKind
 	Guest
 }
 
+/// <summary>Which side owns the house mode: this application, or the Home Assistant dropdown.</summary>
+/// <remarks>
+///     Ordinals are pinned and no member may be renamed or removed, for the reason
+///     <see cref="PeriodAuthority"/> gives: two binders read this document, an unknown key is silence in both,
+///     and an unknown enum value is a <see cref="FormatException"/> at startup.
+/// </remarks>
+public enum HouseModeAuthority
+{
+	/// <summary>
+	///     This application decides, and the default, so a document that says nothing behaves as every document
+	///     did before the authority existed. A period's <c>SetsMode</c>, the no-motion rule and
+	///     <c>ActivateWhileOn</c> all still write the mode, and the select is kept in step as a mirror.
+	/// </summary>
+	AdaptiveLighting = 0,
+
+	/// <summary>
+	///     Home Assistant decides. The engine reads the select and never writes it, and its own mode rules stand
+	///     down: <see cref="TimePeriodConfig.SetsMode"/> and <c>ActivateAfterNoMotionMinutes</c> stop firing, so
+	///     the dropdown is the only thing that moves the house.
+	/// </summary>
+	HomeAssistant = 1
+}
+
 /// <summary>The house-mode select and what each of its options means to the engine.</summary>
 public class HouseModeConfig
 {
 	public string? Entity { get; set; }
+
+	/// <summary>
+	///     <see cref="Entity"/> as anything reading Home Assistant should ask for it: trimmed, or <c>null</c>
+	///     when blank.
+	/// </summary>
+	/// <remarks>
+	///     Same accessor, and the same reason, as <see cref="PeriodSelectConfig.EntityId"/>: a trailing space in
+	///     a hand-edited file otherwise puts the engine on one entity and the pages on another.
+	/// </remarks>
+	[YamlIgnore]
+	public string? EntityId => Entity is { Length: > 0 } entity && entity.Trim() is { Length: > 0 } trimmed
+		? trimmed
+		: null;
+
+	/// <summary>
+	///     Which side decides. Defaults to <see cref="HouseModeAuthority.AdaptiveLighting"/>, so adding the key
+	///     changes nothing on its own.
+	/// </summary>
+	public HouseModeAuthority Authority { get; set; } = HouseModeAuthority.AdaptiveLighting;
+
+	/// <summary>Whether Home Assistant owns the mode, so nothing in the engine may write the select.</summary>
+	[YamlIgnore]
+	public bool HomeAssistantDecides => Authority is HouseModeAuthority.HomeAssistant && EntityId is not null;
 
 	public List<HouseModeOptionConfig> Options { get; set; } = [];
 

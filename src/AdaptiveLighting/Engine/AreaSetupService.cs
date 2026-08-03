@@ -174,6 +174,7 @@ public static class AreaSetupService
 		(area.VacancyTimeoutSeconds is not null ? 1 : 0) + (area.PreOffSeconds is not null ? 1 : 0)
 		+ (area.PreOffBrightnessFactor is not null ? 1 : 0) + (area.OverrideDurationMinutes is not null ? 1 : 0)
 		+ (area.VacancyResetMinutes is not null ? 1 : 0) + (area.Darkness is not null ? 1 : 0)
+		+ (area.ColorControl is not null ? 1 : 0)
 		+ (area.LuxThreshold is not null ? 1 : 0) + (area.LuxHysteresis is not null ? 1 : 0)
 		+ (area.LuxBrightnessEnabled is not null ? 1 : 0) + (area.LuxBrightnessStartLux is not null ? 1 : 0)
 		+ (area.LuxBrightnessFullLux is not null ? 1 : 0) + (area.LuxBrightnessMaxPct is not null ? 1 : 0)

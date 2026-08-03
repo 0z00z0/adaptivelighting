@@ -575,6 +575,12 @@ public sealed class RoomSettingsTests
 				RoomSettings.SetFlag(room, setting.Key, true);
 				break;
 
+			// Keyed, not hardcoded: there is more than one choice-typed setting now, and setting Darkness for all
+			// of them left the others following the house while the loop asserted they did not.
+			case RoomControl.Choice when setting.Key == nameof(AreaSettings.ColorControl):
+				room.ColorControl = ColorControl.EqualChannels;
+				break;
+
 			case RoomControl.Choice:
 				room.Darkness = DarknessSource.Always;
 				break;

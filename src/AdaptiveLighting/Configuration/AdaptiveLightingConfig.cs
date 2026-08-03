@@ -186,6 +186,15 @@ public class AreaSettings
 	/// <remarks>Under <see cref="DarknessSource.Lux"/> a room with no sensor, or none still reporting, counts as dark.</remarks>
 	public DarknessSource Darkness { get; set; } = DarknessSource.Lux;
 
+	/// <summary>How the room's warmth is commanded, or whether it can be at all.</summary>
+	/// <remarks>
+	///     <see cref="ColorControl.Auto"/> reads the fixtures: a room whose resolved lights all lack
+	///     <c>color_temp</c> is driven as <see cref="ColorControl.EqualChannels"/> without anybody configuring
+	///     it. The other two members are a person overruling that, which is needed both ways because Home
+	///     Assistant sometimes advertises a capability a fixture does not really have.
+	/// </remarks>
+	public ColorControl ColorControl { get; set; } = ColorControl.Auto;
+
 	/// <summary>Lux below which the area counts as dark.</summary>
 	/// <remarks>
 	///     A daylight threshold, not an indoor one, because the reading is very often an outdoor sensor a room merely
@@ -244,6 +253,30 @@ public class AreaSettings
 ///     supplies the lux reading is a separate question, answered by <see cref="AreaConfig.LuxSensor"/> or
 ///     <see cref="AreaConfig.FollowOutdoorLux"/>.
 /// </remarks>
+/// <summary>How a room's warmth reaches its lights.</summary>
+/// <remarks>
+///     Ordinals pinned, no member renamed or removed, for the reason <see cref="DarknessSource"/> gives: an
+///     unknown enum value is a <see cref="FormatException"/> at start-up, not a silently ignored key.
+/// </remarks>
+public enum ColorControl
+{
+	/// <summary>
+	///     Decide from the fixtures, and the default. All of the room's lights lacking <c>color_temp</c> reads as
+	///     <see cref="EqualChannels"/>; anything else reads as <see cref="Kelvin"/>.
+	/// </summary>
+	Auto = 0,
+
+	/// <summary>Command <c>color_temp_kelvin</c>. What every colour-temperature fixture takes.</summary>
+	Kelvin = 1,
+
+	/// <summary>
+	///     Command every colour channel at one value, giving neutral white at the target brightness. For a room
+	///     whose lights have no colour temperature: the schedule's kelvin figure cannot reach them, so the UI
+	///     stops offering a number that would do nothing.
+	/// </summary>
+	EqualChannels = 2
+}
+
 public enum DarknessSource
 {
 	/// <summary>Lux only, and the default. A room with no sensor, or with none still answering, is simply dark.</summary>

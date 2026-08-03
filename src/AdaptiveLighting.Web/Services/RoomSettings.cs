@@ -162,6 +162,12 @@ public static class RoomSettings
 		("Sun", nameof(DarknessSource.Sun)),
 		("Always dark", nameof(DarknessSource.Always)));
 
+	/// <summary>How the room's warmth is commanded. <c>Auto</c> reads the fixtures and needs no answer.</summary>
+	public static IReadOnlyList<TokenChoice> ColorControlOptions { get; } = TokenChoices.Of(
+		("Detect from the lights", nameof(ColorControl.Auto)),
+		("Colour temperature", nameof(ColorControl.Kelvin)),
+		("No colour temperature", nameof(ColorControl.EqualChannels)));
+
 	public static IReadOnlyList<RoomSettingGroup> Groups { get; } =
 	[
 		new RoomSettingGroup(
@@ -266,6 +272,11 @@ public static class RoomSettings
 			"Room behaviour",
 			"What this room does when the house sleeps, empties or fills again",
 			[
+				new RoomSetting(
+					nameof(AreaSettings.ColorControl),
+					"How warmth reaches these lights",
+					"Most lights take a colour temperature in kelvin. Plain dimmers and colour strips do not, and those are driven with every channel at one value, which is neutral white; the schedule's kelvin figure does nothing for them. Left to detect, this reads the room's own lights and needs no answer from you.",
+					RoomControl.Choice),
 				new RoomSetting(
 					nameof(AreaSettings.RespectSleepMode),
 					"Gentle while the house sleeps",
@@ -551,6 +562,13 @@ public static class RoomSettings
 				room.Darkness = source;
 				return true;
 
+			case nameof(AreaSettings.ColorControl):
+				if (!edit.TryEnum(out ColorControl roomColor))
+					return false;
+
+				room.ColorControl = roomColor;
+				return true;
+
 			default:
 				return false;
 		}
@@ -647,6 +665,13 @@ public static class RoomSettings
 					return false;
 
 				house.Darkness = source;
+				return true;
+
+			case nameof(AreaSettings.ColorControl):
+				if (!edit.TryEnum(out ColorControl houseColor))
+					return false;
+
+				house.ColorControl = houseColor;
 				return true;
 
 			default:

@@ -18,7 +18,7 @@ public static class AreaView
 {
 	// Must equal RoomSettings.Keys.Count; a test holds the two together. Enabled is not in the list, the header
 	// toggle owns it.
-	public const int OverridableSettingCount = 21;
+	public const int OverridableSettingCount = 22;
 
 	/// <summary>What a floorless group is called, once, so both screens head it the same way.</summary>
 	public const string FloorlessTitle = "Other rooms";
