@@ -9,6 +9,23 @@
 *@
 
 <div class="levels">
+	@* Asked once for the room, not once per period: it is a fact about the fixtures, and a copy in every row
+	   would read as four separate decisions. Above the schedule's own emptiness, because it stands whether or
+	   not there is a day set up yet. *@
+	<div class="lvl-warmth">
+		<label class="lvl-warmth-lab" for="lvl-warmth">Warmth</label>
+		<select id="lvl-warmth" class="cell" @bind:get="WarmthNow" @bind:set="SetWarmth">
+			@foreach (TokenChoice option in AreaSentences.WarmthChoices)
+			{
+				<option value="@option.Value">@option.Text</option>
+			}
+		</select>
+		@if (NoColourTemperature)
+		{
+			<span class="lvl-warmth-note">@AreaSentences.NoColourTemperature</span>
+		}
+	</div>
+
 	@if (Periods.Count == 0)
 	{
 		<div class="empty">
@@ -22,7 +39,7 @@
 		RoomLevelRow current = row;
 		bool isNow = string.Equals(current.Period, ActivePeriod, StringComparison.OrdinalIgnoreCase);
 
-		<div class="lvl @(current.IsOwn ? "lvl-own" : null) @(isNow ? "lvl-now" : null)" @key="current.Period">
+		<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(current.IsOwn ? "lvl-own" : null) @(isNow ? "lvl-now" : null)" @key="current.Period">
 			<div class="lvl-when">
 				<span class="lvl-name">@PeriodName(current.Period)</span>
 				@if (isNow)
@@ -58,34 +75,39 @@
 				}
 			</div>
 
-			<div class="lvl-cell @(current.Colour == LevelSource.Room ? "lvl-set" : null)">
-				<span class="lvl-cell-head">
-					<span class="lvl-cell-label">Warmth</span>
-					@* The same KelvinColour conversion the state chip and the board use, so no two surfaces
-					   disagree about a warmth. *@
-					<span class="lvl-swatch" style="@Swatch(current.ColorTempKelvin)" title="@($"{current.ColorTempKelvin} K")" aria-hidden="true"></span>
+			@* Dropped, not disabled: a kelvin these lights cannot take is not a setting waiting to be filled in.
+			   Anything a period already pinned stays in the document and comes back with the control. *@
+			@if (!NoColourTemperature)
+			{
+				<div class="lvl-cell @(current.Colour == LevelSource.Room ? "lvl-set" : null)">
+					<span class="lvl-cell-head">
+						<span class="lvl-cell-label">Warmth</span>
+						@* The same KelvinColour conversion the state chip and the board use, so no two surfaces
+						   disagree about a warmth. *@
+						<span class="lvl-swatch" style="@Swatch(current.ColorTempKelvin)" title="@($"{current.ColorTempKelvin} K")" aria-hidden="true"></span>
+						@if (current.Colour == LevelSource.Room)
+						{
+							<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+						}
+					</span>
+
+					<PresetSelect Value="@current.ColorTempKelvin"
+								  ValueChanged="@(value => SetColour(current.Period, value))"
+								  Options="@Presets.ColorTempKelvin"
+								  Unit="K" Min="1000" Max="10000" Step="50" />
+
 					@if (current.Colour == LevelSource.Room)
 					{
-						<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+						<button type="button" class="lvl-revert" @onclick="() => ClearColour(current.Period)">
+							Follow the schedule (@ScheduleKelvin(current.Period) K)
+						</button>
 					}
-				</span>
-
-				<PresetSelect Value="@current.ColorTempKelvin"
-							  ValueChanged="@(value => SetColour(current.Period, value))"
-							  Options="@Presets.ColorTempKelvin"
-							  Unit="K" Min="1000" Max="10000" Step="50" />
-
-				@if (current.Colour == LevelSource.Room)
-				{
-					<button type="button" class="lvl-revert" @onclick="() => ClearColour(current.Period)">
-						Follow the schedule (@ScheduleKelvin(current.Period) K)
-					</button>
-				}
-				else
-				{
-					<span class="lvl-inherit">the schedule's</span>
-				}
-			</div>
+					else
+					{
+						<span class="lvl-inherit">the schedule's</span>
+					}
+				</div>
+			}
 		</div>
 	}
 
@@ -123,6 +145,15 @@
 	[Parameter, EditorRequired]
 	public AreaConfig Room { get; set; } = new();
 
+	/// <summary>The house's own settings, which the warmth question follows where the room says nothing.</summary>
+	[Parameter, EditorRequired]
+	public AreaSettings Defaults { get; set; } = new();
+
+	/// <summary>What discovery makes of the room, which is what settles a warmth left on detect.</summary>
+	/// <remarks><c>null</c> while the room cannot be resolved at all, and then only the stated answer is known.</remarks>
+	[Parameter]
+	public ResolvedArea? Resolved { get; set; }
+
 	/// <summary>The period in force right now, so its row says so. <c>null</c> when none is.</summary>
 	[Parameter]
 	public string? ActivePeriod { get; set; }
@@ -133,6 +164,25 @@
 
 	/// <summary>The same placeholder the schedule editor uses for an unnamed period.</summary>
 	private static string PeriodName(string name) => name is { Length: > 0 } ? name : "unnamed period";
+
+	// The resolved answer, so a room left on detect whose fixtures have no colour temperature loses the control
+	// too. The select below stays on the stated answer: snapping it to the detected one would read as the pick
+	// being refused.
+	private bool NoColourTemperature =>
+		(Resolved?.EffectiveColorControl ?? AreaSentences.WarmthOf(Room, Defaults)) is ColorControl.EqualChannels;
+
+	private string WarmthNow => AreaSentences.WarmthOf(Room, Defaults).ToString();
+
+	/// <summary>Writes the room's own answer. A value no member matches is ignored, never thrown out of the handler.</summary>
+	private Task SetWarmth(string value)
+	{
+		if (!Enum.TryParse(value, out ColorControl picked))
+			return Task.CompletedTask;
+
+		Room.ColorControl = picked;
+
+		return Changed.InvokeAsync();
+	}
 
 	/// <summary>When the period starts, in the engine's own reading of its Start string.</summary>
 	private string StartOf(string name) =>

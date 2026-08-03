@@ -942,6 +942,149 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "and the schedule drives the mode exactly as it always did");
 	}
 
+	// ---- house-mode authority -------------------------------------------------------------------
+	//
+	// Under HouseModeAuthority.HomeAssistant the dropdown decides alone: the engine reads the select, never writes
+	// it, and every rule of its own that would move the mode stands down.
+
+	private static GlobalConfig HandedToHomeAssistant(HouseModeConfig mode)
+	{
+		mode.Authority = HouseModeAuthority.HomeAssistant;
+		return new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
+	}
+
+	private static int AnyHouseSelectCalls(FakeHaContext ha) =>
+		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"
+			&& c.Target?.EntityIds?.Contains(Select) == true);
+
+	[TestMethod]
+	public void HomeAssistantAuthority_StillReadsTheSelect()
+	{
+		Rig rig = Build(HandedToHomeAssistant(Mode()));
+
+		rig.Ha.SetState(Select, "Sover");
+
+		Assert.AreEqual(ModeKind.Sleep, rig.Monitor.ActiveKind, "standing down is about writing, not about reading");
+		Assert.AreEqual("Sover", rig.Monitor.CurrentModeValue);
+	}
+
+	[TestMethod]
+	public void HomeAssistantAuthority_PeriodSetsMode_IsDormant()
+	{
+		Rig rig = Started(HandedToHomeAssistant(Mode()),
+			startAt: new DateTimeOffset(2026, 1, 15, 22, 0, 0, TimeSpan.Zero), initialSelect: "Hjemme");
+
+		Advance(rig, TimeSpan.FromMinutes(90));   // past night@23:00, whose SetsMode is Sover
+
+		Assert.AreEqual(0, AnyHouseSelectCalls(rig.Ha), "the schedule does not move a select Home Assistant owns");
+	}
+
+	[TestMethod]
+	public void HomeAssistantAuthority_RestartAcrossABoundary_AppliesNothing()
+	{
+		Rig rig = Started(HandedToHomeAssistant(Mode()), startAt: HalfPastNight, initialSelect: "Hjemme",
+			lastPeriod: EndedIn("evening"));
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, AnyHouseSelectCalls(rig.Ha),
+			"the boundary went by, but applying its mode is still a write of somebody else's select");
+	}
+
+	[TestMethod]
+	public void HomeAssistantAuthority_NoMotionAutoAway_IsDormant()
+	{
+		Rig rig = Started(HandedToHomeAssistant(AwayActivatesOnNoMotion(360).HouseMode!), periods: FlatPeriod(),
+			motion: [Gang], startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+
+		Advance(rig, TimeSpan.FromHours(7));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"), "the idle timer stands down; the dropdown decides alone");
+	}
+
+	// The same table under this application's own authority, so the dormancy above is the authority and not the rig.
+	[TestMethod]
+	public void AdaptiveLightingAuthority_NoMotionAutoAway_IsLive()
+	{
+		Rig rig = Started(AwayActivatesOnNoMotion(360), periods: FlatPeriod(), motion: [Gang],
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+
+		Advance(rig, TimeSpan.FromHours(7));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"), "the default authority is unchanged by the new key");
+	}
+
+	[TestMethod]
+	public void HomeAssistantAuthority_ActivateWhileOn_IsDormant()
+	{
+		Rig rig = Build(HandedToHomeAssistant(WithActivation("Borte", SleepToggle).HouseMode!));
+		rig.Ha.SetState(Select, "Hjemme");
+		rig.Ha.SetState(SleepToggle, "on");
+
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind,
+			"forcing a mode is the engine deciding one, so the overlay stands down with the rest");
+		Assert.IsNull(rig.Monitor.Forced, "and nothing is reported as forcing the house");
+	}
+
+	[TestMethod]
+	public void HomeAssistantAuthority_PresenceReset_IsDormant()
+	{
+		Rig rig = Started(HandedToHomeAssistant(AwayResetsOnPresence([Gang]).HouseMode!), startAt: Evening,
+			initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Gang, "on");
+
+		Assert.AreEqual(0, AnyHouseSelectCalls(rig.Ha), "a reset is a write, and nothing here writes this select");
+	}
+
+	[TestMethod]
+	public void HomeAssistantAuthority_PeriodStartReset_IsDormant()
+	{
+		HouseModeConfig mode = Mode();
+		mode.OptionFor("Sover")!.ResetOnPeriodStart = "morning";
+
+		Rig rig = Started(HandedToHomeAssistant(mode),
+			startAt: new DateTimeOffset(2026, 1, 16, 6, 0, 0, TimeSpan.Zero), initialSelect: "Sover");
+
+		Advance(rig, TimeSpan.FromMinutes(40));   // past morning@06:30
+
+		Assert.AreEqual(0, AnyHouseSelectCalls(rig.Ha), "the waking period does not end a night Home Assistant owns");
+	}
+
+	// The authority is about the house-mode select alone; the period select answers to its own.
+	[TestMethod]
+	public void HomeAssistantAuthority_StillMirrorsThePeriodSelect()
+	{
+		GlobalConfig global = WithPeriodSelect(PeriodAuthority.AdaptiveLighting, Norwegian());
+		global.HouseMode!.Authority = HouseModeAuthority.HomeAssistant;
+
+		Rig rig = Started(global, startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(PeriodSelect, "Morgen"));
+
+		Advance(rig, TimeSpan.FromMinutes(1));
+
+		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Kveld"), "two selects, two authorities");
+		Assert.AreEqual(0, AnyHouseSelectCalls(rig.Ha));
+	}
+
+	// An authority set on a document with no select at all changes nothing: HomeAssistantDecides needs both.
+	[TestMethod]
+	public void HomeAssistantAuthority_WithNoSelectConfigured_IsInert()
+	{
+		HouseModeConfig mode = Mode();
+		mode.Entity = null;
+		mode.Authority = HouseModeAuthority.HomeAssistant;
+		mode.OptionFor("Borte")!.ActivateWhileOn = [SleepToggle];
+
+		Rig rig = Build(new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode });
+		rig.Ha.SetState(SleepToggle, "on");
+
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind,
+			"with no select there is nothing to hand over, so the overlay still decides");
+	}
+
 	// ---- Master-switch default ----------------------------------------------------------------
 
 	[TestMethod]

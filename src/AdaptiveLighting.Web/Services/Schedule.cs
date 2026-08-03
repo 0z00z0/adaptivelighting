@@ -94,3 +94,88 @@ public static class Schedule
 		return pool.OrderBy(entry => entry.Start).Last().Period;
 	}
 }
+
+/// <summary>
+///     The engine's own house-mode rules that a document configures but the authority has stood down, counted so
+///     a page can name them.
+/// </summary>
+/// <param name="SetsModePeriods">Periods carrying a <see cref="TimePeriodConfig.SetsMode"/>.</param>
+/// <param name="ActivateWhileOnOptions">Options carrying a <c>ActivateWhileOn</c> entity.</param>
+/// <param name="AutoAwayOptions">Options carrying a positive <c>ActivateAfterNoMotionMinutes</c>.</param>
+/// <param name="ResetTriggerOptions">Options carrying a reset trigger, which returns the select to Normal.</param>
+public sealed record DormantModeRules(
+	int SetsModePeriods,
+	int ActivateWhileOnOptions,
+	int AutoAwayOptions,
+	int ResetTriggerOptions)
+{
+	/// <summary>Nothing is standing down, either because adaptive lighting decides or because nothing is configured.</summary>
+	public static readonly DormantModeRules None = new(0, 0, 0, 0);
+
+	public bool Any =>
+		SetsModePeriods > 0 || ActivateWhileOnOptions > 0 || AutoAwayOptions > 0 || ResetTriggerOptions > 0;
+
+	/// <summary>Each dormant rule as the page that carries the control names it.</summary>
+	public IReadOnlyList<string> Names
+	{
+		get
+		{
+			List<string> names = new(4);
+
+			if (SetsModePeriods > 0)
+				names.Add(SetsModePeriods == 1
+					? "1 period that also switches the house mode"
+					: $"{SetsModePeriods} periods that also switch the house mode");
+
+			if (ActivateWhileOnOptions > 0)
+				names.Add($"{ActivateWhileOnOptions} {Plural(ActivateWhileOnOptions, "mode")} turned on by a switch or sensor");
+
+			if (AutoAwayOptions > 0)
+				names.Add($"{AutoAwayOptions} {Plural(AutoAwayOptions, "mode")} set after no movement");
+
+			if (ResetTriggerOptions > 0)
+				names.Add($"{ResetTriggerOptions} {Plural(ResetTriggerOptions, "mode")} with a reset trigger");
+
+			return names;
+		}
+	}
+
+	private static string Plural(int count, string noun) => count == 1 ? noun : noun + "s";
+}
+
+/// <summary>Which side owns the house mode, and what that leaves dormant.</summary>
+public static class ModeAuthority
+{
+	/// <summary>Whether Home Assistant owns the house mode, so nothing in the engine may move it.</summary>
+	/// <remarks>
+	///     Asked through <see cref="HouseModeConfig.HomeAssistantDecides"/>, which tests the trimmed
+	///     <c>EntityId</c>: an authority naming no entity, or an entity of nothing but spaces, leaves the engine
+	///     deciding as it always did.
+	/// </remarks>
+	public static bool HomeAssistantDecides(GlobalConfig global)
+	{
+		ArgumentNullException.ThrowIfNull(global);
+
+		return global.HouseMode?.HomeAssistantDecides is true;
+	}
+
+	/// <summary>What the document still configures that Home Assistant's authority has stood down.</summary>
+	/// <remarks>Counts what is configured, so a house that sets none of the three has nothing to report.</remarks>
+	public static DormantModeRules Dormant(GlobalConfig global, IReadOnlyList<TimePeriodConfig> periods)
+	{
+		ArgumentNullException.ThrowIfNull(global);
+		ArgumentNullException.ThrowIfNull(periods);
+
+		if (!HomeAssistantDecides(global))
+			return DormantModeRules.None;
+
+		List<HouseModeOptionConfig> options = global.HouseMode!.Options;
+
+		// A reset writes the select back to Normal, so ModeMonitor stands it down with the three that set it.
+		return new DormantModeRules(
+			periods.Count(period => period.SetsMode is { Length: > 0 }),
+			options.Count(option => option.ActivateWhileOn.Count > 0),
+			options.Count(option => option.ActivateAfterNoMotionMinutes is > 0),
+			options.Count(option => option.Kind != ModeKind.Normal && option.HasResetTrigger));
+	}
+}

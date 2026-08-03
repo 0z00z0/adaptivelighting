@@ -163,6 +163,9 @@ public static class AreaSetupService
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
 		+ (area.FollowOutdoorLux is not null ? 1 : 0)
 		+ (area.IgnoreWhenOn?.Count ?? 0)
+		+ (area.IgnoreWhenOnInverted is not null ? 1 : 0)
+		+ (area.KeepLitWhenOn?.Count ?? 0)
+		+ (area.KeepLitWhenOnInverted is not null ? 1 : 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>

@@ -1,178 +1,149 @@
 @*
 	Ties a Home Assistant dropdown helper to the engine's period table, in either direction.
 
-	Under Home Assistant's authority the helper is an input the engine reads; under adaptive lighting's it is
-	an output the engine writes. The rows come from the helper's live options, not from the document; a stored
-	row the helper no longer offers is shown apart as the rename case and can be moved onto a live option.
+	The picker, the direction switch and the unknown-entity notice are SelectAuthorityPanel's, shared with the
+	house mode. The rows come from the helper's live options, not from the document; a stored row the helper no
+	longer offers is shown apart as the rename case and can be moved onto a live option.
 *@
 
 <div class="periodselect">
-	<div class="field">
-		<div class="field-head">
-			<label class="field-label">Dropdown helper
-				<InfoPopover Label="Dropdown helper">
-					Which <code>input_select</code> holds the time of day. No helper yet? Make one in Home Assistant
-					under <strong>Settings &rarr; Devices &amp; services &rarr; Helpers &rarr; Create helper &rarr;
-					Dropdown</strong>, give it one option per period, then pick it here.
-				</InfoPopover>
-			</label>
-		</div>
-		<div class="field-control">
-			<EntityPicker Value="@Select?.Entity"
-						  ValueChanged="@EntityChanged"
-						  Options="@InputSelects"
+	<SelectAuthorityPanel Label="Dropdown helper"
+						  Entity="@Select?.Entity"
+						  EntityChanged="@EntityChanged"
+						  Entities="@InputSelects"
 						  NameResolver="@NameResolver"
 						  KnownResolver="@KnownResolver"
 						  NoneLabel="(none — the schedule decides the time of day)"
 						  EmptyNote="@EmptyNote"
-						  Placeholder="input_select.tid_pa_dagnet" />
-		</div>
-		<div class="field-help">
+						  Placeholder="input_select.tid_pa_dagnet"
+						  Group="period-authority"
+						  AuthorityLabel="Changes to periods are set by:"
+						  HomeAssistant="@(Authority == PeriodAuthority.HomeAssistant)"
+						  HomeAssistantChanged="@SetAuthority"
+						  AuthorityNote="@AuthorityNote"
+						  UnavailableNote="@UnavailableNote"
+						  IsAvailable="@IsAvailable"
+						  IsReady="@IsReady"
+						  LiveOptions="@LiveOptions">
+		<LabelHelp>
+			Which <code>input_select</code> holds the time of day. No helper yet? Make one in Home Assistant
+			under <strong>Settings &rarr; Devices &amp; services &rarr; Helpers &rarr; Create helper &rarr;
+			Dropdown</strong>, give it one option per period, then pick it here.
+		</LabelHelp>
+		<Note>
 			Without one, periods change at the start times in the schedule above and nothing else is read or written.
-		</div>
-	</div>
-
-	@if (HasEntity)
-	{
-		@* The authority decides what everything below means, so it comes before the mappings. *@
-		<div class="field">
-			<div class="field-head">
-				<span class="field-label">Changes to periods are set by:
-					<InfoPopover Label="Changes to periods are set by">
-						<strong>Home Assistant</strong> means the engine follows this dropdown: whatever option it
-						stands on names the period every room runs, and the start times in the schedule stop
-						deciding anything. <strong>Adaptive lighting</strong> means the engine decides from its own
-						schedule and keeps the dropdown pointing at the answer, so the rest of your house can read it.
-					</InfoPopover>
-				</span>
-			</div>
-			<div class="field-control periodselect-authority">
-				<label class="periodselect-choice">
-					<input type="radio" name="period-authority"
-						   checked="@(Authority == PeriodAuthority.HomeAssistant)"
-						   @onchange="@(() => SetAuthority(PeriodAuthority.HomeAssistant))" />
-					Home Assistant
-				</label>
-				<label class="periodselect-choice">
-					<input type="radio" name="period-authority"
-						   checked="@(Authority == PeriodAuthority.AdaptiveLighting)"
-						   @onchange="@(() => SetAuthority(PeriodAuthority.AdaptiveLighting))" />
-					Adaptive lighting
-				</label>
-			</div>
-			<div class="field-help">@AuthorityHelp</div>
-		</div>
-
-		@* Faults in the order they cost the household: an unreadable helper first, then an unmapped current
-		   option, the one fault already happening. *@
-		@if (!IsAvailable && IsReady)
-		{
-			<div class="notice bad periodselect-warning">
-				<strong>Home Assistant doesn't know <code>@Select!.EntityId</code>.</strong>
-				<span>@UnavailableNote</span>
-			</div>
-		}
-		else if (CurrentIsUnmapped)
-		{
-			<div class="notice warn periodselect-warning">
-				<strong>The helper is on &ldquo;@ActiveValue&rdquo;, and nothing maps it to a period.</strong>
-				<span>@UnmappedNote</span>
-			</div>
-		}
-
-		@if (Shortfall > 0)
-		{
-			<div class="notice periodselect-warning">
-				<strong>@ShortfallTitle</strong>
-				<span>
-					Every option needs a period of its own &mdash; two options cannot share one, because the engine
-					would have no way to tell them apart.
-				</span>
-				<div class="panel-actions">
-					<button type="button" @onclick="AddPeriod">Add a period</button>
+		</Note>
+		<AuthorityHelp>
+			<strong>Home Assistant</strong> means the engine follows this dropdown: whatever option it
+			stands on names the period every room runs, and the start times in the schedule stop
+			deciding anything. <strong>Adaptive lighting</strong> means the engine decides from its own
+			schedule and keeps the dropdown pointing at the answer, so the rest of your house can read it.
+		</AuthorityHelp>
+		<Body Context="state">
+			@* Faults in the order they cost the household: an unreadable helper first, then an unmapped current
+			   option, the one fault already happening. *@
+			@if (!state.ShowsUnavailable && CurrentIsUnmapped)
+			{
+				<div class="notice warn periodselect-warning">
+					<strong>The helper is on &ldquo;@ActiveValue&rdquo;, and nothing maps it to a period.</strong>
+					<span>@UnmappedNote</span>
 				</div>
-			</div>
-		}
+			}
 
-		@if (_liveValues.Count == 0)
-		{
-			<div class="empty">
-				@if (IsReady)
-				{
-					<text>This helper has no options yet. Add one option per period in Home Assistant, then come back here.</text>
-				}
-				else
-				{
-					<text>Waiting for Home Assistant to list the helper's options.</text>
-				}
-			</div>
-		}
-		else
-		{
-			<div class="periodselect-rows">
-				@foreach (string live in _liveValues)
-				{
-					@* Captured per iteration: the handlers outlive the loop, and a closure over the loop variable
-					   would map every row to whichever option was last. *@
-					string option = live;
-					PeriodSelectOptionConfig? row = Find(option);
-					string chosen = row?.Period ?? string.Empty;
-
-					<div class="periodselect-row" @key="option">
-						<span class="periodselect-option">
-							<code>@option</code>
-							@if (IsActive(option))
-							{
-								<span class="badge active-now" title="The helper is standing on this option right now.">now</span>
-							}
-						</span>
-
-						<select class="cell wide" @bind:get="chosen" @bind:set="@(value => SetPeriod(option, value))">
-							<option value="">(none — this option changes nothing)</option>
-							@foreach (string name in PeriodChoices(chosen))
-							{
-								<option value="@name">@name</option>
-							}
-							@if (IsDeadPeriod(chosen))
-							{
-								<option value="@chosen">@chosen — no such period</option>
-							}
-						</select>
+			@if (Shortfall > 0)
+			{
+				<div class="notice periodselect-warning">
+					<strong>@ShortfallTitle</strong>
+					<span>
+						Every option needs a period of its own &mdash; two options cannot share one, because the engine
+						would have no way to tell them apart.
+					</span>
+					<div class="panel-actions">
+						<button type="button" @onclick="AddPeriod">Add a period</button>
 					</div>
-				}
-			</div>
-		}
+				</div>
+			}
 
-		@if (Orphans.Count > 0)
-		{
-			<div class="periodselect-orphans">
-				@foreach (PeriodSelectOptionConfig stale in Orphans)
-				{
-					PeriodSelectOptionConfig orphan = stale;
+			@if (state.LiveValues.Count == 0)
+			{
+				<div class="empty">
+					@if (state.IsReady)
+					{
+						<text>This helper has no options yet. Add one option per period in Home Assistant, then come back here.</text>
+					}
+					else
+					{
+						<text>Waiting for Home Assistant to list the helper's options.</text>
+					}
+				</div>
+			}
+			else
+			{
+				<div class="periodselect-rows">
+					@foreach (string live in state.LiveValues)
+					{
+						@* Captured per iteration: the handlers outlive the loop, and a closure over the loop variable
+						   would map every row to whichever option was last. *@
+						string option = live;
+						PeriodSelectOptionConfig? row = Find(option);
+						string chosen = row?.Period ?? string.Empty;
 
-					<div class="periodselect-orphan" @key="orphan">
-						<span class="badge bad" title="This value is no longer one of the helper's options.">renamed in Home Assistant</span>
-						<span class="periodselect-orphan-text">
-							<code>@orphan.Value</code> means <b>@OrphanPeriod(orphan)</b>, and the helper no longer offers it.
-						</span>
-
-						@if (UnmappedLiveValues.Count > 0)
-						{
-							<select class="cell" value="" @onchange="@(args => Remap(orphan, args.Value as string))">
-								<option value="">move it to&hellip;</option>
-								@foreach (string free in UnmappedLiveValues)
+						<div class="periodselect-row" @key="option">
+							<span class="periodselect-option">
+								<code>@option</code>
+								@if (IsActive(option))
 								{
-									<option value="@free">@free</option>
+									<span class="badge active-now" title="The helper is standing on this option right now.">now</span>
+								}
+							</span>
+
+							<select class="cell wide" @bind:get="chosen" @bind:set="@(value => SetPeriod(option, value))">
+								<option value="">(none — this option changes nothing)</option>
+								@foreach (string name in PeriodChoices(chosen))
+								{
+									<option value="@name">@name</option>
+								}
+								@if (IsDeadPeriod(chosen))
+								{
+									<option value="@chosen">@chosen — no such period</option>
 								}
 							</select>
-						}
+						</div>
+					}
+				</div>
+			}
 
-						<button type="button" class="danger" @onclick="@(() => Forget(orphan))">Remove</button>
-					</div>
-				}
-			</div>
-		}
-	}
+			@if (Orphans.Count > 0)
+			{
+				<div class="periodselect-orphans">
+					@foreach (PeriodSelectOptionConfig stale in Orphans)
+					{
+						PeriodSelectOptionConfig orphan = stale;
+
+						<div class="periodselect-orphan" @key="orphan">
+							<span class="badge bad" title="This value is no longer one of the helper's options.">renamed in Home Assistant</span>
+							<span class="periodselect-orphan-text">
+								<code>@orphan.Value</code> means <b>@OrphanPeriod(orphan)</b>, and the helper no longer offers it.
+							</span>
+
+							@if (UnmappedLiveValues.Count > 0)
+							{
+								<select class="cell" value="" @onchange="@(args => Remap(orphan, args.Value as string))">
+									<option value="">move it to&hellip;</option>
+									@foreach (string free in UnmappedLiveValues)
+									{
+										<option value="@free">@free</option>
+									}
+								</select>
+							}
+
+							<button type="button" class="danger" @onclick="@(() => Forget(orphan))">Remove</button>
+						</div>
+					}
+				</div>
+			}
+		</Body>
+	</SelectAuthorityPanel>
 </div>
 
 @code {
@@ -228,10 +199,6 @@
 
 	/// <summary>The configured block, or <c>null</c> before a helper has ever been picked.</summary>
 	private PeriodSelectConfig? Select => Global.PeriodSelect;
-
-	// The entity, not the block: ConfigNormalizer keeps an entity-less block only until the next save, and
-	// PeriodSelectReader.For builds nothing without an entity.
-	private bool HasEntity => Select?.EntityId is not null;
 
 	/// <summary>Which side currently owns the time of day.</summary>
 	private PeriodAuthority Authority => Select?.Authority ?? PeriodAuthority.AdaptiveLighting;
@@ -321,7 +288,7 @@
 	private bool IsDeadPeriod(string chosen) =>
 		chosen is { Length: > 0 } && !Periods.Any(period => NamesPeriod(period.Name, chosen));
 
-	private string AuthorityHelp => Authority is PeriodAuthority.HomeAssistant
+	private string AuthorityNote => Authority is PeriodAuthority.HomeAssistant
 		? "The engine reads this helper and never writes it. Start times in the schedule above are kept, but they "
 			+ "stop deciding anything until you hand the time of day back."
 		: "The engine writes this helper to match whatever its schedule resolved. Moving the helper by hand changes "
@@ -349,7 +316,8 @@
 	}
 
 	/// <summary>Sets which side owns the time of day. The mappings mean something in both directions, so they stand.</summary>
-	private Task SetAuthority(PeriodAuthority authority) => Set(() => Block().Authority = authority);
+	private Task SetAuthority(bool homeAssistant) => Set(() => Block().Authority =
+		homeAssistant ? PeriodAuthority.HomeAssistant : PeriodAuthority.AdaptiveLighting);
 
 	/// <summary>Points a live option at a period, or clears it.</summary>
 	// A cleared row is removed, not emptied. IsEmpty needs Value and Period both blank, so a row still carrying

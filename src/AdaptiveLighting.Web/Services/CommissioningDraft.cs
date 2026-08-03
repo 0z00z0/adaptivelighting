@@ -76,7 +76,26 @@ public sealed class CommissioningDraft
 			_picked.Add(key);
 	}
 
-	/// <summary>Switches a whole floor on, the floor header's one bulk action.</summary>
+	/// <summary>Whether every room in a set is picked, which is what a bulk control shows as its own state.</summary>
+	/// <remarks>An empty set is not "all": with no rooms drawn there is nothing to have included.</remarks>
+	public bool IncludesAll(IEnumerable<string> keys)
+	{
+		ArgumentNullException.ThrowIfNull(keys);
+
+		bool any = false;
+
+		foreach (string key in keys)
+		{
+			if (!_picked.Contains(key))
+				return false;
+
+			any = true;
+		}
+
+		return any;
+	}
+
+	/// <summary>Switches a set of rooms on: the floor header's bulk action, and the board's include-all.</summary>
 	public void PickAll(IEnumerable<string> keys)
 	{
 		ArgumentNullException.ThrowIfNull(keys);

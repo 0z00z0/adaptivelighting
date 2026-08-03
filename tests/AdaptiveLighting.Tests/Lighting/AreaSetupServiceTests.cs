@@ -556,6 +556,9 @@ public sealed class AreaSetupServiceTests
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
 		+ (area.FollowOutdoorLux is not null ? 1 : 0)
 		+ (area.IgnoreWhenOn?.Count ?? 0)
+		+ (area.IgnoreWhenOnInverted is not null ? 1 : 0)
+		+ (area.KeepLitWhenOn?.Count ?? 0)
+		+ (area.KeepLitWhenOnInverted is not null ? 1 : 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>Property names that are the room's identity or its entity lists, not one of its settings.</summary>
@@ -572,7 +575,13 @@ public sealed class AreaSetupServiceTests
 		nameof(AreaConfig.FollowOutdoorLux),
 
 		nameof(AreaConfig.IgnoreWhenOn),
+		nameof(AreaConfig.KeepLitWhenOn),
 		nameof(AreaConfig.ExcludeEntities),
+
+		// The polarity of the two gates above. Part of the hand-picked choice, not a setting with a house-wide
+		// twin, so they count as pinned rather than as overrides.
+		nameof(AreaConfig.IgnoreWhenOnInverted),
+		nameof(AreaConfig.KeepLitWhenOnInverted),
 
 		// Survives the rebuild, so it is never one of the losses.
 		nameof(AreaConfig.Enabled),

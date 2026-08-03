@@ -66,9 +66,36 @@ public static class AreaSentences
 		("the sun", nameof(DarknessSource.Sun)),
 		("whatever the daylight", nameof(DarknessSource.Always)));
 
+	/// <summary>How the room's warmth reaches its lights, worded once for the sentence and the levels table.</summary>
+	// "No colour temperature" first, and the wording is standalone: the same list fills a bare dropdown in the
+	// levels table, where there is no sentence around it to lean on.
+	public static IReadOnlyList<TokenChoice> WarmthChoices { get; } = TokenChoices.Of(
+		("No colour temperature", nameof(ColorControl.EqualChannels)),
+		("Colour temperature in kelvin", nameof(ColorControl.Kelvin)),
+		("Detect it from the lights", nameof(ColorControl.Auto)));
+
+	/// <summary>Why a room with no colour temperature is offered no kelvin, said the same way wherever it is said.</summary>
+	public const string NoColourTemperature =
+		"The schedule's kelvin figure does nothing for these lights, so they run at neutral white.";
+
+	/// <summary>How the room's warmth is commanded, following the house wherever the room says nothing.</summary>
+	public static ColorControl WarmthOf(AreaConfig? area, AreaSettings defaults)
+	{
+		ArgumentNullException.ThrowIfNull(defaults);
+
+		return area?.ColorControl ?? defaults.ColorControl;
+	}
+
+	/// <summary>Whether a kelvin figure reaches this room's lights at all.</summary>
+	public static bool WithoutColourTemperature(AreaConfig? area, AreaSettings defaults) =>
+		WarmthOf(area, defaults) is ColorControl.EqualChannels;
+
 	/// <summary>One room's behaviour, with every value marked as the room's own or the house's.</summary>
 	/// <param name="area">The room, whose <c>null</c> properties mean "inherit".</param>
-	/// <returns>Two or three sentences: the movement rule, the hand rule, and the flags when a flag is on.</returns>
+	/// <returns>
+	///     The movement rule and the hand rule, then the flags when a flag is on, then the warmth when there is no
+	///     colour temperature to set.
+	/// </returns>
 	public static IReadOnlyList<Sentence> ForArea(AreaConfig area, AreaSettings defaults)
 	{
 		ArgumentNullException.ThrowIfNull(area);
@@ -108,6 +135,9 @@ public static class AreaSentences
 
 		if (Flags(area, effective) is { } flags)
 			sentences.Add(flags);
+
+		if (Warmth(area, defaults, effective) is { } warmth)
+			sentences.Add(warmth);
 
 		return sentences;
 	}
@@ -225,6 +255,23 @@ public static class AreaSentences
 			? null
 			: SentenceBuilder.Start($"This room {JoinClauses(clauses)}.").Build();
 	}
+
+	/// <summary>The warmth sentence, which exists only when there is no colour temperature left to set.</summary>
+	// Auto and Kelvin both end with the schedule's kelvin reaching the lights, which every other surface already
+	// says. Only the third answer changes what the levels table can offer, so only it earns a paragraph.
+	private static Sentence? Warmth(AreaConfig? area, AreaSettings defaults, AreaSettings effective) =>
+		effective.ColorControl is not ColorControl.EqualChannels
+			? null
+			: SentenceBuilder.Start("Warmth: ")
+				.Choice(
+					nameof(AreaSettings.ColorControl),
+					"How warmth reaches these lights",
+					nameof(ColorControl.EqualChannels),
+					WarmthChoices,
+					OriginOf(area, area?.ColorControl),
+					defaults.ColorControl.ToString())
+				.Text($". {NoColourTemperature}")
+				.Build();
 
 	/// <summary>A light level as the sentence and the shortlist both write it, so the popover can tick on words.</summary>
 	private static string InLux(double lux) => TokenFormat.Number(lux, "lx");

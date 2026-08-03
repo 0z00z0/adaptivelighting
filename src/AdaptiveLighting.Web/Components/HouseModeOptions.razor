@@ -156,6 +156,13 @@
 											  AddLabel="Add a switch or sensor…"
 											  EmptyNote="@EmptyNote("No switches, toggles or binary sensors found — type an id.")"
 											  Placeholder="input_boolean.sover" />
+							@if (HomeAssistantDecides)
+							{
+								<span class="mode-dormant">
+									Not in force &mdash; Home Assistant owns the house mode, so nothing here switches it.
+									Whatever is listed is kept, and takes over again the moment you hand the mode back.
+								</span>
+							}
 						</div>
 
 						<div class="housemode-field">
@@ -169,6 +176,13 @@
 									or the house stays in this mode until somebody changes it by hand.
 								</InfoPopover>
 							</label>
+							@if (HomeAssistantDecides)
+							{
+								<span class="mode-dormant">
+									Not in force &mdash; Home Assistant owns the house mode, so an idle house is never
+									switched by the engine. The setting is kept for when you hand the mode back.
+								</span>
+							}
 							@if (boundOption.ActivateAfterNoMotionMinutes is > 0)
 							{
 								<div class="housemode-grace">
@@ -190,6 +204,14 @@
 									happen wins. Set none and the house stays in this mode until somebody changes it by hand.
 								</InfoPopover>
 							</span>
+
+							@if (HomeAssistantDecides)
+							{
+								<span class="mode-dormant">
+									Not in force &mdash; a reset puts the dropdown back to Normal, and Home Assistant owns
+									the dropdown. Whatever is set here is kept for when you hand the mode back.
+								</span>
+							}
 
 							<div class="housemode-field">
 								<span class="housemode-field-label">Reset when this period starts</span>
@@ -291,6 +313,13 @@
 	[Parameter]
 	public bool IsReady { get; set; } = true;
 
+	/// <summary>
+	///     Whether Home Assistant owns the house mode, so the engine's own ways of setting it are dormant.
+	/// </summary>
+	// The page asks ModeAuthority, never the enum: an authority naming no entity stands nothing down.
+	[Parameter]
+	public bool HomeAssistantDecides { get; set; }
+
 	/// <summary>Raised after any change, so the page can re-validate.</summary>
 	[Parameter]
 	public EventCallback Changed { get; set; }
@@ -352,15 +381,19 @@
 			parts.Add(clamp is { Length: > 0 } ? $"dims to {clamp}" : "no dim period");
 		}
 
+		// Both of these are dormant under Home Assistant's authority, and a collapsed fold is where somebody
+		// reads what a mode does without opening the field that says so.
+		string dormant = HomeAssistantDecides ? "dormant: " : "";
+
 		if (option.ActivateWhileOn.Count is > 0 and int on)
-			parts.Add($"on while {on} {(on == 1 ? "entity" : "entities")} on");
+			parts.Add($"{dormant}on while {on} {(on == 1 ? "entity" : "entities")} on");
 
 		if (option.ActivateAfterNoMotionMinutes is > 0 and int idle)
-			parts.Add($"auto after {FormatIdle(idle)} idle");
+			parts.Add($"{dormant}auto after {FormatIdle(idle)} idle");
 
 		int resets = ResetTriggerCount(option);
 		if (resets > 0)
-			parts.Add($"{resets} reset trigger{(resets == 1 ? "" : "s")}");
+			parts.Add($"{dormant}{resets} reset trigger{(resets == 1 ? "" : "s")}");
 
 		return string.Join(" · ", parts);
 	}

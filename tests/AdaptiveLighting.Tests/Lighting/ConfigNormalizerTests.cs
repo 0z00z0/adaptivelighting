@@ -152,6 +152,68 @@ public sealed class ConfigNormalizerTests
 		Assert.IsNotNull(withOptions.Global.HouseMode, "a classified option has been set — keep it");
 	}
 
+	[TestMethod]
+	public void Normalize_TrimsAndDedupesStartsOnMotionAreas()
+	{
+		var config = new AdaptiveLightingConfig
+		{
+			Periods =
+			[
+				new()
+				{
+					Name = "morning",
+					Start = "06:00",
+					StartsOnMotion = true,
+					StartsOnMotionAreas = [" kjokken ", "", "kjokken", "gang", "\t"]
+				}
+			]
+		};
+
+		ConfigNormalizer.Normalize(config);
+
+		CollectionAssert.AreEqual(new[] { "kjokken", "gang" }, config.Periods[0].StartsOnMotionAreas,
+			"trimmed, blanks and repeats gone, in the order they were written");
+	}
+
+	[TestMethod]
+	public void Normalize_DropsTheRoomList_WhenTheMotionStartIsOff()
+	{
+		var config = new AdaptiveLightingConfig
+		{
+			Periods = [new() { Name = "morning", Start = "06:00", StartsOnMotionAreas = ["kjokken"] }]
+		};
+
+		ConfigNormalizer.Normalize(config);
+
+		Assert.AreEqual(0, config.Periods[0].StartsOnMotionAreas.Count,
+			"nothing reads it while the feature is off, and a kept list rots into rooms that were renamed");
+	}
+
+	/// <summary>Both zero values are the old behaviour, and OmitNull writes what a document says either way.</summary>
+	[TestMethod]
+	public void Normalize_LeavesColorControlAndHouseModeAuthorityAlone()
+	{
+		var config = new AdaptiveLightingConfig
+		{
+			Global = new GlobalConfig
+			{
+				HouseMode = new HouseModeConfig
+				{
+					Entity = "input_select.husmodus",
+					Authority = HouseModeAuthority.HomeAssistant
+				}
+			},
+			Defaults = new AreaSettings { ColorControl = ColorControl.EqualChannels },
+			Areas = [new() { AreaId = "stue", ColorControl = ColorControl.Kelvin }]
+		};
+
+		ConfigNormalizer.Normalize(config);
+
+		Assert.AreEqual(HouseModeAuthority.HomeAssistant, config.Global.HouseMode!.Authority);
+		Assert.AreEqual(ColorControl.EqualChannels, config.Defaults.ColorControl);
+		Assert.AreEqual(ColorControl.Kelvin, config.Areas[0].ColorControl);
+	}
+
 	private static AdaptiveLightingConfig WithPeriodSelect(PeriodSelectConfig? select) =>
 		new() { Global = new GlobalConfig { PeriodSelect = select } };
 

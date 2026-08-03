@@ -178,6 +178,63 @@ public sealed class ConfigValidatorTests
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
 
+	/// <summary>
+	///     An id no room answers to costs that room its trigger and nothing else, so it warns. Matched ordinally,
+	///     as the engine matches area ids, which is why a display name written here really does warn.
+	/// </summary>
+	[TestMethod]
+	public void StartsOnMotionAreas_NamingNoRoomInTheDocument_Warns_AndQuotesTheId()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Periods[0].StartsOnMotion = true;
+		config.Periods[0].StartsOnMotionAreas = ["kjokken"];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "one room that never triggers the period is a degraded feature, not an unrunnable document");
+		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("kjokken", StringComparison.Ordinal)),
+			"the warning has to quote the id, because the id is the typo");
+	}
+
+	[TestMethod]
+	public void StartsOnMotionAreas_NamingConfiguredRooms_SaysNothing()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Periods[0].StartsOnMotion = true;
+		config.Periods[0].StartsOnMotionAreas = ["stue"];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(0, result.Warnings.Count);
+	}
+
+	[TestMethod]
+	public void StartsOnMotion_WithNoAreasNamed_MeansAnyRoom_AndSaysNothing()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Periods[0].StartsOnMotion = true;
+
+		Assert.AreEqual(0, ConfigValidator.Validate(config).Warnings.Count,
+			"an empty list is the default and means any room the engine watches");
+	}
+
+	[TestMethod]
+	public void StartsOnMotion_OnAPeriodWithAnUnparseableStart_AddsNothingToTheOneError()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Periods =
+		[
+			new() { Name = "morning", Start = "half past tea", StartsOnMotion = true, StartsOnMotionAreas = ["ghost"] }
+		];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid, "the Start is the error");
+		Assert.AreEqual(0, result.Warnings.Count,
+			"the period is dropped whole, so its room list has earned no second sentence");
+	}
+
 
 	// ===================== the include label =====================
 
@@ -903,6 +960,76 @@ public sealed class ConfigValidatorTests
 		Assert.IsNull(config.Global.HouseMode, "no HouseMode block → property null");
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,
 			"the live cabin document validates cleanly — no house-mode rule fires without a HouseMode");
+	}
+
+	private static AdaptiveLightingConfig UnderHomeAssistantAuthority()
+	{
+		AdaptiveLightingConfig config = WithHouseMode();
+		config.Global.HouseMode!.Authority = HouseModeAuthority.HomeAssistant;
+		return config;
+	}
+
+	/// <summary>
+	///     The same shape as the period select's own rule: an authority with no entity behind it decides nothing,
+	///     and <see cref="HouseModeConfig.HomeAssistantDecides"/> already says so.
+	/// </summary>
+	[TestMethod]
+	public void HouseMode_HomeAssistantAuthorityWithNoEntity_Warns()
+	{
+		AdaptiveLightingConfig config = UnderHomeAssistantAuthority();
+		config.Global.HouseMode!.Entity = null;
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "an authority with nothing behind it is a misconfiguration, not an unsaveable document");
+		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("no Entity is named", StringComparison.Ordinal)));
+	}
+
+	/// <summary>
+	///     Under Home Assistant's authority the engine never writes the select, so every <c>SetsMode</c> is dormant.
+	///     A dormant rule nobody is told about is an evening spent debugging an automation that was switched off.
+	/// </summary>
+	[TestMethod]
+	public void HouseMode_HomeAssistantAuthority_NamesThePeriodsWhoseSetsModeWentDormant()
+	{
+		AdaptiveLightingConfig config = UnderHomeAssistantAuthority();
+		config.Periods[1].SetsMode = "Sover";   // the "night" period
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "the house still runs — the dropdown simply owns the mode now");
+		Assert.IsTrue(result.Warnings.Any(warning =>
+			warning.Contains("dormant", StringComparison.Ordinal) && warning.Contains("'night'", StringComparison.Ordinal)),
+			"naming the period is the whole point: it is the line somebody would otherwise go looking for");
+	}
+
+	[TestMethod]
+	public void HouseMode_HomeAssistantAuthority_WarnsThatTheActivationRulesAreDormant()
+	{
+		AdaptiveLightingConfig config = UnderHomeAssistantAuthority();
+		config.Global.HouseMode!.OptionFor("Sover")!.ActivateAfterNoMotionMinutes = 45;
+		config.Global.HouseMode.OptionFor("Borte")!.ActivateWhileOn = ["input_boolean.ferie"];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "both degrade to a rule that no longer fires");
+		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("ActivateAfterNoMotionMinutes", StringComparison.Ordinal)));
+		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("ActivateWhileOn", StringComparison.Ordinal)));
+	}
+
+	[TestMethod]
+	public void HouseMode_AdaptiveLightingAuthority_FiresNoDormancyRuleAtAll()
+	{
+		AdaptiveLightingConfig config = WithHouseMode();
+		config.Periods[1].SetsMode = "Sover";
+		config.Global.HouseMode!.OptionFor("Sover")!.ActivateAfterNoMotionMinutes = 45;
+		config.Global.HouseMode.OptionFor("Borte")!.ActivateWhileOn = ["input_boolean.ferie"];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(0, result.Warnings.Count(warning => warning.Contains("dormant", StringComparison.Ordinal)),
+			"the default authority is what every document written before it says, and it must notice nothing");
 	}
 
 	// ===================== the period select =====================

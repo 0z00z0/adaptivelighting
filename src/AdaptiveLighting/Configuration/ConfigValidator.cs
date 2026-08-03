@@ -37,6 +37,7 @@ public static class ConfigValidator
 
 		ValidateGlobal(config.Global, knownEntityIds, labelsInUse, result);
 		ValidatePeriods(config.Periods, result);
+		ValidateStartsOnMotion(config, result);
 		ValidateHouseMode(config, knownEntityIds, liveSelectOptions, result);
 		ValidatePeriodSelect(config, knownEntityIds, livePeriodSelectOptions, result);
 		ValidateSettings("Defaults", config.Defaults, result);
@@ -306,6 +307,35 @@ public static class ConfigValidator
 		}
 	}
 
+	/// <summary>The rooms whose movement may pull a period forward (<see cref="TimePeriodConfig.StartsOnMotionAreas"/>).</summary>
+	/// <remarks>
+	///     A warning: an id no room answers to costs that one room its trigger, and an error would block the save
+	///     from the page somebody would rename the room on. Area ids are matched ordinally, as
+	///     <c>AreaSetupService</c> matches them, so a display name written here does warn.
+	/// </remarks>
+	private static void ValidateStartsOnMotion(AdaptiveLightingConfig config, ValidationResult result)
+	{
+		HashSet<string> areaIds = new(StringComparer.Ordinal);
+
+		foreach (AreaConfig area in config.Areas)
+			if (area.AreaId is { Length: > 0 } areaId)
+				areaIds.Add(areaId.Trim());
+
+		foreach (TimePeriodConfig period in config.Periods.Where(p => p.StartsOnMotion))
+		{
+			// An unparseable Start already drops the whole period, so its area list earns nothing further.
+			if (!PeriodStart.TryParse(period.Start, out _))
+				continue;
+
+			foreach (string areaId in period.StartsOnMotionAreas.Where(id => !string.IsNullOrWhiteSpace(id)))
+				if (!areaIds.Contains(areaId.Trim()))
+					result.AddWarning(
+						$"Period '{period.Name}' StartsOnMotionAreas names '{areaId.Trim()}', which matches no room in "
+						+ "this document, so movement there can never start the period. It is the room's area id — the "
+						+ "slug, not its display name.");
+		}
+	}
+
 	private static void ValidatePeriodTargets(TimePeriodConfig period, ValidationResult result)
 	{
 		if (period.BrightnessPct is < MinBrightnessPct or > MaxBrightnessPct)
@@ -344,6 +374,9 @@ public static class ConfigValidator
 
 		ValidateSleepPath(config, houseMode, result);
 
+		if (houseMode is not null)
+			ValidateHouseModeAuthority(config, houseMode, result);
+
 		if (houseMode?.Entity is not { Length: > 0 })
 			return;
 
@@ -371,6 +404,53 @@ public static class ConfigValidator
 
 		if (liveSelectOptions is not null)
 			WarnOnLiveOptionMismatch(houseMode, liveSelectOptions, result);
+	}
+
+	/// <summary>Home Assistant's authority stands the engine's own mode rules down; this names the ones gone quiet.</summary>
+	/// <remarks>
+	///     Warnings throughout. Each rule degrades to one that no longer fires, and an error would block the save
+	///     from the page that hands the authority back. A dormant rule nobody is told about is an evening spent
+	///     debugging an automation the engine switched off on purpose.
+	/// </remarks>
+	private static void ValidateHouseModeAuthority(
+		AdaptiveLightingConfig config,
+		HouseModeConfig houseMode,
+		ValidationResult result)
+	{
+		if (houseMode.Authority is not HouseModeAuthority.HomeAssistant)
+			return;
+
+		// HomeAssistantDecides is false without an entity, so the engine still decides and nothing below is dormant.
+		if (!houseMode.HomeAssistantDecides)
+		{
+			result.AddWarning(
+				"HouseMode.Authority is HomeAssistant but no Entity is named, so there is no dropdown to read and this "
+				+ "application keeps deciding the mode. Name the input_select, or set Authority back to AdaptiveLighting.");
+			return;
+		}
+
+		List<string> setsMode = [.. config.Periods
+			.Where(period => period.SetsMode is { Length: > 0 })
+			.Select(period => $"'{period.Name}'")];
+
+		if (setsMode.Count > 0)
+			result.AddWarning(
+				$"HouseMode.Authority is HomeAssistant, so the SetsMode on period(s) {string.Join(", ", setsMode)} is "
+				+ "dormant: the engine reads the select and never writes it. Clear SetsMode, or set Authority back to "
+				+ "AdaptiveLighting.");
+
+		foreach (HouseModeOptionConfig option in houseMode.Options)
+		{
+			if (option.ActivateAfterNoMotionMinutes is not null)
+				result.AddWarning(
+					$"HouseMode option '{option.Value}' sets ActivateAfterNoMotionMinutes, which is dormant while "
+					+ "HouseMode.Authority is HomeAssistant — only the dropdown moves the house.");
+
+			if (option.ActivateWhileOn.Count > 0)
+				result.AddWarning(
+					$"HouseMode option '{option.Value}' lists ActivateWhileOn entities, which are dormant while "
+					+ "HouseMode.Authority is HomeAssistant — only the dropdown moves the house.");
+		}
 	}
 
 	/// <summary>One Normal, no more. With none the first option is treated as Normal; with several the first wins.</summary>

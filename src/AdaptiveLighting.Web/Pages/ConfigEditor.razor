@@ -387,74 +387,109 @@ else
 				</header>
 
 				<div class="panel">
-					<div class="field">
-						<div class="field-head">
-							<label class="field-label">House mode
-								<InfoPopover Label="House mode">
-									Which dropdown helper holds this house's modes. Picking one reads its options into the
-									cards below: an option the new helper also offers keeps its settings, the rest are dropped.
-									No helper yet? Make one in Home Assistant under <strong>Settings → Devices &amp; services →
-									Helpers → Create helper → Dropdown</strong>, add your options, then pick it here.
-								</InfoPopover>
-							</label>
-						</div>
-						<div class="field-control">
-							<EntityPicker Value="@_config.Global.HouseMode?.Entity"
-										  ValueChanged="@SetHouseModeEntity"
-										  Options="@_inputSelects"
+					@* The same picker and direction switch the period select carries, and for the same reason: which
+					   side owns the dropdown decides what everything under it means. *@
+					<SelectAuthorityPanel Label="House mode"
+										  Entity="@_config.Global.HouseMode?.Entity"
+										  EntityChanged="@SetHouseModeEntity"
+										  Entities="@_inputSelects"
+										  NameResolver="@Name"
+										  KnownResolver="@Catalog.Knows"
 										  NoneLabel="(none — the house has no modes)"
 										  EmptyNote="@EmptyNote("No dropdown helpers yet — make one in Home Assistant under Settings → Devices & services → Helpers, or type an id.")"
-										  Placeholder="input_select.husmodus" />
-						</div>
-						<div class="field-help">
+										  Placeholder="input_select.husmodus"
+										  Group="housemode-authority"
+										  AuthorityLabel="Changes to the house mode are set by:"
+										  HomeAssistant="@(_config.Global.HouseMode?.Authority == HouseModeAuthority.HomeAssistant)"
+										  HomeAssistantChanged="@SetHouseModeAuthority"
+										  AuthorityNote="@HouseModeAuthorityNote"
+										  UnavailableNote="@HouseModeUnavailableNote"
+										  IsAvailable="@Catalog.Knows(_config.Global.HouseMode?.EntityId)"
+										  IsReady="@HomeAssistantIsAnswering"
+										  LiveOptions="@_liveSelectOptions">
+						<LabelHelp>
+							Which dropdown helper holds this house's modes. Picking one reads its options into the
+							cards below: an option the new helper also offers keeps its settings, the rest are dropped.
+							No helper yet? Make one in Home Assistant under <strong>Settings → Devices &amp; services →
+							Helpers → Create helper → Dropdown</strong>, add your options, then pick it here.
+						</LabelHelp>
+						<Note>
 							Without one the house is always in everyday lighting. Say below what each option means.
-						</div>
-					</div>
+						</Note>
+						<AuthorityHelp>
+							<strong>Home Assistant</strong> means the dropdown is the only thing that moves the house:
+							the engine reads it, applies whatever the option means, and never writes it back.
+							<strong>Adaptive lighting</strong> means the engine may set the mode itself &mdash; from a
+							period, from a switch you name, or after a long enough quiet spell &mdash; and keeps the
+							dropdown pointing at the answer.
+						</AuthorityHelp>
+						<Body Context="state">
+							@{
+								string modeEntity = _config.Global.HouseMode?.EntityId ?? "";
+							}
 
-					@*
-						Where the helper's list and this one part company. It reports and offers; it never adopts by
-						itself, because the thing it would rewrite unasked is the list every mode hangs off.
+							@*
+								Where the helper's list and this one part company. It reports and offers; it never adopts by
+								itself, because the thing it would rewrite unasked is the list every mode hangs off.
 
-						All three states render, including the two that ask for nothing: an unreachable Home Assistant
-						cannot tell an empty helper from no answer, so it must say so instead of showing a stale offer.
-					*@
-					@if (_config.Global.HouseMode?.Entity is { Length: > 0 } modeEntity)
-					{
-						@if (_helperDiff.Differs)
-						{
-							<div class="notice warn modes-sync">
-								<strong>@HouseModeSync.Title(_helperDiff)</strong>
-								@* The entity leads the sentence: a <code> chip's own padding floats a trailing full
-								   stop a space away from it. *@
-								<span>The helper <code>@modeEntity</code> now offers something else. @HouseModeSync.Summary(_helperDiff)</span>
-								<span>
-									An option the helper still offers keeps everything you set on it &mdash; what it
-									means, its scene, its resets.
-								</span>
-								<div class="panel-actions">
-									<button type="button" class="primary" @onclick="UseHelperOptions">
-										Use the helper's options
-									</button>
+								All three states render, including the two that ask for nothing: an unreachable Home Assistant
+								cannot tell an empty helper from no answer, so it must say so instead of showing a stale offer.
+							*@
+							@if (_helperDiff.Differs)
+							{
+								<div class="notice warn modes-sync">
+									<strong>@HouseModeSync.Title(_helperDiff)</strong>
+									@* The entity leads the sentence: a <code> chip's own padding floats a trailing full
+									   stop a space away from it. *@
+									<span>The helper <code>@modeEntity</code> now offers something else. @HouseModeSync.Summary(_helperDiff)</span>
+									<span>
+										An option the helper still offers keeps everything you set on it &mdash; what it
+										means, its scene, its resets.
+									</span>
+									<div class="panel-actions">
+										<button type="button" class="primary" @onclick="UseHelperOptions">
+											Use the helper's options
+										</button>
+									</div>
+									<span class="hint">
+										Nothing is written until you press <em>Save and apply</em> &mdash;
+										<em>Discard changes</em> undoes it.
+									</span>
 								</div>
-								<span class="hint">
-									Nothing is written until you press <em>Save and apply</em> &mdash;
-									<em>Discard changes</em> undoes it.
-								</span>
-							</div>
-						}
-						else if (_helperDiff.Matches)
-						{
-							<p class="hint"><code>@modeEntity</code> offers exactly these options.</p>
-						}
-						else
-						{
-							<p class="hint">
-								Home Assistant hasn't said which options <code>@modeEntity</code> has, so this list
-								can't be compared with it. Nothing here is out of date &mdash; it simply can't be
-								checked until the connection is back.
-							</p>
-						}
-					}
+							}
+							else if (_helperDiff.Matches)
+							{
+								<p class="hint"><code>@modeEntity</code> offers exactly these options.</p>
+							}
+							else
+							{
+								<p class="hint">
+									Home Assistant hasn't said which options <code>@modeEntity</code> has, so this list
+									can't be compared with it. Nothing here is out of date &mdash; it simply can't be
+									checked until the connection is back.
+								</p>
+							}
+
+							@* Named, not merely counted: a rule that has quietly stopped firing is what somebody comes
+							   back here to work out, and the controls for these live on three different cards. *@
+							@if (DormantRules.Any)
+							{
+								<div class="notice warn mode-dormant-rules">
+									<strong>These are set up but not firing while Home Assistant decides:</strong>
+									<ul>
+										@foreach (string rule in DormantRules.Names)
+										{
+											<li>@rule</li>
+										}
+									</ul>
+									<span>
+										They are kept as they are and start working again the moment you hand the house
+										mode back to adaptive lighting.
+									</span>
+								</div>
+							}
+						</Body>
+					</SelectAuthorityPanel>
 				</div>
 
 				@* One sentence per mode, over the field-by-field editor. The two tunable durations are tokens; a
@@ -511,6 +546,7 @@ else
 									  NameResolver="@Name"
 									  KnownResolver="@Catalog.Knows"
 									  IsReady="@HomeAssistantIsAnswering"
+									  HomeAssistantDecides="@HouseModeIsHomeAssistants"
 									  Changed="@OnHouseModeOptionsChanged" />
 				}
 			}
@@ -1976,6 +2012,32 @@ else
 		_houseModeOptionValues = HouseModeOptionValues();
 		Revalidate();
 	}
+
+	/// <summary>Sets which side owns the house mode. Every option keeps what it means in both directions.</summary>
+	// Creating the block here is safe: ConfigNormalizer drops one carrying nothing but a non-default Authority.
+	private void SetHouseModeAuthority(bool homeAssistant)
+	{
+		(_config.Global.HouseMode ??= new HouseModeConfig()).Authority =
+			homeAssistant ? HouseModeAuthority.HomeAssistant : HouseModeAuthority.AdaptiveLighting;
+
+		Revalidate();
+	}
+
+	/// <summary>Whether Home Assistant owns the house mode, so the engine's own ways of setting it stand down.</summary>
+	private bool HouseModeIsHomeAssistants => ModeAuthority.HomeAssistantDecides(_config.Global);
+
+	/// <summary>What the document still configures that the authority has stood down.</summary>
+	private DormantModeRules DormantRules => ModeAuthority.Dormant(_config.Global, _config.Periods);
+
+	private string HouseModeAuthorityNote => HouseModeIsHomeAssistants
+		? "The engine reads this dropdown and never writes it. It still applies what each option means — the scene, "
+			+ "the sleep dimming, the sweep — but nothing here moves the house between them."
+		: "The engine may set this dropdown itself, from a period, a switch you name, or a quiet house, and applies "
+			+ "what the option means either way. Moving it by hand still works.";
+
+	private string HouseModeUnavailableNote => HouseModeIsHomeAssistants
+		? "Until it appears, the house stays in everyday lighting and nothing can change the mode. Check the id for a typo."
+		: "Until it appears, the engine has nowhere to write the mode, so it stays in everyday lighting. Check the id for a typo.";
 
 	/// <summary>
 	///     Picks the helper that carries the time of day, and re-reads what that helper offers.

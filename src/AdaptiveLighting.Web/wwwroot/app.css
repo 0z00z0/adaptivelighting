@@ -6512,3 +6512,86 @@ h1[tabindex="-1"]:focus {
 }
 
 /* ===== end period select ===== */
+
+/* ===== mode authority ===== */
+
+/* What a control that is switched off but still editable looks like. Muted and small, because it sits under a
+   field somebody may still want to fill in for later. Greying the control itself would read as disabled, and
+   the setting is kept, not refused. */
+.mode-dormant {
+	display: block;
+	margin-top: 0.35rem;
+	color: var(--muted);
+	font-size: var(--text-sm);
+	font-style: italic;
+}
+
+/* The one place the dormant rules are listed together. Same shape as .periodselect-warning and for the same
+   reason: a notice inside a panel, where the default bottom margin stacks a gap nothing sits in. */
+.mode-dormant-rules {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	margin: 0.6rem 0 0;
+}
+
+/* ===== end mode authority ===== */
+
+/* ==============================================================================================
+   ===== colour + include all =====
+   ============================================================================================== */
+
+/* The room's one warmth question, above the periods rather than inside each of them: it is a fact about
+   the fixtures, and four copies of it would read as four separate decisions. */
+.lvl-warmth {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.4rem 0.7rem;
+	padding: 0.7rem 1.15rem;
+	border-top: var(--rule-inner);
+}
+
+.lvl-warmth-lab {
+	font-size: var(--text-xs);
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* Wraps to its own line under 30rem or so rather than squeezing the dropdown: the sentence is the whole
+   explanation of why the warmth column below has gone. */
+.lvl-warmth-note {
+	flex: 1 1 18rem;
+	min-width: 0;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* Two columns once the warmth cell is gone. Left at three, the brightness control sits at a third of the
+   row with an empty half beside it, which reads as a control that failed to render. */
+@media (min-width: 780px) {
+	.lvl-nocolour {
+		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr);
+	}
+}
+
+/* The board's bulk action across every floor, on the roll-call's own label row so it reads as a heading
+   control rather than as another kind of room row. */
+.comm-label {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.3rem 0.8rem;
+}
+
+.comm-all {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-left: auto;
+	font-size: var(--text-sm);
+	cursor: pointer;
+}
+
+/* ===== end colour + include all ===== */

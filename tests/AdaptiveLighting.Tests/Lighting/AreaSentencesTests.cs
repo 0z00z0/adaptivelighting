@@ -332,6 +332,95 @@ public sealed class AreaSentencesTests
 		Assert.AreEqual("one, two, and three", AreaSentences.JoinClauses(["one", "two", "three"]));
 	}
 
+	// ===================== a room whose lights have no colour temperature =====================
+
+	[TestMethod]
+	public void A_Room_Whose_Lights_Take_A_Warmth_Says_Nothing_About_It()
+	{
+		Assert.AreEqual(2, AreaSentences.ForArea(Room(), Defaults()).Count,
+			"detect is the default and the answer is yes, so there is nothing for a person to be told");
+
+		AreaConfig pinned = Room();
+		pinned.ColorControl = ColorControl.Kelvin;
+
+		Assert.AreEqual(2, AreaSentences.ForArea(pinned, Defaults()).Count,
+			"and saying it out loud changes nothing the schedule does");
+	}
+
+	[TestMethod]
+	public void A_Room_With_No_Colour_Temperature_Says_So_In_One_Sentence()
+	{
+		AreaConfig room = Room();
+		room.ColorControl = ColorControl.EqualChannels;
+
+		IReadOnlyList<Sentence> sentences = AreaSentences.ForArea(room, Defaults());
+
+		Assert.AreEqual(3, sentences.Count);
+		Assert.AreEqual(
+			"Warmth: No colour temperature. The schedule's kelvin figure does nothing for these lights, so they "
+			+ "run at neutral white.",
+			sentences[^1].PlainText);
+	}
+
+	/// <summary>The way back out of it, and the way somebody arrives at it, are the same list.</summary>
+	[TestMethod]
+	public void No_Colour_Temperature_Is_The_First_Thing_The_Warmth_List_Offers()
+	{
+		AreaConfig room = Room();
+		room.ColorControl = ColorControl.EqualChannels;
+
+		SentenceToken token = TokenFor(AreaSentences.ForArea(room, Defaults()), nameof(AreaSettings.ColorControl));
+
+		Assert.AreEqual(TokenKind.Choice, token.Kind);
+		Assert.AreEqual(TokenOrigin.Own, token.Origin);
+		Assert.AreEqual("No colour temperature", token.Text);
+		Assert.AreEqual("Detect it from the lights", token.HouseText, "the house is still reading the fixtures");
+
+		CollectionAssert.AreEqual(
+			new[] { "No colour temperature", "Colour temperature in kelvin", "Detect it from the lights" },
+			token.Choices.Select(choice => choice.Text).ToArray());
+	}
+
+	[TestMethod]
+	public void Every_Warmth_Answer_Can_Be_Applied()
+	{
+		foreach (TokenChoice choice in AreaSentences.WarmthChoices)
+		{
+			AreaConfig room = Room();
+
+			Assert.IsTrue(
+				RoomSettings.Apply(room, new SentenceEdit(nameof(AreaSettings.ColorControl), TokenKind.Choice, choice.Value)),
+				$"the warmth list offers {choice.Value}, so the page must know how to apply it");
+
+			Assert.AreEqual(Enum.Parse<ColorControl>(choice.Value), room.ColorControl);
+		}
+	}
+
+	/// <summary>The levels table reads this to decide whether a kelvin control is worth drawing at all.</summary>
+	[TestMethod]
+	public void Warmth_Follows_The_House_Until_The_Room_Answers_For_Itself()
+	{
+		AreaSettings defaults = Defaults();
+		defaults.ColorControl = ColorControl.EqualChannels;
+
+		Assert.IsTrue(AreaSentences.WithoutColourTemperature(Room(), defaults));
+		Assert.AreEqual(ColorControl.EqualChannels, AreaSentences.WarmthOf(Room(), defaults));
+
+		AreaConfig room = Room();
+		room.ColorControl = ColorControl.Kelvin;
+
+		Assert.IsFalse(AreaSentences.WithoutColourTemperature(room, defaults),
+			"a room that says its lights take kelvin overrules the house");
+
+		Assert.IsFalse(AreaSentences.WithoutColourTemperature(null, Defaults()),
+			"and the house's own page, which has no room, follows its own answer");
+
+		SentenceToken inherited = TokenFor(AreaSentences.ForArea(Room(), defaults), nameof(AreaSettings.ColorControl));
+
+		Assert.AreEqual(TokenOrigin.Inherited, inherited.Origin);
+		Assert.IsNull(inherited.HouseText, "already on the house's answer, so there is no road back to offer");
+	}
+
 	// ===================== the contract the pages code against =====================
 
 	/// <summary>

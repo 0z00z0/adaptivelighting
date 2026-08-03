@@ -227,6 +227,87 @@ public sealed class CommissioningDraftTests
 		Assert.AreEqual(0, draft.PickedCount);
 	}
 
+	// ===================== the board opens with nothing picked =====================
+
+	[TestMethod]
+	public void A_Fresh_Board_Has_Picked_Nothing()
+	{
+		AdaptiveLightingConfig config = Discovered();
+		string[] keys = [.. config.Areas.Select(CommissioningDraft.RoomKey)];
+
+		CommissioningDraft draft = new();
+
+		Assert.AreEqual(0, draft.PickedCount);
+		Assert.IsFalse(Array.Exists(keys, key => draft.IsPicked(key)));
+		Assert.IsFalse(draft.IncludesAll(keys), "and the include-all box is clear along with the rooms");
+		Assert.AreEqual("Switch on the rooms you pick", CommissioningVerdicts.CommitLabel(draft.PickedCount));
+	}
+
+	[TestMethod]
+	public void Include_All_Picks_Every_Room_And_Leaves_None_Behind()
+	{
+		AdaptiveLightingConfig config = Discovered();
+		string[] keys = [.. config.Areas.Select(CommissioningDraft.RoomKey)];
+
+		CommissioningDraft draft = new();
+		draft.PickAll(keys);
+
+		Assert.IsTrue(draft.IncludesAll(keys));
+		Assert.AreEqual("Switch on 3 rooms", CommissioningVerdicts.CommitLabel(draft.PickedCount));
+		Assert.IsNull(CommissioningVerdicts.RestLine(draft.PickedCount, keys.Length), "there is no rest to send anywhere");
+
+		draft.Apply(config, Watched);
+
+		Assert.IsTrue(config.Areas.TrueForAll(area => area.Enabled == true));
+	}
+
+	[TestMethod]
+	public void Clearing_Include_All_Drops_Every_Room()
+	{
+		AdaptiveLightingConfig config = Discovered();
+		string[] keys = [.. config.Areas.Select(CommissioningDraft.RoomKey)];
+
+		CommissioningDraft draft = new();
+		draft.PickAll(keys);
+		draft.DropAll(keys);
+
+		Assert.AreEqual(0, draft.PickedCount);
+		Assert.IsFalse(draft.IncludesAll(keys));
+
+		draft.Apply(config, Watched);
+
+		Assert.IsTrue(config.Areas.TrueForAll(area => area.Enabled == false), "and the document is as discovery left it");
+	}
+
+	[TestMethod]
+	public void Include_All_Goes_Clear_The_Moment_One_Room_Is_Dropped()
+	{
+		AdaptiveLightingConfig config = Discovered();
+		string[] keys = [.. config.Areas.Select(CommissioningDraft.RoomKey)];
+
+		CommissioningDraft draft = new();
+		draft.PickAll(keys);
+		draft.ToggleRoom("gang");
+
+		Assert.IsFalse(draft.IncludesAll(keys));
+		Assert.AreEqual("Switch on 2 rooms", CommissioningVerdicts.CommitLabel(draft.PickedCount));
+		Assert.AreEqual(
+			"The other room stays listed under House, with its own switch.",
+			CommissioningVerdicts.RestLine(draft.PickedCount, keys.Length));
+	}
+
+	// The floor headers read the same predicate, so it has to answer for a subset without seeing the whole board.
+	[TestMethod]
+	public void Everything_Included_Is_Asked_Of_The_Rooms_On_Screen()
+	{
+		CommissioningDraft draft = new();
+		draft.PickAll(["stue", "kjokken"]);
+
+		Assert.IsTrue(draft.IncludesAll(["stue"]));
+		Assert.IsFalse(draft.IncludesAll(["stue", "loft"]));
+		Assert.IsFalse(draft.IncludesAll([]), "with no rooms drawn there is nothing to have included");
+	}
+
 	// A room with explicit entities has no area id, so the key falls back to the display name.
 	[TestMethod]
 	public void A_Room_Without_An_Area_Id_Is_Keyed_By_Name()

@@ -731,7 +731,12 @@ public sealed class AreaController : IDisposable
 		RefreshDarkness();
 
 		double brightness = target.Clamp(target.BrightnessPct * brightnessFactor);
-		LightCommand command = new(true, brightness, target.ColorTempKelvin, TransitionSeconds());
+
+		// Composed here, not per service call: the fixtures were read once when the area resolved.
+		bool equalChannels = _area.EffectiveColorControl is ColorControl.EqualChannels;
+
+		LightCommand command = new(
+			true, brightness, equalChannels ? null : target.ColorTempKelvin, TransitionSeconds(), equalChannels);
 
 		Send(command);
 		Publish(reason);

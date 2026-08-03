@@ -39,6 +39,27 @@ public class AreaConfig
 	/// <summary>Entities that block auto-on while they are on: a projector, a "do not disturb" flag.</summary>
 	public List<string>? IgnoreWhenOn { get; set; }
 
+	/// <summary>Read <see cref="IgnoreWhenOn"/> the other way: block while they are <i>off</i>.</summary>
+	/// <remarks>
+	///     For a "lighting allowed" switch somebody turns off to stop the room. An entity that cannot be read
+	///     blocks under neither polarity, so a vanished helper never pins a room dark.
+	/// </remarks>
+	public bool? IgnoreWhenOnInverted { get; set; }
+
+	/// <summary>
+	///     Entities that stop the engine switching this room's lights <i>off</i> while they are on: a meeting
+	///     light, a guest switch.
+	/// </summary>
+	/// <remarks>
+	///     The sibling of <see cref="IgnoreWhenOn"/> and the opposite half of the same idea. It holds off the
+	///     vacancy timeout, the pre-off warning dim and the leaving sweep. It never turns anything on, and a
+	///     person switching the lights off by hand is still obeyed.
+	/// </remarks>
+	public List<string>? KeepLitWhenOn { get; set; }
+
+	/// <summary>Read <see cref="KeepLitWhenOn"/> the other way: hold the lights on while they are <i>off</i>.</summary>
+	public bool? KeepLitWhenOnInverted { get; set; }
+
 	/// <summary>
 	///     Entity ids discovery must skip for this room, such as a fridge's internal illuminance sensor sitting in
 	///     the room's HA area.

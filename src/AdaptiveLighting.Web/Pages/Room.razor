@@ -186,6 +186,8 @@ else
 
 		<LevelsEditor Periods="@_document.Periods"
 					  Room="@room"
+					  Defaults="@_document.Defaults"
+					  Resolved="@_preview.Resolved"
 					  ActivePeriod="@ActivePeriodName"
 					  Changed="@MarkDirty" />
 
@@ -286,7 +288,7 @@ else
 									<SettingRow Label="@item.Label"
 												Help="@item.Help"
 												IsOwn="@RoomSettings.IsOwn(room, item.Key)"
-												HouseText="@RoomSettings.Describe(null, _document.Defaults, item.Key)"
+												HouseText="@HouseTextFor(item)"
 												Reverted="@(() => Revert(item.Key))">
 										@switch (item.Control)
 										{
@@ -303,7 +305,7 @@ else
 
 											case RoomControl.Choice:
 												<div class="seg" role="group" aria-label="@item.Label">
-													@foreach (TokenChoice option in RoomSettings.DarknessOptions)
+													@foreach (TokenChoice option in ChoicesFor(item.Key))
 													{
 														TokenChoice choice = option;
 														<button type="button"
@@ -1140,8 +1142,34 @@ else
 	private int OwnCountIn(RoomSettingGroup group) =>
 		_room is { } room ? group.Settings.Count(setting => RoomSettings.IsOwn(room, setting.Key)) : 0;
 
+	/// <summary>Whether a setting is the warmth one, which is the only choice row that is not the darkness rule.</summary>
+	private static bool IsWarmth(string key) =>
+		string.Equals(key, nameof(AreaSettings.ColorControl), StringComparison.Ordinal);
+
+	/// <summary>Which shortlist a choice-typed row offers.</summary>
+	private static IReadOnlyList<TokenChoice> ChoicesFor(string key) =>
+		IsWarmth(key) ? RoomSettings.ColorControlOptions : RoomSettings.DarknessOptions;
+
 	private bool IsCurrentChoice(string key, TokenChoice choice) =>
-		string.Equals(RoomSettings.Choice(_room, _document.Defaults, key).ToString(), choice.Value, StringComparison.Ordinal);
+		string.Equals(
+			IsWarmth(key) ? Effective.ColorControl.ToString() : Effective.Darkness.ToString(),
+			choice.Value,
+			StringComparison.Ordinal);
+
+	/// <summary>What a row says the house is on, in that row's own words.</summary>
+	// The choice rows are worded per setting, so the enum's own name would show through as "EqualChannels".
+	private string HouseTextFor(RoomSetting setting)
+	{
+		if (setting.Control != RoomControl.Choice)
+			return RoomSettings.Describe(null, _document.Defaults, setting.Key);
+
+		string house = IsWarmth(setting.Key)
+			? _document.Defaults.ColorControl.ToString()
+			: _document.Defaults.Darkness.ToString();
+
+		return ChoicesFor(setting.Key)
+			.FirstOrDefault(option => string.Equals(option.Value, house, StringComparison.Ordinal))?.Text ?? house;
+	}
 
 	// ===================== editing =====================
 
@@ -1197,12 +1225,12 @@ else
 		return MarkDirty();
 	}
 
+	// Through RoomSettings.Apply, the same path the sentence tokens take, so the two choice rows cannot end up
+	// writing different properties from the same words.
 	private Task SetChoice(string key, string value)
 	{
-		if (_room is not { } room || !Enum.TryParse(value, out DarknessSource source))
+		if (_room is not { } room || !RoomSettings.Apply(room, new SentenceEdit(key, TokenKind.Choice, value)))
 			return Task.CompletedTask;
-
-		room.Darkness = source;
 
 		return MarkDirty();
 	}

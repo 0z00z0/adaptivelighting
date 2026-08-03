@@ -47,6 +47,11 @@ public sealed class LightingOrchestrator : IDisposable
 	private readonly List<AreaController> _areas = [];
 	private readonly List<SuspectLight> _sharedLights = [];
 	private readonly HashSet<string> _motionSensorUnion = new(StringComparer.OrdinalIgnoreCase);
+
+	// The same sensors split by area id, for a period whose StartsOnMotionAreas names rooms. An area configured
+	// without an AreaId cannot be named, so it is absent here.
+	private readonly Dictionary<string, IReadOnlyList<string>> _motionSensorsByArea = new(StringComparer.OrdinalIgnoreCase);
+
 	private readonly CompositeDisposable _subscriptions = [];
 
 	private PresenceMonitor? _presence;
@@ -143,6 +148,10 @@ public sealed class LightingOrchestrator : IDisposable
 			// An option resetting on presence with no explicit sensor list resets on any of these. Must be complete
 			// before StartHouseMonitors builds the mode monitor.
 			_motionSensorUnion.UnionWith(resolved!.MotionSensors);
+
+			if (areaConfig.AreaId is { Length: > 0 } areaId && areaId.Trim() is { Length: > 0 } trimmed)
+				_motionSensorsByArea[trimmed] = resolved!.MotionSensors;
+
 			running.Add(resolved!);
 			_areas.Add(BuildArea(resolved!, areaConfig));
 		}
@@ -264,7 +273,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_motionSensorUnion,
 			_lastPeriod,
 			// The same reader the calculators got, so the mode brain acts on the boundary the rooms are lit for.
-			_periodSelect);
+			_periodSelect,
+			_motionSensorsByArea);
 
 		_subscriptions.Add(_presence.Events.SubscribeSafe((PresenceEvent _) => PublishHouseState(), _logger));
 		_subscriptions.Add(_modes.Changed.SubscribeSafe((Unit _) => PublishHouseState(), _logger));

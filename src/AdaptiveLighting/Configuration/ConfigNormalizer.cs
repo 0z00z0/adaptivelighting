@@ -55,6 +55,26 @@ public static class ConfigNormalizer
 				global.PeriodSelect = null;
 		}
 
+		// Nothing reads the room list while StartsOnMotion is off, so it is cleared rather than left to rot into a
+		// list of rooms that were renamed years ago. ColorControl and HouseMode.Authority need nothing: their zero
+		// values are the old behaviour, and OmitNull leaves a document that never set them untouched.
+		foreach (TimePeriodConfig period in config.Periods)
+		{
+			if (!period.StartsOnMotion)
+			{
+				period.StartsOnMotionAreas.Clear();
+				continue;
+			}
+
+			period.StartsOnMotionAreas =
+			[
+				.. period.StartsOnMotionAreas
+					.Where(areaId => !string.IsNullOrWhiteSpace(areaId))
+					.Select(areaId => areaId.Trim())
+					.Distinct(StringComparer.Ordinal)
+			];
+		}
+
 		// Levels is null-coalesced where Areas, Periods and HouseMode.Options are dereferenced bare: those are
 		// structural and the deserialiser repairs them, whereas AreaSetupService.Apply can hand Levels through as
 		// null from the area it rebuilt.

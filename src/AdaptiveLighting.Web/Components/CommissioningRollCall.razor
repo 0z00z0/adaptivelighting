@@ -7,7 +7,18 @@
 	row unfolds the room's behaviour as read-only sentences; the switch is a separate target and stops the tap.
 *@
 
-<div class="comm-label"><span class="lab">The rooms &mdash; switch on the ones this app may run</span></div>
+<div class="comm-label">
+	<span class="lab">The rooms &mdash; switch on the ones this app may run</span>
+
+	@* A label around the box, not a control inside one: the row below is a div for the same reason. *@
+	@if (AllKeys.Count > 0)
+	{
+		<label class="comm-all">
+			<input type="checkbox" @bind:get="IncludesEveryRoom" @bind:set="SetIncludeAll" />
+			Include all
+		</label>
+	}
+</div>
 
 @foreach (FloorGroup<CommissioningRow> group in Groups)
 {
@@ -172,8 +183,24 @@
 	}
 
 	/// <summary>Whether every room on a floor is picked, which flips the bulk action's words. An empty floor is not.</summary>
-	private bool AllPicked(FloorGroup<CommissioningRow> group) =>
-		group.Items.Count > 0 && group.Items.All(row => Draft.IsPicked(row.Key));
+	private bool AllPicked(FloorGroup<CommissioningRow> group) => Draft.IncludesAll(group.Items.Select(row => row.Key));
+
+	/// <summary>Every room on the board, floors flattened, in the order they are drawn.</summary>
+	private IReadOnlyList<string> AllKeys => [.. Groups.SelectMany(group => group.Items).Select(row => row.Key)];
+
+	private bool IncludesEveryRoom => Draft.IncludesAll(AllKeys);
+
+	private Task SetIncludeAll(bool include)
+	{
+		IReadOnlyList<string> keys = AllKeys;
+
+		if (include)
+			Draft.PickAll(keys);
+		else
+			Draft.DropAll(keys);
+
+		return Changed.InvokeAsync();
+	}
 
 	private void Unfold(string key)
 	{

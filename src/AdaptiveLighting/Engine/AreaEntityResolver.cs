@@ -10,6 +10,7 @@ namespace AdaptiveLighting.Engine;
 /// <remarks>
 ///     <c>Lights</c> and <c>MotionSensors</c> are never empty; <c>LuxSensors</c> may be. <c>FollowOutdoorLux</c>
 ///     stays unresolved so a room that follows the house keeps following when the house changes its mind.
+///     <c>LightsSupportColorTemp</c> is read once here, because the alternative is a state read per light per tick.
 /// </remarks>
 public sealed record ResolvedArea(
 	string Name,
@@ -18,7 +19,19 @@ public sealed record ResolvedArea(
 	IReadOnlyList<string> MotionSensors,
 	IReadOnlyList<string> LuxSensors,
 	IReadOnlyList<string> IgnoreWhenOn,
-	bool FollowOutdoorLux = false);
+	bool FollowOutdoorLux = false,
+	bool? LightsSupportColorTemp = null)
+{
+	/// <summary>How this area's warmth is commanded, with <see cref="ColorControl.Auto"/> already decided.</summary>
+	/// <remarks>
+	///     Null capability means no light could be read, which is not evidence that none has a colour temperature,
+	///     so Auto stays on <see cref="ColorControl.Kelvin"/> until a fixture says otherwise.
+	/// </remarks>
+	public ColorControl EffectiveColorControl =>
+		Settings.ColorControl is not ColorControl.Auto ? Settings.ColorControl
+		: LightsSupportColorTemp == false ? ColorControl.EqualChannels
+		: ColorControl.Kelvin;
+}
 
 /// <summary>What discovery finds in one area, before that area's explicit lists have had their say.</summary>
 /// <remarks>
@@ -45,6 +58,8 @@ public sealed class AreaEntityResolver
 	private const string SensorDomain = "sensor";
 	private const string DeviceClassAttribute = "device_class";
 	private const string GroupMembersAttribute = "entity_id";
+	private const string SupportedColorModesAttribute = "supported_color_modes";
+	private const string ColorTempMode = "color_temp";
 	private const string UnavailableState = "unavailable";
 	private const string UnknownState = "unknown";
 
@@ -145,9 +160,42 @@ public sealed class AreaEntityResolver
 				? string.Join(", ", lux)
 				: area.FollowOutdoorLux == true ? "(the house's outdoor sensor)" : "(none)");
 
+		bool? colorTemp = ColorTempCapabilityOf(lights);
+
+		if (settings.ColorControl is ColorControl.Auto && colorTemp == false)
+			_logger.LogInformation(
+				"Area {Area}: no light reports a '{Mode}' colour mode, so its warmth is driven as equal colour channels "
+				+ "and the schedule's kelvin figure does not reach it. Set ColorControl to Kelvin to overrule that.",
+				name, ColorTempMode);
+
 		resolved = new ResolvedArea(
-			name, settings, lights, motion, lux, [.. area.IgnoreWhenOn ?? []], area.FollowOutdoorLux == true);
+			name, settings, lights, motion, lux, [.. area.IgnoreWhenOn ?? []], area.FollowOutdoorLux == true, colorTemp);
 		return true;
+	}
+
+	/// <summary>Whether any of <paramref name="lights"/> advertises a colour temperature, or <c>null</c> when none said.</summary>
+	/// <remarks>
+	///     A light with no readable <c>supported_color_modes</c> is no evidence either way, so it is not counted.
+	///     False needs at least one fixture that answered, or a house still starting up would resolve every room to
+	///     equal channels and leave it there until the next rebuild.
+	/// </remarks>
+	private bool? ColorTempCapabilityOf(List<string> lights)
+	{
+		bool anyAnswered = false;
+
+		foreach (string light in lights)
+		{
+			IReadOnlyList<string> modes = _ha.AttrStringList(light, SupportedColorModesAttribute);
+			if (modes.Count == 0)
+				continue;
+
+			anyAnswered = true;
+
+			if (modes.Contains(ColorTempMode, StringComparer.OrdinalIgnoreCase))
+				return true;
+		}
+
+		return anyAnswered ? false : null;
 	}
 
 	/// <summary>Why an area yielded no lights, in the words that name the fix.</summary>
