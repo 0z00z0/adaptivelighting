@@ -526,4 +526,27 @@ public sealed class RoomSceneTests
 
 		Assert.IsNull(t.Publisher.Snapshots[0].SceneApplied);
 	}
+
+	// A house scene is the look now, so a room reported as sitting on its own would be describing lights the
+	// house has since replaced.
+	[TestMethod]
+	public void A_House_Scene_Taking_Over_Clears_The_Room_Scene_The_Snapshot_Reports()
+	{
+		Fixture guest = Lit(sceneWhenEmpty: WhenEmpty);
+		Advance(guest, TimeSpan.FromSeconds(VacancySeconds));
+		Assert.AreEqual(WhenEmpty, guest.Publisher.Snapshots[^1].SceneApplied);
+
+		guest.House.OnNext(new HouseState(true, ModeKind.Guest, false) { ActiveScene = "scene.house_party" });
+
+		Assert.AreEqual(AreaState.SceneHold, guest.Area.State);
+		Assert.IsNull(guest.Publisher.Snapshots[^1].SceneApplied);
+
+		Fixture away = Lit(sceneWhenEmpty: WhenEmpty);
+		Advance(away, TimeSpan.FromSeconds(VacancySeconds));
+
+		away.House.OnNext(new HouseState(false, ModeKind.Away, false) { ActiveScene = "scene.house_away" });
+
+		Assert.AreEqual(AreaState.Away, away.Area.State);
+		Assert.IsNull(away.Publisher.Snapshots[^1].SceneApplied);
+	}
 }

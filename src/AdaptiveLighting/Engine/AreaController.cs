@@ -396,6 +396,10 @@ public sealed class AreaController : IDisposable
 	private void EnterSceneHold()
 	{
 		CancelAllTimers();
+
+		// The house's scene is the look now, so the room's own no longer describes these lights.
+		_standingScene = null;
+
 		Enter(AreaState.SceneHold, TransitionReason.SceneHold);
 		Publish(TransitionReason.SceneHold);
 	}
@@ -567,6 +571,7 @@ public sealed class AreaController : IDisposable
 		if (_house.ActiveScene is { Length: > 0 })
 		{
 			_logger.LogDebug("{Area}: away scene {Scene} is holding; skipping the leaving sweep.", Name, _house.ActiveScene);
+			_standingScene = null;
 			Publish(reason);
 			return;
 		}
