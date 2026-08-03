@@ -39,3 +39,6 @@ website/.astro/
 
 # Agent worktrees are scratch, never content
 .claude/worktrees/
+
+# Session working files: briefs, one-off measurement scripts. Never part of the package.
+scratchpad/
