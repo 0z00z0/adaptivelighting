@@ -1,35 +1,19 @@
 @*
-	A number chosen from presets, with a free number field one click away behind the same toggle EntityPicker
-	uses. A stored value not on the list is shown as its own entry, never snapped to a neighbour.
+	A number chosen from presets. The presets span the useful range, so there is no free-entry escape; a stored
+	value not on the list is still shown as its own entry, never snapped to a neighbour.
 *@
 
 <span class="preset">
-	@if (_manual)
-	{
-		@* Invariant, always. See Invariant below. *@
-		<input class="cell num" type="number" step="@Invariant(Step)" min="@Invariant(Min)" max="@Invariant(Max)" value="@Invariant(Value)" @onchange="OnTyped" />
-		@if (Unit is { Length: > 0 })
+	<select class="cell preset-select" @bind:get="Key(Value)" @bind:set="OnPicked">
+		@foreach (PresetChoice option in Options)
 		{
-			<span class="unit">@Unit</span>
+			<option value="@Key(option.Value)">@option.Label</option>
 		}
-	}
-	else
-	{
-		<select class="cell preset-select" @bind:get="Key(Value)" @bind:set="OnPicked">
-			@foreach (PresetChoice option in Options)
-			{
-				<option value="@Key(option.Value)">@option.Label</option>
-			}
-			@if (IsUnlisted)
-			{
-				<option value="@Key(Value)">@Custom(Value)</option>
-			}
-		</select>
-	}
-
-	<button type="button" class="picker-mode" @onclick="ToggleMode">
-		@(_manual ? "Pick from list" : "Enter a value")
-	</button>
+		@if (IsUnlisted)
+		{
+			<option value="@Key(Value)">@Custom(Value)</option>
+		}
+	</select>
 </span>
 
 @code {
@@ -43,23 +27,9 @@
 	[Parameter, EditorRequired]
 	public IReadOnlyList<PresetChoice> Options { get; set; } = [];
 
-	/// <summary>Unit shown beside the free number field, e.g. <c>%</c> or <c>K</c>.</summary>
+	/// <summary>Unit written after a value the list does not carry, e.g. <c>%</c> or <c>K</c>.</summary>
 	[Parameter]
 	public string? Unit { get; set; }
-
-	/// <summary>Constraints for the free number field. The validator remains the real gate.</summary>
-	[Parameter]
-	public double Min { get; set; }
-
-	/// <inheritdoc cref="Min"/>
-	[Parameter]
-	public double Max { get; set; } = 100;
-
-	/// <inheritdoc cref="Min"/>
-	[Parameter]
-	public double Step { get; set; } = 1;
-
-	private bool _manual;
 
 	private bool IsUnlisted => !Options.Any(option => Matches(option.Value, Value));
 
@@ -72,20 +42,8 @@
 
 	private static bool Matches(double left, double right) => Math.Abs(left - right) < 0.001;
 
-	/// <summary>A number bound for an HTML attribute.</summary>
-	// Razor renders a bare @double through the current culture. Under nb-NO 62.5 becomes value="62,5", which
-	// no browser reads as a number: the field shows empty, and a step or min in that shape drops silently.
-	private static string Invariant(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
-
-	private void ToggleMode() => _manual = !_manual;
-
 	private Task OnPicked(string picked) =>
 		double.TryParse(picked, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
-			? Commit(value)
-			: Task.CompletedTask;
-
-	private Task OnTyped(ChangeEventArgs args) =>
-		double.TryParse(args.Value as string, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
 			? Commit(value)
 			: Task.CompletedTask;
 
