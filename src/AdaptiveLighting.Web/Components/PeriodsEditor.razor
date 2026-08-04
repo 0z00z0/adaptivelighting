@@ -63,6 +63,58 @@
 					<PeriodStartEditor Value="@period.Start" ValueChanged="@(value => SetStart(period, value))" />
 				</div>
 
+				<div class="pfield">
+					@* The (i) is a sibling of the label, never inside it: a click on the popover's own text is
+					   forwarded to the first labelable element in a label, which here would toggle the box. *@
+					<span class="pfield-label">
+						<label class="pfield-check">
+							<input type="checkbox" checked="@period.StartsOnMotion"
+								   @onchange="args => SetStartsOnMotion(period, args.Value is true)" />
+							Wait for movement before starting
+						</label>
+						<InfoPopover Label="Wait for movement before starting">
+							This period doesn't begin at the time above. The period before it keeps running &mdash; the
+							house stays at night levels &mdash; until somebody moves, and then this one takes over
+							whole: brightness, warmth and its house mode together. Movement only counts once the start
+							time has come round, and only once a day, so a 02:00 trip to the kitchen isn't the morning.
+							If nobody moves, the next period's own start overtakes it, so an empty house is never left
+							on last night's levels.
+						</InfoPopover>
+					</span>
+					@if (StartsAreDead)
+					{
+						<span class="mode-dormant">
+							Not in force &mdash; Home Assistant decides when periods change, so nothing here waits for
+							movement. The setting is kept, and takes over again the moment you hand the time of day back.
+						</span>
+					}
+				</div>
+
+				@if (period.StartsOnMotion)
+				{
+					<div class="pfield period-motion-rooms">
+						<span class="pfield-label">
+							Movement in
+							<InfoPopover Label="Movement in">
+								Which rooms' movement may start this period. Leave it empty and any room the engine
+								watches will do. Naming the room you actually walk into first keeps a bedroom sensor at
+								06:05 from starting the morning for the whole house. The rooms are this schedule's own,
+								stored by area id.
+							</InfoPopover>
+						</span>
+						<EntityListPicker Value="@period.StartsOnMotionAreas"
+										  ValueChanged="@(value => SetMotionAreas(period, value))"
+										  Options="@MotionAreaOptions"
+										  NameResolver="@AreaNameOf"
+										  KnownResolver="@IsRoomHere"
+										  EmptyLabel="Any room the engine watches."
+										  AddLabel="Add a room…"
+										  Placeholder="area id, e.g. stue"
+										  EmptyNote="No rooms to pick from yet — type an area id instead." />
+						<div class="pfield-help">@MotionRoomsHelp(period)</div>
+					</div>
+				}
+
 				@if (HasHouseMode)
 				{
 					TimePeriodConfig boundPeriod = period;
@@ -162,6 +214,13 @@
 	[Parameter]
 	public IReadOnlyList<string> HouseModeOptions { get; set; } = [];
 
+	/// <summary>
+	///     The document's rooms, offered as the choices for a period that waits for movement. Read only, and by
+	///     area id: the document stores the id, never the display name.
+	/// </summary>
+	[Parameter]
+	public IReadOnlyList<AreaConfig> Areas { get; set; } = [];
+
 	/// <summary>The house-mode config. <c>null</c> hides the field.</summary>
 	[Parameter]
 	public HouseModeConfig? HouseMode { get; set; }
@@ -225,11 +284,19 @@
 	private static string DisplayName(TimePeriodConfig period) =>
 		period.Name is { Length: > 0 } name ? name : "unnamed period";
 
+	/// <summary>When the collapsed card says this period starts, which is not always a time.</summary>
+	// A period that waits for movement still shows its boundary: movement is measured against it, and the
+	// blend still trails it.
+	private string StartSummary(TimePeriodConfig period) =>
+		period.StartsOnMotion
+			? PeriodStartText.WaitsForMovement(StartText(period), MotionRoomNames(period))
+			: StartText(period);
+
 	/// <summary>
 	///     The start as the header shows it: the raw string, plus the wall-clock time a sun-anchored start
 	///     resolves to today from <c>sun.sun</c>.
 	/// </summary>
-	private string StartSummary(TimePeriodConfig period)
+	private string StartText(TimePeriodConfig period)
 	{
 		if (string.IsNullOrWhiteSpace(period.Start))
 			return "start not set";
@@ -249,6 +316,32 @@
 	private static string LevelSummary(TimePeriodConfig period) =>
 		string.Create(CultureInfo.InvariantCulture, $"{Math.Round(period.BrightnessPct)}% · {period.ColorTempKelvin}K");
 
+	/// <summary>The document's rooms as the picker offers them: named for a reader, valued as the area id.</summary>
+	private IReadOnlyList<EntityOption> MotionAreaOptions =>
+	[
+		.. Areas
+			.Where(area => area.AreaId is { Length: > 0 })
+			.Select(area => new EntityOption(area.AreaId!, AreaNaming.DisplayName(area, Catalog.AreaRegistry), null))
+	];
+
+	private string AreaNameOf(string areaId) =>
+		RoomWithId(areaId) is { } room ? AreaNaming.DisplayName(room, Catalog.AreaRegistry) : areaId;
+
+	private bool IsRoomHere(string areaId) => RoomWithId(areaId) is not null;
+
+	// Ordinal, as ConfigValidator matches these ids: a display name typed in here has to come back as an unknown
+	// chip, since the engine will never resolve it either.
+	private AreaConfig? RoomWithId(string areaId) =>
+		Areas.FirstOrDefault(area => string.Equals(area.AreaId, areaId, StringComparison.Ordinal));
+
+	private IReadOnlyList<string> MotionRoomNames(TimePeriodConfig period) =>
+		[.. period.StartsOnMotionAreas.Select(AreaNameOf)];
+
+	private string MotionRoomsHelp(TimePeriodConfig period) =>
+		PeriodStartText.MotionRooms(MotionRoomNames(period)) is { } rooms
+			? $"Only movement in {rooms} starts this period."
+			: "Movement in any room the engine watches starts this period.";
+
 	private string ModeHelp(TimePeriodConfig period)
 	{
 		if (period.SetsMode is not { Length: > 0 } mode)
@@ -267,6 +360,14 @@
 
 	private Task SetMode(TimePeriodConfig period, string? value) =>
 		Set(() => period.SetsMode = string.IsNullOrWhiteSpace(value) ? null : value);
+
+	// The room list is left as it is when the toggle goes off. ConfigNormalizer clears it on save, so nothing
+	// stale reaches the file, and switching back on within one edit keeps what was picked.
+	private Task SetStartsOnMotion(TimePeriodConfig period, bool value) =>
+		Set(() => period.StartsOnMotion = value);
+
+	private Task SetMotionAreas(TimePeriodConfig period, IReadOnlyList<string> areaIds) =>
+		Set(() => period.StartsOnMotionAreas = [.. areaIds]);
 
 	/// <summary>What a period starts as, in the one place that decides it. <see cref="PeriodSelectPanel"/> uses it too.</summary>
 	/// <param name="existing">

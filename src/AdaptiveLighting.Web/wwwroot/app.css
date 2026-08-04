@@ -6625,3 +6625,33 @@ h1[tabindex="-1"]:focus {
 }
 
 /* ===== end gate polarity ===== */
+
+/* ===== a period that waits for movement ===== */
+
+/* The room list spans the whole period grid: the chips and the add row need more than one 230px column, and a
+   picker that wraps inside one reads as a broken control. */
+.period-motion-rooms {
+	grid-column: 1 / -1;
+}
+
+.period-motion-rooms .list-picker {
+	width: 100%;
+}
+
+/* The label around the box only, so the (i) beside it can stay outside the label. Inherits the weight, size
+   and colour of the .pfield-label it sits in. */
+.pfield-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	cursor: pointer;
+}
+
+/* The period grid has no help styling of its own; this matches .field-help, one step smaller for the card. */
+.pfield-help {
+	color: var(--muted);
+	font-size: 0.78rem;
+	max-width: 60rem;
+}
+
+/* ===== end a period that waits for movement ===== */
