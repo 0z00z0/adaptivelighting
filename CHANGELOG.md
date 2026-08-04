@@ -11,6 +11,20 @@ under one version, because they are compiled against each other.
 
 ### Added
 
+- **A period can wait for movement instead of starting on the clock**, from the schedule editor. The
+  engine has understood `StartsOnMotion` since it shipped, and until now the only way to set it was to
+  hand-edit the document.
+  - *Wait for movement before starting* sits beside the period's *Starts*, which it overrides. The
+    period before it keeps running — the house stays at night levels — until somebody moves, and then
+    it begins whole: brightness, warmth and its house mode together.
+  - *Movement in* names the rooms whose movement may start it, offered from this document's own rooms
+    and stored by area id. Empty means any room the engine watches, and the picker says so in those
+    words. An id no room here answers to is marked, as the validator's warning already said.
+  - The collapsed card says it as well: *06:30 · waits for movement in Kitchen or Hall*. A schedule
+    that waits can no longer be read as one that runs on the clock.
+  - Dormant under Home Assistant's period authority, and the toggle now says so where the start times
+    above it already did.
+
 - **A room can run a scene instead of switching on, and another instead of switching off.** Two
   optional per-room dropdowns under *Movement*: *Run a scene instead, on movement* and *Run a scene
   instead, when empty*. Both are off by default, and a room that sets neither behaves exactly as it

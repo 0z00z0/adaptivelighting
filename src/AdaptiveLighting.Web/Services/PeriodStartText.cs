@@ -39,6 +39,36 @@ public static class PeriodStartText
 	}
 
 	/// <summary>
+	///     The rooms whose movement may start a period, in words, or <c>null</c> when none is named and any
+	///     watched room will do.
+	/// </summary>
+	/// <param name="roomNames">Display names, in document order. Ids are no use to a reader.</param>
+	public static string? MotionRooms(IReadOnlyList<string>? roomNames)
+	{
+		if (roomNames is not { Count: > 0 })
+			return null;
+
+		List<string> named = [.. roomNames.Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name.Trim())];
+
+		return named.Count switch
+		{
+			0 => null,
+			1 => named[0],
+			2 => $"{named[0]} or {named[1]}",
+			_ => $"{named[0]} or {named.Count - 1} other rooms"
+		};
+	}
+
+	/// <summary>
+	///     The fold header's start line for a period that does not begin on the clock: the boundary it is still
+	///     bounded by, then what it waits for.
+	/// </summary>
+	public static string WaitsForMovement(string start, IReadOnlyList<string>? roomNames) =>
+		MotionRooms(roomNames) is { } rooms
+			? $"{start} · waits for movement in {rooms}"
+			: $"{start} · waits for movement";
+
+	/// <summary>
 	///     What the engine will make of a Start string, in words, or <c>null</c> when it will refuse it. Runs the
 	///     engine's own parser, so this describes what actually happens.
 	/// </summary>
