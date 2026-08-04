@@ -57,7 +57,6 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
 - **Ship as its own Home Assistant add-on with ingress.** The only route to HA auth: `IHaContext` has no
   `SetState`, and `last_updated` cannot be written back at all.
 - **The user guide has no screenshots.** Every `📷 [screenshot: …]` slot is still a placeholder.
-- **`SceneHold` is missing from the architecture state diagram.** *(thin)*
 - **Section icons in the 0z0 design language are not wired into the UI.** *(thin)*
 
 ## House-specific
