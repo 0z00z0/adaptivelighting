@@ -188,7 +188,7 @@ else
 					  Room="@room"
 					  Defaults="@_document.Defaults"
 					  Resolved="@_preview.Resolved"
-					  ActivePeriod="@ActivePeriodName"
+					  ActivePeriod="@ActivePeriodId"
 					  Changed="@MarkDirty" />
 
 		@* Off, this is one line and a switch: no chart for a rule that is not running. *@
@@ -1061,6 +1061,9 @@ else
 	/// <summary>The period in force right now, by name, or <c>null</c> when none resolves.</summary>
 	private string? ActivePeriodName => _activePeriod?.Name;
 
+	/// <summary>The same period by id, which is what the levels table matches its rows on.</summary>
+	private string? ActivePeriodId => _activePeriod?.Key;
+
 	private bool BrightensWithDaylight => Effective.LuxBrightnessEnabled;
 
 	/// <summary>
@@ -1084,7 +1087,7 @@ else
 				return rows.FirstOrDefault()?.BrightnessPct ?? DefaultDaylightBasePct;
 
 			return rows
-				.FirstOrDefault(row => string.Equals(row.Period, period.Name, StringComparison.OrdinalIgnoreCase))
+				.FirstOrDefault(row => string.Equals(row.PeriodId, period.Key, StringComparison.OrdinalIgnoreCase))
 				?.BrightnessPct ?? period.BrightnessPct;
 		}
 	}

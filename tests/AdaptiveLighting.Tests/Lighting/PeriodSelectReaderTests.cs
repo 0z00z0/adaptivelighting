@@ -29,7 +29,7 @@ public sealed class PeriodSelectReaderTests
 			{
 				Entity = entity,
 				Authority = authority,
-				Options = [.. options.Select(row => new PeriodSelectOptionConfig { Value = row.Value, Period = row.Period })]
+				Options = [.. options.Select(row => new PeriodSelectOptionConfig { Value = row.Value, PeriodId = row.Period })]
 			}
 		};
 
@@ -118,7 +118,7 @@ public sealed class PeriodSelectReaderTests
 		FakeHaContext ha = new();
 		ha.SetState(Select, "Kveld");
 
-		Assert.AreEqual("evening", Reader(ha).CurrentPeriodName());
+		Assert.AreEqual("evening", Reader(ha).CurrentPeriodId());
 	}
 
 	[TestMethod]
@@ -127,7 +127,7 @@ public sealed class PeriodSelectReaderTests
 		FakeHaContext ha = new();
 		ha.SetState(Select, "  kVELd  ");
 
-		Assert.AreEqual("evening", Reader(ha).CurrentPeriodName(),
+		Assert.AreEqual("evening", Reader(ha).CurrentPeriodId(),
 			"the options are display strings somebody typed into a helper; a stray space must not stop the house");
 	}
 
@@ -140,7 +140,7 @@ public sealed class PeriodSelectReaderTests
 		{
 			ha.SetState(Select, state);
 
-			Assert.IsNull(Reader(ha).CurrentPeriodName(),
+			Assert.IsNull(Reader(ha).CurrentPeriodId(),
 				$"'{state}' is not an opinion — after a Home Assistant restart a helper sits like this for a while");
 		}
 	}
@@ -148,7 +148,7 @@ public sealed class PeriodSelectReaderTests
 	[TestMethod]
 	public void CurrentPeriodName_MissingEntity_IsNothing()
 	{
-		Assert.IsNull(Reader(new FakeHaContext()).CurrentPeriodName(), "a select that does not exist decides nothing");
+		Assert.IsNull(Reader(new FakeHaContext()).CurrentPeriodId(), "a select that does not exist decides nothing");
 	}
 
 	[TestMethod]
@@ -157,7 +157,7 @@ public sealed class PeriodSelectReaderTests
 		FakeHaContext ha = new();
 		ha.SetState(Select, "Siesta");
 
-		Assert.IsNull(Reader(ha).CurrentPeriodName(),
+		Assert.IsNull(Reader(ha).CurrentPeriodId(),
 			"an option nothing maps leaves the rooms on the schedule rather than guessing at one");
 	}
 
@@ -171,18 +171,18 @@ public sealed class PeriodSelectReaderTests
 
 		ha.SetState(Select, "Siesta");
 		for (int i = 0; i < 20; i++)
-			reader.CurrentPeriodName();
+			reader.CurrentPeriodId();
 
 		Assert.AreEqual(1, logger.Warnings, "one line for the value, not one per read");
 
 		ha.SetState(Select, "Ettermiddag");
-		reader.CurrentPeriodName();
-		reader.CurrentPeriodName();
+		reader.CurrentPeriodId();
+		reader.CurrentPeriodId();
 
 		Assert.AreEqual(2, logger.Warnings, "a different value is different news, and gets its own line");
 
 		ha.SetState(Select, "Kveld");
-		reader.CurrentPeriodName();
+		reader.CurrentPeriodId();
 
 		Assert.AreEqual(2, logger.Warnings, "a mapped option says nothing at all");
 	}

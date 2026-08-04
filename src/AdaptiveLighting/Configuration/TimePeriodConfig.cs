@@ -1,5 +1,7 @@
 using System.Globalization;
 
+using YamlDotNet.Serialization;
+
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>
@@ -8,14 +10,31 @@ namespace AdaptiveLighting.Configuration;
 /// </summary>
 public class TimePeriodConfig
 {
-	/// <summary>Free-form name: <c>morning</c>, <c>day</c>, <c>evening</c>, <c>night</c>. Reported in logs and snapshots.</summary>
+	/// <summary>What every reference to this period names. Minted once, never shown, never changed.</summary>
+	/// <remarks>
+	///     <see cref="StableKeyMigration"/> fills it in on load for a document written before ids existed. Editing
+	///     it by hand orphans every reference that already points at the old value.
+	/// </remarks>
+	public string? Id { get; set; }
+
+	/// <summary>Free-form name: <c>morning</c>, <c>day</c>, <c>evening</c>, <c>night</c>. Reported in logs and snapshots. Two periods may share one.</summary>
 	public string Name { get; set; } = "";
 
+	/// <summary>What this period is resolved by, everywhere.</summary>
+	// Falls back to Name for the one reader that can never be migrated: NetDaemon's ConfigurationBinder, against a
+	// house's app YAML, has no pre-pass and so no ids.
+	[YamlIgnore]
+	public string Key => Id is { Length: > 0 } id ? id.Trim() : Name.Trim();
+
 	/// <summary>
-	///     When this period starts, set the house-mode select to this option value. <c>null</c> leaves the mode
-	///     unchanged.
+	///     When this period starts, set the house mode to the option with this <see cref="HouseModeOptionConfig.Id"/>.
+	///     <c>null</c> leaves the mode unchanged.
 	/// </summary>
-	public string? SetsMode { get; set; }
+	/// <remarks>
+	///     A value matching no configured option is written to the select verbatim, which is how a live option
+	///     nobody has classified yet still works.
+	/// </remarks>
+	public string? SetsModeId { get; set; }
 
 	/// <summary>
 	///     When this period begins. Either a clock time (<c>06:30</c>) or a sun event with an optional
@@ -25,7 +44,7 @@ public class TimePeriodConfig
 
 	/// <summary>
 	///     This period does not begin at its <see cref="Start"/>. The period before it keeps running until somebody
-	///     moves, and then this one begins for the whole house: levels, warmth and <see cref="SetsMode"/> together.
+	///     moves, and then this one begins for the whole house: levels, warmth and <see cref="SetsModeId"/> together.
 	/// </summary>
 	/// <remarks>
 	///     Bounded three ways. Movement can only start it once its own <see cref="Start"/> has come round, so

@@ -46,8 +46,7 @@
 					<input type="text" class="cell wide" @bind="period.Name" @bind:event="oninput" placeholder="evening" />
 				</div>
 				<div class="field-help">
-					Shown on the dashboard. House modes refer to periods by this name, so renaming one here breaks
-					any mode that named it.
+					Shown on the dashboard. Rename it whenever you like — nothing points at the name.
 				</div>
 			</div>
 
@@ -126,15 +125,15 @@
 								switching to Sleep. Leave unset for a period that only changes light levels.
 							</InfoPopover>
 						</span>
-						<select class="cell wide" @bind:get="boundPeriod.SetsMode ?? string.Empty" @bind:set="@(value => SetMode(boundPeriod, value))">
+						<select class="cell wide" @bind:get="ModeKeyOf(boundPeriod)" @bind:set="@(value => SetMode(boundPeriod, value))">
 							<option value="">(none — leave the house mode unchanged)</option>
 							@foreach (string mode in HouseModeOptions)
 							{
-								<option value="@mode">@mode</option>
+								<option value="@ModeKeyFor(mode)">@mode</option>
 							}
-							@if (boundPeriod.SetsMode is { Length: > 0 } && !HouseModeOptions.Any(m => string.Equals(m, boundPeriod.SetsMode, StringComparison.OrdinalIgnoreCase)))
+							@if (ModeKeyOf(boundPeriod) is { Length: > 0 } stale && !HouseModeOptions.Any(m => string.Equals(ModeKeyFor(m), stale, StringComparison.OrdinalIgnoreCase)))
 							{
-								<option value="@boundPeriod.SetsMode">@boundPeriod.SetsMode — no such option</option>
+								<option value="@stale">@stale — no such option</option>
 							}
 						</select>
 						<div class="pfield-help">@ModeHelp(boundPeriod)</div>
@@ -342,12 +341,20 @@
 			? $"Only movement in {rooms} starts this period."
 			: "Movement in any room the engine watches starts this period.";
 
+	/// <summary>The option key a period's mode switch is stored as, or empty.</summary>
+	// A live option nobody has classified has no row and so no id; its own value is then the key, which is what
+	// HouseModeConfig.OptionValueFor writes back to the select.
+	private string ModeKeyOf(TimePeriodConfig period) => period.SetsModeId?.Trim() ?? string.Empty;
+
+	private string ModeKeyFor(string optionValue) =>
+		HouseMode?.OptionFor(optionValue)?.Key ?? optionValue.Trim();
+
 	private string ModeHelp(TimePeriodConfig period)
 	{
-		if (period.SetsMode is not { Length: > 0 } mode)
+		if (period.SetsModeId is not { Length: > 0 } key)
 			return "Doesn't change the house mode.";
 
-		return $"When this period begins, the house switches to '{mode}'.";
+		return $"When this period begins, the house switches to '{HouseMode?.OptionValueFor(key) ?? key.Trim()}'.";
 	}
 
 	private Task Set(Action mutate)
@@ -358,8 +365,8 @@
 
 	private Task SetStart(TimePeriodConfig period, string value) => Set(() => period.Start = value);
 
-	private Task SetMode(TimePeriodConfig period, string? value) =>
-		Set(() => period.SetsMode = string.IsNullOrWhiteSpace(value) ? null : value);
+	private Task SetMode(TimePeriodConfig period, string? key) =>
+		Set(() => period.SetsModeId = string.IsNullOrWhiteSpace(key) ? null : key.Trim());
 
 	// The room list is left as it is when the toggle goes off. ConfigNormalizer clears it on save, so nothing
 	// stale reaches the file, and switching back on within one edit keeps what was picked.
@@ -371,16 +378,18 @@
 
 	/// <summary>What a period starts as, in the one place that decides it. <see cref="PeriodSelectPanel"/> uses it too.</summary>
 	/// <param name="existing">
-	///     The periods already in the document, so the new one can be named apart from them. Omit only where
-	///     there is genuinely nothing to collide with.
+	///     The periods already in the document, so the new one can be named and keyed apart from them. Omit only
+	///     where there is genuinely nothing to collide with.
 	/// </param>
-	// The name must be unique: pressing "add a period" three times to clear a shortfall of three otherwise
-	// makes three rows called "new period": a duplicate name and two periods at 12:00, both errors.
+	// The id is minted here rather than left to the save-time migration: a room level set before the first save
+	// would otherwise be written against a period with no id and orphan itself the moment one is assigned.
+	// The name is still numbered apart, because three rows called "new period" all at 12:00 is an unreadable table.
 	public static TimePeriodConfig NewPeriod(IReadOnlyList<TimePeriodConfig>? existing = null)
 	{
 		const string Stem = "new period";
 
 		string name = Stem;
+		HashSet<string> takenIds = new(StringComparer.OrdinalIgnoreCase);
 
 		if (existing is { Count: > 0 })
 		{
@@ -390,9 +399,19 @@
 
 			for (int suffix = 2; taken.Contains(name); suffix++)
 				name = $"{Stem} {suffix}";
+
+			foreach (TimePeriodConfig period in existing)
+				takenIds.Add(period.Key);
 		}
 
-		return new TimePeriodConfig { Name = name, Start = "12:00", BrightnessPct = 80, ColorTempKelvin = 3500 };
+		return new TimePeriodConfig
+		{
+			Id = StableId.Create(name, takenIds),
+			Name = name,
+			Start = "12:00",
+			BrightnessPct = 80,
+			ColorTempKelvin = 3500
+		};
 	}
 
 	private async Task Add()

@@ -19,9 +19,11 @@ public enum LevelSource
 ///     Brightness and colour carry their provenance separately because the schema does. A room can state a
 ///     brightness and go on inheriting the warmth.
 /// </remarks>
-/// <param name="Period">The period's name, which is also the key its override is stored under.</param>
+/// <param name="PeriodId">The key the override is stored under, and what an edit writes back against.</param>
+/// <param name="Name">The period's display name, for the screen only.</param>
 public sealed record RoomLevelRow(
-	string Period,
+	string PeriodId,
+	string Name,
 	double BrightnessPct,
 	LevelSource Brightness,
 	int ColorTempKelvin,
@@ -31,12 +33,12 @@ public sealed record RoomLevelRow(
 	public bool IsOwn => Brightness == LevelSource.Room || Colour == LevelSource.Room;
 }
 
-/// <summary>A row this room states for a period the schedule no longer has, nearly always a rename in progress.</summary>
-/// <param name="Period">The name the room wrote, which matches no period in the schedule.</param>
-public sealed record RoomLevelOrphan(string Period, double? BrightnessPct, int? ColorTempKelvin)
+/// <summary>A row this room states for a period the schedule no longer has, nearly always one deleted by hand.</summary>
+/// <param name="PeriodId">The key the room wrote, which matches no period in the schedule.</param>
+public sealed record RoomLevelOrphan(string PeriodId, double? BrightnessPct, int? ColorTempKelvin)
 {
-	// A row with values but no period name survives normalisation, so the blank case reaches the screen.
-	public string Name => Period is { Length: > 0 } named ? named : "(a row with no period name)";
+	// A row with values but no period id survives normalisation, so the blank case reaches the screen.
+	public string Name => PeriodId is { Length: > 0 } named ? named : "(a row with no period)";
 
 	/// <summary>What the orphan holds, written out, so the row says what removing it would throw away.</summary>
 	public string Says
@@ -65,8 +67,8 @@ public sealed record RoomLevelOrphan(string Period, double? BrightnessPct, int? 
 /// </remarks>
 public static class RoomLevels
 {
-	// Case-insensitive, matching ModeMonitor. Ordinal would show an orphan for a period the engine still applies.
-	private const StringComparison ByName = StringComparison.OrdinalIgnoreCase;
+	// Case-insensitive, matching the engine. Ordinal would show an orphan for a period the engine still applies.
+	private const StringComparison ByKey = StringComparison.OrdinalIgnoreCase;
 
 	/// <summary>One row per period in the schedule, in the schedule's own order, showing what this room will run.</summary>
 	/// <param name="room">The room, or <c>null</c> to read the schedule alone.</param>
@@ -78,9 +80,10 @@ public static class RoomLevels
 
 		foreach (TimePeriodConfig period in periods)
 		{
-			RoomLevelOverride? own = Stated(room, period.Name);
+			RoomLevelOverride? own = Stated(room, period.Key);
 
 			rows.Add(new RoomLevelRow(
+				period.Key,
 				period.Name,
 				own?.BrightnessPct ?? period.BrightnessPct,
 				own?.BrightnessPct is not null ? LevelSource.Room : LevelSource.Schedule,
@@ -103,8 +106,8 @@ public static class RoomLevels
 		[
 			.. room.Levels
 				.Where(level => !level.IsEmpty)
-				.Where(level => !periods.Any(period => string.Equals(period.Name, level.Period, ByName)))
-				.Select(level => new RoomLevelOrphan(level.Period, level.BrightnessPct, level.ColorTempKelvin))
+				.Where(level => !periods.Any(period => string.Equals(period.Key, level.PeriodId, ByKey)))
+				.Select(level => new RoomLevelOrphan(level.PeriodId, level.BrightnessPct, level.ColorTempKelvin))
 		];
 	}
 
@@ -115,49 +118,49 @@ public static class RoomLevels
 		Rows(periods, room).Count(row => row.IsOwn);
 
 	/// <summary>Sets this room's brightness for a period, or sends it back to the schedule with <c>null</c>.</summary>
-	public static void SetBrightness(AreaConfig room, string period, double? brightnessPct)
+	public static void SetBrightness(AreaConfig room, string periodId, double? brightnessPct)
 	{
 		ArgumentNullException.ThrowIfNull(room);
 
-		Edit(room, period, level => level.BrightnessPct = brightnessPct);
+		Edit(room, periodId, level => level.BrightnessPct = brightnessPct);
 	}
 
 	/// <summary>Sets this room's colour temperature for a period, or sends it back to the schedule with <c>null</c>.</summary>
-	public static void SetColorTemp(AreaConfig room, string period, int? kelvin)
+	public static void SetColorTemp(AreaConfig room, string periodId, int? kelvin)
 	{
 		ArgumentNullException.ThrowIfNull(room);
 
-		Edit(room, period, level => level.ColorTempKelvin = kelvin);
+		Edit(room, periodId, level => level.ColorTempKelvin = kelvin);
 	}
 
 	/// <summary>Drops everything this room says about a period, which is the road back from an orphan.</summary>
 	/// <returns>Whether anything was removed.</returns>
-	public static bool Remove(AreaConfig room, string period)
+	public static bool Remove(AreaConfig room, string periodId)
 	{
 		ArgumentNullException.ThrowIfNull(room);
 
-		return room.Levels.RemoveAll(level => string.Equals(level.Period, period, ByName)) > 0;
+		return room.Levels.RemoveAll(level => string.Equals(level.PeriodId, periodId, ByKey)) > 0;
 	}
 
 	// Read path. Skips empty rows because CircadianCalculator.LevelsOf skips them: on a hand-edited file with a
 	// cleared row above a real one, taking the first row regardless shows a level the room does not run.
-	private static RoomLevelOverride? Stated(AreaConfig? room, string period) =>
-		room?.Levels.FirstOrDefault(level => !level.IsEmpty && string.Equals(level.Period, period, ByName));
+	private static RoomLevelOverride? Stated(AreaConfig? room, string periodId) =>
+		room?.Levels.FirstOrDefault(level => !level.IsEmpty && string.Equals(level.PeriodId, periodId, ByKey));
 
 	// Write path. Any row, empty included, so an edit reuses a cleared row instead of adding a second one beside it.
-	private static RoomLevelOverride? Find(AreaConfig? room, string period) =>
-		room?.Levels.FirstOrDefault(level => string.Equals(level.Period, period, ByName));
+	private static RoomLevelOverride? Find(AreaConfig? room, string periodId) =>
+		room?.Levels.FirstOrDefault(level => string.Equals(level.PeriodId, periodId, ByKey));
 
 	/// <summary>Applies one change to the room's row for a period, creating it and dropping it as needed.</summary>
-	private static void Edit(AreaConfig room, string period, Action<RoomLevelOverride> change)
+	private static void Edit(AreaConfig room, string periodId, Action<RoomLevelOverride> change)
 	{
 		// Stated first, so the edit lands on the row the page is showing. Going straight to Find wrote into a
 		// cleared row above the real one, which then became first and took over from it.
-		RoomLevelOverride? level = Stated(room, period) ?? Find(room, period);
+		RoomLevelOverride? level = Stated(room, periodId) ?? Find(room, periodId);
 
 		if (level is null)
 		{
-			level = new RoomLevelOverride { Period = period };
+			level = new RoomLevelOverride { PeriodId = periodId };
 			room.Levels.Add(level);
 		}
 

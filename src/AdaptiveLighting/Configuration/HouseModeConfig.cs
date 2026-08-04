@@ -26,14 +26,14 @@ public enum HouseModeAuthority
 {
 	/// <summary>
 	///     This application decides, and the default, so a document that says nothing behaves as every document
-	///     did before the authority existed. A period's <c>SetsMode</c>, the no-motion rule and
+	///     did before the authority existed. A period's <c>SetsModeId</c>, the no-motion rule and
 	///     <c>ActivateWhileOn</c> all still write the mode, and the select is kept in step as a mirror.
 	/// </summary>
 	AdaptiveLighting = 0,
 
 	/// <summary>
 	///     Home Assistant decides. The engine reads the select and never writes it, and its own mode rules stand
-	///     down: <see cref="TimePeriodConfig.SetsMode"/> and <c>ActivateAfterNoMotionMinutes</c> stop firing, so
+	///     down: <see cref="TimePeriodConfig.SetsModeId"/> and <c>ActivateAfterNoMotionMinutes</c> stop firing, so
 	///     the dropdown is the only thing that moves the house.
 	/// </summary>
 	HomeAssistant = 1
@@ -70,9 +70,32 @@ public class HouseModeConfig
 	public List<HouseModeOptionConfig> Options { get; set; } = [];
 
 	/// <summary>The configured option whose value equals <paramref name="value"/> (ordinal-insensitive, trimmed), or null.</summary>
+	/// <remarks>
+	///     <see cref="HouseModeOptionConfig.Value"/> is Home Assistant's string, not ours, so this stays the match
+	///     against what the select reports. References from inside this document go through <see cref="OptionWithKey"/>.
+	/// </remarks>
 	public HouseModeOptionConfig? OptionFor(string? value) =>
 		value is { Length: > 0 }
 			? Options.FirstOrDefault(o => string.Equals(o.Value?.Trim(), value.Trim(), StringComparison.OrdinalIgnoreCase))
+			: null;
+
+	/// <summary>The option a reference from inside this document names, or <c>null</c> when none does.</summary>
+	public HouseModeOptionConfig? OptionWithKey(string? key) =>
+		key is { Length: > 0 }
+			? Options.FirstOrDefault(o => string.Equals(o.Key, key.Trim(), StringComparison.OrdinalIgnoreCase))
+			: null;
+
+	/// <summary>
+	///     The select option string a reference resolves to: the configured row's <see cref="HouseModeOptionConfig.Value"/>,
+	///     or the reference itself when nothing configured carries that key.
+	/// </summary>
+	/// <remarks>
+	///     The fallback is what keeps a <c>SetsModeId</c> naming a live option the household has not classified yet
+	///     working, which the validator has always permitted.
+	/// </remarks>
+	public string? OptionValueFor(string? key) =>
+		key is { Length: > 0 }
+			? OptionWithKey(key)?.Value?.Trim() ?? key.Trim()
 			: null;
 
 	/// <summary>
@@ -85,33 +108,48 @@ public class HouseModeConfig
 
 	/// <summary>
 	///     The period a sleep option clamps to, by the one chain the engine and the UI both use: the option's
-	///     <see cref="HouseModeOptionConfig.ClampPeriod"/>, else the first period whose
-	///     <see cref="TimePeriodConfig.SetsMode"/> sets this option, else a period named <c>night</c>, else <c>null</c>.
+	///     <see cref="HouseModeOptionConfig.ClampPeriodId"/>, else the first period whose
+	///     <see cref="TimePeriodConfig.SetsModeId"/> sets this option, else a period named <c>night</c>, else <c>null</c>.
 	/// </summary>
-	public static string? SleepClampPeriodFor(HouseModeOptionConfig option, IReadOnlyList<TimePeriodConfig> periods)
+	/// <remarks>
+	///     The last link is a guess at what the household meant, not a reference, so it stays a name match. An
+	///     explicit clamp naming no period answers <c>null</c>, which is what the validator errors on.
+	/// </remarks>
+	public static TimePeriodConfig? SleepClampPeriodFor(HouseModeOptionConfig option, IReadOnlyList<TimePeriodConfig> periods)
 	{
 		ArgumentNullException.ThrowIfNull(option);
 		ArgumentNullException.ThrowIfNull(periods);
 
-		if (option.ClampPeriod is { Length: > 0 } clamp)
-			return clamp;
+		if (option.ClampPeriodId is { Length: > 0 } clamp)
+			return periods.FirstOrDefault(p => string.Equals(p.Key, clamp.Trim(), StringComparison.OrdinalIgnoreCase));
 
 		TimePeriodConfig? bySetsMode = periods.FirstOrDefault(p =>
-			p.SetsMode is { Length: > 0 } &&
-			string.Equals(p.SetsMode.Trim(), option.Value?.Trim(), StringComparison.OrdinalIgnoreCase));
+			p.SetsModeId is { Length: > 0 } &&
+			string.Equals(p.SetsModeId.Trim(), option.Key, StringComparison.OrdinalIgnoreCase));
 		if (bySetsMode is not null)
-			return bySetsMode.Name;
+			return bySetsMode;
 
-		TimePeriodConfig? night = periods.FirstOrDefault(p => string.Equals(p.Name, "night", StringComparison.OrdinalIgnoreCase));
-		return night?.Name;
+		return periods.FirstOrDefault(p => string.Equals(p.Name, "night", StringComparison.OrdinalIgnoreCase));
 	}
 }
 
 /// <summary>One option value of the house-mode select, and the behaviour and reset triggers it carries.</summary>
 public class HouseModeOptionConfig
 {
+	/// <summary>What a reference from inside this document names. Minted once, never shown, never changed.</summary>
+	/// <remarks>
+	///     Only this document's own references use it. Matching what Home Assistant reports is still
+	///     <see cref="Value"/>'s job, so renaming the option in Home Assistant still needs re-pointing here.
+	/// </remarks>
+	public string? Id { get; set; }
+
 	/// <summary>The exact option string as the select reports it. Compared case-insensitively, whitespace-trimmed.</summary>
 	public string Value { get; set; } = "";
+
+	/// <summary>What a reference from inside this document resolves by.</summary>
+	// Falls back to Value for the binder that has no migration; see TimePeriodConfig.Key.
+	[YamlIgnore]
+	public string Key => Id is { Length: > 0 } id ? id.Trim() : Value.Trim();
 
 	/// <summary>The option's one behaviour. One option should be <see cref="ModeKind.Normal"/>, the reset target.</summary>
 	public ModeKind Kind { get; set; } = ModeKind.Normal;
@@ -119,11 +157,11 @@ public class HouseModeOptionConfig
 	/// <summary><c>scene.*</c> applied on mode entry. Meaningful for Away and Guest; inert elsewhere.</summary>
 	public string? Scene { get; set; }
 
-	/// <summary>Sleep only: the period sleep-respecting areas clamp to. Optional; see <see cref="HouseModeConfig.SleepClampPeriodFor"/>.</summary>
-	public string? ClampPeriod { get; set; }
+	/// <summary>Sleep only: the <see cref="TimePeriodConfig.Id"/> sleep-respecting areas clamp to. Optional; see <see cref="HouseModeConfig.SleepClampPeriodFor"/>.</summary>
+	public string? ClampPeriodId { get; set; }
 
-	/// <summary>Period name. When that period starts, reset to Normal. Only meaningful on a non-Normal option.</summary>
-	public string? ResetOnPeriodStart { get; set; }
+	/// <summary>A <see cref="TimePeriodConfig.Id"/>. When that period starts, reset to Normal. Only meaningful on a non-Normal option.</summary>
+	public string? ResetOnPeriodStartId { get; set; }
 
 	public bool ResetOnPresence { get; set; }
 
@@ -154,5 +192,5 @@ public class HouseModeOptionConfig
 	///     <see cref="ResetPresenceSensors"/> list, so sensors listed with the toggle off are inert everywhere.
 	/// </remarks>
 	[YamlIgnore]
-	public bool HasResetTrigger => ResetOnPeriodStart is { Length: > 0 } || ResetOnPresence;
+	public bool HasResetTrigger => ResetOnPeriodStartId is { Length: > 0 } || ResetOnPresence;
 }

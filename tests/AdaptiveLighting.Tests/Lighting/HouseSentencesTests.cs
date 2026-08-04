@@ -191,8 +191,8 @@ public sealed class HouseSentencesTests
 				{
 					Value = "Natt",
 					Kind = ModeKind.Sleep,
-					ClampPeriod = "Night",
-					ResetOnPeriodStart = "Morning",
+					ClampPeriodId = "Night",
+					ResetOnPeriodStartId = "Morning",
 					ResetOnPresence = true,
 				}
 			]

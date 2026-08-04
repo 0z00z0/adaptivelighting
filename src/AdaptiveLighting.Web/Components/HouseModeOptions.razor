@@ -123,14 +123,14 @@
 										period that switches this mode on, or one named "night" — usually right.
 									</InfoPopover>
 								</span>
-								<select class="cell wide" @bind:get="boundOption.ClampPeriod ?? string.Empty"
-										@bind:set="@(v => SetField(boundOption, () => boundOption.ClampPeriod = Blank(v)))">
+								<select class="cell wide" @bind:get="boundOption.ClampPeriodId ?? string.Empty"
+										@bind:set="@(v => SetField(boundOption, () => boundOption.ClampPeriodId = Blank(v)))">
 									<option value="">@ClampDefaultLabel(boundOption)</option>
-									@foreach (string name in PeriodNames)
+									@foreach (TimePeriodConfig period in Periods)
 									{
-										<option value="@name">@name</option>
+										<option value="@period.Key">@PeriodName(period)</option>
 									}
-									@if (boundOption.ClampPeriod is { Length: > 0 } clamp && !PeriodNames.Any(n => Eq(n, clamp)))
+									@if (boundOption.ClampPeriodId is { Length: > 0 } clamp && !Periods.Any(p => Eq(p.Key, clamp)))
 									{
 										<option value="@clamp">@clamp — no such period</option>
 									}
@@ -219,14 +219,14 @@
 
 							<div class="housemode-field">
 								<span class="housemode-field-label">Reset when this period starts</span>
-								<select class="cell wide" @bind:get="boundOption.ResetOnPeriodStart ?? string.Empty"
-										@bind:set="@(v => SetField(boundOption, () => boundOption.ResetOnPeriodStart = Blank(v)))">
+								<select class="cell wide" @bind:get="boundOption.ResetOnPeriodStartId ?? string.Empty"
+										@bind:set="@(v => SetField(boundOption, () => boundOption.ResetOnPeriodStartId = Blank(v)))">
 									<option value="">(none)</option>
-									@foreach (string name in PeriodNames)
+									@foreach (TimePeriodConfig period in Periods)
 									{
-										<option value="@name">@name</option>
+										<option value="@period.Key">@PeriodName(period)</option>
 									}
-									@if (boundOption.ResetOnPeriodStart is { Length: > 0 } rp && !PeriodNames.Any(n => Eq(n, rp)))
+									@if (boundOption.ResetOnPeriodStartId is { Length: > 0 } rp && !Periods.Any(p => Eq(p.Key, rp)))
 									{
 										<option value="@rp">@rp — no such period</option>
 									}
@@ -332,8 +332,8 @@
 	[Parameter]
 	public EventCallback Changed { get; set; }
 
-	private IReadOnlyList<string> PeriodNames =>
-		[.. Periods.Select(p => p.Name).Where(name => !string.IsNullOrWhiteSpace(name))];
+	private static string PeriodName(TimePeriodConfig period) =>
+		period.Name is { Length: > 0 } name ? name : "unnamed period";
 
 	/// <summary>Whether no configured option is Normal, so the first displayed value stands in as the reset target.</summary>
 	private bool NoNormalOption =>
@@ -385,8 +385,8 @@
 
 		if (kind == ModeKind.Sleep)
 		{
-			string? clamp = HouseModeConfig.SleepClampPeriodFor(option, [.. Periods]);
-			parts.Add(clamp is { Length: > 0 } ? $"dims to {clamp}" : "no dim period");
+			TimePeriodConfig? clamp = HouseModeConfig.SleepClampPeriodFor(option, [.. Periods]);
+			parts.Add(clamp is not null ? $"dims to {PeriodName(clamp)}" : "no dim period");
 		}
 
 		// Both of these are dormant under Home Assistant's authority, and a collapsed fold is where somebody
@@ -414,7 +414,7 @@
 	}
 
 	private static int ResetTriggerCount(HouseModeOptionConfig option) =>
-		(option.ResetOnPeriodStart is { Length: > 0 } ? 1 : 0) + (option.ResetOnPresence ? 1 : 0);
+		(option.ResetOnPeriodStartId is { Length: > 0 } ? 1 : 0) + (option.ResetOnPresence ? 1 : 0);
 
 	private HouseModeOptionConfig? Find(string value) =>
 		HouseMode.Options.FirstOrDefault(option => Eq(option.Value, value));
@@ -422,10 +422,12 @@
 	/// <summary>The empty-clamp label: the period the fallback chain resolves to when no explicit clamp is set.</summary>
 	private string ClampDefaultLabel(HouseModeOptionConfig option)
 	{
-		HouseModeOptionConfig probe = new HouseModeOptionConfig { Value = option.Value };   // no explicit ClampPeriod, so the fallback shows.
-		string? resolved = HouseModeConfig.SleepClampPeriodFor(probe, [.. Periods]);
-		return resolved is { Length: > 0 }
-			? $"(default: {resolved})"
+		// Carries the option's Id, so the "a period switches to this option" link in the chain still resolves; no
+		// explicit clamp, so the fallback is what shows.
+		HouseModeOptionConfig probe = new HouseModeOptionConfig { Id = option.Id, Value = option.Value };
+		TimePeriodConfig? resolved = HouseModeConfig.SleepClampPeriodFor(probe, [.. Periods]);
+		return resolved is not null
+			? $"(default: {PeriodName(resolved)})"
 			: "(default: none found — name a period)";
 	}
 
@@ -450,8 +452,8 @@
 		// fields the validator would warn about.
 		if (kind == ModeKind.Normal)
 		{
-			option.ClampPeriod = null;
-			option.ResetOnPeriodStart = null;
+			option.ClampPeriodId = null;
+			option.ResetOnPeriodStartId = null;
 			option.ResetOnPresence = false;
 			option.ResetPresenceSensors = [];
 			option.ActivateWhileOn = [];

@@ -75,7 +75,7 @@ public sealed class CircadianCalculator
 	// have started. Installed by the host, so this stays a predicate and never reads motion.
 	private readonly Func<string, DateOnly, bool>? _heldBack;
 
-	// First row wins on a duplicate, matching what the validator reports.
+	// Keyed by TimePeriodConfig.Key. First row wins on a duplicate, matching what the validator reports.
 	private readonly Dictionary<string, RoomLevelOverride> _roomLevels;
 
 	// Parsed once: only the sun-anchor resolution depends on the day, so a tick is Resolve() plus a sort.
@@ -96,7 +96,7 @@ public sealed class CircadianCalculator
 	/// <remarks>
 	///     <paramref name="roomLevels"/> is what one room runs instead of the schedule; <c>null</c> or empty
 	///     answers for the house, which is what the configuration preview wants. Rows naming no configured period
-	///     are never matched, and the validator reports the rename.
+	///     are never matched, and the validator reports them.
 	///     <paramref name="periodOverride"/> comes from <see cref="PeriodSelectReader.ReadPeriod"/> and nothing
 	///     else. <c>null</c> resolves from the schedule.
 	///     <paramref name="periodHeldBack"/> comes from <see cref="MotionPeriodLatch.IsHeldBack"/>. <c>null</c>
@@ -121,8 +121,8 @@ public sealed class CircadianCalculator
 		// An empty row must not shadow a later row that says something. The normaliser drops these on save, but a
 		// hand-edited file never passes through it.
 		foreach (RoomLevelOverride level in roomLevels ?? [])
-			if (level is { IsEmpty: false, Period: { Length: > 0 } period })
-				levels.TryAdd(period, level);
+			if (level is { IsEmpty: false, PeriodId: { Length: > 0 } periodId })
+				levels.TryAdd(periodId.Trim(), level);
 
 		_roomLevels = levels;
 
@@ -154,7 +154,7 @@ public sealed class CircadianCalculator
 	/// <remarks>Under an override there is no boundary time, so no blend: the change is a step.</remarks>
 	public LightTarget? GetTarget(DateTimeOffset now)
 	{
-		// Before the clock, so this and ActivePeriodName cannot disagree about which period is in force.
+		// Before the clock, so this and ActivePeriodId cannot disagree about which period is in force.
 		if (OverriddenPeriod() is { } forced)
 			return TargetOf(forced);
 
@@ -188,15 +188,21 @@ public sealed class CircadianCalculator
 	}
 
 	/// <summary>
-	///     The raw target of the period called <paramref name="periodName"/>, ignoring the clock, or <c>null</c>
+	///     The raw target of the period keyed <paramref name="periodKey"/>, ignoring the clock, or <c>null</c>
 	///     when no such period exists. The room's own levels apply, so the sleep clamp holds a room to its own
 	///     night rules and not the house's.
 	/// </summary>
-	public LightTarget? GetPeriodTarget(string periodName)
+	public LightTarget? GetPeriodTarget(string periodKey)
 	{
-		TimePeriodConfig? period = _periods.FirstOrDefault(p => string.Equals(p.Name, periodName, StringComparison.OrdinalIgnoreCase));
+		TimePeriodConfig? period = PeriodWithKey(periodKey);
 		return period is null ? null : TargetOf(period);
 	}
+
+	/// <summary>The period a reference names, or <c>null</c> when this table has none.</summary>
+	public TimePeriodConfig? PeriodWithKey(string? periodKey) =>
+		periodKey is { Length: > 0 }
+			? _periods.FirstOrDefault(period => string.Equals(period.Key, periodKey.Trim(), StringComparison.OrdinalIgnoreCase))
+			: null;
 
 	private LightTarget TargetOf(TimePeriodConfig period) => ToTarget(period, LevelsOf(period));
 
@@ -207,7 +213,7 @@ public sealed class CircadianCalculator
 	/// <remarks>A replacement, not an offset: a room asking 8 % still asks 8 % after the house raises the period.</remarks>
 	private PeriodLevels LevelsOf(TimePeriodConfig period)
 	{
-		if (!_roomLevels.TryGetValue(period.Name, out RoomLevelOverride? level))
+		if (!_roomLevels.TryGetValue(period.Key, out RoomLevelOverride? level))
 			return new PeriodLevels(period.BrightnessPct, period.ColorTempKelvin, RoomLevelSource.None);
 
 		RoomLevelSource fromRoom =
@@ -231,16 +237,16 @@ public sealed class CircadianCalculator
 	}
 
 	/// <summary>
-	///     The name of the period active at <paramref name="now"/>, or <c>null</c> when none can be placed. A
-	///     name-only view over the same boundary resolution <see cref="GetTarget"/> uses, so
+	///     The key of the period active at <paramref name="now"/>, or <c>null</c> when none can be placed. A
+	///     key-only view over the same boundary resolution <see cref="GetTarget"/> uses, so
 	///     <see cref="ModeMonitor"/>'s period-entry detection and the target maths cannot disagree.
 	/// </summary>
-	public string? ActivePeriodName(DateTimeOffset now)
+	public string? ActivePeriodId(DateTimeOffset now)
 	{
 		if (OverriddenPeriod() is { } forced)
-			return forced.Name;
+			return forced.Key;
 
-		return NameAt(ResolveBoundaries(now), now);
+		return KeyAt(ResolveBoundaries(now), now);
 	}
 
 	/// <summary>
@@ -249,27 +255,24 @@ public sealed class CircadianCalculator
 	/// </summary>
 	/// <remarks>
 	///     Not an answer about what the lights are doing: this is the period movement would be offered, which is the
-	///     one <see cref="ActivePeriodName"/> is holding back. Only <see cref="ModeMonitor"/>'s motion rule asks.
+	///     one <see cref="ActivePeriodId"/> is holding back. Only <see cref="ModeMonitor"/>'s motion rule asks.
 	/// </remarks>
-	public string? ScheduledPeriodName(DateTimeOffset now) => NameAt(ResolveBoundaries(now, respectHold: false), now);
+	public string? ScheduledPeriodId(DateTimeOffset now) => KeyAt(ResolveBoundaries(now, respectHold: false), now);
 
-	private static string? NameAt(List<(TimeOnly Start, TimePeriodConfig Period)> boundaries, DateTimeOffset now) =>
+	private static string? KeyAt(List<(TimeOnly Start, TimePeriodConfig Period)> boundaries, DateTimeOffset now) =>
 		boundaries.Count == 0
 			? null
-			: boundaries[ActiveIndex(boundaries, TimeOnly.FromTimeSpan(now.TimeOfDay))].Period.Name;
+			: boundaries[ActiveIndex(boundaries, TimeOnly.FromTimeSpan(now.TimeOfDay))].Period.Key;
 
 	/// <summary>
 	///     The period an override names, or <c>null</c> when there is no override or it names nothing this table
 	///     has. The single point every consumer of an override goes through.
 	/// </summary>
 	/// <remarks>
-	///     An unmatched name falls through to the schedule. The validator and <see cref="PeriodSelectReader"/>
-	///     already report it, and taking a room dark over a typo in a dropdown would be worse.
+	///     An unmatched id falls through to the schedule. The validator and <see cref="PeriodSelectReader"/>
+	///     already report it, and taking a room dark over a stale mapping would be worse.
 	/// </remarks>
-	private TimePeriodConfig? OverriddenPeriod() =>
-		_periodOverride?.Invoke() is { Length: > 0 } name
-			? _periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase))
-			: null;
+	private TimePeriodConfig? OverriddenPeriod() => PeriodWithKey(_periodOverride?.Invoke());
 
 	/// <summary>
 	///     The day's placeable boundaries, sorted. A period still waiting for movement is absent, so the wrap keeps
@@ -290,7 +293,7 @@ public sealed class CircadianCalculator
 				// A boundary still ahead of us belongs to the instance that began yesterday, which is the one the
 				// wrap puts in force. Asking about today would ask about a period that has not come round yet.
 				if (respectHold
-					&& _heldBack?.Invoke(period.Name, resolved <= timeOfDay ? today : today.AddDays(-1)) == true)
+					&& _heldBack?.Invoke(period.Key, resolved <= timeOfDay ? today : today.AddDays(-1)) == true)
 					continue;
 
 				boundaries.Add((resolved, period));

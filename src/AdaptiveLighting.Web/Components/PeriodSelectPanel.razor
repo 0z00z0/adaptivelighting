@@ -86,7 +86,7 @@
 						   would map every row to whichever option was last. *@
 						string option = live;
 						PeriodSelectOptionConfig? row = Find(option);
-						string chosen = row?.Period ?? string.Empty;
+						string chosen = row?.PeriodId ?? string.Empty;
 
 						<div class="periodselect-row" @key="option">
 							<span class="periodselect-option">
@@ -99,9 +99,9 @@
 
 							<select class="cell wide" @bind:get="chosen" @bind:set="@(value => SetPeriod(option, value))">
 								<option value="">(none — this option changes nothing)</option>
-								@foreach (string name in PeriodChoices(chosen))
+								@foreach (TimePeriodConfig period in PeriodChoices(chosen))
 								{
-									<option value="@name">@name</option>
+									<option value="@period.Key">@period.Name</option>
 								}
 								@if (IsDeadPeriod(chosen))
 								{
@@ -252,41 +252,31 @@
 	private PeriodSelectOptionConfig? Find(string value) =>
 		Options.FirstOrDefault(option => Eq(option.Value, value));
 
-	private static string OrphanPeriod(PeriodSelectOptionConfig orphan) =>
-		orphan.Period is { Length: > 0 } period ? period : "no period";
+	private string OrphanPeriod(PeriodSelectOptionConfig orphan) =>
+		orphan.PeriodId is { Length: > 0 } key
+			? Periods.FirstOrDefault(period => Eq(period.Key, key))?.Name ?? key.Trim()
+			: "no period";
 
 	/// <summary>The periods a row may choose: the untaken ones, plus whatever this row already holds.</summary>
 	// Two options mapping to one period is an ambiguity the writing direction cannot resolve, so it is not
 	// offered. The row's own choice stays on the list, or remapping would be impossible.
-	private List<string> PeriodChoices(string chosen)
+	private List<TimePeriodConfig> PeriodChoices(string chosen)
 	{
 		List<string> taken = [.. Options
-			.Select(option => option.Period)
-			.Where(period => !string.IsNullOrWhiteSpace(period) && !Eq(period, chosen))];
+			.Select(option => option.PeriodId)
+			.Where(periodId => !string.IsNullOrWhiteSpace(periodId) && !Eq(periodId, chosen))];
 
 		return
 		[
-			.. Periods
-				.Select(period => period.Name)
-				.Where(name => !string.IsNullOrWhiteSpace(name))
-				.Where(name => !taken.Any(other => NamesPeriod(name, other)))
+			.. Periods.Where(period => !taken.Any(other => Eq(period.Key, other)))
 		];
 	}
-
-	/// <summary>Whether a mapping's stored period text names the schedule period called <paramref name="periodName"/>.</summary>
-	/// <param name="periodName">A period's name, exactly as the schedule carries it.</param>
-	/// <param name="chosen">A mapping's stored period text.</param>
-	// Trims the mapping's side only. ConfigValidator, Schedule.NamedBySelect and CircadianCalculator all match a
-	// trimmed Option.Period against a raw TimePeriodConfig.Name; Eq trims both, and a period named "night "
-	// mapped to "night" then reads as valid here while the validator refuses the document.
-	private static bool NamesPeriod(string? periodName, string? chosen) =>
-		string.Equals(periodName, chosen?.Trim(), StringComparison.OrdinalIgnoreCase);
 
 	/// <summary>Whether a stored choice names a period the schedule no longer has, so the dropdown must still show it.</summary>
 	// The validator refuses the document over this; a dropdown that quietly reset itself would leave the
 	// refusal with nothing on screen to explain it.
 	private bool IsDeadPeriod(string chosen) =>
-		chosen is { Length: > 0 } && !Periods.Any(period => NamesPeriod(period.Name, chosen));
+		chosen is { Length: > 0 } && !Periods.Any(period => Eq(period.Key, chosen));
 
 	private string AuthorityNote => Authority is PeriodAuthority.HomeAssistant
 		? "The engine reads this helper and never writes it. Start times in the schedule above are kept, but they "
@@ -323,11 +313,11 @@
 	// A cleared row is removed, not emptied. IsEmpty needs Value and Period both blank, so a row still carrying
 	// its option string survives the normaliser and the validator then raises a document-level error, blocking
 	// every save on the Configuration page.
-	private Task SetPeriod(string value, string? period) => Set(() =>
+	private Task SetPeriod(string value, string? periodId) => Set(() =>
 	{
 		PeriodSelectOptionConfig? existing = Find(value);
 
-		if (string.IsNullOrWhiteSpace(period))
+		if (string.IsNullOrWhiteSpace(periodId))
 		{
 			if (existing is not null)
 				Block().Options.Remove(existing);
@@ -336,9 +326,9 @@
 		}
 
 		if (existing is null)
-			Block().Options.Add(new PeriodSelectOptionConfig { Value = value, Period = period.Trim() });
+			Block().Options.Add(new PeriodSelectOptionConfig { Value = value, PeriodId = periodId.Trim() });
 		else
-			existing.Period = period.Trim();
+			existing.PeriodId = periodId.Trim();
 	});
 
 	/// <summary>Moves a stale mapping onto a live option, keeping the period it named.</summary>

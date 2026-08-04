@@ -155,7 +155,7 @@ public sealed class ModeServicePreviewTests
 		{
 			Entity = "input_select.tid",
 			Authority = PeriodAuthority.HomeAssistant,
-			Options = [new PeriodSelectOptionConfig { Value = "Natt", Period = "night" }]
+			Options = [new PeriodSelectOptionConfig { Value = "Natt", PeriodId = "night" }]
 		};
 
 		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(20), NoSun, "Natt");
@@ -173,7 +173,7 @@ public sealed class ModeServicePreviewTests
 		{
 			Entity = "input_select.tid",
 			Authority = PeriodAuthority.AdaptiveLighting,
-			Options = [new PeriodSelectOptionConfig { Value = "Natt", Period = "night" }]
+			Options = [new PeriodSelectOptionConfig { Value = "Natt", PeriodId = "night" }]
 		};
 
 		Assert.AreEqual("evening", ModeService.ComputePreview(mirror, ModeKind.Normal, At(20), NoSun, "Natt").ActivePeriodName);
@@ -183,7 +183,7 @@ public sealed class ModeServicePreviewTests
 		{
 			Entity = "input_select.tid",
 			Authority = PeriodAuthority.HomeAssistant,
-			Options = [new PeriodSelectOptionConfig { Value = "Natt", Period = "night" }]
+			Options = [new PeriodSelectOptionConfig { Value = "Natt", PeriodId = "night" }]
 		};
 
 		Assert.AreEqual("evening", ModeService.ComputePreview(follows, ModeKind.Normal, At(20), NoSun, "Fest").ActivePeriodName,

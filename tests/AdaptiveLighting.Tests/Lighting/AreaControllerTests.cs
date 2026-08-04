@@ -45,7 +45,7 @@ public sealed class AreaControllerTests
 	private static ForcedMode ForcedAway(string entityId = "input_boolean.occupancy") =>
 		new(ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, entityId, "on");
 
-	/// <summary>Normal, Borte (away) and Sover (sleep, carrying no ClampPeriod).</summary>
+	/// <summary>Normal, Borte (away) and Sover (sleep, carrying no ClampPeriodId).</summary>
 	private static HouseModeConfig SoverMode() => new()
 	{
 		Entity = "input_select.husmodus",
@@ -748,7 +748,7 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void RespectSleepMode_Holds_The_Evening_Target_To_The_Night_Level()
 	{
-		// Sover is Sleep-kind with no ClampPeriod, so the clamp falls back to the period named "night".
+		// Sover is Sleep-kind with no ClampPeriodId, so the clamp falls back to the period named "night".
 		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode());
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
@@ -842,7 +842,7 @@ public sealed class AreaControllerTests
 	public void Motion_Lights_The_Area_At_The_Rooms_Own_Level_Where_It_Has_One()
 	{
 		// The fixture's clock stands at 20:00, in evening, which the house runs at 70 % / 2700 K.
-		Fixture t = Build(levels: [new RoomLevelOverride { Period = "evening", BrightnessPct = 25 }]);
+		Fixture t = Build(levels: [new RoomLevelOverride { PeriodId = "evening", BrightnessPct = 25 }]);
 
 		t.Ha.Trigger(Motion, "on");
 
@@ -853,7 +853,7 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void The_Snapshot_Says_Which_Levels_This_Room_Names_For_Itself()
 	{
-		Fixture t = Build(levels: [new RoomLevelOverride { Period = "evening", BrightnessPct = 25 }]);
+		Fixture t = Build(levels: [new RoomLevelOverride { PeriodId = "evening", BrightnessPct = 25 }]);
 
 		AreaSnapshot latest = t.Publisher.Snapshots[^1];
 
@@ -874,7 +874,7 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void The_Snapshot_Flag_Follows_The_Period_Across_A_Boundary()
 	{
-		Fixture t = Build(levels: [new RoomLevelOverride { Period = "evening", BrightnessPct = 25 }]);
+		Fixture t = Build(levels: [new RoomLevelOverride { PeriodId = "evening", BrightnessPct = 25 }]);
 
 		Assert.AreEqual(RoomLevelSource.Brightness, t.Publisher.Snapshots[^1].LevelsFromRoom);
 
@@ -1413,7 +1413,7 @@ public sealed class AreaControllerTests
 	{
 		// The Sover option names its own clamp period explicitly, which beats the 'night' fallback.
 		var mode = SoverMode();
-		mode.OptionFor("Sover")!.ClampPeriod = "dim";
+		mode.OptionFor("Sover")!.ClampPeriodId = "dim";
 		var periods = new List<TimePeriodConfig>
 		{
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
@@ -1426,13 +1426,13 @@ public sealed class AreaControllerTests
 		t.Ha.Trigger(Motion, "on");
 
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
-			"the explicit ClampPeriod 'dim' (its own 5 %) drives the clamp, not the 'night' fallback");
+			"the explicit ClampPeriodId 'dim' (its own 5 %) drives the clamp, not the 'night' fallback");
 	}
 
 	[TestMethod]
 	public void Sleep_RespectingArea_WithNoResolvableClamp_LeavesTheTargetAlone()
 	{
-		// Sover has no ClampPeriod, and there is no 'night' period nor one that SetsMode Sover, so nothing resolves.
+		// Sover has no ClampPeriodId, and there is no 'night' period nor one that SetsModeId Sover, so nothing resolves.
 		var periods = new List<TimePeriodConfig>
 		{
 			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
@@ -1461,7 +1461,7 @@ public sealed class AreaControllerTests
 			s => s.RespectSleepMode = true,
 			g => g.HouseMode = SoverMode(),
 			periods: periods,
-			levels: [new RoomLevelOverride { Period = "night", BrightnessPct = 4 }]);
+			levels: [new RoomLevelOverride { PeriodId = "night", BrightnessPct = 4 }]);
 
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 

@@ -45,7 +45,7 @@ public sealed class MotionPeriodTests
 		{
 			Name = "morning",
 			Start = "06:30",
-			SetsMode = "Hjemme",
+			SetsModeId = "Hjemme",
 			StartsOnMotion = morningStartsOnMotion,
 			StartsOnMotionAreas = [.. morningAreas],
 			BrightnessPct = 60,
@@ -53,7 +53,7 @@ public sealed class MotionPeriodTests
 		},
 		new() { Name = "day", Start = "09:00", BrightnessPct = 90, ColorTempKelvin = 4000 },
 		new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "23:00", SetsMode = "Sover", BrightnessPct = 10, ColorTempKelvin = 2200 }
+		new() { Name = "night", Start = "23:00", SetsModeId = "Sover", BrightnessPct = 10, ColorTempKelvin = 2200 }
 	];
 
 	/// <summary>The note recording which period the last run ended in. <c>null</c> is a first run or a lost note.</summary>
@@ -138,7 +138,7 @@ public sealed class MotionPeriodTests
 		DateTimeOffset now = new(2026, 1, 15, 6, 31, 0, TimeSpan.Zero);
 
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "06:30 went by and nothing moved, so the morning has not begun");
-		Assert.AreEqual("night", rig.Rooms.ActivePeriodName(now), "the house is still on last night's period");
+		Assert.AreEqual("night", rig.Rooms.ActivePeriodId(now), "the house is still on last night's period");
 		Assert.AreEqual(10d, rig.Rooms.GetTarget(now)!.BrightnessPct, "and on last night's levels");
 	}
 
@@ -148,7 +148,7 @@ public sealed class MotionPeriodTests
 	{
 		Rig rig = Started(Periods(), QuarterPastMorning);
 
-		Assert.AreEqual("night", rig.Rooms.ActivePeriodName(QuarterPastMorning));
+		Assert.AreEqual("night", rig.Rooms.ActivePeriodId(QuarterPastMorning));
 		Assert.AreEqual("night", rig.Rooms.GetTarget(QuarterPastMorning)!.PeriodName);
 	}
 
@@ -198,7 +198,7 @@ public sealed class MotionPeriodTests
 		Assert.AreEqual("morning", target.PeriodName, "the movement begins the period for the whole house");
 		Assert.AreEqual(60d, target.BrightnessPct);
 		Assert.AreEqual(3000, target.ColorTempKelvin, "warmth arrives with the brightness, not on a later tick");
-		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "and so does its SetsMode");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "and so does its SetsModeId");
 	}
 
 	[TestMethod]
@@ -209,7 +209,7 @@ public sealed class MotionPeriodTests
 		Move(rig, Gang);
 
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "the period does not ask to start on motion");
-		Assert.AreEqual("morning", rig.Rooms.ActivePeriodName(QuarterPastMorning),
+		Assert.AreEqual("morning", rig.Rooms.ActivePeriodId(QuarterPastMorning),
 			"and it began on the clock like any other period");
 	}
 
@@ -224,9 +224,9 @@ public sealed class MotionPeriodTests
 
 		Advance(rig, TimeSpan.FromHours(3));   // through 09:00 with nobody home
 
-		Assert.AreEqual("day", rig.Rooms.ActivePeriodName(afterDayBegins), "day@09:00 overtakes a morning that never began");
+		Assert.AreEqual("day", rig.Rooms.ActivePeriodId(afterDayBegins), "day@09:00 overtakes a morning that never began");
 		Assert.AreEqual(90d, rig.Rooms.GetTarget(afterDayBegins)!.BrightnessPct);
-		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "and the morning's SetsMode never fired");
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "and the morning's SetsModeId never fired");
 	}
 
 	// Once overtaken it is not on offer any more: the schedule has moved past it.
@@ -268,7 +268,7 @@ public sealed class MotionPeriodTests
 	{
 		Rig rig = Started(Periods(), QuarterPastMorning, lastPeriod: new FakeLastPeriodStore("morning"));
 
-		Assert.AreEqual("morning", rig.Rooms.ActivePeriodName(QuarterPastMorning),
+		Assert.AreEqual("morning", rig.Rooms.ActivePeriodId(QuarterPastMorning),
 			"the note is the evidence that the morning had already begun; the house does not fall back to night");
 
 		Move(rig, Gang);
@@ -283,12 +283,12 @@ public sealed class MotionPeriodTests
 	{
 		Rig rig = Started(Periods(), QuarterPastMorning, lastPeriod: new FakeLastPeriodStore());
 
-		Assert.AreEqual("night", rig.Rooms.ActivePeriodName(QuarterPastMorning));
+		Assert.AreEqual("night", rig.Rooms.ActivePeriodId(QuarterPastMorning));
 
 		Move(rig, Gang);
 
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"));
-		Assert.AreEqual("morning", rig.Rooms.ActivePeriodName(QuarterPastMorning));
+		Assert.AreEqual("morning", rig.Rooms.ActivePeriodId(QuarterPastMorning));
 	}
 
 	// The latch is in memory and a config save rebuilds the engine, so the note is what carries the start across.
@@ -310,7 +310,7 @@ public sealed class MotionPeriodTests
 	{
 		Rig rig = Started(Periods(), QuarterPastMorning, lastPeriod: new FakeLastPeriodStore("night"));
 
-		Assert.AreEqual("night", rig.Rooms.ActivePeriodName(QuarterPastMorning),
+		Assert.AreEqual("night", rig.Rooms.ActivePeriodId(QuarterPastMorning),
 			"the last run ended in the night, which is exactly the period that keeps running");
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"));
 	}
@@ -325,11 +325,11 @@ public sealed class MotionPeriodTests
 		Move(rig, Gang);
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"),
 			"the hall is not the kitchen, and a bedroom sensor must not start the house's morning");
-		Assert.AreEqual("night", rig.Rooms.ActivePeriodName(QuarterPastMorning), "nor move the levels");
+		Assert.AreEqual("night", rig.Rooms.ActivePeriodId(QuarterPastMorning), "nor move the levels");
 
 		Move(rig, Kjokken);
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "movement in the named room starts it");
-		Assert.AreEqual("morning", rig.Rooms.ActivePeriodName(QuarterPastMorning));
+		Assert.AreEqual("morning", rig.Rooms.ActivePeriodId(QuarterPastMorning));
 	}
 
 	[TestMethod]
@@ -372,8 +372,8 @@ public sealed class MotionPeriodTests
 				Authority = PeriodAuthority.HomeAssistant,
 				Options =
 				[
-					new() { Value = "Morgen", Period = "morning" },
-					new() { Value = "Natt", Period = "night" }
+					new() { Value = "Morgen", PeriodId = "morning" },
+					new() { Value = "Natt", PeriodId = "night" }
 				]
 			}
 		};
@@ -381,7 +381,7 @@ public sealed class MotionPeriodTests
 		Rig rig = Started(Periods(), QuarterPastMorning, global: global);
 		rig.Ha.SetState(PeriodSelect, "Morgen");
 
-		Assert.AreEqual("morning", rig.Rooms.ActivePeriodName(QuarterPastMorning),
+		Assert.AreEqual("morning", rig.Rooms.ActivePeriodId(QuarterPastMorning),
 			"the dropdown says morning, so the rooms run the morning without waiting for anybody");
 
 		rig.Ha.SetState(PeriodSelect, "Natt");
@@ -389,7 +389,7 @@ public sealed class MotionPeriodTests
 
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"),
 			"the household's dropdown owns the time of day; movement does not get a vote");
-		Assert.AreEqual("night", rig.Rooms.ActivePeriodName(QuarterPastMorning));
+		Assert.AreEqual("night", rig.Rooms.ActivePeriodId(QuarterPastMorning));
 	}
 
 	private static void Advance(Rig rig, TimeSpan by) => rig.Scheduler.AdvanceBy(by.Ticks);

@@ -13,7 +13,7 @@ namespace AdaptiveLighting.Engine;
 /// </remarks>
 public sealed class MotionPeriodLatch
 {
-	// Settled in the constructor and never written again, so it is read without the gate.
+	// Period keys. Settled in the constructor and never written again, so it is read without the gate.
 	private readonly HashSet<string> _held;
 
 	// Guards _begunOn only. Written from Home Assistant's threads, read from every area's tick.
@@ -26,8 +26,8 @@ public sealed class MotionPeriodLatch
 	{
 		_held = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-		foreach (string name in heldPeriods ?? [])
-			if (name?.Trim() is { Length: > 0 } trimmed)
+		foreach (string key in heldPeriods ?? [])
+			if (key?.Trim() is { Length: > 0 } trimmed)
 				_held.Add(trimmed);
 	}
 
@@ -44,58 +44,58 @@ public sealed class MotionPeriodLatch
 			return new MotionPeriodLatch();
 
 		return new MotionPeriodLatch(
-			(periods ?? []).Where(period => period.StartsOnMotion).Select(period => period.Name));
+			(periods ?? []).Where(period => period.StartsOnMotion).Select(period => period.Key));
 	}
 
 	/// <summary>The periods that do not begin on the clock.</summary>
 	public IReadOnlyCollection<string> HeldPeriods => _held;
 
-	/// <summary>Whether <paramref name="periodName"/> waits for movement instead of beginning on its <c>Start</c>.</summary>
-	public bool Holds(string? periodName) => periodName is { Length: > 0 } && _held.Contains(periodName);
+	/// <summary>Whether <paramref name="periodKey"/> waits for movement instead of beginning on its <c>Start</c>.</summary>
+	public bool Holds(string? periodKey) => periodKey is { Length: > 0 } && _held.Contains(periodKey);
 
-	/// <summary>Whether the instance of <paramref name="periodName"/> that began on <paramref name="day"/> has started.</summary>
-	public bool HasBegun(string? periodName, DateOnly day)
+	/// <summary>Whether the instance of <paramref name="periodKey"/> that began on <paramref name="day"/> has started.</summary>
+	public bool HasBegun(string? periodKey, DateOnly day)
 	{
-		if (periodName is not { Length: > 0 })
+		if (periodKey is not { Length: > 0 })
 			return false;
 
 		lock (_gate)
-			return _begunOn.TryGetValue(periodName, out DateOnly begun) && begun == day;
+			return _begunOn.TryGetValue(periodKey, out DateOnly begun) && begun == day;
 	}
 
 	/// <summary>
-	///     Whether the calculator must leave <paramref name="periodName"/> out of the table for the instance that
+	///     Whether the calculator must leave <paramref name="periodKey"/> out of the table for the instance that
 	///     would have begun on <paramref name="instanceDay"/>.
 	/// </summary>
-	public bool IsHeldBack(string? periodName, DateOnly instanceDay) =>
-		Holds(periodName) && !HasBegun(periodName, instanceDay);
+	public bool IsHeldBack(string? periodKey, DateOnly instanceDay) =>
+		Holds(periodKey) && !HasBegun(periodKey, instanceDay);
 
-	/// <summary>Records that <paramref name="periodName"/> began on <paramref name="day"/>, whatever started it.</summary>
-	public void MarkBegun(string? periodName, DateOnly day)
+	/// <summary>Records that <paramref name="periodKey"/> began on <paramref name="day"/>, whatever started it.</summary>
+	public void MarkBegun(string? periodKey, DateOnly day)
 	{
-		if (periodName is not { Length: > 0 })
+		if (periodKey is not { Length: > 0 })
 			return;
 
 		lock (_gate)
-			_begunOn[periodName] = day;
+			_begunOn[periodKey] = day;
 	}
 
 	/// <summary>
-	///     Claims the day's one start of <paramref name="periodName"/>, or answers <c>false</c> when it is already
+	///     Claims the day's one start of <paramref name="periodKey"/>, or answers <c>false</c> when it is already
 	///     spent.
 	/// </summary>
 	/// <remarks>Atomic, so two sensors tripping at once cannot both start the period.</remarks>
-	public bool TryBegin(string? periodName, DateOnly day)
+	public bool TryBegin(string? periodKey, DateOnly day)
 	{
-		if (periodName is not { Length: > 0 })
+		if (periodKey is not { Length: > 0 })
 			return false;
 
 		lock (_gate)
 		{
-			if (_begunOn.TryGetValue(periodName, out DateOnly begun) && begun == day)
+			if (_begunOn.TryGetValue(periodKey, out DateOnly begun) && begun == day)
 				return false;
 
-			_begunOn[periodName] = day;
+			_begunOn[periodKey] = day;
 			return true;
 		}
 	}

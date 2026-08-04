@@ -303,9 +303,9 @@ public sealed class ModeService
 
 				var scene = kind is ModeKind.Away or ModeKind.Guest ? Blank(option?.Scene) : null;
 				var clamp = kind == ModeKind.Sleep
-					? HouseModeConfig.SleepClampPeriodFor(option ?? new HouseModeOptionConfig { Value = value }, Config.Periods)
+					? HouseModeConfig.SleepClampPeriodFor(option ?? new HouseModeOptionConfig { Value = value }, Config.Periods)?.Name
 					: null;
-				var resetSummary = kind == ModeKind.Normal ? null : ResetSummary(option, houseMode);
+				var resetSummary = kind == ModeKind.Normal ? null : ResetSummary(option, houseMode, Config.Periods);
 
 				return new HouseModeOptionView(
 					value,
@@ -335,13 +335,22 @@ public sealed class ModeService
 	///     A one-line summary of an option's reset triggers, naming the Normal target. Never <c>null</c>: a
 	///     triggerless option gets its own line, so a forgotten away mode reads as fixable, not blank.
 	/// </summary>
-	private static string ResetSummary(HouseModeOptionConfig? option, HouseModeConfig houseMode)
+	private static string ResetSummary(
+		HouseModeOptionConfig? option,
+		HouseModeConfig houseMode,
+		IReadOnlyList<TimePeriodConfig> periods)
 	{
 		var normal = houseMode.NormalOption?.Value;
 		var parts = new List<string>(3);
 
-		if (Blank(option?.ResetOnPeriodStart) is { } period)
-			parts.Add($"when '{period}' starts");
+		if (Blank(option?.ResetOnPeriodStartId) is { } periodId)
+		{
+			string named = periods
+				.FirstOrDefault(period => string.Equals(period.Key, periodId, StringComparison.OrdinalIgnoreCase))
+				?.Name ?? periodId;
+
+			parts.Add($"when '{named}' starts");
+		}
 
 		if (option?.ResetOnPresence == true)
 		{

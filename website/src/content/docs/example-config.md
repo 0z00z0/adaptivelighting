@@ -82,17 +82,22 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     # HouseMode:
     #   Entity: input_select.husmodus
     #   Options:
-    #     - Value: Hjemme
+    #     # Value is Home Assistant's string and must match the helper exactly.
+    #     # Id is ours, minted once, and is what a period's SetsModeId names.
+    #     - Id: hjemme-r4wd
+    #       Value: Hjemme
     #       Kind: Normal
-    #     - Value: Borte
+    #     - Id: borte-k9lz
+    #       Value: Borte
     #       Kind: Away
     #       Scene: scene.borte_belysning
     #       ResetOnPresence: true
     #       ResetPresenceGraceMinutes: 15
     #       ActivateAfterNoMotionMinutes: 360
-    #     - Value: Sover
+    #     - Id: sover-b6t1
+    #       Value: Sover
     #       Kind: Sleep
-    #       ClampPeriod: night
+    #       ClampPeriodId: night-3c9f
 
     # Labels — the "Finding lights & sensors" group.
     #   ExcludeLabel — never let the app touch it.
@@ -198,7 +203,8 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
   # --------------------------------------------------------------------------
   Periods:
 
-    - Name: morning
+    - Id: morning-7k2q       # minted once when the period is created; never edit it
+      Name: morning          # rename freely — nothing points at the name
       Start: "06:30"
       BrightnessPct: 60
       ColorTempKelvin: 3000
@@ -211,25 +217,29 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
         - kjokken
         - gang
 
-    - Name: day
+    - Id: day-1x8m
+      Name: day
       Start: sunrise+00:45
       BrightnessPct: 90
       ColorTempKelvin: 4500
 
-    - Name: evening
+    - Id: evening-4pb3
+      Name: evening
       Start: sunset-01:00
       BrightnessPct: 70
       ColorTempKelvin: 2700
 
-    - Name: night
+    - Id: night-3c9f
+      Name: night
       Start: "22:30"
       BrightnessPct: 15
       ColorTempKelvin: 2200
       # BrightnessPct above is the whole answer for this period — 15 % is what
       # a room runs at night, and nobody gets 100 % in the face at 03:00
       # because the night row says 15, not because a second number forbids it.
-      # SetsMode switches the house to this mode option when the period starts.
-      # SetsMode: Sover
+      # SetsModeId switches the house to a mode option when the period starts.
+      # It names the option's Id, not the text the dropdown shows.
+      # SetsModeId: sover-b6t1
 
   # --------------------------------------------------------------------------
   #  Areas — opt-in. An area that is not listed here is never touched, and a

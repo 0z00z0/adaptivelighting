@@ -13,7 +13,7 @@ public sealed class HouseModeAuthorityTests
 	private static List<TimePeriodConfig> Day() =>
 	[
 		new TimePeriodConfig { Name = "dag", Start = "09:00" },
-		new TimePeriodConfig { Name = "natt", Start = "23:00", SetsMode = "Sover" }
+		new TimePeriodConfig { Name = "natt", Start = "23:00", SetsModeId = "Sover" }
 	];
 
 	private static GlobalConfig House(HouseModeAuthority authority, string? entity = "input_select.husmodus") =>
@@ -100,7 +100,7 @@ public sealed class HouseModeAuthorityTests
 	public void A_Reset_Trigger_Reports_Dormant_Because_It_Writes_The_Select_Too()
 	{
 		GlobalConfig global = House(HouseModeAuthority.HomeAssistant);
-		global.HouseMode!.Options[1].ResetOnPeriodStart = "morgen";
+		global.HouseMode!.Options[1].ResetOnPeriodStartId = "morgen";
 
 		Assert.AreEqual(2, ModeAuthority.Dormant(global, Day()).ResetTriggerOptions);
 	}

@@ -25,21 +25,30 @@ public class AdaptiveLightingConfig
 	/// <remarks>
 	///     Names no entities. A placeholder id is one Home Assistant does not know, so it fails validation on a fresh
 	///     install and blocks the discovery that would otherwise have filled the same field in.
+	///     The period ids are minted here, so a seed document is already in the shape the migration produces and a
+	///     fresh install never takes the migrating write.
 	/// </remarks>
-	public static AdaptiveLightingConfig CreateDefault() => new()
+	public static AdaptiveLightingConfig CreateDefault()
 	{
-		ConfigName = "Adaptive lighting",
-		Global = new GlobalConfig(),
-		Defaults = new AreaSettings(),
-		Periods =
-		[
-			new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
-			new() { Name = "day",     Start = "09:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "sunset-01:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night",   Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 },
-		],
-		Areas = [],
-	};
+		AdaptiveLightingConfig config = new()
+		{
+			ConfigName = "Adaptive lighting",
+			Global = new GlobalConfig(),
+			Defaults = new AreaSettings(),
+			Periods =
+			[
+				new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
+				new() { Name = "day",     Start = "09:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
+				new() { Name = "evening", Start = "sunset-01:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+				new() { Name = "night",   Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 },
+			],
+			Areas = [],
+		};
+
+		StableKeyMigration.Apply(config);
+
+		return config;
+	}
 }
 
 /// <summary>Settings that apply to the whole house, not to a single area.</summary>

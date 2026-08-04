@@ -151,7 +151,7 @@ public static class HouseSentences
 					.Build();
 
 			case ModeKind.Sleep:
-				builder.Text(HouseModeConfig.SleepClampPeriodFor(option, periods) is { Length: > 0 } clamp
+				builder.Text(HouseModeConfig.SleepClampPeriodFor(option, periods) is { Name: { Length: > 0 } clamp }
 					? $"holds the rooms that are gentle at night to the {clamp} period's limits, and the rooms set never to come on by themselves stay off"
 					: "holds the rooms that are gentle at night to the night period's limits — but no period is named for it yet, so nothing is clamped");
 				break;
@@ -170,7 +170,7 @@ public static class HouseSentences
 				break;
 		}
 
-		Ends(builder, option, index);
+		Ends(builder, option, index, periods);
 		builder.Text(".");
 
 		return builder.Build();
@@ -188,7 +188,7 @@ public static class HouseSentences
 			.Text(", then "));
 
 	/// <summary>The clauses about what ends a mode, joined as English joins them.</summary>
-	private static void Ends(SentenceBuilder builder, HouseModeOptionConfig option, int index)
+	private static void Ends(SentenceBuilder builder, HouseModeOptionConfig option, int index, IReadOnlyList<TimePeriodConfig> periods)
 	{
 		if (option.Kind == ModeKind.Normal)
 			return;
@@ -196,8 +196,8 @@ public static class HouseSentences
 		bool presence = option.ResetOnPresence;
 		List<string> others = [];
 
-		if (option.ResetOnPeriodStart is { Length: > 0 } period)
-			others.Add($"when the {period} period starts");
+		if (option.ResetOnPeriodStartId is { Length: > 0 } resetPeriod)
+			others.Add($"when the {NameOf(periods, resetPeriod)} period starts");
 
 		if (!presence && others.Count == 0)
 		{
@@ -229,4 +229,11 @@ public static class HouseSentences
 	/// <summary>An option's own value, or a stand-in when the document left it blank.</summary>
 	private static string Name(HouseModeOptionConfig option) =>
 		option.Value is { Length: > 0 } value ? value : "This option";
+
+	/// <summary>A period reference as a sentence names it: the display name, or the raw id when it resolves to nothing.</summary>
+	private static string NameOf(IReadOnlyList<TimePeriodConfig> periods, string periodId) =>
+		periods.FirstOrDefault(period => string.Equals(period.Key, periodId.Trim(), StringComparison.OrdinalIgnoreCase))
+			?.Name is { Length: > 0 } name
+			? name
+			: periodId.Trim();
 }

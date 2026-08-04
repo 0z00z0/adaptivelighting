@@ -159,11 +159,12 @@ A period runs from its start until the next period begins.
 
 | Setting | What it does | In the file |
 |---|---|---|
-| **Period name** | `morning`, `day`, `evening`, `night` — free-form, and what the board and the logs call it. | `Name` |
+| **Period name** | `morning`, `day`, `evening`, `night` — free-form, and what the board and the logs call it. Rename it whenever you like; nothing points at the name. | `Name` |
+| *(not on screen)* | The period's id, minted once when it is created. Everything that refers to a period refers to this. | `Id` |
 | **Starts** | A clock time (`22:30`) or a sun event with an optional offset (`sunrise`, `sunset-01:00`, `sunrise+00:45`). | `Start` |
 | **Brightness** | The target brightness while this period runs. | `BrightnessPct` |
 | **Colour temperature** | The target warmth, in kelvin. | `ColorTempKelvin` |
-| **Also switches house mode to** | When this period starts, switch the house to this mode option. | `SetsMode` |
+| **Also switches house mode to** | When this period starts, switch the house to this mode option. | `SetsModeId` |
 | **Blend between periods** / **Blend over** | Lights drift to the next period's level instead of stepping at the boundary. | `SmoothTransitions`, `BlendMinutes` (default on, 30 min) |
 | **Wait for movement before starting** | The period does not begin at its *Starts*. The one before it keeps running until somebody moves. | `StartsOnMotion` |
 | **Movement in** | Which rooms' movement may start it. Empty means any room the engine watches. | `StartsOnMotionAreas` |
@@ -205,10 +206,10 @@ option is then tagged here.
 | **House mode** | The `input_select` whose value is the house mode. | `Global.HouseMode.Entity` |
 | **Kind** | What the option means: **Normal**, **Sleep**, **Away** or **Guest**. Mark exactly one option Normal — it is what every reset returns to. | `Kind` |
 | **Activate this scene when entering mode** | A `scene.*` applied on entry. Away with no scene sweeps the lights off instead. | `Scene` |
-| **Dim level while asleep** | Sleep only: the period whose dimness sleep-respecting rooms are held to. Falls back to a period that sets this mode, then to one named `night`. | `ClampPeriod` |
+| **Dim level while asleep** | Sleep only: the period whose dimness sleep-respecting rooms are held to. Falls back to a period that sets this mode, then to one named `night`. | `ClampPeriodId` |
 | **Turn this mode on while …** | While any listed entity is on, this option is the active mode whatever the dropdown says — a bedside "sleep" switch. | `ActivateWhileOn` |
 | **Activate when no movement for** | Switch to this option once the whole house has had no movement for this long. Non-Normal options only. | `ActivateAfterNoMotionMinutes` |
-| **Reset when a period starts** | Back to Normal when the named period begins. | `ResetOnPeriodStart` |
+| **Reset when a period starts** | Back to Normal when the named period begins. | `ResetOnPeriodStartId` |
 | **Reset on presence**, and its **grace** | Back to Normal when somebody moves. An empty sensor list means every motion sensor in the house. The grace ignores presence for that long after the mode is set, so walking out of the door does not cancel the mode you set on your way. | `ResetOnPresence`, `ResetPresenceSensors`, `ResetPresenceGraceMinutes` (default 15 min) |
 
 Reset triggers combine: any of them can be set, and the first to happen wins. Leave them all unset to

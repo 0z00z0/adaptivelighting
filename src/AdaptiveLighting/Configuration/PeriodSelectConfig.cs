@@ -20,7 +20,7 @@ public enum PeriodAuthority
 
 	/// <summary>
 	///     Home Assistant decides. The engine reads the select and never writes it; the option it reports maps to a
-	///     period name, and that period is what every room runs.
+	///     period, and that period is what every room runs.
 	/// </summary>
 	/// <remarks>The day/night blend has no boundary time under this authority and becomes a step.</remarks>
 	HomeAssistant = 1
@@ -56,7 +56,7 @@ public class PeriodSelectConfig
 
 	public List<PeriodSelectOptionConfig> Options { get; set; } = [];
 
-	/// <summary>The period <paramref name="value"/> stands for, or <c>null</c> when nothing maps it.</summary>
+	/// <summary>The period id <paramref name="value"/> stands for, or <c>null</c> when nothing maps it.</summary>
 	/// <remarks>Trimmed and case-insensitive: the options are display strings a person typed into an HA helper.</remarks>
 	public string? PeriodFor(string? value)
 	{
@@ -68,22 +68,22 @@ public class PeriodSelectConfig
 
 		return Options
 			.FirstOrDefault(option => string.Equals(option.Value?.Trim(), needle, StringComparison.OrdinalIgnoreCase))
-			?.Period?.Trim();
+			?.PeriodId?.Trim();
 	}
 
 	/// <summary>
-	///     The select option standing for <paramref name="periodName"/>, or <c>null</c> when no row names it. First
-	///     row wins on a duplicate, as every other name lookup in this document does.
+	///     The select option standing for the period keyed <paramref name="periodId"/>, or <c>null</c> when no row
+	///     names it. First row wins on a duplicate, as every other lookup in this document does.
 	/// </summary>
-	public string? OptionFor(string? periodName)
+	public string? OptionFor(string? periodId)
 	{
-		if (periodName is not { Length: > 0 })
+		if (periodId is not { Length: > 0 })
 			return null;
 
-		string needle = periodName.Trim();
+		string needle = periodId.Trim();
 
 		return Options
-			.FirstOrDefault(option => string.Equals(option.Period?.Trim(), needle, StringComparison.OrdinalIgnoreCase))
+			.FirstOrDefault(option => string.Equals(option.PeriodId?.Trim(), needle, StringComparison.OrdinalIgnoreCase))
 			?.Value?.Trim();
 	}
 }
@@ -94,14 +94,14 @@ public class PeriodSelectOptionConfig
 	/// <summary>The exact option string as the select reports it. Compared case-insensitively, whitespace-trimmed.</summary>
 	public string Value { get; set; } = "";
 
-	/// <summary>The engine period this option means, by name, matching <see cref="TimePeriodConfig.Name"/>.</summary>
+	/// <summary>The engine period this option means, by <see cref="TimePeriodConfig.Id"/>.</summary>
 	/// <remarks>
-	///     A name matching no period is a validation error here, where the same shape is only a warning on a room's
+	///     An id matching no period is a validation error here, where the same shape is only a warning on a room's
 	///     levels: an unresolvable mapping leaves the whole house unable to place the selected time of day.
 	/// </remarks>
-	public string Period { get; set; } = "";
+	public string PeriodId { get; set; } = "";
 
 	/// <summary>Whether this row says nothing, so <see cref="ConfigNormalizer"/> can drop it on save.</summary>
 	[YamlIgnore]
-	public bool IsEmpty => string.IsNullOrWhiteSpace(Value) && string.IsNullOrWhiteSpace(Period);
+	public bool IsEmpty => string.IsNullOrWhiteSpace(Value) && string.IsNullOrWhiteSpace(PeriodId);
 }
