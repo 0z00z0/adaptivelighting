@@ -161,6 +161,18 @@ The page has:
   folded sections — each names what it holds, and opens when you tap it — plus one more for what the
   room *is*: its name, and which Home Assistant area it stands for. The line beside the button says
   how many of the settings are this room's own rather than the house's.
+
+  *Movement & timing* is where you say when this room should leave itself alone. *Don't switch on
+  while* names things that stop it lighting up — a projector, a do-not-disturb switch. *Don't switch
+  off while* is the opposite: while one of those is on, the room will not turn itself off. Either list
+  can be turned round with *while these are off instead*, for a switch you turn **off** to mean the
+  same thing.
+
+  The two scene rows below them swap one moment for a scene of yours. *Run a scene instead, on
+  movement* replaces switching on; *Run a scene instead, when empty* replaces switching off, so a room
+  settles into something soft rather than going dark. Set one, both or neither — a room that sets
+  neither behaves as it always did. Everything that could refuse to light the room still refuses; a
+  scene only changes *what* happens, never whether it happens.
 - **In this room** — the lights and sensors that were found, as chips. The **×** on a chip leaves that
   entity out of this room, and the exclusions are listed so you can put one back. *Not right? Pick by
   hand* replaces the automatic choice for one list at a time. At the bottom sit the two actions that
@@ -205,10 +217,18 @@ that shows the year at a glance.
 📷 [screenshot: Configuration → Schedule — the daylight chart and the period table]
 
 A period starts at a clock time (`22:30`) or a sun event with an offset (`sunset-01:00`), so it moves
-with the seasons. Each period sets a brightness and a colour temperature, and can cap or floor how
-bright any light gets while it runs — that cap is what stops a motion event putting 100 % in your face
-at 03:00. A period can also set a house mode when it begins. *Blend between periods* lets the lights
-drift to the next period's level instead of stepping at the boundary.
+with the seasons. Each period sets a brightness and a colour temperature, and can set a house mode when
+it begins. *Blend between periods* lets the lights drift to the next period's level instead of stepping
+at the boundary.
+
+What stops a motion event putting 100 % in your face at 03:00 is the night period's own brightness,
+held by *Gentle while the house sleeps* on the rooms you want kept dim.
+
+A period can instead **wait for movement**. Tick *Wait for movement before starting* and it does not
+begin at its time: the period before it keeps running — the house stays at night levels — until
+somebody moves, and then it begins whole. Name the rooms under *Movement in*, or leave it empty for any
+room. It never fires before the period's own start time, so a 02:00 trip to the kitchen is not the
+morning, and it happens once a day.
 
 Keep at least one clock-time boundary. Far north, a sun-anchored boundary can be unresolvable around
 midsummer and midwinter, and a period that cannot be placed is skipped.
@@ -257,7 +277,19 @@ to **Sun** or **Always dark**.
 not the darkness gate — a room with nothing to read counts as dark, whether it never had a sensor or
 its sensors have all stopped reporting. Look for another reason in the same rows: the master switch,
 the room's own switch, an empty house, a guest scene, a sleeping house, or an entity named under
-*Blocked while on*.
+*Don't switch on while*.
+
+**A room will not switch itself off.** Something is named under *Don't switch off while* and is on —
+or, if *while these are off instead* is ticked, is off. While that holds, the countdown, the warning
+dim and the leaving sweep all leave the room alone. Switching it off by hand still works.
+
+**A room dims to something soft instead of going dark.** That is *Run a scene instead, when empty*
+doing what it was set to do. Clear it and the room goes off as it used to. The warning dim does not run
+first, because nothing is about to go off.
+
+**The morning never arrived.** If the morning period has *Wait for movement before starting* ticked, it
+waits — nothing happens until somebody moves in one of the rooms named under *Movement in*. Check that
+list holds a room people actually walk through first thing.
 
 **A room I expected has no lane.** It is switched off. The line under the board says how many are, and
 links to where you turn them back on.

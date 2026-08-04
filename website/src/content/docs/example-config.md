@@ -158,8 +158,8 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     SunElevationThreshold: 3.0  # "Dark when the sun is below", in degrees
     SunEntity: sun.sun
 
-    # Brightening with daylight. Off by default; it only ever adds light, and
-    # the active period's own cap still binds.
+    # Brightening with daylight. Off by default; it only ever adds light, up to
+    # LuxBrightnessMaxPct.
     LuxBrightnessEnabled: false
     LuxBrightnessStartLux: 100      # at or below this, the schedule is used unchanged
     LuxBrightnessFullLux: 10000     # at or above this, the room holds its ceiling
@@ -171,6 +171,10 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     NightTransitionSeconds: 15
 
     # Room behaviour — off by default, opted into per room.
+    ColorControl: Auto         # "How warmth reaches these lights". Auto reads the
+                               # fixtures; Kelvin forces a colour temperature;
+                               # EqualChannels drives every channel at one value,
+                               # for dimmers and strips that take no kelvin.
     RespectSleepMode: false    # "Gentle while the house sleeps"
     SleepBlocksAutoOn: false   # "Never comes on by itself while the house sleeps"
     SkipAwaySweep: false       # "Stays on when everyone leaves"
@@ -198,6 +202,14 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       Start: "06:30"
       BrightnessPct: 60
       ColorTempKelvin: 3000
+      # This period waits for somebody to get up rather than starting at 06:30.
+      # Until then the night period keeps running. Never before 06:30, once per
+      # local day, and an empty StartsOnMotionAreas means any room the engine
+      # watches. The next period's own Start overtakes one that never began.
+      StartsOnMotion: true
+      StartsOnMotionAreas:
+        - kjokken
+        - gang
 
     - Name: day
       Start: sunrise+00:45
@@ -249,6 +261,19 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       VacancyTimeoutSeconds: 1800
       IgnoreWhenOn:
         - binary_sensor.projektor_er_pa
+      # IgnoreWhenOnInverted: true would hold while that entity is *off*
+      # instead — for a "lighting allowed" switch you turn off.
+
+    # 2b. A living room that never goes dark on its own: while the meeting flag
+    #     is on it refuses to switch itself off at all, and when it does empty it
+    #     settles onto a scene rather than going out. Each replaces exactly one
+    #     transition; every gate that could refuse to light the room still does.
+    - AreaId: stue_peis
+      Enabled: true
+      KeepLitWhenOn:
+        - input_boolean.moete
+      SceneWhenEmpty: scene.stue_peis_natt
+      # SceneOnMotion: scene.stue_peis_kveld   # replaces switching on, too
 
     # 3. An entrance: short timeout, lights on first arrival when it's dark.
     - AreaId: gang

@@ -22,9 +22,9 @@ sensors it holds. Rooms are opt-in: a room you have not switched on is still wat
 reported, but it is never commanded.
 
 **The schedule** is one table for the whole house, cut into periods — morning, day, evening, night.
-Each period sets a brightness and a colour temperature, and can cap how bright any light gets while
-it runs. Boundaries are clock times or sun events, and levels blend across a boundary rather than
-stepping.
+Each period sets a brightness and a colour temperature. Boundaries are clock times or sun events, and
+levels blend across a boundary rather than stepping. A period can also be told to wait for movement
+instead of starting on the clock.
 
 **The house** holds what every room shares: who is home, which house mode is active, and whether the
 master switch is on. A room reads it and then decides for itself.
@@ -69,8 +69,8 @@ so a reading sitting on the threshold cannot flap.
 ### Brightening with daylight
 
 Separately from the gate above, a room can be told to lift its lights as it gets brighter outside, so
-it does not read as gloomy against a bright window. It is off until you switch it on, it only ever
-adds light, and the period's own brightness cap still binds.
+it does not read as gloomy against a bright window. It is off until you switch it on, and it only ever
+adds light: *Brightest it goes* is the ceiling, and a period already brighter than that is left alone.
 
 ## What the system manages
 
