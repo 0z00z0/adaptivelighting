@@ -140,6 +140,10 @@ Full documentation — how it works, how to use it, the settings reference and a
 **[adaptivelighting.netlify.app](https://adaptivelighting.netlify.app)** (source in
 [`website/`](website/)).
 
+Working on the engine itself: [`docs/mechanisms.md`](docs/mechanisms.md) is why the system behaves as
+it does and why each chosen number is that number; [`docs/backlog.md`](docs/backlog.md) is what is
+still open.
+
 ## Packages
 
 | Package | What it is |

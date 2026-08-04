@@ -26,7 +26,7 @@ its own rather than the house's.
 
 These are the settings a room can state for itself. The same list, with the same labels, appears twice:
 under **House → Every room starts with these** as the baseline, and on each room's page as that room's
-own. There are 21 of them.
+own. There are 22 of them.
 
 ### Movement & timing
 
@@ -42,9 +42,9 @@ own. There are 21 of them.
 
 The warning dim must be shorter than the time the lights stay on.
 
-*Blocked while on* closes the section as well, though it is not one of the 21: it decides whether
-movement lights the room at all, but it is a list belonging to one room rather than a value with a
-house-wide baseline. It is described under [a room's own facts](#a-rooms-own-facts).
+Four more controls close the section, though none is one of the 22: two lists that decide whether the
+room switches itself on and off, and two scenes it can run instead. They belong to one room and have
+no house-wide baseline, so they are described under [a room's own facts](#a-rooms-own-facts).
 
 ### Darkness
 
@@ -77,8 +77,7 @@ as **Sensor**, and the next save writes that.
 ### Brightness from daylight
 
 *Lifting the room above the schedule when it is bright outside.* Off until you switch it on, and it
-only ever adds light — a period already brighter than the ceiling is left alone, and the period's own
-cap still binds.
+only ever adds light — a period already brighter than *Brightest it goes* is left alone.
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
@@ -97,6 +96,7 @@ sensor, or from the house's outdoor sensor when the room follows it.
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
+| **How warmth reaches these lights** | Most lights take a colour temperature in kelvin. Plain dimmers and colour strips do not, and those are driven with every channel at one value, which is neutral white. Left to **Detect from the lights** it reads the room's own fixtures and needs no answer. | Detect from the lights | `ColorControl` |
 | **Gentle while the house sleeps** | Held to the night period's limits, so a 03:00 glass of water gets a dim light. | off | `RespectSleepMode` |
 | **Never comes on by itself while the house sleeps** | For the bedroom itself. The wall switch still works. | off | `SleepBlocksAutoOn` |
 | **Stays on when everyone leaves** | Porch and security lights are wanted precisely when nobody's home. | off | `SkipAwaySweep` |
@@ -122,8 +122,30 @@ These belong to one room and have no house-wide baseline. They live on the room'
 | Home Assistant area | Which area the room is. Everything else is found from it. | `AreaId` |
 | **Not right? Pick by hand → Lights / Motion sensors / Light-level sensor** | Each list you fill in replaces the automatic choice for that list alone, and ignores the labels. Leave empty to use whatever is found. | `Lights`, `MotionSensors`, `LuxSensor` |
 | The **×** on a found chip | Leaves one entity out of this room — a fridge's own light sensor, a hallway lamp filed under the wrong room. Listed afterwards so you can put it back. | `ExcludeEntities` |
-| **Blocked while on** | While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Offered from the whole house, since a blocker often belongs to no room. It closes the *Movement & timing* section under **All settings**, beside the timings it works with. | `IgnoreWhenOn` |
+| **Don't switch on while** | While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Offered from the whole house, since a blocker often belongs to no room. | `IgnoreWhenOn` |
+| **Don't switch off while** | While any of these is on, the room won't turn its own lights off: the countdown, the warning dim and the leaving sweep all leave it alone. A meeting light, a guest switch. It never turns anything *on*, and switching off by hand still works. | `KeepLitWhenOn` |
+| **Run a scene instead, on movement** | Movement runs this scene rather than setting the room's own brightness and warmth, and the room is left alone afterwards. | `SceneOnMotion` |
+| **Run a scene instead, when empty** | When the room has been empty long enough to go off it runs this scene and stays there — atmospheric lighting rather than darkness. | `SceneWhenEmpty` |
 | The room's switch, in its header | Whether the engine commands this room at all. A switched-off room is still watched and still reported. | `Enabled` |
+
+All four close the *Movement & timing* section under **All settings**, beside the timings they work with.
+
+**Both lists can be turned round.** Tick *while these are off instead* under either one and the rule
+holds while the listed entities are **off** — for a "lighting allowed" switch you turn off rather than a
+"do not disturb" switch you turn on. In the file that is `IgnoreWhenOnInverted` and
+`KeepLitWhenOnInverted`, and the box only appears once the list has something in it.
+
+**A scene replaces one transition and nothing else.** Everything that could refuse to light the room
+still refuses — the master switch, the room's own switch, an empty house, sleep, too much daylight,
+*Don't switch on while*. A scene is what happens *instead of* a command the engine had already decided
+to make, never a reason to make one. Leaving the house still switches the room off, because an empty
+house is not a room going empty; a room that should stay lit then wants *Stays on when everyone
+leaves*. While a room sits on one of its scenes the engine leaves it there: neither the circadian drift
+nor a house-mode change re-aims it. A hand at the switch still wins.
+
+*Don't switch off while* blocks the empty scene exactly as it blocks a plain switch-off. When the hold
+releases, what lands is whatever that room's off-transition now is — the scene, for a room that names
+one.
 
 **File only:** `FollowOutdoorLux: true` makes a room read the house's outdoor light sensor when it has
 none of its own. There is no control for it in the UI. A room's own sensor always wins over the
@@ -143,10 +165,33 @@ A period runs from its start until the next period begins.
 | **Colour temperature** | The target warmth, in kelvin. | `ColorTempKelvin` |
 | **Also switches house mode to** | When this period starts, switch the house to this mode option. | `SetsMode` |
 | **Blend between periods** / **Blend over** | Lights drift to the next period's level instead of stepping at the boundary. | `SmoothTransitions`, `BlendMinutes` (default on, 30 min) |
+| **Wait for movement before starting** | The period does not begin at its *Starts*. The one before it keeps running until somebody moves. | `StartsOnMotion` |
+| **Movement in** | Which rooms' movement may start it. Empty means any room the engine watches. | `StartsOnMotionAreas` |
 
 Quote clock times in the file: bare `06:00` is not a string in YAML. Keep at least one clock-time
 boundary — far north a sun-anchored boundary can be unresolvable around midsummer and midwinter, and a
 period that cannot be placed is skipped.
+
+### A period that waits for movement
+
+Set on a morning period, this is the difference between the house brightening at 06:30 whether or not
+anybody is up and the house brightening when somebody gets up. The night period keeps running until
+then, and the morning then arrives whole: brightness, warmth and *Also switches house mode to*
+together, for every room.
+
+- **Never before its own *Starts*.** A 02:00 trip to the kitchen is not the morning.
+- **Once a day**, and the day is your local day.
+- **It falls through on its own.** The next period's own start overtakes one that never began, so an
+  empty house is never stranded on last night's levels.
+- **Nothing at all when Home Assistant owns the periods.** The toggle says so where it is dormant.
+- A schedule where *every* period waits gives you a warning: nothing would be in force from midnight
+  until somebody moved.
+- The collapsed card says which it is — *06:30 · waits for movement in Kitchen or Hall* — so a
+  schedule that waits cannot be misread as one that runs on the clock.
+
+One thing it does not yet do: the blend arrives already part-run. A period whose *Starts* is 06:30 and
+which begins at 06:45 is 15 minutes into its 30-minute blend rather than easing from the moment
+somebody walked in.
 
 ---
 

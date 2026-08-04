@@ -645,6 +645,11 @@ Relatedly: a click on any descendant of a `<label>` is forwarded by the browser 
 element inside it. `InfoPopover`'s scrim needs `@onclick:preventDefault`, or the scrim closes the panel and
 the forwarded click reopens it in the same gesture.
 
+The scrim is not the whole of it. Where a `<label>` wrapped both a checkbox and an `InfoPopover`, the
+forwarding target was the checkbox, so reading the panel toggled the setting behind it. **A label wraps its
+own control and its own words; an (i) is the label's sibling.** `.housemode-check` is that inner label, and
+inherits size, weight and colour from the `.housemode-field-label` span it sits in.
+
 ### Blazor: other traps that have each cost something
 
 - A loop variable captured by a handler must be copied per iteration, or every row binds to the last value.
@@ -731,14 +736,16 @@ at all. When NetDaemon surfaces it, reading it in preference to `last_updated` i
 | 1000 lx | default darkness threshold | measured 1000–3706 lx by day on a shaded outdoor sensor; 40 lx left rooms dark all day |
 | geometric mean | multi-sensor lux | brightness is perceived logarithmically |
 | echo window + transition | manual-override detection | a 30 s fade otherwise reads as a person at the switch |
-| 21 | per-room settings count | the re-setup warning counts against it; was 16 before the daylight-brightness settings |
+| 22 | per-room settings count | the re-setup warning counts against it; was 16 before the daylight-brightness settings, 21 before `ColorControl` |
 | 3 | names before "and N others" | naming three beats spending a clause to avoid printing one word |
 | 2 % | `BrightnessTolerancePct` | HA reports brightness as a 0–255 integer against our per cent, so a round trip lands ~1 % off; 2 % is wider than that and narrower than an eye |
 | 50 K | `ColorTempToleranceKelvin` | under 2 % at the warm end, invisible anywhere in the range |
 | 30 s | `DiscoverySettle` | how long Home Assistant's state cache needs before the registry reads whole |
 | ~3× | lux ladder ratio | illuminance spans four orders of magnitude; a fixed step is unusable at one end or the other |
-| 21 | overridable per-room settings | `RoomSettings.Keys` derives it by reflection over the nullable twins; `AreaView.OverridableSettingCount` hard-codes it and a test holds the two together. A hand-written list is how the editor came to say "n of 16" about a document with 21 |
+| 22 | overridable per-room settings | `RoomSettings.Keys` derives it by reflection over the nullable twins; `AreaView.OverridableSettingCount` hard-codes it and a test holds the two together. A hand-written list is how the editor came to say "n of 16" about a document with 21 |
 | ~3 px | board mark de-duplication gap | a screen bound, not a clock bound, because the suppressed-off path republishes per movement |
+| 12.5 / 14 / 15 / 20 / 25 px | the type scale | one step up from the shipped 11 / 12.5 / 13.5 / 19 / 24 after "small and hard to read". Size was the complaint as much as contrast: the muted colour already passed AA before this |
+| 9.41 / 6.05 / 8.70 : 1 | muted text on the page background, Dark / Light / 0z0 | measured after the lift; Dark was 6.51:1 |
 
 ---
 

@@ -255,6 +255,34 @@ under one version, because they are compiled against each other.
   seventeen-room list they were effectively invisible. House now has a rule worth stating: it holds
   the settings there is exactly one of. `?section=defaults` follows them, the Areas lede says where
   they went, and the room page's settings reveal links to the baseline it is measured against.
+- **The text is larger, and the quiet text is easier to read.** Every size in the type scale moves up
+  a step — the uppercase section label from 11 to 12.5 px, help lines and timestamps from 12.5 to 14,
+  dense settings rows from 13.5 to 15 — and the muted colour lifts in all three themes. Muted text on
+  the page background measures 9.41:1 on Dark, 6.05:1 on Light and 8.70:1 on 0z0, where Dark was
+  6.51:1. The commissioning column heads stop hardcoding their own size and take the tokens.
+- **Dropdowns that offered *Type as text* no longer do.** Every preset picker had a toggle into a free
+  text field, on lists where anything worth choosing is already offered. Brightness gained **0% (off)**
+  in its place, which is what people were typing. A value already in a document that the list does not
+  offer still shows and is still kept.
+- **A period's *Starts* no longer repeats itself.** The line under the picker read *every day at 06:45*
+  beside a control that already said 06:45. It is shown for the starts that need explaining and
+  suppressed for a plain clock time.
+
+### Fixed
+
+- **A restart no longer reads as somebody changing the house mode.** Every rebuild seeds the house
+  stream with a fabricated state before publishing the observed one, so the first genuine publication
+  looked like a transition: a settings save put one *Mode changed to X* row in the record, and a
+  restart put one per adopted room, from a `select` nobody had touched. The opening publication now
+  carries `Startup`, and the rule that already drops empty start-up rows drops these.
+- **A restart and a settings save are now rows of their own**, in Background. The record was fed only
+  by per-area events, so the one fact that explained three phantom mode rows — that the engine had
+  restarted three times — was the one thing it could not say. `LightingEngineHost` raises one
+  `EngineNotice` per rebuild; an entry carries either an area report or a notice, so no state, period
+  or darkness verdict is invented for a row no room reported.
+- **A click inside an (i) panel no longer ticks the checkbox behind it.** The panel sat inside the
+  `<label>`, and a click on any descendant of a label is forwarded to the first labelable element in
+  it. The label now wraps the box and its own words, and the (i) is its sibling.
 
 ## [2.0.0]
 
