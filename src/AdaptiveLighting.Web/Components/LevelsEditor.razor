@@ -37,16 +37,16 @@
 	@foreach (RoomLevelRow row in RoomLevels.Rows(Periods, Room))
 	{
 		RoomLevelRow current = row;
-		bool isNow = string.Equals(current.Period, ActivePeriod, StringComparison.OrdinalIgnoreCase);
+		bool isNow = string.Equals(current.PeriodId, ActivePeriod, StringComparison.OrdinalIgnoreCase);
 
-		<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(current.IsOwn ? "lvl-own" : null) @(isNow ? "lvl-now" : null)" @key="current.Period">
+		<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(current.IsOwn ? "lvl-own" : null) @(isNow ? "lvl-now" : null)" @key="current.PeriodId">
 			<div class="lvl-when">
-				<span class="lvl-name">@PeriodName(current.Period)</span>
+				<span class="lvl-name">@PeriodName(current.Name)</span>
 				@if (isNow)
 				{
 					<span class="badge active-now" title="This period is in force right now.">now</span>
 				}
-				<span class="lvl-start">@StartOf(current.Period)</span>
+				<span class="lvl-start">@StartOf(current.PeriodId)</span>
 			</div>
 
 			<div class="lvl-cell @(current.Brightness == LevelSource.Room ? "lvl-set" : null)">
@@ -59,14 +59,14 @@
 				</span>
 
 				<PresetSelect Value="@current.BrightnessPct"
-							  ValueChanged="@(value => SetBrightness(current.Period, value))"
+							  ValueChanged="@(value => SetBrightness(current.PeriodId, value))"
 							  Options="@Presets.BrightnessPct"
 							  Unit="%" Min="0" Max="100" />
 
 				@if (current.Brightness == LevelSource.Room)
 				{
-					<button type="button" class="lvl-revert" @onclick="() => ClearBrightness(current.Period)">
-						Follow the schedule (@TokenFormat.Percent(ScheduleBrightness(current.Period)))
+					<button type="button" class="lvl-revert" @onclick="() => ClearBrightness(current.PeriodId)">
+						Follow the schedule (@TokenFormat.Percent(ScheduleBrightness(current.PeriodId)))
 					</button>
 				}
 				else
@@ -92,14 +92,14 @@
 					</span>
 
 					<PresetSelect Value="@current.ColorTempKelvin"
-								  ValueChanged="@(value => SetColour(current.Period, value))"
+								  ValueChanged="@(value => SetColour(current.PeriodId, value))"
 								  Options="@Presets.ColorTempKelvin"
 								  Unit="K" Min="1000" Max="10000" Step="50" />
 
 					@if (current.Colour == LevelSource.Room)
 					{
-						<button type="button" class="lvl-revert" @onclick="() => ClearColour(current.Period)">
-							Follow the schedule (@ScheduleKelvin(current.Period) K)
+						<button type="button" class="lvl-revert" @onclick="() => ClearColour(current.PeriodId)">
+							Follow the schedule (@ScheduleKelvin(current.PeriodId) K)
 						</button>
 					}
 					else
@@ -117,7 +117,7 @@
 	{
 		RoomLevelOrphan current = orphan;
 
-		<div class="lvl lvl-orphan" @key="@($"orphan:{current.Period}")">
+		<div class="lvl lvl-orphan" @key="@($"orphan:{current.PeriodId}")">
 			<div class="lvl-when">
 				<span class="lvl-name">@current.Name</span>
 				<span class="lvl-start">no period is called this any more</span>
@@ -130,7 +130,7 @@
 
 			<div class="lvl-cell">
 				<span class="lvl-cell-label">Kept in case it was renamed</span>
-				<button type="button" class="lvl-drop" @onclick="() => Drop(current.Period)">Remove it</button>
+				<button type="button" class="lvl-drop" @onclick="() => Drop(current.PeriodId)">Remove it</button>
 			</div>
 		</div>
 	}
@@ -154,7 +154,7 @@
 	[Parameter]
 	public ResolvedArea? Resolved { get; set; }
 
-	/// <summary>The period in force right now, so its row says so. <c>null</c> when none is.</summary>
+	/// <summary>The id of the period in force right now, so its row says so. <c>null</c> when none is.</summary>
 	[Parameter]
 	public string? ActivePeriod { get; set; }
 
@@ -185,54 +185,53 @@
 	}
 
 	/// <summary>When the period starts, in the engine's own reading of its Start string.</summary>
-	private string StartOf(string name) =>
-		Periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase)) is { } found
-			? PeriodStartText.Describe(found.Start) ?? "start not set"
-			: string.Empty;
+	private string StartOf(string periodId) =>
+		Found(periodId) is { } found ? PeriodStartText.Describe(found.Start) ?? "start not set" : string.Empty;
 
-	private double ScheduleBrightness(string name) =>
-		Periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase))?.BrightnessPct ?? 0;
+	private double ScheduleBrightness(string periodId) => Found(periodId)?.BrightnessPct ?? 0;
 
-	private int ScheduleKelvin(string name) =>
-		Periods.FirstOrDefault(period => string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase))?.ColorTempKelvin ?? 0;
+	private int ScheduleKelvin(string periodId) => Found(periodId)?.ColorTempKelvin ?? 0;
+
+	private TimePeriodConfig? Found(string periodId) =>
+		Periods.FirstOrDefault(period => string.Equals(period.Key, periodId, StringComparison.OrdinalIgnoreCase));
 
 	/// <summary>The swatch's fill, as a custom property so the stylesheet decides how a warmth is painted.</summary>
 	// KelvinColour.Css writes its own invariant integers, so no decimal comma reaches the colour function.
 	private static string Swatch(int kelvin) => $"--lvl-kelvin: {KelvinColour.Css(kelvin)}";
 
-	private Task SetBrightness(string period, double value)
+	private Task SetBrightness(string periodId, double value)
 	{
-		RoomLevels.SetBrightness(Room, period, value);
+		RoomLevels.SetBrightness(Room, periodId, value);
 
 		return Changed.InvokeAsync();
 	}
 
-	private Task ClearBrightness(string period)
+	private Task ClearBrightness(string periodId)
 	{
-		RoomLevels.SetBrightness(Room, period, null);
+		RoomLevels.SetBrightness(Room, periodId, null);
 
 		return Changed.InvokeAsync();
 	}
 
 	/// <summary>Colour temperature is a whole number of kelvin in the schema; the preset control carries a double.</summary>
 	// Rounded, not truncated: 2699.6 filed as 2699 shows nowhere on the page.
-	private Task SetColour(string period, double value)
+	private Task SetColour(string periodId, double value)
 	{
-		RoomLevels.SetColorTemp(Room, period, (int)Math.Round(value, MidpointRounding.AwayFromZero));
+		RoomLevels.SetColorTemp(Room, periodId, (int)Math.Round(value, MidpointRounding.AwayFromZero));
 
 		return Changed.InvokeAsync();
 	}
 
-	private Task ClearColour(string period)
+	private Task ClearColour(string periodId)
 	{
-		RoomLevels.SetColorTemp(Room, period, null);
+		RoomLevels.SetColorTemp(Room, periodId, null);
 
 		return Changed.InvokeAsync();
 	}
 
-	private Task Drop(string period)
+	private Task Drop(string periodId)
 	{
-		RoomLevels.Remove(Room, period);
+		RoomLevels.Remove(Room, periodId);
 
 		return Changed.InvokeAsync();
 	}

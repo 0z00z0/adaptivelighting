@@ -58,13 +58,13 @@ public static class Schedule
 		if (!HomeAssistantDecides(global))
 			return null;
 
-		if (global.PeriodSelect!.PeriodFor(selectValue) is not { Length: > 0 } name)
+		if (global.PeriodSelect!.PeriodFor(selectValue) is not { Length: > 0 } periodId)
 			return null;
 
-		// Name untrimmed and OrdinalIgnoreCase, matching CircadianCalculator.OverriddenPeriod character for
-		// character. Trimming here would resolve a period the engine leaves unresolved.
+		// Matched on Key, exactly as CircadianCalculator.OverriddenPeriod does, so no page can badge a period the
+		// engine leaves unresolved.
 		return periods.FirstOrDefault(period =>
-			string.Equals(period.Name, name, StringComparison.OrdinalIgnoreCase));
+			string.Equals(period.Key, periodId.Trim(), StringComparison.OrdinalIgnoreCase));
 	}
 
 	/// <summary>The period whose start is the most recent at or before <paramref name="now"/>.</summary>
@@ -99,7 +99,7 @@ public static class Schedule
 ///     The engine's own house-mode rules that a document configures but the authority has stood down, counted so
 ///     a page can name them.
 /// </summary>
-/// <param name="SetsModePeriods">Periods carrying a <see cref="TimePeriodConfig.SetsMode"/>.</param>
+/// <param name="SetsModePeriods">Periods carrying a <see cref="TimePeriodConfig.SetsModeId"/>.</param>
 /// <param name="ActivateWhileOnOptions">Options carrying a <c>ActivateWhileOn</c> entity.</param>
 /// <param name="AutoAwayOptions">Options carrying a positive <c>ActivateAfterNoMotionMinutes</c>.</param>
 /// <param name="ResetTriggerOptions">Options carrying a reset trigger, which returns the select to Normal.</param>
@@ -175,7 +175,7 @@ public static class ModeAuthority
 		// Normal is exempt from no-motion and reset in the engine, so counting it here would name a rule that was
 		// never firing under either authority.
 		return new DormantModeRules(
-			periods.Count(period => period.SetsMode is { Length: > 0 }),
+			periods.Count(period => period.SetsModeId is { Length: > 0 }),
 			options.Count(option => option.ActivateWhileOn.Count > 0),
 			options.Count(option => option.Kind != ModeKind.Normal && option.ActivateAfterNoMotionMinutes is > 0),
 			options.Count(option => option.Kind != ModeKind.Normal && option.HasResetTrigger));
