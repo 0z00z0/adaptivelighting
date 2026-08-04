@@ -46,6 +46,9 @@ public static class ServiceCollectionExtensions
 		services.AddSingleton<AreaSnapshotCache>();
 		services.AddHostedService(provider => provider.GetRequiredService<AreaSnapshotCache>());
 
+		// The record's other feed: the engine's own rebuilds, which never reach Home Assistant as an area event.
+		services.AddHostedService<EngineNoticeRecorder>();
+
 		// Scoped: these depend on IHaContext, which NetDaemon scopes. One per Blazor circuit.
 		services.AddScoped<ModeService>();
 		services.AddScoped<HaCatalog>();

@@ -162,8 +162,8 @@ public static class BoardView
 
 		for (int index = 0; index < ordered.Count; index++)
 		{
-			AreaSnapshot snapshot = ordered[index].Snapshot;
-			if (KindOf(snapshot.State) is not { } kind)
+			// A lane is one room's history; the engine's own notices belong to none and paint nothing.
+			if (ordered[index].Snapshot is not { } snapshot || KindOf(snapshot.State) is not { } kind)
 				continue;
 
 			DateTimeOffset from = ordered[index].At;
@@ -218,12 +218,14 @@ public static class BoardView
 		List<LaneRefusal> marks = [];
 		double? previousPercent = null;
 
-		foreach (ActivityEntry entry in entries
-			.Where(entry => ActivityView.IsDeclinedMotion(entry.Snapshot))
-			.Where(entry => IsAboutThisRoom(entry.Snapshot))
-			.Where(entry => entry.At >= window.Start && entry.At <= window.End)
-			.OrderBy(entry => entry.At)
-			.ThenBy(entry => entry.Sequence))
+		foreach ((ActivityEntry entry, AreaSnapshot snapshot) in entries
+			.Where(entry => entry.Snapshot is not null)
+			.Select(entry => (Entry: entry, Snapshot: entry.Snapshot!))
+			.Where(pair => ActivityView.IsDeclinedMotion(pair.Snapshot))
+			.Where(pair => IsAboutThisRoom(pair.Snapshot))
+			.Where(pair => pair.Entry.At >= window.Start && pair.Entry.At <= window.End)
+			.OrderBy(pair => pair.Entry.At)
+			.ThenBy(pair => pair.Entry.Sequence))
 		{
 			double percent = Math.Clamp(window.PercentAt(entry.At), 0, 100);
 
@@ -234,7 +236,7 @@ public static class BoardView
 				continue;
 
 			previousPercent = percent;
-			marks.Add(new LaneRefusal(percent, $"{Clock(entry.At)} movement, {ActivityView.RefusalReason(entry.Snapshot)}"));
+			marks.Add(new LaneRefusal(percent, $"{Clock(entry.At)} movement, {ActivityView.RefusalReason(snapshot)}"));
 		}
 
 		return marks;

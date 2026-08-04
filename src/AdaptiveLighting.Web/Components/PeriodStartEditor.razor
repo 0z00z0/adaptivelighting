@@ -10,7 +10,7 @@
 	<select class="cell start-mode" @bind:get="_mode" @bind:set="OnModeChanged">
 		<option value="clock">at a clock time</option>
 		<option value="sun">relative to the sun</option>
-		<option value="text">typed as text</option>
+		<option value="text">as text, for anything else</option>
 	</select>
 
 	@if (_mode == "clock")
@@ -34,20 +34,25 @@
 		<input class="cell start-raw" value="@Value" @oninput="OnRawChanged" placeholder="22:30 or sunset-01:00" />
 	}
 
-	<div class="cell-note @(Description is null ? "bad" : "")">
-		@if (Description is { } description)
-		{
-			@description
-			@if (TodaySuffix is { Length: > 0 } suffix)
+	@* A clock start needs no note: it would read the time field back. A sun anchor does, because the time it
+	   lands on today is not on screen anywhere else. *@
+	@if (Description is null || _mode != "clock")
+	{
+		<div class="cell-note @(Description is null ? "bad" : "")">
+			@if (Description is { } description)
 			{
-				<span class="start-today"> @suffix</span>
+				@description
+				@if (TodaySuffix is { Length: > 0 } suffix)
+				{
+					<span class="start-today"> @suffix</span>
+				}
 			}
-		}
-		else
-		{
-			@("Not a valid time. Try 22:30 or sunset-01:00.")
-		}
-	</div>
+			else
+			{
+				@("Not a valid time. Try 22:30 or sunset-01:00.")
+			}
+		</div>
+	}
 </div>
 
 @code {

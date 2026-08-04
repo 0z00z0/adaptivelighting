@@ -16,6 +16,7 @@ public static class Presets
 	/// <summary>Brightness stops, in percent. Dense where dim, coarse where bright, following perception.</summary>
 	public static readonly IReadOnlyList<PresetChoice> BrightnessPct =
 	[
+		new(0, "0 % — off"),
 		new(1, "1 % — the faintest glow"),
 		new(2, "2 %"),
 		new(5, "5 % — night-light"),

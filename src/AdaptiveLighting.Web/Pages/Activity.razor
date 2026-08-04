@@ -144,7 +144,7 @@ else
 		<ol class="log">
 			@foreach (ActivityRow row in day.Rows)
 			{
-				<li class="log-row family-@AreaView.Family(row.Snapshot.State)" @key="row.Sequence">
+				<li class="log-row family-@row.Family" @key="row.Sequence">
 					<div class="log-when">
 						<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)"
 							  title="@Full(row.At)">@Clock(row.At)</time>

@@ -1,3 +1,4 @@
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Hosting;
 
@@ -134,6 +135,79 @@ public sealed class LightingEngineHostTests
 		Assert.IsFalse(host.IsRunning);
 		Assert.IsFalse(host.IsAttached);
 		Assert.AreEqual(0, host.RunningAreaCount);
+	}
+
+	// ---- the record's only sight of a rebuild ---------------------------------------------------
+	//
+	// The activity log is fed from per-area events, so a save was invisible in it and a restart was a scatter of
+	// start-up rows most of which are dropped. One notice per rebuild is what puts the cause in the timeline.
+
+	/// <summary>A scheduler on a real date. From tick zero the engine's own periodic timers overflow.</summary>
+	private static TestScheduler Clocked()
+	{
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		return scheduler;
+	}
+
+	/// <summary>A document with no areas, so the rebuild turns on the connection alone and not on the registry.</summary>
+	private static AdaptiveLightingConfig Roomless()
+	{
+		AdaptiveLightingConfig config = Valid();
+		config.Areas = [];
+
+		return config;
+	}
+
+	[TestMethod]
+	public void EachRebuild_RaisesOneNotice_SayingWhichKindItWas()
+	{
+		List<EngineNotice> notices = [];
+		LightingEngineHost host = BuildHost();
+
+		using IDisposable subscription = host.Notices.Subscribe(notices.Add);
+
+		host.Attach(new FakeHaContext(), new FakeHaRegistry(), Clocked());
+		host.Save(Roomless());
+		host.Reload();
+
+		CollectionAssert.AreEqual(
+			new[] { EngineNoticeKind.SettingsSaved, EngineNoticeKind.Started },
+			notices.ConvertAll(notice => notice.Kind),
+			"a save and a start are the two rebuilds, and each is one notice");
+
+		host.Dispose();
+	}
+
+	/// <summary>The engine is started by the bootstrap app, which can beat the web host's recorder to it.</summary>
+	[TestMethod]
+	public void TheStartNotice_ReachesARecorderThatSubscribedAfterwards()
+	{
+		LightingEngineHost host = BuildHost();
+		host.Attach(new FakeHaContext(), new FakeHaRegistry(), Clocked());
+		host.Save(Roomless());
+
+		List<EngineNotice> notices = [];
+		using IDisposable subscription = host.Notices.Subscribe(notices.Add);
+
+		Assert.AreEqual(1, notices.Count, "the rebuild that already happened is still the one that explains the rows");
+
+		host.Dispose();
+	}
+
+	[TestMethod]
+	public void ARebuildThatCannotRun_RaisesNothing()
+	{
+		List<EngineNotice> notices = [];
+		LightingEngineHost host = BuildHost();
+
+		using IDisposable subscription = host.Notices.Subscribe(notices.Add);
+
+		// Nothing attached, so the document is written and no engine is built.
+		host.Save(Roomless());
+
+		Assert.AreEqual(0, notices.Count, "nothing was rebuilt, so the record must not say the house was");
 	}
 
 	[TestMethod]

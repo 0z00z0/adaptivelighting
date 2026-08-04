@@ -1,5 +1,7 @@
 using System.Reactive.Concurrency;
+using System.Reactive.Subjects;
 
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
@@ -62,6 +64,10 @@ public sealed class LightingEngineHost : IDisposable
 	// Dispose with a Start.
 	private readonly Lock _gate = new();
 
+	// Replayed, because the engine is started by the NetDaemon bootstrap and the web host's recorder may not have
+	// subscribed by then. One is enough: nothing but the engine's own start can precede a browser being open.
+	private readonly ReplaySubject<EngineNotice> _notices = new(bufferSize: 1);
+
 	private IHaContext? _ha;
 	private IHaRegistry? _registry;
 	private IScheduler? _scheduler;
@@ -94,6 +100,12 @@ public sealed class LightingEngineHost : IDisposable
 	}
 
 	public LightingConfigStore Store => _store;
+
+	/// <summary>
+	///     The house-wide things the engine did to itself: it started, or a save rebuilt every room. One per
+	///     rebuild, never one per area.
+	/// </summary>
+	public IObservable<EngineNotice> Notices => _notices;
 
 	/// <summary>
 	///     The app's built-in enable switch, or <c>null</c> before <see cref="Attach"/>. Used as the kill switch
@@ -202,7 +214,7 @@ public sealed class LightingEngineHost : IDisposable
 
 			ScheduleAreaDiscoveryIfNeeded(config);
 
-			return ApplyCore(config);
+			return ApplyCore(config, EngineNoticeKind.Started);
 		}
 	}
 
@@ -369,7 +381,8 @@ public sealed class LightingEngineHost : IDisposable
 					"Home and Away will follow {Count} people ({Persons}). Change who under Configuration → House.",
 					seeded.Count, string.Join(", ", seeded));
 
-			ApplyCore(config);
+			// Discovery rewrote the document during start-up; nobody saved anything.
+			ApplyCore(config, EngineNoticeKind.Started);
 		}
 	}
 
@@ -414,7 +427,7 @@ public sealed class LightingEngineHost : IDisposable
 
 			// Re-read, never the in-memory object: a save is reported successful only once the bytes on disk parse
 			// back into a document the engine accepts, which is what matters after a restart.
-			return ApplyCore(_store.Load());
+			return ApplyCore(_store.Load(), EngineNoticeKind.SettingsSaved);
 		}
 	}
 
@@ -452,10 +465,15 @@ public sealed class LightingEngineHost : IDisposable
 			_ha = null;
 			_registry = null;
 			_scheduler = null;
+			_notices.Dispose();
 		}
 	}
 
-	private SaveResult ApplyCore(AdaptiveLightingConfig config)
+	/// <remarks>
+	///     <c>notice</c> is raised only where the engine actually came up. A rebuild that ends faulted is in the log
+	///     and the notification; it is not a row in the record saying the house was rebuilt.
+	/// </remarks>
+	private SaveResult ApplyCore(AdaptiveLightingConfig config, EngineNoticeKind notice)
 	{
 		_logger.LogInformation(
 			"Applying lighting configuration update: {Areas} areas, {Periods} periods, house-mode select {Select}.",
@@ -515,6 +533,8 @@ public sealed class LightingEngineHost : IDisposable
 			_logger.LogInformation(
 				"Adaptive lighting is running: {Areas} of {Configured} areas resolved.",
 				orchestrator.Areas.Count, config.Areas.Count);
+
+			_notices.OnNext(new EngineNotice(notice, DateTimeOffset.Now));
 
 			return new SaveResult(SaveStatus.Saved, validation, $"Saved: {orchestrator.Areas.Count} of {config.Areas.Count} rooms are running.");
 		}

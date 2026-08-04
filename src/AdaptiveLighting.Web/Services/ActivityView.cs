@@ -15,7 +15,10 @@ public sealed record ActivityLine(string What, string? Why);
 ///     record once per switched-on room; the record renders per thing that happened.
 /// </remarks>
 /// <param name="Entry">The report the row is drawn from, the newest of the run when several collapsed.</param>
-/// <param name="Rooms">The rooms whose reports this row covers, newest first and named once each. Never empty.</param>
+/// <param name="Rooms">
+///     The rooms whose reports this row covers, newest first and named once each. Empty only for a row the
+///     engine raised about itself, which no room reported.
+/// </param>
 public sealed record ActivityRow(
 	ActivityEntry Entry,
 	ActivityLine Line,
@@ -27,7 +30,11 @@ public sealed record ActivityRow(
 	/// <summary>The row's key. Dense and never reused, so it survives eviction from the buffer.</summary>
 	public long Sequence => Entry.Sequence;
 
-	public AreaSnapshot Snapshot => Entry.Snapshot;
+	/// <summary>The report behind the row, or <c>null</c> when the engine raised it about itself.</summary>
+	public AreaSnapshot? Snapshot => Entry.Snapshot;
+
+	/// <summary>The stripe class the page draws the row with. A row no room reported is idle.</summary>
+	public string Family => Entry.Snapshot is { } snapshot ? AreaView.Family(snapshot.State) : "idle";
 
 	/// <summary>The room the row belongs to, or <c>null</c> when it belongs to the house.</summary>
 	public string? Room => IsAboutTheHouse ? null : Entry.AreaName;
@@ -165,6 +172,30 @@ public static class ActivityView
 		return new ActivityLine(Headline(snapshot), Condition(snapshot));
 	}
 
+	/// <summary>Puts a house-wide notice into words. One row per rebuild, whatever the house has in it.</summary>
+	public static ActivityLine Describe(EngineNotice notice)
+	{
+		ArgumentNullException.ThrowIfNull(notice);
+
+		return notice.Kind switch
+		{
+			EngineNoticeKind.SettingsSaved => new ActivityLine(
+				"Settings saved — every room rebuilt",
+				"Every room was rebuilt on the saved settings. The rooms below it start again from there."),
+			_ => new ActivityLine(
+				"Adaptive lighting started",
+				"Nothing above this line was recorded by this run of the engine.")
+		};
+	}
+
+	/// <summary>What an entry says, whichever of the two kinds it is.</summary>
+	public static ActivityLine Describe(ActivityEntry entry)
+	{
+		ArgumentNullException.ThrowIfNull(entry);
+
+		return entry.Snapshot is { } snapshot ? Describe(snapshot) : Describe(entry.Notice!);
+	}
+
 	// Ordinal on the display name. Rooms and the verdict collapse in Rows match the same way; if the three
 	// disagree about what "the same room" is, an option stops meaning a filter.
 	public static IReadOnlyList<ActivityEntry> InRoom(IEnumerable<ActivityEntry> entries, string? room)
@@ -187,8 +218,10 @@ public static class ActivityView
 
 		return
 		[
+			// A house-wide notice names no room, and an option with no name is one the filter cannot mean.
 			.. entries
 				.Select(entry => entry.AreaName)
+				.OfType<string>()
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.OrderBy(name => name, StringComparer.CurrentCulture)
 		];
@@ -213,11 +246,12 @@ public static class ActivityView
 	}
 
 	/// <summary>Only the reports worth a row. Never applied where the dashboard reads the log for the board.</summary>
+	/// <remarks>The engine's own notices are always worth a row: one is raised per rebuild, not per room.</remarks>
 	public static IReadOnlyList<ActivityEntry> Shown(IEnumerable<ActivityEntry> entries)
 	{
 		ArgumentNullException.ThrowIfNull(entries);
 
-		return [.. entries.Where(entry => IsWorthShowing(entry.Snapshot))];
+		return [.. entries.Where(entry => entry.Snapshot is not { } snapshot || IsWorthShowing(snapshot))];
 	}
 
 	// ===================== the category filter =====================
@@ -286,6 +320,17 @@ public static class ActivityView
 	}
 
 	/// <summary>
+	///     What an entry is about, whichever of the two kinds it is. A rebuild is housekeeping: the chip that holds
+	///     start-up rows is the one that holds the line explaining them.
+	/// </summary>
+	public static ActivityCategory Categorise(ActivityEntry entry)
+	{
+		ArgumentNullException.ThrowIfNull(entry);
+
+		return entry.Snapshot is { } snapshot ? Categorise(snapshot) : ActivityCategory.Background;
+	}
+
+	/// <summary>
 	///     Only the reports in <paramref name="categories"/>. Applied to a list already read out of
 	///     <see cref="ActivityLog"/>, never inside its lock, which hands over the entries and the sequence
 	///     together.
@@ -297,7 +342,7 @@ public static class ActivityView
 		if (categories == AllCategories)
 			return [.. entries];
 
-		return [.. entries.Where(entry => (Categorise(entry.Snapshot) & categories) != ActivityCategory.None)];
+		return [.. entries.Where(entry => (Categorise(entry) & categories) != ActivityCategory.None)];
 	}
 
 	/// <summary>
@@ -312,7 +357,7 @@ public static class ActivityView
 
 		foreach (ActivityEntry entry in entries)
 		{
-			ActivityCategory found = Categorise(entry.Snapshot);
+			ActivityCategory found = Categorise(entry);
 
 			for (int index = 0; index < Catalogue.Length; index++)
 			{
@@ -427,6 +472,17 @@ public static class ActivityView
 	}
 
 	/// <summary>
+	///     Whether an entry's words are about the whole house. Always true of a notice the engine raised about
+	///     itself, which no room reported.
+	/// </summary>
+	public static bool IsAboutTheHouse(ActivityEntry entry)
+	{
+		ArgumentNullException.ThrowIfNull(entry);
+
+		return entry.Snapshot is not { } snapshot || IsAboutTheHouse(snapshot);
+	}
+
+	/// <summary>
 	///     A house-wide row's words, minus the publishing room's condition. Dropping it is what lets one mode
 	///     change be one row: the rooms differ when the mode moves, so their conditions would split the event.
 	/// </summary>
@@ -492,12 +548,25 @@ public static class ActivityView
 
 			ActivityEntry head = ordered[index];
 			ActivityLine line = LineAt(index);
-			bool house = IsAboutTheHouse(head.Snapshot);
-			List<string> rooms = [head.AreaName];
+
+			// A notice the engine raised about itself is one row on its own: it is already one per rebuild, and
+			// there is no room to add to the run.
+			if (head.Snapshot is not { } leading)
+			{
+				rows.Add(new ActivityRow(head, line, IsAboutTheHouse: true, []));
+
+				if (limit is { } reached && rows.Count >= reached)
+					break;
+
+				continue;
+			}
+
+			bool house = IsAboutTheHouse(leading);
+			List<string> rooms = [leading.AreaName];
 
 			if (house)
 				SwallowHouseRun(index, line, rooms);
-			else if (IsStandingVerdict(head.Snapshot))
+			else if (IsStandingVerdict(leading))
 				SwallowRepeatedVerdict(index, line);
 
 			rows.Add(new ActivityRow(head, line, house, rooms));
@@ -508,7 +577,8 @@ public static class ActivityView
 
 		return rows;
 
-		ActivityLine LineAt(int at) => words[at] ??= LineFor(ordered[at].Snapshot);
+		ActivityLine LineAt(int at) =>
+			words[at] ??= ordered[at].Snapshot is { } snapshot ? LineFor(snapshot) : Describe(ordered[at].Notice!);
 
 		void SwallowHouseRun(int from, ActivityLine line, List<string> rooms)
 		{
@@ -516,16 +586,18 @@ public static class ActivityView
 
 			for (int scan = from + 1; scan < ordered.Count; scan++)
 			{
+				// A notice ends the run whatever it says: it belongs to no room, so it has nothing to add to one.
 				// Absolute difference, not a subtraction: the list is newest first by sequence, so a report whose
 				// timestamp disagrees with its position must not be swept in by an interval that went negative.
-				if (!IsAboutTheHouse(ordered[scan].Snapshot)
+				if (ordered[scan].Snapshot is not { } snapshot
+					|| !IsAboutTheHouse(snapshot)
 					|| (at - ordered[scan].At).Duration() > CollapseWindow
 					|| LineAt(scan) != line)
 				{
 					return;
 				}
 
-				string room = ordered[scan].AreaName;
+				string room = snapshot.AreaName;
 
 				if (!rooms.Contains(room, StringComparer.OrdinalIgnoreCase))
 					rooms.Add(room);
@@ -538,14 +610,15 @@ public static class ActivityView
 		{
 			// Ordinal on the display name, as InRoom and the room filter are. If the three disagree, a run gets
 			// assembled from rooms the filter would not put together.
-			string room = ordered[from].AreaName;
+			string? room = ordered[from].AreaName;
 
 			for (int scan = from + 1; scan < ordered.Count; scan++)
 			{
 				if (!string.Equals(ordered[scan].AreaName, room, StringComparison.OrdinalIgnoreCase))
 					continue;
 
-				if (!IsStandingVerdict(ordered[scan].Snapshot)
+				if (ordered[scan].Snapshot is not { } snapshot
+					|| !IsStandingVerdict(snapshot)
 					|| !string.Equals(LineAt(scan).What, line.What, StringComparison.Ordinal))
 				{
 					return;
@@ -624,7 +697,11 @@ public static class ActivityView
 	/// <summary>The event itself, from the engine's own reason for publishing.</summary>
 	private static string Headline(AreaSnapshot snapshot) => snapshot.Reason switch
 	{
-		TransitionReason.Startup => "Started up — took the room as it was",
+		// The away branch is the mode the engine found at start-up, never a mode that moved: the room was swept
+		// because the house was already away, and "took the room as it was" would deny the sweep.
+		TransitionReason.Startup => snapshot.State == AreaState.Away
+			? "Started up — the house was already away"
+			: "Started up — took the room as it was",
 		TransitionReason.AdoptedAtStartup => "Started up — these lights were already on",
 		TransitionReason.Motion => snapshot.State switch
 		{
