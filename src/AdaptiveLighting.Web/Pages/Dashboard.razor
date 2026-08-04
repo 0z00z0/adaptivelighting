@@ -332,7 +332,7 @@ else
 		<ol class="log log-compact">
 			@foreach (ActivityRow row in _logRows)
 			{
-				<li class="log-row family-@AreaView.Family(row.Snapshot.State)" @key="row.Sequence">
+				<li class="log-row family-@row.Family" @key="row.Sequence">
 					<div class="log-when">
 						<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)"
 							  title="@Full(row.At)">@Clock(row.At)</time>
@@ -341,9 +341,9 @@ else
 							@* Not attributed to a room, because no room did it. The hover lists which reported it. *@
 							<span class="log-room log-room-house" title="@ActivityView.ReportedBy(row)">@HouseLabel(row)</span>
 						}
-						else if (row.Snapshot.AreaId is { Length: > 0 })
+						else if (row.Snapshot is { AreaId: { Length: > 0 } areaId })
 						{
-							<a class="log-room log-room-link" href="@RoomHref(row.Snapshot.AreaId)">@row.Room</a>
+							<a class="log-room log-room-link" href="@RoomHref(areaId)">@row.Room</a>
 						}
 						else
 						{
@@ -477,11 +477,15 @@ else
 
 		IReadOnlyList<AreaSnapshot> visible = AreaView.VisibleCards(_snapshots, _rooms);
 
+		// The engine's own notices are skipped: a lane draws one room's history, and a rebuild belongs to none.
 		Dictionary<string, List<ActivityEntry>> byRoom = new(StringComparer.Ordinal);
 		foreach (ActivityEntry entry in _entries)
 		{
-			if (!byRoom.TryGetValue(KeyOf(entry.Snapshot), out List<ActivityEntry>? room))
-				byRoom[KeyOf(entry.Snapshot)] = room = [];
+			if (entry.Snapshot is not { } snapshot)
+				continue;
+
+			if (!byRoom.TryGetValue(KeyOf(snapshot), out List<ActivityEntry>? room))
+				byRoom[KeyOf(snapshot)] = room = [];
 
 			room.Add(entry);
 		}

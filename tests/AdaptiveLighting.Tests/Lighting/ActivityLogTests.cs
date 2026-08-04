@@ -56,6 +56,9 @@ public sealed class ActivityLogTests
 
 	private static ActivityEntry Entry(long sequence, AreaSnapshot snapshot) => new(sequence, snapshot);
 
+	private static ActivityEntry Entry(long sequence, EngineNoticeKind kind, DateTimeOffset? at = null) =>
+		new(sequence, new EngineNotice(kind, at ?? Noon));
+
 	// ===================== the bounded buffer =====================
 
 	[TestMethod]
@@ -1401,7 +1404,7 @@ public sealed class ActivityLogTests
 
 		// Only the row drops it. Describe is what the room page reads, and there it is still attributed.
 		StringAssert.Contains(
-			ActivityView.Describe(entries[1].Snapshot).Why,
+			ActivityView.Describe(entries[1]).Why,
 			"lux 214",
 			"Describe is what the room page reads, and there the condition is attributed and wanted");
 	}
@@ -1733,6 +1736,93 @@ public sealed class ActivityLogTests
 			BoardView.LogFoot(ActivityLog.Capacity, ActivityLog.Capacity, 300, 12, ActivityLog.Capacity),
 			$"the most recent {ActivityLog.Capacity} are kept",
 			"a full buffer has started forgetting, and a reader who is not told will read the oldest row as the beginning");
+	}
+
+	// ===================== the engine's own rebuilds =====================
+	//
+	// The record's other feed is the per-area event, so a save was invisible in it and a restart was a scatter of
+	// start-up rows the sift drops. The row that explains a morning of phantom mode changes is this one.
+
+	[TestMethod]
+	public void A_Save_Is_One_Row_However_Many_Rooms_Were_Rebuilt()
+	{
+		ActivityLog log = new();
+
+		log.Record(Report("Stue", at: Noon));
+		log.Record(Report("Kjøkken", at: Noon));
+		log.Record(new EngineNotice(EngineNoticeKind.SettingsSaved, Noon.AddSeconds(1)));
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(ActivityView.Shown(log.Entries));
+
+		Assert.AreEqual(1, rows.Count(row => row.Line.What == "Settings saved — every room rebuilt"));
+		Assert.AreEqual(3, log.Newest, "one running count, shared with the reports either side of it");
+	}
+
+	[TestMethod]
+	public void A_Rebuild_Row_Belongs_To_The_House_And_Names_No_Room()
+	{
+		ActivityEntry entry = Entry(1, EngineNoticeKind.Started);
+		ActivityRow row = ActivityView.Rows([entry]).Single();
+
+		Assert.AreEqual("Adaptive lighting started", row.Line.What);
+		Assert.IsTrue(row.IsAboutTheHouse);
+		Assert.IsNull(row.Room);
+		Assert.AreEqual(0, row.Rooms.Count, "no room reported it, so none may be named");
+		Assert.IsNull(ActivityView.ReportedBy(row), "and nothing claims a room did");
+		Assert.IsNull(row.Snapshot, "no state, no period and no darkness verdict were invented for it");
+	}
+
+	[TestMethod]
+	public void A_Rebuild_Row_Is_Background_So_The_Page_Opens_Without_It()
+	{
+		ActivityEntry entry = Entry(1, EngineNoticeKind.SettingsSaved);
+
+		Assert.AreEqual(ActivityCategory.Background, ActivityView.Categorise(entry));
+
+		Assert.AreEqual(0, ActivityView.InCategories([entry], ActivityView.DefaultCategories).Count,
+			"Background starts switched off, and this row is housekeeping");
+
+		Assert.AreEqual(1, ActivityView.InCategories([entry], ActivityCategory.Background).Count);
+		Assert.AreEqual(1, Chip(ActivityView.Chips([entry], ActivityView.DefaultCategories), ActivityCategory.Background).Count);
+	}
+
+	[TestMethod]
+	public void The_Room_Filter_And_The_Category_Filter_Still_Compose_Over_A_Rebuild_Row()
+	{
+		IReadOnlyList<ActivityEntry> entries =
+		[
+			Entry(2, EngineNoticeKind.Started, Noon.AddSeconds(1)),
+			Entry(1, Report("Stue", AreaState.OverriddenOn, TransitionReason.ManualOn, at: Noon))
+		];
+
+		CollectionAssert.AreEqual(new[] { "Stue" }, ActivityView.Rooms(entries).ToArray(),
+			"a row no room reported must not add a nameless option to the dropdown");
+
+		IReadOnlyList<ActivityEntry> inRoom = ActivityView.InRoom(entries, "Stue");
+
+		Assert.AreEqual(1, inRoom.Count, "the rebuild belongs to no room, so choosing one leaves it out");
+		Assert.AreEqual(2, ActivityView.InRoom(entries, ActivityView.AllRooms).Count);
+
+		Assert.AreEqual(1, ActivityView.InCategories(entries, ActivityCategory.Background).Count,
+			"and the category filter still reaches it when no room is chosen");
+	}
+
+	/// <summary>Its own row, not a member of the run beside it: the collapse is about rooms saying one thing.</summary>
+	[TestMethod]
+	public void A_Rebuild_Row_Is_Never_Swallowed_By_A_House_Wide_Run()
+	{
+		IReadOnlyList<ActivityEntry> entries =
+		[
+			Entry(3, Mode("Kjøkken", "Home", Noon.AddSeconds(2))),
+			Entry(2, EngineNoticeKind.Started, Noon.AddSeconds(1)),
+			Entry(1, Mode("Stue", "Home", Noon))
+		];
+
+		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
+
+		Assert.AreEqual(3, rows.Count,
+			"the two mode reports are not consecutive any more, and the rebuild joins neither");
+		Assert.AreEqual("Adaptive lighting started", rows[1].Line.What);
 	}
 
 	private static AreaSnapshot Mode(string area, string value, DateTimeOffset at) =>

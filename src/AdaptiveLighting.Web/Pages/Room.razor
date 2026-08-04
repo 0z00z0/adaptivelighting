@@ -679,7 +679,7 @@ else
 				<ol class="log room-log">
 					@foreach (ActivityRow row in rows)
 					{
-						<li class="log-row family-@AreaView.Family(row.Snapshot.State)" @key="row.Sequence">
+						<li class="log-row family-@row.Family" @key="row.Sequence">
 							<div class="log-when">
 								<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(row.At)</time>
 							</div>

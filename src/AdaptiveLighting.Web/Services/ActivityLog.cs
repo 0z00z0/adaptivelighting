@@ -4,19 +4,53 @@ using AdaptiveLighting.Abstractions;
 
 namespace AdaptiveLighting.Web.Services;
 
-/// <summary>One line of the activity page: a report the engine published, with the position it arrived in.</summary>
-/// <param name="Sequence">
-///     Where this report fell in the run, counting from one. Two areas can publish on the same instant, so
-///     <see cref="AreaSnapshot.Timestamp"/> alone does not order the timeline. Dense and never reused, which is
-///     what lets the page count new arrivals by subtraction after eviction.
-/// </param>
-/// <param name="Snapshot">The report itself, as the engine published it.</param>
-public sealed record ActivityEntry(long Sequence, AreaSnapshot Snapshot)
+/// <summary>
+///     One line of the activity page: either a report an area published, or a house-wide notice the engine
+///     raised about itself.
+/// </summary>
+/// <remarks>
+///     Exactly one of <see cref="Snapshot"/> and <see cref="Notice"/> is set. A notice fabricates no snapshot: a
+///     state, a period and a darkness verdict would all have to be invented, and the rest of the page reads them
+///     as facts about a room.
+/// </remarks>
+public sealed record ActivityEntry
 {
-	public string AreaName => Snapshot.AreaName;
+	/// <param name="sequence">
+	///     Where this entry fell in the run, counting from one. Two areas can publish on the same instant, so
+	///     <see cref="AreaSnapshot.Timestamp"/> alone does not order the timeline. Dense and never reused, which is
+	///     what lets the page count new arrivals by subtraction after eviction.
+	/// </param>
+	/// <param name="snapshot">The report itself, as the engine published it.</param>
+	public ActivityEntry(long sequence, AreaSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		Sequence = sequence;
+		Snapshot = snapshot;
+	}
+
+	/// <remarks><c>sequence</c> is the same running count an area report takes; the two share one timeline.</remarks>
+	public ActivityEntry(long sequence, EngineNotice notice)
+	{
+		ArgumentNullException.ThrowIfNull(notice);
+
+		Sequence = sequence;
+		Notice = notice;
+	}
+
+	public long Sequence { get; }
+
+	/// <summary>The area report behind this entry, or <c>null</c> when the engine was speaking for the house.</summary>
+	public AreaSnapshot? Snapshot { get; }
+
+	/// <summary>What the engine did to itself, or <c>null</c> when a room reported.</summary>
+	public EngineNotice? Notice { get; }
+
+	/// <summary>The room that reported, or <c>null</c> when no room did. Never an empty name.</summary>
+	public string? AreaName => Snapshot?.AreaName;
 
 	/// <summary>When the engine made this decision.</summary>
-	public DateTimeOffset At => Snapshot.Timestamp;
+	public DateTimeOffset At => Snapshot?.Timestamp ?? Notice!.At;
 }
 
 /// <summary>
@@ -102,9 +136,23 @@ public sealed class ActivityLog
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 
+		return File(sequence => new ActivityEntry(sequence, snapshot));
+	}
+
+	/// <summary>Records one house-wide notice: the engine started, or a save rebuilt every room.</summary>
+	/// <remarks>Raised once per rebuild, never once per area, so a save is one row and not one row per room.</remarks>
+	public ActivityEntry Record(EngineNotice notice)
+	{
+		ArgumentNullException.ThrowIfNull(notice);
+
+		return File(sequence => new ActivityEntry(sequence, notice));
+	}
+
+	private ActivityEntry File(Func<long, ActivityEntry> build)
+	{
 		lock (_gate)
 		{
-			ActivityEntry entry = new(++_sequence, snapshot);
+			ActivityEntry entry = build(++_sequence);
 			_entries.Enqueue(entry);
 
 			while (_entries.Count > Capacity)

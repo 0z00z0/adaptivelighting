@@ -490,6 +490,31 @@ Two consequences worth knowing:
 An away-at-start-up row lands under Background alone, where it used to land under Mode. That is the cost of not
 claiming a mode change: the record says the house was already away, not that it just became so.
 
+### A restart and a save are rows of their own
+
+The record's only other input is `AreaSnapshotCache.Record`, fed by the per-area `adaptive_lighting_area` event
+round-tripping through Home Assistant. A save was therefore **invisible** in the timeline and a restart was a
+scatter of start-up rows, most of which the sift drops. The one fact that explained three phantom mode rows in a
+morning, that the engine had restarted three times, was the one thing the record could not say.
+
+`LightingEngineHost` raises one `EngineNotice` per rebuild, in process, and `EngineNoticeRecorder` files it.
+Raised where the engine actually came up, so a rebuild that ends faulted is in the log and the notification but
+not in the record.
+
+`ActivityEntry` carries **either** an `AreaSnapshot` or an `EngineNotice`, never a fabricated snapshot: a state, a
+period and a darkness verdict would all have to be invented and the rest of the page reads them as facts about a
+room. The consequences, each of which has a test:
+
+- a notice belongs to no room, so it names none in the dropdown, and choosing a room filters it out;
+- it is its own row and joins no run, in either direction, so it cannot be swallowed by a house-wide collapse or
+  end one prematurely by joining it;
+- it is `Background` alone, so the page opens without it;
+- the board's lanes skip it, because a lane draws one room's history.
+
+The notice stream is a `ReplaySubject` of one. The engine is started by the NetDaemon bootstrap and the web
+host's recorder can subscribe after that; one is enough, because nothing but the engine's own start can precede a
+browser being open.
+
 ### How refusal reports are thinned, and the one path that escapes it
 
 On the ordinary path the engine publishes one "movement refused" report per **change of the refusing gate**,
