@@ -47,7 +47,7 @@
 
 	/* ---- text ---- */
 	--text: #eaeadf;
-	--muted: #9a9c8a;
+	--muted: #b9bcaa;
 	--accent-ink: #221a05;    /* text ON --accent, never text near it */
 
 	/* ---- the one accent: editability and primary action ---- */
@@ -109,7 +109,7 @@
 		--grid: #e2e4d8;
 
 		--text: #23261f;
-		--muted: #6e7365;
+		--muted: #565b4e;
 		--accent-ink: #ffffff;
 
 		--accent: #8f6c15;
@@ -159,7 +159,7 @@
 	--line: #33362a;
 	--grid: #262921;
 	--text: #eaeadf;
-	--muted: #9a9c8a;
+	--muted: #b9bcaa;
 	--accent-ink: #221a05;
 	--accent: #e2ae45;
 	--machine: #e8a24a;
@@ -197,7 +197,7 @@
 	--line: #d9dcce;
 	--grid: #e2e4d8;
 	--text: #23261f;
-	--muted: #6e7365;
+	--muted: #565b4e;
 	--accent-ink: #ffffff;
 	--accent: #8f6c15;
 	--machine: #8a5214;
@@ -283,7 +283,7 @@
 	   5.0:1 on --panel. The stated value is not wasted — it becomes --idle,
 	   whose shipped contrast band is 3.4-4.1:1 in both existing themes. */
 	--text: #dde6f4;
-	--muted: #7789a3;
+	--muted: #9db0cc;
 	--accent-ink: #0a0f17;
 
 	/* ---- the one accent: the palette's teal, "Primary accent". ---- */
@@ -371,12 +371,12 @@
 	/* ---- type ---- */
 	--font-sans: Seravek, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
 	--mono: "Cascadia Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
-	--text-xs: 11px;          /* the uppercase section label */
-	--text-sm: 12.5px;        /* help lines, meta, timestamps */
-	--text-md: 13.5px;        /* dense body: settings rows, log lines */
+	--text-xs: 12.5px;        /* the uppercase section label */
+	--text-sm: 14px;          /* help lines, meta, timestamps */
+	--text-md: 15px;          /* dense body: settings rows, log lines */
 	--text-base: 15px;        /* body */
-	--text-lg: 19px;          /* page and card headings */
-	--text-xl: 24px;          /* the one number a page is about */
+	--text-lg: 20px;          /* page and card headings */
+	--text-xl: 25px;          /* the one number a page is about */
 	--label-track: 0.14em;    /* letter-spacing on uppercase labels */
 }
 
@@ -2720,6 +2720,15 @@ select.cell.wide {
 	font-size: 0.8rem;
 	font-weight: 600;
 	color: var(--muted);
+}
+
+/* The label around the box only, so the (i) beside it can stay outside the label. Same gap as the
+   .housemode-field-label it sits in, whose weight, size and colour it inherits. */
+.housemode-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	cursor: pointer;
 }
 
 .housemode-resets {
@@ -6110,12 +6119,9 @@ h1[tabindex="-1"]:focus {
 	padding: var(--space-3) var(--space-4) var(--space-1);
 }
 
-/* NOT folded into the shared micro-label rule below, though it is the same recipe. This hardcodes 10.5px and
-   0.12em where the tokens are 11px and 0.14em, so adopting them is a real change to these column heads rather
-   than a no-op tidy — and it has not been looked at. Left as it renders today; see the follow-up. */
 .comm-cols span {
-	font-size: 10.5px;
-	letter-spacing: 0.12em;
+	font-size: var(--text-xs);
+	letter-spacing: var(--label-track);
 	text-transform: uppercase;
 	color: var(--muted);
 	font-weight: 700;
