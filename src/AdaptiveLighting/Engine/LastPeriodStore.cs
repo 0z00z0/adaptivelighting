@@ -14,13 +14,17 @@ namespace AdaptiveLighting.Engine;
 public interface ILastPeriodStore
 {
 	/// <summary>
-	///     The period name the previous run recorded, or <c>null</c> when there is none to be had. A first run, a
+	///     The period the previous run recorded, or <c>null</c> when there is none to be had. A first run, a
 	///     deleted file and a corrupt one all answer <c>null</c>; telling them apart is the log's job.
 	/// </summary>
+	/// <remarks>
+	///     A <see cref="Configuration.TimePeriodConfig.Id"/> since ids existed, and a name in a file written before
+	///     that. <see cref="ModeMonitor"/> translates the older shape; nothing here knows the period table.
+	/// </remarks>
 	string? Load();
 
-	/// <summary>Records the period now current. Reports failure; never throws.</summary>
-	bool TrySave(string periodName);
+	/// <summary>Records the period now current, by key. Reports failure; never throws.</summary>
+	bool TrySave(string periodKey);
 }
 
 /// <summary>The file's contents: the period name, and enough context for whoever opens it.</summary>
@@ -51,11 +55,11 @@ public sealed class LastPeriodDocument
 	[JsonPropertyName("savedAt")]
 	public DateTimeOffset SavedAt { get; set; }
 
-	/// <summary>The period's name, not the moment its boundary fell.</summary>
+	/// <summary>The period's key, not the moment its boundary fell.</summary>
 	/// <remarks>
 	///     A sun-anchored <c>Start</c> resolves to a different time every day, so a stored timestamp would have to
 	///     be re-read against a table that has moved. A box coming back from an outage may also have an
-	///     uncorrected clock. Comparing two names touches neither.
+	///     uncorrected clock. Comparing two keys touches neither. A file from before ids holds a period name here.
 	/// </remarks>
 	[JsonPropertyName("period")]
 	public string? Period { get; set; }
@@ -148,11 +152,11 @@ public sealed class LastPeriodStore : ILastPeriodStore
 	}
 
 	/// <inheritdoc/>
-	public bool TrySave(string periodName)
+	public bool TrySave(string periodKey)
 	{
-		ArgumentException.ThrowIfNullOrWhiteSpace(periodName);
+		ArgumentException.ThrowIfNullOrWhiteSpace(periodKey);
 
-		LastPeriodDocument document = new() { SavedAt = DateTimeOffset.UtcNow, Period = periodName.Trim() };
+		LastPeriodDocument document = new() { SavedAt = DateTimeOffset.UtcNow, Period = periodKey.Trim() };
 
 		lock (_gate)
 		{

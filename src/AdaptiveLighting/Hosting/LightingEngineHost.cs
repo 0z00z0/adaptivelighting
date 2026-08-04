@@ -209,7 +209,7 @@ public sealed class LightingEngineHost : IDisposable
 
 			AdaptiveLightingConfig config = read.Config;
 
-			if (read.UsedLegacyKeys)
+			if (read.NeedsMigratingWrite)
 				RewriteInCurrentSchema(config);
 
 			ScheduleAreaDiscoveryIfNeeded(config);
@@ -218,14 +218,13 @@ public sealed class LightingEngineHost : IDisposable
 		}
 	}
 
-	/// <summary>
-	///     Writes a document that loaded through the pre-2.0 key names straight back out in the current schema.
-	/// </summary>
+	/// <summary>Writes a document that loaded through a superseded schema straight back out in the current one.</summary>
 	/// <remarks>
 	///     On first load, before the engine is built, so a house that never opens the web UI does not depend on the
-	///     translation table for ever. The write goes through <see cref="LightingConfigStore.Save"/>, so the
-	///     pre-migration file survives at <see cref="LightingConfigStore.BackupPath"/>. A failed write only warns:
-	///     the in-memory document is the same either way.
+	///     translation tables for ever. The write goes through <see cref="LightingConfigStore.Save"/>, so the
+	///     pre-migration file survives at <see cref="LightingConfigStore.BackupPath"/>. Once, because the store keeps
+	///     one backup slot: <see cref="DocumentReadResult.NeedsMigratingWrite"/> is false the moment the file carries
+	///     what the migration was there to add. A failed write only warns: the in-memory document is the same either way.
 	/// </remarks>
 	private void RewriteInCurrentSchema(AdaptiveLightingConfig config)
 	{
@@ -234,7 +233,7 @@ public sealed class LightingEngineHost : IDisposable
 			_store.Save(config);
 
 			_logger.LogInformation(
-				"The configuration file used the pre-2.0 key names and has been rewritten in the current schema. "
+				"The configuration file was written against an older schema and has been rewritten in the current one. "
 				+ "The file as it was is at {Backup}.",
 				_store.BackupPath);
 		}
@@ -242,7 +241,7 @@ public sealed class LightingEngineHost : IDisposable
 		{
 			_logger.LogWarning(
 				exception,
-				"Could not rewrite {Path} in the current schema. The engine is running on it either way; the old key names will be translated again on the next start.",
+				"Could not rewrite {Path} in the current schema. The engine is running on it either way; the migration will be run again on the next start.",
 				_store.FilePath);
 		}
 	}

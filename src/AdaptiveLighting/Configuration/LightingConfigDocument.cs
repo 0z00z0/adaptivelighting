@@ -9,11 +9,21 @@ namespace AdaptiveLighting.Configuration;
 ///     out of the pre-2.0 schema to produce it.
 /// </summary>
 /// <param name="Config">The bound document. Never <c>null</c>.</param>
-/// <param name="UsedLegacyKeys">
-///     Whether any pre-2.0 key was renamed. Not a diagnostic: it triggers the migrating write in
-///     <see cref="Hosting.LightingEngineHost.Reload"/>.
+/// <param name="UsedLegacyKeys">Whether any superseded key name was renamed on the way in.</param>
+/// <param name="MintedStableKeys">
+///     Whether <see cref="StableKeyMigration"/> had to fill in an id or repoint a reference.
 /// </param>
-public sealed record DocumentReadResult(AdaptiveLightingConfig Config, bool UsedLegacyKeys);
+public sealed record DocumentReadResult(
+	AdaptiveLightingConfig Config,
+	bool UsedLegacyKeys,
+	bool MintedStableKeys = false)
+{
+	/// <summary>
+	///     Whether the file on disk is behind the schema, so <see cref="Hosting.LightingEngineHost.Reload"/> writes
+	///     it back once. Not a diagnostic.
+	/// </summary>
+	public bool NeedsMigratingWrite => UsedLegacyKeys || MintedStableKeys;
+}
 
 /// <summary>
 ///     Raised when an <c>AdaptiveLighting.yaml</c> document cannot be read or written. The message is written
@@ -51,15 +61,21 @@ public static class LightingConfigDocument
 	/// </summary>
 	public const string RootKey = "AdaptiveLighting.Configuration.AdaptiveLightingConfig";
 
-	/// <summary>The pre-2.0 key names, mapped to what the schema calls them now.</summary>
+	/// <summary>The superseded key names, mapped to what the schema calls them now.</summary>
 	/// <remarks>
 	///     Deleting this is silent data loss. <see cref="Deserialize"/> binds with <c>IgnoreUnmatchedProperties</c>,
 	///     so a document still saying <c>Zones:</c> would load as zero areas with no error and nothing in the log.
+	///     The five below carried a period or house-mode-option name and now carry an id; the rename only moves the
+	///     value across, and <see cref="StableKeyMigration"/> is what turns the name into the id.
 	/// </remarks>
 	private static readonly Dictionary<string, string> LegacyKeys = new(StringComparer.OrdinalIgnoreCase)
 	{
 		["Zones"] = nameof(AdaptiveLightingConfig.Areas),
-		["ZonesAutoDiscovered"] = nameof(GlobalConfig.AreasAutoDiscovered)
+		["ZonesAutoDiscovered"] = nameof(GlobalConfig.AreasAutoDiscovered),
+		["Period"] = nameof(RoomLevelOverride.PeriodId),
+		["SetsMode"] = nameof(TimePeriodConfig.SetsModeId),
+		["ClampPeriod"] = nameof(HouseModeOptionConfig.ClampPeriodId),
+		["ResetOnPeriodStart"] = nameof(HouseModeOptionConfig.ResetOnPeriodStartId)
 	};
 
 	/// <summary>Values a retired setting used to take, and what each becomes.</summary>
@@ -182,7 +198,17 @@ public static class LightingConfigDocument
 
 		RepairStructuralNulls(config, logger);
 
-		return new DocumentReadResult(config, usedLegacyKeys);
+		// After the repair, so the migration walks lists it can rely on. The load path does not otherwise rewrite a
+		// hand-edited file; this is the Zones: case again, and for the same reason: without it every reference that
+		// used to resolve by name resolves to nothing, silently.
+		bool mintedStableKeys = StableKeyMigration.Apply(config);
+
+		if (mintedStableKeys)
+			logger?.LogInformation(
+				"The configuration document referred to periods and house modes by name. Each has been given an id "
+				+ "and every reference repointed at it, so renaming one no longer breaks what pointed at it.");
+
+		return new DocumentReadResult(config, usedLegacyKeys, mintedStableKeys);
 	}
 
 	/// <summary>

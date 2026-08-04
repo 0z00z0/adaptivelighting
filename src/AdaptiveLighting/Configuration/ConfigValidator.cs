@@ -48,6 +48,16 @@ public static class ConfigValidator
 		return result;
 	}
 
+	/// <summary>The period a reference names, or <c>null</c> when nothing does.</summary>
+	private static TimePeriodConfig? PeriodWithKey(IReadOnlyList<TimePeriodConfig> periods, string? key) =>
+		key is { Length: > 0 }
+			? periods.FirstOrDefault(period => string.Equals(period.Key, key.Trim(), StringComparison.OrdinalIgnoreCase))
+			: null;
+
+	/// <summary>A period reference as a sentence should name it: its display name, or the raw id when it resolves to nothing.</summary>
+	private static string PeriodLabel(IReadOnlyList<TimePeriodConfig> periods, string? key) =>
+		PeriodWithKey(periods, key)?.Name is { Length: > 0 } name ? name : key?.Trim() ?? "";
+
 	/// <summary>The <c>input_select</c> tied to the period table, in whichever direction its authority names.</summary>
 	/// <remarks>
 	///     An unresolvable mapping is an error here where the same shape is a warning on a room's levels: under
@@ -108,10 +118,10 @@ public static class ConfigValidator
 			if (!seen.Add(option.Value.Trim()))
 				result.AddError($"Duplicate PeriodSelect option value '{option.Value.Trim()}'.");
 
-			if (string.IsNullOrWhiteSpace(option.Period))
-				result.AddError($"PeriodSelect option '{option.Value.Trim()}' names no Period, so selecting it would mean nothing.");
-			else if (!config.Periods.Any(period => string.Equals(period.Name, option.Period.Trim(), StringComparison.OrdinalIgnoreCase)))
-				result.AddError($"PeriodSelect option '{option.Value.Trim()}' maps to period '{option.Period.Trim()}', which matches no configured period.");
+			if (string.IsNullOrWhiteSpace(option.PeriodId))
+				result.AddError($"PeriodSelect option '{option.Value.Trim()}' names no period, so selecting it would mean nothing.");
+			else if (PeriodWithKey(config.Periods, option.PeriodId) is null)
+				result.AddError($"PeriodSelect option '{option.Value.Trim()}' maps to period '{option.PeriodId.Trim()}', which matches no configured period.");
 		}
 
 		// Authority is Home Assistant's with nothing to decide with. The engine falls back to its own schedule for
@@ -267,13 +277,16 @@ public static class ConfigValidator
 			return;
 		}
 
-		IEnumerable<string> duplicateNames = periods
-			.GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+		// Names are free to repeat: nothing resolves by one any more. Two rows answering to one key are not, or the
+		// first would silently take every reference to the second.
+		IEnumerable<string> duplicateKeys = periods
+			.Where(p => p.Key is { Length: > 0 })
+			.GroupBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
 			.Where(g => g.Count() > 1)
 			.Select(g => g.Key);
 
-		foreach (string? name in duplicateNames)
-			result.AddError($"Duplicate period name '{name}'.");
+		foreach (string key in duplicateKeys)
+			result.AddError($"Two periods share the id '{key}'. Give one of them an Id of its own, or delete it and add it again.");
 
 		Dictionary<TimeOnly, string> fixedStarts = new();
 
@@ -364,19 +377,19 @@ public static class ConfigValidator
 		HouseModeConfig? houseMode = config.Global.HouseMode;
 		List<TimePeriodConfig> periods = config.Periods;
 
-		foreach (TimePeriodConfig? period in periods.Where(p => p.SetsMode is { Length: > 0 }))
+		foreach (TimePeriodConfig? period in periods.Where(p => p.SetsModeId is { Length: > 0 }))
 		{
-			string setsMode = period.SetsMode!;
-			HouseModeOptionConfig? option = houseMode?.OptionFor(setsMode);
+			string setsMode = period.SetsModeId!;
+			HouseModeOptionConfig? option = houseMode?.OptionWithKey(setsMode);
 
-			// A live option the owner has not tagged yet is still legitimate. Erroring on it would deadlock the save,
-			// because tagging that option is itself a save.
+			// A live option the owner has not tagged yet is still legitimate, and has no id to be named by, so the
+			// raw value is still matched. Erroring on it would deadlock the save, because tagging it is itself a save.
 			bool isLiveOption = liveSelectOptions?.Any(live => string.Equals(live.Trim(), setsMode.Trim(), StringComparison.OrdinalIgnoreCase)) ?? false;
 
 			if (option is null && !isLiveOption)
-				result.AddError($"Period '{period.Name}' has SetsMode '{setsMode}', which matches no house-mode option — neither a configured one nor a live option of the select.");
+				result.AddError($"Period '{period.Name}' switches the house mode to '{setsMode}', which matches no house-mode option — neither a configured one nor a live option of the select.");
 			else if (option?.Kind == ModeKind.Normal)
-				result.AddWarning($"Period '{period.Name}' SetsMode '{setsMode}', which is a Normal option — the period would schedule a reset to the baseline.");
+				result.AddWarning($"Period '{period.Name}' switches the house mode to '{option.Value}', which is a Normal option — the period would schedule a reset to the baseline.");
 		}
 
 		ValidateSleepPath(config, houseMode, result);
@@ -437,13 +450,13 @@ public static class ConfigValidator
 		}
 
 		List<string> setsMode = [.. config.Periods
-			.Where(period => period.SetsMode is { Length: > 0 })
+			.Where(period => period.SetsModeId is { Length: > 0 })
 			.Select(period => $"'{period.Name}'")];
 
 		if (setsMode.Count > 0)
 			result.AddWarning(
-				$"HouseMode.Authority is HomeAssistant, so the SetsMode on period(s) {string.Join(", ", setsMode)} is "
-				+ "dormant: the engine reads the select and never writes it. Clear SetsMode, or set Authority back to "
+				$"HouseMode.Authority is HomeAssistant, so the mode switch on period(s) {string.Join(", ", setsMode)} is "
+				+ "dormant: the engine reads the select and never writes it. Clear it, or set Authority back to "
 				+ "AdaptiveLighting.");
 
 		foreach (HouseModeOptionConfig option in houseMode.Options)
@@ -504,13 +517,13 @@ public static class ConfigValidator
 				result.AddError($"HouseMode option '{option.Value}' Scene '{scene}' is not known to Home Assistant.");
 		}
 
-		// ClampPeriod is load-bearing only on Sleep, so a dangling name errors only there.
-		if (option.ClampPeriod is { Length: > 0 } clamp)
+		// ClampPeriodId is load-bearing only on Sleep, so a dangling id errors only there.
+		if (option.ClampPeriodId is { Length: > 0 } clamp)
 		{
 			if (option.Kind != ModeKind.Sleep)
-				result.AddWarning($"HouseMode option '{option.Value}' has a ClampPeriod but its kind is {option.Kind}; it is inert.");
-			else if (!config.Periods.Any(p => string.Equals(p.Name, clamp, StringComparison.OrdinalIgnoreCase)))
-				result.AddError($"HouseMode option '{option.Value}' ClampPeriod '{clamp}' matches no configured period.");
+				result.AddWarning($"HouseMode option '{option.Value}' has a ClampPeriodId but its kind is {option.Kind}; it is inert.");
+			else if (PeriodWithKey(config.Periods, clamp) is null)
+				result.AddError($"HouseMode option '{option.Value}' ClampPeriodId '{clamp.Trim()}' matches no configured period.");
 		}
 
 		// Normal is the reset target, so a trigger on it is inert.
@@ -520,13 +533,13 @@ public static class ConfigValidator
 		if (isAwayOrGuest && !option.HasResetTrigger)
 			result.AddWarning($"HouseMode option '{option.Value}' is {option.Kind} but has no reset trigger; it will stay active until a manual change.");
 
-		if (option.ResetOnPeriodStart is { Length: > 0 } resetPeriod
-			&& !config.Periods.Any(p => string.Equals(p.Name, resetPeriod, StringComparison.OrdinalIgnoreCase)))
+		if (option.ResetOnPeriodStartId is { Length: > 0 } resetPeriod
+			&& PeriodWithKey(config.Periods, resetPeriod) is null)
 		{
 			if (isNormal)
-				result.AddWarning($"HouseMode option '{option.Value}' ResetOnPeriodStart '{resetPeriod}' matches no period, but the option is Normal so it is inert.");
+				result.AddWarning($"HouseMode option '{option.Value}' ResetOnPeriodStartId '{resetPeriod.Trim()}' matches no period, but the option is Normal so it is inert.");
 			else
-				result.AddError($"HouseMode option '{option.Value}' ResetOnPeriodStart '{resetPeriod}' matches no configured period.");
+				result.AddError($"HouseMode option '{option.Value}' ResetOnPeriodStartId '{resetPeriod.Trim()}' matches no configured period.");
 		}
 
 		if (option.ResetPresenceGraceMinutes < 0)
@@ -574,14 +587,10 @@ public static class ConfigValidator
 
 		foreach (HouseModeOptionConfig? option in sleepOptions)
 		{
-			string? clamp = HouseModeConfig.SleepClampPeriodFor(option, config.Periods);
-			bool resolves = clamp is { Length: > 0 }
-				&& config.Periods.Any(p => string.Equals(p.Name, clamp, StringComparison.OrdinalIgnoreCase));
-
-			if (!resolves)
+			if (HouseModeConfig.SleepClampPeriodFor(option, config.Periods) is null)
 				result.AddError(
 					$"Sleep option '{option.Value}' is load-bearing (an area respects sleep) but no clamp period resolves: " +
-					"set its ClampPeriod, have a period SetsMode this option, or add a period named 'night'.");
+					"set its ClampPeriodId, have a period switch to this option, or add a period named 'night'.");
 		}
 	}
 
@@ -631,8 +640,9 @@ public static class ConfigValidator
 
 	/// <summary>What one room runs instead of the schedule (<see cref="AreaConfig.Levels"/>).</summary>
 	/// <remarks>
-	///     A dangling period name warns and the row survives: renaming a period is itself a save, so erroring would
-	///     deadlock the file. A value outside the physical range is an error, checked as the schedule's own is.
+	///     A dangling period id warns and the row survives: it is nearly always a period deleted by hand, and the
+	///     levels are worth more than the tidiness. A value outside the physical range is an error, checked as the
+	///     schedule's own is.
 	/// </remarks>
 	private static void ValidateRoomLevels(List<TimePeriodConfig> periods, AreaConfig area, ValidationResult result)
 	{
@@ -640,9 +650,9 @@ public static class ConfigValidator
 
 		foreach (RoomLevelOverride level in area.Levels ?? [])
 		{
-			ValidateRoomLevelRange(area, level, result);
+			ValidateRoomLevelRange(periods, area, level, result);
 
-			if (level.Period is not { Length: > 0 } name || string.IsNullOrWhiteSpace(name))
+			if (level.PeriodId is not { Length: > 0 } key || string.IsNullOrWhiteSpace(key))
 			{
 				result.AddWarning(
 					$"[{area.DisplayName}] has a levels row naming no period, so it replaces nothing. Name the period "
@@ -657,34 +667,40 @@ public static class ConfigValidator
 				continue;
 
 			// First wins, matching the calculator.
-			if (!seen.Add(name))
+			if (!seen.Add(key.Trim()))
 			{
 				result.AddWarning(
-					$"[{area.DisplayName}] has more than one levels row for period '{name}'; the first one wins and the "
-					+ "rest are ignored. Merge them into one row.");
+					$"[{area.DisplayName}] has more than one levels row for period '{PeriodLabel(periods, key)}'; the "
+					+ "first one wins and the rest are ignored. Merge them into one row.");
 				continue;
 			}
 
-			if (!periods.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
+			if (PeriodWithKey(periods, key) is null)
 			{
 				result.AddWarning(
-					$"[{area.DisplayName}] has levels for period '{name}', which matches no configured period — almost "
-					+ "always a period that has been renamed. The row is kept so the levels are not lost, but it does "
-					+ "nothing until it names a period that exists.");
+					$"[{area.DisplayName}] has levels for period '{key.Trim()}', which matches no configured period — "
+					+ "almost always a period that has been deleted. The row is kept so the levels are not lost, but it "
+					+ "does nothing until it names a period that exists.");
 			}
 		}
 	}
 
 	/// <summary>The physical ranges, checked whether or not the row's period resolves.</summary>
-	private static void ValidateRoomLevelRange(AreaConfig area, RoomLevelOverride level, ValidationResult result)
+	private static void ValidateRoomLevelRange(
+		List<TimePeriodConfig> periods,
+		AreaConfig area,
+		RoomLevelOverride level,
+		ValidationResult result)
 	{
+		string label = PeriodLabel(periods, level.PeriodId);
+
 		if (level.BrightnessPct is { } brightness && brightness is < MinBrightnessPct or > MaxBrightnessPct)
 			result.AddError(
-				$"[{area.DisplayName}] levels for period '{level.Period}' have BrightnessPct {brightness}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
+				$"[{area.DisplayName}] levels for period '{label}' have BrightnessPct {brightness}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
 
 		if (level.ColorTempKelvin is { } kelvin && kelvin is < MinColorTempKelvin or > MaxColorTempKelvin)
 			result.AddError(
-				$"[{area.DisplayName}] levels for period '{level.Period}' have ColorTempKelvin {kelvin}, outside {MinColorTempKelvin}–{MaxColorTempKelvin}.");
+				$"[{area.DisplayName}] levels for period '{label}' have ColorTempKelvin {kelvin}, outside {MinColorTempKelvin}–{MaxColorTempKelvin}.");
 	}
 
 

@@ -27,7 +27,7 @@ public sealed class PeriodSelectReader
 
 		// The single branch on authority. Exactly one delegate is ever assigned, and nothing downstream re-asks.
 		if (config.Authority is PeriodAuthority.HomeAssistant)
-			ReadPeriod = CurrentPeriodName;
+			ReadPeriod = CurrentPeriodId;
 		else
 			OptionForPeriod = config.OptionFor;
 	}
@@ -53,7 +53,7 @@ public sealed class PeriodSelectReader
 	// Non-null on the authority OptionForPeriod is null on. Never both.
 	public Func<string?>? ReadPeriod { get; }
 
-	/// <summary>Maps a period name to the option the select should show, or <c>null</c> when Home Assistant owns it.</summary>
+	/// <summary>Maps a period id to the option the select should show, or <c>null</c> when Home Assistant owns it.</summary>
 	// Non-null on the authority ReadPeriod is null on. Never both.
 	public Func<string, string?>? OptionForPeriod { get; }
 
@@ -63,9 +63,9 @@ public sealed class PeriodSelectReader
 	public string? CurrentValue() => _ha.GetState(Entity).AsUsableState();
 
 	/// <summary>
-	///     The period the select currently names, or <c>null</c> when it names nothing the document maps.
+	///     The period id the select currently names, or <c>null</c> when it names nothing the document maps.
 	/// </summary>
-	public string? CurrentPeriodName()
+	public string? CurrentPeriodId()
 	{
 		if (CurrentValue() is not { } value)
 			return null;

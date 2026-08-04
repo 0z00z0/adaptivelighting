@@ -14,6 +14,10 @@ public static class ConfigNormalizer
 
 		GlobalConfig global = config.Global;
 
+		// Before anything that reads a key: a period or option added since the last save has no id yet, and the
+		// referenced-options scan below and the whole engine resolve by one.
+		StableKeyMigration.Apply(config);
+
 		// Written out as Lux, so a file passes through here on its first save and never says Either again.
 		if (config.Defaults.Darkness is DarknessSource.Either)
 			config.Defaults.Darkness = DarknessSource.Lux;
@@ -21,21 +25,21 @@ public static class ConfigNormalizer
 		foreach (AreaConfig retiring in config.Areas.Where(area => area.Darkness is DarknessSource.Either))
 			retiring.Darkness = DarknessSource.Lux;
 
-		// Drop pure-default option rows, except the designated Normal row and any row a period's SetsMode names.
-		// Dropping a named row would leave that SetsMode pointing at nothing, which the validator rejects: a save
+		// Drop pure-default option rows, except the designated Normal row and any row a period's SetsModeId names.
+		// Dropping a named row would leave that SetsModeId pointing at nothing, which the validator rejects: a save
 		// that unmakes itself.
 		if (global.HouseMode is { } mode)
 		{
 			HouseModeOptionConfig? normal = mode.NormalOption;
 			HashSet<string> referenced = config.Periods
-				.Where(period => period.SetsMode is { Length: > 0 })
-				.Select(period => period.SetsMode!.Trim())
+				.Where(period => period.SetsModeId is { Length: > 0 })
+				.Select(period => period.SetsModeId!.Trim())
 				.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
 			mode.Options.RemoveAll(option =>
 				!ReferenceEquals(option, normal)
 				&& IsPureDefault(option)
-				&& !(option.Value is { Length: > 0 } value && referenced.Contains(value.Trim())));
+				&& !referenced.Contains(option.Key));
 		}
 
 		// Drop an empty HouseMode so a never-adopted document acquires no HouseMode: block.
@@ -91,7 +95,7 @@ public static class ConfigNormalizer
 	private static bool IsPureDefault(HouseModeOptionConfig option) =>
 		option.Kind == ModeKind.Normal
 		&& string.IsNullOrWhiteSpace(option.Scene)
-		&& string.IsNullOrWhiteSpace(option.ClampPeriod)
+		&& string.IsNullOrWhiteSpace(option.ClampPeriodId)
 		&& option.ActivateWhileOn.Count == 0
 		&& option.ActivateAfterNoMotionMinutes is null
 		&& !option.HasResetTrigger;

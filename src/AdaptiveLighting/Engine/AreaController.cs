@@ -858,12 +858,12 @@ public sealed class AreaController : IDisposable
 	private LightTarget ClampToSleepCaps(LightTarget target)
 	{
 		HouseModeOptionConfig? option = _global.HouseMode?.OptionFor(_house.ModeValue);
-		string? sleepPeriodName = option is not null ? HouseModeConfig.SleepClampPeriodFor(option, _periods) : null;
-		LightTarget? sleepPeriod = sleepPeriodName is { Length: > 0 } ? _circadian.GetPeriodTarget(sleepPeriodName) : null;
+		TimePeriodConfig? clampPeriod = option is not null ? HouseModeConfig.SleepClampPeriodFor(option, _periods) : null;
+		LightTarget? sleepPeriod = clampPeriod is not null ? _circadian.GetPeriodTarget(clampPeriod.Key) : null;
 		if (sleepPeriod is null)
 		{
 			_logger.LogWarning("{Area} respects sleep mode but no clamp period resolves ('{Period}'); leaving the target alone.",
-				Name, sleepPeriodName ?? "(none)");
+				Name, clampPeriod?.Name ?? "(none)");
 			return target;
 		}
 
