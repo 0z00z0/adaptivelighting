@@ -266,6 +266,16 @@ A document that says `Zones:` still loads. The old keys are translated as it is 
 written back in the new schema on the first start after the upgrade, with the previous version kept
 beside it. Nothing needs doing by hand.
 
+The same happens to a file whose periods and house-mode options have no `Id`. Each gets one on the
+first start, and everything that pointed at a period or a mode **by name** is repointed at its id:
+`SetsMode` becomes `SetsModeId`, `ClampPeriod` becomes `ClampPeriodId`, `ResetOnPeriodStart` becomes
+`ResetOnPeriodStartId`, and a room's own levels follow. That is what makes renaming a period safe —
+before it, renaming *morning* silently broke every reference to it. A reference naming something that
+does not exist is left exactly as written, so a typo still shows up as the warning it always was.
+
+Two things do not become ids. `Value` on a house-mode option stays the text your `input_select`
+reports, because that is how the two are matched. And `Global.HouseMode.Entity` is still an entity id.
+
 What does not migrate is your own Home Assistant automations: the published event is
 `adaptive_lighting_area` with an `area` field, and nothing publishes the old `laget_lighting_zone`
 any more.

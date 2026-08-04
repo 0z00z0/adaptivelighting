@@ -141,14 +141,44 @@ public sealed class ColorControlTests
 	}
 
 	[TestMethod]
-	public void A_Light_Reporting_No_Colour_At_All_Cannot_Have_Drifted_From_One()
+	public void A_Light_Offering_A_Colour_Channel_And_Reporting_None_Is_Commanded()
 	{
 		FakeHaContext ha = new();
 		ha.SetState(Light, "on", new() { ["brightness"] = 178.5, [SupportedColorModes] = new[] { "rgb" } });
 
 		Actuator(ha).Apply(Light, new LightCommand(true, 70, null, 15, EqualChannels: true));
 
-		Assert.AreEqual(0, ha.Calls.Count, "a light that reports no colour must not be re-commanded on every tick");
+		Assert.AreEqual(1, ha.Calls.Count, "silence from a fixture that has the channel means it is not using it");
+	}
+
+	[TestMethod]
+	public void A_Light_Sitting_In_Colour_Temp_Mode_Is_Moved_To_Equal_Channels()
+	{
+		// The case three reviews found: HA publishes rgbww_color only while the fixture is in that mode, so an
+		// equal-channels room whose lamp is holding a kelvin read as already-correct and was never commanded.
+		FakeHaContext ha = new();
+		ha.SetState(Light, "on", new()
+		{
+			["brightness"] = 178.5,
+			[SupportedColorModes] = new[] { "color_temp", "rgbww" },
+			["color_mode"] = "color_temp",
+			["color_temp_kelvin"] = 2700
+		});
+
+		Actuator(ha).Apply(Light, new LightCommand(true, 70, null, 15, EqualChannels: true));
+
+		CollectionAssert.AreEqual(new[] { 255, 255, 255, 255, 255 }, (int[])DataOf(ha.Calls.Single())["rgbww_color"]);
+	}
+
+	[TestMethod]
+	public void A_Light_With_No_Colour_Channel_At_All_Is_Left_Alone()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Light, "on", new() { ["brightness"] = 178.5, [SupportedColorModes] = new[] { "brightness" } });
+
+		Actuator(ha).Apply(Light, new LightCommand(true, 70, null, 15, EqualChannels: true));
+
+		Assert.AreEqual(0, ha.Calls.Count, "a plain dimmer must not be re-commanded on every tick");
 	}
 
 	// ===================== Auto, read off the fixtures =====================

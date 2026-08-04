@@ -103,6 +103,13 @@ public sealed class HaLightActuator : ILightActuator
 		return modes.Contains(RgbwMode, StringComparer.OrdinalIgnoreCase) ? RgbwColorKey : RgbColorKey;
 	}
 
+	private static bool OffersAColourChannel(EntityState state)
+	{
+		IReadOnlyList<string> modes = state.AttrStringList(SupportedColorModesAttribute);
+
+		return AreaEntityResolver.ColourChannelModes.Any(mode => modes.Contains(mode, StringComparer.OrdinalIgnoreCase));
+	}
+
 	private static int[] EqualChannels(string channelKey) =>
 		[.. Enumerable.Repeat(EqualChannelValue, ChannelCountOf(channelKey))];
 
@@ -139,11 +146,20 @@ public sealed class HaLightActuator : ILightActuator
 
 		if (channelKey is not null)
 		{
-			// Same reading as the colour temperature above: an unreported colour cannot have drifted.
 			IReadOnlyList<double> channels = ChannelsOf(state, channelKey);
 
-			if (channels.Count > 0 && channels.Any(channel => Math.Abs(channel - EqualChannelValue) > 0.5))
+			if (channels.Count > 0)
+			{
+				if (channels.Any(channel => Math.Abs(channel - EqualChannelValue) > 0.5))
+					return false;
+			}
+			// HA publishes rgbw_color / rgbww_color only while the fixture is in that colour mode, so a fixture
+			// that offers one and reports none is sitting in some other mode and has to be commanded. Silence
+			// from a fixture with no colour at all is not evidence, and stays a match.
+			else if (OffersAColourChannel(state))
+			{
 				return false;
+			}
 		}
 
 		return true;

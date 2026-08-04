@@ -511,6 +511,24 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual(string.Empty, house.SunEntity, "the house has no null to fall back to, so none is written as empty");
 	}
 
+	// Keyed on the property, not on DarknessSource: the House tab used to parse every choice as a darkness rule, so
+	// picking a warmth there wrote nothing and picking a darkness word under the warmth setting wrote the wrong one.
+	[TestMethod]
+	public void The_House_Writes_Each_Choice_To_Its_Own_Setting()
+	{
+		AreaSettings house = House;
+
+		RoomSettings.SetChoice(house, nameof(AreaSettings.ColorControl), nameof(ColorControl.EqualChannels));
+		RoomSettings.SetChoice(house, nameof(AreaSettings.Darkness), nameof(DarknessSource.Sun));
+
+		Assert.AreEqual(ColorControl.EqualChannels, house.ColorControl);
+		Assert.AreEqual(DarknessSource.Sun, house.Darkness);
+
+		RoomSettings.SetChoice(house, nameof(AreaSettings.ColorControl), nameof(DarknessSource.Always));
+
+		Assert.AreEqual(ColorControl.EqualChannels, house.ColorControl, "a token from another setting's list is refused, not written");
+	}
+
 	[TestMethod]
 	public void A_Sentence_Edit_Applies_To_The_House_As_It_Does_To_A_Room()
 	{

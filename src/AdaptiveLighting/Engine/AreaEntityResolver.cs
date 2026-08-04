@@ -77,7 +77,8 @@ public sealed class AreaEntityResolver
 	private const string ColorTempMode = "color_temp";
 
 	// The modes that give equal channels somewhere to land. Nothing else counts as evidence against kelvin.
-	private static readonly string[] ColourChannelModes = ["rgb", "rgbw", "rgbww", "hs", "xy"];
+	// Internal: HaLightActuator reads the same list to tell "not in colour mode" from "has no colour".
+	internal static readonly string[] ColourChannelModes = ["rgb", "rgbw", "rgbww", "hs", "xy"];
 	private const string UnavailableState = "unavailable";
 	private const string UnknownState = "unknown";
 
