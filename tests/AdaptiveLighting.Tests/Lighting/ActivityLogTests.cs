@@ -905,6 +905,47 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(ActivityCategory.Background, ActivityView.Categorise(measured));
 	}
 
+	/// <summary>
+	///     The mode a rebuild reads off the select reaches every adopted room. Reported as a mode change it put one
+	///     "Mode changed to Sover" in the timeline per save, with nothing behind it and no mode having moved.
+	/// </summary>
+	[TestMethod]
+	public void Two_Rebuilds_With_The_House_Asleep_Leave_No_Rows_At_All()
+	{
+		AreaSnapshot first = Report(
+			"Stue", AreaState.AutoActive, TransitionReason.Startup,
+			at: Noon, houseModeValue: "Sover", brightness: 15);
+
+		AreaSnapshot second = first with { Timestamp = Noon.AddMinutes(2) };
+
+		Assert.AreEqual(0, ActivityView.Shown([Entry(2, second), Entry(1, first)]).Count);
+		Assert.AreEqual(ActivityCategory.Background, ActivityView.Categorise(first));
+		Assert.IsFalse(ActivityView.IsAboutTheHouse(first), "start-up says what each room was found in");
+	}
+
+	/// <summary>
+	///     The one start-up state where the engine did act: an away-kind mode standing when it came up sweeps the
+	///     room, so the headline must not claim it left the lights alone.
+	/// </summary>
+	[TestMethod]
+	public void A_Room_Swept_At_Start_Up_Says_The_House_Was_Already_Away()
+	{
+		AreaSnapshot swept = Report(
+			"Stue", AreaState.Away, TransitionReason.Startup,
+			mode: HouseMode.Away, houseModeValue: "Borte", isAnyoneHome: true, forced: ForcedAway());
+
+		ActivityLine line = ActivityView.Describe(swept);
+
+		Assert.AreEqual("Started up — the house was already away", line.What);
+		Assert.AreEqual("Away mode is forced while input_boolean.occupancy is on.", line.Why,
+			"what is forcing the mode still has to reach the row");
+
+		Assert.IsTrue(ActivityView.IsWorthShowing(swept));
+	}
+
+	private static ForcedMode ForcedAway() =>
+		new(ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, "input_boolean.occupancy", "on");
+
 	/// <summary>A row with no second line is the ordinary shape of most events; only start-up is ever sifted out.</summary>
 	[TestMethod]
 	public void Only_Start_Up_Rows_Are_Ever_Dropped()

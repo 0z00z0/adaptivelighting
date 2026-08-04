@@ -624,7 +624,11 @@ public static class ActivityView
 	/// <summary>The event itself, from the engine's own reason for publishing.</summary>
 	private static string Headline(AreaSnapshot snapshot) => snapshot.Reason switch
 	{
-		TransitionReason.Startup => "Started up — took the room as it was",
+		// The away branch is the mode the engine found at start-up, never a mode that moved: the room was swept
+		// because the house was already away, and "took the room as it was" would deny the sweep.
+		TransitionReason.Startup => snapshot.State == AreaState.Away
+			? "Started up — the house was already away"
+			: "Started up — took the room as it was",
 		TransitionReason.AdoptedAtStartup => "Started up — these lights were already on",
 		TransitionReason.Motion => snapshot.State switch
 		{

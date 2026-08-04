@@ -72,6 +72,10 @@ public sealed class AreaController : IDisposable
 	// engine aiming the room itself, which the scene no longer describes.
 	private string? _standingScene;
 
+	// Armed by Start, because the orchestrator publishes the opening house state straight afterwards. The mode it
+	// carries was read, not changed, and every rebuild would otherwise report a mode change nobody made.
+	private bool _openingHouseState;
+
 	private bool _disposed;
 
 	/// <summary>Creates a controller for one resolved area.</summary>
@@ -163,6 +167,9 @@ public sealed class AreaController : IDisposable
 			// What cannot be known yet, the last command and last motion, stays null instead of being guessed.
 			RefreshDarkness();
 			Publish(AdoptIfLit() ? TransitionReason.AdoptedAtStartup : TransitionReason.Startup);
+
+			// After the subscription above, so the seed the stream is created on cannot spend it.
+			_openingHouseState = true;
 		}
 	}
 
@@ -323,6 +330,9 @@ public sealed class AreaController : IDisposable
 			HouseState previous = _house;
 			_house = house;
 
+			bool opening = _openingHouseState;
+			_openingHouseState = false;
+
 			if (!IsEngineAllowed())
 			{
 				if (_state != AreaState.Disabled)
@@ -350,7 +360,7 @@ public sealed class AreaController : IDisposable
 			if (house.Mode == HouseMode.Away)
 			{
 				if (_state != AreaState.Away)
-					GoAway();
+					GoAway(opening);
 
 				return;
 			}
@@ -389,7 +399,7 @@ public sealed class AreaController : IDisposable
 				&& _standingScene is null
 				&& (previous.ActiveKind != house.ActiveKind
 					|| !string.Equals(previous.ModeValue, house.ModeValue, StringComparison.OrdinalIgnoreCase)))
-				ApplyTarget(TransitionReason.HouseModeChanged);
+				ApplyTarget(ModeReason(opening));
 		}
 	}
 
@@ -557,12 +567,19 @@ public sealed class AreaController : IDisposable
 	///     in, and that is the state a reader has to be able to see.
 	///     <see cref="AdaptiveLighting.Abstractions.AreaSnapshot.Forced"/> then names which route put it there.
 	/// </remarks>
-	private TransitionReason AwayReason() =>
-		_house.ActiveKind == ModeKind.Away ? TransitionReason.HouseModeChanged : TransitionReason.EveryoneLeft;
+	private TransitionReason AwayReason(bool opening) =>
+		_house.ActiveKind == ModeKind.Away ? ModeReason(opening) : TransitionReason.EveryoneLeft;
 
-	private void GoAway()
+	/// <summary>
+	///     The reason for a report the house mode caused: a change, unless this is the mode the area found when it
+	///     started.
+	/// </summary>
+	private static TransitionReason ModeReason(bool opening) =>
+		opening ? TransitionReason.Startup : TransitionReason.HouseModeChanged;
+
+	private void GoAway(bool opening)
 	{
-		TransitionReason reason = AwayReason();
+		TransitionReason reason = AwayReason(opening);
 
 		CancelAllTimers();
 		Enter(AreaState.Away, reason);
@@ -774,7 +791,8 @@ public sealed class AreaController : IDisposable
 				return true;
 
 			case AreaState.Away:
-				TurnOff(AwayReason());
+				// From the tick, so never the opening state however long the hold has been refusing the off.
+				TurnOff(AwayReason(opening: false));
 				return true;
 
 			case AreaState.AutoVacant:

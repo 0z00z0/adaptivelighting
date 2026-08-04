@@ -169,7 +169,7 @@ public sealed class LightingOrchestrator : IDisposable
 		foreach (AreaController area in _areas)
 			area.Start();
 
-		PublishHouseState();
+		PublishHouseState(opening: true);
 		ReportFailures(failures);
 	}
 
@@ -293,7 +293,14 @@ public sealed class LightingOrchestrator : IDisposable
 		_modes.Start();
 	}
 
-	private void PublishHouseState()
+	/// <summary>
+	///     Composes the house-wide state and hands it to the areas, unless it says the same as the standing one.
+	/// </summary>
+	/// <param name="opening">
+	///     Whether this is the opening publication, which goes out even when it matches the seed the stream was
+	///     created on: each area is waiting for it to know which mode it merely found rather than saw change.
+	/// </param>
+	private void PublishHouseState(bool opening = false)
 	{
 		HouseState previous = _house.Value;
 		HouseState state = new(
@@ -306,7 +313,7 @@ public sealed class LightingOrchestrator : IDisposable
 			Forced = _modes?.Forced
 		};
 
-		if (state == previous)
+		if (state == previous && !opening)
 			return;
 
 		// Applied once on entry, never re-asserted. The areas pause themselves; this only fires the scene.

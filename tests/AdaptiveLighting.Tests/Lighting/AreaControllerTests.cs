@@ -64,7 +64,8 @@ public sealed class AreaControllerTests
 		IReadOnlyList<string>? ignoreWhenOn = null,
 		Action<FakeHaContext>? seed = null,
 		IReadOnlyList<TimePeriodConfig>? periods = null,
-		IReadOnlyList<RoomLevelOverride>? levels = null)
+		IReadOnlyList<RoomLevelOverride>? levels = null,
+		bool openHouse = true)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -108,6 +109,12 @@ public sealed class AreaControllerTests
 			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area");
 
 		controller.Start();
+
+		// The orchestrator publishes the opening house state straight after starting the areas. Without it every
+		// test's first push would be the state the area came in on, not a change.
+		if (openHouse)
+			house.OnNext(House());
+
 		return new Fixture(scheduler, ha, actuator, publisher, house, controller);
 	}
 
@@ -1600,6 +1607,55 @@ public sealed class AreaControllerTests
 		Assert.AreNotEqual(TransitionReason.FirstPersonArrived, report.Reason,
 			"claiming an arrival nobody made is the same invented cause in the other direction");
 		Assert.AreEqual(TransitionReason.HouseModeChanged, report.Reason);
+	}
+
+	// ---- the mode an area found when it started is not a mode change ---------------------------
+	//
+	// Every settings save rebuilds every area controller, so the opening house state reached the record as one
+	// "Mode changed to Sover" per save while the select had not moved all day.
+
+	/// <summary>A lit room, so the area adopts and is in the one state the opening mode retargets.</summary>
+	private static Fixture BuildLitAndUnopened() =>
+		Build(
+			tweakGlobal: g => g.HouseMode = SoverMode(),
+			seed: ha => ha.SetState(Light, "on", new() { ["brightness"] = 178.5 }),
+			openHouse: false);
+
+	[TestMethod]
+	public void TheModeFoundAtStartUp_IsReportedAsStartUp_NotAsAModeChange()
+	{
+		Fixture t = BuildLitAndUnopened();
+
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
+
+		Assert.AreEqual(TransitionReason.Startup, LastReport(t).Reason,
+			"the select never moved; the engine started and read it");
+	}
+
+	[TestMethod]
+	public void AModeChangeAfterStartUp_IsStillAModeChange()
+	{
+		Fixture t = BuildLitAndUnopened();
+		t.House.OnNext(House(modeValue: "Normal"));
+
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
+
+		Assert.AreEqual(TransitionReason.HouseModeChanged, LastReport(t).Reason);
+	}
+
+	[TestMethod]
+	public void AnAwayModeFoundAtStartUp_StillSweepsTheRoom_AndStillNamesWhatIsForcingIt()
+	{
+		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode(), openHouse: false);
+
+		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
+
+		AreaSnapshot report = LastReport(t);
+
+		Assert.AreEqual(AreaState.Away, report.State, "the sweep was never the part that was wrong");
+		Assert.AreEqual(TransitionReason.Startup, report.Reason);
+		Assert.AreEqual("input_boolean.occupancy", report.Forced?.EntityId,
+			"a mode forced at start-up must still be able to say what is holding it");
 	}
 
 	[TestMethod]
