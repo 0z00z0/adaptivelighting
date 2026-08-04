@@ -301,6 +301,14 @@ under one version, because they are compiled against each other.
 - **A click inside an (i) panel no longer ticks the checkbox behind it.** The panel sat inside the
   `<label>`, and a click on any descendant of a label is forwarded to the first labelable element in
   it. The label now wraps the box and its own words, and the (i) is its sibling.
+- **A lamp holding a colour temperature is now moved to equal channels.** Home Assistant publishes
+  `rgbw_color` / `rgbww_color` only while the fixture is *in* that colour mode, so an equal-channels
+  room whose lamp sat in colour-temp mode was read as already-correct and never commanded. A fixture
+  that offers a colour channel and reports none is not using it; one that offers no colour at all is
+  still left alone, so a plain dimmer is not re-commanded every tick.
+- **The warmth buttons on the House tab write something.** Every choice on that tab was parsed as a
+  darkness rule, so picking *How warmth reaches these lights* there silently did nothing. Each choice
+  is now parsed against its own setting's type. Per-room warmth was never affected.
 
 ## [2.0.0]
 

@@ -615,6 +615,20 @@ public static class RoomSettings
 		HouseProperties[key].SetValue(house, value);
 	}
 
+	/// <summary>Sets an enum-valued setting from the token a choice button carries.</summary>
+	// Parsed against the property's own type, not a named enum: keyed on DarknessSource is how the House tab
+	// came to write a darkness rule when somebody picked a warmth, and to do nothing at all when the token
+	// was not a darkness word.
+	public static void SetChoice(AreaSettings house, string key, string value)
+	{
+		ArgumentNullException.ThrowIfNull(house);
+
+		PropertyInfo property = HouseProperties[key];
+
+		if (Enum.TryParse(property.PropertyType, value, out object? parsed))
+			property.SetValue(house, parsed);
+	}
+
 	/// <summary>
 	///     An empty pick is stored as an empty string, not <c>null</c>: the house's properties are not nullable,
 	///     and empty is what the engine reads as "nothing chosen".

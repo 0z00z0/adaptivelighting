@@ -11,28 +11,18 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
 
 ---
 
-## In flight
+## Next up
 
-- **Stable ids for periods and modes** — `refactor/stable-keys`. A period's user-typed `Name` is the key every
-  reference uses, so renaming silently breaks whatever pointed at it. Moves `RoomLevelOverride.Period`,
-  `ClampPeriod`, `ResetOnPeriodStart`, `PeriodSelectOptionConfig.Period` and `LastPeriodStore` onto ids.
-  `HouseModeOptionConfig.Value` must stay the match key against Home Assistant's `input_select`. The risky
-  half is a load-path migration that must run exactly once: the store keeps one backup slot, so a second pass
-  would overwrite the only pre-migration copy.
-  - **Copy `b1.yaml` off the box by hand before the deploy that carries this.** The migration rewrites it on
-    load, and one backup slot is not enough if the first migrated load is itself wrong.
-- **House mode page gets the Schedule's mapping table** — blocked on the ids work, because an id changes what
-  a mapping row points at. One row per live helper option with the rename/orphan handling. **The "take its
-  list" adopt button goes away**; if that button is wanted, say so before the page is rebuilt.
+- **Deploy the stable-ids migration to B1, and copy `b1.yaml` off the box by hand first.** The migration
+  rewrites the file on load and the store keeps one backup slot, so a second load would overwrite the only
+  pre-migration copy. Nothing else is waiting on this; it wants its own deploy so a bad first load is
+  isolated.
+- **House mode page gets the Schedule's mapping table.** One row per live helper option with the
+  rename/orphan handling. **The "take its list" adopt button goes away**; if that button is wanted, say so
+  before the page is rebuilt. Unblocked now that the ids have landed.
 
 ## Known defects, found by review and not yet fixed
 
-- **The House tab's warmth buttons do nothing.** `ConfigEditor.SetHouseChoice` ignores its `key` and always
-  parses into `DarknessSource`, so picking a warmth on the House tab silently writes nothing. Per-room warmth
-  works.
-- **`HaLightActuator.AlreadyMatches` reads an absent colour attribute as a match.** Home Assistant only
-  publishes `rgbw_color`/`rgbww_color` while the fixture is in that colour mode, so an equal-channels room
-  sitting in colour-temp mode is judged already-correct and never commanded. Three reviews found it.
 - **`ModeService.ComputePreview` builds a calculator with no hold predicate**, so the settings-page preview
   shows the clock's period for a held-back period while the house is still on the previous one.
 - **`ModeService.GetHouseMode` still promises reset behaviour under Home Assistant mode authority.** The

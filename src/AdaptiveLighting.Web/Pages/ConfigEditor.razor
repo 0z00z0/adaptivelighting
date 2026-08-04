@@ -1691,10 +1691,7 @@ else
 
 	private void SetHouseChoice(string key, string value)
 	{
-		if (!Enum.TryParse(value, out DarknessSource source))
-			return;
-
-		_config.Defaults.Darkness = source;
+		RoomSettings.SetChoice(_config.Defaults, key, value);
 		Revalidate();
 	}
 
