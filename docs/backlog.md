@@ -21,6 +21,11 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
 
 ## Known defects, found by review and not yet fixed
 
+- **A dangling level row has no control to fix it with.** Found on B1 on 2026-08-04: four rows named periods
+  that house has never had, and the room page renders nothing for a row whose period does not resolve — the
+  only way to clear them was to hand-edit the document and restart. The validator says the row is wrong; the
+  UI cannot act on what it says. Worth an orphaned row in the levels table with a remove button, the way the
+  house-mode and period-select mappings already handle an option that has gone.
 - **`ModeService.ComputePreview` builds a calculator with no hold predicate**, so the settings-page preview
   shows the clock's period for a held-back period while the house is still on the previous one.
 - **`ModeService.GetHouseMode` still promises reset behaviour under Home Assistant mode authority.** The
@@ -57,11 +62,6 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
 
 ## House-specific
 
-- **Four dangling level rows on B1**, measured 2026-08-04 after the migration: `lab` names periods `morning`,
-  `evening` and `night`, and `lab_t` names `night`. This house's periods are `Tidlig morgen`, `Morgen`, `Dag`,
-  `Ettermiddag`, `Kveld`, `Natt` — those four names have never existed here, so the rows have always done
-  nothing. `lab` is disabled, so only `lab_t`'s `night: 30 %` is live. Decide whether it meant `Natt`, then
-  fix it on the room page; the rest can go.
 - **Eight B1 rooms have a lux sensor that is not reporting** — `bad`, `soverom-gang`, `kjeller_multimedia`,
   `kjokken` (both of its two), `kontor`, `vaskerom`, `trening`, `inngang`. Each warns on every start and each
   counts as dark meanwhile, so movement lights it. Dead batteries or a Zigbee dropout, not a config fault.
