@@ -130,15 +130,34 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void Duplicate_Period_Names_Are_Rejected()
+	public void Two_Periods_May_Share_A_Display_Name()
 	{
 		var config = Minimal();
-		config.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "day", Start = "08:00" }];
+		config.Periods =
+		[
+			new() { Id = "day-a1b2", Name = "day", Start = "07:00" },
+			new() { Id = "day-c3d4", Name = "day", Start = "08:00" }
+		];
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "nothing resolves by a period's name any more");
+	}
+
+	[TestMethod]
+	public void Two_Periods_Sharing_An_Id_Are_Rejected()
+	{
+		var config = Minimal();
+		config.Periods =
+		[
+			new() { Id = "day-a1b2", Name = "morning", Start = "07:00" },
+			new() { Id = "day-a1b2", Name = "afternoon", Start = "08:00" }
+		];
 
 		var result = ConfigValidator.Validate(config);
 
 		Assert.IsFalse(result.IsValid);
-		StringAssert.Contains(result.ToString(), "Duplicate");
+		StringAssert.Contains(result.ToString(), "share the id 'day-a1b2'");
 	}
 
 	[TestMethod]
@@ -634,7 +653,7 @@ public sealed class ConfigValidatorTests
 	public void Levels_Naming_A_Missing_Period_Warn_And_Are_Never_Refused()
 	{
 		var config = Minimal();
-		config.Areas[0].Levels = [new() { Period = "kveld", BrightnessPct = 40 }];
+		config.Areas[0].Levels = [new() { PeriodId = "kveld", BrightnessPct = 40 }];
 
 		var result = ConfigValidator.Validate(config);
 
@@ -652,8 +671,8 @@ public sealed class ConfigValidatorTests
 		var config = Minimal();
 		config.Areas[0].Levels =
 		[
-			new() { Period = "night", BrightnessPct = 8 },
-			new() { Period = "night", BrightnessPct = 60 }
+			new() { PeriodId = "night", BrightnessPct = 8 },
+			new() { PeriodId = "night", BrightnessPct = 60 }
 		];
 
 		var result = ConfigValidator.Validate(config);
@@ -677,8 +696,8 @@ public sealed class ConfigValidatorTests
 		var config = Minimal();
 		config.Areas[0].Levels =
 		[
-			new() { Period = "night" },
-			new() { Period = "night", BrightnessPct = 8 }
+			new() { PeriodId = "night" },
+			new() { PeriodId = "night", BrightnessPct = 8 }
 		];
 
 		var result = ConfigValidator.Validate(config);
@@ -704,7 +723,7 @@ public sealed class ConfigValidatorTests
 	public void A_Rooms_Brightness_Outside_The_Physical_Range_Is_A_Document_Error()
 	{
 		var config = Minimal();
-		config.Areas[0].Levels = [new() { Period = "night", BrightnessPct = 150 }];
+		config.Areas[0].Levels = [new() { PeriodId = "night", BrightnessPct = 150 }];
 
 		var result = ConfigValidator.Validate(config);
 
@@ -716,7 +735,7 @@ public sealed class ConfigValidatorTests
 	public void A_Rooms_Colour_Temperature_Outside_A_Sane_Kelvin_Range_Is_A_Document_Error()
 	{
 		var config = Minimal();
-		config.Areas[0].Levels = [new() { Period = "night", ColorTempKelvin = 42 }];
+		config.Areas[0].Levels = [new() { PeriodId = "night", ColorTempKelvin = 42 }];
 
 		var result = ConfigValidator.Validate(config);
 
@@ -728,7 +747,7 @@ public sealed class ConfigValidatorTests
 	public void A_Rooms_Out_Of_Range_Value_Is_Still_An_Error_When_Its_Period_Has_Been_Renamed()
 	{
 		var config = Minimal();
-		config.Areas[0].Levels = [new() { Period = "kveld", BrightnessPct = 150 }];
+		config.Areas[0].Levels = [new() { PeriodId = "kveld", BrightnessPct = 150 }];
 
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
@@ -790,23 +809,23 @@ public sealed class ConfigValidatorTests
 	public void SetsMode_MustMatchAConfiguredOption_AndRequireASelect()
 	{
 		var unmatched = WithHouseMode();
-		unmatched.Periods.Add(new TimePeriodConfig { Name = "film", SetsMode = "Film", Start = "20:00" });
-		Assert.IsFalse(ConfigValidator.Validate(unmatched).IsValid, "a SetsMode matching no configured option value");
+		unmatched.Periods.Add(new TimePeriodConfig { Name = "film", SetsModeId = "Film", Start = "20:00" });
+		Assert.IsFalse(ConfigValidator.Validate(unmatched).IsValid, "a SetsModeId matching no configured option value");
 
 		var noSelect = Minimal();
-		noSelect.Periods.Add(new TimePeriodConfig { Name = "late", SetsMode = "Sover", Start = "23:00" });
-		Assert.IsFalse(ConfigValidator.Validate(noSelect).IsValid, "a SetsMode while no HouseMode is configured matches nothing");
+		noSelect.Periods.Add(new TimePeriodConfig { Name = "late", SetsModeId = "Sover", Start = "23:00" });
+		Assert.IsFalse(ConfigValidator.Validate(noSelect).IsValid, "a SetsModeId while no HouseMode is configured matches nothing");
 	}
 
 	[TestMethod]
 	public void SetsMode_MatchingALiveSelectOption_IsAccepted_EvenWhenNotYetTagged()
 	{
 		var config = WithHouseMode();
-		config.Periods.Add(new TimePeriodConfig { Name = "film", SetsMode = "Film", Start = "20:00" });
+		config.Periods.Add(new TimePeriodConfig { Name = "film", SetsModeId = "Film", Start = "20:00" });
 
 		// Requiring the option be tagged first would deadlock the save: tagging is itself a save.
 		Assert.IsTrue(ConfigValidator.Validate(config, liveSelectOptions: ["Film"]).IsValid,
-			"a SetsMode naming a live select option is legitimate even before it is tagged a Kind");
+			"a SetsModeId naming a live select option is legitimate even before it is tagged a Kind");
 
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid, "unknown to both configured and live options → error");
 	}
@@ -815,11 +834,11 @@ public sealed class ConfigValidatorTests
 	public void SetsMode_NamingANormalOption_Warns_ButDoesNotRefuse()
 	{
 		var config = WithHouseMode();
-		config.Periods.Add(new TimePeriodConfig { Name = "reset", SetsMode = "Normal", Start = "06:00" });
+		config.Periods.Add(new TimePeriodConfig { Name = "reset", SetsModeId = "Normal", Start = "06:00" });
 
 		var result = ConfigValidator.Validate(config);
 
-		Assert.IsTrue(result.IsValid, "SetsMode naming a Normal option is a scheduled reset — legal, but probably a mistake");
+		Assert.IsTrue(result.IsValid, "SetsModeId naming a Normal option is a scheduled reset — legal, but probably a mistake");
 		Assert.IsTrue(result.Warnings.Any(w => w.Contains("Normal", StringComparison.Ordinal)));
 	}
 
@@ -872,21 +891,21 @@ public sealed class ConfigValidatorTests
 	public void ClampPeriod_MustNameAPeriod_AndWarnsOffSleep()
 	{
 		var missing = WithHouseMode();
-		missing.Global.HouseMode!.OptionFor("Sover")!.ClampPeriod = "nope";
-		Assert.IsFalse(ConfigValidator.Validate(missing).IsValid, "a ClampPeriod naming no period is an error");
+		missing.Global.HouseMode!.OptionFor("Sover")!.ClampPeriodId = "nope";
+		Assert.IsFalse(ConfigValidator.Validate(missing).IsValid, "a ClampPeriodId naming no period is an error");
 
 		var offSleep = WithHouseMode();
-		offSleep.Global.HouseMode!.OptionFor("Borte")!.ClampPeriod = "night";   // Away, not Sleep — inert
+		offSleep.Global.HouseMode!.OptionFor("Borte")!.ClampPeriodId = "night";   // Away, not Sleep — inert
 		var result = ConfigValidator.Validate(offSleep);
-		Assert.IsTrue(result.IsValid, "a ClampPeriod on a non-sleep option is inert, a warning not an error");
-		Assert.IsTrue(result.Warnings.Any(w => w.Contains("ClampPeriod", StringComparison.Ordinal)));
+		Assert.IsTrue(result.IsValid, "a ClampPeriodId on a non-sleep option is inert, a warning not an error");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("ClampPeriodId", StringComparison.Ordinal)));
 	}
 
 	[TestMethod]
 	public void ResetOnPeriodStart_MustNameAPeriod()
 	{
 		var config = WithHouseMode();
-		config.Global.HouseMode!.OptionFor("Borte")!.ResetOnPeriodStart = "ghost";
+		config.Global.HouseMode!.OptionFor("Borte")!.ResetOnPeriodStartId = "ghost";
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
 
@@ -894,7 +913,7 @@ public sealed class ConfigValidatorTests
 	public void StaleResetOnPeriodStart_OnANormalOption_Warns_NotErrors()
 	{
 		var config = WithHouseMode();
-		config.Global.HouseMode!.OptionFor("Normal")!.ResetOnPeriodStart = "gone";
+		config.Global.HouseMode!.OptionFor("Normal")!.ResetOnPeriodStartId = "gone";
 
 		var result = ConfigValidator.Validate(config);
 
@@ -968,7 +987,7 @@ public sealed class ConfigValidatorTests
 		resolvable.Areas[0].RespectSleepMode = true;
 		Assert.IsTrue(ConfigValidator.Validate(resolvable).IsValid, "the 'night' period resolves the clamp");
 
-		// Nothing resolves the clamp: no ClampPeriod, no SetsMode period, no "night".
+		// Nothing resolves the clamp: no ClampPeriodId, no SetsModeId period, no "night".
 		var unresolvable = WithHouseMode();
 		unresolvable.Areas[0].RespectSleepMode = true;
 		unresolvable.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" }];
@@ -981,8 +1000,8 @@ public sealed class ConfigValidatorTests
 		var viaClamp = WithHouseMode();
 		viaClamp.Areas[0].RespectSleepMode = true;
 		viaClamp.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "dim", Start = "22:00" }];
-		viaClamp.Global.HouseMode!.OptionFor("Sover")!.ClampPeriod = "dim";
-		Assert.IsTrue(ConfigValidator.Validate(viaClamp).IsValid, "an explicit ClampPeriod resolves the clamp");
+		viaClamp.Global.HouseMode!.OptionFor("Sover")!.ClampPeriodId = "dim";
+		Assert.IsTrue(ConfigValidator.Validate(viaClamp).IsValid, "an explicit ClampPeriodId resolves the clamp");
 	}
 
 	[TestMethod]
@@ -1081,14 +1100,14 @@ public sealed class ConfigValidatorTests
 	}
 
 	/// <summary>
-	///     Under Home Assistant's authority the engine never writes the select, so every <c>SetsMode</c> is dormant.
+	///     Under Home Assistant's authority the engine never writes the select, so every <c>SetsModeId</c> is dormant.
 	///     A dormant rule nobody is told about is an evening spent debugging an automation that was switched off.
 	/// </summary>
 	[TestMethod]
 	public void HouseMode_HomeAssistantAuthority_NamesThePeriodsWhoseSetsModeWentDormant()
 	{
 		AdaptiveLightingConfig config = UnderHomeAssistantAuthority();
-		config.Periods[1].SetsMode = "Sover";   // the "night" period
+		config.Periods[1].SetsModeId = "Sover";   // the "night" period
 
 		ValidationResult result = ConfigValidator.Validate(config);
 
@@ -1116,7 +1135,7 @@ public sealed class ConfigValidatorTests
 	public void HouseMode_AdaptiveLightingAuthority_FiresNoDormancyRuleAtAll()
 	{
 		AdaptiveLightingConfig config = WithHouseMode();
-		config.Periods[1].SetsMode = "Sover";
+		config.Periods[1].SetsModeId = "Sover";
 		config.Global.HouseMode!.OptionFor("Sover")!.ActivateAfterNoMotionMinutes = 45;
 		config.Global.HouseMode.OptionFor("Borte")!.ActivateWhileOn = ["input_boolean.ferie"];
 
@@ -1139,7 +1158,7 @@ public sealed class ConfigValidatorTests
 		{
 			Entity = entity,
 			Authority = authority,
-			Options = [.. options.Select(row => new PeriodSelectOptionConfig { Value = row.Value, Period = row.Period })]
+			Options = [.. options.Select(row => new PeriodSelectOptionConfig { Value = row.Value, PeriodId = row.Period })]
 		};
 
 		return config;
@@ -1157,7 +1176,7 @@ public sealed class ConfigValidatorTests
 
 	/// <summary>
 	///     Both are <c>input_select</c>s, so every other rule passes. Under Adaptive-lighting authority the mirror
-	///     writes the period to this entity every tick, over the mode that auto-away and <c>SetsMode</c> wrote.
+	///     writes the period to this entity every tick, over the mode that auto-away and <c>SetsModeId</c> wrote.
 	/// </summary>
 	[TestMethod]
 	public void PeriodSelect_OnTheHouseModesOwnHelper_IsADocumentError()

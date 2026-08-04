@@ -39,7 +39,7 @@ public sealed class ModeMonitorTests
 	[
 		new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
 		new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsMode = "Sover" }
+		new() { Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsModeId = "Sover" }
 	];
 
 	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor, FakeLastPeriodStore LastPeriod);
@@ -203,12 +203,12 @@ public sealed class ModeMonitorTests
 		var rig = Started(startAt: Evening, initialSelect: "Hjemme");
 		Activate(rig, "Sover");    // sleep, and Mode()'s Sover has no reset trigger
 
-		Advance(rig, TimeSpan.FromHours(6));   // crosses night (SetsMode Sover, already Sover) and beyond
+		Advance(rig, TimeSpan.FromHours(6));   // crosses night (SetsModeId Sover, already Sover) and beyond
 
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "nothing resets a retained mode");
 	}
 
-	// ---- Period entry → SetsMode --------------------------------------------------------------
+	// ---- Period entry → SetsModeId --------------------------------------------------------------
 
 	[TestMethod]
 	public void PeriodEntry_SetsMode_FiresOnceAtEntry()
@@ -217,7 +217,7 @@ public sealed class ModeMonitorTests
 
 		Advance(rig, TimeSpan.FromMinutes(90));   // past night@23:00
 
-		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "SetsMode fires exactly once on entry");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "SetsModeId fires exactly once on entry");
 	}
 
 	[TestMethod]
@@ -246,7 +246,7 @@ public sealed class ModeMonitorTests
 
 	// ---- Restart across a period boundary ------------------------------------------------------
 
-	// 23:30, half an hour into night, whose SetsMode is Sover. Every restart test starts here and varies only
+	// 23:30, half an hour into night, whose SetsModeId is Sover. Every restart test starts here and varies only
 	// which period the note says the previous run ended in.
 	private static readonly DateTimeOffset HalfPastNight = new(2026, 1, 15, 23, 30, 0, TimeSpan.Zero);
 
@@ -297,6 +297,27 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "same period as when it stopped: nothing happened to act on");
 	}
 
+	// The note is written by key, and a note from before periods had ids holds a name. Read as-is it would look
+	// like a period the table does not have, and the first start after the upgrade would apply night's mode over
+	// whatever the household had chosen.
+	[TestMethod]
+	public void StartWithANoteFromBeforeIdsExisted_ReadsTheNameAsThatPeriodsId()
+	{
+		List<TimePeriodConfig> keyed =
+		[
+			new() { Id = "morning-aaaa", Name = "morning", Start = "06:30" },
+			new() { Id = "evening-bbbb", Name = "evening", Start = "18:00" },
+			new() { Id = "night-cccc", Name = "night", Start = "23:00", SetsModeId = "Sover" }
+		];
+
+		var rig = Started(startAt: HalfPastNight, periods: keyed, initialSelect: "Gjester", lastPeriod: EndedIn("night"));
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "the note names the period the engine is already in");
+		CollectionAssert.AreEqual(Array.Empty<string>(), rig.LastPeriod.Saved, "and nothing needs rewriting");
+	}
+
 	[TestMethod]
 	public void StartWithNoNoteOfThePreviousRun_AppliesNothing()
 	{
@@ -337,7 +358,7 @@ public sealed class ModeMonitorTests
 	[TestMethod]
 	public void StartAfterABoundaryWentBy_WithoutSetsMode_WritesNothing()
 	{
-		// evening@18:00 carries no SetsMode; the note says the last run ended in morning.
+		// evening@18:00 carries no SetsModeId; the note says the last run ended in morning.
 		var rig = Started(startAt: Evening, initialSelect: "Hjemme", lastPeriod: EndedIn("morning"));
 
 		Advance(rig, TimeSpan.FromMinutes(30));
@@ -351,7 +372,7 @@ public sealed class ModeMonitorTests
 	public void StartAfterABoundaryWentBy_DoesNotFireThePeriodStartReset()
 	{
 		var mode = Mode();
-		mode.OptionFor("Borte")!.ResetOnPeriodStart = "night";
+		mode.OptionFor("Borte")!.ResetOnPeriodStartId = "night";
 		var global = new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
 
 		var rig = Started(global, startAt: HalfPastNight, initialSelect: "Borte", lastPeriod: EndedIn("evening"));
@@ -395,7 +416,7 @@ public sealed class ModeMonitorTests
 	public void PeriodReset_EnteringNamedPeriod_ResetsToNormal()
 	{
 		var mode = Mode();
-		mode.OptionFor("Sover")!.ResetOnPeriodStart = "morning";
+		mode.OptionFor("Sover")!.ResetOnPeriodStartId = "morning";
 		var global = new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
 
 		var rig = Started(global, startAt: new DateTimeOffset(2026, 1, 16, 6, 0, 0, TimeSpan.Zero), initialSelect: "Sover");
@@ -484,7 +505,7 @@ public sealed class ModeMonitorTests
 		return new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode };
 	}
 
-	// A single all-day period, so period entry and SetsMode never interfere with the idle-timer tests.
+	// A single all-day period, so period entry and SetsModeId never interfere with the idle-timer tests.
 	private static List<TimePeriodConfig> FlatPeriod() =>
 		[new() { Name = "all", Start = "00:00", BrightnessPct = 50, ColorTempKelvin = 3000 }];
 
@@ -753,7 +774,7 @@ public sealed class ModeMonitorTests
 			{
 				Entity = PeriodSelect,
 				Authority = authority,
-				Options = [.. options.Select(row => new PeriodSelectOptionConfig { Value = row.Value, Period = row.Period })]
+				Options = [.. options.Select(row => new PeriodSelectOptionConfig { Value = row.Value, PeriodId = row.Period })]
 			}
 		};
 
@@ -861,7 +882,7 @@ public sealed class ModeMonitorTests
 			"the engine follows this select; writing it would have it chasing its own tail through Home Assistant");
 	}
 
-	// Under Home Assistant's authority the select is the period boundary, so SetsMode fires on the flip and not up
+	// Under Home Assistant's authority the select is the period boundary, so SetsModeId fires on the flip and not up
 	// to a tick later.
 	[TestMethod]
 	public void PeriodSelect_UnderHomeAssistantAuthority_AFlipFiresSetsMode()
@@ -871,7 +892,7 @@ public sealed class ModeMonitorTests
 
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "the evening sets no mode");
 
-		// Periods() gives night SetsMode: Sover. The clock has not moved at all.
+		// Periods() gives night SetsModeId: Sover. The clock has not moved at all.
 		rig.Ha.Trigger(PeriodSelect, "Natt");
 
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"),
@@ -915,7 +936,7 @@ public sealed class ModeMonitorTests
 	}
 
 	// The asymmetry: when the helper goes unavailable the override reads null and the clock answers instead.
-	// Levels revert on their own when it comes back; a SetsMode latch does not, because "day" sets no mode.
+	// Levels revert on their own when it comes back; a SetsModeId latch does not, because "day" sets no mode.
 	[TestMethod]
 	public void PeriodSelect_UnreadableForAMoment_DoesNotLatchTheClocksPeriodMode()
 	{
@@ -928,7 +949,7 @@ public sealed class ModeMonitorTests
 		Advance(rig, TimeSpan.FromHours(4));   // 20:00 → midnight, over the 23:00 boundary
 
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"),
-			"the clock's answer is a fallback, not a choice — it must not fire the night's SetsMode");
+			"the clock's answer is a fallback, not a choice — it must not fire the night's SetsModeId");
 	}
 
 	[TestMethod]
@@ -974,7 +995,7 @@ public sealed class ModeMonitorTests
 		Rig rig = Started(HandedToHomeAssistant(Mode()),
 			startAt: new DateTimeOffset(2026, 1, 15, 22, 0, 0, TimeSpan.Zero), initialSelect: "Hjemme");
 
-		Advance(rig, TimeSpan.FromMinutes(90));   // past night@23:00, whose SetsMode is Sover
+		Advance(rig, TimeSpan.FromMinutes(90));   // past night@23:00, whose SetsModeId is Sover
 
 		Assert.AreEqual(0, AnyHouseSelectCalls(rig.Ha), "the schedule does not move a select Home Assistant owns");
 	}
@@ -1043,7 +1064,7 @@ public sealed class ModeMonitorTests
 	public void HomeAssistantAuthority_PeriodStartReset_IsDormant()
 	{
 		HouseModeConfig mode = Mode();
-		mode.OptionFor("Sover")!.ResetOnPeriodStart = "morning";
+		mode.OptionFor("Sover")!.ResetOnPeriodStartId = "morning";
 
 		Rig rig = Started(HandedToHomeAssistant(mode),
 			startAt: new DateTimeOffset(2026, 1, 16, 6, 0, 0, TimeSpan.Zero), initialSelect: "Sover");

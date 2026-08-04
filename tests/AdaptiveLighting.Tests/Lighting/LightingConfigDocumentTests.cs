@@ -53,12 +53,12 @@ public sealed class LightingConfigDocumentTests
 		},
 		Periods =
 		[
-			new TimePeriodConfig { Name = "morning", Start = "06:00", BrightnessPct = 60, ColorTempKelvin = 3000 },
-			new TimePeriodConfig { Name = "day", Start = "sunrise+00:45", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new TimePeriodConfig { Name = "evening", Start = "sunset-01:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new TimePeriodConfig { Id = "morning-1a1a", Name = "morning", Start = "06:00", BrightnessPct = 60, ColorTempKelvin = 3000 },
+			new TimePeriodConfig { Id = "day-2b2b", Name = "day", Start = "sunrise+00:45", BrightnessPct = 90, ColorTempKelvin = 4500 },
+			new TimePeriodConfig { Id = "evening-3c3c", Name = "evening", Start = "sunset-01:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
 			new TimePeriodConfig
 			{
-				Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200
+				Id = "night-4d4d", Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200
 			}
 		],
 		Areas =
@@ -375,10 +375,10 @@ public sealed class LightingConfigDocumentTests
 		var original = Populated();
 		original.Areas[0].Levels =
 		[
-			new RoomLevelOverride { Period = "night", BrightnessPct = 8, ColorTempKelvin = 2000 },
-			new RoomLevelOverride { Period = "day", BrightnessPct = 55 },
-			new RoomLevelOverride { Period = "evening", ColorTempKelvin = 4000 },
-			new RoomLevelOverride { Period = "kveld", BrightnessPct = 40 }   // a renamed period: kept, not dropped
+			new RoomLevelOverride { PeriodId = "night", BrightnessPct = 8, ColorTempKelvin = 2000 },
+			new RoomLevelOverride { PeriodId = "day", BrightnessPct = 55 },
+			new RoomLevelOverride { PeriodId = "evening", ColorTempKelvin = 4000 },
+			new RoomLevelOverride { PeriodId = "kveld", BrightnessPct = 40 }   // a renamed period: kept, not dropped
 		];
 
 		var reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
@@ -395,14 +395,14 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsNull(reloaded.Levels[2].BrightnessPct);
 		Assert.AreEqual(4000, reloaded.Levels[2].ColorTempKelvin);
 
-		Assert.AreEqual("kveld", reloaded.Levels[3].Period, "a row naming no configured period survives the trip too");
+		Assert.AreEqual("kveld", reloaded.Levels[3].PeriodId, "a row naming no configured period survives the trip too");
 	}
 
 	[TestMethod]
 	public void Serialize_DoesNotWriteTheDerivedIsEmptyFlag()
 	{
 		var config = Populated();
-		config.Areas[0].Levels = [new RoomLevelOverride { Period = "night", BrightnessPct = 8 }];
+		config.Areas[0].Levels = [new RoomLevelOverride { PeriodId = "night", BrightnessPct = 8 }];
 
 		StringAssert.DoesNotMatch(
 			LightingConfigDocument.Serialize(config),
@@ -485,7 +485,7 @@ public sealed class LightingConfigDocumentTests
 				new() { Value = "Sover", Kind = ModeKind.Sleep }
 			]
 		};
-		original.Periods.Add(new TimePeriodConfig { Name = "late", SetsMode = "Sover", Start = "23:15", BrightnessPct = 10, ColorTempKelvin = 2000 });
+		original.Periods.Add(new TimePeriodConfig { Id = "late-5e5e", Name = "late", SetsModeId = "Sover", Start = "23:15", BrightnessPct = 10, ColorTempKelvin = 2000 });
 
 		var reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config;
 
@@ -494,8 +494,12 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(ModeKind.Sleep, reloaded.Global.HouseMode.OptionFor("Sover")!.Kind, "Kind survives the round trip");
 		Assert.AreEqual(ModeKind.Away, reloaded.Global.HouseMode.OptionFor("Borte")!.Kind);
 		Assert.AreEqual("scene.borte", reloaded.Global.HouseMode.OptionFor("Borte")!.Scene, "the option's Scene survives");
-		Assert.AreEqual("Sover", reloaded.Periods.Single(p => string.Equals(p.Name, "late", StringComparison.Ordinal)).SetsMode,
-			"SetsMode survives the round trip");
+		// The reference arrived naming the option's Value; the migration repointed it at the option's minted Id and
+		// the round trip kept it pointing at the same row.
+		string? setsMode = reloaded.Periods.Single(p => string.Equals(p.Name, "late", StringComparison.Ordinal)).SetsModeId;
+
+		Assert.AreEqual(reloaded.Global.HouseMode.OptionFor("Sover")!.Id, setsMode, "the period's mode switch resolves by id");
+		Assert.AreEqual("Sover", reloaded.Global.HouseMode.OptionValueFor(setsMode), "and still writes 'Sover' to the select");
 	}
 
 	// Both kill-switch views are in-memory only: one is injected by the host at start, the other is derived.

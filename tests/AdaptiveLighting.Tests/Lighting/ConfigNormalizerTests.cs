@@ -44,7 +44,7 @@ public sealed class ConfigNormalizerTests
 			Options =
 			[
 				new() { Value = "Normal", Kind = ModeKind.Normal },
-				new() { Value = "Kveld", Kind = ModeKind.Normal, ResetOnPeriodStart = "morning" }
+				new() { Value = "Kveld", Kind = ModeKind.Normal, ResetOnPeriodStartId = "morning" }
 			]
 		};
 		var config = new AdaptiveLightingConfig { Global = new GlobalConfig { HouseMode = mode } };
@@ -70,16 +70,16 @@ public sealed class ConfigNormalizerTests
 		var config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { HouseMode = mode },
-			Periods = [new() { Name = "day", Start = "07:00", SetsMode = "Dag" }, new() { Name = "night", Start = "22:30" }],
+			Periods = [new() { Name = "day", Start = "07:00", SetsModeId = "Dag" }, new() { Name = "night", Start = "22:30" }],
 			Areas = [new() { Name = "Stue", AreaId = "stue" }]
 		};
 
 		ConfigNormalizer.Normalize(config);
 
 		var options = config.Global.HouseMode!.Options.Select(o => o.Value).ToList();
-		CollectionAssert.Contains(options, "Dag", "an option a period's SetsMode names survives normalisation");
+		CollectionAssert.Contains(options, "Dag", "an option a period's SetsModeId names survives normalisation");
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,
-			"and the normalised document still validates — the SetsMode still resolves to an option");
+			"and the normalised document still validates — the SetsModeId still resolves to an option");
 	}
 
 	[TestMethod]
@@ -105,9 +105,9 @@ public sealed class ConfigNormalizerTests
 					AreaId = "stue",
 					Levels =
 					[
-						new() { Period = "night", BrightnessPct = 8 },
-						new() { Period = "evening" },                    // drawn, then both fields cleared
-						new() { Period = "day", ColorTempKelvin = 4000 }
+						new() { PeriodId = "night", BrightnessPct = 8 },
+						new() { PeriodId = "evening" },                    // drawn, then both fields cleared
+						new() { PeriodId = "day", ColorTempKelvin = 4000 }
 					]
 				}
 			]
@@ -115,7 +115,7 @@ public sealed class ConfigNormalizerTests
 
 		ConfigNormalizer.Normalize(config);
 
-		var periods = config.Areas[0].Levels.Select(level => level.Period).ToList();
+		var periods = config.Areas[0].Levels.Select(level => level.PeriodId).ToList();
 		CollectionAssert.AreEqual(new[] { "night", "day" }, periods,
 			"the rows that say something survive, in the order they were written");
 	}
@@ -225,9 +225,9 @@ public sealed class ConfigNormalizerTests
 			Entity = "input_select.tid_pa_dagen",
 			Options =
 			[
-				new() { Value = "Kveld", Period = "evening" },
+				new() { Value = "Kveld", PeriodId = "evening" },
 				new(),                                        // an editor's row somebody cleared both fields on
-				new() { Value = "  ", Period = "\t" }
+				new() { Value = "  ", PeriodId = "\t" }
 			]
 		});
 
@@ -280,7 +280,7 @@ public sealed class ConfigNormalizerTests
 		Assert.IsNotNull(withEntity.Global.PeriodSelect, "an entity has been chosen — keep it");
 
 		AdaptiveLightingConfig withRows = WithPeriodSelect(
-			new PeriodSelectConfig { Options = [new() { Value = "Kveld", Period = "evening" }] });
+			new PeriodSelectConfig { Options = [new() { Value = "Kveld", PeriodId = "evening" }] });
 		ConfigNormalizer.Normalize(withRows);
 		Assert.IsNotNull(withRows.Global.PeriodSelect, "a mapping has been written — keep it");
 	}

@@ -80,8 +80,8 @@ public sealed class ScheduleTests
 				Authority = authority,
 				Options =
 				[
-					new PeriodSelectOptionConfig { Value = "Natt", Period = "natt" },
-					new PeriodSelectOptionConfig { Value = "Morgen", Period = "morgen" }
+					new PeriodSelectOptionConfig { Value = "Natt", PeriodId = "natt" },
+					new PeriodSelectOptionConfig { Value = "Morgen", PeriodId = "morgen" }
 				]
 			}
 		};
@@ -135,7 +135,7 @@ public sealed class ScheduleTests
 		Assert.AreEqual("dag", Schedule.InForceNow(Day(), global, Sun, new TimeOnly(12, 0), "Fest")?.Name,
 			"an option no row maps");
 
-		global.PeriodSelect!.Options.Add(new PeriodSelectOptionConfig { Value = "Kveld", Period = "gone" });
+		global.PeriodSelect!.Options.Add(new PeriodSelectOptionConfig { Value = "Kveld", PeriodId = "gone" });
 
 		Assert.AreEqual("dag", Schedule.InForceNow(Day(), global, Sun, new TimeOnly(12, 0), "Kveld")?.Name,
 			"a mapping naming a period the schedule no longer has");
@@ -149,15 +149,15 @@ public sealed class ScheduleTests
 		// PeriodSelectConfig.PeriodFor trims and ignores case on the select's own value.
 		Assert.AreEqual("natt", Schedule.NamedBySelect(Day(), global, "  natt  ")?.Name);
 
-		// CircadianCalculator.OverriddenPeriod compares TimePeriodConfig.Name as it stands, so a period whose name
-		// carries a stray space stays on the schedule. The two sides are asymmetric on purpose.
+		// Both sides go through TimePeriodConfig.Key, which trims, so a padded id resolves here and in
+		// CircadianCalculator.OverriddenPeriod alike. A page can no longer badge what the engine refuses.
 		List<TimePeriodConfig> padded =
 		[
-			new TimePeriodConfig { Name = " natt ", Start = "23:00" },
-			new TimePeriodConfig { Name = "dag", Start = "09:00" }
+			new TimePeriodConfig { Id = " natt ", Name = "natt", Start = "23:00" },
+			new TimePeriodConfig { Id = "dag", Name = "dag", Start = "09:00" }
 		];
 
-		Assert.IsNull(Schedule.NamedBySelect(padded, global, "Natt"));
-		Assert.AreEqual("dag", Schedule.InForceNow(padded, global, Sun, new TimeOnly(12, 0), "Natt")?.Name);
+		Assert.AreEqual("natt", Schedule.NamedBySelect(padded, global, "Natt")?.Name);
+		Assert.AreEqual("natt", Schedule.InForceNow(padded, global, Sun, new TimeOnly(12, 0), "Natt")?.Name);
 	}
 }

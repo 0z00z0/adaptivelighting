@@ -29,11 +29,11 @@ public sealed class RoomLevelsTests
 		AreaConfig room = Room();
 		room.Levels =
 		[
-			new RoomLevelOverride { Period = "kveld" },
-			new RoomLevelOverride { Period = "kveld", BrightnessPct = 8 }
+			new RoomLevelOverride { PeriodId = "kveld" },
+			new RoomLevelOverride { PeriodId = "kveld", BrightnessPct = 8 }
 		];
 
-		RoomLevelRow evening = RoomLevels.Rows(Day(), room).Single(row => row.Period == "kveld");
+		RoomLevelRow evening = RoomLevels.Rows(Day(), room).Single(row => row.PeriodId == "kveld");
 
 		Assert.AreEqual(8, evening.BrightnessPct, "the engine runs this room at 8 %, so the card has to say 8 %");
 		Assert.AreEqual(LevelSource.Room, evening.Brightness,
@@ -64,7 +64,7 @@ public sealed class RoomLevelsTests
 		AreaConfig room = Room();
 		RoomLevels.SetBrightness(room, "dag", 45);
 
-		RoomLevelRow row = RoomLevels.Rows(Day(), room).Single(r => r.Period == "dag");
+		RoomLevelRow row = RoomLevels.Rows(Day(), room).Single(r => r.PeriodId == "dag");
 
 		Assert.AreEqual(45, row.BrightnessPct);
 		Assert.AreEqual(LevelSource.Room, row.Brightness);
@@ -111,7 +111,7 @@ public sealed class RoomLevelsTests
 		List<TimePeriodConfig> moved = Day();
 		moved[0].BrightnessPct = 85;
 
-		RoomLevelRow row = RoomLevels.Rows(moved, room).Single(r => r.Period == "morgen");
+		RoomLevelRow row = RoomLevels.Rows(moved, room).Single(r => r.PeriodId == "morgen");
 
 		Assert.AreEqual(85, row.BrightnessPct, "a cleared row follows the schedule's later edits");
 		Assert.AreEqual(LevelSource.Schedule, row.Brightness);
@@ -124,7 +124,7 @@ public sealed class RoomLevelsTests
 		AreaConfig room = Room();
 		RoomLevels.SetBrightness(room, "kveld", 70);
 
-		RoomLevelRow row = RoomLevels.Rows(Day(), room).Single(r => r.Period == "kveld");
+		RoomLevelRow row = RoomLevels.Rows(Day(), room).Single(r => r.PeriodId == "kveld");
 
 		Assert.AreEqual(LevelSource.Room, row.Brightness);
 		Assert.IsTrue(row.IsOwn);
@@ -138,11 +138,11 @@ public sealed class RoomLevelsTests
 
 		List<TimePeriodConfig> day = Day();
 
-		Assert.IsFalse(RoomLevels.Rows(day, room).Any(row => row.Period == "kveldstemning"));
+		Assert.IsFalse(RoomLevels.Rows(day, room).Any(row => row.PeriodId == "kveldstemning"));
 
 		RoomLevelOrphan orphan = RoomLevels.Orphans(day, room).Single();
 
-		Assert.AreEqual("kveldstemning", orphan.Period);
+		Assert.AreEqual("kveldstemning", orphan.PeriodId);
 		Assert.AreEqual(25, orphan.BrightnessPct);
 		Assert.IsTrue(orphan.Says.Contains("25", StringComparison.Ordinal), "it says what removing it would throw away");
 	}
@@ -168,7 +168,7 @@ public sealed class RoomLevelsTests
 		AreaConfig room = Room();
 		RoomLevels.SetBrightness(room, "Kveld", 40);
 
-		Assert.AreEqual(LevelSource.Room, RoomLevels.Rows(Day(), room).Single(r => r.Period == "kveld").Brightness);
+		Assert.AreEqual(LevelSource.Room, RoomLevels.Rows(Day(), room).Single(r => r.PeriodId == "kveld").Brightness);
 		Assert.AreEqual(0, RoomLevels.Orphans(Day(), room).Count);
 	}
 
@@ -193,7 +193,7 @@ public sealed class RoomLevelsTests
 	public void A_Row_That_Says_Nothing_Is_Ignored_Wherever_It_Came_From()
 	{
 		AreaConfig room = Room();
-		room.Levels.Add(new RoomLevelOverride { Period = "spøkelse" });
+		room.Levels.Add(new RoomLevelOverride { PeriodId = "spøkelse" });
 
 		Assert.AreEqual(0, RoomLevels.OwnCount(Day(), room));
 		Assert.AreEqual(0, RoomLevels.Orphans(Day(), room).Count);
@@ -218,10 +218,10 @@ public sealed class RoomLevelsTests
 	public void Two_Rows_For_One_Period_Read_As_The_First()
 	{
 		AreaConfig room = Room();
-		room.Levels.Add(new RoomLevelOverride { Period = "dag", BrightnessPct = 10 });
-		room.Levels.Add(new RoomLevelOverride { Period = "dag", BrightnessPct = 90 });
+		room.Levels.Add(new RoomLevelOverride { PeriodId = "dag", BrightnessPct = 10 });
+		room.Levels.Add(new RoomLevelOverride { PeriodId = "dag", BrightnessPct = 90 });
 
-		Assert.AreEqual(10, RoomLevels.Rows(Day(), room).Single(r => r.Period == "dag").BrightnessPct);
+		Assert.AreEqual(10, RoomLevels.Rows(Day(), room).Single(r => r.PeriodId == "dag").BrightnessPct);
 	}
 
 	/// <summary>Normalisation drops a row that says nothing; a row that says something under no name survives it.</summary>
@@ -229,11 +229,11 @@ public sealed class RoomLevelsTests
 	public void A_Row_With_No_Period_Name_Is_Reported_And_Called_Something()
 	{
 		AreaConfig room = Room();
-		room.Levels.Add(new RoomLevelOverride { Period = "", BrightnessPct = 15 });
+		room.Levels.Add(new RoomLevelOverride { PeriodId = "", BrightnessPct = 15 });
 
 		RoomLevelOrphan orphan = RoomLevels.Orphans(Day(), room).Single();
 
-		Assert.AreEqual("", orphan.Period, "the key it is removed by is still its own");
+		Assert.AreEqual("", orphan.PeriodId, "the key it is removed by is still its own");
 		Assert.IsTrue(orphan.Name.Length > 0, "but it is not drawn as a blank");
 	}
 

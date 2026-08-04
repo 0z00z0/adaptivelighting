@@ -104,10 +104,10 @@ public sealed class HouseModeConfigTests
 	[TestMethod]
 	public void SleepClampPeriodFor_PrefersAnExplicitClampPeriod()
 	{
-		var option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep, ClampPeriod = "evening" };
+		var option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep, ClampPeriodId = "evening" };
 
-		Assert.AreEqual("evening", HouseModeConfig.SleepClampPeriodFor(option, Periods()),
-			"an explicit ClampPeriod wins the chain");
+		Assert.AreEqual("evening", HouseModeConfig.SleepClampPeriodFor(option, Periods())?.Name,
+			"an explicit ClampPeriodId wins the chain");
 	}
 
 	[TestMethod]
@@ -115,10 +115,10 @@ public sealed class HouseModeConfigTests
 	{
 		var option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
 		var periods = Periods();
-		periods[0].SetsMode = "Sover";   // day sets Sover
+		periods[0].SetsModeId = "Sover";   // day sets Sover
 
-		Assert.AreEqual("day", HouseModeConfig.SleepClampPeriodFor(option, periods),
-			"absent an explicit clamp, the first period whose SetsMode is this option wins");
+		Assert.AreEqual("day", HouseModeConfig.SleepClampPeriodFor(option, periods)?.Name,
+			"absent an explicit clamp, the first period whose SetsModeId is this option wins");
 	}
 
 	[TestMethod]
@@ -126,8 +126,8 @@ public sealed class HouseModeConfigTests
 	{
 		var option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
 
-		Assert.AreEqual("night", HouseModeConfig.SleepClampPeriodFor(option, Periods()),
-			"absent an explicit clamp and a SetsMode period, a period named 'night' is the fallback");
+		Assert.AreEqual("night", HouseModeConfig.SleepClampPeriodFor(option, Periods())?.Name,
+			"absent an explicit clamp and a SetsModeId period, a period named 'night' is the fallback");
 	}
 
 	[TestMethod]
@@ -137,6 +137,6 @@ public sealed class HouseModeConfigTests
 		var periods = new List<TimePeriodConfig> { new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" } };
 
 		Assert.IsNull(HouseModeConfig.SleepClampPeriodFor(option, periods),
-			"no clamp, no SetsMode period, no 'night' → nothing resolves");
+			"no clamp, no SetsModeId period, no 'night' → nothing resolves");
 	}
 }

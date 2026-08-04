@@ -20,7 +20,7 @@ public sealed class HouseModeSyncTests
 		[
 			new() { Value = "Normal", Kind = ModeKind.Normal },
 			new() { Value = "Borte", Kind = ModeKind.Away, Scene = "scene.away", ResetOnPresence = true },
-			new() { Value = "Sover", Kind = ModeKind.Sleep, ClampPeriod = "night" }
+			new() { Value = "Sover", Kind = ModeKind.Sleep, ClampPeriodId = "night" }
 		]
 	};
 

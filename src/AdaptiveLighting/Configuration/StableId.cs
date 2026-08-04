@@ -20,13 +20,11 @@ public static class StableId
 	/// <summary>Used when the seed slugs to nothing at all: an unnamed period, an option of punctuation.</summary>
 	private const string FallbackSlug = "id";
 
-	// Norwegian, Swedish, Danish and German letters do not decompose under FormD, so they would each become a
-	// separator and "kveld på hytta" would slug as "kveld-p--hytta".
+	// The letters with no canonical decomposition, so FormD below leaves them whole and they would otherwise each
+	// become a separator: "kjøkken" slugging as "kj-kken". Nothing for å, ä, ö or ü; those do decompose.
 	private static readonly Dictionary<char, string> Transliterations = new()
 	{
-		['æ'] = "ae", ['ø'] = "oe", ['å'] = "aa",
-		['ä'] = "ae", ['ö'] = "oe", ['ü'] = "ue", ['ß'] = "ss",
-		['ð'] = "d", ['þ'] = "th"
+		['æ'] = "ae", ['ø'] = "oe", ['ß'] = "ss", ['ð'] = "d", ['þ'] = "th"
 	};
 
 	/// <summary>An id seeded from <paramref name="seed"/> that none of <paramref name="taken"/> already holds.</summary>

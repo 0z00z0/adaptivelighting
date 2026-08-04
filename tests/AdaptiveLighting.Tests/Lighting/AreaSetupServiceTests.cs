@@ -179,7 +179,7 @@ public sealed class AreaSetupServiceTests
 		House house = Build("stue");
 		AreaConfig before = Rich("stue");
 		before.Enabled = true;
-		before.Levels = [new RoomLevelOverride { Period = "night", BrightnessPct = 8 }];
+		before.Levels = [new RoomLevelOverride { PeriodId = "night", BrightnessPct = 8 }];
 
 		AdaptiveLightingConfig config = Document(before);
 
@@ -189,7 +189,7 @@ public sealed class AreaSetupServiceTests
 
 		Assert.AreEqual("stue", after.AreaId, "identity survives");
 		Assert.IsTrue(after.Enabled, "and so does the switch the owner threw");
-		Assert.AreEqual(8d, after.Levels.Single(level => level.Period == "night").BrightnessPct,
+		Assert.AreEqual(8d, after.Levels.Single(level => level.PeriodId == "night").BrightnessPct,
 			"and the levels the room chose: discovery has no opinion about them, so a rebuild cannot re-supply them");
 
 		Assert.IsNull(after.Name, "the custom name is gone");
