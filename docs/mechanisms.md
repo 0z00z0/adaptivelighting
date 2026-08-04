@@ -38,6 +38,52 @@ there is no way to prove no file still says the word.
 Only the two legacy names are matched case-insensitively. Every other key is case-sensitive, which is why a
 lower-case `areas:` can never win over `Zones:`.
 
+### Nothing in the document points at a name a person typed
+
+A period and a house-mode option each carry an `Id`, minted once when they are created and never derived from
+the current name. Every reference from inside the document is to that id: `RoomLevelOverride.PeriodId`,
+`HouseModeOptionConfig.ClampPeriodId` and `ResetOnPeriodStartId`, `PeriodSelectOptionConfig.PeriodId`, and
+`TimePeriodConfig.SetsModeId`. Renaming is therefore free, and two periods may share a display name.
+
+`HouseModeOptionConfig.Value` is the exception and stays the match key. That string belongs to Home
+Assistant: the engine has to write what the `input_select` will accept and classify what it reports. Renaming
+the option **in Home Assistant** still needs re-pointing here; renaming anything on this side does not.
+
+The shape is a slug of the creation-time name plus four random base-36 characters — `night-3c9f`. A raw GUID
+would be correct and unreadable, and a hand-edited file is a supported thing to have. The slug is frozen at
+creation, so it is a hint about where the row came from and never a fact about what it is called now.
+
+Two accessors carry the fallback the ids cannot cover: `TimePeriodConfig.Key` and `HouseModeOptionConfig.Key`
+answer the id when there is one and the name (or value) when there is not. That is the second binder's path,
+the one with no pre-pass, so a house's app YAML bound by NetDaemon's `ConfigurationBinder` still resolves by
+name as it always did.
+
+### The migration off names runs once, on load
+
+`StableKeyMigration.Apply` mints the missing ids and rewrites every reference that resolves by name onto the
+id it resolved to. It runs from `LightingConfigDocument.Deserialize`, which is the load path and is otherwise
+forbidden from rewriting a hand-edited file. The precedent, and the reason, is the `Zones:` pre-pass: the
+alternative is silent data loss, because a reference that is no longer read by name is a reference that reads
+as nothing at all.
+
+Two things make it terminate. It repoints a reference **only** when the reference is not already some
+period's id, so a migrated document changes nothing; and it reports whether it wrote anything, through
+`DocumentReadResult.MintedStableKeys`, so `LightingEngineHost.Reload` takes the migrating write exactly once.
+That single write matters because `LightingConfigStore` keeps one backup slot: a second rewrite would push the
+only pre-migration copy of the file out of it.
+
+A name that resolves to nothing is left exactly as it was, so the validator's existing severities still land
+on it: a dangling levels row warns and survives, a dangling select mapping errors. Adding a period by hand and
+reloading mints an id for it and leaves every other reference alone.
+
+The old key names — `Period`, `SetsMode`, `ClampPeriod`, `ResetOnPeriodStart` — go through `LegacyKeys`, not a
+property rename. Both binders ignore an unknown key, so simply renaming the property would have been silent
+data loss for everyone on an older file.
+
+`LastPeriodStore` writes a period id. A note written before ids holds a name, and `ModeMonitor` resolves that
+by name on read; without it the first start after the upgrade compares a name against an id and acts on a
+boundary crossing that never happened.
+
 ### Normalisation runs on save, never on load
 
 `ConfigNormalizer` cleans a document on the way out, not on the way in. The load path must not rewrite a
@@ -159,9 +205,10 @@ That is forced by the blend: `GetTarget` interpolates between the two periods ei
 a room replacing one side and not the other has to arrive from *its* level, not the house's. Replacing an
 already-blended value afterwards turns a smooth arrival into a step.
 
-Period **names** are the join between periods and everything referring to them — house modes, room level
-overrides, select mappings. Renaming a period breaks whatever named it. The match is case-insensitive, and it
-trims the *referring* side only, not `TimePeriodConfig.Name`.
+Period **ids** are the join between periods and everything referring to them — house modes, room level
+overrides, select mappings. `TimePeriodConfig.Name` is display only, two periods may share one, and renaming
+one costs nothing. Every lookup goes through `TimePeriodConfig.Key`, case-insensitively, with both sides
+trimmed.
 
 Sun-anchored boundaries are laid out for the day before, the day of and the day after, so a period past
 midnight still places, and so a DST boundary resolves against its own offset rather than the window's.
@@ -170,12 +217,12 @@ midnight still places, and so a DST boundary resolves against its own offset rat
 
 `StartsOnMotion` means the period **does not begin at its `Start`**. The previous period keeps running — the
 house stays at night levels — until somebody moves in one of `StartsOnMotionAreas`, and then the period begins
-whole: brightness, warmth and `SetsMode` together, for every room.
+whole: brightness, warmth and `SetsModeId` together, for every room.
 
 It is implemented by **leaving the boundary out of the table**, not by a rule anywhere downstream.
 `CircadianCalculator.ResolveBoundaries` skips a held period, so the wrap keeps the previous period in force and
 the next period's own `Start` overtakes it without anything having to notice. Every question the engine asks —
-`ActivePeriodName`, `GetTarget`, the blend — comes out of that one table, which is why the name and the levels
+`ActivePeriodId`, `GetTarget`, the blend — comes out of that one table, which is why the name and the levels
 cannot disagree about a period that has not begun.
 
 This was half-built for a long time. The flag existed and only `ModeMonitor` read it, so the clock still entered
@@ -189,7 +236,7 @@ Four things it is bounded by, and each of them is a house that would otherwise m
   midnight.
 - **The next period overtakes it.** An empty house is never stranded on last night's levels, and the day never
   ends holding a period that never started.
-- **Once per local day**, so walking back in at lunch does not re-fire `SetsMode` over a mode somebody chose.
+- **Once per local day**, so walking back in at lunch does not re-fire `SetsModeId` over a mode somebody chose.
 - **Nothing at all under `PeriodAuthority.HomeAssistant`.** The dropdown is the boundary there.
 
 The latch itself is `MotionPeriodLatch`: one object per engine, written by `ModeMonitor` and read by every
@@ -203,7 +250,7 @@ belongs to yesterday's instance, which is the one the wrap has in force; asking 
 period that has not come round yet.
 
 Two places write it, and no more. `ModeMonitor.Start` seeds it from the note on disk, and movement claims it.
-The seed is what stops a restart from re-firing a period's `SetsMode` and its period-start reset over a mode a
+The seed is what stops a restart from re-firing a period's `SetsModeId` and its period-start reset over a mode a
 person chose — three separate reviews found that the day latch was never seeded. A held period is seeded only
 when the note names it: without the note there is no evidence it ever began, and the house waits for movement
 as it would have without the restart. Movement writes the note immediately rather than leaving it to the tick,
@@ -212,7 +259,7 @@ because a config save rebuilds the whole engine and the latch is in memory.
 The blend is unchanged, which means a period started at 06:45 whose `Start` was 06:30 arrives already part-way
 through its blend. The window trails the boundary, and the boundary is still 06:30.
 
-`GetPeriodTarget(name)` sits outside all of it. The sleep clamp asks for a period by name and gets the one it
+`GetPeriodTarget(id)` sits outside all of it. The sleep clamp asks for a period by id and gets the one it
 named, held or not.
 
 A document where **every** period sets `StartsOnMotion` places nothing at all from midnight until somebody
@@ -243,7 +290,7 @@ are separate causes and a surface that conflates them sends somebody hunting a p
 exist.
 
 Mode entry is **edge-triggered**, so a boundary crossed while the engine was down was never seen. On restart
-the schedule's `SetsMode` is applied over a non-Normal option deliberately: a crossed boundary is a real
+the schedule's `SetsModeId` is applied over a non-Normal option deliberately: a crossed boundary is a real
 event the schedule is entitled to act on. What protects a person's choice is the boundary test, not the
 standing mode.
 
@@ -275,16 +322,16 @@ They are separate because `OnPeriodEntered` also fires the period-start reset: r
 would cancel a retained Away or Guest mode as a side effect of a deploy. Not knowing which period the last run
 ended in is "do nothing", never "a boundary was crossed".
 
-What is stored is the period **name**, not a timestamp. A sun-anchored `Start` is re-resolved daily, so
+What is stored is the period **id**, not a timestamp. A sun-anchored `Start` is re-resolved daily, so
 yesterday's 20:14 is not today's; a sun-anchored period the sun entity cannot place is dropped from the table
-entirely; and a box returning from an outage may carry an uncorrected clock. Comparing two names touches none
+entirely; and a box returning from an outage may carry an uncorrected clock. Comparing two ids touches none
 of that.
 
 ### An unreadable period select is not a period change
 
-Under Home Assistant authority, while the helper is unavailable `ActivePeriodName` falls through to the clock,
+Under Home Assistant authority, while the helper is unavailable `ActivePeriodId` falls through to the clock,
 and that answer is indistinguishable from a real one. A household holding "day" at 23:30 would have night's
-`SetsMode` latch the house asleep — and nothing puts it back when the helper returns, because levels revert on
+`SetsModeId` latch the house asleep — and nothing puts it back when the helper returns, because levels revert on
 their own but a latched mode does not. `ModeMonitor.OnTick` computes `overrideIsBlind` for exactly this.
 
 The mirror write works by **comparison, never by memory**: it writes only when the select is not already

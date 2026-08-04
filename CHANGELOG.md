@@ -157,6 +157,24 @@ under one version, because they are compiled against each other.
 
 ### Changed — action required
 
+- **Renaming a period is now free, and the settings file gains ids.** A period's name used to be the key
+  every reference used, so renaming one silently broke whatever pointed at it — a room's levels, a mode's
+  dim-while-asleep period, a reset trigger, a dropdown mapping. Periods and house-mode options now carry an
+  `Id`, minted once and never shown, and every reference inside the file points at that instead. The name is
+  display only, two periods may share one, and the warning that used to sit under the name field is gone.
+  - **Your file is migrated on the first start after upgrading, once.** Ids are filled in and every
+    reference is repointed at the period or option it already resolved to; the file is then written back with
+    the previous version kept as the usual `.bak`. Later starts change nothing. A reference that matched
+    nothing is left exactly as it was and still reports what it always reported — a room's levels row warns
+    and survives, a dropdown mapping errors.
+  - **The old key names still parse**, so an unmigrated file loses nothing: `Period` becomes `PeriodId`,
+    `SetsMode` becomes `SetsModeId`, `ClampPeriod` becomes `ClampPeriodId` and `ResetOnPeriodStart` becomes
+    `ResetOnPeriodStartId`. Hand-written YAML wanting the new names should use the ids the migration wrote;
+    the ids read as `night-3c9f`, not as a GUID, for exactly that reason.
+  - **A house-mode option's `Value` is unchanged and still matches Home Assistant.** That string is the
+    dropdown's, not ours, so renaming the option *in Home Assistant* still needs re-pointing here. Only
+    renames on this side became free.
+
 - **A room counts as dark below 1000 lx, not 40.** The reading a room gates on is usually not a
   reading of that room at all: most houses have one outdoor lux sensor and many rooms with none. One
   live instance's outdoor sensor, measured over 30 hours, sits at 1–3 lx at night and 1000–3706
@@ -199,7 +217,7 @@ under one version, because they are compiled against each other.
   brightened at 06:30 whether or not anybody was up. The flag moved the house *mode*, and only inside
   one `CircadianTickSeconds` or after a restart mid-period.
   - Now the previous period keeps running — the house stays at night levels — until somebody moves in
-    one of `StartsOnMotionAreas`, and then the period begins whole: brightness, warmth and `SetsMode`
+    one of `StartsOnMotionAreas`, and then the period begins whole: brightness, warmth and `SetsModeId`
     together, for every room. An empty `StartsOnMotionAreas` still means any room the engine watches.
   - It falls through on its own. The next period's own `Start` overtakes a period that never began, so
     an empty house is never stranded on last night's levels and the day never ends holding a period
