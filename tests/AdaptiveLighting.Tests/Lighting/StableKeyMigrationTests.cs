@@ -225,7 +225,9 @@ public sealed class StableKeyMigrationTests
 	[TestMethod]
 	public void A_Name_That_Resolves_To_Nothing_Is_Left_Exactly_As_It_Was()
 	{
-		string yaml = PreMigrationYaml().Replace("        - Period: natt\n", "        - Period: fjorten\n", StringComparison.Ordinal);
+		// No line ending in the needle: a raw string literal carries the source file's, which is not the same on
+		// this box as on the agent.
+		string yaml = PreMigrationYaml().Replace("        - Period: natt", "        - Period: fjorten", StringComparison.Ordinal);
 
 		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(yaml).Config;
 

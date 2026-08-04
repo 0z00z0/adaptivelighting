@@ -7,7 +7,7 @@ namespace AdaptiveLighting.Engine;
 ///     means.
 /// </summary>
 /// <remarks>
-///     Adoption writes kinds and nothing else: no scene, no reset trigger, no period <c>SetsMode</c>. Every
+///     Adoption writes kinds and nothing else: no scene, no reset trigger, no period switching to it. Every
 ///     writing path needs configuration this never adds, so an adopted select is read and never written.
 ///     Adopting the wrong dropdown holds a whole house Away, so the rules stay narrow: two distinct kinds, one of
 ///     them Normal, and only one qualifying select in the house.

@@ -154,7 +154,7 @@ public static class StableKeyMigration
 	///     The option id <paramref name="reference"/> should become, or <c>null</c> to leave it alone.
 	/// </summary>
 	/// <remarks>
-	///     A <c>SetsMode</c> naming a live select option nobody has configured resolves to no row, so it stays the
+	///     A mode switch naming a live select option nobody has configured resolves to no row, so it stays the
 	///     raw option string and the engine goes on writing it. The validator has always allowed that.
 	/// </remarks>
 	private static string? OptionIdFor(string? reference, List<HouseModeOptionConfig> options)
