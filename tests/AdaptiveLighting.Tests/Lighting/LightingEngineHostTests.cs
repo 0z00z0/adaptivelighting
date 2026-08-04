@@ -360,6 +360,48 @@ public sealed class LightingEngineHostTests
 		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath));
 	}
 
+	/// <summary>A document in the current key names but written before periods had ids.</summary>
+	private const string SchemaWithoutIds =
+		"""
+		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+		  ConfigName: "Adaptive lighting [test]"
+		  Periods:
+		    - Name: dag
+		      Start: "06:00"
+		      BrightnessPct: 80
+		      ColorTempKelvin: 3500
+		  Areas:
+		    - Name: Stue
+		      AreaId: stue
+		      Levels:
+		        - PeriodId: dag
+		          BrightnessPct: 40
+		""";
+
+	[TestMethod]
+	public void Reload_OfADocumentWithoutIds_MintsThemOnce_AndKeepsTheRoomsOwnLevel()
+	{
+		File.WriteAllText(_path, SchemaWithoutIds);
+		string original = File.ReadAllText(_path);
+
+		LightingEngineHost host = BuildHost();
+
+		Assert.AreEqual(SaveStatus.Saved, host.Reload().Status);
+
+		string migrated = File.ReadAllText(_path);
+		AdaptiveLightingConfig config = host.Store.Load();
+
+		Assert.AreEqual(config.Periods.Single().Id, config.Areas.Single().Levels.Single().PeriodId,
+			"the row that named the period by name now names it by id");
+		Assert.AreEqual(40d, config.Areas.Single().Levels.Single().BrightnessPct, "and still says what it said");
+		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath), "the backup is the pre-migration file");
+
+		host.Reload();
+
+		Assert.AreEqual(migrated, File.ReadAllText(_path), "nothing to mint the second time");
+		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath), "so the one backup slot still holds it");
+	}
+
 	/// <summary>
 	///     <see cref="LightingEngineHost.Reload"/> never throws. Its caller is the <c>[NetDaemonApp]</c>
 	///     bootstrap, and an app that throws goes to <c>ApplicationState.Error</c>, taking its DI scope and its
