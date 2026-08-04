@@ -2,7 +2,7 @@
 
 Open work, one line each with enough context to act on without the conversation that produced it.
 
-Reconstructed on 2026-08-03 from the changelog, the docs, memory and a session's history, after a 50-item
+Reconstructed on 2026-08-04 from the changelog, the docs, memory and a session's history, after a 50-item
 list that lived only in a session was lost. **That is why this file exists**: a backlog that is not in the
 repository is not a backlog. Items marked *(thin)* survived only as a title; their detail is gone.
 
