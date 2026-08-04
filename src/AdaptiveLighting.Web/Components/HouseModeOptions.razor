@@ -166,16 +166,20 @@
 						</div>
 
 						<div class="housemode-field">
-							<label class="housemode-field-label">
-								<input type="checkbox" checked="@(boundOption.ActivateAfterNoMotionMinutes is > 0)"
-									   @onchange="args => ToggleNoMotion(boundOption, args.Value is true)" />
-								Switch to this mode after no movement for
+							@* The (i) is a sibling of the label, never inside it: a click on the popover's own text is
+							   forwarded to the first labelable element in a label, which here would toggle the box. *@
+							<span class="housemode-field-label">
+								<label class="housemode-check">
+									<input type="checkbox" checked="@(boundOption.ActivateAfterNoMotionMinutes is > 0)"
+										   @onchange="args => ToggleNoMotion(boundOption, args.Value is true)" />
+									Switch to this mode after no movement for
+								</label>
 								<InfoPopover Label="Switch to this mode after no movement for">
 									With no motion anywhere in the house for this long, the house switches itself to this mode
 									— an auto-away. Every room's motion sensors count. Pair it with the presence reset below,
 									or the house stays in this mode until somebody changes it by hand.
 								</InfoPopover>
-							</label>
+							</span>
 							@if (HomeAssistantDecides)
 							{
 								<span class="mode-dormant">
@@ -230,16 +234,20 @@
 							</div>
 
 							<div class="housemode-field">
-								<label class="housemode-field-label">
-									<input type="checkbox" checked="@boundOption.ResetOnPresence"
-										   @onchange="args => SetField(boundOption, () => boundOption.ResetOnPresence = args.Value is true)" />
-									Reset when somebody is detected
+								@* The (i) is a sibling of the label, never inside it: a click on the popover's own text is
+								   forwarded to the first labelable element in a label, which here would toggle the box. *@
+								<span class="housemode-field-label">
+									<label class="housemode-check">
+										<input type="checkbox" checked="@boundOption.ResetOnPresence"
+											   @onchange="args => SetField(boundOption, () => boundOption.ResetOnPresence = args.Value is true)" />
+										Reset when somebody is detected
+									</label>
 									<InfoPopover Label="Reset when somebody is detected">
 										Movement, or a person coming home, switches the house back to Normal. The grace is how
 										long after the mode starts arrivals are ignored, so walking out of the door does not
 										cancel the mode you just set. Leave the sensor list empty to watch every room's motion.
 									</InfoPopover>
-								</label>
+								</span>
 								@if (boundOption.ResetOnPresence)
 								{
 									<div class="housemode-presence">
