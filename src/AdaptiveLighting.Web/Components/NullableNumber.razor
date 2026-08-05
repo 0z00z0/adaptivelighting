@@ -9,7 +9,7 @@
 	{
 		@if (Presets is { Count: > 0 } presets)
 		{
-			<PresetSelect Value="@value" ValueChanged="@(v => Commit(v))" Options="@presets" Unit="%" Min="0" Max="100" />
+			<PresetSelect Value="@value" ValueChanged="@(v => Commit(v))" Options="@presets" Unit="%" />
 		}
 		else
 		{

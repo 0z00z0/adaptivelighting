@@ -61,7 +61,7 @@
 				<PresetSelect Value="@current.BrightnessPct"
 							  ValueChanged="@(value => SetBrightness(current.PeriodId, value))"
 							  Options="@Presets.BrightnessPct"
-							  Unit="%" Min="0" Max="100" />
+							  Unit="%" />
 
 				@if (current.Brightness == LevelSource.Room)
 				{
@@ -94,7 +94,7 @@
 					<PresetSelect Value="@current.ColorTempKelvin"
 								  ValueChanged="@(value => SetColour(current.PeriodId, value))"
 								  Options="@Presets.ColorTempKelvin"
-								  Unit="K" Min="1000" Max="10000" Step="50" />
+								  Unit="K" />
 
 					@if (current.Colour == LevelSource.Room)
 					{

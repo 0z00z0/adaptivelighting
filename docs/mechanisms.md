@@ -904,3 +904,18 @@ framework, not the SDK. A NetDaemon host gets it transitively.
 What it bought immediately: the house-mode remap was proved end to end — the orphan row's *move it to…*
 carried a Guest option's whole configuration onto a renamed value, and opening the select did not toggle the
 fold it sits in, which until then was a `stopPropagation` argument rather than an observation.
+
+### Razor does not check component parameter names at compile time
+
+Passing a parameter a component does not have compiles cleanly and throws **at first render**:
+`Object of type 'X' does not have a property matching the name 'Y'`. In Blazor Server that exception is
+unhandled, so it **tears the circuit down**: the page stops responding to every click, not just the one that
+triggered it, and looks frozen rather than broken.
+
+This shipped. `PresetSelect` lost `Min`, `Max` and `Step` when the free-entry escape went, and five call sites
+kept passing them — the schedule editor, the room levels editor and an unused `NullableNumber`. Build was
+clean, 1420 tests passed, CI was green, and the Schedule tab and every room page were dead on both houses for
+a day. Nothing that does not render a component could have caught it.
+
+**So: a component whose parameters change means grepping its call sites, and opening the pages in
+`tools/uihost`.** The tests cannot see this class of bug, and neither can the compiler.

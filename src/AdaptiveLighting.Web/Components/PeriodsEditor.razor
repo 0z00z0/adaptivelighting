@@ -151,7 +151,7 @@
 					<PresetSelect Value="@period.BrightnessPct"
 								  ValueChanged="@(value => Set(() => period.BrightnessPct = value))"
 								  Options="@Presets.BrightnessPct"
-								  Unit="%" Min="0" Max="100" />
+								  Unit="%" />
 				</div>
 
 				<div class="pfield">
@@ -165,7 +165,7 @@
 					<PresetSelect Value="@period.ColorTempKelvin"
 								  ValueChanged="@(value => Set(() => period.ColorTempKelvin = (int)Math.Round(value)))"
 								  Options="@Presets.ColorTempKelvin"
-								  Unit="K" Min="1000" Max="10000" Step="50" />
+								  Unit="K" />
 				</div>
 
 			</div>
