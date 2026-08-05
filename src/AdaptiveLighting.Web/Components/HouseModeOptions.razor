@@ -344,31 +344,16 @@
 	private bool IsResetTarget(HouseModeOptionConfig? option) =>
 		option is not null && ReferenceEquals(option, HouseMode.NormalOption);
 
+	// One reconciliation for both helpers; HelperOptions carries the unanswered-connection rule and its tests.
+	private HelperOptions Helper =>
+		HelperOptions.Reconcile(LiveOptions, HouseMode.Options.Select(option => option.Value), ActiveValue);
+
 	/// <summary>The values to render: the live options first, then any configured value HA no longer offers.</summary>
-	private List<string> DisplayValues
-	{
-		get
-		{
-			List<string> values = new List<string>();
+	private IReadOnlyList<string> DisplayValues => Helper.Display;
 
-			foreach (string live in LiveOptions.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim()))
-				if (!values.Any(existing => Eq(existing, live)))
-					values.Add(live);
+	private bool IsLive(string value) => Helper.IsLive(value);
 
-			foreach (string configured in HouseMode.Options.Select(option => option.Value).Where(value => !string.IsNullOrWhiteSpace(value)))
-				if (!values.Any(existing => Eq(existing, configured)))
-					values.Add(configured);
-
-			return values;
-		}
-	}
-
-	// An empty LiveOptions is a Home Assistant that has not answered, not a helper with no options. Read as an
-	// answer it strikes every mode through at once. Same refusal HouseModeSync.Compare makes.
-	private bool IsLive(string value) =>
-		LiveOptions.Count == 0 || LiveOptions.Any(live => Eq(live, value));
-
-	private bool IsActive(string value) => ActiveValue is { Length: > 0 } && Eq(ActiveValue, value);
+	private bool IsActive(string value) => Helper.IsActive(value);
 
 	/// <summary>The collapsed header's hint: the option's key settings at a glance.</summary>
 	private string SummaryHint(HouseModeOptionConfig? option, ModeKind kind)
@@ -516,7 +501,7 @@
 	/// <summary>Stores an explicit Normal row once any option is classified, so the reset target is on disk.</summary>
 	private void EnsureNormalTarget()
 	{
-		List<string> values = DisplayValues;
+		IReadOnlyList<string> values = DisplayValues;
 
 		// A fresh document with nothing classified keeps its implicit-Normal state; it is not force-populated.
 		bool hasNormal = HouseMode.Options.Any(o => o.Kind == ModeKind.Normal);
@@ -537,12 +522,21 @@
 	// of them on an unrelated edit and rebind an in-progress edit to another row.
 	private void Reorder()
 	{
-		List<string> order = DisplayValues;
+		IReadOnlyList<string> order = DisplayValues;
 
 		int Rank(HouseModeOptionConfig option)
 		{
-			int index = order.FindIndex(v => Eq(v, option.Value));
-			return index < 0 ? int.MaxValue : index;
+			// Not FindIndex: order is the shared reconciliation's list, which is read-only by design.
+			int index = 0;
+			foreach (string value in order)
+			{
+				if (Eq(value, option.Value))
+					return index;
+
+				index++;
+			}
+
+			return int.MaxValue;
 		}
 
 		List<HouseModeOptionConfig> sorted = HouseMode.Options.OrderBy(Rank).ToList();
