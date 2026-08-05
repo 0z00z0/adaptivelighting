@@ -138,8 +138,8 @@ public static class ConfigValidator
 		foreach (PeriodSelectOptionConfig option in select.Options.Where(o => !string.IsNullOrWhiteSpace(o.Value)))
 			if (!livePeriodSelectOptions.Any(live => string.Equals(live.Trim(), option.Value.Trim(), StringComparison.OrdinalIgnoreCase)))
 				result.AddWarning(
-					$"PeriodSelect option '{option.Value.Trim()}' is no longer one of the select's live options — it has "
-					+ "probably been renamed in Home Assistant, and until it matches again the mapping does nothing.");
+					$"PeriodSelect option {HelperOrphan.NoLongerOffered(option.Value)} — until it matches one again "
+					+ "the mapping does nothing.");
 	}
 
 	/// <summary>The house names an outdoor lux sensor and no room asked to read it, or the reverse.</summary>
@@ -602,7 +602,8 @@ public static class ConfigValidator
 		foreach (HouseModeOptionConfig option in houseMode.Options)
 			if (option.Value is { Length: > 0 }
 				&& !liveSelectOptions.Any(live => string.Equals(live.Trim(), option.Value.Trim(), StringComparison.OrdinalIgnoreCase)))
-				result.AddWarning($"HouseMode option '{option.Value}' is no longer one of the select's live options — its kind and reset triggers are inert.");
+				result.AddWarning(
+					$"HouseMode option {HelperOrphan.NoLongerOffered(option.Value)} — its kind and reset triggers are inert.");
 
 		foreach (string live in liveSelectOptions)
 			if (live is { Length: > 0 } && houseMode.OptionFor(live) is null)

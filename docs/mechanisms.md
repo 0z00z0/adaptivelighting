@@ -873,3 +873,16 @@ whether or not Home Assistant answered — losing it off the screen would be wor
 
 What is not shared is the shape: a mode option opens a whole editor, a period row carries one dropdown. The
 picker, the direction switch and the unknown-entity notice are `SelectAuthorityPanel`'s, and have been.
+
+### A dropped helper option is described once
+
+A stored row whose dropdown no longer offers its value had four descriptions: two validator warnings and two
+badges. The badges contradicted each other — one read *renamed in Home Assistant*, the other *removed from the
+helper*. **A rename is a removal and an addition**, so nothing on this side can tell them apart, and the shared
+wording says neither: `not in the helper`, with the explanation that it was renamed or removed and the two look
+the same from here.
+
+`HelperOrphan` carries the words and `HelperOrphanBadge` the markup, so the screens cannot drift again. What
+stays with each caller is the **consequence** — losing a period mapping is not losing a mode's reset triggers,
+and the household wants to be told which. `ConfigValidatorTests.A_Dropped_Option_Reads_The_Same_On_Both_Helpers`
+holds both halves: the same diagnosis, different tails, and neither guessing at the cause.
