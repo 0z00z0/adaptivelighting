@@ -793,21 +793,34 @@ public sealed class ModeMonitorTests
 			&& c.Target?.EntityIds?.Contains(PeriodSelect) == true);
 
 	[TestMethod]
-	public void PeriodSelect_UnderOurAuthority_IsWrittenToTheActivePeriod_Once()
+	public void PeriodSelect_UnderOurAuthority_IsWrittenAtStart_AndLeftAloneOnceItEchoes()
 	{
 		Rig rig = Started(WithPeriodSelect(PeriodAuthority.AdaptiveLighting, Norwegian()),
 			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Morgen"));
 
 		Advance(rig, TimeSpan.FromMinutes(1));
 
-		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Kveld"), "20:00 is the evening period, and the select says so");
+		// Two: once from Start, once from the tick. The fake never echoes on its own, so the tick still disagrees
+		// with the select and asks again — the retry this relies on has its own test below.
+		Assert.AreEqual(2, PeriodSelectCalls(rig.Ha, "Kveld"), "20:00 is the evening period, and the select says so");
 
 		// Home Assistant echoes the write back, as it would in the house.
 		rig.Ha.Trigger(PeriodSelect, "Kveld");
 		Advance(rig, TimeSpan.FromMinutes(5));
 
-		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Kveld"),
+		Assert.AreEqual(2, PeriodSelectCalls(rig.Ha, "Kveld"),
 			"the write is idempotent — a select already showing the period is left alone");
+	}
+
+	// Start writes it because SchedulePeriodic's first callback is a whole tick away: at the 300 s one house runs,
+	// a restart mid-period left the select naming the period before it for five minutes.
+	[TestMethod]
+	public void PeriodSelect_UnderOurAuthority_IsWrittenBeforeTheFirstTick()
+	{
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.AdaptiveLighting, Norwegian()),
+			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Morgen"));
+
+		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Kveld"), "written on Start, with no tick advanced at all");
 	}
 
 	[TestMethod]
@@ -839,8 +852,9 @@ public sealed class ModeMonitorTests
 
 		Advance(rig, TimeSpan.FromMinutes(3));   // three ticks, and the select never moves
 
-		Assert.AreEqual(3, PeriodSelectCalls(rig.Ha, "Kveld"),
-			"a write that landed nowhere is retried, so the mirror cannot be left silently wrong");
+		Assert.AreEqual(4, PeriodSelectCalls(rig.Ha, "Kveld"),
+			"the Start write plus one per tick: a write that landed nowhere is retried, so the mirror cannot be "
+			+ "left silently wrong");
 	}
 
 	// A remembered "we already asked for this" latch would make a hand-moved select, and one that came back from a
@@ -1088,7 +1102,8 @@ public sealed class ModeMonitorTests
 
 		Advance(rig, TimeSpan.FromMinutes(1));
 
-		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Kveld"), "two selects, two authorities");
+		// Two: Start and the tick. The house select stays untouched throughout — that is the point of the test.
+		Assert.AreEqual(2, PeriodSelectCalls(rig.Ha, "Kveld"), "two selects, two authorities");
 		Assert.AreEqual(0, AnyHouseSelectCalls(rig.Ha));
 	}
 

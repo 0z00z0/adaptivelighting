@@ -24,8 +24,6 @@ namespace AdaptiveLighting.Engine;
 /// </remarks>
 public sealed class ModeMonitor : IDisposable
 {
-	private const string SelectDomain = "input_select";
-	private const string SelectOptionService = "select_option";
 	private const string PersonDomain = "person";
 	private const string DeviceTrackerDomain = "device_tracker";
 	private const string HomeState = "home";
@@ -38,6 +36,11 @@ public sealed class ModeMonitor : IDisposable
 	private readonly CircadianCalculator _circadian;
 	private readonly Func<SunTimes> _sunTimes;
 	private readonly TimeZoneInfo _zone;
+
+	// The two selects this engine may drive. Same mechanics, different rules: the rules stay below, the ownership
+	// test and the call live in SelectMirror.
+	private readonly SelectMirror _modeSelect;
+	private readonly SelectMirror _periodMirror;
 	private readonly IReadOnlyCollection<string> _areaMotionSensors;
 
 	// Which sensors may start each held period. A null value means any watched sensor; an empty set is a period
@@ -137,6 +140,12 @@ public sealed class ModeMonitor : IDisposable
 		_areaMotionSensors = areaMotionSensors ?? throw new ArgumentNullException(nameof(areaMotionSensors));
 		_lastPeriod = lastPeriod;
 		_periodSelect = periodSelect;
+
+		_modeSelect = new SelectMirror(ha, global.HouseMode?.Entity, !HouseModeIsHomeAssistants);
+
+		// OptionForPeriod is non-null on exactly the authority that lets us write; PeriodSelectReader is where that
+		// branch is decided, and it is decided once.
+		_periodMirror = new SelectMirror(ha, periodSelect?.Entity, periodSelect?.OptionForPeriod is not null);
 
 		_motionPeriods = motionPeriods ?? MotionPeriodLatch.For(periods, global);
 
@@ -315,6 +324,8 @@ public sealed class ModeMonitor : IDisposable
 	/// <summary>Subscribes and starts the evaluation tick. Safe to call once.</summary>
 	public void Start()
 	{
+		string? startingPeriod;
+
 		lock (_gate)
 		{
 			if (_started)
@@ -333,6 +344,7 @@ public sealed class ModeMonitor : IDisposable
 			// Before ActivePeriodName: seeding may put a held period back in the table.
 			SeedPeriodLatch(_scheduler.Now);
 			_previousPeriodId = _circadian.ActivePeriodId(_scheduler.Now);
+			startingPeriod = _previousPeriodId;
 		}
 
 		if (_global.EffectiveKillSwitchEntity is { Length: > 0 } killSwitch)
@@ -340,7 +352,17 @@ public sealed class ModeMonitor : IDisposable
 			_logger.LogInformation("Watching kill switch {EntityId}.", killSwitch);
 			_subscriptions.Add(_ha.Entity(killSwitch)
 				.StateChanges()
-				.SubscribeSafe(_ => _changed.OnNext(Unit.Default), _logger));
+				.SubscribeSafe(
+					_ =>
+					{
+						// Coming back from the master switch crosses no boundary, so nothing else re-asserts the
+						// helper and it would read the period we paused in until the next tick.
+						if (!KillSwitchActive)
+							MirrorPeriodSelect(_circadian.ActivePeriodId(_scheduler.Now));
+
+						_changed.OnNext(Unit.Default);
+					},
+					_logger));
 		}
 
 		if (_global.HouseMode?.Entity is { Length: > 0 } select)
@@ -371,6 +393,12 @@ public sealed class ModeMonitor : IDisposable
 		// An entity already on before start forces the mode from the first instant and raises no edge, so a house
 		// booting into a forced mode would otherwise say nothing until somebody toggled the entity.
 		AnnounceForcedMode();
+
+		// SchedulePeriodic's first callback is a whole CircadianTickSeconds away, so without this a restart inside a
+		// period left the select naming the period before it: measured on one house at 300 s, five minutes of a
+		// dashboard reading the wrong time of day. A no-op under Home Assistant's authority, and when it already
+		// reads the right thing.
+		MirrorPeriodSelect(startingPeriod);
 
 		_subscriptions.Add(_scheduler.SchedulePeriodic(
 			TimeSpan.FromSeconds(_global.CircadianTickSeconds),
@@ -774,16 +802,15 @@ public sealed class ModeMonitor : IDisposable
 		foreach (HouseModeOptionConfig option in houseMode.Options
 			.Where(candidate => candidate.Kind != ModeKind.Normal && candidate.ActivateAfterNoMotionMinutes is > 0))
 		{
-			if (string.Equals(CurrentModeValue, option.Value.Trim(), StringComparison.OrdinalIgnoreCase))
+			if (_modeSelect.AlreadyShows(option.Value))
 				continue;   // already standing on this mode
 
 			if (now - lastMotionAt < TimeSpan.FromMinutes(option.ActivateAfterNoMotionMinutes!.Value))
 				continue;
 
-			_logger.LogInformation("No motion for {Minutes} min; setting {Select} to '{Mode}'.",
-				option.ActivateAfterNoMotionMinutes, select, option.Value);
-			_ha.CallService(SelectDomain, SelectOptionService,
-				new ServiceTarget { EntityIds = [select] }, new { option = option.Value.Trim() });
+			_modeSelect.Ensure(option.Value, entity => _logger.LogInformation(
+				"No motion for {Minutes} min; setting {Select} to '{Mode}'.",
+				option.ActivateAfterNoMotionMinutes, entity, option.Value));
 
 			lock (_gate)
 			{
@@ -905,16 +932,10 @@ public sealed class ModeMonitor : IDisposable
 
 		// Once, at entry, so a human override mid-period stands. A boundary the engine was not running for never
 		// reaches here; ApplyPeriodModeOnStart handles that from the note on disk.
-		if (!HouseModeIsHomeAssistants
-			&& period?.SetsModeId is { Length: > 0 } setsMode
-			&& _global.HouseMode?.OptionValueFor(setsMode) is { Length: > 0 } wanted
-			&& _global.HouseMode?.Entity is { Length: > 0 } select
-			&& !string.Equals(CurrentModeValue, wanted, StringComparison.OrdinalIgnoreCase))
-		{
-			_logger.LogInformation("Period '{Period}' started; setting {Select} to '{Mode}'.", DisplayName(periodKey), select, wanted);
-			_ha.CallService(SelectDomain, SelectOptionService,
-				new ServiceTarget { EntityIds = [select] }, new { option = wanted });
-		}
+		if (period?.SetsModeId is { Length: > 0 } setsMode
+			&& _global.HouseMode?.OptionValueFor(setsMode) is { Length: > 0 } wanted)
+			_modeSelect.Ensure(wanted, entity => _logger.LogInformation(
+				"Period '{Period}' started; setting {Select} to '{Mode}'.", DisplayName(periodKey), entity, wanted));
 
 		// Period-start reset: a non-Normal option whose ResetOnPeriodStartId names this period returns to Normal.
 		if (activeOption is { Kind: not ModeKind.Normal, ResetOnPeriodStartId: { Length: > 0 } resetPeriod }
@@ -960,19 +981,12 @@ public sealed class ModeMonitor : IDisposable
 		TimePeriodConfig? period = PeriodWithKey(periodKey);
 
 		if (period?.SetsModeId is not { Length: > 0 } setsMode
-			|| _global.HouseMode?.OptionValueFor(setsMode) is not { Length: > 0 } wanted
-			|| _global.HouseMode?.Entity is not { Length: > 0 } select)
+			|| _global.HouseMode?.OptionValueFor(setsMode) is not { Length: > 0 } wanted)
 			return;
 
-		if (string.Equals(CurrentModeValue, wanted, StringComparison.OrdinalIgnoreCase))
-			return;   // already standing where the period wants it
-
-		_logger.LogInformation(
+		_modeSelect.Ensure(wanted, entity => _logger.LogInformation(
 			"Period '{Period}' began while the engine was stopped (it was last running in '{Previous}'); setting {Select} to '{Mode}'.",
-			DisplayName(periodKey), DisplayName(previousRun), select, wanted);
-
-		_ha.CallService(SelectDomain, SelectOptionService,
-			new ServiceTarget { EntityIds = [select] }, new { option = wanted });
+			DisplayName(periodKey), DisplayName(previousRun), entity, wanted));
 	}
 
 	/// <summary>Points the period select at the period the engine's own schedule resolved.</summary>
@@ -987,30 +1001,29 @@ public sealed class ModeMonitor : IDisposable
 	/// </remarks>
 	private void MirrorPeriodSelect(string? periodKey)
 	{
-		if (_periodSelect is not { OptionForPeriod: { } optionFor } select || periodKey is not { Length: > 0 })
+		if (_periodSelect?.OptionForPeriod is not { } optionFor || periodKey is not { Length: > 0 })
 			return;
 
 		if (optionFor(periodKey) is not { Length: > 0 } wanted)
 			return;   // no row maps this period; the validator has already said so if it matters
 
-		if (string.Equals(select.CurrentValue(), wanted, StringComparison.OrdinalIgnoreCase))
-			return;   // already showing it
-
-		bool firstTime;
-		lock (_gate)
+		_periodMirror.Ensure(wanted, entity =>
 		{
-			firstTime = !string.Equals(_mirroredPeriodOption, wanted, StringComparison.OrdinalIgnoreCase);
-			_mirroredPeriodOption = wanted;
-		}
+			// Info the first time we ask for a value, Debug on every retry: an option the select does not offer is
+			// rejected and correctly re-asked on every tick, and that must not fill the log.
+			bool firstTime;
+			lock (_gate)
+			{
+				firstTime = !string.Equals(_mirroredPeriodOption, wanted, StringComparison.OrdinalIgnoreCase);
+				_mirroredPeriodOption = wanted;
+			}
 
-		if (firstTime)
-			_logger.LogInformation("Period '{Period}' is in force; setting {Select} to '{Option}'.",
-				DisplayName(periodKey), select.Entity, wanted);
-		else
-			_logger.LogDebug("Period select {Select} still does not read '{Option}'; asking again.", select.Entity, wanted);
-
-		_ha.CallService(SelectDomain, SelectOptionService,
-			new ServiceTarget { EntityIds = [select.Entity] }, new { option = wanted });
+			if (firstTime)
+				_logger.LogInformation("Period '{Period}' is in force; setting {Select} to '{Option}'.",
+					DisplayName(periodKey), entity, wanted);
+			else
+				_logger.LogDebug("Period select {Select} still does not read '{Option}'; asking again.", entity, wanted);
+		});
 	}
 
 	/// <summary>Reads the previous run's period, treating any failure as "we do not know".</summary>
@@ -1088,12 +1101,8 @@ public sealed class ModeMonitor : IDisposable
 			return;
 		}
 
-		if (string.Equals(CurrentModeValue, normal.Trim(), StringComparison.OrdinalIgnoreCase))
-			return;   // already Normal
-
-		_logger.LogInformation("Resetting {Select} to '{Normal}' ({Trigger}).", select, normal, trigger);
-		_ha.CallService(SelectDomain, SelectOptionService,
-			new ServiceTarget { EntityIds = [select] }, new { option = normal.Trim() });
+		_modeSelect.Ensure(normal, entity =>
+			_logger.LogInformation("Resetting {Select} to '{Normal}' ({Trigger}).", entity, normal, trigger));
 	}
 
 	/// <inheritdoc/>

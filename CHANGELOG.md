@@ -288,6 +288,12 @@ under one version, because they are compiled against each other.
 
 ### Fixed
 
+- **The time-of-day helper is written when the engine starts, not one tick later.** `SchedulePeriodic`'s first
+  callback is a whole `CircadianTickSeconds` away, so a restart inside a period left the `input_select` naming
+  the period *before* it — measured on one house at the 300 s tick, five minutes of every dashboard and
+  automation reading the wrong time of day. It is written again when the master switch releases, which crosses
+  no boundary and so triggered nothing. Both are no-ops under Home Assistant's authority, and when the select
+  already reads the right option.
 - **The schedule runs on the household's clock, not UTC.** `IScheduler.Now` is a `DateTimeOffset` at `+00:00`,
   and the engine compared its `TimeOfDay` directly against each period's `Start`, which is a wall clock. One
   house ran **two hours behind** all summer: `Natt` at 22:30 began at 00:32, so walking through at midnight got
