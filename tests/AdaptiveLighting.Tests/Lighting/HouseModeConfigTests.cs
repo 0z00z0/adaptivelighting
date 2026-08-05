@@ -139,4 +139,43 @@ public sealed class HouseModeConfigTests
 		Assert.IsNull(HouseModeConfig.SleepClampPeriodFor(option, periods),
 			"no clamp, no SetsModeId period, no 'night' → nothing resolves");
 	}
+
+	/// <summary>Re-pointing an option's Value at a renamed helper option breaks nothing that referred to it.</summary>
+	/// <remarks>
+	///     This is what makes the "move it to…" control on both helper screens safe to offer. It is only true
+	///     because a period names a mode by <c>SetsModeId</c>, which is the option's id: before stable ids, moving
+	///     the value would have silently detached every period that switched this mode on.
+	/// </remarks>
+	[TestMethod]
+	public void Repointing_An_Options_Value_Keeps_Everything_That_Named_It()
+	{
+		HouseModeOptionConfig option = new()
+		{
+			Id = "sover-1gz0",
+			Value = "Sover",
+			Kind = ModeKind.Sleep,
+			Scene = "scene.natt",
+			ClampPeriodId = "natt-t1mj",
+			ResetOnPresence = true,
+			ActivateWhileOn = ["input_boolean.sengelys"]
+		};
+
+		HouseModeConfig house = new() { Entity = "input_select.house_state", Options = [option] };
+		TimePeriodConfig night = new() { Id = "natt-t1mj", Name = "Natt", Start = "22:30", SetsModeId = option.Id };
+
+		Assert.AreEqual("Sover", house.OptionValueFor(night.SetsModeId));
+
+		// What the control does: the household renamed the option in Home Assistant, and moves the row onto it.
+		option.Value = "Nattmodus";
+
+		Assert.AreEqual("Nattmodus", house.OptionValueFor(night.SetsModeId),
+			"the period still switches this mode on, and now writes the name Home Assistant will accept");
+
+		Assert.AreEqual(ModeKind.Sleep, option.Kind);
+		Assert.AreEqual("scene.natt", option.Scene);
+		Assert.AreEqual("natt-t1mj", option.ClampPeriodId);
+		Assert.IsTrue(option.ResetOnPresence);
+		CollectionAssert.AreEqual(new[] { "input_boolean.sengelys" }, option.ActivateWhileOn.ToArray(),
+			"a mode option carries far more than a period mapping, which is why rebuilding it by hand was the cost");
+	}
 }
