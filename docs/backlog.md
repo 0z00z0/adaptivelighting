@@ -27,11 +27,20 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
   diagnosis had to come from Home Assistant's recorder instead. Wants a size cap and a rotation that cannot
   itself fill `/config`, and it must never write a token or a Samba credential.
 
-- **House mode page gets the Schedule's mapping table.** One row per live helper option with the
-  rename/orphan handling. Unblocked: the ids landed and are deployed. **Decided 2026-08-04: the "take its
-  list" adopt button goes.** The table shows a row per live option regardless, so no option becomes
-  unreachable; you tag each option's `Kind` rather than adopting a list and editing it. Same reasoning the
-  Schedule's own picker already uses — adopting invents mappings nobody chose.
+- **House mode page gets the Schedule's mapping table.** **Decided 2026-08-04: the "take its list" adopt button
+  goes.** The table shows a row per live option regardless, so no option becomes unreachable; you tag each
+  option's `Kind` rather than adopting a list and editing it. Same reasoning the Schedule's own picker already
+  uses — adopting invents mappings nobody chose.
+  - **Two thirds of the sharing already exists**, found 2026-08-05: `SelectAuthorityPanel` has always carried the
+    picker, the direction switch and the unknown-entity notice for both, and `HelperOptions` now carries the
+    reconciliation. What is left is presentation only — the period select renders compact rows inside the
+    panel's `Body`, the house mode renders `details` folds in a section below it, and the orphan row is worded
+    and laid out differently in each ("renamed in Home Assistant" with a *move it to…* picker, against "removed
+    from the helper in Home Assistant" with a bare Remove).
+  - The remaining question is a design call rather than a refactor: whether a mode option's fold belongs inside
+    the panel body the way a period row does. A fold opens a whole editor and a period row is one dropdown, so
+    they may be right to differ. **Decide that before writing any markup**, and share the orphan row either way —
+    it is the same situation described in two voices.
 
 ## Known defects, found by review and not yet fixed
 
