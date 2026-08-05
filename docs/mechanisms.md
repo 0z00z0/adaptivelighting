@@ -886,3 +886,21 @@ the same from here.
 stays with each caller is the **consequence** — losing a period mapping is not losing a mode's reset triggers,
 and the household wants to be told which. `ConfigValidatorTests.A_Dropped_Option_Reads_The_Same_On_Both_Helpers`
 holds both halves: the same diagnosis, different tails, and neither guessing at the cause.
+
+### The UI can be run, and how
+
+`AdaptiveLighting.Web` is a Razor Class Library with no host, so for a long time a UI change could only be
+reasoned about or checked against a hand-written HTML page holding a copy of the markup. `tools/uihost` is a
+host: the real components, the real stylesheet, a fake Home Assistant, and a gitignored `local.yaml` you can
+fill with a copy of a real document. It is not in the solution — CI should not build a developer tool.
+
+Three things it needs that are each invisible until the page looks broken rather than errors:
+`builder.WebHost.UseStaticWebAssets()`, because static web assets are automatic only in Development;
+`app.MapStaticAssets()` alongside `UseStaticFiles()`, because `_framework/blazor.web.js` comes from the former
+and without it the page server-renders once and never opens a circuit; and a `PackageReference` to
+**`Microsoft.AspNetCore.App.Internal.Assets`**, which is where `blazor.web.js` actually lives — not the shared
+framework, not the SDK. A NetDaemon host gets it transitively.
+
+What it bought immediately: the house-mode remap was proved end to end — the orphan row's *move it to…*
+carried a Guest option's whole configuration onto a renamed value, and opening the select did not toggle the
+fold it sits in, which until then was a `stopPropagation` argument rather than an observation.

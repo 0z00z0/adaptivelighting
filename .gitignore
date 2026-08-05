@@ -42,3 +42,7 @@ website/.astro/
 
 # Session working files: briefs, one-off measurement scripts. Never part of the package.
 scratchpad/
+
+# The UI host edits a real document locally; never commit one (this repo is public).
+tools/uihost/local.yaml
+tools/uihost/*.yaml
