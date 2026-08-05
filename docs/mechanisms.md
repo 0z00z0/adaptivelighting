@@ -856,3 +856,20 @@ that decided it. The mode select's is `HouseModeConfig.HomeAssistantDecides`.
 `SchedulePeriodic` does not fire immediately: its first callback is one full period away. Anything that must be
 true from the first instant has to be done in `Start` as well, which is why the period select is written there
 and again when the master switch releases. Neither crosses a boundary, and a boundary is all the tick watches.
+
+### One reconciliation for both helpers
+
+A house mode and a time-of-day period are both a Home Assistant dropdown set against rows in the document, and
+the answer — which options are still offered, which the helper has stopped offering, which nothing maps yet —
+is one answer. `HelperOptions.Reconcile` is it, and it carries the rule that had been written out three times:
+
+**An empty option list is a connection that has not answered, not a helper somebody emptied.** Read as an
+answer it strikes every stored row through at once, the moment the socket blinks. So `IsLive` is true for
+everything while nothing has been reported, and `Orphans` is empty.
+
+Rendering and orphaning are separate questions. A stored row the helper no longer offers is **rendered**
+whether or not Home Assistant answered — losing it off the screen would be worse than showing it — but is
+**badged** as renamed only when there was an answer to judge it against. `Display` and `Orphans` are the two.
+
+What is not shared is the shape: a mode option opens a whole editor, a period row carries one dropdown. The
+picker, the direction switch and the unknown-entity notice are `SelectAuthorityPanel`'s, and have been.

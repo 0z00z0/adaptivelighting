@@ -214,26 +214,16 @@
 	/// <inheritdoc/>
 	protected override void OnParametersSet() => _liveValues = HouseModeSync.Clean(LiveOptions);
 
+	// One reconciliation for both helpers; HelperOptions carries the unanswered-connection rule and its tests.
+	private HelperOptions Helper =>
+		HelperOptions.Reconcile(_liveValues, Options.Select(option => option.Value), ActiveValue);
+
 	/// <summary>Live options no mapping names yet: what an orphan can be moved onto in one pick.</summary>
-	private List<string> UnmappedLiveValues =>
-		[.. _liveValues.Where(value => Find(value) is null)];
+	private List<string> UnmappedLiveValues => [.. Helper.Unmapped];
 
 	/// <summary>Stored mappings the helper no longer offers: the rename case.</summary>
-	// Empty when LiveOptions is empty. That is a Home Assistant that has not answered, not a helper with no
-	// options; read as an answer it strikes the entire table through the moment the connection blinks.
-	private List<PeriodSelectOptionConfig> Orphans
-	{
-		get
-		{
-			List<string> live = _liveValues;
-
-			return live.Count == 0
-				? []
-				: [.. Options.Where(option =>
-					!string.IsNullOrWhiteSpace(option.Value)
-					&& !live.Any(value => Eq(value, option.Value)))];
-		}
-	}
+	private List<PeriodSelectOptionConfig> Orphans =>
+		[.. Helper.Orphans.Select(Find).OfType<PeriodSelectOptionConfig>()];
 
 	/// <summary>Whether the helper's current option maps to nothing.</summary>
 	// Only asked under Home Assistant's authority. Under adaptive lighting's the engine writes this helper, so
