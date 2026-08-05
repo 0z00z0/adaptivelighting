@@ -35,6 +35,13 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
 
 ## Known defects, found by review and not yet fixed
 
+- **A restart mid-period leaves the period dropdown stale.** Under `PeriodAuthority.AdaptiveLighting` the engine
+  writes `PeriodSelect.Entity` on a boundary *change*, so a restart at 10:58 inside `Dag` left
+  `input_select.time_of_day` reading last night's `Kveld` until the next boundary. Measured on B1 2026-08-05.
+  The engine's own period was correct throughout — this is the helper only, but anything reading that helper
+  (a dashboard card, somebody's automation) is told the wrong time of day for up to a whole period. Write it
+  once on start-up, from the period already resolved.
+
 - **A dangling level row has no control to fix it with.** Found on B1 on 2026-08-04: four rows named periods
   that house has never had, and the room page renders nothing for a row whose period does not resolve — the
   only way to clear them was to hand-edit the document and restart. The validator says the row is wrong; the
