@@ -54,7 +54,11 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
   UI cannot act on what it says. Worth an orphaned row in the levels table with a remove button, the way the
   house-mode and period-select mappings already handle an option that has gone.
 - **`ModeService.ComputePreview` builds a calculator with no hold predicate**, so the settings-page preview
-  shows the clock's period for a held-back period while the house is still on the previous one.
+  shows the clock's period for a held-back period while the house is still on the previous one. Harder than it
+  looks and deliberately left alone on 2026-08-05: the preview is `static` and has no access to the engine's
+  `MotionPeriodLatch`, and a fresh latch would answer "not begun" for every held period, which is wrong in the
+  other direction. It needs the host to hand its latch over, or the preview to ask the engine for the period it
+  already resolved rather than recomputing one.
 - **`ModeService.GetHouseMode` still promises reset behaviour under Home Assistant mode authority.** The
   engine stands those rules down; the dashboard card still describes them as live.
 - **Six chart labels are `9px`/`10px` in SVG user units, not CSS pixels.** `.daylight-axis`,

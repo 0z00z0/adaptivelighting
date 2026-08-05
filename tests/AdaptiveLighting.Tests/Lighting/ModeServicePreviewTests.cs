@@ -165,6 +165,34 @@ public sealed class ModeServicePreviewTests
 		Assert.AreEqual(2200, preview.PreviewKelvin);
 	}
 
+	/// <summary>The same, on a document that has been through the stable-key migration.</summary>
+	/// <remarks>
+	///     Every fixture above names its periods and gives them no <c>Id</c>, so <c>Key</c> falls back to <c>Name</c>
+	///     and a calculator handed either one matches. Every real house has ids, where the two differ — and the
+	///     preview was handing over the display name, matching nothing, and quietly falling back to the clock.
+	/// </remarks>
+	[TestMethod]
+	public void The_Preview_Follows_The_Select_On_A_Document_With_Ids()
+	{
+		AdaptiveLightingConfig config = CabinConfig();
+
+		foreach (TimePeriodConfig period in config.Periods)
+			period.Id = $"{period.Name}-t3st";
+
+		config.Global.PeriodSelect = new PeriodSelectConfig
+		{
+			Entity = "input_select.tid",
+			Authority = PeriodAuthority.HomeAssistant,
+			Options = [new PeriodSelectOptionConfig { Value = "Natt", PeriodId = "night-t3st" }]
+		};
+
+		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(20), NoSun, "Natt");
+
+		Assert.AreEqual("night", preview.ActivePeriodName,
+			"the select names night by id; 20:00 on the clock is evening, and the clock is not deciding");
+		Assert.AreEqual(15d, preview.PreviewBrightness);
+	}
+
 	[TestMethod]
 	public void The_Preview_Ignores_The_Select_Where_The_Engine_Does()
 	{

@@ -496,7 +496,10 @@ public sealed class ModeService
 	/// </remarks>
 	private static CircadianCalculator Calculator(AdaptiveLightingConfig config, SunTimes sun, string? periodSelectValue)
 	{
-		string? forced = Schedule.NamedBySelect(config.Periods, config.Global, periodSelectValue)?.Name;
+		// Key, never Name: CircadianCalculator.PeriodWithKey matches on Key, which is the id once one exists. Passing
+		// the display name silently matched nothing after the stable-key migration, so the card fell back to the
+		// clock on exactly the houses this method exists to serve.
+		string? forced = Schedule.NamedBySelect(config.Periods, config.Global, periodSelectValue)?.Key;
 
 		return new CircadianCalculator(
 			config.Periods, config.Global, () => sun, null, forced is null ? null : () => forced);

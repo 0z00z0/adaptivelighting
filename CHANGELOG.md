@@ -288,6 +288,11 @@ under one version, because they are compiled against each other.
 
 ### Fixed
 
+- **The mode preview follows the time-of-day dropdown again**, on any house that has been through the
+  stable-key migration. The preview handed its calculator the period's *display name* where the calculator
+  matches on its *key*, which is the id once one exists — so under Home Assistant's period authority the cards
+  silently fell back to the clock, which is the one thing that method exists to prevent. Every test fixture
+  named its periods without ids, where the two spellings coincide, so nothing caught it.
 - **The time-of-day helper is written when the engine starts, not one tick later.** `SchedulePeriodic`'s first
   callback is a whole `CircadianTickSeconds` away, so a restart inside a period left the `input_select` naming
   the period *before* it — measured on one house at the 300 s tick, five minutes of every dashboard and
