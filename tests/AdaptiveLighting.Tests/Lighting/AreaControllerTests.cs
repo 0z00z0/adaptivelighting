@@ -105,7 +105,7 @@ public sealed class AreaControllerTests
 
 		var controller = new AreaController(
 			ha, scheduler, area, global, table,
-			new CircadianCalculator(table, global, () => SunTimes.Unknown, levels),
+			new CircadianCalculator(table, global, () => SunTimes.Unknown, levels, zone: TimeZoneInfo.Utc),
 			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area");
 
 		controller.Start();
@@ -989,7 +989,7 @@ public sealed class AreaControllerTests
 		var publisher = new FakeStatePublisher();
 		var controller = new AreaController(
 			ha, scheduler, new ResolvedArea("Test", settings, [Light], [Motion], [Lux], []), global, periods,
-			new CircadianCalculator(periods, global, () => SunTimes.Unknown),
+			new CircadianCalculator(periods, global, () => SunTimes.Unknown, zone: TimeZoneInfo.Utc),
 			new FakeLightActuator(), publisher, new BehaviorSubject<HouseState>(HouseState.Initial),
 			NullLoggerFactory.Instance);
 
@@ -1046,7 +1046,7 @@ public sealed class AreaControllerTests
 			ha, scheduler,
 			new ResolvedArea("Test", settings, [Light], [Motion], [], [], followOutdoorLux),
 			global, periods,
-			new CircadianCalculator(periods, global, () => SunTimes.Unknown),
+			new CircadianCalculator(periods, global, () => SunTimes.Unknown, zone: TimeZoneInfo.Utc),
 			new FakeLightActuator(), publisher, new BehaviorSubject<HouseState>(HouseState.Initial),
 			NullLoggerFactory.Instance);
 

@@ -87,10 +87,12 @@ public sealed class ModeMonitorTests
 
 		var note = lastPeriod as FakeLastPeriodStore ?? new FakeLastPeriodStore();
 
+		// The rig's instants are at +00:00, so the household is UTC here too — otherwise every boundary assertion
+		// below would mean a different hour on each developer's box and a third thing on CI.
 		var monitor = new ModeMonitor(
 			ha, global, NullLogger.Instance, scheduler,
 			periods ?? Periods(), () => SunTimes.Unknown, motion ?? [], lastPeriod ?? note,
-			PeriodSelectReader.For(ha, global, NullLogger.Instance));
+			PeriodSelectReader.For(ha, global, NullLogger.Instance), zone: TimeZoneInfo.Utc);
 
 		return new Rig(ha, scheduler, monitor, note);
 	}

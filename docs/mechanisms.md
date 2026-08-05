@@ -718,6 +718,27 @@ CI runs on Ubuntu in UTC; the development box is Europe/Oslo. Anything rendering
 `ToLocalTime()`, so a test asserting a literal clock string passes locally and fails on the agent. Assert
 shape, or compare against the same projection.
 
+### A Start is a wall clock; `IScheduler.Now` is not
+
+`IScheduler.Now` is a `DateTimeOffset` at **+00:00**, so `now.TimeOfDay` is UTC and `now.Date` is the UTC day.
+Every `Start` in the document is a household wall clock. Comparing them directly ran one house two hours behind
+for a whole summer: `Natt` at 22:30 began at 00:32 local, and a person walking through at midnight got the
+evening period's 70 % instead of the night's 5 %. The offset follows DST, so it cannot be dialled out of the
+document.
+
+`WallClock.TimeIn` / `DayIn` are the only two readings, and `CircadianCalculator` and `ModeMonitor` both take a
+`TimeZoneInfo` defaulting to `TimeZoneInfo.Local` — the same shape `BoardView` already used. **The two must
+carry the same zone**, or a period's mode switch is filed against a different day from the one the table placed
+it on.
+
+The web layer was never wrong: `ActivityView` and `BoardView` convert. That asymmetry is why the pages looked
+right while the lights did not, and it is why the bug survived so long.
+
+**Tests must name the zone.** Sixteen tests were silently asserting UTC behaviour and passed on CI whatever the
+engine did; they now pass `TimeZoneInfo.Utc` explicitly, because their instants are built at `+00:00`. The
+conversion itself is asserted against a fixed `+02:00` custom zone, so it means the same thing on a box with no
+tz database. A regression test here that does not name a zone proves nothing.
+
 ---
 
 ## Last-seen tracking
