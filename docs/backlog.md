@@ -37,10 +37,13 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
     panel's `Body`, the house mode renders `details` folds in a section below it, and the orphan row is worded
     and laid out differently in each ("renamed in Home Assistant" with a *move it to…* picker, against "removed
     from the helper in Home Assistant" with a bare Remove).
-  - The remaining question is a design call rather than a refactor: whether a mode option's fold belongs inside
-    the panel body the way a period row does. A fold opens a whole editor and a period row is one dropdown, so
-    they may be right to differ. **Decide that before writing any markup**, and share the orphan row either way —
-    it is the same situation described in two voices.
+  - **Functionally equal as of 2026-08-05**: the wording is shared, and the house mode gained the *move it to…*
+    remap it was missing. What is left is the container only — whether a mode option's fold belongs inside the
+    panel body the way a period row does. A fold opens a whole editor and a period row is one dropdown, so they
+    may be right to differ. Decide that before writing any markup; nothing is broken until then.
+  - Two differences that are **not** gaps and should stay: the schedule offers *Add a period* when the helper has
+    more options than the schedule has periods, and warns when the live option maps to nothing. A mode option
+    needs neither — tagging a Kind creates the row, so it can never be unmapped in that sense.
 
 ## Known defects, found by review and not yet fixed
 

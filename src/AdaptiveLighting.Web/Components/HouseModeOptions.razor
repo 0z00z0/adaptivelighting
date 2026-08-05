@@ -62,6 +62,18 @@
 					@if (!isLive)
 					{
 						<HelperOrphanBadge />
+						@if (UnmappedLiveValues.Count > 0)
+						{
+							@* stopPropagation on a control inside a summary, or opening it toggles the fold under it. *@
+							<select class="cell" value="" @onclick:stopPropagation="true"
+									@onchange="@(args => Remap(current, args.Value as string))">
+								<option value="">move it to&hellip;</option>
+								@foreach (string free in UnmappedLiveValues)
+								{
+									<option value="@free">@free</option>
+								}
+							</select>
+						}
 						<button type="button" class="danger" @onclick="() => Remove(current)" @onclick:stopPropagation="true">Remove</button>
 					}
 					<span class="housemode-summary-hint">@SummaryHint(option, kind)</span>
@@ -495,6 +507,28 @@
 	{
 		HouseMode.Options.RemoveAll(option => Eq(option.Value, value));
 		EnsureNormalTarget();
+		await Changed.InvokeAsync().ConfigureAwait(false);
+	}
+
+	/// <summary>Live options nothing is stored against: what an orphan can be moved onto in one pick.</summary>
+	private IReadOnlyList<string> UnmappedLiveValues => Helper.Unmapped;
+
+	/// <summary>
+	///     Re-points an orphaned option at a live one, keeping everything the row carries.
+	/// </summary>
+	/// <remarks>
+	///     The rename case, and the same move the schedule offers. It matters more here: a period mapping is one
+	///     string, where a mode option carries its kind, its scene, its clamp period and every reset trigger, and
+	///     without this the only way back from a rename in Home Assistant is to build all of that again.
+	///     Only ever offered an unmapped value, so this cannot collide with an option that already exists.
+	/// </remarks>
+	private async Task Remap(string orphanValue, string? live)
+	{
+		if (live?.Trim() is not { Length: > 0 } target || Find(orphanValue) is not { } option)
+			return;
+
+		option.Value = target;
+		Reorder();
 		await Changed.InvokeAsync().ConfigureAwait(false);
 	}
 
