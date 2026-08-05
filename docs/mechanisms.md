@@ -896,10 +896,15 @@ fill with a copy of a real document. It is not in the solution — CI should not
 
 Three things it needs that are each invisible until the page looks broken rather than errors:
 `builder.WebHost.UseStaticWebAssets()`, because static web assets are automatic only in Development;
-`app.MapStaticAssets()` alongside `UseStaticFiles()`, because `_framework/blazor.web.js` comes from the former
-and without it the page server-renders once and never opens a circuit; and a `PackageReference` to
+`app.MapStaticAssets()`, which serves both `_content/**` and `_framework/blazor.web.js`, without which the page
+server-renders once and never opens a circuit; and a `PackageReference` to
 **`Microsoft.AspNetCore.App.Internal.Assets`**, which is where `blazor.web.js` actually lives — not the shared
 framework, not the SDK. A NetDaemon host gets it transitively.
+
+`UseStaticFiles()` is **not** among them. This file said it was, on the strength of a note claiming
+`MapStaticAssets` serves 0-byte bodies; measured with it removed, both assets return full bodies and the circuit
+opens. The 0-byte symptom came from the missing package in a Production environment, and the extra call was
+cargo-cult carried forward.
 
 What it bought immediately: the house-mode remap was proved end to end — the orphan row's *move it to…*
 carried a Guest option's whole configuration onto a renamed value, and opening the select did not toggle the

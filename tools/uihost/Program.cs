@@ -43,13 +43,10 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 WebApplication app = builder.Build();
 
-// UseStaticFiles, not MapStaticAssets: the RCL's _content assets come back as 0-byte bodies under the latter.
-app.UseStaticFiles();
 app.UseAntiforgery();
 
-// Both, and in this order. UseStaticFiles serves the RCL's _content/** off the runtime manifest;
-// MapStaticAssets is what serves _framework/blazor.web.js, without which the page renders once and never
-// becomes interactive.
+// This alone serves the RCL's _content/** and _framework/blazor.web.js. No UseStaticFiles: measured without
+// it, both come back 200 with real bodies and the circuit opens.
 app.MapStaticAssets();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
