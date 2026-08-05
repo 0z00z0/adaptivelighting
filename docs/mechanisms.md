@@ -841,3 +841,18 @@ at all. When NetDaemon surfaces it, reading it in preference to `last_updated` i
   substrings — Norwegian buries them in compounds, and bare `oven` means "above".
 - Every web asset carries a `?v=` build token, or a cached `app.css` survives a deploy. The token is the
   commit sha, not the version number.
+
+### One select, two authorities, one writer
+
+The house mode and the time of day are two `input_select`s with the same mechanics and different rules.
+`SelectMirror` holds the mechanics: whether the select is ours to write, whether it already shows the option,
+and the call. The rules stay with their callers, and each passes its own log line as a callback that runs
+**only if a write actually happens** — a message describing a write that did not occur is worse than none.
+
+Ownership is structural rather than checked. `PeriodSelectReader` assigns `ReadPeriod` or `OptionForPeriod`,
+never both, so "we own the period select" is `OptionForPeriod is not null` and cannot drift from the authority
+that decided it. The mode select's is `HouseModeConfig.HomeAssistantDecides`.
+
+`SchedulePeriodic` does not fire immediately: its first callback is one full period away. Anything that must be
+true from the first instant has to be done in `Start` as well, which is why the period select is written there
+and again when the master switch releases. Neither crosses a boundary, and a boundary is all the tick watches.
