@@ -1284,6 +1284,48 @@ public sealed class ConfigValidatorTests
 		Assert.IsTrue(result.Warnings.Any(w => w.Contains("Natt", StringComparison.Ordinal)));
 	}
 
+	/// <summary>Both helpers describe a dropped option the same way, and neither guesses at the cause.</summary>
+	/// <remarks>
+	///     There were four wordings for this one situation, and the two screens contradicted each other: one badge
+	///     said "renamed in Home Assistant", the other "removed from the helper". A rename is a removal and an
+	///     addition, so nothing here can tell them apart.
+	/// </remarks>
+	[TestMethod]
+	public void A_Dropped_Option_Reads_The_Same_On_Both_Helpers()
+	{
+		string periodWarning = ConfigValidator.Validate(
+				WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]),
+				livePeriodSelectOptions: ["Dag"])
+			.Warnings.Single(w => w.StartsWith("PeriodSelect option", StringComparison.Ordinal));
+
+		AdaptiveLightingConfig house = Minimal();
+		house.Global.HouseMode = new HouseModeConfig
+		{
+			Entity = "input_select.house_state",
+			// A reset trigger on Ferie only so it earns no second warning of its own; this test is about the first.
+			Options =
+			[
+				new() { Value = "Hjemme", Kind = ModeKind.Normal },
+				new() { Value = "Ferie", Kind = ModeKind.Away, ResetOnPresence = true }
+			]
+		};
+
+		string modeWarning = ConfigValidator.Validate(house, liveSelectOptions: ["Hjemme"])
+			.Warnings.Single(w => w.StartsWith("HouseMode option", StringComparison.Ordinal));
+
+		Assert.IsTrue(periodWarning.Contains(HelperOrphan.NoLongerOffered("Natt"), StringComparison.Ordinal), periodWarning);
+		Assert.IsTrue(modeWarning.Contains(HelperOrphan.NoLongerOffered("Ferie"), StringComparison.Ordinal), modeWarning);
+
+		foreach (string guess in (string[])["renamed", "removed"])
+		{
+			Assert.IsFalse(periodWarning.Contains(guess, StringComparison.OrdinalIgnoreCase), periodWarning);
+			Assert.IsFalse(modeWarning.Contains(guess, StringComparison.OrdinalIgnoreCase), modeWarning);
+		}
+
+		// The consequence is the half that must differ: losing a period mapping is not losing a mode's triggers.
+		Assert.AreNotEqual(periodWarning, modeWarning);
+	}
+
 	[TestMethod]
 	public void PeriodSelect_LiveOptionsAreNotCheckedAgainstTheHouseModeSelect()
 	{

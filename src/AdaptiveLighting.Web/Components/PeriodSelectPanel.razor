@@ -121,9 +121,10 @@
 						PeriodSelectOptionConfig orphan = stale;
 
 						<div class="periodselect-orphan" @key="orphan">
-							<span class="badge bad" title="This value is no longer one of the helper's options.">renamed in Home Assistant</span>
+							<HelperOrphanBadge />
 							<span class="periodselect-orphan-text">
-								<code>@orphan.Value</code> means <b>@OrphanPeriod(orphan)</b>, and the helper no longer offers it.
+								<code>@orphan.Value</code> means <b>@OrphanPeriod(orphan)</b>, and the helper no longer
+								offers it. Move it across if you renamed it; the mapping does nothing until you do.
 							</span>
 
 							@if (UnmappedLiveValues.Count > 0)

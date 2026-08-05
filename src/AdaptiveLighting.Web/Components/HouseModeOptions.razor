@@ -61,7 +61,7 @@
 					}
 					@if (!isLive)
 					{
-						<span class="badge bad" title="This value is no longer one of the select's live options.">removed from the helper in Home Assistant</span>
+						<HelperOrphanBadge />
 						<button type="button" class="danger" @onclick="() => Remove(current)" @onclick:stopPropagation="true">Remove</button>
 					}
 					<span class="housemode-summary-hint">@SummaryHint(option, kind)</span>
