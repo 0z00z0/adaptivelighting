@@ -37,6 +37,7 @@ public sealed class ModeMonitor : IDisposable
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
 	private readonly CircadianCalculator _circadian;
 	private readonly Func<SunTimes> _sunTimes;
+	private readonly TimeZoneInfo _zone;
 	private readonly IReadOnlyCollection<string> _areaMotionSensors;
 
 	// Which sensors may start each held period. A null value means any watched sensor; an empty set is a period
@@ -123,8 +124,10 @@ public sealed class ModeMonitor : IDisposable
 		ILastPeriodStore? lastPeriod = null,
 		PeriodSelectReader? periodSelect = null,
 		IReadOnlyDictionary<string, IReadOnlyList<string>>? motionSensorsByArea = null,
-		MotionPeriodLatch? motionPeriods = null)
+		MotionPeriodLatch? motionPeriods = null,
+		TimeZoneInfo? zone = null)
 	{
+		_zone = zone ?? TimeZoneInfo.Local;
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -138,7 +141,7 @@ public sealed class ModeMonitor : IDisposable
 		_motionPeriods = motionPeriods ?? MotionPeriodLatch.For(periods, global);
 
 		_circadian = new CircadianCalculator(
-			periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod, _motionPeriods.IsHeldBack);
+			periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod, _motionPeriods.IsHeldBack, _zone);
 
 		BuildMotionStartPeriods(motionSensorsByArea);
 	}
@@ -636,8 +639,9 @@ public sealed class ModeMonitor : IDisposable
 		// Before the lock: this consults Home Assistant.
 		HouseModeOptionConfig? activeOption = CurrentOption;
 
-		// The instant's own offset, as the circadian table reads it. Never the machine's local day.
-		DateOnly today = DateOnly.FromDateTime(now.Date);
+		// The household's day, as the circadian table reads it. The two must agree or a period's mode switch is
+		// filed against a different day from the one the table placed it on.
+		DateOnly today = now.DayIn(_zone);
 
 		string? periodKey;
 		bool start;
@@ -684,7 +688,7 @@ public sealed class ModeMonitor : IDisposable
 		if (PeriodWithKey(periodKey) is not { } period || !PeriodStart.TryParse(period.Start, out PeriodStart? start))
 			return false;
 
-		return start!.Resolve(_sunTimes()) is { } resolved && resolved <= TimeOnly.FromTimeSpan(now.TimeOfDay);
+		return start!.Resolve(_sunTimes()) is { } resolved && resolved <= now.TimeIn(_zone);
 	}
 
 	/// <summary>
@@ -714,7 +718,7 @@ public sealed class ModeMonitor : IDisposable
 	// instance, which is the one the table's wrap puts in force.
 	private DateOnly InstanceDay(string periodKey, DateTimeOffset now)
 	{
-		DateOnly today = DateOnly.FromDateTime(now.Date);
+		DateOnly today = now.DayIn(_zone);
 		return StartHasPassed(periodKey, now) ? today : today.AddDays(-1);
 	}
 

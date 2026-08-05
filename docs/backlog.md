@@ -13,6 +13,20 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
 
 ## Next up
 
+- **Schedule to the next boundary instead of polling every `CircadianTickSeconds`.** B1 runs a 300 s tick, so a
+  period arrives 0–5 minutes late; measured 2026-08-05, the six boundaries landed +0 to +4 min. Home Assistant
+  has no wall-clock event worth subscribing to — its time triggers live in HA automations, which would move the
+  schedule out of the engine — so the fix is `IScheduler.Schedule(nextBoundary)` and a reschedule whenever the
+  sun times move or the document is saved. **A timer does not survive a restart and does not need to**: start-up
+  already resolves the active period from the clock, `LastPeriodStore` seeds what has already fired, and
+  `ModeMonitor.BoundaryWentByWhileDown` covers a boundary crossed while the engine was down. Keep the tick as a
+  slow safety net rather than deleting it.
+- **A 24-hour circular log beside the config, surviving restarts.** `/config/adaptive-lighting/` rather than the
+  deploy folder, which is wiped on every deploy. The need is proven: the midnight incident on 2026-08-05 could
+  not be read from the add-on log at all — Supervisor's buffer had been overwritten by two restarts, and the
+  diagnosis had to come from Home Assistant's recorder instead. Wants a size cap and a rotation that cannot
+  itself fill `/config`, and it must never write a token or a Samba credential.
+
 - **House mode page gets the Schedule's mapping table.** One row per live helper option with the
   rename/orphan handling. Unblocked: the ids landed and are deployed. **Decided 2026-08-04: the "take its
   list" adopt button goes.** The table shows a row per live option regardless, so no option becomes

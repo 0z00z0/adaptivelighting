@@ -288,6 +288,20 @@ under one version, because they are compiled against each other.
 
 ### Fixed
 
+- **The schedule runs on the household's clock, not UTC.** `IScheduler.Now` is a `DateTimeOffset` at `+00:00`,
+  and the engine compared its `TimeOfDay` directly against each period's `Start`, which is a wall clock. One
+  house ran **two hours behind** all summer: `Natt` at 22:30 began at 00:32, so walking through at midnight got
+  the evening period's 70 % instead of the night's 5 %. The engine's idea of *today* rolled over at 02:00 local
+  with it, which reached the motion latch and the once-a-day period rules.
+  - The offset follows daylight saving, so it could not be dialled out of the document.
+  - `CircadianCalculator` and `ModeMonitor` now take the household's `TimeZoneInfo`, defaulting to the machine's,
+    and **must be given the same one** — a period's mode switch is otherwise filed against a different day from
+    the one that placed it.
+  - The pages were never affected: the activity list and the board already converted, which is why the UI looked
+    correct while the lights did not.
+  - Sixteen tests were asserting UTC behaviour without saying so and would have passed on a UTC CI box whatever
+    the engine did. They now name `TimeZoneInfo.Utc`, and the conversion is asserted against a fixed `+02:00`
+    zone so it means the same thing anywhere.
 - **A restart no longer reads as somebody changing the house mode.** Every rebuild seeds the house
   stream with a fabricated state before publishing the observed one, so the first genuine publication
   looked like a transition: a settings save put one *Mode changed to X* row in the record, and a

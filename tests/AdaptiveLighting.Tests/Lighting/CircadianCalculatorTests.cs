@@ -20,13 +20,17 @@ public sealed class CircadianCalculatorTests
 		new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
 	];
 
+	// At() builds an instant at +00:00, so every calculator below is told the household is UTC too. Left to
+	// TimeZoneInfo.Local these assertions would mean a different hour on every developer's box and a third thing
+	// on CI. The conversion itself is asserted in TheScheduleIsAWallClock_NotUtc, which names a real offset.
 	private static DateTimeOffset At(int hour, int minute = 0) => new(2026, 1, 15, hour, minute, 0, TimeSpan.Zero);
 
 	private static CircadianCalculator Stepped(
 		IReadOnlyList<TimePeriodConfig>? periods = null,
 		SunTimes? sun = null,
 		IReadOnlyList<RoomLevelOverride>? levels = null) =>
-		new(periods ?? Table, new GlobalConfig { SmoothTransitions = false }, () => sun ?? SunTimes.Unknown, levels);
+		new(periods ?? Table, new GlobalConfig { SmoothTransitions = false }, () => sun ?? SunTimes.Unknown, levels,
+			zone: TimeZoneInfo.Utc);
 
 	/// <summary>Only the physical bound is left; the per-period floor and ceiling were cut.</summary>
 	[TestMethod]
@@ -49,6 +53,29 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual("evening", calc.GetTarget(At(18))!.PeriodName);
 		Assert.AreEqual("evening", calc.GetTarget(At(22, 29))!.PeriodName);
 		Assert.AreEqual("night", calc.GetTarget(At(22, 30))!.PeriodName);
+	}
+
+	/// <summary>A Start is a household wall clock, and the instant the scheduler hands over is not.</summary>
+	/// <remarks>
+	///     The house ran two hours behind for a whole summer: IScheduler.Now is a DateTimeOffset at +00:00, so its
+	///     TimeOfDay is UTC, and night@22:30 began at 00:30. A fixed +02:00 zone rather than a named one, so this
+	///     asserts the same thing on a box with no tz database.
+	/// </remarks>
+	[TestMethod]
+	public void The_Schedule_Is_A_Wall_Clock_Not_UTC()
+	{
+		TimeZoneInfo plusTwo = TimeZoneInfo.CreateCustomTimeZone("test+2", TimeSpan.FromHours(2), "UTC+2", "UTC+2");
+
+		CircadianCalculator calc = new(
+			Table, new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown, zone: plusTwo);
+
+		// 21:00Z is 23:00 in the household, which is night. Read as UTC it is 21:00, which is evening.
+		Assert.AreEqual("night", calc.GetTarget(At(21))!.PeriodName, "23:00 local is night, whatever the offset");
+		Assert.AreEqual("night", calc.ActivePeriodId(At(21)));
+
+		// 20:29Z is 22:29 local, the minute before the boundary — the period must not arrive early either.
+		Assert.AreEqual("evening", calc.GetTarget(At(20, 29))!.PeriodName);
+		Assert.AreEqual("night", calc.GetTarget(At(20, 30))!.PeriodName, "22:30 local exactly");
 	}
 
 	[TestMethod]
@@ -167,7 +194,8 @@ public sealed class CircadianCalculatorTests
 	// ===================== blending =====================
 
 	private static CircadianCalculator Blended(int blendMinutes = 30, IReadOnlyList<RoomLevelOverride>? levels = null) =>
-		new(Table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = blendMinutes }, () => SunTimes.Unknown, levels);
+		new(Table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = blendMinutes }, () => SunTimes.Unknown, levels,
+			zone: TimeZoneInfo.Utc);
 
 	[TestMethod]
 	public void Halfway_Through_The_Blend_The_Target_Is_Halfway_Between_The_Periods()
@@ -442,7 +470,7 @@ public sealed class CircadianCalculatorTests
 		Func<string?> periodOverride,
 		IReadOnlyList<RoomLevelOverride>? levels = null) =>
 		new(Table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 },
-			() => SunTimes.Unknown, levels, periodOverride);
+			() => SunTimes.Unknown, levels, periodOverride, zone: TimeZoneInfo.Utc);
 
 	[TestMethod]
 	public void Override_NamesThePeriod_WhateverTheClockSays()
@@ -524,7 +552,8 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual(15d, calc.GetTarget(At(18, 15))!.BrightnessPct);
 
 		LightTarget blended = new CircadianCalculator(
-			Table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 }, () => SunTimes.Unknown)
+			Table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 }, () => SunTimes.Unknown,
+			zone: TimeZoneInfo.Utc)
 			.GetTarget(At(18, 15))!;
 
 		Assert.AreNotEqual(15d, blended.BrightnessPct,
@@ -550,7 +579,8 @@ public sealed class CircadianCalculatorTests
 
 	/// <summary>A calculator holding back whatever <paramref name="heldBack"/> says is still waiting.</summary>
 	private static CircadianCalculator Holding(Func<string, DateOnly, bool> heldBack, GlobalConfig? global = null) =>
-		new(Table, global ?? new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown, null, null, heldBack);
+		new(Table, global ?? new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown, null, null, heldBack,
+			TimeZoneInfo.Utc);
 
 	[TestMethod]
 	public void AHeldPeriod_IsLeftOutOfTheTable_SoThePreviousOneKeepsRunning()

@@ -74,6 +74,7 @@ public sealed class CircadianCalculator
 	// Answers whether a period that waits for movement has still not begun on the local day its instance would
 	// have started. Installed by the host, so this stays a predicate and never reads motion.
 	private readonly Func<string, DateOnly, bool>? _heldBack;
+	private readonly TimeZoneInfo _zone;
 
 	// Keyed by TimePeriodConfig.Key. First row wins on a duplicate, matching what the validator reports.
 	private readonly Dictionary<string, RoomLevelOverride> _roomLevels;
@@ -101,6 +102,8 @@ public sealed class CircadianCalculator
 	///     else. <c>null</c> resolves from the schedule.
 	///     <paramref name="periodHeldBack"/> comes from <see cref="MotionPeriodLatch.IsHeldBack"/>. <c>null</c>
 	///     places every period on its own <c>Start</c>.
+	///     <paramref name="zone"/> is the household's, and is named explicitly only by tests: a boundary is a wall
+	///     clock and the instants handed in are not.
 	/// </remarks>
 	public CircadianCalculator(
 		IReadOnlyList<TimePeriodConfig> periods,
@@ -108,13 +111,15 @@ public sealed class CircadianCalculator
 		Func<SunTimes> sunTimes,
 		IReadOnlyList<RoomLevelOverride>? roomLevels = null,
 		Func<string?>? periodOverride = null,
-		Func<string, DateOnly, bool>? periodHeldBack = null)
+		Func<string, DateOnly, bool>? periodHeldBack = null,
+		TimeZoneInfo? zone = null)
 	{
 		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_sunTimes = sunTimes ?? throw new ArgumentNullException(nameof(sunTimes));
 		_periodOverride = periodOverride;
 		_heldBack = periodHeldBack;
+		_zone = zone ?? TimeZoneInfo.Local;
 
 		Dictionary<string, RoomLevelOverride> levels = new(StringComparer.OrdinalIgnoreCase);
 
@@ -162,7 +167,7 @@ public sealed class CircadianCalculator
 		if (boundaries.Count == 0)
 			return null;
 
-		TimeOnly timeOfDay = TimeOnly.FromTimeSpan(now.TimeOfDay);
+		TimeOnly timeOfDay = now.TimeIn(_zone);
 		int index = ActiveIndex(boundaries, timeOfDay);
 		(TimeOnly Start, TimePeriodConfig Period) active = boundaries[index];
 		PeriodLevels arriving = LevelsOf(active.Period);
@@ -259,10 +264,10 @@ public sealed class CircadianCalculator
 	/// </remarks>
 	public string? ScheduledPeriodId(DateTimeOffset now) => KeyAt(ResolveBoundaries(now, respectHold: false), now);
 
-	private static string? KeyAt(List<(TimeOnly Start, TimePeriodConfig Period)> boundaries, DateTimeOffset now) =>
+	private string? KeyAt(List<(TimeOnly Start, TimePeriodConfig Period)> boundaries, DateTimeOffset now) =>
 		boundaries.Count == 0
 			? null
-			: boundaries[ActiveIndex(boundaries, TimeOnly.FromTimeSpan(now.TimeOfDay))].Period.Key;
+			: boundaries[ActiveIndex(boundaries, now.TimeIn(_zone))].Period.Key;
 
 	/// <summary>
 	///     The period an override names, or <c>null</c> when there is no override or it names nothing this table
@@ -282,8 +287,8 @@ public sealed class CircadianCalculator
 	{
 		SunTimes sunTimes = _sunTimes();
 		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = new(_parsedStarts.Count);
-		TimeOnly timeOfDay = TimeOnly.FromTimeSpan(now.TimeOfDay);
-		DateOnly today = DateOnly.FromDateTime(now.Date);
+		TimeOnly timeOfDay = now.TimeIn(_zone);
+		DateOnly today = now.DayIn(_zone);
 
 		// A sun-anchored boundary the sun entity cannot place is dropped, not guessed at. The table still covers
 		// the day by wrapping, so the drop is reported or the wrap is silent.
