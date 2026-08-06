@@ -1,0 +1,11 @@
+{
+	"version": "0.0.1",
+	"configurations": [
+		{
+			"name": "uihost",
+			"runtimeExecutable": "dotnet",
+			"runtimeArgs": ["run", "--project", "tools/uihost"],
+			"port": 5199
+		}
+	]
+}

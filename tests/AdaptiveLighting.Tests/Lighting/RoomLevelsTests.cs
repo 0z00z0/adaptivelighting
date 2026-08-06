@@ -243,5 +243,81 @@ public sealed class RoomLevelsTests
 		Assert.AreEqual(0, RoomLevels.Rows([], Room()).Count);
 		Assert.AreEqual(0, RoomLevels.Orphans([], null).Count);
 		Assert.AreEqual(0, RoomLevels.OwnCount([], null));
+		Assert.AreEqual(0, RoomLevels.FreePeriods([], null).Count);
+	}
+
+	// ===================== sending an orphan back to a real period =====================
+
+	private static AreaConfig RoomWithOrphan() => new()
+	{
+		AreaId = "kontor",
+		Levels = [new RoomLevelOverride { PeriodId = "night", BrightnessPct = 12, ColorTempKelvin = 2200 }]
+	};
+
+	[TestMethod]
+	public void An_Orphan_Carries_Its_Brightness_And_Warmth_To_The_Period_It_Moves_To()
+	{
+		AreaConfig room = RoomWithOrphan();
+
+		Assert.IsTrue(RoomLevels.Repoint(room, "night", "natt"));
+
+		Assert.AreEqual(0, RoomLevels.Orphans(Day(), room).Count, "the row is no longer stranded");
+
+		RoomLevelRow moved = RoomLevels.Rows(Day(), room).Single(row => row.PeriodId == "natt");
+		Assert.AreEqual(12, moved.BrightnessPct);
+		Assert.AreEqual(2200, moved.ColorTempKelvin);
+		Assert.AreEqual(LevelSource.Room, moved.Brightness);
+		Assert.AreEqual(LevelSource.Room, moved.Colour);
+	}
+
+	[TestMethod]
+	public void Only_Periods_The_Room_States_Nothing_For_Are_Offered()
+	{
+		AreaConfig room = RoomWithOrphan();
+		room.Levels.Add(new RoomLevelOverride { PeriodId = "dag", BrightnessPct = 80 });
+
+		CollectionAssert.AreEqual(
+			new[] { "morgen", "kveld", "natt" },
+			RoomLevels.FreePeriods(Day(), room).Select(period => period.Key).ToArray(),
+			"dag is spoken for, so offering it would mean overwriting a level that is on screen");
+	}
+
+	[TestMethod]
+	public void A_Move_Onto_A_Period_The_Room_Already_States_Is_Refused()
+	{
+		AreaConfig room = RoomWithOrphan();
+		room.Levels.Add(new RoomLevelOverride { PeriodId = "dag", BrightnessPct = 80 });
+
+		Assert.IsFalse(RoomLevels.Repoint(room, "night", "dag"));
+
+		Assert.AreEqual(80, RoomLevels.Rows(Day(), room).Single(row => row.PeriodId == "dag").BrightnessPct,
+			"the standing level survives the refused move");
+		Assert.AreEqual(1, RoomLevels.Orphans(Day(), room).Count, "and the orphan is still there to deal with");
+	}
+
+	[TestMethod]
+	public void A_Move_Onto_A_Cleared_Row_Takes_It_Over_Instead_Of_Sitting_Under_It()
+	{
+		AreaConfig room = RoomWithOrphan();
+		room.Levels.Insert(0, new RoomLevelOverride { PeriodId = "natt" });
+
+		Assert.IsTrue(RoomLevels.Repoint(room, "night", "natt"), "an empty row states nothing, so natt is free");
+
+		Assert.AreEqual(1, room.Levels.Count, "the cleared row goes rather than shadowing the moved one");
+		Assert.AreEqual(12, RoomLevels.Rows(Day(), room).Single(row => row.PeriodId == "natt").BrightnessPct);
+	}
+
+	[TestMethod]
+	public void A_Move_That_Names_Nothing_Or_Names_Itself_Changes_Nothing()
+	{
+		AreaConfig room = RoomWithOrphan();
+
+		Assert.IsFalse(RoomLevels.Repoint(room, "night", ""));
+		Assert.IsFalse(RoomLevels.Repoint(room, "night", "   "));
+		Assert.IsFalse(RoomLevels.Repoint(room, "night", "night"));
+		Assert.IsFalse(RoomLevels.Repoint(room, "no-such-row", "natt"));
+
+		Assert.AreEqual(1, RoomLevels.Orphans(Day(), room).Count);
+		Assert.AreEqual("night", room.Levels.Single().PeriodId);
 	}
 }

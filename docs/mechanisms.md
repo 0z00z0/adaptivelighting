@@ -797,6 +797,52 @@ at all. When NetDaemon surfaces it, reading it in preference to `last_updated` i
 
 ---
 
+## Chart labels are sized against the chart, not the window
+
+Both hand-built SVG charts are drawn at a fixed viewBox and stretched to `width: 100%` — the daylight chart
+730 units wide, the lux curve 620. Everything inside scales with that, type included, so a `font-size` written
+in the stylesheet is a *user unit* and not a pixel. The consequence is that the labels shrink exactly as the
+chart does.
+
+Measured on 2026-08-06, at a 390 px viewport:
+
+| | viewBox | chart width | scale | label before | label after |
+|---|---|---|---|---|---|
+| daylight | 730 | 308 px | 0.42 | **3.8 px** | 5.5 px |
+| lux curve | 620 | 303 px | 0.49 | 9.8 px | 9.8 px |
+
+The lux chart already had a `@media (max-width: 560px)` block bumping its labels to fixed user-unit sizes, so
+a phone was covered; the daylight chart had nothing, and 3.8 px is the live defect. That bump is also why the
+lux figures do not move — the cap lands on the same number the hack did.
+
+The fix cancels the viewBox scale in CSS: `tan(atan2(730px, 100cqw))` evaluates to `730 / rendered width`, so
+multiplying a wanted pixel size by it yields the user-unit size that renders at that pixel size, at any width.
+It keys on a container query rather than the viewport, so a narrow chart inside a wide window thins too, and
+sits inside `@supports` so a browser lacking either feature keeps the old behaviour rather than losing labels.
+
+**The targets are measured, not the numbers that were in the stylesheet.** At 1280 px the daylight chart is
+819 px wide (scale 1.12) and the lux plot 1013 px (scale 1.63) — so the lux chart's "10 px" labels were
+already rendering at 16.3 px. Taking the stylesheet figure as the target would have shrunk that chart by a
+third.
+
+**The cap is what limits the gain, and it is paired with a constant in C#.** Labels sit at data-driven y
+positions that do not grow with the type. Stepping the daylight cap: clean at 13 user units, colliding at 14,
+where the December month label meets the last period label in the bottom-right corner. That corner is a layout
+problem, not a sizing one, and it holds the phone rendering to 5.5 px instead of the 10.1 the formula asks
+for. It is in `docs/backlog.md`.
+
+`DaylightChart.SpreadLabels` owns the other half. Its `MinGap` pushes two close period labels apart, and it
+was 11 — one line-height at the old 9-unit type. At the 13-unit cap the label box measures **12.3 units above
+the baseline and 6.7 below**, so baselines must be at least 19 apart to touch and 20 to clear. `MinGap` is now
+20. Verified against a six-period document with three boundaries inside 20 minutes, which is the case that
+forces the spread: at 390 px no two labels of any family overlap.
+
+**The two constants move together.** Raising the CSS cap without raising `MinGap` overlaps the labels on any
+house whose boundaries are close enough to be spread — which the common four-period document never is, so it
+would pass a casual look and fail on somebody's real schedule.
+
+---
+
 ## Numbers that were chosen, not derived
 
 | Value | Where | Why |
@@ -814,6 +860,10 @@ at all. When NetDaemon surfaces it, reading it in preference to `last_updated` i
 | ~3 px | board mark de-duplication gap | a screen bound, not a clock bound, because the suppressed-off path republishes per movement |
 | 12.5 / 14 / 15 / 20 / 25 px | the type scale | one step up from the shipped 11 / 12.5 / 13.5 / 19 / 24 after "small and hard to read". Size was the complaint as much as contrast: the muted colour already passed AA before this |
 | 9.41 / 6.05 / 8.70 : 1 | muted text on the page background, Dark / Light / 0z0 | measured after the lift; Dark was 6.51:1 |
+| 13 user units | daylight chart label cap | stepped it: clean at 13, and 14 runs the December month label into the last period label. A layout clash in one corner, not a size limit |
+| 20 user units | `DaylightChart.SpreadLabels.MinGap` | one label box at that cap, measured 12.3 above the baseline and 6.7 below. Was 11, sized for the old 9-unit type; 19 exactly touches |
+| 10.1 / 7.9 px | daylight chart label targets | what a 1280 px desktop already rendered, so the desktop chart does not move |
+| 16.3 / 14.7 px | lux curve label targets | same rule, and this plot is 1013 px wide at 1280, so its "10 px" labels were already 16.3 |
 
 ---
 

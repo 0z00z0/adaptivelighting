@@ -194,7 +194,10 @@
 	/// </summary>
 	private static IEnumerable<(string Label, double LabelY)> SpreadLabels(List<PeriodLine> lines)
 	{
-		const double MinGap = 11;
+		// Baseline to baseline, so it must clear the box either side of it: at app.css's 13-unit cap on
+		// .daylight-period-label the box measures 12.3 above the baseline and 6.7 below, and 19 exactly
+		// touches. Raise that cap and this has to move with it.
+		const double MinGap = 20;
 
 		List<(string Label, double LabelY)> ordered = lines
 			.Select(line => (line.Label, LabelY: line.LabelY))

@@ -111,9 +111,16 @@
 		</div>
 	}
 
-	@* Rows this room wrote for a period that no longer exists. The schema keeps them because a missing period
-	   is usually a rename in progress; they are shown and removable, but have nothing to edit against. *@
-	@foreach (RoomLevelOrphan orphan in RoomLevels.Orphans(Periods, Room))
+	@* Rows this room wrote for a period the schedule no longer has. Since periods carry stable ids a rename no
+	   longer strands one, so these come from a deleted period or a hand-edited file. *@
+	@{
+		IReadOnlyList<RoomLevelOrphan> orphans = RoomLevels.Orphans(Periods, Room);
+
+		// Hoisted: read inside the loop it would be recomputed twice per orphan, on a page that ticks at 1 Hz.
+		IReadOnlyList<TimePeriodConfig> free = orphans.Count > 0 ? RoomLevels.FreePeriods(Periods, Room) : [];
+	}
+
+	@foreach (RoomLevelOrphan orphan in orphans)
 	{
 		RoomLevelOrphan current = orphan;
 
@@ -129,7 +136,17 @@
 			</div>
 
 			<div class="lvl-cell">
-				<span class="lvl-cell-label">Kept in case it was renamed</span>
+				<span class="lvl-cell-label">Move it to a period, or remove it</span>
+				@if (free.Count > 0)
+				{
+					<select class="cell" value="" @onchange="@(args => Repoint(current.PeriodId, args.Value as string))">
+						<option value="">move it to&hellip;</option>
+						@foreach (TimePeriodConfig period in free)
+						{
+							<option value="@period.Key">@period.Name</option>
+						}
+					</select>
+				}
 				<button type="button" class="lvl-drop" @onclick="() => Drop(current.PeriodId)">Remove it</button>
 			</div>
 		</div>
@@ -232,6 +249,14 @@
 	private Task Drop(string periodId)
 	{
 		RoomLevels.Remove(Room, periodId);
+
+		return Changed.InvokeAsync();
+	}
+
+	private Task Repoint(string fromPeriodId, string? toPeriodId)
+	{
+		if (toPeriodId is not { Length: > 0 } target || !RoomLevels.Repoint(Room, fromPeriodId, target))
+			return Task.CompletedTask;
 
 		return Changed.InvokeAsync();
 	}

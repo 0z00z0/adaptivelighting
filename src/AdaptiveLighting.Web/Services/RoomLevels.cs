@@ -142,6 +142,37 @@ public static class RoomLevels
 		return room.Levels.RemoveAll(level => string.Equals(level.PeriodId, periodId, ByKey)) > 0;
 	}
 
+	/// <summary>The schedule's periods this room states nothing for, which is where an orphan row may be sent.</summary>
+	public static IReadOnlyList<TimePeriodConfig> FreePeriods(IReadOnlyList<TimePeriodConfig> periods, AreaConfig? room)
+	{
+		ArgumentNullException.ThrowIfNull(periods);
+
+		return [.. periods.Where(period => Stated(room, period.Key) is null)];
+	}
+
+	/// <summary>Points an orphaned row at a real period, carrying its brightness and warmth across.</summary>
+	/// <returns>Whether the row moved.</returns>
+	/// <remarks>
+	///     Refuses a target the room already states, so a move cannot silently overwrite a level that is on
+	///     screen. <see cref="FreePeriods"/> is what the picker offers, and this repeats the check because the
+	///     schedule can change under an open page.
+	/// </remarks>
+	public static bool Repoint(AreaConfig room, string fromPeriodId, string toPeriodId)
+	{
+		ArgumentNullException.ThrowIfNull(room);
+
+		if (string.IsNullOrWhiteSpace(toPeriodId) || string.Equals(fromPeriodId, toPeriodId, ByKey))
+			return false;
+
+		RoomLevelOverride? orphan = Find(room, fromPeriodId);
+		if (orphan is null || orphan.IsEmpty || Stated(room, toPeriodId) is not null)
+			return false;
+
+		orphan.PeriodId = toPeriodId;
+		Prune(room);
+		return true;
+	}
+
 	// Read path. Skips empty rows because CircadianCalculator.LevelsOf skips them: on a hand-edited file with a
 	// cleared row above a real one, taking the first row regardless shows a level the room does not run.
 	private static RoomLevelOverride? Stated(AreaConfig? room, string periodId) =>

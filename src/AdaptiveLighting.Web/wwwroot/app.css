@@ -1261,20 +1261,6 @@ button.mode-card:disabled {
 	color: var(--text);
 }
 
-/* The house-mode section's one call to action: what the dropdown helper offers, what this document has, and
-   the single control that takes the helper's list. A stack rather than a paragraph because it is three
-   sentences and a button — and the button lives inside the notice rather than under it, so what it does and
-   what it costs can never be read apart. */
-.modes-sync {
-	display: flex;
-	flex-direction: column;
-	gap: 0.4rem;
-}
-
-.modes-sync .panel-actions {
-	margin: 0.15rem 0 0;
-}
-
 /* ---- status ---- */
 
 .status-row {
@@ -2540,6 +2526,10 @@ select.cell.wide {
 
 .daylight-chart {
 	margin-bottom: 1rem;
+	container: daylightchart / inline-size;
+
+	/* 730 is DaylightChart's viewBox width. tan(atan2(a, b)) is a / b. */
+	--chart-unit: tan(atan2(730px, 100cqw));
 }
 
 .daylight-svg {
@@ -2638,6 +2628,34 @@ select.cell.wide {
 	color: var(--muted);
 	font-size: 0.82rem;
 	margin: 0.5rem 0 0;
+}
+
+/* Chart type is in SVG user units, so it shrinks with the drawing: 9 units rendered 3.8 real pixels at 390 px.
+   --chart-unit is the viewBox width over the rendered width, so multiplying a wanted pixel size by it holds a
+   label the same physical size at any width. Sizing and the two viewBox widths are in docs/mechanisms.md.
+
+   The 13-unit cap is paired with DaylightChart.SpreadLabels.MinGap, which spaces labels for exactly this
+   size. Raise one and the other has to move, or close boundaries overlap. */
+@supports (font-size: calc(tan(atan2(1px, 1px)) * 1px)) {
+	@container daylightchart (min-width: 1px) {
+		.daylight-axis,
+		.daylight-period-label,
+		.daylight-mark-label {
+			font-size: min(calc(var(--chart-unit) * 10.1px), 13px);
+		}
+
+		.daylight-dst-label {
+			font-size: min(calc(var(--chart-unit) * 7.9px), 10.2px);
+		}
+
+		/* The halo is a stroke, so it scales with the viewBox too and would thicken into the glyphs. */
+		.daylight-axis,
+		.daylight-period-label,
+		.daylight-mark-label,
+		.daylight-dst-label {
+			stroke-width: calc(var(--chart-unit) * 2.7px);
+		}
+	}
 }
 
 /* ---- house-mode options ----
@@ -5743,6 +5761,10 @@ h1[tabindex="-1"]:focus {
 
 .luxc-plot {
 	position: relative;
+	container: luxcurve / inline-size;
+
+	/* 620 is LuxCurve.ViewWidth. */
+	--chart-unit: tan(atan2(620px, 100cqw));
 }
 
 .luxc-svg {
@@ -5849,19 +5871,30 @@ h1[tabindex="-1"]:focus {
 }
 
 /* On a phone the chart is about a third of its desktop size, and everything inside it scales with the
-   viewBox — so ten user units of type land as under six real pixels. These sizes are user units, chosen to
-   come out at roughly the size they have on a desktop; measured at 390x844, where the first attempt was
-   legible only when zoomed into the screenshot. The decade words go: they are a gloss on labels that are
-   already there, and the room is wanted for the labels themselves. */
+   viewBox — so ten user units of type land as under six real pixels.
+
+   These were fixed user-unit bumps keyed to the viewport. Same idiom as the daylight chart now, keyed to the
+   chart rather than the window, so a narrow chart in a wide sidebar behaves too.
+
+   The targets are pixel sizes, not the user-unit numbers above: this plot is 1013 px wide at a 1280 px window,
+   so 10 units were already rendering at 16.3. Taking the stylesheet figure would have shrunk it by a third. */
+@supports (font-size: calc(tan(atan2(1px, 1px)) * 1px)) {
+	@container luxcurve (min-width: 1px) {
+		.luxc-axis,
+		.luxc-now-label {
+			font-size: min(calc(var(--chart-unit) * 16.3px), 20px);
+		}
+
+		.luxc-decade {
+			font-size: min(calc(var(--chart-unit) * 14.7px), 18px);
+		}
+	}
+}
+
+/* Constant-size type does not buy back the room between decades, so the thinning above and the decade drop
+   below both stay, and stay keyed to the viewport: they are the fallback for a browser that skipped the block
+   above, and a phone is narrow on both measures anyway. */
 @media (max-width: 560px) {
-	.luxc-axis {
-		font-size: 20px;
-	}
-
-	.luxc-now-label {
-		font-size: 20px;
-	}
-
 	.luxc-decade {
 		display: none;
 	}

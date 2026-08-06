@@ -34,7 +34,9 @@ public sealed class RoomFactsTests
 		string? blockingEntity = null,
 		string? houseModeValue = null,
 		bool? isAnyoneHome = null,
-		ForcedMode? forced = null) =>
+		ForcedMode? forced = null,
+		bool? isHeldLit = null,
+		string? heldLitBy = null) =>
 		new(
 			"Stue",
 			state,
@@ -57,7 +59,9 @@ public sealed class RoomFactsTests
 			blockingEntity,
 			null,
 			isAnyoneHome,
-			forced);
+			forced,
+			isHeldLit,
+			heldLitBy);
 
 	private static string ValueOf(IReadOnlyList<RoomFact> facts, string label) =>
 		facts.Single(fact => fact.Label == label).Value;
@@ -336,5 +340,62 @@ public sealed class RoomFactsTests
 	{
 		Assert.AreNotEqual(RoomFacts.KelvinCss(2200), RoomFacts.KelvinCss(4500));
 		StringAssert.StartsWith(RoomFacts.KelvinCss(2700), "rgb(255,");
+	}
+
+	// ===================== a KeepLitWhenOn hold =====================
+
+	// Lit and dimmed-as-a-warning are the two states a hold can refuse an off from; both null NextChangeAt,
+	// which is why the countdown arms below them cannot answer.
+	[TestMethod]
+	[DataRow(AreaState.AutoActive, 62d)]
+	[DataRow(AreaState.PreOff, 25d)]
+	public void A_Held_Room_Names_What_Is_Holding_It_Instead_Of_Falling_Silent(AreaState state, double brightness)
+	{
+		AreaSnapshot held = Report(state, brightness: brightness, isHeldLit: true, heldLitBy: "media_player.stue_tv");
+
+		Assert.AreEqual(
+			"Won't switch off while the television is holding the lights on.",
+			RoomFacts.NextLine(held, Now, _ => "the television"));
+	}
+
+	[TestMethod]
+	public void An_Unresolvable_Holder_Falls_Back_To_The_Entity_Id_Then_To_Prose()
+	{
+		AreaSnapshot named = Report(AreaState.AutoActive, isHeldLit: true, heldLitBy: "media_player.stue_tv");
+		StringAssert.Contains(RoomFacts.NextLine(named, Now), "media_player.stue_tv", StringComparison.Ordinal);
+
+		// An older engine reports the hold without naming it, so the sentence must still parse.
+		AreaSnapshot anonymous = Report(AreaState.AutoActive, isHeldLit: true);
+		Assert.AreEqual(
+			"Won't switch off while something in this room is holding the lights on.",
+			RoomFacts.NextLine(anonymous, Now));
+	}
+
+	[TestMethod]
+	public void The_Table_Gains_A_Held_On_By_Row_Only_While_The_Hold_Applies()
+	{
+		IReadOnlyList<RoomFact> held = RoomFacts.For(
+			Report(AreaState.AutoActive, brightness: 62, isHeldLit: true, heldLitBy: "media_player.stue_tv"),
+			Now,
+			_ => "the television");
+
+		Assert.AreEqual("the television", ValueOf(held, "Held on by"));
+
+		// false is "nothing is holding it"; null is a build that cannot say. Neither earns a row.
+		Assert.IsFalse(RoomFacts.For(Report(AreaState.AutoActive, isHeldLit: false), Now).Any(fact => fact.Label == "Held on by"));
+		Assert.IsFalse(RoomFacts.For(Report(AreaState.AutoActive), Now).Any(fact => fact.Label == "Held on by"));
+	}
+
+	[TestMethod]
+	public void A_Hold_Does_Not_Displace_The_Overdue_Warning()
+	{
+		// Overdue means the connection is suspect, which outranks anything the last snapshot claimed.
+		AreaSnapshot stale = Report(
+			AreaState.AutoActive,
+			nextChange: Now.AddSeconds(-(int)RoomFacts.OverdueAfter.TotalSeconds - 30),
+			isHeldLit: true,
+			heldLitBy: "media_player.stue_tv");
+
+		StringAssert.Contains(RoomFacts.NextLine(stale, Now), "hasn't arrived", StringComparison.Ordinal);
 	}
 }

@@ -27,45 +27,40 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
   diagnosis had to come from Home Assistant's recorder instead. Wants a size cap and a rotation that cannot
   itself fill `/config`, and it must never write a token or a Samba credential.
 
-- **House mode page gets the Schedule's mapping table.** **Decided 2026-08-04: the "take its list" adopt button
-  goes.** The table shows a row per live option regardless, so no option becomes unreachable; you tag each
-  option's `Kind` rather than adopting a list and editing it. Same reasoning the Schedule's own picker already
-  uses — adopting invents mappings nobody chose.
-  - **Two thirds of the sharing already exists**, found 2026-08-05: `SelectAuthorityPanel` has always carried the
-    picker, the direction switch and the unknown-entity notice for both, and `HelperOptions` now carries the
-    reconciliation. What is left is presentation only — the period select renders compact rows inside the
-    panel's `Body`, the house mode renders `details` folds in a section below it, and the orphan row is worded
-    and laid out differently in each ("renamed in Home Assistant" with a *move it to…* picker, against "removed
-    from the helper in Home Assistant" with a bare Remove).
-  - **Functionally equal as of 2026-08-05**: the wording is shared, and the house mode gained the *move it to…*
-    remap it was missing. What is left is the container only — whether a mode option's fold belongs inside the
-    panel body the way a period row does. A fold opens a whole editor and a period row is one dropdown, so they
-    may be right to differ. Decide that before writing any markup; nothing is broken until then.
-  - Two differences that are **not** gaps and should stay: the schedule offers *Add a period* when the helper has
-    more options than the schedule has periods, and warns when the live option maps to nothing. A mode option
-    needs neither — tagging a Kind creates the row, so it can never be unmapped in that sense.
-
 ## Known defects, found by review and not yet fixed
 
-
-- **A dangling level row has no control to fix it with.** Found on B1 on 2026-08-04: four rows named periods
-  that house has never had, and the room page renders nothing for a row whose period does not resolve — the
-  only way to clear them was to hand-edit the document and restart. The validator says the row is wrong; the
-  UI cannot act on what it says. Worth an orphaned row in the levels table with a remove button, the way the
-  house-mode and period-select mappings already handle an option that has gone.
+- **The daylight chart's bottom-right corner holds two label families.** The December month label
+  (`.daylight-axis`, y=236) and the last period label (`.daylight-period-label`, right-anchored at x=726)
+  overlap once either grows. Measured 2026-08-06 at 390 px: clean to 13 user units, colliding at 14, which is
+  what caps the responsive label sizing at 5.5 real pixels instead of the 10.1 the formula asks for. Fixing
+  the corner — shifting the month row, or dropping the last month label when a period label shares its band —
+  is what unlocks the rest. Separately, two period boundaries closer than about 11 user units overlap at
+  today's size too, and always have.
 - **`ModeService.ComputePreview` builds a calculator with no hold predicate**, so the settings-page preview
   shows the clock's period for a held-back period while the house is still on the previous one. Harder than it
   looks and deliberately left alone on 2026-08-05: the preview is `static` and has no access to the engine's
   `MotionPeriodLatch`, and a fresh latch would answer "not begun" for every held period, which is wrong in the
   other direction. It needs the host to hand its latch over, or the preview to ask the engine for the period it
   already resolved rather than recomputing one.
-- **`ModeService.GetHouseMode` still promises reset behaviour under Home Assistant mode authority.** The
-  engine stands those rules down; the dashboard card still describes them as live.
-- **Six chart labels are `9px`/`10px` in SVG user units, not CSS pixels.** `.daylight-axis`,
-  `.daylight-period-label`, `.daylight-mark-label`, `.luxc-axis`, `.luxc-decade`, `.luxc-now-label`. The
-  daylight chart's viewBox is 730 wide at `width: 100%`, so on a 390 px phone it scales by about 0.48 and 9px
-  renders near 4 px. Raising the number is not the fix — the decade labels already ran together at 390 px
-  once. Needs the size to come from the rendered width, and a look at both widths afterwards.
+- **`AreaSnapshot.SceneApplied` reaches Home Assistant but no page reads it.** Verified 2026-08-06: it is set
+  by the engine, compared in the snapshot's own equality, written out as `scene_applied`, and carried through
+  `AreaSnapshotEvent` — and no `.razor` file mentions it. A room sitting on its own `SceneOnMotion` or
+  `SceneWhenEmpty` scene therefore never names which scene. Same shape as the `IsHeldLit` gap closed the same
+  day, and the same fix: one more row in `RoomFacts.For`.
+
+## Decisions taken on 2026-08-06, recorded so they are not relitigated
+
+- **A mode option's fold stays below the helper panel, not inside its `Body`.** The two helper screens are
+  therefore not visually identical, and that is the answer, not a gap. A period row is one dropdown whose whole
+  meaning is "this option maps to this period", so it belongs beside the picker; a mode fold is a full editor
+  (kind, scene, clamp, activation, resets) and is the page's main content. Nesting six of them under the picker
+  demotes what a person actually comes to read.
+- **Adoption is gone entirely — the button and the silent adopt on picking a helper.** The 2026-08-04 decision
+  covered only the button; the pick path was still rewriting the list, which was the one edit that could destroy
+  an option's settings. The cards render a row per live option regardless, so nothing became unreachable.
+  `HouseModeSync` now reports drift and never proposes.
+- **The chart labels are sized in pure CSS**, `tan(atan2())` against a container query, not a `ResizeObserver`.
+  No interop, no script to fail to load, and `@supports` leaves an old browser on exactly today's behaviour.
 
 ## Product decisions still open
 
@@ -107,5 +102,3 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
 - **`tests/Test1.cs`** looks like the `dotnet new mstest` template leftover.
 - **A shared `SameName` / `ByName` matcher.** Twenty hand-written `Trim()` + `OrdinalIgnoreCase` comparisons
   and fifteen period-name lookups, each spelled out. Deferred once as too broad for an unrelated change.
-- **`AreaSnapshot.IsHeldLit` / `HeldLitBy` are published and compared but no page reads either**, so a room
-  that refuses to switch off has nothing on screen naming what is holding it.
