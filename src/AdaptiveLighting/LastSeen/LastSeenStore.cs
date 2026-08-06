@@ -44,6 +44,11 @@ public sealed class LastSeenStore
 	private const string Extension = ".json";
 	private const string BackupSuffix = ".bak";
 
+	/// <summary>The subdirectory the cache lives in, beside the document rather than on top of it.</summary>
+	// One house put ~150 cache files in the same folder as its configuration document, which made the one file a
+	// person edits impossible to find. The cache is machine-written and never hand-edited, so it moves out.
+	public const string FolderName = "last-seen";
+
 	private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
 	private readonly ILogger<LastSeenStore> _logger;
@@ -67,15 +72,94 @@ public sealed class LastSeenStore
 
 		string full = Path.GetFullPath(configFilePath);
 
-		DirectoryPath = Path.GetDirectoryName(full)
+		string documentDirectory = Path.GetDirectoryName(full)
 			?? throw new ArgumentException($"'{configFilePath}' has no directory to write beside.", nameof(configFilePath));
 
-		// b1.yaml gives b1.last-seen.motion.json, so the files sort next to the document they belong to.
+		DirectoryPath = Path.Combine(documentDirectory, FolderName);
+
+		// b1.yaml gives b1.last-seen.motion.json. The stem stays in the name even inside the subfolder, so two
+		// houses that share a /config still cannot collide.
 		string stem = Path.GetFileNameWithoutExtension(full);
 		if (stem.Length == 0)
 			stem = "adaptive-lighting";
 
 		_prefix = stem + NameInfix;
+
+		// Eagerly, so PathFor names a directory that exists. It used to name the document's own, which always did.
+		// Guarded: a read-only /config must cost history and nothing else, and TrySave creates it again anyway.
+		try
+		{
+			Directory.CreateDirectory(DirectoryPath);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			_logger.LogDebug(exception, "Could not create {Directory}; the cache will try again on its first write.", DirectoryPath);
+		}
+
+		AdoptFilesWrittenBesideTheDocument(documentDirectory);
+	}
+
+	/// <summary>
+	///     Moves cache files written by an earlier build into the subfolder, and drops the <c>.bak</c> that build kept.
+	/// </summary>
+	/// <remarks>
+	///     Runs once: after the move there is nothing left beside the document to find. Every failure is ignored on
+	///     purpose — this is a cache, so the worst outcome of giving up is a bucket that starts again as unknown, and
+	///     that must never stop the engine from starting.
+	/// </remarks>
+	private void AdoptFilesWrittenBesideTheDocument(string documentDirectory)
+	{
+		try
+		{
+			string[] strays = Directory.Exists(documentDirectory)
+				? Directory.GetFiles(documentDirectory, _prefix + "*")
+				: [];
+
+			if (strays.Length == 0)
+				return;
+
+			Directory.CreateDirectory(DirectoryPath);
+
+			int moved = 0;
+			int dropped = 0;
+
+			foreach (string stray in strays)
+			{
+				string name = Path.GetFileName(stray);
+
+				// The old scheme's backups carry nothing the moved file does not, so they are not worth carrying over.
+				if (name.EndsWith(BackupSuffix, StringComparison.OrdinalIgnoreCase))
+				{
+					TryDelete(stray);
+					dropped++;
+
+					continue;
+				}
+
+				if (!IsCacheFile(name))
+					continue;
+
+				try
+				{
+					File.Move(stray, Path.Combine(DirectoryPath, name), overwrite: true);
+					moved++;
+				}
+				catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+				{
+					// Left where it is. The next start tries again, and until then its history simply is not read.
+				}
+			}
+
+			if (moved > 0 || dropped > 0)
+				_logger.LogInformation(
+					"Moved {Moved} last-seen cache files into {Directory} and dropped {Dropped} backups the current build "
+					+ "does not write. The configuration document is the only thing beside it now.",
+					moved, DirectoryPath, dropped);
+		}
+		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+		{
+			_logger.LogDebug(exception, "Could not tidy last-seen cache files beside the document; they are left alone.");
+		}
 	}
 
 	/// <summary>The directory the cache files live in: the configuration document's own.</summary>
@@ -171,7 +255,7 @@ public sealed class LastSeenStore
 	}
 
 	/// <summary>
-	///     Writes one bucket via temp file and <c>.bak</c>, or removes its file when the document is empty.
+	///     Writes one bucket through a temp file, or removes its file when the document is empty.
 	/// </summary>
 	/// <remarks>
 	///     An empty bucket has no file. Buckets come and go with the hardware, and that removal is also how the
@@ -197,12 +281,11 @@ public sealed class LastSeenStore
 				Directory.CreateDirectory(DirectoryPath);
 				File.WriteAllText(temporary, JsonSerializer.Serialize(document, LastSeenDocument.SerializerOptions), Utf8NoBom);
 
-				if (File.Exists(path))
-					// One call replaces the target and moves the old contents to .bak. Copying to .bak first would
-					// leave a window in which the backup is the only copy.
-					File.Replace(temporary, path, path + BackupSuffix, ignoreMetadataErrors: true);
-				else
-					File.Move(temporary, path);
+				// No .bak. The move is atomic, so a torn file is not reachable, and the only thing a backup could
+				// buy back is history this cache is already documented as losing gracefully: every answer degrades
+				// to "we do not know", never to "everything is dead". One backup per bucket was ~75 files nobody
+				// read.
+				File.Move(temporary, path, overwrite: true);
 
 				return true;
 			}
@@ -288,7 +371,7 @@ public sealed class LastSeenStore
 			if (File.Exists(path))
 				File.Delete(path);
 
-			// The in-memory set already holds every record the emptied bucket had, so its .bak backs up nothing.
+			// This build writes no .bak; an older one did, so a removal is also the chance to take its leftover away.
 			if (File.Exists(path + BackupSuffix))
 				File.Delete(path + BackupSuffix);
 

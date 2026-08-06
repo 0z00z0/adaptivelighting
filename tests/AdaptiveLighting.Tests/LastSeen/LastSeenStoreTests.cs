@@ -64,16 +64,21 @@ public sealed class LastSeenStoreTests
 		using TempDirectory temp = new();
 		LastSeenStore store = temp.Store("cabin.yaml");
 
-		Assert.AreEqual(Path.Combine(temp.Path, "cabin.last-seen.illuminance.json"), store.PathFor(LastSeenBuckets.Illuminance));
-		Assert.AreEqual(Path.Combine(temp.Path, "cabin.last-seen.motion.json"), store.PathFor(LastSeenBuckets.Motion));
-		Assert.AreEqual(Path.Combine(temp.Path, "cabin.last-seen.light.json"), store.PathFor(LastSeenBuckets.Light));
-		Assert.AreEqual(Path.Combine(temp.Path, "cabin.last-seen.other.json"), store.PathFor(LastSeenBuckets.Unclassified));
+		string cache = Path.Combine(temp.Path, LastSeenStore.FolderName);
+
+		Assert.AreEqual(Path.Combine(cache, "cabin.last-seen.illuminance.json"), store.PathFor(LastSeenBuckets.Illuminance));
+		Assert.AreEqual(Path.Combine(cache, "cabin.last-seen.motion.json"), store.PathFor(LastSeenBuckets.Motion));
+		Assert.AreEqual(Path.Combine(cache, "cabin.last-seen.light.json"), store.PathFor(LastSeenBuckets.Light));
+		Assert.AreEqual(Path.Combine(cache, "cabin.last-seen.other.json"), store.PathFor(LastSeenBuckets.Unclassified));
 
 		// The names the split adds. A device class is a word a person recognises, which is the point of it.
-		Assert.AreEqual(Path.Combine(temp.Path, "cabin.last-seen.temperature.json"), store.PathFor("temperature"));
-		Assert.AreEqual(Path.Combine(temp.Path, "cabin.last-seen.input_boolean.json"), store.PathFor("input_boolean"));
+		Assert.AreEqual(Path.Combine(cache, "cabin.last-seen.temperature.json"), store.PathFor("temperature"));
+		Assert.AreEqual(Path.Combine(cache, "cabin.last-seen.input_boolean.json"), store.PathFor("input_boolean"));
 
-		Assert.AreEqual(temp.Path, store.DirectoryPath, "the cache lives beside the document, which is the directory a deploy does not wipe");
+		// Under the document's directory, not in it: that directory survives a deploy, and the document in it stays
+		// findable rather than sitting among a hundred and fifty machine-written files.
+		Assert.AreEqual(cache, store.DirectoryPath);
+		Assert.AreEqual(temp.Path, Path.GetDirectoryName(store.DirectoryPath));
 	}
 
 	[TestMethod]
@@ -87,7 +92,7 @@ public sealed class LastSeenStoreTests
 		{
 			string path = store.PathFor(hostile);
 
-			Assert.AreEqual(temp.Path, Path.GetDirectoryName(path), hostile);
+			Assert.AreEqual(store.DirectoryPath, Path.GetDirectoryName(path), hostile);
 			StringAssert.StartsWith(Path.GetFileName(path), "b1.last-seen.");
 			StringAssert.EndsWith(Path.GetFileName(path), ".json");
 		}
@@ -171,8 +176,15 @@ public sealed class LastSeenStoreTests
 		Assert.IsNull(load.Entities["binary_sensor.new"].Entry.LastSeen);
 	}
 
+	/// <summary>A rewrite replaces the file and keeps nothing beside it.</summary>
+	/// <remarks>
+	///     This used to assert the opposite. One backup per bucket meant ~150 files in a folder holding one document
+	///     a person edits, and the backup bought back only history this cache already loses gracefully — an
+	///     unreadable bucket reads as "we do not know", never as "everything is dead". The move is atomic, so the
+	///     torn file a backup would guard against is not reachable either.
+	/// </remarks>
 	[TestMethod]
-	public void A_Rewrite_Keeps_One_Backup()
+	public void A_Rewrite_Replaces_The_File_And_Leaves_No_Backup()
 	{
 		using TempDirectory temp = new();
 		LastSeenStore store = temp.Store();
@@ -180,11 +192,62 @@ public sealed class LastSeenStoreTests
 		store.TrySave(LastSeenBuckets.Motion, Document(LastSeenBuckets.Motion, Noon, ("binary_sensor.one", Noon)));
 		store.TrySave(LastSeenBuckets.Motion, Document(LastSeenBuckets.Motion, Noon.AddMinutes(5), ("binary_sensor.two", Noon)));
 
-		string backup = store.PathFor(LastSeenBuckets.Motion) + ".bak";
-
-		Assert.IsTrue(File.Exists(backup));
-		StringAssert.Contains(File.ReadAllText(backup), "binary_sensor.one");
+		Assert.IsFalse(File.Exists(store.PathFor(LastSeenBuckets.Motion) + ".bak"));
 		StringAssert.Contains(File.ReadAllText(store.PathFor(LastSeenBuckets.Motion)), "binary_sensor.two");
+
+		Assert.AreEqual(1, Directory.GetFiles(store.DirectoryPath).Length,
+			"one bucket written twice is one file, not a file and its shadow");
+	}
+
+	/// <summary>The cache sits in its own folder, so the document beside it stays findable.</summary>
+	[TestMethod]
+	public void The_Cache_Lives_Under_Its_Own_Folder_Beside_The_Document()
+	{
+		using TempDirectory temp = new();
+		LastSeenStore store = temp.Store();
+
+		store.TrySave(LastSeenBuckets.Motion, Document(LastSeenBuckets.Motion, Noon, ("binary_sensor.one", Noon)));
+
+		Assert.AreEqual(LastSeenStore.FolderName, Path.GetFileName(store.DirectoryPath));
+		Assert.AreEqual(0, Directory.GetFiles(temp.Path, "*.json").Length,
+			"nothing the cache writes lands beside the configuration document");
+	}
+
+	/// <summary>Files an earlier build wrote beside the document are adopted, and its backups dropped.</summary>
+	[TestMethod]
+	public void Files_Written_Beside_The_Document_By_An_Older_Build_Are_Moved_In()
+	{
+		using TempDirectory temp = new();
+
+		// What the previous scheme left: a bucket and the .bak it kept per write.
+		string stray = Path.Combine(temp.Path, "b1.last-seen.motion.json");
+		File.WriteAllText(stray, File.ReadAllText(WriteThenRead(temp)));
+		File.WriteAllText(stray + ".bak", "{}");
+
+		LastSeenStore store = temp.Store();
+
+		Assert.IsFalse(File.Exists(stray), "the bucket moved");
+		Assert.IsFalse(File.Exists(stray + ".bak"), "and the backup it no longer needs went with it");
+		Assert.IsTrue(File.Exists(Path.Combine(store.DirectoryPath, "b1.last-seen.motion.json")));
+
+		StringAssert.Contains(
+			File.ReadAllText(Path.Combine(store.DirectoryPath, "b1.last-seen.motion.json")),
+			"binary_sensor.moved",
+			"the history came with it rather than starting again");
+	}
+
+	// Writes one bucket through a store, then hands back the file so the test above can plant it as a stray.
+	private static string WriteThenRead(TempDirectory temp)
+	{
+		LastSeenStore seeded = temp.Store();
+		seeded.TrySave(LastSeenBuckets.Motion, Document(LastSeenBuckets.Motion, Noon, ("binary_sensor.moved", Noon)));
+
+		string written = seeded.PathFor(LastSeenBuckets.Motion);
+		string copy = Path.Combine(temp.Path, "seed.json");
+		File.Copy(written, copy, overwrite: true);
+		File.Delete(written);
+
+		return copy;
 	}
 
 	[TestMethod]
@@ -215,7 +278,9 @@ public sealed class LastSeenStoreTests
 		store.TrySave("battery", Document("battery", Noon.AddMinutes(5), ("sensor.remote_battery", Noon)));
 
 		Assert.IsTrue(File.Exists(store.PathFor("battery")));
-		Assert.IsTrue(File.Exists(store.PathFor("battery") + ".bak"));
+
+		// An older build kept one of these per bucket. Planted here so the removal below is shown to clear it.
+		File.WriteAllText(store.PathFor("battery") + ".bak", "{}");
 
 		// The last battery sensor leaves the house. Buckets are device classes now, so they come and go with the
 		// hardware, and a folder of husks is what splitting the cache was meant to avoid.

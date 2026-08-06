@@ -924,3 +924,24 @@ a day. Nothing that does not render a component could have caught it.
 
 **So: a component whose parameters change means grepping its call sites, and opening the pages in
 `tools/uihost`.** The tests cannot see this class of bug, and neither can the compiler.
+
+### The last-seen cache does not get backups, and does not sit on the document
+
+Two rules, both learned from one folder that reached ~160 files:
+
+**Its own subfolder.** `/config/adaptive-lighting/` holds exactly one file a person ever edits. Burying it
+under seventy-five machine-written buckets made it unfindable, so the cache lives in `last-seen/` beneath it.
+The stem stays in each file name even there, because two houses can still share a `/config`.
+
+**No `.bak`.** The write is a temp file and an atomic move, so a torn file is not reachable; a backup could
+only buy back *history*, and losing history is this cache's documented, graceful failure — every answer
+degrades to "we do not know", never to "everything is dead". A backup per bucket was seventy-five files
+guarding against the one outcome that was already acceptable.
+
+`LastSeenStore`'s constructor moves anything an earlier build left beside the document into the subfolder and
+deletes the backups that build kept. It runs on every start and is a no-op after the first, because there is
+then nothing beside the document to find. Every failure in it is swallowed: this is a cache, and the worst
+outcome of giving up is a bucket that starts again as unknown, which must never stop the engine from starting.
+
+The constructor also creates the directory eagerly, so `PathFor` names somewhere that exists. It used to name
+the document's own directory, which always did.

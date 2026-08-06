@@ -71,14 +71,14 @@ under one version, because they are compiled against each other.
     point of the feature.
   - Never confuses "the value did not change" with "it did not report" — a light-level sensor sitting at
     a constant 3 lx all night is healthy and quiet, and is counted alive.
-  - The record survives a redeploy: it is JSON beside the configuration document, split into
-    `<document>.last-seen.<bucket>.json` so somebody diagnosing their lux sensors opens one small file
-    rather than reading past 250 motion entries. Lights, motion sources and light-level sensors have
-    their own buckets by rule; everything else is filed under its own `device_class` — `temperature`,
-    `battery`, `door`, `power` — or, for an entity with no class, under its domain (`person`, `sun`,
-    `automation`, `script`). Nothing is dropped: an entity with neither lands in `other`. Written
-    atomically with one `.bak` apiece, batched to one flush every five minutes plus one on shutdown,
-    ~45 KB for a 300-entity house.
+  - The record survives a redeploy: it is JSON in `last-seen/` beneath the configuration document's own
+    directory, split into `<document>.last-seen.<bucket>.json` so somebody diagnosing their lux sensors
+    opens one small file rather than reading past 250 motion entries. Lights, motion sources and
+    light-level sensors have their own buckets by rule; everything else is filed under its own
+    `device_class` — `temperature`, `battery`, `door`, `power` — or, for an entity with no class, under
+    its domain (`person`, `sun`, `automation`, `script`). Nothing is dropped: an entity with neither
+    lands in `other`. Written through an atomic move and **kept without backups**, batched to one flush
+    every five minutes plus one on shutdown, ~45 KB for a 300-entity house.
   - The bucket name reaches the file system and comes from an external system, so it is sanitised
     against an allow-list and fingerprinted whenever anything had to be dropped or truncated — two
     device classes can never collide onto one file. An emptied bucket takes its file with it, which is
@@ -285,6 +285,18 @@ under one version, because they are compiled against each other.
 - **A period's *Starts* no longer repeats itself.** The line under the picker read *every day at 06:45*
   beside a control that already said 06:45. It is shown for the starts that need explaining and
   suppressed for a plain clock time.
+
+### Changed
+
+- **The last-seen cache moved into `<config>/last-seen/` and stopped keeping backups.** One house's
+  configuration folder held about 160 files — one document a person edits, and everything else machine-written,
+  half of it `.bak` copies nobody reads. The cache now writes one file per bucket into a subfolder of its own,
+  through an atomic move with no `.bak` beside it: the only thing a backup could buy back is history this cache
+  is already documented as losing gracefully, where every answer degrades to *we do not know* and never to
+  *everything is dead*.
+  - Files an earlier build wrote beside the document are **moved in on the next start**, with their history, and
+    the backups that build kept are dropped. Nothing is lost and nothing needs doing by hand.
+  - An emptied bucket still takes its file away, and now takes an older build's leftover `.bak` with it.
 
 ### Fixed
 
