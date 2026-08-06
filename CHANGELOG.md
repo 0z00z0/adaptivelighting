@@ -11,6 +11,16 @@ under one version, because they are compiled against each other.
 
 ### Added
 
+- **A room that refuses to switch off now says what is holding it.** `KeepLitWhenOn` cancels the off and
+  clears the countdown with it, so the room page's next-line had nothing to draw and fell silent — the exact
+  moment somebody wants an answer. It now reads *"Won't switch off while the television is holding the lights
+  on."*, and the evidence table gains a **Held on by** row. The holder is resolved to its friendly name; an
+  engine too old to name it still gets a sentence that parses.
+- **An orphaned level row can be moved to a real period, not only deleted.** A row naming a period the
+  schedule no longer has already showed a *Remove it*; it now also offers *move it to…*, listing only the
+  periods that room states nothing for, and carries the brightness and warmth across. Matches what the
+  house-mode and period-select mappings have always done with a vanished option.
+
 - **A period can wait for movement instead of starting on the clock**, from the schedule editor. The
   engine has understood `StartsOnMotion` since it shipped, and until now the only way to set it was to
   hand-edit the document.
@@ -212,6 +222,19 @@ under one version, because they are compiled against each other.
 
 ### Changed
 
+- **Picking a house-mode helper no longer rewrites the option list**, and the *Use the helper's options*
+  button is gone with it. Adopting invented mappings nobody chose, and dropped the settings of every option
+  the new helper did not also offer — the one edit in the page that could destroy a mode's configuration. The
+  cards already render a row per live option and mark the stranded ones, so nothing became unreachable and a
+  helper picked by mistake now costs nothing. The drift notice stays, as a sentence that describes rather than
+  offers.
+- **Chart labels keep their size on a phone.** Every label in the daylight and lux charts was sized in SVG
+  user units, which scale with the drawing: measured at 390 px, the daylight chart's 9-unit type rendered at
+  3.8 real pixels. They are now derived from the chart's own rendered width, so a label is the same physical
+  size at any width, and keyed to the chart rather than the window — a narrow chart on a wide screen had the
+  same problem. Desktop rendering is unchanged, measured at 1280 px. Browsers without container queries keep
+  exactly the old behaviour.
+
 - **A period with `StartsOnMotion` no longer begins at its `Start`.** It was half a feature: only the
   house-mode brain ever read the flag, so the clock still entered the period on time and the lights
   brightened at 06:30 whether or not anybody was up. The flag moved the house *mode*, and only inside
@@ -299,6 +322,11 @@ under one version, because they are compiled against each other.
   - An emptied bucket still takes its file away, and now takes an older build's leftover `.bak` with it.
 
 ### Fixed
+
+- **A house mode no longer promises a reset that Home Assistant's authority has stood down.** Under
+  `HouseModeAuthority.HomeAssistant` the engine stops firing reset triggers, but the mode card went on
+  describing them: *"switches back to Normal when 'Morgen' starts"*. It now says the rules are paused, which
+  is what the dormant-rules notice on the same page has always said.
 
 - **The mode preview follows the time-of-day dropdown again**, on any house that has been through the
   stable-key migration. The preview handed its calculator the period's *display name* where the calculator

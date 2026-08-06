@@ -358,7 +358,7 @@ else
 							   Global="@_config.Global" />
 
 				@* Under the table, and open only when already in use: then it is what decides what the table means. *@
-				<GroupFold Title="Connect existing Selection from Home Assistant (must be an Input-Select)"
+				<GroupFold Title="Connect a dropdown helper from Home Assistant"
 						   Description="@PeriodSelectSummary"
 						   Open="@(_config.Global.PeriodSelect?.EntityId is not null)">
 					<PeriodSelectPanel Global="@_config.Global"
@@ -409,8 +409,9 @@ else
 										  IsReady="@HomeAssistantIsAnswering"
 										  LiveOptions="@_liveSelectOptions">
 						<LabelHelp>
-							Which dropdown helper holds this house's modes. Picking one reads its options into the
-							cards below: an option the new helper also offers keeps its settings, the rest are dropped.
+							Which dropdown helper holds this house's modes. Its options appear in the cards below &mdash;
+							say what each one means. Anything you set for an option this helper doesn't offer is kept
+							and shown, so you can move it across or remove it.
 							No helper yet? Make one in Home Assistant under <strong>Settings → Devices &amp; services →
 							Helpers → Create helper → Dropdown</strong>, add your options, then pick it here.
 						</LabelHelp>
@@ -430,33 +431,16 @@ else
 							}
 
 							@*
-								Where the helper's list and this one part company. It reports and offers; it never adopts by
-								itself, because the thing it would rewrite unasked is the list every mode hangs off.
-
-								All three states render, including the two that ask for nothing: an unreachable Home Assistant
-								cannot tell an empty helper from no answer, so it must say so instead of showing a stale offer.
+								All three states render, including the two that ask for nothing: an unreachable Home
+								Assistant cannot tell an empty helper from no answer, so it must say so.
 							*@
 							@if (_helperDiff.Differs)
 							{
-								<div class="notice warn modes-sync">
-									<strong>@HouseModeSync.Title(_helperDiff)</strong>
+								<p class="hint">
 									@* The entity leads the sentence: a <code> chip's own padding floats a trailing full
 									   stop a space away from it. *@
-									<span>The helper <code>@modeEntity</code> now offers something else. @HouseModeSync.Summary(_helperDiff)</span>
-									<span>
-										An option the helper still offers keeps everything you set on it &mdash; what it
-										means, its scene, its resets.
-									</span>
-									<div class="panel-actions">
-										<button type="button" class="primary" @onclick="UseHelperOptions">
-											Use the helper's options
-										</button>
-									</div>
-									<span class="hint">
-										Nothing is written until you press <em>Save and apply</em> &mdash;
-										<em>Discard changes</em> undoes it.
-									</span>
-								</div>
+									<code>@modeEntity</code> and this list have drifted apart. @HouseModeSync.Drift(_helperDiff)
+								</p>
 							}
 							else if (_helperDiff.Matches)
 							{
@@ -2008,7 +1992,6 @@ else
 		}
 
 		_liveSelectOptions = Catalog.SelectOptionsOf(_config.Global.HouseMode?.Entity);
-		AdoptHelperOptions();
 		_activeModeValue = Catalog.CurrentStateOf(_config.Global.HouseMode?.Entity);
 		_houseModeOptionValues = HouseModeOptionValues();
 		Revalidate();
@@ -2087,30 +2070,6 @@ else
 				? $"{entity} decides the time of day · {rows}"
 				: $"{entity} is kept in step with the schedule · {rows}";
 		}
-	}
-
-	/// <summary>
-	///     Rebuilds the mode list from the helper, on the pick and on request from the panel.
-	/// </summary>
-	/// <remarks>
-	///     The merge is <see cref="HouseModeSync.Adopt"/>, never a copy of it. Both callers must keep a surviving
-	///     option's whole configuration and both must refuse an empty live list; this is the one edit that can destroy
-	///     a mode's settings.
-	/// </remarks>
-	private void AdoptHelperOptions() => HouseModeSync.Adopt(_config.Global.HouseMode, _liveSelectOptions);
-
-	/// <summary>
-	///     Takes the helper's option list on request: the explicit half of what picking a helper does silently.
-	/// </summary>
-	/// <remarks>
-	///     Reachable only from the panel, which appears only when the lists differ and Home Assistant has answered.
-	///     <see cref="AdoptHelperOptions"/> refuses an empty live list on its own account too, so a connection lost
-	///     between render and click cannot empty the list.
-	/// </remarks>
-	private void UseHelperOptions()
-	{
-		AdoptHelperOptions();
-		OnHouseModeOptionsChanged();
 	}
 
 	private void OnHouseModeOptionsChanged()

@@ -4,11 +4,12 @@ using AdaptiveLighting.Web.Services;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>
-///     Comparing the configured house-mode list against the dropdown helper's own, and taking the helper's.
+///     Comparing the configured house-mode list against the dropdown helper's own, and saying how they drifted.
 /// </summary>
 /// <remarks>
 ///     An unreachable Home Assistant answers with an empty option list, so empty is "cannot tell" and never
-///     "drop every configured mode".
+///     "drop every configured mode". Nothing adopts a helper's list; the cards render a row per live option and
+///     mark the stranded ones instead.
 /// </remarks>
 [TestClass]
 public sealed class HouseModeSyncTests
@@ -25,15 +26,14 @@ public sealed class HouseModeSyncTests
 	};
 
 	[TestMethod]
-	public void Two_Lists_That_Agree_Say_So_And_Offer_Nothing()
+	public void Two_Lists_That_Agree_Say_So_And_Have_No_Drift_To_Report()
 	{
 		HouseModeOptionsDiff diff = HouseModeSync.Compare(Cabin(), ["Normal", "Borte", "Sover"]);
 
 		Assert.IsTrue(diff.CanCompare);
 		Assert.IsTrue(diff.Matches);
 		Assert.IsFalse(diff.Differs);
-		Assert.IsNull(HouseModeSync.Title(diff), "nothing to head");
-		Assert.IsNull(HouseModeSync.Summary(diff), "nothing to say it would do");
+		Assert.IsNull(HouseModeSync.Drift(diff), "nothing to describe");
 	}
 
 	[TestMethod]
@@ -50,7 +50,7 @@ public sealed class HouseModeSyncTests
 	}
 
 	[TestMethod]
-	public void A_Difference_Names_What_Would_Be_Added_And_What_Dropped()
+	public void A_Difference_Names_What_The_Helper_Gained_And_What_It_Lost()
 	{
 		HouseModeOptionsDiff diff = HouseModeSync.Compare(Cabin(), ["Normal", "Borte", "Ferie"]);
 
@@ -59,30 +59,52 @@ public sealed class HouseModeSyncTests
 		CollectionAssert.AreEqual(new[] { "Ferie" }, diff.Added.ToArray());
 		CollectionAssert.AreEqual(new[] { "Sover" }, diff.Dropped.ToArray());
 
-		string? summary = HouseModeSync.Summary(diff);
+		string? drift = HouseModeSync.Drift(diff);
 
-		StringAssert.Contains(summary, "Ferie");
-		StringAssert.Contains(summary, "Sover");
-		StringAssert.Contains(summary, "adds");
-		StringAssert.Contains(summary, "drops");
+		StringAssert.Contains(drift, "Ferie", StringComparison.Ordinal);
+		StringAssert.Contains(drift, "Sover", StringComparison.Ordinal);
 	}
 
 	[TestMethod]
-	public void The_Heading_Says_Which_Way_The_Lists_Drifted()
+	public void The_Drift_Sentence_Says_Which_Way_The_Lists_Parted()
 	{
-		string? gained = HouseModeSync.Title(HouseModeSync.Compare(Cabin(), ["Normal", "Borte", "Sover", "Ferie"]));
-		string? lost = HouseModeSync.Title(HouseModeSync.Compare(Cabin(), ["Normal", "Borte"]));
-		string? both = HouseModeSync.Title(HouseModeSync.Compare(Cabin(), ["Normal", "Ferie"]));
+		string? gained = HouseModeSync.Drift(HouseModeSync.Compare(Cabin(), ["Normal", "Borte", "Sover", "Ferie"]));
+		string? lost = HouseModeSync.Drift(HouseModeSync.Compare(Cabin(), ["Normal", "Borte"]));
+		string? both = HouseModeSync.Drift(HouseModeSync.Compare(Cabin(), ["Normal", "Ferie"]));
 
 		Assert.AreNotEqual(gained, lost);
 		Assert.AreNotEqual(gained, both);
 		Assert.AreNotEqual(lost, both);
 
-		StringAssert.Contains(HouseModeSync.Summary(HouseModeSync.Compare(Cabin(), ["Normal", "Borte", "Sover", "Ferie"])), "adds Ferie");
-		Assert.IsFalse(
-			HouseModeSync.Summary(HouseModeSync.Compare(Cabin(), ["Normal", "Borte", "Sover", "Ferie"]))!
-				.Contains("drops", StringComparison.Ordinal),
-			"nothing would be dropped, so nothing is threatened");
+		StringAssert.Contains(gained, "It offers Ferie", StringComparison.Ordinal);
+		Assert.IsFalse(gained!.Contains("no longer offers", StringComparison.Ordinal),
+			"nothing was lost, so nothing is reported lost");
+
+		StringAssert.Contains(lost, "It no longer offers Sover", StringComparison.Ordinal);
+	}
+
+	/// <summary>
+	///     The copy describes, it never proposes. The button it used to sit under is gone, so wording that implies
+	///     one would send a person looking for a control that does not exist.
+	/// </summary>
+	[TestMethod]
+	public void The_Drift_Sentence_Never_Offers_To_Rewrite_The_List()
+	{
+		foreach (string[] live in new[]
+		{
+			new[] { "Normal", "Borte", "Sover", "Ferie" },
+			["Normal", "Borte"],
+			["Normal", "Ferie"]
+		})
+		{
+			string drift = HouseModeSync.Drift(HouseModeSync.Compare(Cabin(), live))!;
+
+			foreach (string proposal in new[] { "Taking", "adds", "drops", "Use the helper" })
+			{
+				Assert.IsFalse(drift.Contains(proposal, StringComparison.OrdinalIgnoreCase),
+					$"'{proposal}' reads as an offer, and there is nothing to press: {drift}");
+			}
+		}
 	}
 
 	/// <summary>An empty live list is Home Assistant not answering; the two readings call for opposite responses.</summary>
@@ -95,7 +117,7 @@ public sealed class HouseModeSyncTests
 		Assert.IsFalse(diff.Differs);
 		Assert.IsFalse(diff.Matches, "silence is not agreement either");
 		Assert.AreEqual(0, diff.Dropped.Count, "the configured modes are not up for deletion over a dropped connection");
-		Assert.IsNull(HouseModeSync.Summary(diff));
+		Assert.IsNull(HouseModeSync.Drift(diff));
 	}
 
 	[TestMethod]
@@ -105,81 +127,23 @@ public sealed class HouseModeSyncTests
 		Assert.IsFalse(HouseModeSync.Compare(new HouseModeConfig(), ["Normal"]).CanCompare);
 	}
 
-	[TestMethod]
-	public void A_Surviving_Option_Keeps_Everything_It_Was_Configured_To_Mean()
-	{
-		HouseModeConfig mode = Cabin();
-
-		Assert.IsTrue(HouseModeSync.Adopt(mode, ["Normal", "Borte", "Ferie"]));
-
-		HouseModeOptionConfig? borte = mode.OptionFor("Borte");
-
-		Assert.IsNotNull(borte);
-		Assert.AreEqual(ModeKind.Away, borte.Kind);
-		Assert.AreEqual("scene.away", borte.Scene);
-		Assert.IsTrue(borte.ResetOnPresence);
-
-		Assert.IsNull(mode.OptionFor("Sover"), "an option the helper no longer offers can never be selected");
-		Assert.IsNotNull(mode.OptionFor("Ferie"));
-		Assert.AreEqual(ModeKind.Normal, mode.OptionFor("Ferie")!.Kind,
-			"a new option arrives with nothing guessed about it — this is a person's edit, not a discovery");
-
-		CollectionAssert.AreEqual(
-			new[] { "Normal", "Borte", "Ferie" },
-			mode.Options.Select(option => option.Value).ToArray(),
-			"the list reads the way the dropdown does");
-	}
-
-	[TestMethod]
-	public void Adopting_What_Is_Already_There_Is_A_No_Op()
-	{
-		HouseModeConfig mode = Cabin();
-
-		Assert.IsFalse(HouseModeSync.Adopt(mode, ["Normal", "Borte", "Sover"]));
-		Assert.AreEqual(3, mode.Options.Count);
-		Assert.IsTrue(HouseModeSync.Compare(mode, ["Normal", "Borte", "Sover"]).Matches);
-	}
-
-	/// <summary>The panel appears only once the helper has answered, but the connection can drop before the click.</summary>
-	[TestMethod]
-	public void Adopting_An_Empty_List_Leaves_The_Modes_Alone()
-	{
-		HouseModeConfig mode = Cabin();
-
-		Assert.IsFalse(HouseModeSync.Adopt(mode, []));
-		Assert.AreEqual(3, mode.Options.Count, "an unreachable Home Assistant does not get to delete a house's modes");
-
-		Assert.IsFalse(HouseModeSync.Adopt(null, ["Normal"]), "and a document with no house mode has nothing to rebuild");
-	}
-
-	[TestMethod]
-	public void Adopting_Settles_The_Difference_That_Offered_It()
-	{
-		HouseModeConfig mode = Cabin();
-		string[] live = ["Normal", "Borte", "Ferie"];
-
-		Assert.IsTrue(HouseModeSync.Compare(mode, live).Differs);
-
-		HouseModeSync.Adopt(mode, live);
-
-		Assert.IsTrue(HouseModeSync.Compare(mode, live).Matches);
-	}
-
 	/// <summary>
-	///     <see cref="HouseModeOptionConfig.Kind"/> defaults to Normal, so a list can hold several; the reset
-	///     target is the first, which <see cref="HouseModeConfig.NormalOption"/> returns and the settings page reads.
+	///     What replaced adoption: a mode the helper has stopped offering keeps everything it was configured to
+	///     mean, so the orphan row can offer to move it rather than only to delete it.
 	/// </summary>
 	[TestMethod]
-	public void Adopting_A_New_Option_Leaves_The_Reset_Target_Where_It_Was()
+	public void Comparing_Never_Touches_The_Configured_Options()
 	{
 		HouseModeConfig mode = Cabin();
 
-		HouseModeSync.Adopt(mode, ["Normal", "Borte", "Sover", "Ferie"]);
+		_ = HouseModeSync.Compare(mode, ["Normal", "Borte", "Ferie"]);
 
-		HouseModeOptionConfig adopted = mode.OptionFor("Ferie")!;
+		CollectionAssert.AreEqual(
+			new[] { "Normal", "Borte", "Sover" },
+			mode.Options.Select(option => option.Value).ToArray());
 
-		Assert.AreEqual(ModeKind.Normal, adopted.Kind, "nothing is guessed from an option's wording, so it lands on the default");
-		Assert.AreEqual("Normal", mode.NormalOption?.Value, "but the reset target is still the option that already held it");
-		Assert.IsFalse(ReferenceEquals(adopted, mode.NormalOption), "so the newcomer is Normal without being the reset target");
+		HouseModeOptionConfig sover = mode.OptionFor("Sover")!;
+		Assert.AreEqual(ModeKind.Sleep, sover.Kind);
+		Assert.AreEqual("night", sover.ClampPeriodId);
 	}
 }

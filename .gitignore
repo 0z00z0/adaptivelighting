@@ -44,5 +44,9 @@ website/.astro/
 scratchpad/
 
 # The UI host edits a real document locally; never commit one (this repo is public).
+# The .bak too: LightingEngineHost.Save writes one beside the document on every save, so a real house
+# copied in here leaks through its backup even when the document itself is ignored.
 tools/uihost/local.yaml
 tools/uihost/*.yaml
+tools/uihost/*.yaml.bak
+tools/uihost/last-seen/

@@ -335,15 +335,29 @@ public sealed class ModeService
 	///     A one-line summary of an option's reset triggers, naming the Normal target. Never <c>null</c>: a
 	///     triggerless option gets its own line, so a forgotten away mode reads as fixable, not blank.
 	/// </summary>
+	private const string StaysUntilSwitchedBack = "stays until you switch the house back yourself";
+
 	private static string ResetSummary(
 		HouseModeOptionConfig? option,
 		HouseModeConfig houseMode,
 		IReadOnlyList<TimePeriodConfig> periods)
 	{
-		var normal = houseMode.NormalOption?.Value;
-		var parts = new List<string>(3);
+		// Asked off the trigger fields, not off the formatted list below, so neither early return builds a
+		// sentence it throws away. This runs per option on a page that ticks once a second.
+		string? periodId = Blank(option?.ResetOnPeriodStartId);
+		var onPresence = option?.ResetOnPresence == true;
 
-		if (Blank(option?.ResetOnPeriodStartId) is { } periodId)
+		if (periodId is null && !onPresence)
+			return StaysUntilSwitchedBack;
+
+		// ModeAuthority.Dormant counts these same triggers as stood down, so describing them as live would have
+		// the card and the dormant-rules notice contradict each other on one page.
+		if (houseMode.HomeAssistantDecides)
+			return $"{StaysUntilSwitchedBack} — its automatic reset rules are paused while Home Assistant decides the mode";
+
+		var parts = new List<string>(2);
+
+		if (periodId is not null)
 		{
 			string named = periods
 				.FirstOrDefault(period => string.Equals(period.Key, periodId, StringComparison.OrdinalIgnoreCase))
@@ -352,19 +366,16 @@ public sealed class ModeService
 			parts.Add($"when '{named}' starts");
 		}
 
-		if (option?.ResetOnPresence == true)
+		if (onPresence)
 		{
-			var where = option.ResetPresenceSensors.Count > 0
+			var where = option!.ResetPresenceSensors.Count > 0
 				? $"{option.ResetPresenceSensors.Count} chosen {(option.ResetPresenceSensors.Count == 1 ? "sensor" : "sensors")}"
 				: "any room's motion";
 			parts.Add($"on presence ({where}, after {option.ResetPresenceGraceMinutes} min)");
 		}
 
-		if (parts.Count == 0)
-			return "stays until you switch the house back yourself";
-
 		// With no Normal option the engine has nothing to reset to and the trigger will not fire.
-		return normal is { Length: > 0 }
+		return houseMode.NormalOption?.Value is { Length: > 0 } normal
 			? $"switches back to {normal} {string.Join("; ", parts)}"
 			: $"would switch back {string.Join("; ", parts)}, but no option is marked Normal — fix this under Configuration → House modes";
 	}

@@ -20,17 +20,15 @@ public sealed record HouseModeOptionsDiff(
 	/// <summary>Nothing to do: the two lists name the same options.</summary>
 	public bool Matches => CanCompare && Added.Count == 0 && Dropped.Count == 0;
 
-	/// <summary>There is something to take, and therefore something to offer.</summary>
+	/// <summary>The two lists name different options.</summary>
 	public bool Differs => CanCompare && (Added.Count > 0 || Dropped.Count > 0);
 }
 
 /// <summary>
 ///     Compares the house-mode options in the document against the ones its dropdown helper is offering, and says
-///     in words what adopting the helper's list would do.
+///     in words how the two have drifted.
 /// </summary>
-/// <remarks>
-///     Reports only. Nothing here adopts on load; the page turns the report into one deliberate control.
-/// </remarks>
+/// <remarks>Reports only. Nothing writes the option list from a helper.</remarks>
 public static class HouseModeSync
 {
 	/// <summary>What the helper offers against what the document carries.</summary>
@@ -48,86 +46,31 @@ public static class HouseModeSync
 
 		List<string> configured = Clean(mode.Options.Select(option => option.Value));
 
-		// Sets, trimmed and case-insensitive: the same equality ConfigEditor's adopt uses to decide which options
-		// keep their settings. Order is not part of it.
+		// Sets, trimmed and case-insensitive, matching HouseModeConfig.OptionFor. Order is not part of it.
 		return new HouseModeOptionsDiff(
 			true,
 			[.. live.Where(value => !configured.Contains(value, StringComparer.OrdinalIgnoreCase))],
 			[.. configured.Where(value => !live.Contains(value, StringComparer.OrdinalIgnoreCase))]);
 	}
 
-	/// <summary>What the gap is, in a heading, or <c>null</c> when there is no gap to head.</summary>
-	public static string? Title(HouseModeOptionsDiff diff)
+	/// <summary>Which way the two lists differ, in one sentence, or <c>null</c> when they do not.</summary>
+	/// <remarks>Describes, never proposes: there is no control to press.</remarks>
+	public static string? Drift(HouseModeOptionsDiff diff)
 	{
 		ArgumentNullException.ThrowIfNull(diff);
 
 		if (!diff.Differs)
 			return null;
 
-		if (diff.Added.Count == 0)
-			return "This list has options the helper no longer offers.";
+		// Join reads parts[0] and parts[^1], so neither list may be empty when it is called.
+		if (diff.Dropped.Count == 0)
+			return $"It offers {Join(diff.Added)}, which nothing here describes yet.";
 
-		return diff.Dropped.Count == 0
-			? "The helper offers options this list doesn't have."
-			: "The helper's options and this list have drifted apart.";
-	}
+		string stranded = $"It no longer offers {Join(diff.Dropped)}, which stays below so you can move it across or remove it.";
 
-	/// <summary>What taking the helper's list would do, with the options named, or <c>null</c> for a no-op.</summary>
-	public static string? Summary(HouseModeOptionsDiff diff)
-	{
-		ArgumentNullException.ThrowIfNull(diff);
-
-		if (!diff.Differs)
-			return null;
-
-		if (diff.Added.Count == 0)
-			return $"Taking its list drops {Join(diff.Dropped)}.";
-
-		return diff.Dropped.Count == 0
-			? $"Taking its list adds {Join(diff.Added)}."
-			: $"Taking its list adds {Join(diff.Added)}, and drops {Join(diff.Dropped)}.";
-	}
-
-	/// <summary>
-	///     Rebuilds the mode's option list from the helper's, keeping what each surviving option was configured to
-	///     mean. An option the document has never seen arrives with no meaning assigned.
-	/// </summary>
-	/// <param name="mode">The configured house mode to rebuild. <c>null</c> does nothing.</param>
-	/// <param name="liveOptions">The helper's options. Empty does nothing, for the reason <see cref="Compare"/> gives.</param>
-	/// <returns>Whether anything changed, so a caller can tell an adoption from a no-op.</returns>
-	public static bool Adopt(HouseModeConfig? mode, IReadOnlyList<string> liveOptions)
-	{
-		ArgumentNullException.ThrowIfNull(liveOptions);
-
-		List<string> live = Clean(liveOptions);
-
-		if (mode is null || live.Count == 0)
-			return false;
-
-		// Read before the loop: keeping an option re-stamps its value in place, so a snapshot taken afterwards
-		// compares the new list against itself and always reports nothing happened.
-		List<string?> before = [.. mode.Options.Select(option => option.Value)];
-		List<HouseModeOptionConfig> adopted = [];
-
-		foreach (string value in live)
-		{
-			HouseModeOptionConfig? kept = mode.OptionFor(value);
-
-			if (kept is not null)
-			{
-				// Re-stamped with the helper's spelling, since the two are equal under this comparison anyway.
-				kept.Value = value;
-				adopted.Add(kept);
-			}
-			else
-			{
-				adopted.Add(new HouseModeOptionConfig { Value = value });
-			}
-		}
-
-		mode.Options = adopted;
-
-		return !before.SequenceEqual(adopted.Select(option => option.Value), StringComparer.Ordinal);
+		return diff.Added.Count == 0
+			? stranded
+			: $"It offers {Join(diff.Added)}, which nothing here describes yet. {stranded}";
 	}
 
 	/// <summary>Trimmed, non-blank and named once each: the shape both sides of the comparison are read in.</summary>

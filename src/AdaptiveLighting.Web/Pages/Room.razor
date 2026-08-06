@@ -83,7 +83,7 @@ else
 			{
 				<p class="room-says">@RoomFacts.Headline(snapshot)</p>
 
-				@if (RoomFacts.NextLine(snapshot, _now) is { Length: > 0 } next)
+				@if (RoomFacts.NextLine(snapshot, _now, Name) is { Length: > 0 } next)
 				{
 					<p class="room-next @(RoomFacts.IsOverdue(snapshot, _now) ? "room-overdue" : null)">@next</p>
 				}
@@ -117,7 +117,7 @@ else
 			{
 				<table class="room-fact-table">
 					<tbody>
-						@foreach (RoomFact fact in RoomFacts.For(facts, _now))
+						@foreach (RoomFact fact in RoomFacts.For(facts, _now, Name))
 						{
 							<tr>
 								<th scope="row">@fact.Label</th>

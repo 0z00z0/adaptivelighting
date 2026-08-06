@@ -23,7 +23,11 @@ public static class RoomFacts
 	public static readonly TimeSpan OverdueAfter = TimeSpan.FromSeconds(90);
 
 	/// <summary>What the engine saw, as the room page's evidence table.</summary>
-	public static IReadOnlyList<RoomFact> For(AreaSnapshot snapshot, DateTimeOffset now)
+	/// <remarks>
+	///     <paramref name="nameOf"/> resolves a held-lit holder to its friendly name; without one the row shows
+	///     the raw entity id.
+	/// </remarks>
+	public static IReadOnlyList<RoomFact> For(AreaSnapshot snapshot, DateTimeOffset now, Func<string, string>? nameOf = null)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 
@@ -54,6 +58,16 @@ public static class RoomFacts
 
 		facts.Add(new RoomFact("Lights", Reading(snapshot), LightsTitle(snapshot)));
 
+		// `is true` throughout: null is a build predating the field, which cannot say either way.
+		if (snapshot.IsHeldLit is true)
+		{
+			facts.Add(new RoomFact(
+				"Held on by",
+				Holder(snapshot, nameOf),
+				"This room is set to stay lit while this is holding it. Dimming and switching off wait until it lets go.",
+				IsProse: true));
+		}
+
 		facts.Add(snapshot.LastMotionAt is { } motion
 			? new RoomFact("Last movement", Stamp(motion, now), $"Movement was last seen at {Clock(motion)}.")
 			: new RoomFact("Last movement", "none seen", "No movement has been reported since the engine started."));
@@ -69,6 +83,15 @@ public static class RoomFacts
 
 		return facts;
 	}
+
+	/// <summary>
+	///     What to call the thing holding the lights on. An older engine reports the hold without naming it, so
+	///     the copy stays true when there is nothing to name.
+	/// </summary>
+	private static string Holder(AreaSnapshot snapshot, Func<string, string>? nameOf) =>
+		snapshot.HeldLitBy is { Length: > 0 } entity
+			? nameOf?.Invoke(entity) is { Length: > 0 } friendly ? friendly : entity
+			: "something in this room";
 
 	/// <summary>The room's present tense: what the lights are doing and why.</summary>
 	public static string Headline(AreaSnapshot snapshot)
@@ -102,7 +125,7 @@ public static class RoomFacts
 	/// <summary>
 	///     What happens next, from the deadline the engine armed, or <c>null</c> when nothing is pending.
 	/// </summary>
-	public static string? NextLine(AreaSnapshot snapshot, DateTimeOffset now)
+	public static string? NextLine(AreaSnapshot snapshot, DateTimeOffset now, Func<string, string>? nameOf = null)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 
@@ -111,6 +134,11 @@ public static class RoomFacts
 			return $"An update was due {Ago(snapshot.NextChangeAt!.Value, now)} and hasn't arrived. " +
 				"The Home Assistant connection may be down.";
 		}
+
+		// A hold nulls NextChangeAt while the room stays lit, so without this the two arms below fall through to
+		// null and a room refusing to switch off says nothing at all.
+		if (snapshot is { IsHeldLit: true, State: AreaState.AutoActive or AreaState.PreOff })
+			return $"Won't switch off while {Holder(snapshot, nameOf)} is holding the lights on.";
 
 		string? countdown = snapshot.NextChangeAt is { } due ? In(due, now) : null;
 
