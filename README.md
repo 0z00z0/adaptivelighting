@@ -39,7 +39,7 @@ Lights come on when you enter a room, dim as a warning before switching off so t
 
 ## Status
 
-**Preview.** The engine runs a real house and a real cabin and is covered by 927 tests, but the API and the configuration schema may still move. Requires **.NET 10** and the **NetDaemon V6** add-on.
+**Preview.** The engine runs a real house and a real cabin and is covered by 1421 tests, but the API and the configuration schema may still move. Requires **.NET 10** and the **NetDaemon V6** add-on.
 
 **2.0 renames zones to areas** — the types, the YAML, the UI and the published Home Assistant event all say *area* now. A pre-2.0 configuration migrates itself on first start; an HA automation listening for the old event does not. Read [CHANGELOG.md](CHANGELOG.md) before upgrading.
 
@@ -117,7 +117,7 @@ Nothing is hard-coded: it all lives in one YAML file, in four layers, each narro
 |---|---|
 | `Global` | House-wide: people, master switch, house modes, outdoor lux sensor, the discovery labels |
 | `Defaults` | The baseline every room starts with |
-| `Periods` | The circadian table: when each period starts, its brightness/colour, its caps |
+| `Periods` | The circadian table: when each period starts, and its brightness and colour temperature |
 | `Areas` | Per room — overrides *only* what differs from `Defaults` |
 
 Most rooms are three lines, because of **discovery**: give an area an `AreaId` and its lights, motion sensors and lux sensor are found from the Home Assistant area registry.
