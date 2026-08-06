@@ -23,6 +23,11 @@ dotnet add package AdaptiveLighting
 dotnet add package AdaptiveLighting.Web   # the board, the room pages and the settings
 ```
 
+:::note[Preview — not yet on NuGet]
+The packages publish on the first tagged release. Until then, clone the repository and reference the
+projects. Watch the [releases](https://github.com/0z00z0/adaptivelighting/releases) for the first build.
+:::
+
 Three things then need doing in your host, and they are all in the
 [README](https://github.com/0z00z0/adaptivelighting#quick-start):
 

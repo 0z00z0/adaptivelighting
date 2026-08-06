@@ -52,6 +52,11 @@ dotnet add package AdaptiveLighting
 dotnet add package AdaptiveLighting.Web   # optional: the board, room pages and settings
 ```
 
+:::note[Preview — not yet on NuGet]
+The packages publish on the first tagged release. Until then, clone the repository and reference the
+projects. Watch the [releases](https://github.com/0z00z0/adaptivelighting/releases) for the first build.
+:::
+
 Start it once and it finds every room with a light and a motion sensor by itself — and writes them all
 **switched off**. No light changes until you open the UI and choose which rooms to hand over.
 
@@ -68,3 +73,7 @@ ingress or an authenticating reverse proxy. The engine itself has no network sur
 	<LinkCard title="Settings reference" href="/configuration/" description="Every setting, in the words the UI uses." />
 	<LinkCard title="Example configuration" href="/example-config/" description="What the configuration file looks like, annotated." />
 </CardGrid>
+
+---
+
+Part of [ZeroZero Software](https://0z0.xyz) — small tools, zero bloat.
