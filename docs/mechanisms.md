@@ -831,6 +831,14 @@ changes are one change.
 `opacity: 0.45`; WCAG exempts disabled controls, and dimming them is what says they are disabled. The active
 nav item measures 6.86:1 because it is the amber accent, which is a deliberate colour and still above AA.
 
+**The dark palette is written twice and the first pass only changed one of them.** The stylesheet is
+dark-first: the bare `:root` *is* the dark theme and is what "follow the system" resolves to on a dark device,
+which is the default for anyone who never opens the theme picker. `:root[data-theme="dark"]` is only the
+explicit escape hatch. Changing the second alone shipped a build where picking *Dark* by hand looked new and
+the default still looked old — and it reached a live house before the served `app.css` was grepped for the old
+values and gave back both. **Serving the file and searching it for the tokens you think you removed is the
+check**; the `@media (prefers-color-scheme: light)` block is the third place a surface colour lives.
+
 ---
 
 ## Chart labels are sized against the chart, not the window

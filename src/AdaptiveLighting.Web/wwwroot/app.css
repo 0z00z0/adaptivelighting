@@ -30,24 +30,27 @@
    the point of use so shape and colour carry one message.
    ============================================================================ */
 
+/* This bare :root IS the dark theme, and it is what "follow the system" resolves to on a dark device — the
+   default for everybody who never opens the theme picker. :root[data-theme="dark"] below is only the explicit
+   escape hatch. Any change to one has to be made to both, or the two dark themes drift. */
 :root {
 	/* ---- surfaces ---- */
-	--bg: #141610;
-	--panel: #1c1e16;
-	--panel-2: #22251b;
-	--chip: #262a1e;          /* inset fill: chips, tokens, badges, stepper wells */
-	--lane: #181a12;          /* a track a timeline is drawn on */
-	--glow-track: #2c2f22;    /* the unlit part of a ring, bar or lamp */
+	--bg: #0b0d07;
+	--panel: #22261b;
+	--panel-2: #2a2e21;
+	--chip: #303425;          /* inset fill: chips, tokens, badges, stepper wells */
+	--lane: #141610;          /* a track a timeline is drawn on */
+	--glow-track: #363a2b;    /* the unlit part of a ring, bar or lamp */
 
 	/* ---- lines. Two weights, and the difference is load-bearing:
 	   --line draws the edge OF a surface (panel border, control border);
 	   --grid draws a hairline INSIDE one (row separators, gridlines). ---- */
-	--line: #33362a;
-	--grid: #262921;
+	--line: #404433;
+	--grid: #2e3226;
 
 	/* ---- text ---- */
-	--text: #eaeadf;
-	--muted: #b9bcaa;
+	--text: #f1f1e8;
+	--muted: #d0d3c2;
 	--accent-ink: #221a05;    /* text ON --accent, never text near it */
 
 	/* ---- the one accent: editability and primary action ---- */
@@ -149,10 +152,11 @@
    screenshot harness — or a future in-app toggle — ask for one theme and get it. The attribute selector outranks
    the bare :root above and is unaffected by the media query, so it wins in both directions.
 */
-/* Reworked 2026-08-07. The page and the panels used to sit 1.08:1 apart, so cards did not read as cards and
-   the whole theme looked flat; --muted carries the nav, the labels and most secondary text and sat at 8.69:1
-   on a panel. Darkening the page and lifting the panels separates the surfaces, and --muted moves with them so
-   the text does not lose what the lift would otherwise cost it. Ratios in docs/mechanisms.md. */
+/* Reworked 2026-08-07, and the bare :root above carries the same values for the reason stated there. The page
+   and the panels used to sit 1.08:1 apart, so cards did not read as cards; --muted carries the nav, the labels
+   and most secondary text and sat at 8.69:1 on a panel. Darkening the page and lifting the panels separates
+   the surfaces, and --muted moves with them so the text does not lose what the lift costs it. Ratios in
+   docs/mechanisms.md. */
 :root[data-theme="dark"] {
 	--bg: #0b0d07;
 	--panel: #22261b;
