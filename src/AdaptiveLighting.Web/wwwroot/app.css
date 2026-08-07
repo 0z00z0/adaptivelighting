@@ -149,17 +149,21 @@
    screenshot harness — or a future in-app toggle — ask for one theme and get it. The attribute selector outranks
    the bare :root above and is unaffected by the media query, so it wins in both directions.
 */
+/* Reworked 2026-08-07. The page and the panels used to sit 1.08:1 apart, so cards did not read as cards and
+   the whole theme looked flat; --muted carries the nav, the labels and most secondary text and sat at 8.69:1
+   on a panel. Darkening the page and lifting the panels separates the surfaces, and --muted moves with them so
+   the text does not lose what the lift would otherwise cost it. Ratios in docs/mechanisms.md. */
 :root[data-theme="dark"] {
-	--bg: #141610;
-	--panel: #1c1e16;
-	--panel-2: #22251b;
-	--chip: #262a1e;
-	--lane: #181a12;
-	--glow-track: #2c2f22;
-	--line: #33362a;
-	--grid: #262921;
-	--text: #eaeadf;
-	--muted: #b9bcaa;
+	--bg: #0b0d07;
+	--panel: #22261b;
+	--panel-2: #2a2e21;
+	--chip: #303425;
+	--lane: #141610;
+	--glow-track: #363a2b;
+	--line: #404433;
+	--grid: #2e3226;
+	--text: #f1f1e8;
+	--muted: #d0d3c2;
 	--accent-ink: #221a05;
 	--accent: #e2ae45;
 	--machine: #e8a24a;

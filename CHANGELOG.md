@@ -222,6 +222,13 @@ under one version, because they are compiled against each other.
 
 ### Changed
 
+- **The dark theme separates its surfaces and lifts its secondary text.** A card sat 1.08:1 against the page
+  it was on, so nothing had edges and the theme read as flat; and `--muted`, which carries the nav, the labels
+  and every secondary sentence, sat at 8.69:1 on a panel. The page goes darker, the panels lift, and `--muted`
+  moves with them — because lifting panels alone takes muted text *down* to 7.96:1, and most text is on a
+  panel. Measured over 120 rendered text nodes: median 8.69 → 10.12, nothing below AA, panel-against-page
+  1.08 → 1.27. Light and 0z0 are untouched; neither had the problem.
+
 - **Picking a house-mode helper no longer rewrites the option list**, and the *Use the helper's options*
   button is gone with it. Adopting invented mappings nobody chose, and dropped the settings of every option
   the new helper did not also offer — the one edit in the page that could destroy a mode's configuration. The

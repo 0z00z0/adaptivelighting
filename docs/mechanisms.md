@@ -797,6 +797,42 @@ at all. When NetDaemon surfaces it, reading it in preference to `last_updated` i
 
 ---
 
+## The dark theme's contrast problem was two problems
+
+Reported 2026-08-07 as "too muted, the background should be darker". Measuring the tokens said the opposite —
+text on background was already 15.05:1 and muted 9.41:1, both far above AA. **The tokens were the wrong thing
+to measure.** Two separate faults sat underneath:
+
+**Surfaces did not separate.** `--panel` against `--bg` was **1.08:1**. A card and the page it sits on were
+effectively the same colour, so nothing on the screen had edges and the whole theme read as flat. Neither Light
+nor 0z0 had this; it was specific to Dark.
+
+**`--muted` carries most of the interface.** The nav, the section labels, the info icons and every secondary
+sentence are `--muted`, not `--text`. At 8.69:1 on a panel it passes every guideline and still looks washed out
+against a near-black page, because low-saturation olive-grey on olive-black is a small *hue* step however large
+the luminance step is.
+
+Walking the rendered DOM rather than the tokens is what found it: 120 live text nodes, their effective colour
+after inherited `opacity`, against the real painted background behind each one.
+
+| | before | after |
+|---|---|---|
+| panel against page | 1.08 | **1.27** |
+| `--muted` on a panel | 8.69 | **10.12** |
+| `--muted` on the page | 9.41 | **12.82** |
+| median of 120 live text nodes | 8.69 | **10.12** |
+| nodes below AA | 0 | 0 |
+
+**Lifting the panels costs text contrast, so `--muted` had to move with them.** Panel `#1c1e16` → `#22261b`
+alone drops muted-on-panel from 8.69 to 7.96 — the wrong direction, and most text sits on panels. The two
+changes are one change.
+
+**Two things that look like faults and are not.** The disabled ↑/↓ period-reorder buttons measure 3.76:1 at
+`opacity: 0.45`; WCAG exempts disabled controls, and dimming them is what says they are disabled. The active
+nav item measures 6.86:1 because it is the amber accent, which is a deliberate colour and still above AA.
+
+---
+
 ## Chart labels are sized against the chart, not the window
 
 Both hand-built SVG charts are drawn at a fixed viewBox and stretched to `width: 100%` — the daylight chart
@@ -859,7 +895,8 @@ would pass a casual look and fail on somebody's real schedule.
 | 22 | overridable per-room settings | `RoomSettings.Keys` derives it by reflection over the nullable twins; `AreaView.OverridableSettingCount` hard-codes it and a test holds the two together. A hand-written list is how the editor came to say "n of 16" about a document with 21 |
 | ~3 px | board mark de-duplication gap | a screen bound, not a clock bound, because the suppressed-off path republishes per movement |
 | 12.5 / 14 / 15 / 20 / 25 px | the type scale | one step up from the shipped 11 / 12.5 / 13.5 / 19 / 24 after "small and hard to read". Size was the complaint as much as contrast: the muted colour already passed AA before this |
-| 9.41 / 6.05 / 8.70 : 1 | muted text on the page background, Dark / Light / 0z0 | measured after the lift; Dark was 6.51:1 |
+| 12.82 / 6.05 / 8.70 : 1 | muted text on the page background, Dark / Light / 0z0 | Dark went 6.51 → 9.41 → 12.82 across two passes |
+| 1.27 : 1 | dark theme, panel against page | was 1.08, which is why cards did not read as cards. Only Light and 0z0 were ever comfortable here |
 | 13 user units | daylight chart label cap | stepped it: clean at 13, and 14 runs the December month label into the last period label. A layout clash in one corner, not a size limit |
 | 20 user units | `DaylightChart.SpreadLabels.MinGap` | one label box at that cap, measured 12.3 above the baseline and 6.7 below. Was 11, sized for the old 9-unit type; 19 exactly touches |
 | 10.1 / 7.9 px | daylight chart label targets | what a 1280 px desktop already rendered, so the desktop chart does not move |
