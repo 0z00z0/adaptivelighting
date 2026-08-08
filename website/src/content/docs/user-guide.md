@@ -19,13 +19,15 @@ Adaptive lighting runs inside a [NetDaemon](https://netdaemon.xyz) host, on the 
 add-on. It needs .NET 10.
 
 ```bash
-dotnet add package AdaptiveLighting
-dotnet add package AdaptiveLighting.Web   # the board, the room pages and the settings
+dotnet add package AdaptiveLighting.NetDaemon   # engine, board, room pages and settings
 ```
 
-:::note[Preview — not yet on NuGet]
+:::note[Preview — on GitHub Packages, not nuget.org]
 The packages publish on the first tagged release. Until then, clone the repository and reference the
 projects. Watch the [releases](https://github.com/0z00z0/adaptivelighting/releases) for the first build.
+
+GitHub's NuGet feed asks for a token on every read, even for a public package, so you will need
+`https://nuget.pkg.github.com/0z00z0/index.json` in your own `nuget.config` with a `read:packages` token.
 :::
 
 Three things then need doing in your host, and they are all in the

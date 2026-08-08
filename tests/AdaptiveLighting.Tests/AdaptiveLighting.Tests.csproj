@@ -26,6 +26,12 @@
     -->
     <ProjectReference Include="..\..\src\AdaptiveLighting.Web\AdaptiveLighting.Web.csproj" />
     <ProjectReference Include="..\..\src\AdaptiveLighting.Extensions\AdaptiveLighting.Extensions.csproj" />
+    <!--
+      AdaptiveLighting.NetDaemon is the one reference here that pulls in a web host. It earns that: the
+      registration it performs is the whole product of the package, and the key-ring guard it carries had a bug
+      that no test would have caught because nothing else in this suite builds a WebApplicationBuilder.
+    -->
+    <ProjectReference Include="..\..\src\AdaptiveLighting.NetDaemon\AdaptiveLighting.NetDaemon.csproj" />
   </ItemGroup>
 
   <ItemGroup>

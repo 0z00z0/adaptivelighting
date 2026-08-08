@@ -79,7 +79,12 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
 
 ## Shipping and packaging
 
-- **`NUGET_API_KEY` is not set** as a repo secret, so tagging `v*` cannot publish. Espen must add it.
+- **Publishing needs no secret any more.** `release.yml` pushes to GitHub Packages with the per-run
+  `GITHUB_TOKEN`, so the `NUGET_API_KEY` that was never added is no longer the thing blocking a first release.
+  Untested, because no tag has been pushed since the change — the first `v*` tag is the test.
+- **An outside consumer needs a token to restore.** GitHub's NuGet feed authenticates every read, including a
+  public package from an MIT repo. Nothing to fix while Espen is the only consumer; it is the cost of the
+  GitHub Packages choice and the reason to revisit nuget.org if anyone else ever adopts this.
 - **Ship as its own Home Assistant add-on with ingress.** The only route to HA auth: `IHaContext` has no
   `SetState`, and `last_updated` cannot be written back at all.
 - **The user guide has no screenshots.** Every `📷 [screenshot: …]` slot is still a placeholder.

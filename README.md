@@ -29,6 +29,9 @@ Lights come on when you enter a room, dim as a warning before switching off so t
 └──────────────┬──────────────┘
 ┌──────────────▼──────────────┐
 │    AdaptiveLighting.Web     │   Blazor dashboard + config editor (optional)
+└──────────────┬──────────────┘
+┌──────────────▼──────────────┐
+│ AdaptiveLighting.NetDaemon  │   the host wiring, so a house doesn't repeat it
 └─────────────────────────────┘
 ```
 
@@ -45,12 +48,21 @@ Lights come on when you enter a room, dim as a warning before switching off so t
 
 ## Install
 
-> **Preview — not yet on NuGet.** The packages below are wired to publish on the first tagged release; until that lands, clone the repo and reference the three projects (or `dotnet pack` them locally). Track the first published build in the [releases](https://github.com/0z00z0/adaptivelighting/releases).
+> **Preview — published to GitHub Packages, not nuget.org.** The packages are wired to publish on the first tagged release; until that lands, clone the repo and reference the projects (or `dotnet pack` them locally). Track the first published build in the [releases](https://github.com/0z00z0/adaptivelighting/releases).
+>
+> GitHub's NuGet feed authenticates every read, including for a public package, so add the source to your own `nuget.config` with a token that has `read:packages`:
+>
+> ```xml
+> <packageSources>
+>   <add key="0z00z0" value="https://nuget.pkg.github.com/0z00z0/index.json" />
+> </packageSources>
+> ```
 
 ```bash
-dotnet add package AdaptiveLighting
-dotnet add package AdaptiveLighting.Web   # optional: the dashboard + config editor
+dotnet add package AdaptiveLighting.NetDaemon   # engine + UI + host wiring, one reference
 ```
+
+Or take the pieces on their own — `AdaptiveLighting` for the engine with no web surface at all, `AdaptiveLighting.Web` to add the UI and wire the host yourself.
 
 ## Quick start
 
@@ -84,19 +96,22 @@ internal sealed class AdaptiveLightingApp : IAsyncDisposable
 }
 ```
 
-**3. `program.cs`** — standard NetDaemon host, plus the UI if you want it:
+**3. `program.cs`** — two calls, plus the one thing a library must not decide for you:
 
 ```csharp
-builder.Services.AddLightingWeb();                                  // engine + UI services
-builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-builder.WebHost.ConfigureKestrel(o => o.ListenAnyIP(10000));        // LAN only — see the warning above
-builder.WebHost.UseStaticWebAssets();
+builder.Host
+    .UseNetDaemonDefaultLogging()
+    .UseIsoTimestampLogging();      // after NetDaemon's own: it replaces that logger, so order matters
+
+builder.AddAdaptiveLighting();      // engine, UI, static assets, DataProtection key ring
+
+builder.WebHost.ConfigureKestrel(o => o.ListenAnyIP(10000));   // LAN only — see the warning above
 
 var app = builder.Build();
-app.MapStaticAssets();                    // serves the library's CSS via the asset manifest
-app.UseAntiforgery();
-app.MapRazorComponents<AdaptiveLighting.Web.App>().AddInteractiveServerRenderMode();
+app.UseAdaptiveLighting();          // assets, antiforgery, the Blazor endpoint
 ```
+
+**The port stays yours on purpose.** The UI has no authentication, so `ListenAnyIP` is a statement about one network and a package cannot make it for you. `UseAdaptiveLighting()` also calls `UseAntiforgery()`, so install any middleware that isolates a port *before* it — and note the package owns the process's only root Blazor component: a second one in the same container is an `AmbiguousMatchException` on every request.
 
 Start it once and leave it alone. Half a minute in, the engine reads Home Assistant's area registry and writes down every room that has both a light and a motion sensor — **all of them switched off**. No light changes until you open the UI at `http://<host>:10000` and choose which rooms to switch on.
 
@@ -126,12 +141,13 @@ Full documentation — how it works, how to use it, the settings reference and a
 
 ## Packages
 
-Ship the three as a matched set — they are compiled against each other.
+Ship the four as a matched set — they are compiled against each other. Referencing the top one brings the rest.
 
 | Package | What it is |
 |---|---|
-| `AdaptiveLighting` | The engine. No network surface, no UI. |
+| `AdaptiveLighting.NetDaemon` | The host wiring: registration, static assets, antiforgery, the key ring. Start here. |
 | `AdaptiveLighting.Web` | Blazor dashboard + config editor (Razor Class Library). |
+| `AdaptiveLighting` | The engine. No network surface, no UI. |
 | `AdaptiveLighting.Extensions` | Host-agnostic HassModel helpers. Useful in any NetDaemon app. |
 
 ## Licence

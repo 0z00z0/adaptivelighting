@@ -11,6 +11,22 @@ under one version, because they are compiled against each other.
 
 ### Added
 
+- **`AdaptiveLighting.NetDaemon`: a fourth package that binds the engine into a host in one line.**
+  `builder.AddAdaptiveLighting()` registers the engine, the UI, static web assets and a DataProtection key
+  ring; `app.UseAdaptiveLighting()` maps the assets, antiforgery and the Blazor endpoint. It took **59
+  identical lines** out of each of two houses' `program.cs` — including the three traps that were previously
+  re-learned per host: static web assets are wired up automatically only in Development, `MapStaticAssets` is
+  what serves both the class library's content and `blazor.web.js`, and a key ring left inside the container
+  is destroyed by the next deploy.
+  - The key ring lands **beside the lighting document**, so a house names its state directory once, in
+    `AdaptiveLighting:ConfigPath`. It tolerates the directory not existing yet as long as the parent does,
+    matching `LightingConfigPath.Resolve`, and says so in the log when it declines to place one.
+  - **The Kestrel port stays with the host.** The UI has no authentication, so `ListenAnyIP` is a statement
+    about one network and a library cannot make it.
+  - **`UseIsoTimestampLogging()` is a separate call**, chained after the host's own logging. It replaces that
+    logger rather than adjusting it, so an option flag on an unordered registration could not have expressed
+    the constraint — placed first, it silently loses every Debug line.
+
 - **A room that refuses to switch off now says what is holding it.** `KeepLitWhenOn` cancels the off and
   clears the countdown with it, so the room page's next-line had nothing to draw and fell silent — the exact
   moment somebody wants an answer. It now reads *"Won't switch off while the television is holding the lights
