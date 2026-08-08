@@ -79,13 +79,12 @@ what is deployed in `NetDaemon/CLAUDE.md`. Nothing here duplicates those.
 
 ## Shipping and packaging
 
-- **`release.yml` still cannot publish: `PACKAGES_TOKEN` is not set.** Checked 2026-08-08 —
-  `gh api repos/0z00z0/adaptivelighting/actions/secrets` returns nothing at all. Espen chose a fine-grained PAT
-  over the per-run `GITHUB_TOKEN`, so a `v*` tag builds and then fails at the push step until the secret exists:
-  resource owner `0z00z0`, Contents read-only, Packages read and write.
-  **This did not block the first release** — `2.0.0-preview.1` was packed and pushed by hand with
-  `gh auth token` on 2026-08-08, and both houses consume it. The workflow itself has still never published
-  anything, and the first tag remains the only test of it.
+- **`release.yml` has never published anything, and the first `v*` tag is its only test.** It uses the per-run
+  `GITHUB_TOKEN` with `packages: write`, so nothing has to be set up — measured 2026-08-08 that no secret
+  exists in any of the three repos, and none is needed. A fine-grained PAT was briefly adopted and dropped:
+  the argument for it was that one credential could also serve restore, which is wrong, because restore runs
+  on a developer's machine against the user-level `NuGet.Config` and never touches the job.
+  `2.0.0-preview.1` went out by hand with `gh auth token`; both houses consume it.
 - **An outside consumer needs a token to restore.** GitHub's NuGet feed authenticates every read, including a
   public package from an MIT repo. Nothing to fix while Espen is the only consumer; it is the cost of the
   GitHub Packages choice and the reason to revisit nuget.org if anyone else ever adopts this.

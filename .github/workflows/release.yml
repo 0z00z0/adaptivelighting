@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # The push below. This is the whole credential story: GITHUB_TOKEN is minted for the run, so there is no
+      # secret to create, rotate or forget.
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -28,19 +31,13 @@ jobs:
 
       # GitHub Packages, not nuget.org, matching ESPHomeAdmin.
       #
-      # A fine-grained PAT, not the per-run GITHUB_TOKEN. GITHUB_TOKEN is scoped to this repository, which is
-      # enough to publish and not enough to be the one credential a consumer also restores with — the houses
-      # pull this package from another repository entirely. One token, both directions, and its scope is
-      # visible and revocable in one place.
-      #
-      # PACKAGES_TOKEN must be a fine-grained personal access token, resource owner 0z00z0, with:
-      #   Repository permissions -> Contents: Read-only          (restore during the build)
-      #   Account/Org permissions -> Packages: Read and write     (the push below)
-      # Add it under Settings -> Secrets and variables -> Actions. A classic token with write:packages also
-      # works; fine-grained is preferred because the scope is per-resource and it can be given an expiry.
+      # GITHUB_TOKEN, not a PAT: it is minted per run, so there is no secret to create, rotate or forget, and
+      # nothing that expires and breaks a release with no warning. A PAT was considered and dropped — the
+      # argument for it was that one credential could also serve restore, but restore happens on a developer's
+      # machine against the user-level NuGet.Config and never touches this job.
       #
       # The trade-off, stated because it is real: GitHub's NuGet feed authenticates every read, including a
       # public package from an MIT repo, so an outside consumer needs a token of their own. Moving to
       # nuget.org later is a source change and a version bump, not a migration.
       - name: Push to GitHub Packages
-        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.PACKAGES_TOKEN }}" --source https://nuget.pkg.github.com/0z00z0/index.json --skip-duplicate
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.GITHUB_TOKEN }}" --source https://nuget.pkg.github.com/0z00z0/index.json --skip-duplicate

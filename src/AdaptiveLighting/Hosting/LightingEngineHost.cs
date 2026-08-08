@@ -531,11 +531,11 @@ public sealed class LightingEngineHost : IDisposable
 
 			_logger.LogInformation(
 				"Adaptive lighting is running: {Areas} of {Configured} areas resolved.",
-				orchestrator.Areas.Count, config.Areas.Count);
+				orchestrator.Areas.Count, config.ManagedAreaCount);
 
 			_notices.OnNext(new EngineNotice(notice, DateTimeOffset.Now));
 
-			return new SaveResult(SaveStatus.Saved, validation, $"Saved: {orchestrator.Areas.Count} of {config.Areas.Count} rooms are running.");
+			return new SaveResult(SaveStatus.Saved, validation, $"Saved: {orchestrator.Areas.Count} of {config.ManagedAreaCount} rooms are running.");
 		}
 		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
 		{
