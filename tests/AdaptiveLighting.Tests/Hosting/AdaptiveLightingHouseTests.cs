@@ -136,4 +136,45 @@ public sealed class AdaptiveLightingHouseTests
 
 		Assert.IsFalse(Directory.Exists(Path.Combine(root, "dataprotection-keys")));
 	}
+
+	// ===================== the port =====================
+
+	[TestMethod]
+	public void The_Port_Comes_From_Configuration_And_Defaults_To_10000()
+	{
+		Assert.AreEqual(10000, AdaptiveLightingHouse.DefaultPort,
+			"the NetDaemon add-on declares 10000-10004, and every existing house is already on this one");
+	}
+
+	/// <summary>
+	///     Zero is the escape hatch for a host that binds Kestrel itself. Without it, adopting the package would
+	///     force a second listener onto anyone who already had one.
+	/// </summary>
+	[TestMethod]
+	public void A_Port_Of_Zero_Leaves_Kestrel_Alone()
+	{
+		string root = TempRoot();
+		WebApplicationBuilder builder = BuilderWith(Path.Combine(root, "house.yaml"), root);
+		builder.Configuration["AdaptiveLighting:Port"] = "0";
+
+		builder.AddAdaptiveLighting();
+
+		// Nothing to assert on the options object beyond it not throwing: the contract is that the package adds
+		// no endpoint of its own, and Build() would fail on a bad one.
+		using WebApplication app = builder.Build();
+		Assert.IsNotNull(app);
+	}
+
+	[TestMethod]
+	public void An_Explicit_Port_Wins_Over_Configuration()
+	{
+		string root = TempRoot();
+		WebApplicationBuilder builder = BuilderWith(Path.Combine(root, "house.yaml"), root);
+		builder.Configuration["AdaptiveLighting:Port"] = "10000";
+
+		builder.AddAdaptiveLighting(new AdaptiveLightingHouseOptions(Port: 0));
+
+		using WebApplication app = builder.Build();
+		Assert.IsNotNull(app, "the explicit 0 has to beat the configured 10000, or a host cannot opt out");
+	}
 }

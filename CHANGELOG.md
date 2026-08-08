@@ -21,8 +21,12 @@ under one version, because they are compiled against each other.
   - The key ring lands **beside the lighting document**, so a house names its state directory once, in
     `AdaptiveLighting:ConfigPath`. It tolerates the directory not existing yet as long as the parent does,
     matching `LightingConfigPath.Resolve`, and says so in the log when it declines to place one.
-  - **The Kestrel port stays with the host.** The UI has no authentication, so `ListenAnyIP` is a statement
-    about one network and a library cannot make it.
+  - **The port is bound by the package**, from `AdaptiveLighting:Port`, defaulting to 10000; `0` opts out for a
+    host that binds Kestrel itself. It was briefly left to the host on the grounds that an unauthenticated
+    listener is a claim about one network — which is true, and was the wrong conclusion: it meant 30 lines of
+    security comment had to be re-pasted into every new house, where the one that mattered could be edited or
+    quietly dropped. The library now **logs the warning at every start**, naming the port, so the risk travels
+    with the code instead of with a comment.
   - **`UseIsoTimestampLogging()` is a separate call**, chained after the host's own logging. It replaces that
     logger rather than adjusting it, so an option flag on an unordered registration could not have expressed
     the constraint — placed first, it silently loses every Debug line.
