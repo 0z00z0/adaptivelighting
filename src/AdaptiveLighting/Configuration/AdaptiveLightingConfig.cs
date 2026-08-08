@@ -21,6 +21,15 @@ public class AdaptiveLightingConfig
 	/// <summary>Areas are opt-in: an HA area absent from this list is never touched.</summary>
 	public List<AreaConfig> Areas { get; set; } = [];
 
+	/// <summary>How many areas the engine is meant to be commanding, which is the denominator of "n of m running".</summary>
+	/// <remarks>
+	///     An area switched off is not a candidate, so counting it made "2 of 4" mean "2 of the 3 that were
+	///     supposed to run, and one that was never going to". A whole-house area with no lights of its own is the
+	///     usual reason somebody switches one off.
+	/// </remarks>
+	[YamlIgnore]
+	public int ManagedAreaCount => Areas.Count(area => area.Effective(Defaults).Enabled);
+
 	/// <summary>The document a fresh installation starts from.</summary>
 	/// <remarks>
 	///     Names no entities. A placeholder id is one Home Assistant does not know, so it fails validation on a fresh

@@ -147,6 +147,17 @@ public sealed class LightingOrchestrator : IDisposable
 		{
 			if (!resolver.TryResolve(areaConfig, _config.Defaults, out ResolvedArea? resolved, out string? error))
 			{
+				// An area switched off was never going to be commanded, so failing to resolve is not a fault.
+				// Petterhaugen's whole-cabin area holds no lights on purpose and raised an error, and a
+				// notification, on every start.
+				if (!areaConfig.Effective(_config.Defaults).Enabled)
+				{
+					_logger.LogDebug(
+						"Area {Area} is switched off and does not resolve: {Error}. Not counted as a fault.",
+						areaConfig.DisplayName, error);
+					continue;
+				}
+
 				_logger.LogError("Area {Area} disabled: {Error}", areaConfig.DisplayName, error);
 				failures.Add($"{areaConfig.DisplayName}: {error}");
 				continue;
@@ -340,7 +351,7 @@ public sealed class LightingOrchestrator : IDisposable
 		string body = string.Join("", failures.Select(failure => $"<li>{failure}</li>"));
 		_notifier.Notify(
 			"Adaptive lighting: areas disabled",
-			$"{failures.Count} of {_config.Areas.Count} areas could not be resolved and are not being managed:<ul>{body}</ul>");
+			$"{failures.Count} of {_config.ManagedAreaCount} areas could not be resolved and are not being managed:<ul>{body}</ul>");
 	}
 
 	/// <summary>Reads the day's sun times off the sun entity.</summary>
