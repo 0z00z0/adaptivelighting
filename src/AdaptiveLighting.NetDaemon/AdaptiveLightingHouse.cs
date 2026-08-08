@@ -15,7 +15,11 @@ namespace AdaptiveLighting.NetDaemon;
 ///     Where the DataProtection key ring is persisted. <c>null</c> puts it beside the lighting document, which is
 ///     the only directory a host has already promised to keep across deploys.
 /// </param>
-public sealed record AdaptiveLightingHouseOptions(string? KeyRingPath = null);
+/// <param name="Port">
+///     The port the UI listens on, overriding <c>AdaptiveLighting:Port</c>. <c>0</c> means the host owns its own
+///     Kestrel and this must not touch it.
+/// </param>
+public sealed record AdaptiveLightingHouseOptions(string? KeyRingPath = null, int? Port = null);
 
 /// <summary>Adopts AdaptiveLighting into a NetDaemon host.</summary>
 /// <remarks>
@@ -34,14 +38,29 @@ public sealed record AdaptiveLightingHouseOptions(string? KeyRingPath = null);
 ///         and its own Kestrel, the way the ESPHome console does.
 ///     </para>
 ///     <para>
-///         The port is deliberately not set here. The UI has no authentication, so the <c>ListenAnyIP</c> call
-///         and the warning that belongs beside it are a statement about one network, which a package cannot make.
+///         <b>EXPOSURE.</b> The UI listens on every interface with <b>no authentication of any kind</b>. It is not
+///         a read-only dashboard: anyone who reaches the port can rewrite the lighting configuration and rebuild
+///         the running engine — disable every room, point them at other people's lights, set the night cap to
+///         100%. The write surface is exactly one file, resolved server-side at start-up and never influenced by
+///         a request, which bounds the hole without closing it.
+///     </para>
+///     <para>
+///         That is acceptable only while the port stays on a trusted LAN. Do not forward or NAT it. It is not
+///         reachable through Nabu Casa, which proxies only Home Assistant's own 8123. On a Home Assistant add-on
+///         it is exposed only if the port is mapped in the Network panel. If it ever has to be reachable from
+///         outside, put it behind Home Assistant ingress or an authenticating reverse proxy — do not add a login
+///         form here, because hand-rolled credentials would be worse than none. The port is logged as a warning
+///         at every start so this is never a silent default.
 ///     </para>
 /// </remarks>
 public static class AdaptiveLightingHouse
 {
 	private const string ConfigPathKey = "AdaptiveLighting:ConfigPath";
+	private const string PortKey = "AdaptiveLighting:Port";
 	private const string KeyRingFolder = "dataprotection-keys";
+
+	/// <summary>The port the UI listens on when nothing says otherwise. The NetDaemon add-on declares 10000-10004.</summary>
+	public const int DefaultPort = 10000;
 
 	/// <summary>Registers the engine, the UI, and the hosting the UI needs. Pair with <see cref="UseAdaptiveLighting"/>.</summary>
 	/// <remarks>Call before <c>builder.Build()</c>. Ordering against other registrations does not matter.</remarks>
@@ -58,9 +77,38 @@ public static class AdaptiveLightingHouse
 		// _content/** 404s in production and every page renders unstyled and inert.
 		builder.WebHost.UseStaticWebAssets();
 
-		AddKeyRing(builder, options ?? new AdaptiveLightingHouseOptions());
+		AdaptiveLightingHouseOptions settings = options ?? new AdaptiveLightingHouseOptions();
+
+		AddKeyRing(builder, settings);
+		Listen(builder, settings);
 
 		return builder;
+	}
+
+	/// <summary>
+	///     Binds the UI's port, and says out loud what that means. <c>0</c> leaves Kestrel alone for a host that
+	///     configures its own.
+	/// </summary>
+	/// <remarks>
+	///     Kestrel's option delegates are additive, so a host that also listens on its own port keeps doing so.
+	///     The warning is logged rather than left as a comment in somebody's program.cs, which is where it used to
+	///     live and therefore had to be re-pasted into every new house.
+	/// </remarks>
+	private static void Listen(WebApplicationBuilder builder, AdaptiveLightingHouseOptions options)
+	{
+		int port = options.Port
+			?? (int.TryParse(builder.Configuration[PortKey], out int configured) ? configured : DefaultPort);
+
+		if (port == 0)
+			return;
+
+		builder.WebHost.ConfigureKestrel(kestrel => kestrel.ListenAnyIP(port));
+
+		Logger().LogWarning(
+			"The lighting UI is listening on port {Port} on every interface, with no authentication: anyone who "
+			+ "can reach it can rewrite this house's lighting configuration. Keep it on the LAN — do not forward "
+			+ "or NAT it. Set {Key} to 0 to bind it yourself.",
+			port, PortKey);
 	}
 
 	/// <summary>Maps the UI's assets and endpoints.</summary>
@@ -94,9 +142,7 @@ public static class AdaptiveLightingHouse
 	/// </remarks>
 	private static void AddKeyRing(WebApplicationBuilder builder, AdaptiveLightingHouseOptions options)
 	{
-		ILogger logger = LoggerFactory
-			.Create(logging => logging.AddConsole())
-			.CreateLogger(typeof(AdaptiveLightingHouse).FullName!);
+		ILogger logger = Logger();
 
 		if (KeyRingDirectory(builder, options) is not { } keyRing)
 		{
@@ -120,6 +166,12 @@ public static class AdaptiveLightingHouse
 
 		logger.LogInformation("DataProtection keys are kept at {Path}.", keyRing);
 	}
+
+	// Registration runs before the host is built, so there is no ILogger to resolve yet. Both messages here have
+	// to reach an operator on the run that decides them, which is why they are not deferred to a hosted service.
+	private static ILogger Logger() => LoggerFactory
+		.Create(logging => logging.AddConsole())
+		.CreateLogger(typeof(AdaptiveLightingHouse).FullName!);
 
 	private static string? KeyRingDirectory(WebApplicationBuilder builder, AdaptiveLightingHouseOptions options)
 	{

@@ -96,22 +96,23 @@ internal sealed class AdaptiveLightingApp : IAsyncDisposable
 }
 ```
 
-**3. `program.cs`** — two calls, plus the one thing a library must not decide for you:
+**3. `program.cs`** — two calls. There is no third.
 
 ```csharp
-builder.Host
-    .UseNetDaemonDefaultLogging()
-    .UseIsoTimestampLogging();      // after NetDaemon's own: it replaces that logger, so order matters
-
-builder.AddAdaptiveLighting();      // engine, UI, static assets, DataProtection key ring
-
-builder.WebHost.ConfigureKestrel(o => o.ListenAnyIP(10000));   // LAN only — see the warning above
+builder.AddAdaptiveLighting();      // engine, UI, static assets, key ring, and the port
 
 var app = builder.Build();
 app.UseAdaptiveLighting();          // assets, antiforgery, the Blazor endpoint
 ```
 
-**The port stays yours on purpose.** The UI has no authentication, so `ListenAnyIP` is a statement about one network and a package cannot make it for you. `UseAdaptiveLighting()` also calls `UseAntiforgery()`, so install any middleware that isolates a port *before* it — and note the package owns the process's only root Blazor component: a second one in the same container is an `AmbiguousMatchException` on every request.
+Optionally `builder.Host.UseIsoTimestampLogging()` — chained **after** your host's own logging call, because it replaces that logger rather than adjusting it.
+
+Two things to know, both enforced by the shape rather than by you remembering:
+
+- **`UseAdaptiveLighting()` calls `UseAntiforgery()`**, so install any middleware that isolates a port *before* it.
+- **The package owns the process's only root Blazor component.** A second one in the same service container is an `AmbiguousMatchException` on every request to every port; give it its own container and its own Kestrel.
+
+`AdaptiveLighting:Port` defaults to **10000** and is bound for you. Set it to `0` if your host binds Kestrel itself. Read the exposure warning above before changing it to anything reachable from outside the LAN — the UI has no authentication, and the library logs that warning at every start so it is never a silent default.
 
 Start it once and leave it alone. Half a minute in, the engine reads Home Assistant's area registry and writes down every room that has both a light and a motion sensor — **all of them switched off**. No light changes until you open the UI at `http://<host>:10000` and choose which rooms to switch on.
 
