@@ -1,7 +1,7 @@
 name: release
 
 # Tag a release to publish: git tag v0.1.0-preview.1 && git push origin v0.1.0-preview.1
-# The tag drives the package version, so the three packages always ship as a matched set.
+# The tag drives the package version, so the four packages always ship as a matched set.
 on:
   push:
     tags: [ 'v*' ]
@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # Publishing to GitHub Packages, so the job needs to write them. This is also what removes the
+      # NUGET_API_KEY dependency: GITHUB_TOKEN is minted per run and needs no secret to be set by hand.
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -26,6 +29,12 @@ jobs:
 
       - run: dotnet pack AdaptiveLighting.slnx -c Release --no-build -p:Version=$PKG_VERSION -o artifacts
 
-      # Requires a NUGET_API_KEY repository secret (nuget.org > API Keys).
-      - name: Push to nuget.org
-        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+      # GitHub Packages, not nuget.org, matching ESPHomeAdmin. Nothing has to be set up by hand: GITHUB_TOKEN
+      # is minted for the run, where the nuget.org route needed a NUGET_API_KEY secret that was never added and
+      # so had never once published.
+      #
+      # The trade-off, stated because it is real: GitHub's NuGet feed requires authentication even for a public
+      # package, so an outside consumer of this MIT library needs a GitHub token in their own nuget.config.
+      # Moving to nuget.org later is a source change and a version bump, not a migration.
+      - name: Push to GitHub Packages
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.GITHUB_TOKEN }}" --source https://nuget.pkg.github.com/0z00z0/index.json --skip-duplicate

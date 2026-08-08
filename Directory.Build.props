@@ -2,8 +2,9 @@
 
   <!--
     Shared build + package metadata. Each project adds only its own PackageId and Description.
-    Version is set here so the three packages always ship as a matched set: the engine, the UI and the
-    extensions are compiled against each other, so a mixed set is not a supported combination.
+    Version is set here so the four packages always ship as a matched set: the engine, the UI, the
+    extensions and the NetDaemon host binding are compiled against each other, so a mixed set is not a
+    supported combination. They go to GitHub Packages under 0z00z0, not nuget.org.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>

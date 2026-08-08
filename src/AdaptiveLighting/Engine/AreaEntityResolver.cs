@@ -172,9 +172,11 @@ public sealed class AreaEntityResolver
 
 		AreaSettings settings = area.Effective(defaults);
 
+		// Counts are entries, not devices: one group reads as "1 motion sensors" and hides that the room is
+		// watching several. Naming the membership is what stops that line being read as one sensor.
 		_logger.LogInformation(
 			"Area {Area}: {LightCount} lights ({Lights}), {MotionCount} motion sensors ({Motion}), lux sensors {Lux}.",
-			name, lights.Count, string.Join(", ", lights), motion.Count, string.Join(", ", motion),
+			name, lights.Count, string.Join(", ", lights.Select(Describe)), motion.Count, string.Join(", ", motion.Select(Describe)),
 			lux.Count > 0
 				? string.Join(", ", lux)
 				: area.FollowOutdoorLux == true ? "(the house's outdoor sensor)" : "(none)");
@@ -635,6 +637,11 @@ public sealed class AreaEntityResolver
 	// The entity_id attribute and nothing else. A name is no evidence: light.kontorlys_alle is a real group of two
 	// ceiling lights while light.kontor_taklys_alle carries no membership at all despite reading like one.
 	private bool IsGroup(string entityId) => _ha.AttrStringList(entityId, GroupMembersAttribute).Count > 0;
+
+	/// <summary>An entity as the start-up summary names it, saying so when it is a group and how many it holds.</summary>
+	/// <remarks>Counts leaves, not direct members, so a group of groups reports the sensors it actually watches.</remarks>
+	private string Describe(string entityId) =>
+		IsGroup(entityId) ? $"{entityId} (a group of {LeavesOf(entityId).Count})" : entityId;
 
 	private static string RivalsOf(List<string> kept, Dictionary<string, IReadOnlySet<string>> coverage, IReadOnlySet<string> covers) =>
 		string.Join(", ", kept.Where(id => coverage.TryGetValue(id, out IReadOnlySet<string>? theirs) && theirs.Overlaps(covers)));
