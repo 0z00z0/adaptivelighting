@@ -198,9 +198,14 @@
 		return Changed.InvokeAsync();
 	}
 
-	/// <summary>When the period starts, in the engine's own reading of its Start string.</summary>
-	private string StartOf(string periodId) =>
-		Found(periodId) is { } found ? PeriodStartText.Describe(found.Start) ?? "start not set" : string.Empty;
+	/// <summary>When the period starts, bracketed beside its name; the row already says which period it is.</summary>
+	private string StartOf(string periodId)
+	{
+		if (Found(periodId) is not { } found)
+			return string.Empty;
+
+		return PeriodStartText.Short(found.Start) is { Length: > 0 } boundary ? $"[{boundary}]" : "start not set";
+	}
 
 	private double ScheduleBrightness(string periodId) => Found(periodId)?.BrightnessPct ?? 0;
 

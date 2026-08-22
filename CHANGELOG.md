@@ -187,6 +187,14 @@ against each other.
 
 ### Changed
 
+- **The room page carries less standing prose, and its sections are in reading order.** *How this room
+  behaves* leads the settings, with *All settings*, *In this room* and *What happened here* together at the
+  foot of the page. The lines that reported nothing having happened yet are gone; *"Movement in the dark turns
+  the lights on."* is now *"Awaiting movement."*; the levels lede is a count rather than a sentence; a period's
+  boundary sits bracketed beside its name, *"Morgen [06:45]"*. A write is confirmed by a brief toast at the
+  foot of the screen — the Configuration page's confirmation, floating alone — so the card heads carry only a
+  pending or refused save. No engine behaviour, no commands and no configuration schema change.
+
 - **A period arrives at its boundary, not on the next tick.** The engine schedules a wake-up at the next
   boundary and re-arms for the one after; the house mode a period sets, the period helper and every lit room
   all move at the boundary. Previously a period arrived up to a whole `CircadianTickSeconds` late — measured on

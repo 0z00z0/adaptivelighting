@@ -81,10 +81,7 @@ else
 					<p class="room-next @(RoomFacts.IsOverdue(snapshot, _now) ? "room-overdue" : null)">@next</p>
 				}
 			}
-			else
-			{
-				<p class="room-says">This room hasn't reported yet. It appears here the first time the engine decides something about it.</p>
-			}
+			@* Nothing said when there is no report: the header already carries a "no report yet" badge. *@
 
 			@if (!IsEnabled)
 			{
@@ -128,10 +125,7 @@ else
 			}
 			else
 			{
-				<p class="room-fact-empty">
-					Nothing measured yet. Readings appear as soon as this room reports &mdash; usually within a
-					minute of the engine starting.
-				</p>
+				<p class="room-fact-empty">Nothing measured yet.</p>
 			}
 		</aside>
 	</div>
@@ -169,6 +163,24 @@ else
 			<strong>This room will be skipped.</strong> @mine.Message
 		</div>
 	}
+
+	<section class="panel room-card">
+		<div class="room-card-head">
+			<span class="room-card-title">How this room behaves</span>
+			<span class="room-save @SaveClass" role="status">@SaveLine</span>
+			@if (_dirty)
+			{
+				<button type="button" class="room-save-now" @onclick="Commit">Save now</button>
+			}
+		</div>
+
+		<div class="room-sentences">
+			<SentenceView Sentences="@AreaSentences.ForArea(room, _document.Defaults)"
+						  Edited="@OnEdited"
+						  Reverted="@OnReverted"
+						  Note="@TokenNote" />
+		</div>
+	</section>
 
 	<section class="panel room-card room-levels-card">
 		<div class="room-card-head">
@@ -221,23 +233,8 @@ else
 		</div>
 	</section>
 
+	@* All settings, the gear and the log sit together at the foot of the page. *@
 	<section class="panel room-card">
-		<div class="room-card-head">
-			<span class="room-card-title">How this room behaves</span>
-			<span class="room-save @SaveClass" role="status">@SaveLine</span>
-			@if (_dirty)
-			{
-				<button type="button" class="room-save-now" @onclick="Commit">Save now</button>
-			}
-		</div>
-
-		<div class="room-sentences">
-			<SentenceView Sentences="@AreaSentences.ForArea(room, _document.Defaults)"
-						  Edited="@OnEdited"
-						  Reverted="@OnReverted"
-						  Note="@TokenNote" />
-		</div>
-
 		<div class="room-morebar">
 			<button type="button"
 					class="room-more"
@@ -684,13 +681,18 @@ else
 			}
 			else
 			{
-				<p class="room-card-foot">
-					Nothing recorded for this room yet. Recording starts when adaptive lighting starts, and a room
-					appears the first time it decides something.
-				</p>
+				<p class="room-card-foot">Nothing recorded here yet.</p>
 			}
 		</section>
 	</div>
+
+	@* The Configuration page's save confirmation, floating alone: this page has no bar to sit it in. *@
+	@if (SaveToast is { Length: > 0 } toast)
+	{
+		<div class="savebar savebar-alone">
+			<span class="savebar-note ok savebar-toast" role="status">@toast</span>
+		</div>
+	}
 }
 
 @code {
@@ -698,6 +700,9 @@ else
 	/// <remarks>A save rebuilds every area controller in the house, so a write per press would restart every
 	/// room's vacancy timer while a stepper is held down.</remarks>
 	private static readonly TimeSpan SaveDelay = TimeSpan.FromMilliseconds(1200);
+
+	/// <summary>How long the write confirmation stays at the foot of the screen.</summary>
+	private static readonly TimeSpan ToastLingers = TimeSpan.FromSeconds(3.5);
 
 	/// <summary>How many of this room's log entries the card holds; the Activity page has the rest.</summary>
 	private const int LogRows = 6;
@@ -1010,18 +1015,19 @@ else
 			string kept = orphaned switch
 			{
 				0 => string.Empty,
-				1 => " One more is kept from a period the schedule no longer has.",
-				_ => $" {orphaned} more are kept from periods the schedule no longer has."
+				1 => " 1 kept from a period that is gone.",
+				_ => $" {orphaned} kept from periods that are gone."
 			};
 
-			if (chosen == 0)
-			{
-				return periods == 0
-					? "Nothing to follow yet — the schedule has no periods." + kept
-					: "Every period follows the house's schedule. Change one here and only this room changes." + kept;
-			}
+			if (periods == 0)
+				return "The schedule has no periods." + kept;
 
-			return $"{chosen} of {periods} {(periods == 1 ? "period is" : "periods are")} this room's own; the rest follow the schedule." + kept;
+			if (chosen == 0)
+				return "All follow the schedule." + kept;
+
+			return chosen == periods
+				? $"All {periods} set here." + kept
+				: $"{chosen} of {periods} set here." + kept;
 		}
 	}
 
@@ -1155,7 +1161,7 @@ else
 		string.Equals(RoomSettings.ChoiceName(_room, _document.Defaults, key), choice.Value, StringComparison.Ordinal);
 
 	// No default for this: only the page knows whether a pick waits behind a save bar or applies itself.
-	private const string TokenNote = "Applied about a second after you pick. The line above says when it saved.";
+	private const string TokenNote = "Applied about a second after you pick.";
 
 	private Task OnEdited(SentenceEdit edit)
 	{
@@ -1415,6 +1421,8 @@ else
 			}
 			else
 			{
+				// Drops any lingering confirmation, so a refusal never stands beside a stale "Saved".
+				_savedAt = null;
 				_failure = result;
 			}
 		}
@@ -1431,6 +1439,8 @@ else
 		OnParametersSet();
 	}
 
+	// Same split as the Configuration page: a refusal stands until it is resolved, a success is transient and
+	// leaves through the toast.
 	private string SaveLine
 	{
 		get
@@ -1438,14 +1448,17 @@ else
 			if (_failure is not null)
 				return "not saved";
 
-			if (_dirty)
-				return "saving in a moment…";
-
-			return _savedAt is { } saved
-				? $"saved {saved.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)}"
-				: "every change here applies and saves by itself";
+			return _dirty ? "saving in a moment…" : string.Empty;
 		}
 	}
+
+	/// <summary>The write confirmation at the foot of the screen, or <c>null</c> once it has had its few seconds.</summary>
+	/// <remarks>Cleared by the page's one-second ticker rather than a timer of its own, since every read of this
+	/// property happens in a render that ticker drives.</remarks>
+	private string? SaveToast =>
+		_savedAt is { } saved && _now - saved < ToastLingers
+			? $"Saved {saved.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)}"
+			: null;
 
 	private string SaveClass => _failure is not null ? "room-save-bad" : _dirty ? "room-save-pending" : "room-save-ok";
 

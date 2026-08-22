@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Web.Services;
 
@@ -99,5 +101,39 @@ public sealed class PeriodStartTextTests
 		Assert.AreEqual("01:00 before sunset", PeriodStartText.Describe("sunset-01:00"));
 		Assert.IsNull(PeriodStartText.Describe("half past tea"), "what the engine refuses, the note must call unparseable");
 		Assert.IsNull(PeriodStartText.Describe(""));
+	}
+
+	/// <summary>The levels row names the period, so the boundary beside it carries no prose.</summary>
+	[TestMethod]
+	public void Short_Drops_The_Prose_And_Keeps_The_Boundary()
+	{
+		Assert.AreEqual("22:30", PeriodStartText.Short("22:30"));
+		Assert.AreEqual("06:45", PeriodStartText.Short("06:45"));
+		Assert.AreEqual("sunrise", PeriodStartText.Short("sunrise"));
+		Assert.AreEqual("sunset", PeriodStartText.Short("sunset"));
+		Assert.AreEqual("sunrise +00:45", PeriodStartText.Short("sunrise+00:45"));
+		Assert.AreEqual("sunset -01:00", PeriodStartText.Short("sunset-01:00"));
+
+		Assert.IsNull(PeriodStartText.Short("half past tea"), "what the engine refuses, the row must not print");
+		Assert.IsNull(PeriodStartText.Short(""));
+	}
+
+	/// <summary>A comma for the decimal separator would render as an empty clock time.</summary>
+	[TestMethod]
+	public void Short_Writes_The_Clock_Invariantly()
+	{
+		CultureInfo restore = CultureInfo.CurrentCulture;
+
+		try
+		{
+			CultureInfo.CurrentCulture = new CultureInfo("nb-NO");
+
+			Assert.AreEqual("06:45", PeriodStartText.Short("06:45"));
+			Assert.AreEqual("sunset -01:30", PeriodStartText.Short("sunset-01:30"));
+		}
+		finally
+		{
+			CultureInfo.CurrentCulture = restore;
+		}
 	}
 }
