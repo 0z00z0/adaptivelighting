@@ -52,14 +52,6 @@ rewritten to suit one.
 - **Move *How this room behaves* to the top of the room settings**, with *All settings*, *In this room* and
   *What happened here* together at the foot of the page.
 
-- **Fix `PeriodSelect_UnreadableForAMoment_DoesNotLatchTheClocksPeriodMode`, which passes for the wrong
-  reason.** It seeds the select with `Dag`, but `PeriodsInNorwegian()` — the fixture it uses — maps only the
-  three periods `Periods()` has, so `Dag` is an option nothing maps and the reader folds it to nothing before
-  the helper ever drops out. The path it means to cover, a *mapped* option going unavailable, is untested;
-  what it covers duplicates
-  `PeriodSelect_UnderHomeAssistantAuthority_AnUnmappedOptionLeavesTheScheduleInCharge`. Mapping `Dag` keeps the
-  suite green (measured), but changes what the test exercises, so this is a fix and not a rename.
-
 - **Fix the dashboard's period ribbon, which draws a schedule the engine is not running.** `BoardView.Band`
   (`BoardView.cs:449-500`) lays the day's boundaries out itself from `PeriodStart.TryParse` and
   `PeriodStart.Resolve`: a third boundary layout beside `CircadianCalculator.ResolveBoundaries` and the room
@@ -75,12 +67,6 @@ rewritten to suit one.
   somebody walked in. **The blend keeps its full configured length and therefore finishes later than a
   clock-started one would**, so the transition feels the same whenever you arrive. Needs the calculator to know
   *when* a period began, not just whether.
-
-- **Colour control's *Detect from lights* reports a colour temperature that is not there.** A room whose
-  fixtures have no colour temperature still renders as though they do; the toilet is the worked example.
-  `AreaEntityResolver.ColorTempCapabilityOf` returns null when no fixture answered, and
-  `ResolvedArea.EffectiveColorControl` reads null as Kelvin, so silence is treated as capability. Detection
-  must consider only the room's live, included lights.
 
 - **The daylight lift climbs past the day level.** *Brighten with daylight* has been observed near 100 % in the
   toilet. It should not exceed the *Day* period's brightness, which gives the lift a ceiling without

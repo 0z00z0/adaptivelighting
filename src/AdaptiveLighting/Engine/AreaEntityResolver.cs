@@ -33,6 +33,11 @@ public sealed record ResolvedArea(
 	/// <summary>A scene run in place of switching this area off when it goes empty, or <c>null</c>.</summary>
 	public string? SceneWhenEmpty { get; init; }
 
+	/// <summary>Whether any of the area's lights offers colour of any kind, or <c>null</c> when none answered.</summary>
+	// False is the brightness-only room, which is a different fact from LightsSupportColorTemp being null: that
+	// one covers both "nobody answered" and "nobody has colour", and only this separates them.
+	public bool? LightsSupportAnyColour { get; init; }
+
 	/// <summary>How this area's warmth is commanded, with <see cref="ColorControl.Auto"/> already decided.</summary>
 	// Null capability means no light could be read, which is no evidence that none has a colour temperature, so
 	// Auto stays on Kelvin until a fixture says otherwise.
@@ -40,6 +45,15 @@ public sealed record ResolvedArea(
 		Settings.ColorControl is not ColorControl.Auto ? Settings.ColorControl
 		: LightsSupportColorTemp == false ? ColorControl.EqualChannels
 		: ColorControl.Kelvin;
+
+	/// <summary>Whether the area sends any colour command at all.</summary>
+	// ColorControl's ordinals are pinned and take no third member, so "no colour" is carried here instead. Only
+	// Auto consults the fixtures; a stated Kelvin or EqualChannels is an owner overruling them.
+	public bool CommandsColour =>
+		Settings.ColorControl is not ColorControl.Auto || LightsSupportAnyColour is not false;
+
+	/// <summary>Whether the schedule's colour temperature reaches this area's lights.</summary>
+	public bool CommandsKelvin => CommandsColour && EffectiveColorControl is ColorControl.Kelvin;
 }
 
 /// <summary>What discovery finds in one area, before that area's explicit lists have had their say.</summary>
@@ -174,9 +188,14 @@ public sealed class AreaEntityResolver
 				? string.Join(", ", lux)
 				: area.FollowOutdoorLux == true ? "(the house's outdoor sensor)" : "(none)");
 
-		bool? colorTemp = ColorTempCapabilityOf(lights);
+		(bool? colorTemp, bool? anyColour) = ColourCapabilityOf(lights);
 
-		if (settings.ColorControl is ColorControl.Auto && colorTemp == false)
+		if (settings.ColorControl is ColorControl.Auto && anyColour == false)
+			_logger.LogInformation(
+				"Area {Area}: no light reports a colour mode of any kind, so it is driven on brightness alone and no "
+				+ "colour command reaches it. Set ColorControl to Kelvin or EqualChannels to overrule that.",
+				name);
+		else if (settings.ColorControl is ColorControl.Auto && colorTemp == false)
 			_logger.LogInformation(
 				"Area {Area}: no light reports a '{Mode}' colour mode, so its warmth is driven as equal colour channels "
 				+ "and the schedule's kelvin figure does not reach it. Set ColorControl to Kelvin to overrule that.",
@@ -185,6 +204,7 @@ public sealed class AreaEntityResolver
 		resolved = new ResolvedArea(
 			name, settings, lights, motion, lux, [.. area.IgnoreWhenOn ?? []], area.FollowOutdoorLux == true, colorTemp)
 		{
+			LightsSupportAnyColour = anyColour,
 			KeepLitWhenOn = [.. area.KeepLitWhenOn ?? []],
 			IgnoreWhenOnInverted = area.IgnoreWhenOnInverted == true,
 			KeepLitWhenOnInverted = area.KeepLitWhenOnInverted == true,
@@ -199,11 +219,13 @@ public sealed class AreaEntityResolver
 	private static string? Trimmed(string? entityId) =>
 		string.IsNullOrWhiteSpace(entityId) ? null : entityId.Trim();
 
-	// Whether any light advertises a colour temperature, or null when none said. A light with no readable
-	// supported_color_modes is no evidence either way and is not counted. False needs at least one fixture that
-	// answered, or a house still starting up would resolve every room to equal channels until the next rebuild.
-	private bool? ColorTempCapabilityOf(List<string> lights)
+	// What the area's fixtures say about colour. A light with no readable supported_color_modes said nothing and
+	// is not counted, so both answers stay null while a house is still starting up: absence of evidence must not
+	// resolve every room to equal channels, nor take the colour command away from one.
+	private (bool? ColorTemp, bool? AnyColour) ColourCapabilityOf(List<string> lights)
 	{
+		bool anyAnswered = false;
+		bool anyColourTemp = false;
 		bool anyColourChannel = false;
 
 		foreach (string light in lights)
@@ -212,17 +234,24 @@ public sealed class AreaEntityResolver
 			if (modes.Count == 0)
 				continue;
 
+			anyAnswered = true;
+
 			if (modes.Contains(ColorTempMode, StringComparer.OrdinalIgnoreCase))
-				return true;
+				anyColourTemp = true;
 
 			// Only a fixture with somewhere to put equal channels is evidence for them. A brightness-only dimmer
 			// answers this attribute and offers no colour at all, and reading it as "no colour temperature" would
 			// take the kelvin away from every room holding one beside a real lamp.
-			if (ColourChannelModes.Any(mode => modes.Contains(mode, StringComparer.OrdinalIgnoreCase)))
+			else if (ColourChannelModes.Any(mode => modes.Contains(mode, StringComparer.OrdinalIgnoreCase)))
 				anyColourChannel = true;
 		}
 
-		return anyColourChannel ? false : null;
+		if (!anyAnswered)
+			return (null, null);
+
+		bool? colorTemp = anyColourTemp ? true : anyColourChannel ? false : null;
+
+		return (colorTemp, anyColourTemp || anyColourChannel);
 	}
 
 	// Re-runs discovery without the include label, because an area with no lights at all must not be told to go

@@ -2,8 +2,7 @@
    on a LAN with no internet, which is exactly where this UI runs. */
 
 /* ============================================================================
-   THE DESIGN TOKENS — "The Workshop" (docs/design/ui-design-c.md §6)
-   Written up for consumers in docs/design/visual-foundation.md.
+   THE DESIGN TOKENS — "The Workshop"
 
    Four rules the tokens exist to enforce, because a rule nobody can look up is
    a rule that lasts one page:
@@ -1300,7 +1299,7 @@ button.mode-card:disabled {
    place a reader starts; rendered only when dirty, its presence is itself the
    answer to "have I changed anything?".
 
-   One of the two things allowed elevation (visual-foundation §1): it genuinely
+   One of the two things allowed elevation: it genuinely
    floats over the content rather than sitting in the flow. */
 
 .savebar {
@@ -3210,7 +3209,7 @@ button.mode-pill:disabled {
 /* ============================================================================
    THE SHARED VOCABULARY
    Icons, state chips and the sentence primitive: the three things every page is
-   expected to use rather than re-invent. See docs/design/visual-foundation.md.
+   expected to use rather than re-invent.
    ============================================================================ */
 
 /* ---- icons ----
@@ -3530,7 +3529,7 @@ button.mode-pill:disabled {
 }
 
 /* ============================================================================
-   THE BOARD — Pages/Dashboard.razor (ui-design-c.md §5.1, "C4")
+   THE BOARD — Pages/Dashboard.razor
    The home surface: an exception tray, room swim-lanes on a shared time axis
    under the schedule band, one now-line through everything, and the decision
    log below.
@@ -4163,7 +4162,7 @@ button.mode-pill:disabled {
 }
 
 /* ============================================================================
-   THE ROOM PAGE  —  Pages/Room.razor  (ui-design-c.md §5.2, "C2")
+   THE ROOM PAGE  —  Pages/Room.razor
    One room, whole: what it is doing, why, and every knob that decides it.
 
    The layout is designed against one constraint — twenty-one settings plus live
@@ -5138,7 +5137,7 @@ button.mode-pill:disabled {
 	}
 }
 /* ============================================================================
-   THE HOUSE TAB  —  Pages/ConfigEditor.razor  (ui-design-c.md §5.3, "C3")
+   THE HOUSE TAB  —  Pages/ConfigEditor.razor
    Everything that isn't one room: what every room starts with, the day's
    schedule, the modes, the people, and the engine itself.
 
@@ -5930,10 +5929,10 @@ h1[tabindex="-1"]:focus {
    findings strip, the checklist, the roll-call's grid and the commit block. Every colour is a token, in both
    themes, so nothing below needs a theme of its own.
 
-   docs/design/first-run-wizard.md is the specification; docs/design/mockups/first-run.html renders it. */
+   docs/design/mockups/first-run.html renders this screen. */
 
 /* ---- the findings strip: orientation in five numbers ----
-   Glyphless on purpose (ui-design-c §6.2: glyphs mark sections, counts stay text). The one glyph marks the one
+   Glyphless on purpose — glyphs mark sections, counts stay text. The one glyph marks the one
    chip that is a fact rather than a count, so it reads as a different kind of thing. */
 .comm-strip {
 	display: flex;
