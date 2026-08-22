@@ -64,7 +64,7 @@ Lights come on when you enter a room, dim as a warning before switching off so t
 > dotnet nuget update source 0z00z0 --username YOUR_GITHUB_USERNAME --password YOUR_TOKEN --store-password-in-clear-text
 > ```
 >
-> Latest preview: **2.0.0-preview.4**. See [releases](https://github.com/0z00z0/adaptivelighting/releases).
+> Latest preview: **2.0.0-preview.4**, on the feed above. Omit the version to take whatever is newest.
 
 ```bash
 dotnet add package AdaptiveLighting.NetDaemon   # engine + UI + host wiring, one reference
