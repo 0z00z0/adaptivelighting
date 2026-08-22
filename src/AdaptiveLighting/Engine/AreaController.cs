@@ -125,17 +125,26 @@ public sealed class AreaController : IDisposable
 			: area.FollowOutdoorLux && global.OutdoorLuxSensor is { Length: > 0 } outdoor ? [outdoor]
 			: [];
 
+		TimeSpan staleAfter = TimeSpan.FromMinutes(global.LuxSensorStaleAfterMinutes);
+
 		_gateSensor = new IlluminanceGate(
 			ha,
 			luxSensors,
 			area.Settings,
-			TimeSpan.FromMinutes(global.LuxSensorStaleAfterMinutes),
+			staleAfter,
 			() => _scheduler.Now,
 			_logger,
 			lastSeen);
 
-		// Through the gate, not a sensor of its own, so "which sensor is this room reading" has one answer.
-		_luxBrightness = new LuxBrightnessCurve(area.Settings, _gateSensor.ReadLux);
+		// The house's outdoor reading unless the room named its own. Never the darkness sensor: an indoor one
+		// measures the lamps the curve is setting, so the curve would chase itself.
+		IReadOnlyList<string> daylightSensors = area.DaylightSensor is { Length: > 0 } chosen ? [chosen]
+			: global.OutdoorLuxSensor is { Length: > 0 } house ? [house]
+			: [];
+
+		_luxBrightness = new LuxBrightnessCurve(
+			area.Settings,
+			new LuxReader(ha, daylightSensors, staleAfter, () => _scheduler.Now, lastSeen).Read);
 		_detector = new OverrideDetector(global, scheduler);
 
 		_boundary = new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
@@ -797,9 +806,9 @@ public sealed class AreaController : IDisposable
 		_lastMotionAt is { } lastMotion &&
 		_scheduler.Now - lastMotion < TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds);
 
-	/// <summary>The area's target now: the shared table, the daylight adjustment, then the sleep clamp where it applies.</summary>
-	// The daylight adjustment lives here so OnTick sees it; inside ApplyTarget alone it would raise the level on
-	// the next motion event and never before. It runs before the sleep clamp, so a bright reading during an
+	/// <summary>The area's target now: the shared table, the daylight curve, then the sleep clamp where it applies.</summary>
+	// The daylight curve lives here so OnTick sees it; inside ApplyTarget alone it would set the level on the
+	// next motion event and never before. It runs before the sleep clamp, so a bright reading during an
 	// afternoon nap cannot lift the room past the night rules.
 	private LightTarget? ResolveTarget()
 	{

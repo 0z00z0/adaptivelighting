@@ -427,6 +427,13 @@ public sealed class HaCatalog
 		return positive.Count == 1 ? positive[0] : Math.Exp(positive.Sum(Math.Log) / positive.Count);
 	}
 
+	/// <summary>What one light-level sensor reads now, or <c>null</c> when it answers with no number.</summary>
+	// What the daylight curve is drawn against: one sensor, never an average, because the curve reads one.
+	public double? LuxOf(string? entityId) =>
+		entityId is { Length: > 0 } && TryGetState(entityId).StateAsDouble() is { } lux && double.IsFinite(lux)
+			? lux
+			: null;
+
 	/// <summary>Runs the engine's own area resolver against <paramref name="area"/> as it stands in the editor.</summary>
 	/// <param name="area">The area being edited. Not mutated.</param>
 	public AreaPreview PreviewArea(AreaConfig area, AreaSettings defaults, GlobalConfig global)

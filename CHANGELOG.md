@@ -8,6 +8,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The packa
 `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
+## [Unreleased]
+
+### Changed
+
+- **The daylight curve is now a per-period mode, and replaces the per-room lift.** Every period carries one
+  choice: *specify brightness*, which is its own percentage and the default, or *use daylight curve*, where
+  the light outside decides the level instead. Several periods may claim the curve, and one curve spans them
+  all.
+  - The curve **replaces** the level rather than adding to it, so both of its ends are free across the whole
+    0–100 %: `LuxBrightnessMinPct` at `LuxBrightnessStartLux` and below, `LuxBrightnessMaxPct` at
+    `LuxBrightnessFullLux` and above, shaped by `LuxBrightnessGamma`. There is no ceiling any more, and the
+    plan's brightest period no longer bounds it. A bright end set under the dark end makes the curve fall.
+  - A period on the curve **hides its own percentage and keeps it in the document**, so switching back
+    restores what was typed.
+  - The curve diagram is shown on a room's page only while at least one period claims the curve.
+  - **The reading comes from the house's outdoor sensor.** An indoor sensor measures the room's own lamps, so
+    the curve would chase itself. A room may override it with `DaylightSensor`, chosen from any light-level
+    sensor in the house. A document where a period claims the curve and no sensor is named is warned about,
+    naming the rooms with nothing to read.
+  - The captions, setting names and help texts around the curve are rewritten in plainer, shorter wording.
+
+### Removed
+
+- **`LuxBrightnessEnabled` is gone.** The period decides alone; one mechanism replaces two. A document still
+  carrying the key loads unharmed — it is an unmatched key, which is silence — and the next save drops it,
+  with one warning logged on load saying what to set instead.
+  - **No migration is attempted, deliberately.** The old switch was per room and the new mode is per period,
+    which is house-wide, so there is no faithful translation. A house that had the lift on in some rooms has
+    it nowhere until a period is put on the curve. The curve's anchors, exponent and per-room overrides all
+    survive the upgrade untouched.
+
 ## [2.0.0-preview.5] - 2026-08-22
 
 ### Added

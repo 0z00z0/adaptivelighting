@@ -68,10 +68,6 @@ rewritten to suit one.
   clock-started one would**, so the transition feels the same whenever you arrive. Needs the calculator to know
   *when* a period began, not just whether.
 
-- **The daylight lift climbs past the day level.** *Brighten with daylight* has been observed near 100 % in the
-  toilet. It should not exceed the *Day* period's brightness, which gives the lift a ceiling without
-  reintroducing a per-period cap.
-
 - **Publishing is blocked: the packages are still linked to the archived repository, and are now private.**
   Measured 2026-08-22 — `users/0z00z0/packages/nuget/AdaptiveLighting` reports
   `repository: 0z00z0/adaptivelighting-archive`, `visibility: private`. The `v2.0.0-preview.5` tag built and
@@ -83,19 +79,23 @@ rewritten to suit one.
   what the project deliberately avoids. Until this is done no release can be published and no house can be
   updated past `2.0.0-preview.4`.
 
-- **The daylight curve becomes a per-period mode, replacing the lift.** Each period carries a choice:
-  *specify brightness*, which is today's behaviour and the default, or *use daylight curve*, where the curve
-  decides the brightness instead. The curve diagram is shown only when at least one period claims it, and a
-  claiming period hides its own percentage, which the curve makes irrelevant. Several periods may claim it,
-  and the curve then spans them all. The curve is draggable across the full 0-100 % range, so no ceiling is
-  needed and the plan's brightest level does not constrain it.
-  - A claiming period keeps its stored percentage in the document, hidden, so the choice is reversible without
-    losing what was typed.
-  - **The reading comes from the house's outdoor sensor**, since an indoor sensor measures the room's own
-    lamps. A configuration with no outdoor sensor defined is warned about. A room may override which sensor it
-    reads, chosen from all light-level sensors, in its own settings.
-  - `LuxBrightnessEnabled` is removed: the period decides alone, and one mechanism replaces two.
-  - Texts throughout are reworked to plain, short wording.
+- **A house that had the old daylight lift on loses it, and has to choose the curve again.** The lift was
+  switched on per room (`LuxBrightnessEnabled`); the curve is claimed per period, which is house-wide. No
+  translation between the two exists — a per-room switch cannot be turned into a per-period one without
+  inventing an answer for the rooms that disagree, and turning the curve on for *every* period because one
+  room asked for a lift is a larger behaviour change than losing it. **Nothing is migrated on purpose.** A
+  house upgrading past this change runs every period on its own percentage until somebody picks *use daylight
+  curve*, and the stale `LuxBrightnessEnabled` key parses as silence with one warning on load. The decision
+  wanted: whether to leave it as is (the current behaviour), or ship a one-off note in the UI naming the rooms
+  whose old key is still in the file. The curve's shaping settings — the two anchors, the exponent — survive
+  the upgrade untouched and need nothing.
+
+- **The old lift's ceiling is gone and nothing replaced it.** *Brighten with daylight* was once observed near
+  100 % in the toilet, and the ask was that it not exceed the *Day* period's brightness. The curve replaces
+  the level rather than adding to it, so the complaint no longer applies in that shape: the bright end is now
+  a number that is chosen, per house and per room, rather than a lift that climbs. Worth re-checking against a
+  live house once a period has been on the curve for a few days, in case the wanted rule was really "not
+  brighter than the brightest thing the plan asks for anywhere".
 
 ## Parked
 
