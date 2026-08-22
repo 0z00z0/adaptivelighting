@@ -8,7 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The packa
 `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
-## [Unreleased]
+## [2.0.0-preview.5] - 2026-08-22
 
 ### Added
 
@@ -26,7 +26,7 @@ against each other.
 - **File logging survives a restart.** `UseIsoTimestampLogging()` also writes every line to
   `/config/adaptive-lighting/log/<stem>.log`, beside the configuration document and outside the deploy folder.
   A host with no `AdaptiveLighting:ConfigPath` keeps the console alone.
-  - Two files and a hard 4 MiB ceiling: one active file capped at 2 MiB and one rolled generation the next
+  - Two files and a hard 20 MiB ceiling: one active file capped at 10 MiB and one rolled generation the next
     rotation overwrites. No numbered series, no date in a name, no retention count. At a measured 170 bytes a
     line that is 12 000 lines guaranteed and about 24 000 at best.
   - The sink renders each event from its message template and named properties and never calls
