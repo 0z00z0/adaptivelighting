@@ -376,6 +376,24 @@ Interpolation is on `log10(lux)`, so each decade gets an equal share, and `LuxBr
 A period on the curve keeps its `BrightnessPct` in the document, hidden on screen. Switching back restores
 what was typed, and nothing has to be re-entered to try the curve for an evening.
 
+#### The dark end is seeded by the period that claims the curve
+
+The curve's dark end is what a period gives when it is dark outside, so no single number suits every period
+that might claim it: a plan asking for 15 % at night and 90 % by day is served badly by one figure sitting
+between them. `DaylightCurveMode.Set` therefore writes `Defaults.LuxBrightnessMinPct` to **half the claiming
+period's own `BrightnessPct`**, clamped to 0–100 % and rounded to one decimal. Night at 15 % seeds 7.5;
+day at 90 % seeds 45.
+
+It fires only as the curve goes from **unused to used** — no period on it at all, and one being put on it.
+A second period joining seeds nothing, because by then the value may have been dragged into place by hand and
+overwriting it would undo that. Turning the curve off on every period and on again counts as claiming it
+afresh and seeds once more. Only the house default is written: a room stating its own dark end keeps it.
+
+**This is an editing action, not engine logic.** The engine reads whatever the document holds, so a
+hand-written file runs with nothing seeded, and `AreaSettings.LuxBrightnessMinPct`'s schema default is the
+fallback for a document where the curve was never claimed through the editor. The seeding is the normal path
+to that number; the schema default is the reserve.
+
 **The reading is the house's outdoor sensor**, `Global.OutdoorLuxSensor`, unless the room names its own
 `AreaConfig.DaylightSensor`. Never the darkness sensor: an indoor sensor measures the lamps the curve is
 setting, so a closed loop oscillates. That makes it a different question from `FollowOutdoorLux`, which is
@@ -1169,7 +1187,8 @@ the size. The remaining limit is the chart's own height, which is a design quest
 | 30 s | `DiscoverySettle` | how long Home Assistant's state cache needs before the registry reads whole |
 | 1 s | `BoundaryTimer.Lead` | the wake fires just past the boundary, so the instant the callback reads is on the new period's side of it; short enough that nobody can see it and long enough to cover a timer that fires a hair early |
 | ~3× | lux ladder ratio | illuminance spans four orders of magnitude; a fixed step is unusable at one end or the other |
-| 40 % / 100 % | `LuxBrightnessMinPct` / `LuxBrightnessMaxPct` defaults | the curve's two ends have to draw a usable line before anything is dragged; 100 lx to 10 000 lx spans a dull room to a bright overcast day, and 40 to 100 spans it visibly |
+| half the claiming period's level | seeded `LuxBrightnessMinPct` | the dark end is what that period gives when it is dark outside, and it has to land under the period's own level without collapsing to nothing; one fixed figure suits neither a 15 % night nor a 90 % day |
+| 40 % / 100 % | `LuxBrightnessMinPct` / `LuxBrightnessMaxPct` schema defaults | the reserve for a document where the curve was never claimed through the editor, and the bright end throughout; 100 lx to 10 000 lx spans a dull room to a bright overcast day |
 | 22 | overridable per-room settings | `RoomSettings.Keys` derives it by reflection over the nullable twins; `AreaView.OverridableSettingCount` hard-codes it and a test holds the two together |
 | ~3 px | board mark de-duplication gap | a screen bound, not a clock bound, because the suppressed-off path republishes per movement |
 | 12.5 / 14 / 15 / 20 / 25 px | the type scale | one step up from 11 / 12.5 / 13.5 / 19 / 24, which read as small and hard to read at a muted colour that already passed AA |

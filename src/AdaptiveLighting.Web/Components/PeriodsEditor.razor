@@ -243,6 +243,10 @@
 	[Parameter]
 	public GlobalConfig? Global { get; set; }
 
+	/// <summary>The house's baseline settings, edited in place when the curve is first claimed.</summary>
+	[Parameter, EditorRequired]
+	public AreaSettings Defaults { get; set; } = new();
+
 	private bool HasHouseMode => HouseMode?.Entity is { Length: > 0 };
 
 	// Under Home Assistant's period authority the Start fields decide nothing: the engine takes the period from
@@ -314,9 +318,11 @@
 
 	private static string BrightnessModeOf(TimePeriodConfig period) => period.UseDaylightCurve ? CurveMode : SpecifyMode;
 
-	// The percentage is left where it is, so switching back restores what was typed.
+	// The percentage is left where it is, so switching back restores what was typed. The first period to claim
+	// the curve seeds its dark end; see DaylightCurveMode.
 	private Task SetBrightnessMode(TimePeriodConfig period, string value) =>
-		Set(() => period.UseDaylightCurve = string.Equals(value, CurveMode, StringComparison.Ordinal));
+		Set(() => DaylightCurveMode.Set(
+			Periods, Defaults, period, string.Equals(value, CurveMode, StringComparison.Ordinal)));
 
 	private static string LevelSummary(TimePeriodConfig period) =>
 		period.UseDaylightCurve

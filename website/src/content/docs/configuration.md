@@ -79,13 +79,20 @@ This section shapes the curve for this room.
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
 | **Dark end** | At or under this reading outside, the room holds the level below. 100 lx is a dull room. | 100 lx | `LuxBrightnessStartLux` |
-| **Brightness at the dark end** | How bright the room is while it is dark outside. | 40 % | `LuxBrightnessMinPct` |
+| **Brightness at the dark end** | How bright the room is while it is dark outside. | half the level of the period that first put a period on the curve | `LuxBrightnessMinPct` |
 | **Bright end** | At or over this reading the room is as bright as the curve takes it. 10 000 lx is a bright overcast day. | 10 000 lx | `LuxBrightnessFullLux` |
 | **Brightness at the bright end** | How bright the room is on a bright day. | 100 % | `LuxBrightnessMaxPct` |
 | **Curve shape** | 1 rises steadily. Above 1 holds back until it is properly bright out; below 1 moves the room as soon as the light outside starts climbing. | 1 | `LuxBrightnessGamma` |
 
 Both ends go anywhere from 0 to 100 %. Nothing in the schedule limits them, and setting the bright
 end under the dark end makes the curve fall instead of rise.
+
+**The dark end starts at half the level of the period that claimed the curve**, since that is what the
+period gives when it is dark outside. Putting a 15 % night on the curve starts it at 7.5 %, a 90 % day
+at 45 %. Only the house's own value is set, so a room that has stated its own dark end keeps it. It is
+set once, when the curve goes from being used by no period to being used by one: a second period joining
+leaves the number where it is, and so does every later edit. Turn the curve off on every period and on
+again and it is set once more.
 
 **The reading comes from the house's outdoor sensor**, [*Outdoor light sensor*](#the-house). An
 indoor sensor measures the room's own lamps, so a room following one would chase itself. To read
