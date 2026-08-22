@@ -874,6 +874,19 @@ public sealed class ModeMonitorTests
 	private static (string Value, string Period)[] PeriodsInNorwegian() =>
 		[("Morgen", "morning"), ("Kveld", "evening"), ("Natt", "night")];
 
+	/// <summary>A schedule carrying a daytime period, for the tests that need an option the clock disagrees with.</summary>
+	private static List<TimePeriodConfig> PeriodsWithDay() =>
+	[
+		new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
+		new() { Name = "day", Start = "10:00", BrightnessPct = 80, ColorTempKelvin = 4000 },
+		new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
+		new() { Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsModeId = "Sover" }
+	];
+
+	/// <summary>Every period of <see cref="PeriodsWithDay"/>, mapped: no option here folds to nothing.</summary>
+	private static (string Value, string Period)[] PeriodsWithDayInNorwegian() =>
+		[("Morgen", "morning"), ("Dag", "day"), ("Kveld", "evening"), ("Natt", "night")];
+
 	private static int PeriodSelectCalls(FakeHaContext ha, string option) =>
 		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"
 			&& c.Target?.EntityIds?.Contains(PeriodSelect) == true && OptionOf(c) == option);
@@ -1044,16 +1057,23 @@ public sealed class ModeMonitorTests
 	[TestMethod]
 	public void PeriodSelect_UnreadableForAMoment_DoesNotLatchTheClocksPeriodMode()
 	{
-		Rig rig = Started(WithPeriodSelect(PeriodAuthority.HomeAssistant, PeriodsInNorwegian()),
+		Rig rig = Started(WithPeriodSelect(PeriodAuthority.HomeAssistant, PeriodsWithDayInNorwegian()),
+			periods: PeriodsWithDay(),
 			startAt: Evening, initialSelect: "Hjemme", seed: ha => ha.SetState(PeriodSelect, "Dag"));
 
-		// The household is holding "Dag" on purpose. The helper drops out, and the clock crosses into night.
+		// "Dag" maps to a period the schedule defines, so the override really is holding the house in the day at
+		// 20:00. The helper drops out, and the clock crosses into night.
 		rig.Ha.SetState(PeriodSelect, "unavailable");
 
 		Advance(rig, TimeSpan.FromHours(4));   // 20:00 → midnight, over the 23:00 boundary
 
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"),
 			"the clock's answer is a fallback, not a choice — it must not fire the night's SetsModeId");
+
+		rig.Ha.Trigger(PeriodSelect, "Dag");   // the helper comes back on the option it went away on
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"),
+			"and the period never moved, so the recovery is not an entry either");
 	}
 
 	[TestMethod]

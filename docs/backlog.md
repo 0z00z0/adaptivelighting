@@ -52,14 +52,6 @@ rewritten to suit one.
 - **Move *How this room behaves* to the top of the room settings**, with *All settings*, *In this room* and
   *What happened here* together at the foot of the page.
 
-- **Fix `PeriodSelect_UnreadableForAMoment_DoesNotLatchTheClocksPeriodMode`, which passes for the wrong
-  reason.** It seeds the select with `Dag`, but `PeriodsInNorwegian()` — the fixture it uses — maps only the
-  three periods `Periods()` has, so `Dag` is an option nothing maps and the reader folds it to nothing before
-  the helper ever drops out. The path it means to cover, a *mapped* option going unavailable, is untested;
-  what it covers duplicates
-  `PeriodSelect_UnderHomeAssistantAuthority_AnUnmappedOptionLeavesTheScheduleInCharge`. Mapping `Dag` keeps the
-  suite green (measured), but changes what the test exercises, so this is a fix and not a rename.
-
 - **Fix the dashboard's period ribbon, which draws a schedule the engine is not running.** `BoardView.Band`
   (`BoardView.cs:449-500`) lays the day's boundaries out itself from `PeriodStart.TryParse` and
   `PeriodStart.Resolve`: a third boundary layout beside `CircadianCalculator.ResolveBoundaries` and the room
