@@ -1,0 +1,666 @@
+@page "/"
+@page "/modes"
+@implements IDisposable
+@inject AreaSnapshotCache Cache
+@inject ActivityLog Log
+@inject LightingEngineHost Engine
+@inject ModeService Service
+@inject HaCatalog Catalog
+@inject ILogger<Dashboard> Logger
+
+@* The layout rules live in BoardView so a test can hold them. Read-only about configuration: the master
+   switch and the house-mode selector command Home Assistant through ModeService, and nothing on this page
+   writes the document. The /modes route is kept so old bookmarks land here. *@
+
+<PageTitle>Dashboard &mdash; Adaptive lighting</PageTitle>
+
+@* All three cells re-read on the page ticker; only the master switch and the mode act. *@
+<div class="housebar">
+	<HouseModePanel HouseMode="_houseMode" Message="@_modeMessage" Confirmation="@_modeConfirmation" OnSelect="SelectMode" />
+	<WhoIsHomePanel People="_people" />
+
+	@if (_masterSwitch is { } master)
+	{
+		<div class="housebar-cell housebar-master @MasterClass(master)">
+			<span class="housebar-lab">Adaptive lighting</span>
+			<div class="housebar-main">
+				@if (master.IsAvailable)
+				{
+					@* Same markup and aria as a room's own power switch; the two must stay in step. *@
+					<button type="button"
+							class="switch @(master.AdaptiveLightingOn ? "on" : null)"
+							role="switch"
+							aria-checked="@(master.AdaptiveLightingOn ? "true" : "false")"
+							aria-label="Adaptive lighting for the whole house"
+							disabled="@(!master.Toggle.CanToggle)"
+							title="@MasterTitle(master)"
+							@onclick="ToggleMaster">
+						<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+						<span class="switch-word">@(master.AdaptiveLightingOn ? "on" : "off")</span>
+					</button>
+				}
+				else
+				{
+					@* No switch when Home Assistant cannot say which way it is set. *@
+					<span class="housebar-value unknown" title="@MasterTitle(master)">unknown</span>
+				}
+			</div>
+			@if (MasterNote(master) is { Length: > 0 } note)
+			{
+				<p class="housebar-note">@note</p>
+			}
+		</div>
+	}
+</div>
+
+@if (_snapshots.Any(area => area.KillSwitchActive))
+{
+	<div class="notice bad">
+		<strong>Adaptive lighting is paused.</strong> Nothing was turned off, but no lights will change until you
+		turn it back on above.
+	</div>
+}
+else if (!Engine.IsRunning && Cache.HasData)
+{
+	<div class="notice bad">
+		<strong>Adaptive lighting has stopped@(Engine.Fault is { Length: > 0 } ? ":" : ".")</strong>
+		@Engine.Fault
+		The timeline below shows what each room was doing when it stopped.
+	</div>
+}
+
+@* The empty states, in precedence order: a broken connection and a stopped engine are answered before the
+   first-run state, so neither is dressed up as onboarding. *@
+@if (!Cache.HasData && !Engine.IsAttached)
+{
+	<div class="empty">
+		<strong>Connecting to Home Assistant&hellip;</strong>
+		<p>This is normal for a minute after a restart. If it doesn't clear, the connection is down.</p>
+	</div>
+}
+else if (!Cache.HasData && !Engine.IsRunning)
+{
+	<div class="empty">
+		<strong>Connected, but adaptive lighting isn't running.</strong>
+		<p>@(Engine.Fault ?? "No reason was recorded.")</p>
+		<p>See <a href="config">Configuration</a> for details.</p>
+	</div>
+}
+else if (AreaView.IsAwaitingRoomChoice(_rooms, Engine.IsAttached))
+{
+	@* A state and not a route: the moment the commit lands the condition above is false and this same page
+	   renders the live board. CommissioningBoard owns the draft and its single Save. *@
+	<CommissioningBoard People="_people" Committed="OnCommissioned" />
+}
+else if (!Cache.HasData)
+{
+	<div class="empty">
+		<strong>Starting up &mdash; waiting for the first report from your rooms.</strong>
+		<p>This normally takes a few seconds.</p>
+	</div>
+}
+else if (_lanes.Count == 0)
+{
+	@* Reports have arrived, but none from a room that is switched on. *@
+	<div class="empty">
+		<strong>None of the rooms you switched on has reported yet.</strong>
+		<p>Each one gets a lane here as it checks in.</p>
+	</div>
+}
+else
+{
+	<div class="tray">
+		@foreach (AreaSnapshot area in _exceptions)
+		{
+			<a class="tray-chip @TrayEdge(area.State)" href="@RoomHref(area.AreaId)">
+				<StateChip State="area.State" Kelvin="area.ColorTempKelvin" Bare="true" />
+				<span class="tray-text"><b>@area.AreaName</b> &mdash; @BoardView.ExceptionLine(area, _now)</span>
+			</a>
+		}
+		<span class="tray-quiet">@BoardView.QuietRoomsLine(_lanes.Count, _exceptions.Count)</span>
+	</div>
+
+	<section class="board">
+		<div class="board-head">
+			<h2 class="board-title"><Icon Name="@Glyph.Lanes" Class="ic-head" />Timeline</h2>
+			<span class="board-span">@BoardView.Clock(_window.Start) &rarr; @BoardView.Clock(_window.End)</span>
+			<span class="board-since">@SinceLine</span>
+		</div>
+
+		@* The axis, the band and every lane share one grid, so a block, its hour and its period line up. *@
+		<div class="board-scroll">
+			<div class="board-grid" style="--hour-w: @Pct(100.0 / _window.Hours)%">
+				<div class="board-axis">
+					<div class="board-gutter"></div>
+					<div class="board-track board-track-bare">
+						@* An hour the now-tag sits on is skipped, so the two do not overlap. *@
+						@for (int index = 0; index < _ticks.Count; index++)
+						{
+							double at = index * 100.0 / _window.Hours;
+
+							@if (Math.Abs(at - _nowPercent) >= 3.5)
+							{
+								<span class="board-tick @TickClass(index)" style="left: @Pct(at)%">
+									@_ticks[index].ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture)
+								</span>
+							}
+						}
+					</div>
+				</div>
+
+				<div class="board-band">
+					<div class="board-gutter"></div>
+					<div class="board-track board-track-bare">
+						@if (_band.Count == 0)
+						{
+							<span class="board-band-none">no schedule could be placed</span>
+						}
+						@foreach (BandSegment segment in _band)
+						{
+							<span class="band-seg"
+								  style="left: @Pct(segment.LeftPct)%; width: @Pct(segment.WidthPct)%; background: @KelvinColour.Css(segment.Kelvin)"
+								  title="@($"{segment.Name} — {segment.Kelvin} K")"></span>
+
+							@if (BoardView.IsLabelled(segment))
+							{
+								<span class="band-name" style="left: @Pct(segment.LeftPct)%">@segment.Name</span>
+							}
+						}
+					</div>
+				</div>
+
+				<div class="board-lanes">
+					@foreach (FloorGroup<BoardLane> group in _groups)
+					{
+						IReadOnlyList<BoardLane> busy = [.. group.Items.Where(lane => !_quiet.Contains(lane.Key))];
+
+						@* A floor is headed only when it has a busy lane to head. *@
+						@if (busy.Count > 0 && AreaView.ShowsHeader(_groups.Count, group.Floor))
+						{
+							<div class="board-floor">
+								<span class="board-floor-name">@AreaView.FloorTitle(group.Floor)</span>
+							</div>
+						}
+
+						@foreach (BoardLane lane in busy)
+						{
+							<a class="lane" href="@RoomHref(lane.AreaId)" title="@LaneTitle(lane)" @key="lane.Key">
+								<span class="lane-name">
+									<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" />
+									<span class="lane-room">@lane.Name</span>
+								</span>
+								<span class="board-track">
+									@foreach (LaneBlock block in lane.Blocks)
+									{
+										<span class="blk blk-@block.Kind.ToString().ToLowerInvariant()"
+											  style="left: @Pct(block.LeftPct)%; width: @Pct(block.WidthPct)%@(block.Kelvin is { } kelvin ? $"; --blk: {KelvinColour.Css(kelvin)}" : null)"></span>
+									}
+									@* After the blocks, so a refusal inside a lit stretch is not painted over, and before
+									   the future mark, which sits above everything. aria-hidden because these are inside
+									   the room's link, and each title would otherwise join the link's accessible name. *@
+									@foreach (LaneRefusal refusal in lane.Refusals ?? [])
+									{
+										@* Past two thirds across the label opens leftwards: the track clips overflow
+										   silently, so a reason near the right edge is cut mid-word. *@
+										<span class="lane-refusal @(refusal.LeftPct > 66 ? "lane-refusal-late" : null)"
+											  style="left: @Pct(refusal.LeftPct)%"
+											  title="@refusal.Label" aria-hidden="true"><i>@refusal.Label</i></span>
+									}
+									@if (lane.Next is { } next)
+									{
+										<span class="lane-mark" style="left: @Pct(next.LeftPct)%"><i>@next.Label</i></span>
+									}
+								</span>
+							</a>
+						}
+					}
+				</div>
+
+				@* Offset past the sticky name column so it stands where the tracks begin. *@
+				<span class="board-now" style="left: @NowOffset"></span>
+				<span class="board-now-tag" style="left: @NowOffset">@BoardView.Clock(_now)</span>
+			</div>
+		</div>
+
+		@if (_quiet.Count > 0)
+		{
+			<div class="board-quiet">
+				<span class="board-quiet-lab">Quiet since @BoardView.Clock(_window.Start)</span>
+				@foreach (FloorGroup<BoardLane> group in _groups)
+				{
+					IReadOnlyList<BoardLane> resting = [.. group.Items.Where(lane => _quiet.Contains(lane.Key))];
+
+					@if (resting.Count > 0)
+					{
+						@if (AreaView.ShowsHeader(_groups.Count, group.Floor))
+						{
+							<span class="board-quiet-floor">@AreaView.FloorTitle(group.Floor)</span>
+						}
+
+						@foreach (BoardLane lane in resting)
+						{
+							<a class="quiet-chip" href="@RoomHref(lane.AreaId)" title="@LaneTitle(lane)" @key="lane.Key">
+								<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" />
+								@lane.Name
+							</a>
+						}
+					}
+				}
+			</div>
+		}
+
+		@if (_entries.Count == 0)
+		{
+			<p class="board-note">
+				Nothing has been recorded yet. Recording starts when adaptive lighting starts, and a room appears
+				the first time it decides something.
+			</p>
+		}
+
+		@* The legend explains marks, so it appears only when the board has marks. *@
+		<div class="board-foot">
+			@if (_hasMarks)
+			{
+				<span class="board-key"><StateChip State="AreaState.AutoActive" Bare="true" Kelvin="2700" /><span class="board-swatch blk-lit" style="--blk: @KelvinColour.Css(2700)"></span> lit by the engine (colour = actual warmth)</span>
+				<span class="board-key"><StateChip State="AreaState.OverriddenOn" Bare="true" /><span class="board-swatch blk-hand"></span> set manually</span>
+				<span class="board-key"><StateChip State="AreaState.PreOff" Bare="true" /><span class="board-swatch blk-dimming"></span> warning dim</span>
+				<span class="board-key"><StateChip State="AreaState.SuppressedOff" Bare="true" /><span class="board-swatch blk-held"></span> off manually</span>
+				<span class="board-key"><span class="board-swatch board-swatch-refusal"></span> movement, but no &mdash; hover for why</span>
+				<span class="board-key"><span class="board-swatch board-swatch-next"></span> what happens next</span>
+			}
+			<span class="board-foot-end">Tap a room for its page</span>
+		</div>
+	</section>
+
+	@if (AreaView.HiddenNote(AreaView.SwitchedOffCount(_rooms)) is { } hidden)
+	{
+		<p class="rooms-off">
+			@hidden.Lead
+			<a href="config?section=areas">@hidden.LinkText</a>.
+		</p>
+	}
+
+	@* Filtered to ActivityView.SummaryCategories and not the Activity page's opening set, the board above
+	   having drawn the routine already. The budget is spent after the filter, never before it. *@
+	<div class="board-loghead">
+		<h2 class="board-title">What's worth knowing &mdash; newest first</h2>
+		<span class="board-since">@LogFoot</span>
+	</div>
+
+	@if (_entries.Count == 0)
+	{
+		<div class="empty">
+			<strong>Nothing has happened yet.</strong>
+			<p>
+				A quiet house can sit here for a long time. Each room appears the first time it decides
+				something &mdash; movement, a change of house mode, or the light outside crossing the level it
+				counts as dark.
+			</p>
+		</div>
+	}
+	else if (_logRows.Count == 0)
+	{
+		@* Reports exist, but not of the kind this summary carries. *@
+		<div class="empty">
+			<strong>Nothing important has happened yet.</strong>
+			<p>
+				@BackgroundOnlyLine Movement, re-checks and everyday light changes are kept on the
+				<a href="activity">Activity</a> page, so this list stays short.
+			</p>
+		</div>
+	}
+	else
+	{
+		<ol class="log log-compact">
+			@foreach (ActivityRow row in _logRows)
+			{
+				<li class="log-row family-@row.Family" @key="row.Sequence">
+					<div class="log-when">
+						<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)"
+							  title="@Full(row.At)">@Clock(row.At)</time>
+						@if (row.IsAboutTheHouse)
+						{
+							@* Not attributed to a room, because no room did it. *@
+							<span class="log-room log-room-house" title="@ActivityView.ReportedBy(row)">@HouseLabel(row)</span>
+						}
+						else if (row.Snapshot is { AreaId: { Length: > 0 } areaId })
+						{
+							<a class="log-room log-room-link" href="@RoomHref(areaId)">@row.Room</a>
+						}
+						else
+						{
+							<span class="log-room">@row.Room</span>
+						}
+					</div>
+					<div class="log-body">
+						<span class="log-what">@row.Line.What</span>
+						@if (row.Line.Why is { Length: > 0 } why)
+						{
+							<span class="log-why">@why</span>
+						}
+					</div>
+				</li>
+			}
+		</ol>
+
+		<p class="log-foot"><a href="activity">All activity &rsaquo;</a></p>
+	}
+}
+
+@code {
+	private IReadOnlyList<AreaSnapshot> _snapshots = [];
+	private IReadOnlyList<RoomView> _rooms = [];
+	private IReadOnlyList<ActivityEntry> _entries = [];
+
+	// _kept is what SummaryCategories leaves; _reachable is what the Activity page would draw on the same buffer,
+	// not the raw buffer, so the footer's "N reports on the Activity page" is a count that link can keep.
+	private int _kept;
+	private int _reachable;
+	private IReadOnlyList<ActivityRow> _logRows = [];
+
+	private IReadOnlyList<BoardLane> _lanes = [];
+	private bool _hasMarks;
+	private IReadOnlyList<FloorGroup<BoardLane>> _groups = [];
+	private HashSet<string> _quiet = new(StringComparer.Ordinal);
+	private IReadOnlyList<AreaSnapshot> _exceptions = [];
+	private IReadOnlyList<BandSegment> _band = [];
+	private BoardWindow _window = BoardWindow.Around(DateTimeOffset.Now, BoardView.LookBack, BoardView.LookAhead);
+	private IReadOnlyList<DateTimeOffset> _ticks = [];
+	private double _nowPercent;
+	private IReadOnlyList<TimePeriodConfig>? _periods;
+	private DateTimeOffset? _periodsStamp;
+	private MasterSwitchView? _masterSwitch;
+	private HouseModeView? _houseMode;
+	private IReadOnlyList<PersonView> _people = [];
+	private string? _modeMessage;
+	private string? _modeConfirmation;
+	private DateTimeOffset? _modeConfirmationUntil;
+	private DateTimeOffset _now = DateTimeOffset.Now;
+	private IDisposable? _subscription;
+	private IDisposable? _ticker;
+
+	/// <inheritdoc/>
+	protected override void OnInitialized()
+	{
+		_snapshots = Cache.Snapshots;
+		ReadHouseState();
+		ReadBoard();
+
+		// Sampled, not raw: a house waking up pushes a burst of transitions.
+		_subscription = Cache.Changes
+			.Sample(TimeSpan.FromMilliseconds(400))
+			.SubscribeSafe(_ => InvokeAsync(() =>
+			{
+				_snapshots = Cache.Snapshots;
+				ReadHouseState();
+				ReadBoard();
+				StateHasChanged();
+			}), Logger);
+
+		// The now-line and every countdown are only honest while they move, so the board is rebuilt once a second
+		// whether or not the engine said anything. Everything this tick does must stay cheap; see ReadSchedule.
+		_ticker = Observable.Interval(TimeSpan.FromSeconds(1))
+			.SubscribeSafe(_ => InvokeAsync(() =>
+			{
+				_now = DateTimeOffset.Now;
+
+				// The confirmation is transient, so the panel cannot carry a stale one once the mode has landed.
+				if (_modeConfirmationUntil is { } until && _now > until)
+				{
+					_modeConfirmation = null;
+					_modeConfirmationUntil = null;
+				}
+
+				ReadHouseState();
+				ReadBoard();
+				StateHasChanged();
+			}), Logger);
+	}
+
+	/// <summary>Re-reads the three house-state projections, house mode first: its readiness bookkeeping is
+	/// clobbered by the master switch's if the two are swapped.</summary>
+	private void ReadHouseState()
+	{
+		_houseMode = Service.GetHouseMode();
+		_masterSwitch = Service.GetMasterSwitch();
+		_people = Service.GetPeople();
+	}
+
+	/// <summary>Rebuilds the whole board: the window, one lane per switched-on room, the quiet split, the tray
+	/// and the schedule band.</summary>
+	/// <remarks>Rebuilt on every tick and never cached, since the window steps on the hour and every countdown
+	/// goes wrong the moment it stops being recalculated. This page keeps no read mark on the log, so
+	/// <c>Entries</c> alone is safe; anything that wants to say "4 new" must switch to <c>ActivityLog.Read()</c>,
+	/// which returns the entries and the sequence number under one lock.</remarks>
+	private void ReadBoard()
+	{
+		_rooms = Service.GetRooms();
+		_window = BoardWindow.Around(_now, BoardView.LookBack, BoardView.LookAhead);
+		_ticks = _window.Ticks;
+		_nowPercent = Math.Clamp(_window.PercentAt(_now), 0, 100);
+		_entries = Log.Entries;
+
+		// This sift belongs to the summary alone: the lanes are drawn from every report the engine published,
+		// start-up included, because that snapshot is where a lane's first block begins.
+		IReadOnlyList<ActivityEntry> shown = ActivityView.Shown(_entries);
+		IReadOnlyList<ActivityEntry> kept = ActivityView.InCategories(shown, ActivityView.SummaryCategories);
+
+		// DefaultCategories, because that is what the Activity page opens on. Counting against the raw buffer would
+		// promise reports that page also hides.
+		_reachable = ActivityView.InCategories(shown, ActivityView.DefaultCategories).Count;
+		_kept = kept.Count;
+		_logRows = ActivityView.Rows(kept, BoardView.LogPreview);
+
+		IReadOnlyList<AreaSnapshot> visible = AreaView.VisibleCards(_snapshots, _rooms);
+
+		// The engine's own notices are skipped: a lane draws one room's history, and a rebuild belongs to none.
+		Dictionary<string, List<ActivityEntry>> byRoom = new(StringComparer.Ordinal);
+		foreach (ActivityEntry entry in _entries)
+		{
+			if (entry.Snapshot is not { } snapshot)
+				continue;
+
+			if (!byRoom.TryGetValue(KeyOf(snapshot), out List<ActivityEntry>? room))
+				byRoom[KeyOf(snapshot)] = room = [];
+
+			room.Add(entry);
+		}
+
+		List<BoardLane> lanes = new(visible.Count);
+		foreach (AreaSnapshot snapshot in visible)
+		{
+			string key = KeyOf(snapshot);
+			IReadOnlyList<ActivityEntry> history = byRoom.TryGetValue(key, out List<ActivityEntry>? found) ? found : [];
+
+			lanes.Add(new BoardLane(
+				key,
+				snapshot.AreaName,
+				snapshot.AreaId,
+				snapshot,
+				BoardView.Blocks(history, _window, _now),
+				BoardView.NextMark(snapshot, _window, _now),
+				BoardView.Refusals(history, _window)));
+		}
+
+		_lanes = lanes;
+		// Refusals count here: they are the only mark a lane can carry with no block and nothing armed, so leaving
+		// them out hides the legend on the very board the refusal tick was drawn for.
+		_hasMarks = lanes.Any(lane => lane.Blocks.Count > 0 || lane.Next is not null || lane.Refusals is { Count: > 0 });
+		_exceptions = BoardView.Exceptions(visible);
+
+		(IReadOnlyList<BoardLane> _, IReadOnlyList<BoardLane> quiet) = BoardView.Partition(lanes);
+		_quiet = new HashSet<string>(quiet.Select(lane => lane.Key), StringComparer.Ordinal);
+
+		// A registry that has not connected throws instead of answering, so GroupOrFlat degrades to one unnamed
+		// group and the board renders flat instead of not at all.
+		_groups = FloorGrouping.GroupOrFlat(lanes, lane => lane.AreaId, Catalog.AreaRegistry);
+
+		ReadSchedule();
+	}
+
+	/// <summary>Re-reads the circadian table for the band above the lanes.</summary>
+	/// <remarks>Cached against the store file's last-write time, so the per-second ticker costs a stat and not
+	/// a YAML parse. A parse failure keeps the last good table instead of blanking the band mid-save.</remarks>
+	private void ReadSchedule()
+	{
+		if (Engine.Store.Exists)
+		{
+			DateTimeOffset? stamp = Engine.Store.LastWrittenUtc;
+
+			if (_periods is null || stamp != _periodsStamp)
+			{
+				try
+				{
+					_periods = Engine.Store.Load().Periods;
+					_periodsStamp = stamp;
+				}
+				catch (LightingConfigException exception)
+				{
+					Logger.LogDebug(exception, "Could not read the schedule for the board; keeping the last good copy.");
+				}
+			}
+		}
+
+		SunTimes sun;
+		try
+		{
+			(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
+			sun = new SunTimes(sunrise, sunset);
+		}
+		catch (InvalidOperationException)
+		{
+			sun = SunTimes.Unknown;
+		}
+
+		_band = BoardView.Band(_periods ?? [], sun, _window);
+	}
+
+	/// <summary>What a report is filed under, matching the snapshot cache's own key so the two agree.</summary>
+	private static string KeyOf(AreaSnapshot snapshot) =>
+		snapshot.AreaId is { Length: > 0 } areaId ? areaId : snapshot.AreaName;
+
+	/// <summary>A room's own page, or <c>null</c> for a room configured with explicit entities.</summary>
+	/// <remarks>Null makes Blazor drop the href, leaving an anchor that is neither a link nor a tab stop.</remarks>
+	private static string? RoomHref(string? areaId) =>
+		areaId is { Length: > 0 } id ? $"room/{Uri.EscapeDataString(id)}" : null;
+
+	private static string LaneTitle(BoardLane lane) => $"{lane.Name} — {StateGlyph.For(lane.Latest.State).Word}";
+
+	/// <summary>Which edge a tray chip carries: the warning dim is about to act, the other three are standing.</summary>
+	private static string TrayEdge(AreaState state) => state == AreaState.PreOff ? "tray-warn" : "tray-human";
+
+	/// <summary>Past the sticky name column, then the fraction of the track already elapsed.</summary>
+	/// <remarks>The column width is a token, so the phone override moves the line with it.</remarks>
+	private string NowOffset => $"calc(var(--lane-name) + (100% - var(--lane-name)) * {Pct(_nowPercent / 100.0)})";
+
+	/// <summary>How far back the board can see; a restart wipes the morning.</summary>
+	private string SinceLine =>
+		Engine.LastStartedUtc is { } started
+			? $"since adaptive lighting started, {BoardView.Clock(started)}"
+			: "since adaptive lighting started";
+
+	/// <summary>What the log below is showing, what the filter is holding back, and the cap it is all held to.</summary>
+	private string LogFoot => BoardView.LogFoot(_entries.Count, _reachable, _kept, _logRows.Count, ActivityLog.Capacity);
+
+	/// <summary>The count in front of the nothing-important empty state.</summary>
+	/// <remarks>Counted off <c>_reachable</c>, like the footer it renders beside.</remarks>
+	private string BackgroundOnlyLine => _reachable == 1
+		? "The one report so far is routine."
+		: $"All {_reachable} reports so far are routine.";
+
+	private static string HouseLabel(ActivityRow row) =>
+		row.Rooms.Count > 1 ? $"House · {row.Rooms.Count} rooms" : "House";
+
+	/// <summary>The first tick hangs off the left edge and the last off the right, so neither is clipped.</summary>
+	private string? TickClass(int index) =>
+		index == 0 ? "board-tick-first" : index == _window.Ticks.Count - 1 ? "board-tick-last" : null;
+
+	// Invariant, always. Under nb-NO a double renders 62,5 and "left: 62,5%" is not a length, so the
+	// declaration is dropped and every block on the board stacks at the left edge.
+	private static string Pct(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+	private static string Clock(DateTimeOffset at) =>
+		at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+
+	private static string Full(DateTimeOffset at) =>
+		at.ToLocalTime().ToString("dddd d MMMM yyyy, HH:mm:ss", CultureInfo.CurrentCulture);
+
+	/// <summary>Re-reads the page the moment the commissioning board's save lands, ahead of the next tick.</summary>
+	private void OnCommissioned()
+	{
+		ReadHouseState();
+		ReadBoard();
+	}
+
+	/// <summary>Flips the master switch through the config-resolved toggle, then re-reads the house state.</summary>
+	private void ToggleMaster()
+	{
+		if (_masterSwitch is { IsAvailable: true, Toggle.CanToggle: true } master)
+			Service.Toggle(master.Toggle);
+
+		ReadHouseState();
+	}
+
+	/// <summary>Switches the house mode through <see cref="ModeService.SelectHouseMode"/>, then re-reads.</summary>
+	/// <remarks>The service call is fire and forget, so what is set here is a "requested" acknowledgement; the
+	/// current-mode highlight still comes from what Home Assistant reports on the next read.</remarks>
+	private void SelectMode(string option)
+	{
+		if (Service.SelectHouseMode(option))
+		{
+			_modeMessage = null;
+			_modeConfirmation = $"Switching to {option}…";
+			_modeConfirmationUntil = DateTimeOffset.Now.AddSeconds(6);
+		}
+		else
+		{
+			_modeConfirmation = null;
+			_modeConfirmationUntil = null;
+			_modeMessage = $"Couldn't switch to '{option}' — Home Assistant may be offline.";
+		}
+
+		ReadHouseState();
+	}
+
+	/// <summary>Which of the three master states the cell is in, for the panel-edge colour.</summary>
+	/// <remarks>All three are emitted although only two colour anything: a <c>:has()</c> rule matches <c>on</c>
+	/// to leave the edge neutral, and dropping it merges "switched on" with "no master switch at all".</remarks>
+	private static string MasterClass(MasterSwitchView master) =>
+		!master.IsAvailable ? "unknown" : master.AdaptiveLightingOn ? "on" : "off";
+
+	/// <summary>The line under the master switch, or <c>null</c> when the switch is simply on.</summary>
+	private static string? MasterNote(MasterSwitchView master)
+	{
+		if (!master.IsAvailable)
+		{
+			return master.IsReady
+				? "Home Assistant doesn't know the master switch, so its state can't be shown."
+				: "Waiting for Home Assistant — state unknown.";
+		}
+
+		return master.AdaptiveLightingOn
+			? null
+			: "Paused — nothing was turned off, but no lights will change until you turn it back on.";
+	}
+
+	private static string MasterTitle(MasterSwitchView master)
+	{
+		if (!master.IsAvailable)
+		{
+			return master.IsReady
+				? "Home Assistant doesn't know this switch."
+				: "Waiting for Home Assistant.";
+		}
+
+		return master.Toggle.CanToggle
+			? $"Turn adaptive lighting {(master.AdaptiveLightingOn ? "off" : "on")}"
+			: "This entity can't be switched on or off.";
+	}
+
+	/// <inheritdoc/>
+	public void Dispose()
+	{
+		_subscription?.Dispose();
+		_ticker?.Dispose();
+	}
+}

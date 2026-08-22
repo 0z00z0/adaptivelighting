@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 810" width="980" height="810" role="img" aria-label="Adaptive lighting area state machine, annotated with the configuration parameter governing each transition">
+	<title>Adaptive lighting — area state machine and the parameters that drive it</title>
+
+	<style>
+		svg { color-scheme: light dark;
+		      --ink:#191a18; --muted:#67695f; --faint:#8c8e84; --line:#b9b9b1; --panel:#f1f1ef;
+		      --machine:#2c6e9b; --machine-bg:#eaf2f8; --human:#b4700f; --human-bg:#fbf2e3; --idle:#8c8e84; --idle-bg:#f0f0ee; }
+		@media (prefers-color-scheme: dark) {
+			svg { --ink:#e8e9ea; --muted:#9aa0a6; --faint:#6f767c; --line:#3a4046; --panel:#1d2125;
+			      --machine:#7fb3d5; --machine-bg:#16242e; --human:#e9a33c; --human-bg:#2a2011; --idle:#6f767c; --idle-bg:#1d2125; }
+		}
+		.st  { font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; font-size:13.5px; font-weight:600; }
+		.ev  { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size:12px; fill:#191a18; }
+		.pa  { font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; font-size:10.5px; fill:#67695f; }
+		.cap { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size:11px; fill:#8c8e84; }
+		.hd  { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size:10px; letter-spacing:.14em; fill:#8c8e84; }
+		@media (prefers-color-scheme: dark) {
+			.ev { fill:#e8e9ea; } .pa { fill:#9aa0a6; } .cap, .hd { fill:#6f767c; }
+		}
+		.edge{ stroke:#b9b9b1; stroke-width:1.5; fill:none; marker-end:url(#a); }
+		@media (prefers-color-scheme: dark) { .edge { stroke:#3a4046; } }
+	</style>
+
+	<defs>
+		<marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+			<path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/>
+		</marker>
+	</defs>
+
+	<text x="0" y="20" class="hd">AREA STATE MACHINE · EACH ARROW NAMES THE PARAMETER THAT DRIVES IT</text>
+
+	<!-- Legend starts past the title: the title is 66 tracked characters and runs to about x=455. -->
+	<g transform="translate(600,10)">
+		<rect x="0" y="0" width="10" height="10" rx="2" fill="var(--machine-bg)" stroke="var(--machine)" stroke-width="1.5"/>
+		<text x="16" y="9" class="cap">engine decides</text>
+		<rect x="112" y="0" width="10" height="10" rx="2" fill="var(--human-bg)" stroke="var(--human)" stroke-width="1.5"/>
+		<text x="128" y="9" class="cap">human decided</text>
+		<rect x="236" y="0" width="10" height="10" rx="2" fill="var(--idle-bg)" stroke="var(--idle)" stroke-width="1.5"/>
+		<text x="252" y="9" class="cap">not commanding</text>
+	</g>
+
+	<!-- ===== LEVELS panel (top right) ===== -->
+	<rect x="600" y="40" width="380" height="96" rx="7" fill="var(--panel)" stroke="var(--line)" stroke-width="1"/>
+	<text x="616" y="60" class="hd">LEVELS — WHAT IT SETS WHILE A ROOM IS LIT</text>
+	<text x="616" y="80" class="ev">Brightness and colour follow the time of day.</text>
+	<text x="616" y="100" class="pa">Periods · BrightnessPct · ColorTempKelvin · BlendMinutes</text>
+	<text x="616" y="115" class="pa">CircadianTickSeconds · Day/NightTransitionSeconds</text>
+	<text x="616" y="130" class="pa">StartsOnMotion — a period can wait for movement</text>
+
+	<!-- ===== the automatic cycle ===== -->
+
+	<rect x="228" y="60" width="176" height="46" rx="7" fill="var(--machine-bg)" stroke="var(--machine)" stroke-width="1.5"/>
+	<text x="316" y="82" class="st" fill="var(--machine)" text-anchor="middle">AutoVacant</text>
+	<text x="316" y="97" class="cap" text-anchor="middle">dark, waiting for motion</text>
+
+	<path class="edge" d="M316,106 L316,196"/>
+	<text x="330" y="130" class="ev">motion, and dark enough</text>
+	<text x="330" y="147" class="pa">Darkness · LuxThreshold · LuxHysteresis</text>
+	<text x="330" y="161" class="pa">SunElevationThreshold · IgnoreWhenOn</text>
+	<text x="330" y="175" class="pa">SleepBlocksAutoOn</text>
+
+	<rect x="228" y="196" width="176" height="46" rx="7" fill="var(--machine-bg)" stroke="var(--machine)" stroke-width="1.5"/>
+	<text x="316" y="216" class="st" fill="var(--machine)" text-anchor="middle">AutoActive</text>
+	<text x="316" y="231" class="cap" text-anchor="middle">lit · re-targets as the day drifts</text>
+
+	<path class="edge" d="M316,242 L316,332"/>
+	<text x="330" y="272" class="ev">no motion for…</text>
+	<text x="330" y="289" class="pa">VacancyTimeoutSeconds</text>
+
+	<rect x="228" y="332" width="176" height="46" rx="7" fill="var(--machine-bg)" stroke="var(--machine)" stroke-width="1.5"/>
+	<text x="316" y="354" class="st" fill="var(--machine)" text-anchor="middle">PreOff</text>
+	<text x="316" y="369" class="cap" text-anchor="middle">dimmed — speak now</text>
+
+	<!-- PreOff -> AutoActive : motion rescues -->
+	<path class="edge" d="M404,344 C 476,326 476,266 408,244"/>
+	<text x="488" y="322" class="ev">motion rescues it</text>
+	<text x="488" y="338" class="pa">PreOffBrightnessFactor</text>
+
+	<!-- PreOff -> AutoVacant : grace elapsed, off. Routed far left; nothing else lives there. -->
+	<path class="edge" d="M228,356 C 60,356 60,84 224,84"/>
+	<text x="76" y="392" class="ev">grace elapsed → off</text>
+	<text x="76" y="409" class="pa">PreOffSeconds</text>
+
+	<!-- ===== human-owned states ===== -->
+
+	<path class="edge" d="M404,206 L660,166"/>
+	<text x="452" y="180" class="ev">you set a level</text>
+
+	<rect x="664" y="144" width="176" height="46" rx="7" fill="var(--human-bg)" stroke="var(--human)" stroke-width="1.5"/>
+	<text x="752" y="166" class="st" fill="var(--human)" text-anchor="middle">OverriddenOn</text>
+	<text x="752" y="181" class="cap" text-anchor="middle">your setting is sacred</text>
+
+	<path class="edge" d="M752,190 L752,216"/>
+	<text x="766" y="208" class="pa">OverrideDurationMinutes → auto</text>
+
+	<path class="edge" d="M404,230 L660,266"/>
+	<text x="452" y="258" class="ev">you switch it off</text>
+
+	<rect x="664" y="246" width="176" height="46" rx="7" fill="var(--human-bg)" stroke="var(--human)" stroke-width="1.5"/>
+	<text x="752" y="268" class="st" fill="var(--human)" text-anchor="middle">SuppressedOff</text>
+	<text x="752" y="283" class="cap" text-anchor="middle">motion ignored until it is quiet</text>
+
+	<path class="edge" d="M752,292 L752,318"/>
+	<text x="766" y="310" class="pa">VacancyResetMinutes quiet → auto</text>
+
+	<!-- how the engine tells itself apart from you -->
+	<rect x="600" y="352" width="380" height="104" rx="7" fill="var(--panel)" stroke="var(--line)" stroke-width="1"/>
+	<text x="616" y="372" class="hd">HOW "YOU" IS TOLD APART FROM "THE ENGINE"</text>
+	<text x="616" y="392" class="ev">It is the engine's own if it matches a command in flight.</text>
+	<text x="616" y="408" class="ev">Otherwise: no user and no parent means a physical switch.</text>
+	<text x="616" y="428" class="pa">SelfEchoWindowSeconds (+ the fade length)</text>
+	<text x="616" y="443" class="pa">TreatAutomationsAsManual · NetDaemonUserId</text>
+
+	<!-- ===== house-wide overlays ===== -->
+	<line x1="0" y1="472" x2="980" y2="472" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 4"/>
+	<text x="0" y="494" class="hd">HOUSE-WIDE — ENTERED FROM ANY STATE ABOVE</text>
+
+	<rect x="0" y="508" width="300" height="46" rx="7" fill="var(--idle-bg)" stroke="var(--idle)" stroke-width="1.5" stroke-dasharray="4 3"/>
+	<text x="150" y="530" class="st" fill="var(--idle)" text-anchor="middle">Away</text>
+	<text x="150" y="545" class="cap" text-anchor="middle">everyone left — lights swept off</text>
+	<text x="0" y="576" class="pa">Persons · AwayDebounceMinutes</text>
+	<text x="0" y="591" class="pa">SkipAwaySweep — outdoor lights opt out</text>
+	<text x="0" y="606" class="pa">first arrival + dark → WelcomeHome</text>
+
+	<rect x="340" y="508" width="300" height="46" rx="7" fill="var(--idle-bg)" stroke="var(--idle)" stroke-width="1.5" stroke-dasharray="4 3"/>
+	<text x="490" y="530" class="st" fill="var(--idle)" text-anchor="middle">Sleep clamp</text>
+	<text x="490" y="545" class="cap" text-anchor="middle">night caps, whatever the clock says</text>
+	<text x="340" y="576" class="pa">a Sleep-kind house mode · ClampPeriodId</text>
+	<text x="340" y="591" class="pa">RespectSleepMode (per area)</text>
+	<text x="340" y="606" class="pa">held to that period's own BrightnessPct</text>
+
+	<rect x="680" y="508" width="300" height="46" rx="7" fill="var(--idle-bg)" stroke="var(--idle)" stroke-width="1.5" stroke-dasharray="4 3"/>
+	<text x="830" y="530" class="st" fill="var(--idle)" text-anchor="middle">Disabled</text>
+	<text x="830" y="545" class="cap" text-anchor="middle">still watching, never commanding</text>
+	<text x="680" y="576" class="pa">KillSwitchEntity · KillSwitchActiveWhenOff</text>
+	<text x="680" y="591" class="pa">Enabled (per area)</text>
+	<text x="680" y="606" class="pa">NetDaemon's own app switch kills everything</text>
+
+	<rect x="0" y="636" width="300" height="46" rx="7" fill="var(--idle-bg)" stroke="var(--idle)" stroke-width="1.5" stroke-dasharray="4 3"/>
+	<text x="150" y="658" class="st" fill="var(--idle)" text-anchor="middle">SceneHold</text>
+	<text x="150" y="673" class="cap" text-anchor="middle">a scene is the look — engine stands down</text>
+	<text x="0" y="704" class="pa">a Guest-kind house mode carrying a Scene</text>
+	<text x="0" y="719" class="pa">motion is still noticed, never commanded</text>
+	<text x="0" y="734" class="pa">back to AutoVacant when the mode resets</text>
+
+	<rect x="340" y="636" width="640" height="98" rx="7" fill="var(--panel)" stroke="var(--line)" stroke-width="1"/>
+	<text x="356" y="656" class="hd">A ROOM'S OWN SCENES — EACH REPLACES ONE TRANSITION, AND NOTHING ELSE</text>
+	<text x="356" y="676" class="ev">SceneOnMotion replaces switching on. SceneWhenEmpty replaces switching off.</text>
+	<text x="356" y="694" class="ev">Every gate above still refuses first: a scene is what happens instead, never a reason to.</text>
+	<text x="356" y="716" class="pa">SceneOnMotion · SceneWhenEmpty · IgnoreWhenOn · KeepLitWhenOn (either invertible)</text>
+
+	<text x="0" y="768" class="cap">Rooms are opt-in: an area that is not listed is never touched. An area needs only an AreaId — its lights, motion sensors and lux sensor are discovered.</text>
+	<text x="0" y="786" class="cap">Every value named above is configuration. No entity id, threshold, time or room name is compiled into the engine.</text>
+</svg>

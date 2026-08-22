@@ -1,0 +1,95 @@
+@* Chosen by display name and stored as the registry slug: AreaId is "stue" while Home Assistant shows "Stue"
+   everywhere, so typing the displayed value gives a room that never lights. *@
+
+<div class="picker">
+	@if (_manual || !HasOptions)
+	{
+		<input type="text"
+			   class="picker-text"
+			   placeholder="area id, e.g. stue"
+			   value="@Value"
+			   @onchange="OnTyped" />
+	}
+	else
+	{
+		<select class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
+			<option value="">@NoneLabel</option>
+			@foreach (AreaOption area in Areas)
+			{
+				<option value="@area.Id">@area.Label</option>
+			}
+			@if (IsUnlisted)
+			{
+				<option value="@Value">@Value — not a registry area id</option>
+			}
+		</select>
+	}
+
+	<button type="button" class="picker-mode" @onclick="ToggleMode" disabled="@(!HasOptions)">
+		@(_manual ? "Pick from list" : "Type an id")
+	</button>
+
+	@if (!HasOptions)
+	{
+		<span class="picker-note">@EmptyNote</span>
+	}
+	else if (IsUnlisted)
+	{
+		<span class="picker-note bad">Not a registry area id.</span>
+	}
+	else if (Selected is { HasLights: false })
+	{
+		<span class="picker-note bad">
+			No lights found in this room, so it can't run. Assign lights to the area in Home Assistant, or pick them
+			by hand below.
+		</span>
+	}
+	else if (Selected is { LuxIsAmbiguous: true })
+	{
+		<span class="picker-note">
+			@Selected.LuxCount light-level sensors here — pick which one to use below.
+		</span>
+	}
+</div>
+
+@code {
+	[Parameter]
+	public string? Value { get; set; }
+
+	[Parameter]
+	public EventCallback<string?> ValueChanged { get; set; }
+
+	[Parameter]
+	public IReadOnlyList<AreaOption> Areas { get; set; } = [];
+
+	[Parameter]
+	public string NoneLabel { get; set; } = "(none — list the entities explicitly instead)";
+
+	/// <summary>Why there is nothing to pick, worded so it never blames the connection: a disconnected Home
+	/// Assistant and a house with no areas look the same here.</summary>
+	[Parameter]
+	public string EmptyNote { get; set; } = "No areas to pick from yet — type an area id instead.";
+
+	private bool _manual;
+
+	private bool HasOptions => Areas.Count > 0;
+
+	private AreaOption? Selected =>
+		Value is { Length: > 0 } ? Areas.FirstOrDefault(area => string.Equals(area.Id, Value, StringComparison.Ordinal)) : null;
+
+	private bool IsUnlisted =>
+		Value is { Length: > 0 } && !Areas.Any(area => string.Equals(area.Id, Value, StringComparison.Ordinal));
+
+	private Task OnPicked(string picked) => Commit(picked);
+
+	private Task OnTyped(ChangeEventArgs args) => Commit(args.Value as string);
+
+	private void ToggleMode() => _manual = !_manual;
+
+	private Task Commit(string? raw)
+	{
+		string? value = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+		Value = value;
+		return ValueChanged.InvokeAsync(value);
+	}
+}

@@ -1,0 +1,445 @@
+@inject IJSRuntime Js
+@inject ILogger<LuxCurveChart> Logger
+@implements IAsyncDisposable
+
+@* The x axis is logarithmic and every y on the line comes from LuxBrightnessCurve.Raise, so the picture is
+   the engine's own arithmetic. Nothing here writes: every change leaves as a CurveEdit. *@
+
+<div class="luxc @(_grip == Grip.None ? null : "luxc-dragging")">
+	<div class="luxc-plot">
+		<svg class="luxc-svg"
+			 viewBox="@_viewBox"
+			 preserveAspectRatio="xMidYMid meet"
+			 role="group"
+			 aria-label="@Description">
+			@((MarkupString)_backdrop)
+
+			<g transform="@_plotOrigin">
+				<path d="@_path" class="luxc-line" />
+
+				@if (_start is { } start)
+				{
+					<circle class="luxc-handle @(_grip == Grip.Start ? "luxc-held" : null)"
+							cx="@LuxCurve.Num(start.X)"
+							cy="@LuxCurve.Num(start.Y)"
+							r="7"
+							tabindex="0"
+							role="slider"
+							aria-label="Daylight level where brightening starts"
+							aria-valuemin="@LuxCurve.Num(StartSetting.Min)"
+							aria-valuemax="@LuxCurve.Num(StartSetting.Max ?? LuxCurve.AxisMaxCeilingLux)"
+							aria-valuenow="@LuxCurve.Num(Settings.LuxBrightnessStartLux)"
+							aria-valuetext="@LuxCurve.Lux(Settings.LuxBrightnessStartLux)"
+							@onkeydown="@(args => OnKey(Grip.Start, args))" />
+				}
+
+				@if (_full is { } full)
+				{
+					<circle class="luxc-handle @(_grip == Grip.Full ? "luxc-held" : null)"
+							cx="@LuxCurve.Num(full.X)"
+							cy="@LuxCurve.Num(full.Y)"
+							r="7"
+							tabindex="0"
+							role="slider"
+							aria-label="Daylight level for full brightness, and the brightest this room goes"
+							aria-valuemin="@LuxCurve.Num(FullSetting.Min)"
+							aria-valuemax="@LuxCurve.Num(FullSetting.Max ?? LuxCurve.AxisMaxCeilingLux)"
+							aria-valuenow="@LuxCurve.Num(Settings.LuxBrightnessFullLux)"
+							aria-valuetext="@($"{LuxCurve.Lux(Settings.LuxBrightnessFullLux)}, {TokenFormat.Percent(Settings.LuxBrightnessMaxPct)}")"
+							@onkeydown="@(args => OnKey(Grip.Full, args))" />
+				}
+
+				@if (_shape is { } shape)
+				{
+					<circle class="luxc-handle luxc-shape @(_grip == Grip.Shape ? "luxc-held" : null)"
+							cx="@LuxCurve.Num(shape.X)"
+							cy="@LuxCurve.Num(shape.Y)"
+							r="6"
+							tabindex="0"
+							role="slider"
+							aria-label="Curve shape"
+							aria-valuemin="@LuxCurve.Num(ShapeSetting.Min)"
+							aria-valuemax="@LuxCurve.Num(ShapeSetting.Max ?? 5)"
+							aria-valuenow="@LuxCurve.Num(Settings.LuxBrightnessGamma)"
+							aria-valuetext="@CurvePath.Describe(Settings.LuxBrightnessGamma)"
+							@onkeydown="@(args => OnKey(Grip.Shape, args))" />
+				}
+			</g>
+		</svg>
+
+		@* The gesture target, laid over the plot by LuxCurve.SurfaceStyle. It sits above the handles so a tap
+		   anywhere grabs the nearest one; Tab still reaches the handles themselves. *@
+		<div class="luxc-surface" style="@LuxCurve.SurfaceStyle()" @ref="_surface"></div>
+	</div>
+
+	<p class="luxc-caption">@Description</p>
+</div>
+
+@code {
+	/// <summary>Which handle a gesture is steering: the foot, the head, or the shaping exponent.</summary>
+	private enum Grip
+	{
+		None,
+		Start,
+		Full,
+		Shape
+	}
+
+	/// <summary>The room's settings with inheritance already resolved.</summary>
+	[Parameter, EditorRequired]
+	public AreaSettings Settings { get; set; } = new();
+
+	/// <summary>The level the curve rises from: what the period in force asks this room for.</summary>
+	[Parameter]
+	public double BaseBrightnessPct { get; set; } = 80;
+
+	/// <summary>The period the base level came from, so the caption can name it.</summary>
+	[Parameter]
+	public string? PeriodName { get; set; }
+
+	/// <summary>The room's light-level reading right now, or <c>null</c> when no sensor answers.</summary>
+	[Parameter]
+	public double? Reading { get; set; }
+
+	/// <summary>Raised for each setting a drag or a key changes.</summary>
+	[Parameter]
+	public EventCallback<CurveEdit> Changed { get; set; }
+
+	private ElementReference _surface;
+	private DotNetObjectReference<LuxCurveChart>? _self;
+	private bool _watching;
+
+	private Grip _grip = Grip.None;
+
+	// Rebuilt in OnParametersSet, not read in getters: this page redraws once a second and the backdrop is a
+	// hundred-odd string appends.
+	private double _axisMax = 10_000;
+	private string _backdrop = "";
+	private string _path = "";
+	private CurvePoint? _start;
+	private CurvePoint? _full;
+	private CurvePoint? _shape;
+
+	private readonly string _viewBox = string.Create(CultureInfo.InvariantCulture,
+		$"0 0 {LuxCurve.ViewWidth} {LuxCurve.ViewHeight}");
+
+	private readonly string _plotOrigin = string.Create(CultureInfo.InvariantCulture,
+		$"translate({LuxCurve.PlotLeft},{LuxCurve.PlotTop})");
+
+	private static RoomSetting StartSetting => RoomSettings.Of(nameof(AreaSettings.LuxBrightnessStartLux));
+
+	private static RoomSetting FullSetting => RoomSettings.Of(nameof(AreaSettings.LuxBrightnessFullLux));
+
+	private static RoomSetting MaxSetting => RoomSettings.Of(nameof(AreaSettings.LuxBrightnessMaxPct));
+
+	private static RoomSetting ShapeSetting => RoomSettings.Of(nameof(AreaSettings.LuxBrightnessGamma));
+
+	/// <inheritdoc/>
+	protected override void OnParametersSet() => Rebuild();
+
+	private void Rebuild()
+	{
+		_axisMax = LuxCurve.AxisMaxLux(Settings, Reading);
+		_path = LuxCurve.Path(Settings, BaseBrightnessPct, _axisMax);
+		_start = LuxCurve.StartHandle(Settings, BaseBrightnessPct, _axisMax);
+		_full = LuxCurve.FullHandle(Settings, _axisMax);
+		_shape = LuxCurve.HasHeadroom(Settings, BaseBrightnessPct)
+			? LuxCurve.ShapeHandle(Settings, BaseBrightnessPct, _axisMax)
+			: null;
+
+		_backdrop = Backdrop();
+	}
+
+	// Attached once: the surface element is stable for the component's life, and a second watch on the same
+	// element is refused by the script.
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender || _watching)
+			return;
+
+		_self ??= DotNetObjectReference.Create(this);
+
+		try
+		{
+			await Js.InvokeVoidAsync("adaptiveLightingCurve.watch", _surface, _self).ConfigureAwait(true);
+			_watching = true;
+		}
+		catch (Exception exception) when (IsSurvivable(exception))
+		{
+			// An exception out of OnAfterRenderAsync tears the circuit down. A missing script costs only the
+			// drag; every value is still reachable from the numbers under the chart.
+			Logger.LogDebug(exception, "The daylight curve could not attach its pointer handler; it stays read-only.");
+		}
+	}
+
+	/// <summary>Which interop failures are ordinary in a long-lived circuit.</summary>
+	private static bool IsSurvivable(Exception exception) =>
+		exception is JSDisconnectedException or JSException or OperationCanceledException;
+
+	/// <summary>Takes hold of whichever handle the gesture started nearest, and applies at once so a tap moves it.</summary>
+	/// <param name="x">Where the pointer went down, as a fraction across the plot.</param>
+	/// <param name="y">The same, down the plot.</param>
+	[JSInvokable]
+	public Task Grab(double x, double y)
+	{
+		double pointX = LuxCurve.X(x);
+		double pointY = y * LuxCurve.PlotHeight;
+
+		_grip = Nearest(pointX, pointY);
+
+		return Apply(x, y);
+	}
+
+	/// <summary>Moves the held handle, ignored when nothing is held.</summary>
+	[JSInvokable]
+	public Task Move(double x, double y) => _grip == Grip.None ? Task.CompletedTask : Apply(x, y);
+
+	[JSInvokable]
+	public Task Drop()
+	{
+		_grip = Grip.None;
+		StateHasChanged();
+
+		return Task.CompletedTask;
+	}
+
+	private Grip Nearest(double x, double y)
+	{
+		Grip nearest = Grip.Start;
+		double best = double.MaxValue;
+
+		Consider(Grip.Start, _start);
+		Consider(Grip.Full, _full);
+		Consider(Grip.Shape, _shape);
+
+		return nearest;
+
+		void Consider(Grip grip, CurvePoint? point)
+		{
+			if (point is not { } candidate)
+				return;
+
+			double distance = ((candidate.X - x) * (candidate.X - x)) + ((candidate.Y - y) * (candidate.Y - y));
+
+			if (distance >= best)
+				return;
+
+			best = distance;
+			nearest = grip;
+		}
+	}
+
+	/// <summary>Turns a position in the plot into the settings the held handle stands for.</summary>
+	private Task Apply(double x, double y) => _grip switch
+	{
+		Grip.Start => SetStartLux(LuxCurve.RoundLux(LuxCurve.LuxAt(x, _axisMax))),
+		Grip.Full => SetFull(LuxCurve.RoundLux(LuxCurve.LuxAt(x, _axisMax)), Math.Round((1 - Math.Clamp(y, 0, 1)) * 100)),
+		Grip.Shape => SetGamma(GammaAt(y)),
+		_ => Task.CompletedTask
+	};
+
+	/// <summary>The exponent that puts the curve through a dragged point.</summary>
+	// Read as a position within the headroom and not as a brightness, which is what the engine's shaping acts
+	// on, so the same drag means a different exponent under a period asking 20 % than under one asking 70 %.
+	private double GammaAt(double y)
+	{
+		double brightness = (1 - Math.Clamp(y, 0, 1)) * 100;
+		double headroom = Settings.LuxBrightnessMaxPct - BaseBrightnessPct;
+
+		if (headroom <= 0)
+			return Settings.LuxBrightnessGamma;
+
+		double gamma = LuxCurve.GammaFor(
+			LuxCurve.ShapeFraction,
+			(brightness - BaseBrightnessPct) / headroom,
+			ShapeSetting.Min,
+			ShapeSetting.Max ?? 5);
+
+		// Snapped to the stepper's grain, so a value reached by dragging is one the arrows can reach again.
+		return Math.Round(gamma / ShapeSetting.Step, MidpointRounding.AwayFromZero) * ShapeSetting.Step;
+	}
+
+	/// <summary>Moves the foot of the curve, keeping it below the head. The validator refuses anchors that cross.</summary>
+	private Task SetStartLux(double lux)
+	{
+		double ceiling = Math.Max(StartSetting.Min, Settings.LuxBrightnessFullLux - 1);
+
+		return Raise(nameof(AreaSettings.LuxBrightnessStartLux), Math.Clamp(lux, StartSetting.Min, ceiling));
+	}
+
+	/// <summary>Moves the head of the curve: the reading full brightness happens at, and how bright that is.</summary>
+	// The ceiling yields to the floor, never the reverse. StartLux has no configured maximum, so a saved
+	// { StartLux: 120000, FullLux: 200000 } puts the derived floor above the axis ceiling, and Math.Clamp throws
+	// when min > max, which out of an event handler takes the circuit down.
+	private async Task SetFull(double lux, double brightnessPct)
+	{
+		double floor = Math.Max(FullSetting.Min, Settings.LuxBrightnessStartLux + 1);
+		double ceiling = Math.Max(FullSetting.Max ?? LuxCurve.AxisMaxCeilingLux, floor);
+		double bounded = Math.Clamp(lux, floor, ceiling);
+
+		await Raise(nameof(AreaSettings.LuxBrightnessFullLux), bounded).ConfigureAwait(true);
+		await Raise(nameof(AreaSettings.LuxBrightnessMaxPct),
+			Math.Clamp(brightnessPct, MaxSetting.Min, MaxSetting.Max ?? 100)).ConfigureAwait(true);
+	}
+
+	private Task SetGamma(double gamma) =>
+		Raise(nameof(AreaSettings.LuxBrightnessGamma), Math.Clamp(gamma, ShapeSetting.Min, ShapeSetting.Max ?? 5));
+
+	private Task Raise(string key, double value) => Changed.InvokeAsync(new CurveEdit(key, value));
+
+	// The arrows move a handle by the setting's own step. On the shaping handle Up lowers the exponent,
+	// backwards for an ARIA slider: a lower exponent lifts the curve, so Up matches what dragging does. The
+	// sign cannot be flipped without moving the drag too.
+	private Task OnKey(Grip grip, KeyboardEventArgs args)
+	{
+		int direction = args.Key switch
+		{
+			"ArrowRight" or "ArrowUp" => 1,
+			"ArrowLeft" or "ArrowDown" => -1,
+			_ => 0
+		};
+
+		if (direction == 0)
+			return Task.CompletedTask;
+
+		bool horizontal = args.Key is "ArrowLeft" or "ArrowRight";
+
+		return (grip, horizontal) switch
+		{
+			(Grip.Start, true) => SetStartLux(LuxCurve.RoundLux(Nudge(Settings.LuxBrightnessStartLux, direction))),
+			(Grip.Full, true) => SetFull(LuxCurve.RoundLux(Nudge(Settings.LuxBrightnessFullLux, direction)), Settings.LuxBrightnessMaxPct),
+			(Grip.Full, false) => SetFull(Settings.LuxBrightnessFullLux, Settings.LuxBrightnessMaxPct + (direction * MaxSetting.Step)),
+			(Grip.Shape, false) => SetGamma(Settings.LuxBrightnessGamma - (direction * ShapeSetting.Step)),
+			_ => Task.CompletedTask
+		};
+	}
+
+	/// <summary>One keyboard step along a logarithmic axis: a quarter of a decade, about 1.8×.</summary>
+	private static double Nudge(double lux, int direction) =>
+		Math.Pow(10, Math.Log10(Math.Max(lux, LuxCurve.AxisMinLux)) + (direction * 0.25));
+
+	// A markup string and not Razor tags: Razor reserves <text> as a control-flow transition, so an SVG text
+	// element with attributes cannot be written inline.
+	private string Backdrop()
+	{
+		System.Text.StringBuilder svg = new();
+
+		svg.Append(string.Create(CultureInfo.InvariantCulture,
+			$"<g transform=\"translate({LuxCurve.PlotLeft},{LuxCurve.PlotTop})\">"));
+
+		svg.Append(string.Create(CultureInfo.InvariantCulture,
+			$"<rect x=\"0\" y=\"0\" width=\"{LuxCurve.PlotWidth}\" height=\"{LuxCurve.PlotHeight}\" class=\"luxc-field\" />"));
+
+		// Brightness gridlines every 25 %, labelled at the quarters a person reads off: 0, 50, 100.
+		foreach (int percent in new[] { 0, 25, 50, 75, 100 })
+		{
+			string y = LuxCurve.Num(LuxCurve.Y(percent));
+
+			svg.Append($"<line x1=\"0\" y1=\"{y}\" x2=\"{LuxCurve.Num(LuxCurve.PlotWidth)}\" y2=\"{y}\" class=\"luxc-grid\" />");
+
+			if (percent % 50 == 0)
+				svg.Append($"<text x=\"-8\" y=\"{LuxCurve.Num(LuxCurve.Y(percent) + 4)}\" text-anchor=\"end\" class=\"luxc-axis\">{percent} %</text>");
+		}
+
+		IReadOnlyList<double> decades = LuxCurve.Decades(_axisMax);
+
+		for (int index = 0; index < decades.Count; index++)
+		{
+			double lux = decades[index];
+			string x = LuxCurve.Num(LuxCurve.X(LuxCurve.FractionOf(lux, _axisMax)));
+
+			// End labels anchor inward; centred, the first and last hang outside the viewBox.
+			string anchor = index == 0 ? "start" : index == decades.Count - 1 ? "end" : "middle";
+
+			// Alternate labels are marked so the stylesheet can drop them on a narrow card: this SVG is built on
+			// the server against a fixed viewBox. Counted from the right, so the top decade always survives.
+			string thin = (decades.Count - 1 - index) % 2 == 1 ? " luxc-thin" : string.Empty;
+
+			svg.Append($"<line x1=\"{x}\" y1=\"0\" x2=\"{x}\" y2=\"{LuxCurve.Num(LuxCurve.PlotHeight)}\" class=\"luxc-grid\" />");
+			svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 16)}\" text-anchor=\"{anchor}\" class=\"luxc-axis{thin}\">{Escape(LuxCurve.Lux(lux))}</text>");
+
+			if (DecadeWord(lux) is { Length: > 0 } word)
+				svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 29)}\" text-anchor=\"{anchor}\" class=\"luxc-decade{thin}\">{Escape(word)}</text>");
+		}
+
+		if (Reading is { } reading)
+		{
+			double x = LuxCurve.X(LuxCurve.FractionOf(reading, _axisMax));
+			double y = LuxCurve.Y(LuxBrightnessCurve.Raise(BaseBrightnessPct, reading, Settings));
+
+			svg.Append($"<line x1=\"{LuxCurve.Num(x)}\" y1=\"0\" x2=\"{LuxCurve.Num(x)}\" y2=\"{LuxCurve.Num(LuxCurve.PlotHeight)}\" class=\"luxc-now\" />");
+			svg.Append($"<circle cx=\"{LuxCurve.Num(x)}\" cy=\"{LuxCurve.Num(y)}\" r=\"3.5\" class=\"luxc-now-dot\" />");
+
+			// Nudged inside the plot at both ends, so a reading at either extreme keeps its label on the chart.
+			double labelX = Math.Clamp(x, 4, LuxCurve.PlotWidth - 4);
+			string anchor = x > LuxCurve.PlotWidth - 80 ? "end" : x < 80 ? "start" : "middle";
+
+			svg.Append($"<text x=\"{LuxCurve.Num(labelX)}\" y=\"-3\" text-anchor=\"{anchor}\" class=\"luxc-now-label\">{Escape($"{LuxCurve.Lux(reading)} now")}</text>");
+		}
+
+		svg.Append("</g>");
+
+		return svg.ToString();
+	}
+
+	private static string DecadeWord(double lux) => lux switch
+	{
+		1 => "night",
+		100 => "dull room",
+		1_000 => "overcast",
+		10_000 => "bright day",
+		_ => ""
+	};
+
+	/// <summary>The chart in words, used for the accessible name and the caption alike.</summary>
+	private string Description
+	{
+		get
+		{
+			string from = PeriodName is { Length: > 0 } period
+				? $"From {period}'s {TokenFormat.Percent(BaseBrightnessPct)}"
+				: $"From {TokenFormat.Percent(BaseBrightnessPct)}";
+
+			string line =
+				$"{from}, this room climbs to {TokenFormat.Percent(Settings.LuxBrightnessMaxPct)} as the light outside "
+				+ $"goes from {LuxCurve.Lux(Settings.LuxBrightnessStartLux)} to {LuxCurve.Lux(Settings.LuxBrightnessFullLux)} — "
+				+ $"{CurvePath.Describe(Settings.LuxBrightnessGamma)}.";
+
+			if (Reading is { } reading)
+			{
+				double raised = LuxBrightnessCurve.Raise(BaseBrightnessPct, reading, Settings);
+				line += $" It reads {LuxCurve.Lux(reading)} right now, which asks for {TokenFormat.Percent(Math.Round(raised))}.";
+			}
+			else
+			{
+				line += " This room has no light-level sensor, so nothing lifts it.";
+			}
+
+			return line;
+		}
+	}
+
+	private static string Escape(string text) =>
+		text.Replace("&", "&amp;", StringComparison.Ordinal)
+			.Replace("<", "&lt;", StringComparison.Ordinal)
+			.Replace(">", "&gt;", StringComparison.Ordinal);
+
+	// Order matters: the listeners go before the .NET reference they call into, so a pointer already down when
+	// the page is left cannot invoke a disposed component.
+	public async ValueTask DisposeAsync()
+	{
+		if (_watching)
+		{
+			try
+			{
+				await Js.InvokeVoidAsync("adaptiveLightingCurve.release", _surface).ConfigureAwait(false);
+			}
+			catch (Exception exception) when (IsSurvivable(exception))
+			{
+				Logger.LogDebug(exception, "The daylight curve could not release its pointer handler.");
+			}
+		}
+
+		_self?.Dispose();
+	}
+}

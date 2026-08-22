@@ -1,0 +1,48 @@
+<Project>
+
+  <!--
+    Shared build + package metadata. Each project adds only its own PackageId and Description.
+    Version is set here so the four packages always ship as a matched set: the engine, the UI, the
+    extensions and the NetDaemon host binding are compiled against each other, so a mixed set is not a
+    supported combination. They go to GitHub Packages under 0z00z0, and nowhere else.
+    The tag is authoritative for a release: release.yml overrides Version from it with -p:Version.
+    This value is what anything built outside that workflow reports, so keep it on the latest tag.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>2.0.0-preview.4</Version>
+    <Authors>0z00z0</Authors>
+    <PackageProjectUrl>https://github.com/0z00z0/adaptivelighting</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/0z00z0/adaptivelighting</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>netdaemon;home-assistant;homeassistant;lighting;circadian;adaptive-lighting;home-automation</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!--
+      Source Link, so a stack trace leads back to real source. The .snupkg these produce is packed and then
+      dropped: GitHub Packages has no symbol server, so release.yml pushes with symbols suppressed. Making
+      them actually reachable means DebugType=embedded, which changes what ships. See docs/backlog.md.
+    -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- The code documents intent, not every public member; CS1591 would be noise, not a finding. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

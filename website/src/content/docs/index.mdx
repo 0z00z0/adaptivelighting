@@ -1,0 +1,81 @@
+---
+title: AdaptiveLighting
+description: Motion- and daylight-driven lighting for Home Assistant, as a NetDaemon library.
+template: splash
+hero:
+  tagline: Lights that come on when you walk in — at the right brightness for the time of day, and only when it's actually dark.
+  actions:
+    - text: How to use it
+      link: /user-guide/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/0z00z0/adaptivelighting
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+	<Card title="Motion, gated by daylight" icon="sun">
+		A room lights when someone walks in — but only if it is dark, judged by its own light-level sensors
+		or the sun's height. A room with no sensor counts as dark; following a house-wide outdoor sensor is
+		something a room opts into.
+	</Card>
+	<Card title="It dims before it gives up" icon="moon">
+		Lights fade as a warning before switching off, so they never drop on someone sitting still.
+		Any movement brings them straight back.
+	</Card>
+	<Card title="It backs off when you intervene" icon="approve-check">
+		Touch a switch or a dimmer and the automation leaves your setting alone for a while. Every change
+		is worked out as the engine's or a person's.
+	</Card>
+	<Card title="House modes" icon="setting">
+		Normal, Sleep, Away and Guest — each able to run a Home Assistant scene, switch on a schedule or a
+		quiet house, and switch back when someone moves.
+	</Card>
+	<Card title="Mornings that wait for you" icon="star">
+		A period can be told to start on movement rather than on the clock. The house stays at night levels
+		until somebody actually gets up, and then the morning arrives whole.
+	</Card>
+	<Card title="A scene, where a level will not do" icon="rocket">
+		A room can run one of your scenes instead of switching on, and another instead of switching off.
+		Each replaces one moment and nothing else; every rule that could refuse to light the room still
+		refuses.
+	</Card>
+</CardGrid>
+
+## Install
+
+```bash
+dotnet add package AdaptiveLighting.NetDaemon   # engine, board, room pages and settings
+```
+
+:::note[One extra step: these packages are on GitHub, not nuget.org]
+The command above will not find anything until you add the feed. GitHub asks for a sign-in on every
+read, even for a public package, so you need a [token](https://github.com/settings/tokens) with the
+**`read:packages`** scope. Full instructions are in the [install guide](/user-guide/#1-install-it).
+
+Latest preview: **2.0.0-preview.4**.
+:::
+
+Start it once and it finds every room with a light and a motion sensor by itself — and writes them all
+**switched off**. No light changes until you open the UI and choose which rooms to hand over.
+
+:::caution[The web UI has no authentication]
+The UI is built for a **LAN-only** deployment. Anyone who can reach its port can rewrite your
+lighting configuration. Do not port-forward it. If you need it from outside, put it behind Home Assistant
+ingress or an authenticating reverse proxy. The engine itself has no network surface — skip
+`AdaptiveLighting.Web` if you don't want a UI.
+:::
+
+<CardGrid>
+	<LinkCard title="How to use it" href="/user-guide/" description="The first ten minutes, the four screens, and why a light didn't come on." />
+	<LinkCard title="How it works" href="/overview/" description="What happens when you walk into a room, and what decides it." />
+	<LinkCard title="Settings reference" href="/configuration/" description="Every setting, in the words the UI uses." />
+	<LinkCard title="Example configuration" href="/example-config/" description="What the configuration file looks like, annotated." />
+</CardGrid>
+
+---
+
+Part of [ZeroZero Software](https://0z0.xyz) — small tools, zero bloat.

@@ -1,0 +1,186 @@
+@* No press can produce a value the validator would refuse, so a change is safe to apply as it is made. A
+   setting whose range spans decades (RoomSettings.SpansDecades) gets the box instead and keeps it: no single
+   step is usable at both 3 lx and 30 000, and the box refuses what it cannot take without clamping. *@
+
+@if (RoomSettings.SpansDecades(Min, Max))
+{
+	<span class="numbox">
+		<span class="numbox-row">
+			@* step="any" because there is no grain to declare; the browser would otherwise mark a legal 62.5
+			   invalid. *@
+			<input class="numbox-input @(IsOwn ? null : "numbox-inherited")"
+				   type="number"
+				   step="any"
+				   min="@Invariant(Min)"
+				   max="@(Max is { } ceiling ? Invariant(ceiling) : null)"
+				   value="@(_entered ?? Invariant(Value))"
+				   aria-label="@Label"
+				   aria-invalid="@(_refusal is null ? null : "true")"
+				   title="@($"{Label} — type a value")"
+				   @onchange="OnEntered" />
+
+			@if (Suffix is { Length: > 0 } unit)
+			{
+				<span class="unit">@unit</span>
+			}
+		</span>
+
+		@* Rendered even when empty, so the live region exists before the first refusal arrives. *@
+		<span class="numbox-refusal" role="status">@_refusal</span>
+	</span>
+}
+else
+{
+	<span class="stepper">
+		<button type="button"
+				class="stepper-step"
+				aria-label="@($"Less — {Label}")"
+				title="@($"Less — {Label}")"
+				disabled="@(Value <= Min)"
+				@onclick="Down">&minus;</button>
+
+		@if (_typing)
+		{
+			@* Not @bind: it writes on every keystroke, and every write here schedules a save. onchange fires on
+			   Enter and on blur, when a typed number is meant. *@
+			<input class="stepper-input"
+				   type="number"
+				   step="@Invariant(Step)"
+				   min="@Invariant(Min)"
+				   max="@(Max is { } max ? Invariant(max) : null)"
+				   value="@Invariant(Value)"
+				   aria-label="@Label"
+				   @onchange="OnTyped"
+				   @onblur="StopTyping" />
+		}
+		else
+		{
+			<button type="button"
+					class="stepper-value @(IsOwn ? null : "stepper-inherited")"
+					title="@($"{Label} — click to type a value")"
+					@onclick="StartTyping">@Text</button>
+		}
+
+		<button type="button"
+				class="stepper-step"
+				aria-label="@($"More — {Label}")"
+				title="@($"More — {Label}")"
+				disabled="@(Max is { } ceiling && Value >= ceiling)"
+				@onclick="Up">+</button>
+	</span>
+}
+
+@code {
+	[Parameter, EditorRequired]
+	public double Value { get; set; }
+
+	/// <summary>The value as it is written, unit and all, formatted by the caller.</summary>
+	[Parameter, EditorRequired]
+	public string Text { get; set; } = "";
+
+	/// <summary>The setting's name, for the accessible names of three unlabelled buttons.</summary>
+	[Parameter, EditorRequired]
+	public string Label { get; set; } = "";
+
+	/// <summary>How far one press moves it.</summary>
+	[Parameter]
+	public double Step { get; set; } = 1;
+
+	[Parameter]
+	public double Min { get; set; }
+
+	/// <summary>The highest, or <c>null</c> for unbounded above.</summary>
+	[Parameter]
+	public double? Max { get; set; }
+
+	/// <summary>Whether this is the room's own value, which decides how solidly the readout is drawn.</summary>
+	[Parameter]
+	public bool IsOwn { get; set; }
+
+	[Parameter]
+	public EventCallback<double> ValueChanged { get; set; }
+
+	private bool _typing;
+
+	/// <summary>What was typed and refused, left on screen so it can be corrected without being typed again.</summary>
+	private string? _entered;
+
+	private string? _refusal;
+
+	/// <summary>The written value this box last settled on, so a change from elsewhere can be recognised.</summary>
+	private string? _settled;
+
+	/// <summary>The unit, read off <see cref="Text"/> so the box and the readout cannot name different units.</summary>
+	private string Suffix =>
+		Text.StartsWith(Invariant(Value), StringComparison.Ordinal)
+			? Text[Invariant(Value).Length..].Trim()
+			: string.Empty;
+
+	// The revert link and the sentence above both write this setting, so a value arriving from elsewhere has to
+	// clear a refusal that is now about a number nobody is looking at.
+	protected override void OnParametersSet()
+	{
+		if (string.Equals(_settled, Invariant(Value), StringComparison.Ordinal))
+			return;
+
+		_settled = Invariant(Value);
+		_entered = null;
+		_refusal = null;
+	}
+
+	/// <summary>Snaps to the step's grid, not adding: a hand-typed 7 with a step of 5 goes to 10, not 12.</summary>
+	private Task Down() => Move(Math.Ceiling(Round(Value / Step) - 1) * Step);
+
+	private Task Up() => Move(Math.Floor(Round(Value / Step) + 1) * Step);
+
+	private Task Move(double next) => ValueChanged.InvokeAsync(Bounded(next));
+
+	private void StartTyping() => _typing = true;
+
+	private void StopTyping() => _typing = false;
+
+	private Task OnTyped(ChangeEventArgs args)
+	{
+		_typing = false;
+
+		// An empty or unparseable box is not an instruction to change anything: selecting the text and tabbing
+		// away must not write a zero into a timeout.
+		if (args.Value is not string typed
+			|| !double.TryParse(typed, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed))
+		{
+			return Task.CompletedTask;
+		}
+
+		return Move(parsed);
+	}
+
+	// The box refuses what it cannot take instead of clamping it; the arrows may clamp, because a press means
+	// only "one more".
+	private Task OnEntered(ChangeEventArgs args)
+	{
+		string raw = args.Value as string ?? string.Empty;
+		TypedNumber entry = RoomSettings.ReadNumber(raw, Min, Max, Suffix);
+
+		if (entry.Value is not { } value)
+		{
+			_entered = raw;
+			_refusal = entry.Refusal;
+
+			return Task.CompletedTask;
+		}
+
+		_entered = null;
+		_refusal = null;
+
+		return ValueChanged.InvokeAsync(value);
+	}
+
+	private double Bounded(double value) => Math.Clamp(value, Min, Max ?? double.MaxValue);
+
+	/// <summary>Rounds away the binary drift a chain of 0.1 steps accumulates.</summary>
+	private static double Round(double value) => Math.Round(value, 6);
+
+	// A bare @double attribute renders through the current culture: under nb-NO 62.5 becomes value="62,5",
+	// which no browser reads as a number, so the field shows empty and min/step silently drop.
+	private static string Invariant(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+}

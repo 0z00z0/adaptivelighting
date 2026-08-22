@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<!--
+		A host for AdaptiveLighting.Web, which is a Razor Class Library and has none of its own. It exists so a
+		UI change can be looked at before it reaches a house: the RCL already ships App.razor and Routes.razor,
+		so this is a Program.cs, a fake Home Assistant and a copy of a real document.
+
+		Scratchpad, not the repo. Nothing here ships.
+	-->
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<RootNamespace>UiHost</RootNamespace>
+		<!-- The test project brings MSTest in with the fakes; nothing here is a test. -->
+		<NoWarn>$(NoWarn);MSTEST0001</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\AdaptiveLighting.Web\AdaptiveLighting.Web.csproj" />
+		<!-- FakeHaContext and FakeHaRegistry already exist and are public; a second pair would drift. -->
+		<ProjectReference Include="..\..\tests\AdaptiveLighting.Tests\AdaptiveLighting.Tests.csproj" />
+	</ItemGroup>
+
+	<!--
+		Deliberately not in AdaptiveLighting.slnx. This is a developer tool, not something CI should build or
+		package, and it references the test project.
+	-->
+	<ItemGroup>
+		<None Update="local.yaml" CopyToOutputDirectory="Never" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+			_framework/blazor.web.js lives in this package, not in the shared framework or the SDK. A host without
+			it server-renders every page once and never opens a circuit, so nothing on the page responds and it
+			reads as broken UI. B1 restores it transitively; this project has to ask.
+		-->
+		<PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.0.9" />
+	</ItemGroup>
+
+</Project>

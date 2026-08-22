@@ -1,0 +1,52 @@
+<div class="srow @(IsOwn ? "srow-own" : null)">
+	<div class="srow-text">
+		<div class="srow-label">
+			<span>@Label</span>
+			@if (IsOwn)
+			{
+				<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+			}
+		</div>
+
+		@if (Help is { Length: > 0 } help)
+		{
+			<div class="srow-help">@help</div>
+		}
+
+		@if (IsOwn && HouseText is { Length: > 0 } house)
+		{
+			<button type="button" class="srow-revert" @onclick="Reverted">Use house setting (@house)</button>
+		}
+		else if (HouseText is { Length: > 0 })
+		{
+			<span class="srow-inherit">house setting</span>
+		}
+	</div>
+
+	<div class="srow-control">@ChildContent</div>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public string Label { get; set; } = "";
+
+	[Parameter]
+	public string? Help { get; set; }
+
+	/// <summary>Whether this room states its own value instead of following the house.</summary>
+	[Parameter]
+	public bool IsOwn { get; set; }
+
+	/// <summary>The house's value, already written, or <c>null</c> where there is no house above this setting.</summary>
+	[Parameter]
+	public string? HouseText { get; set; }
+
+	// The handler must clear the room's property, not copy HouseText's number in, so the room keeps following
+	// the house when the house changes.
+	[Parameter]
+	public EventCallback Reverted { get; set; }
+
+	/// <summary>The control that changes the value.</summary>
+	[Parameter, EditorRequired]
+	public RenderFragment? ChildContent { get; set; }
+}

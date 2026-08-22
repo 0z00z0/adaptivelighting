@@ -1,0 +1,6711 @@
+/* Served at _content/AdaptiveLighting.Web/app.css. Hand-written and dependency-free: a CDN link would not load
+   on a LAN with no internet, which is exactly where this UI runs. */
+
+/* ============================================================================
+   THE DESIGN TOKENS — "The Workshop" (docs/design/ui-design-c.md §6)
+   Written up for consumers in docs/design/visual-foundation.md.
+
+   Four rules the tokens exist to enforce, because a rule nobody can look up is
+   a rule that lasts one page:
+
+   1. FLAT.       Surfaces are a 1px line on a flat ground — the same
+                  outline-on-nothing the icons are drawn with. Elevation is
+                  information, not decoration, so only genuinely floating
+                  layers get --shadow-float. A glow that reports a light's
+                  actual warmth is data, not elevation, and stays.
+   2. GEOMETRIC.  Radii come from the icons' own rx ≈ 1.5-1.7 on 24 units:
+                  panels 8, controls 7, chips 6. The pill is not a default —
+                  it survives only where the shape IS the meaning (a switch).
+   3. ONE ACCENT. --accent (brass) marks EDITABILITY AND PRIMARY ACTION and
+                  nothing else: tokens, steppers, the active tab, the commit
+                  button. State is never accent — --machine / --human / --warn
+                  / --idle / --now are semantic and reach icons through
+                  currentColor.
+   4. ONE STROKE. Icon strokes (1.7 / 2), control borders (1 / 1.5px) and the
+                  2px now-line are one family of lines, not three decisions.
+
+   Every token is defined in BOTH themes. --icon-accent is per theme on
+   purpose: the glyphs bind their accent to var(--icon-accent, currentColor)
+   so they work in either, and a state glyph overrides it to currentColor at
+   the point of use so shape and colour carry one message.
+   ============================================================================ */
+
+/* This bare :root IS the dark theme, and it is what "follow the system" resolves to on a dark device — the
+   default for everybody who never opens the theme picker. :root[data-theme="dark"] below is only the explicit
+   escape hatch. Any change to one has to be made to both, or the two dark themes drift. */
+:root {
+	/* ---- surfaces ---- */
+	--bg: #0b0d07;
+	--panel: #22261b;
+	--panel-2: #2a2e21;
+	--chip: #303425;          /* inset fill: chips, tokens, badges, stepper wells */
+	--lane: #141610;          /* a track a timeline is drawn on */
+	--glow-track: #363a2b;    /* the unlit part of a ring, bar or lamp */
+
+	/* ---- lines. Two weights, and the difference is load-bearing:
+	   --line draws the edge OF a surface (panel border, control border);
+	   --grid draws a hairline INSIDE one (row separators, gridlines). ---- */
+	--line: #404433;
+	--grid: #2e3226;
+
+	/* ---- text ---- */
+	--text: #f1f1e8;
+	--muted: #d0d3c2;
+	--accent-ink: #221a05;    /* text ON --accent, never text near it */
+
+	/* ---- the one accent: editability and primary action ---- */
+	--accent: #e2ae45;
+
+	/* ---- semantic state. Never the accent, never each other's hue. ----
+	   --machine  the engine acting (a lit room's own Kelvin overrides it)
+	   --human    a person acted — violet, so "somebody touched it" and
+	              "look at this now" can never be read as the same amber
+	   --warn     the warning dim, and anything else asking to be noticed
+	   --ok/--bad healthy / broken
+	   --idle     watching without commanding
+	   --now      the live edge: the now-line, the running badge */
+	--machine: #e8a24a;
+	--machine-bg: #2e2412;
+	--kelvin-weight: 100%;
+	--kelvin-shade: transparent;
+	--human: #a99af2;
+	--human-bg: #2a2447;
+	--warn: #efa23b;
+	--warn-bg: #3a2d12;
+	--ok: #8fbf7a;
+	--ok-bg: #1e2a18;
+	--bad: #e07a5f;
+	--bad-bg: #33201a;
+	--idle: #7c7f6d;
+	--idle-bg: #20231a;
+	--now: #5fc2ac;
+	--info: #7fb3d5;          /* neutral remark colour; not a state */
+
+	/* ---- icons. Set here so a glyph is themed, never hard-coded; the state
+	   chips override it to currentColor where shape and colour must agree. ---- */
+	--icon-accent: var(--accent);
+
+	/* ---- Daylight-chart bands: warm daylight → cool twilight → deep-cool night, never pure black; each a themed
+	   surface (09 §5.5). --daylight-halo is the outline behind chart labels that keeps them legible over any band
+	   (paint-order stroke) — dark here, since the label text is light. ---- */
+	--daylight-night: #1c2442;
+	--daylight-twilight: #3b4f8f;
+	--daylight-day: #ab8640;
+	--daylight-halo: rgba(9, 11, 18, 0.72);
+
+	/* ---- elevation: the exception, not the rule ---- */
+	--shadow-float: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
+
+	color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		--bg: #eeefe9;
+		--panel: #ffffff;
+		--panel-2: #f6f6f1;
+		--chip: #ebede2;
+		--lane: #f3f4ee;
+		--glow-track: #e4e5da;
+
+		--line: #d9dcce;
+		--grid: #e2e4d8;
+
+		--text: #23261f;
+		--muted: #565b4e;
+		--accent-ink: #ffffff;
+
+		--accent: #8f6c15;
+
+		--machine: #8a5214;
+		--machine-bg: #f6ecdb;
+		--kelvin-weight: 45%;
+		--kelvin-shade: #23261f;
+		--human: #6553c4;
+		--human-bg: #e9e5f8;
+		--warn: #b26a00;
+		--warn-bg: #f4e4c6;
+		--ok: #3e7a46;
+		--ok-bg: #e6efe4;
+		--bad: #a8402f;
+		--bad-bg: #f6e3df;
+		--idle: #8a8d7d;
+		--idle-bg: #f0f1ea;
+		--now: #2e6e62;
+		--info: #2c6e9b;
+
+		--icon-accent: var(--accent);
+
+		--daylight-night: #384777;
+		--daylight-twilight: #7e93c9;
+		--daylight-day: #e8d296;
+		--daylight-halo: rgba(255, 255, 255, 0.8);
+
+		--shadow-float: 0 1px 2px rgba(35, 38, 31, 0.05), 0 5px 18px rgba(35, 38, 31, 0.12);
+
+		color-scheme: light;
+	}
+}
+
+/*
+   The explicit escape hatches. prefers-color-scheme is the device's answer and stays the default; these let a
+   screenshot harness — or a future in-app toggle — ask for one theme and get it. The attribute selector outranks
+   the bare :root above and is unaffected by the media query, so it wins in both directions.
+*/
+/* Reworked 2026-08-07, and the bare :root above carries the same values for the reason stated there. The page
+   and the panels used to sit 1.08:1 apart, so cards did not read as cards; --muted carries the nav, the labels
+   and most secondary text and sat at 8.69:1 on a panel. Darkening the page and lifting the panels separates
+   the surfaces, and --muted moves with them so the text does not lose what the lift costs it. Ratios in
+   docs/mechanisms.md. */
+:root[data-theme="dark"] {
+	--bg: #0b0d07;
+	--panel: #22261b;
+	--panel-2: #2a2e21;
+	--chip: #303425;
+	--lane: #141610;
+	--glow-track: #363a2b;
+	--line: #404433;
+	--grid: #2e3226;
+	--text: #f1f1e8;
+	--muted: #d0d3c2;
+	--accent-ink: #221a05;
+	--accent: #e2ae45;
+	--machine: #e8a24a;
+	--machine-bg: #2e2412;
+	--kelvin-weight: 100%;
+	--kelvin-shade: transparent;
+	--human: #a99af2;
+	--human-bg: #2a2447;
+	--warn: #efa23b;
+	--warn-bg: #3a2d12;
+	--ok: #8fbf7a;
+	--ok-bg: #1e2a18;
+	--bad: #e07a5f;
+	--bad-bg: #33201a;
+	--idle: #7c7f6d;
+	--idle-bg: #20231a;
+	--now: #5fc2ac;
+	--info: #7fb3d5;
+	--icon-accent: var(--accent);
+	--daylight-night: #1c2442;
+	--daylight-twilight: #3b4f8f;
+	--daylight-day: #ab8640;
+	--daylight-halo: rgba(9, 11, 18, 0.72);
+	--shadow-float: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35);
+	color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+	--bg: #eeefe9;
+	--panel: #ffffff;
+	--panel-2: #f6f6f1;
+	--chip: #ebede2;
+	--lane: #f3f4ee;
+	--glow-track: #e4e5da;
+	--line: #d9dcce;
+	--grid: #e2e4d8;
+	--text: #23261f;
+	--muted: #565b4e;
+	--accent-ink: #ffffff;
+	--accent: #8f6c15;
+	--machine: #8a5214;
+	--machine-bg: #f6ecdb;
+	--kelvin-weight: 45%;
+	--kelvin-shade: #23261f;
+	--human: #6553c4;
+	--human-bg: #e9e5f8;
+	--warn: #b26a00;
+	--warn-bg: #f4e4c6;
+	--ok: #3e7a46;
+	--ok-bg: #e6efe4;
+	--bad: #a8402f;
+	--bad-bg: #f6e3df;
+	--idle: #8a8d7d;
+	--idle-bg: #f0f1ea;
+	--now: #2e6e62;
+	--info: #2c6e9b;
+	--icon-accent: var(--accent);
+	--daylight-night: #384777;
+	--daylight-twilight: #7e93c9;
+	--daylight-day: #e8d296;
+	--daylight-halo: rgba(255, 255, 255, 0.8);
+	--shadow-float: 0 1px 2px rgba(35, 38, 31, 0.05), 0 5px 18px rgba(35, 38, 31, 0.12);
+	color-scheme: light;
+}
+
+/* ============================================================================
+   THE 0z0 TECH THEME  —  :root[data-theme="0z0"]
+   The ZeroZero Software design language (0z0-design/design-language.md) applied
+   to this UI. A third choice beside light and dark; nothing above this line
+   changed, so a browser that has chosen nothing still follows its device.
+
+   THE SPLIT THE LANGUAGE ITSELF DRAWS. design-language.md keeps its palette for
+   "anything that reads as ZeroZero Software" and lets every app "introduce its
+   own accent colours for PRODUCT-specific meaning" — the rule ChargeKeeper
+   already ships against (history, 2026-07-15: studio palette on the chrome,
+   its own functional battery-fill palette kept). So:
+
+     CHROME     — surfaces, lines, text, the one accent — is the studio palette
+                  verbatim. bg/bg2/bg3/border/text are its own hex values, and
+                  --accent is teal #27e0c8, which the palette table names the
+                  primary accent and which ChargeKeeper's chrome already took.
+     STATE      — machine / human / warn / ok / bad / idle / now / info — is
+                  product meaning. Three come straight from the studio palette
+                  where it names the job (amber IS "warnings"; purple IS the
+                  violet --human has to be; blue is the engine, and the board's
+                  own comment records that --machine used to be one). The rest
+                  are derived, and marked below.
+
+   The four rules still hold. One accent, and no state borrows it — which is
+   why --now cannot stay a teal here and is derived instead. Flat: only
+   --shadow-float floats. The radius and stroke scales are untouched.
+
+   MONOSPACE THROUGHOUT is the one token outside the palette this block sets.
+   The language calls it "a deliberate, load-bearing choice ... not just a
+   code-block convention", covering "headings, navigation and body copy", so a
+   0z0 theme in a proportional face would be a recolour rather than the
+   language. --font-sans becomes the existing --mono stack, which already lists
+   Cascadia Mono first and degrades to ui-monospace where it is not installed —
+   the language's own zero-dependency rule for its typeface on the web.
+   ============================================================================ */
+:root[data-theme="0z0"] {
+	/* ---- surfaces. bg / bg2 / bg3 verbatim from the palette table. --chip,
+	   --lane and --glow-track are DERIVED: the studio has three surfaces and
+	   this UI needs six, so the two extra fills continue the same blue-black
+	   ladder and --lane steps below --panel, which is what a track does. ---- */
+	--bg: #0a0f17;
+	--panel: #0e1620;
+	--panel-2: #101a26;
+	--chip: #13202f;
+	--lane: #0a121c;
+	--glow-track: #17233a;
+
+	/* --line is the palette's own `border`. --grid is DERIVED one step quieter,
+	   because the two weights are load-bearing and the studio names one. */
+	--line: #1a2840;
+	--grid: #152034;
+
+	/* --text verbatim. --muted is the palette's #64788f LIFTED one step: at
+	   3.96:1 on --panel it is below AA for the 11-12.5px secondary text this UI
+	   spends it on, and legibility is not negotiable. Same hue, same chroma,
+	   5.0:1 on --panel. The stated value is not wasted — it becomes --idle,
+	   whose shipped contrast band is 3.4-4.1:1 in both existing themes. */
+	--text: #dde6f4;
+	--muted: #9db0cc;
+	--accent-ink: #0a0f17;
+
+	/* ---- the one accent: the palette's teal, "Primary accent". ---- */
+	--accent: #27e0c8;
+
+	/* ---- semantic state ----
+	   Studio: --machine blue, --human purple (the violet the rule demands),
+	   --warn amber (the palette gives amber "warnings" outright).
+	   DERIVED: --ok, --bad, --now, --info. Taken together the eight complete
+	   the studio's five hues into a terminal palette — red, green, yellow,
+	   blue, magenta, cyan — which is the language's own voice (CLI tokens,
+	   prompt lines, a blinking cursor) rather than an invention beside it.
+	   --now is magenta because every other bright hue is spoken for and the
+	   live edge must never be mistaken for the accent. --info is deliberately
+	   the palest rung of the slate ladder (--idle < --muted < --info): it is a
+	   remark, not a state, and it sits beside --machine on the room page. */
+	--machine: #11a9d6;
+	--machine-bg: #102a3f;
+	--kelvin-weight: 100%;
+	--kelvin-shade: transparent;
+	--human: #7b8cff;
+	--human-bg: #221f4a;
+	--warn: #d8a657;
+	--warn-bg: #33280f;
+	--ok: #54cc7a;
+	--ok-bg: #0f2a1c;
+	--bad: #f06a5a;
+	--bad-bg: #3a1a1c;
+	--idle: #64788f;
+	--idle-bg: #111a26;
+	--now: #e46ad6;
+	--info: #9db3cf;
+
+	--icon-accent: var(--accent);
+
+	/* DERIVED. The chart's three bands are real times of day, so they keep the
+	   existing themes' shape — deep-cool night, indigo twilight, warm day — cut
+	   from the studio's indigo and amber and darkened to sit on this ground. */
+	--daylight-night: #101a30;
+	--daylight-twilight: #2f4788;
+	--daylight-day: #8a6a30;
+	--daylight-halo: rgba(5, 8, 14, 0.75);
+
+	--shadow-float: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(2, 5, 10, 0.55);
+
+	/* See the header: the language's monospace-throughout rule, not a per-theme
+	   type experiment. --mono is defined on :root below and resolves there. */
+	--font-sans: var(--mono);
+
+	color-scheme: dark;
+}
+
+/*
+   Theme-independent tokens. Shape, rhythm and type do not change with the lights, so they are stated once —
+   and stating them once is what stops a page inventing a 9px radius or a 13px gap of its own.
+   (The 0z0 theme overrides --font-sans, on the record above: monospace is that language, not a decoration.)
+*/
+:root {
+	/* ---- the geometric radius scale ---- */
+	--radius-panel: 8px;      /* cards, panels, the board, folds */
+	--radius-control: 7px;    /* buttons, inputs, steppers, segmented controls */
+	--radius-chip: 6px;       /* chips, sentence tokens, badges, gear pills */
+	--radius-switch: 999px;   /* TRUE SWITCHES ONLY — the shape is the meaning */
+	--radius: var(--radius-panel);   /* the pre-token name, kept pointing at the scale */
+
+	/* ---- the stroke grammar. One family: hairline inside a surface, a
+	   heavier border on a control you can press, 2px for a mark on a chart.
+	   Icon strokes are SVG attributes (1.7 normal, 2 below ~16px) and belong
+	   to the same family — see docs/design/icons/README.md. ---- */
+	--stroke-hair: 1px;
+	--stroke-control: 1.5px;
+	--stroke-mark: 2px;
+	--rule: 1px solid var(--line);         /* the edge of a surface */
+	--rule-inner: 1px solid var(--grid);   /* a separator within one */
+
+	/* ---- spacing. Six steps; anything between them is a decision that
+	   should have been one of these. ---- */
+	--space-1: 4px;
+	--space-2: 6px;
+	--space-3: 8px;
+	--space-4: 12px;
+	--space-5: 16px;
+	--space-6: 24px;
+
+	/* ---- type ---- */
+	--font-sans: Seravek, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+	--mono: "Cascadia Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+	--text-xs: 12.5px;        /* the uppercase section label */
+	--text-sm: 14px;          /* help lines, meta, timestamps */
+	--text-md: 15px;          /* dense body: settings rows, log lines */
+	--text-base: 15px;        /* body */
+	--text-lg: 20px;          /* page and card headings */
+	--text-xl: 25px;          /* the one number a page is about */
+	--label-track: 0.14em;    /* letter-spacing on uppercase labels */
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html, body {
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font-sans);
+	font-size: 15px;
+	line-height: 1.5;
+}
+
+.shell {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+/* ---- top bar ---- */
+
+/*
+   min-height, never height. A fixed height with flex-wrap is a contradiction: on a narrow screen
+   the nav wraps to a second row, the bar stays 56px tall, and the wrapped row renders outside its
+   own box where .content paints straight over it — the tabs are visible but untappable. Reported
+   on a phone, 2026-07-17. Row-gap matters for the same reason: once it wraps, the rows need air.
+*/
+/* 44px, not 56: the bar carries a mark, three words and three tabs, and every pixel it spends is a pixel the
+   board's first lane does not get. It stays a comfortable touch target because the nav links carry their own
+   padding, and it still grows rather than clipping when the nav wraps. */
+.topbar {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem 2rem;
+	padding: 0.35rem 1.5rem;
+	min-height: 44px;
+	background: var(--panel);
+	border-bottom: 1px solid var(--line);
+	flex-wrap: wrap;
+}
+
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	font-weight: 600;
+}
+
+/* The product in one mark: the app-mark glyph, ink outline and brass light point. It replaced a glowing dot,
+   which was a shadow used as decoration — the one thing §6 struck off the page. The glow was also the only
+   accent on the bar that meant nothing; brass now means the same here as everywhere: the thing you act on. */
+.brand-mark {
+	width: 22px;
+	height: 22px;
+	color: var(--text);
+	flex: 0 0 auto;
+}
+
+.nav {
+	display: flex;
+	gap: 0.35rem;
+}
+
+/* The active tab is brass on a brass underline, not a filled block: the tab is the primary action of the bar,
+   and the underline is the same 2px mark the board's now-line is drawn with. */
+.nav-link {
+	color: var(--muted);
+	text-decoration: none;
+	padding: 0.35rem 0.75rem;
+	border-radius: var(--radius-control);
+	font-size: 0.92rem;
+	border-bottom: var(--stroke-mark) solid transparent;
+}
+
+.nav-link:hover {
+	background: var(--panel-2);
+	color: var(--text);
+}
+
+.nav-link.active {
+	background: var(--panel-2);
+	color: var(--accent);
+	border-bottom-color: var(--accent);
+}
+
+/*
+   Phones. This page is read leaning on a doorframe as often as at a desk, so once the bar has to
+   wrap, give the nav its own full-width row and make the three tabs equal thirds: a thumb finds a
+   third of a screen, and 0.35rem of padding is not a touch target.
+*/
+@media (max-width: 560px) {
+	.topbar {
+		gap: 0.5rem 1rem;
+		padding: 0.5rem 1rem;
+	}
+
+	.nav {
+		width: 100%;
+		gap: 0.25rem;
+	}
+
+	.nav-link {
+		flex: 1;
+		text-align: center;
+		padding: 0.6rem 0.5rem;
+	}
+
+	.content {
+		padding: 0.75rem 1rem 1rem;
+	}
+}
+
+/* ---- content ---- */
+
+.content {
+	flex: 1;
+	/* The generous foot keeps the last row clear of the floating save bar, which is out of flow and would
+	   otherwise cover it at the bottom of a long page. Harmless on the pages that have no bar. */
+	padding: 0.9rem 1.5rem 5rem;
+	max-width: 1100px;
+	width: 100%;
+	margin: 0 auto;
+}
+
+h1 {
+	font-size: 1.35rem;
+	margin: 0 0 0.25rem;
+}
+
+h2 {
+	font-size: 1rem;
+	margin: 1.75rem 0 0.6rem;
+	color: var(--muted);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+}
+
+.lede {
+	color: var(--muted);
+	margin: 0 0 1.5rem;
+	max-width: 70ch;
+}
+
+/* ---- panels ---- */
+
+.panel {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1rem 1.15rem;
+	margin-bottom: 1rem;
+}
+
+.empty {
+	background: var(--panel);
+	border: 1px dashed var(--line);
+	border-radius: var(--radius);
+	padding: 2rem;
+	text-align: center;
+	color: var(--muted);
+}
+
+.empty strong {
+	color: var(--text);
+	display: block;
+	margin-bottom: 0.5rem;
+}
+
+.empty p {
+	max-width: 60ch;
+	margin: 0.4rem auto;
+}
+
+/* ---- waiting for the first choice of rooms ----
+   The state a fresh install lands on: every discovered room is written switched off, so the house is fully
+   set up and deliberately doing nothing. Styled as a calm panel with one thing to do — no dashed "nothing
+   here" border, no warning edge, no fault colour. It is not an error, and dressing it as one would tell a
+   new owner their ten-minute-old install is broken. */
+
+.onboarding {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1.4rem 1.5rem;
+}
+
+.onboarding-lead {
+	margin: 0 0 0.9rem;
+	font-size: 1.02rem;
+	color: var(--text);
+	max-width: 60ch;
+}
+
+.room-chips {
+	list-style: none;
+	margin: 0 0 1.2rem;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+/* Grey, and grey for a reason: these rooms are switched off, and the dashboard's colours mean the engine is
+   acting or a person has. A chip in a live colour would promise something none of them is doing yet. */
+.room-chip {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.35rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-chip);
+	padding: 0.15rem 0.55rem;
+	background: var(--idle-bg);
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+.room-chip-name {
+	color: var(--text);
+	font-weight: 550;
+}
+
+.room-chip-count {
+	font-variant-numeric: tabular-nums;
+}
+
+/* The one action on the page, so it looks like the primary button it would be if it were not a link. */
+.onboarding-action {
+	display: inline-block;
+	background: var(--accent);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-control);
+	padding: 0.4rem 0.85rem;
+	color: var(--accent-ink);
+	font-size: 0.9rem;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.onboarding-action:hover {
+	filter: brightness(1.06);
+}
+
+/* ---- the rooms that are switched off ----
+   Quiet, under the grid, and always a way back: a room switched off by a mis-tap simply stops appearing, and
+   without this line there is nothing to pull on. */
+.rooms-off {
+	margin: 1.2rem 0 0;
+	color: var(--muted);
+	font-size: 0.85rem;
+}
+
+/* ---- area cards ----
+   A card is a story with four beats — headline, last event, what happens next, conditions — not a table.
+   The left edge and the badge carry the machine/human/idle family; the lamp carries the light itself,
+   glowing in the commanded Kelvin at the commanded brightness (inline style, data-driven). */
+
+/*
+   grid-auto-rows: 1fr makes every row the height of the tallest card anywhere in the grid — the
+   largest box decides, and the cards read as one set instead of a ragged shelf. The cards absorb
+   the extra height gracefully because .area-meta is pushed to the bottom edge with margin-top:auto,
+   so what stretches is the quiet space above the footer, not the text.
+*/
+.areas {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	grid-auto-rows: 1fr;
+	gap: 0.9rem;
+}
+
+.area {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-left: 3px solid var(--line);
+	border-radius: var(--radius);
+	padding: 0.9rem 1rem;
+}
+
+/*
+   The left edge groups a grid of cards at a glance, and the design asks that glance to find the exceptions.
+   A room the engine is running is the ordinary case — fourteen out of seventeen — so its edge is the panel's
+   own line and the grid stays quiet; a room somebody has touched is the thing worth finding, and keeps its
+   colour. What each room is doing right now is on its chip, in shape and colour both.
+
+   This is the dark-cockpit rule applied to the edge. It also stops the palette change from painting most of
+   the house amber: --machine used to be a calm blue, and lighting fourteen edges with the engine's new warm
+   would make the three that matter impossible to pick out.
+*/
+.area.family-machine { border-left-color: var(--line); }
+.area.family-human { border-left-color: var(--human); }
+
+.area.family-idle {
+	border-left-color: var(--idle);
+	border-style: dashed;   /* the diagram draws not-commanding states dashed; so does the card */
+	border-left-style: solid;
+}
+
+.area-head {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 0.1rem;
+}
+
+.area-name {
+	font-weight: 600;
+	font-size: 1.02rem;
+}
+
+/* The card's state chip sits on the right edge of the header. The chip itself is shared and knows nothing
+   about cards, so its placement is stated here rather than as a variant inside the component. */
+.area-head .state-chip {
+	margin-left: auto;
+}
+
+/* The card's own state colouring now lives in the shared chip. The card keeps the left edge, which is a
+   different job: the edge groups a grid of cards at a glance, the chip names one room's state exactly. */
+
+/* The lamp. Lit: filled and glowing, colour and strength from the actual command (inline style).
+   Off: an empty ring. Human-held: filled amber, glowing gently — on, but not at the engine's levels. */
+.lamp {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	flex: 0 0 auto;
+}
+
+.lamp-off {
+	background: transparent;
+	border: 1.5px solid var(--muted);
+	opacity: 0.6;
+}
+
+.lamp-human {
+	background: var(--human);
+	box-shadow: 0 0 8px var(--human);
+}
+
+/* On, but at levels the engine did not choose: lit, and deliberately colourless. */
+.lamp-adopted {
+	background: var(--muted);
+	box-shadow: 0 0 8px var(--muted);
+}
+
+.area-line {
+	margin: 0;
+	font-size: 0.92rem;
+	line-height: 1.45;
+}
+
+.area-event {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+
+.event-when {
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.event-when::before {
+	content: "· ";
+}
+
+.area-next {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.area-next.overdue {
+	color: var(--warn);
+}
+
+/* ---- the countdown bar ----
+   A thin track under the "what happens next" line, filled to how far the armed countdown has run.
+   It ticks with the page's one-second clock, in the family's colour: blue while the engine's own
+   timer runs, amber while a human's override or suppression counts down. Elapsed fills, so a bar
+   almost full means "almost now" — the same direction the sentence above it reads in. */
+
+.area-countdown {
+	height: 4px;
+	border-radius: 999px;
+	background: var(--panel-2);
+	overflow: hidden;
+}
+
+.area-countdown-fill {
+	height: 100%;
+	border-radius: inherit;
+	background: var(--idle);
+	transition: width 1s linear;
+}
+
+.family-machine .area-countdown-fill { background: var(--machine); }
+.family-human .area-countdown-fill { background: var(--human); }
+
+/* ---- the stats row ----
+   Three numbers that reward a glance — last motion, standing command, next change — with the story
+   in the tooltips. dl/dt/dd for structure; tabular numerals so the once-a-second tick does not
+   make the row shimmer. */
+
+.area-stats {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 0.5rem;
+	margin: 0.35rem 0 0;
+	padding: 0.5rem 0 0;
+	border-top: 1px solid var(--line);
+}
+
+.area-stats .stat {
+	min-width: 0;
+	cursor: default;
+}
+
+.area-stats dt {
+	font-size: 0.68rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--muted);
+}
+
+.area-stats dd {
+	margin: 0.1rem 0 0;
+	font-size: 0.82rem;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.area-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.3rem;
+	margin-top: auto;         /* the footer sits on the card's bottom edge; equal heights stretch the space above it */
+	padding-top: 0.55rem;
+	border-top: 1px solid var(--line);
+}
+
+.area-meta .chip {
+	background: var(--panel-2);
+	border: none;
+	color: var(--muted);
+	font-size: 0.72rem;
+	padding: 0.12rem 0.5rem;
+	cursor: default;
+}
+
+.area-meta .chip-alert {
+	color: var(--bad);
+	font-weight: 600;
+}
+
+.area-meta .chip-when {
+	margin-left: auto;
+	background: none;
+	padding-right: 0;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---- badges ---- */
+
+.badge {
+	display: inline-block;
+	padding: 0.1rem 0.5rem;
+	border-radius: var(--radius-chip);
+	font-size: 0.75rem;
+	font-weight: 600;
+	background: var(--panel-2);
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.badge.ok { color: var(--ok); }
+.badge.warn { color: var(--warn); }
+.badge.bad { color: var(--bad); }
+.badge.info { color: var(--info); }
+.badge.accent { color: var(--accent); }
+
+/* The "active now" badge on the period/mode in force: accent text on an accent-tinted pill, so it reads as
+   the live one rather than just another grey tag. */
+.badge.active-now {
+	color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 16%, var(--panel-2));
+}
+
+/* ---- tables ---- */
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.88rem;
+}
+
+th, td {
+	text-align: left;
+	padding: 0.45rem 0.6rem;
+	border-bottom: 1px solid var(--line);
+	vertical-align: top;
+}
+
+th {
+	color: var(--muted);
+	font-weight: 600;
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+tr:last-child td {
+	border-bottom: none;
+}
+
+td.num {
+	font-variant-numeric: tabular-nums;
+}
+
+code {
+	font-family: var(--mono);
+	font-size: 0.85em;
+	background: var(--panel-2);
+	padding: 0.1rem 0.35rem;
+	border-radius: 4px;
+	color: var(--accent);
+	/* A file path or entity id is one unbreakable token, and on a phone one long token is the whole
+	   page scrolling sideways. Break anywhere rather than push the save bar off-screen. */
+	overflow-wrap: anywhere;
+}
+
+/* ---- mode toggles ---- */
+
+.mode {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1.5rem;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1rem 1.15rem;
+	margin-bottom: 0.75rem;
+}
+
+.mode-body {
+	flex: 1;
+}
+
+.mode-label {
+	font-weight: 600;
+	margin-bottom: 0.15rem;
+}
+
+.mode-desc {
+	color: var(--muted);
+	font-size: 0.87rem;
+	margin: 0.25rem 0;
+	max-width: 65ch;
+}
+
+.mode-meaning {
+	font-size: 0.87rem;
+	margin: 0.35rem 0 0;
+}
+
+button.toggle {
+	border: 1px solid var(--line);
+	background: var(--panel-2);
+	color: var(--text);
+	border-radius: var(--radius-control);
+	padding: 0.4rem 1.1rem;
+	font-size: 0.87rem;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+	min-width: 92px;
+}
+
+button.toggle:hover:not(:disabled) {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+button.toggle.on {
+	background: color-mix(in srgb, var(--ok) 14%, transparent);
+	border-color: var(--ok);
+	color: var(--ok);
+}
+
+button.toggle:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* ---- mode hero + cards ----
+   Read-only enrichment of the modes page: the live derived state, and a card per option that says what the
+   mode drives, what its light looks like right now, and what it does to the areas. Additive; nothing here acts. */
+
+.mode-hero {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 1rem 1.15rem;
+	margin-bottom: 1rem;
+}
+
+.mode-hero.legacy {
+	background: var(--panel-2);
+}
+
+.mode-hero-main {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+}
+
+.mode-hero-label {
+	color: var(--muted);
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.mode-hero-value {
+	font-size: 1.6rem;
+	font-weight: 700;
+	color: var(--text);
+	line-height: 1.1;
+}
+
+.mode-hero-value.unknown {
+	color: var(--muted);
+	font-style: italic;
+}
+
+.mode-hero-sub {
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+.mode-pills {
+	display: flex;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+}
+
+.pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-chip);
+	padding: 0.2rem 0.65rem;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--muted);
+	background: var(--panel-2);
+}
+
+.pill .pill-glyph {
+	font-size: 0.9em;
+}
+
+/* An "off" pill stays quiet; an active one lights in its own colour so the wall-state reads at a glance. */
+.pill.off {
+	opacity: 0.5;
+}
+
+.pill.unknown {
+	opacity: 0.6;
+	font-style: italic;
+}
+
+.pill.sleep.on {
+	color: var(--info);
+	border-color: var(--info);
+	background: color-mix(in srgb, var(--info) 14%, transparent);
+}
+
+.pill.guest.on {
+	color: var(--accent);
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.pill.away.on {
+	color: var(--bad);
+	border-color: var(--bad);
+	background: color-mix(in srgb, var(--bad) 14%, transparent);
+}
+
+.mode-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
+	gap: 0.75rem;
+	margin-bottom: 1rem;
+}
+
+/* A card is a button: fully clickable, keyboard-focusable, and disabled when Home Assistant is not ready. */
+button.mode-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	text-align: left;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 0.85rem 0.95rem;
+	cursor: pointer;
+}
+
+button.mode-card:hover:not(:disabled) {
+	border-color: var(--accent);
+}
+
+button.mode-card.current {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+button.mode-card:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.mode-card-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.mode-card-name {
+	font-weight: 700;
+	font-size: 1.05rem;
+	color: var(--text);
+}
+
+.mode-card-chips {
+	display: inline-flex;
+	gap: 0.3rem;
+	flex-wrap: wrap;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-chip);
+	padding: 0.05rem 0.4rem;
+	font-size: 0.72rem;
+	font-weight: 600;
+	color: var(--muted);
+	background: var(--panel-2);
+}
+
+.chip.sleep { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, transparent); }
+.chip.guest { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.chip.away { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+
+.mode-card-drives {
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+.mode-card-swatch-row {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+}
+
+/* The swatch's inline style carries the period colour and a glow scaled by brightness; the default here is the
+   dark disc an off/unresolved preview falls back to. */
+.mode-swatch {
+	flex: 0 0 auto;
+	width: 1.5rem;
+	height: 1.5rem;
+	border-radius: 50%;
+	border: 1px solid var(--line);
+	background: var(--bg);
+}
+
+.mode-swatch.off {
+	background: repeating-linear-gradient(45deg, var(--bg), var(--bg) 3px, var(--panel-2) 3px, var(--panel-2) 6px);
+}
+
+.mode-swatch-label {
+	font-size: 0.82rem;
+	color: var(--text);
+	font-variant-numeric: tabular-nums;
+}
+
+.mode-card-effect {
+	font-size: 0.82rem;
+	color: var(--muted);
+	border-top: 1px solid var(--line);
+	padding-top: 0.5rem;
+}
+
+.notice {
+	border-left: 3px solid var(--warn);
+	background: var(--panel);
+	border-radius: 0 var(--radius) var(--radius) 0;
+	padding: 0.75rem 1rem;
+	margin-bottom: 1rem;
+	font-size: 0.88rem;
+	color: var(--muted);
+}
+
+.notice.bad {
+	border-left-color: var(--bad);
+}
+
+/* ---- footer ---- */
+
+.footer {
+	border-top: 1px solid var(--line);
+	padding: 0.75rem 1.5rem;
+	color: var(--muted);
+	font-size: 0.8rem;
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.footer-warn {
+	color: var(--warn);
+}
+
+/* ============================================================================
+   Editor. Everything below exists because the configuration page stopped being
+   a viewer and started being a form. Grouped rather than scattered so the
+   read-only styles above stay recognisable as what they were.
+   ============================================================================ */
+
+/* ---- notices ---- */
+
+.notice.warn {
+	border-left-color: var(--warn);
+}
+
+/* A notice that reports something done rather than something wrong — the re-setup panel's "rebuilt, not yet
+   saved", the house-mode panel's confirmation. Without this they inherited the warning edge and read as faults. */
+.notice.ok {
+	border-left-color: var(--ok);
+}
+
+.notice ul {
+	margin: 0.4rem 0 0;
+	padding-left: 1.1rem;
+}
+
+.notice li {
+	margin: 0.2rem 0;
+}
+
+.notice strong {
+	color: var(--text);
+}
+
+/* ---- status ---- */
+
+.status-row {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+	padding: 0.3rem 0;
+	font-size: 0.88rem;
+	color: var(--muted);
+}
+
+.status-label {
+	color: var(--text);
+	font-weight: 600;
+	min-width: 7rem;
+}
+
+.hint {
+	color: var(--muted);
+	font-size: 0.82rem;
+}
+
+/* ---- save bar ----
+   Floats at the foot of the viewport, and only while there is something to save.
+   It was sticky at the top and always present, which had it competing for the
+   first screenful with the section rail on a page that is mostly reading. Fixed
+   to the bottom it is reachable from any scroll position without occupying the
+   place a reader starts; rendered only when dirty, its presence is itself the
+   answer to "have I changed anything?".
+
+   One of the two things allowed elevation (visual-foundation §1): it genuinely
+   floats over the content rather than sitting in the flow. */
+
+.savebar {
+	position: fixed;
+	left: 50%;
+	transform: translateX(-50%);
+	bottom: 1rem;
+	z-index: 40;
+	width: min(1100px, calc(100vw - 3rem));
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	padding: 0.6rem 0.9rem;
+	box-shadow: var(--shadow-float);
+}
+
+
+.savebar-note {
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+
+.savebar-note.ok {
+	color: var(--ok);
+}
+
+.savebar-note.bad {
+	color: var(--bad);
+}
+
+/* The success confirmation is transient — it fades in, then the component removes it after a few seconds. It
+   carries a small check so a glance reads "saved" without reading the words. Only success is a toast; a refused
+   or failed save renders through the persistent .savebar-note.bad above and stays until resolved. */
+.savebar-toast {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	animation: savebar-toast-in 0.2s ease-out;
+}
+
+.savebar-toast::before {
+	content: "✓";
+	font-weight: 700;
+}
+
+@keyframes savebar-toast-in {
+	from { opacity: 0; transform: translateY(-3px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.savebar-toast {
+		animation: none;
+	}
+}
+
+/* ---- controls ---- */
+
+button {
+	background: var(--panel-2);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-control);
+	padding: 0.35rem 0.7rem;
+	font: inherit;
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+	border-color: var(--accent);
+}
+
+button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+button.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-ink);
+	font-weight: 600;
+	transition: transform 0.06s ease, filter 0.06s ease;
+}
+
+/* A brief press: the button sinks and darkens on click, so "Save and apply" feels like a physical action
+   rather than a link. Reduced-motion users get the darken without the movement. */
+button.primary:active:not(:disabled) {
+	transform: translateY(1px) scale(0.985);
+	filter: brightness(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	button.primary {
+		transition: filter 0.06s ease;
+	}
+
+	button.primary:active:not(:disabled) {
+		transform: none;
+	}
+}
+
+button.danger:hover:not(:disabled) {
+	border-color: var(--bad);
+	color: var(--bad);
+}
+
+input[type="text"], input[type="number"], input[type="password"], select {
+	background: var(--bg);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-control);
+	padding: 0.3rem 0.45rem;
+	font: inherit;
+	font-size: 0.85rem;
+}
+
+input:focus, select:focus {
+	outline: none;
+	border-color: var(--accent);
+}
+
+input[type="checkbox"] {
+	accent-color: var(--accent);
+}
+
+.cell {
+	min-width: 6rem;
+}
+
+.cell.num {
+	width: 6rem;
+	text-align: right;
+	font-family: var(--mono);
+}
+
+.cell.wide {
+	min-width: min(22rem, 100%);
+	max-width: 100%;
+}
+
+.unit {
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+
+/* ---- fields ---- */
+
+.field {
+	padding: 0.6rem 0;
+	border-bottom: 1px solid var(--line);
+}
+
+.field:last-child {
+	border-bottom: none;
+}
+
+.field-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.field-label {
+	font-weight: 600;
+	font-size: 0.88rem;
+}
+
+.field-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	color: var(--muted);
+	font-size: 0.78rem;
+	cursor: pointer;
+}
+
+.field-control {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+	margin-top: 0.35rem;
+}
+
+.field-control.checks {
+	gap: 1rem;
+}
+
+.field-control.checks label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+.field-help {
+	color: var(--muted);
+	font-size: 0.8rem;
+	margin-top: 0.3rem;
+	max-width: 60rem;
+}
+
+.field-inherit, .inherit {
+	color: var(--muted);
+	font-size: 0.85rem;
+	font-style: italic;
+}
+
+.field-inherit strong {
+	color: var(--text);
+	font-style: normal;
+}
+
+/* ---- pickers ---- */
+
+.picker {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+/* One width for every picker, and it is a width, not a min-width: the People/Master/Sleep dropdowns
+   used to size themselves to their longest option and sat visibly ragged above one another. The
+   longest requirement decides for all of them. min(…, 100%) because 24rem is wider than a phone. */
+.picker-select, .picker-text {
+	width: min(24rem, 100%);
+	max-width: 100%;
+}
+
+/* The plain selects in Global (kill-switch polarity, illuminance class …) line up with the pickers. */
+select.cell.wide {
+	width: min(24rem, 100%);
+	min-width: 0;
+}
+
+.picker-mode {
+	font-size: 0.75rem;
+	padding: 0.2rem 0.5rem;
+}
+
+.picker-note {
+	font-size: 0.78rem;
+	color: var(--muted);
+}
+
+.picker-note.bad {
+	color: var(--bad);
+}
+
+.list-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	align-items: stretch;
+	width: 100%;
+	min-width: 0;
+}
+
+/* The add control sits on its own full-width row under the chips, with room to breathe. This control
+   has been photographed overlapping its own chips; the row-gap matters once the select and the
+   "Type an id" button wrap onto two lines. */
+.picker-addrow {
+	width: 100%;
+	row-gap: 0.5rem;
+}
+
+.picker-mode {
+	flex: 0 0 auto;
+}
+
+.list-empty {
+	color: var(--muted);
+	font-size: 0.82rem;
+	font-style: italic;
+}
+
+.chips {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+.chip {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;      /* a chip with a long name and a long id folds onto two lines on a phone */
+	gap: 0.15rem 0.4rem;
+	max-width: 100%;
+	min-width: 0;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-chip);
+	padding: 0.15rem 0.5rem;
+	font-size: 0.8rem;
+}
+
+/* Entity ids are single unbreakable tokens; unbroken they are the widest thing on a phone screen. */
+.chip-name, .chip-id {
+	overflow-wrap: anywhere;
+	min-width: 0;
+}
+
+.chip-bad {
+	border-color: var(--bad);
+}
+
+.chip-name {
+	color: var(--text);
+}
+
+.chip-id {
+	font-family: var(--mono);
+	font-size: 0.72rem;
+	color: var(--muted);
+}
+
+.chip-remove {
+	border: none;
+	background: none;
+	color: var(--muted);
+	padding: 0 0.1rem;
+	font-size: 1rem;
+	line-height: 1;
+}
+
+.chip-remove:hover {
+	color: var(--bad);
+}
+
+.nullable {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+/* ---- section folds, unified ----
+   Periods and house-mode options are the same object in the editor: a <details> that reads as a one-line
+   header when collapsed and opens to its editor. They share ONE visual language so the whole page reads as one
+   system — the readable, structured look the house-mode cards introduced, now applied to both: an accent
+   left-edge that makes the stack scannable, a panel-2 header wash on hover and while open, and one chevron.
+   The per-type blocks further down keep only what is genuinely unique (a period's start time, a mode's Kind
+   badge, the orphan state) and must NOT re-declare the shared look, or source order would fork it again.
+
+   An AREA was a third member of this family and is not any more: the editor's rooms became .room-row links
+   to a page each, and .area-fold / .area-summary / .area-actions went with them. Their rules survived the
+   restructure, matching nothing, right down to four family-colour edges duplicating .room-row's own. Removed;
+   .area-title, .area-slug, .area-chevron and .area-summary-hint stay, because the rows and the folds still
+   use those. */
+
+.period-fold,
+.housemode-fold,
+.group-fold {
+	padding: 0;
+	/* NOT overflow: hidden. The clip kept the header wash inside the rounded corners, but it also cut off every
+	   info popover hanging past the fold — and a popover is absolutely positioned precisely so it can leave.
+	   The corners are held instead by each header rounding ITSELF (below): full radius closed, top-only when
+	   open. .group-summary already did that; the other three did not, so removing the clip on its own squared
+	   off every period and house-mode card. Anything added here that paints to the fold's edge must carry its
+	   own matching radius — there is nothing left to clip it. */
+	/* A dimmed-green edge by default — alive but quiet — so the cards read as a healthy list rather than plain
+	   grey. The period/mode in force turns this edge accent (below); green is the resting state, orange is "now". */
+	border-left: 3px solid color-mix(in srgb, var(--ok) 42%, var(--line));
+}
+
+/* The period in force and the mode the house is in right now get a warm left edge and an "active now" badge,
+   so a glance down the list shows "where we are". Only periods and house modes have an active state — areas
+   and setting groups have none, and keep the neutral edge. */
+.period-fold.active,
+.housemode-fold.active {
+	border-left-color: var(--accent);
+}
+
+.period-fold > *:not(summary),
+.housemode-fold > *:not(summary) {
+	margin-left: 1.1rem;
+	margin-right: 1.1rem;
+}
+
+.period-summary,
+.housemode-summary {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem 0.7rem;
+	flex-wrap: wrap;
+	padding: 0.8rem 1.1rem;
+	cursor: pointer;
+	list-style: none;
+	/* The header rounds itself, because the fold no longer clips it. Closed, the summary IS the card, so it
+	   takes the full radius; open, only the top two (below) — the body owns the bottom edge. The fold sets
+	   padding: 0, so without this the hover/open wash paints a square corner straight over the panel's border.
+	   The same move .group-summary makes. */
+	border-radius: var(--radius);
+}
+
+.period-summary::-webkit-details-marker,
+.housemode-summary::-webkit-details-marker {
+	display: none;
+}
+
+.period-summary:hover,
+.housemode-summary:hover {
+	background: var(--panel-2);
+}
+
+.period-fold[open] > .period-summary,
+.housemode-fold[open] > .housemode-summary {
+	background: var(--panel-2);
+	border-radius: var(--radius) var(--radius) 0 0;
+	border-bottom: 1px solid var(--line);
+	margin-bottom: 0.7rem;
+}
+
+.period-fold[open] > .period-summary .area-chevron,
+.housemode-fold[open] > .housemode-summary .area-chevron {
+	transform: rotate(45deg);
+}
+
+/* Titles carry the human name of the thing — identical across all three. The house-mode value is an HA id, so
+   it keeps the mono face (below) but matches this weight and size. */
+.area-title,
+.period-title {
+	font-weight: 600;
+	font-size: 1.02rem;
+}
+
+/* Right-aligned muted summary of the settings behind the header — identical across all three. */
+.area-summary-hint,
+.period-summary-hint,
+.housemode-summary-hint {
+	margin-left: auto;
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.area-slug {
+	font-family: var(--mono);
+	font-size: 0.75rem;
+	color: var(--muted);
+	background: var(--panel-2);
+	padding: 0.1rem 0.4rem;
+	border-radius: 4px;
+}
+
+/* The chevron: drawn, not a glyph, so it renders identically everywhere and can rotate. Shared by all folds. */
+.area-chevron {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-right: 2px solid var(--muted);
+	border-bottom: 2px solid var(--muted);
+	transform: rotate(-45deg);
+	transition: transform 0.15s ease;
+}
+
+/* ---- the room switch ----
+   A switch, not a checkbox: it is the room's power state, not a form field. It lives on the fold's header row
+   and stops the click there, so a thumb aiming at the switch never also opens the editor. */
+
+.switch {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	flex: 0 0 auto;
+	background: none;
+	border: none;
+	border-radius: var(--radius-control);
+	padding: 0.1rem 0.2rem;
+	color: var(--muted);
+	font-size: 0.76rem;
+	cursor: pointer;
+}
+
+.switch-track {
+	position: relative;
+	width: 34px;
+	height: 18px;
+	flex: 0 0 auto;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-switch);
+	background: var(--panel-2);
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.switch-knob {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--muted);
+	transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.switch.on .switch-track {
+	background: color-mix(in srgb, var(--ok) 28%, var(--panel-2));
+	border-color: var(--ok);
+}
+
+.switch.on .switch-knob {
+	background: var(--ok);
+	transform: translateX(16px);
+}
+
+.switch.on .switch-word {
+	color: var(--ok);
+}
+
+.switch:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* ---- floor headers ----
+   Written as reusable classes on purpose: the dashboard's grid groups by the same floors through the same
+   helper, and two looks for one fact would be two answers to "which floor is this". */
+
+.floor-head {
+	display: flex;
+	align-items: baseline;
+	gap: 0.75rem;
+	margin: 1.5rem 0 0.5rem;
+}
+
+.floor-name {
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--muted);
+}
+
+/* The only bulk action offered, and only per floor: with twenty rooms at most, a matrix of bulk operations
+   would be more to read than the rooms themselves. */
+.floor-bulk {
+	margin-left: auto;
+	background: none;
+	border: none;
+	padding: 0.1rem 0.2rem;
+	color: var(--accent);
+	font-size: 0.8rem;
+	cursor: pointer;
+}
+
+.floor-bulk:hover {
+	text-decoration: underline;
+}
+
+.panel-actions + .floor-head,
+.section-head + .floor-head {
+	margin-top: 0.9rem;
+}
+
+/* ---- setting rooms up again ----
+   An inline panel rather than a modal: it is a preview, and the rooms it talks about are on the page behind it.
+   Accent-edged because it is a step in a flow, not a resting part of the page. */
+
+.setup-panel {
+	border-left: 3px solid var(--accent);
+}
+
+.setup-title {
+	margin: 0 0 0.35rem;
+	font-size: 1.02rem;
+	font-weight: 650;
+}
+
+.setup-rooms {
+	list-style: none;
+	margin: 0.5rem 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+	gap: 0.25rem 1rem;
+}
+
+.setup-rooms label {
+	display: flex;
+	align-items: center;
+	gap: 0.45rem;
+	cursor: pointer;
+}
+
+.setup-room-name {
+	font-weight: 550;
+}
+
+/* What each room loses, one line each. Never generic: a room with nothing to lose says so. */
+.setup-losses {
+	margin: 0.4rem 0 0.8rem;
+	padding-left: 1.2rem;
+}
+
+.setup-losses li {
+	margin-bottom: 0.3rem;
+}
+
+.setup-losses .hint {
+	display: block;
+}
+
+/* ---- discovery preview ----
+   Bordered and coloured rather than plain, because it is the answer to the
+   question the area picker asks, and it has to be findable at a glance. */
+
+.preview {
+	border: 1px solid var(--line);
+	border-left-width: 3px;
+	border-radius: 0 var(--radius) var(--radius) 0;
+	background: var(--bg);
+	padding: 0.6rem 0.9rem;
+	margin: 0.6rem 0;
+}
+
+.preview-ok {
+	border-left-color: var(--ok);
+}
+
+.preview-bad {
+	border-left-color: var(--bad);
+}
+
+.preview-head {
+	font-size: 0.78rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted);
+	margin-bottom: 0.4rem;
+}
+
+.preview-error {
+	color: var(--bad);
+	font-size: 0.85rem;
+}
+
+.preview table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.preview th {
+	text-align: left;
+	vertical-align: top;
+	color: var(--muted);
+	font-weight: 500;
+	font-size: 0.82rem;
+	width: 6rem;
+	padding: 0.25rem 0;
+}
+
+.chips-plain .chip {
+	background: none;
+	border-radius: var(--radius-chip);
+}
+
+/* ---- disclosure ---- */
+
+.advanced {
+	border-top: 1px solid var(--line);
+	margin-top: 0.6rem;
+	padding-top: 0.5rem;
+}
+
+.advanced > summary {
+	cursor: pointer;
+	color: var(--muted);
+	font-size: 0.82rem;
+	padding: 0.2rem 0;
+}
+
+.advanced > summary:hover {
+	color: var(--accent);
+}
+
+/* ---- grid tables ---- */
+
+.grid {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.grid th {
+	text-align: left;
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-weight: 500;
+	padding: 0.3rem 0.4rem;
+	border-bottom: 1px solid var(--line);
+}
+
+.grid td {
+	padding: 0.3rem 0.4rem;
+	vertical-align: top;
+}
+
+.cell-note {
+	font-size: 0.72rem;
+	color: var(--muted);
+	margin-top: 0.15rem;
+}
+
+.cell-note.bad {
+	color: var(--bad);
+}
+
+.row-actions {
+	white-space: nowrap;
+}
+
+.row-actions button {
+	padding: 0.15rem 0.4rem;
+	font-size: 0.75rem;
+}
+
+.panel-actions {
+	margin: 0.75rem 0 1.5rem;
+}
+
+/* Wide tables scroll inside their own box. The page must never scroll sideways: on a phone that
+   drags the save bar and the nav off-screen with it. */
+.table-scroll {
+	overflow-x: auto;
+}
+
+/* ---- the section rail ----
+   The configuration document has four rooms — Areas, Periods, Defaults, Global — and the page shows
+   one at a time. On a desktop the rail sits beside the content and sticks below the save bar; on a
+   phone it becomes a row of chips above the content, because a 170px column on a 375px screen is a
+   rail nobody's thumb can use. */
+
+.config-layout {
+	display: grid;
+	grid-template-columns: 170px minmax(0, 1fr);
+	gap: 1.5rem;
+	align-items: start;
+}
+
+.config-nav {
+	position: sticky;
+	top: 4.25rem;   /* clears the sticky save bar */
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.config-nav-link {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	text-align: left;
+	background: none;
+	border: none;
+	border-left: 2px solid transparent;
+	border-radius: 0 var(--radius-chip) var(--radius-chip) 0;
+	color: var(--muted);
+	padding: 0.45rem 0.7rem;
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+/* The section's glyph, and the label that pushes the count to the far edge. The glyph takes the link's own
+   colour — muted at rest, brass on the active section — so the mark and its label say the same thing rather
+   than the mark staying lit on a section you are not in. */
+.config-nav-icon {
+	width: 16px;
+	height: 16px;
+}
+
+.config-nav-text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.config-nav-link:hover:not(.active) {
+	background: var(--panel-2);
+	color: var(--text);
+	border-left-color: transparent;
+}
+
+.config-nav-link.active {
+	background: var(--panel-2);
+	color: var(--accent);
+	border-left-color: var(--accent);
+}
+
+.config-nav-count {
+	font-size: 0.72rem;
+	font-variant-numeric: tabular-nums;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-chip);
+	padding: 0 0.45rem;
+	color: var(--muted);
+}
+
+@media (max-width: 880px) {
+	.config-layout {
+		display: block;
+	}
+
+	/* Wrapping, not scrolling. Measured at 390px BEFORE the glyphs went on: the four chips wanted 474px of a
+	   342px row, so House sat entirely off-screen behind a sideways scroll with nothing on the page saying it
+	   was there — a section you cannot see is a section you do not know you have. Two rows of two fit, and a
+	   tablet still gets one row because the chips only take the width they need. */
+	.config-nav {
+		position: static;
+		flex-direction: row;
+		flex-wrap: wrap;
+		overflow-x: visible;
+		gap: 0.4rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.config-nav-link {
+		flex: 1 1 auto;
+		justify-content: center;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-control);
+		padding: 0.55rem 0.8rem;   /* a chip a thumb can hit */
+	}
+
+	/* The label stops stretching once the chips wrap: flex: 1 1 auto here would let one chip's text claim the
+	   slack and leave its glyph and count marooned at opposite ends of an over-wide chip. */
+	.config-nav-text {
+		flex: 0 1 auto;
+	}
+
+	.config-nav-link:hover:not(.active) {
+		border-color: var(--line);
+	}
+
+	.config-nav-link.active {
+		border-color: var(--accent);
+	}
+}
+
+/* ---- section headers ----
+   Real headers for the section in view: title-cased, with the brand's accent tick — not the muted
+   all-caps h2 that used to blur into the field labels around it. */
+
+.section-head {
+	margin-bottom: 1rem;
+}
+
+.section-head h2 {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	margin: 0 0 0.35rem;
+	font-size: 1.15rem;
+	font-weight: 650;
+	color: var(--text);
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+.section-head h2::before {
+	content: "";
+	flex: 0 0 auto;
+	width: 4px;
+	height: 1.05em;
+	border-radius: 2px;
+	background: var(--accent);
+}
+
+.section-head .lede {
+	margin-bottom: 0;
+}
+
+/* A labelled sub-box grouping related toggles inside a settings fold — the Sleep and Away behaviours in
+   Defaults. Quiet framing (a panel-2 card with a small caps title) so related switches read as one idea
+   rather than a flat run of checkboxes. The field dividers inside are dropped: the box is the grouping. */
+.setting-box {
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--panel-2);
+	padding: 0.1rem 0.9rem 0.5rem;
+	margin: 0.7rem 0;
+}
+
+.setting-box-title {
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--muted);
+	margin: 0.7rem 0 0.1rem;
+}
+
+.setting-box .field {
+	border-bottom: none;
+	padding: 0.35rem 0;
+}
+
+/* A sub-section header inside a section (e.g. "Mode options" under House modes): quieter than the section's
+   own h2 — no accent bar, a touch smaller — but louder than a field label, and spaced off the block above it. */
+.section-head.subsection {
+	margin-top: 1.4rem;
+}
+
+.section-head h3 {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0 0 0.35rem;
+	font-size: 1.02rem;
+	font-weight: 650;
+	color: var(--text);
+}
+
+/* Group headers inside a section: quieter than the section's own, louder than a field label. */
+.group-head {
+	margin: 1.5rem 0 0.5rem;
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--muted);
+}
+
+.section-head + .group-head {
+	margin-top: 0;
+}
+
+/* ---- group folds ----
+   Defaults and Global are collapsible groups: a header that says what the group is for, a fold that
+   keeps a long page skimmable. The same <details> grammar — and the same shared block above — as the period
+   and house-mode folds, so only what is unique to a group lives down here; the fold's own padding, edge and
+   visible overflow all come from there. Visible overflow is why an info popover hanging past the last field
+   is not clipped by its own group. */
+
+.group-summary {
+	display: flex;
+	align-items: baseline;
+	gap: 0.35rem 0.75rem;
+	flex-wrap: wrap;
+	padding: 0.75rem 1.15rem;
+	cursor: pointer;
+	list-style: none;
+	border-radius: var(--radius);
+}
+
+.group-summary::-webkit-details-marker {
+	display: none;
+}
+
+.group-summary:hover {
+	background: var(--panel-2);
+}
+
+.group-fold[open] > .group-summary {
+	background: var(--panel-2);
+	border-radius: var(--radius) var(--radius) 0 0;
+	border-bottom: 1px solid var(--line);
+}
+
+.group-title {
+	font-weight: 600;
+	font-size: 0.95rem;
+}
+
+.group-desc {
+	flex: 1 1 16rem;
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+
+.group-summary .area-chevron {
+	align-self: center;
+	margin-left: auto;
+}
+
+.group-fold[open] > .group-summary .area-chevron {
+	transform: rotate(45deg);
+}
+
+.group-body {
+	padding: 0.35rem 1.15rem 0.75rem;
+}
+
+/* A body whose content already spans the fold: the all-rooms card's sentences, its reveal bar, and the two
+   columns of settings groups all bring their own 1.15rem and their own full-width rules. Inset again they
+   would stop short of the fold's border, which reads as a mistake rather than as a nested box. */
+.group-body-flush {
+	padding: 0;
+}
+
+/* A framing note at the top of a group's body: the legacy-switches group says once that the whole
+   group is superseded, instead of every field mumbling it. Quiet on purpose — it is context, not
+   a warning, and the fields below it still carry their own badges. */
+.group-note {
+	margin: 0.5rem 0 0.25rem;
+	color: var(--muted);
+	font-size: 0.82rem;
+	max-width: 60rem;
+}
+
+/* ---- info popovers ----
+   The (i) beside a label. A button, because a phone has no hover and a keyboard reaches a button.
+   The open panel anchors to the field (nearest positioned ancestor), not the icon: anchored to the
+   icon it would poke past the viewport whenever the icon sits near an edge, and there is no CSS that
+   flips it. Anchored to the field it can never be wider than the field, which can never be wider
+   than the page. Under 560px it becomes a fixed sheet above the bottom edge instead — guaranteed
+   on-screen, and where a thumb already is. */
+
+/* Every container that can hold an (i) must be a positioning context, or its panel falls back to the viewport
+   and lands bottom-left. .field/.pfield cover the area, period and settings forms; the housemode-* ones cover
+   the house-mode option cards; .section-head covers a sub-section header like "Mode options". */
+.field, .pfield, .housemode-field, .housemode-resets-head, .section-head {
+	position: relative;
+}
+
+.field-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+.info {
+	display: inline-flex;
+}
+
+.info-icon {
+	width: 1.15rem;
+	height: 1.15rem;
+	padding: 0;
+	border-radius: 50%;
+	border: 1px solid var(--line);
+	background: var(--panel-2);
+	color: var(--muted);
+	font-family: Georgia, "Times New Roman", serif;
+	font-style: italic;
+	font-size: 0.72rem;
+	line-height: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	flex: 0 0 auto;
+}
+
+.info-icon:hover,
+.info-icon[aria-expanded="true"] {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.info-icon:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+/* The press that closes it. Fixed and over the whole viewport so a click anywhere but the panel lands here,
+   under the panel's own z-index so the panel keeps its clicks, and over everything else so the click cannot
+   also work the control it landed on — dismissing and acting on one press is how somebody loses a setting
+   they only meant to stop reading about. Deliberately unpainted: this is a note, not a modal, and dimming
+   the page to read one help line would be louder than the line. */
+.info-scrim {
+	position: fixed;
+	inset: 0;
+	z-index: 39;
+	cursor: default;
+}
+
+.info-panel {
+	position: absolute;
+	z-index: 40;
+	left: 0;
+	top: calc(100% + 0.35rem);
+	width: min(26rem, 100%);
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	/* Opaque, not frosted. It is absolutely positioned, so it necessarily paints over the field below it, and
+	   at 88% the covered field's own label and control read faintly through the help text — two settings in
+	   one place, which is worse than either. The float shadow is what says it is above the page; the fill's
+	   job is only to stop the page showing through. */
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-float);
+	padding: 0.7rem 0.85rem;
+	color: var(--text);
+	font-size: 0.82rem;
+	font-weight: 400;
+	font-style: normal;
+	line-height: 1.5;
+	text-transform: none;
+	letter-spacing: normal;
+	text-align: left;
+	cursor: auto;
+}
+
+.info-title {
+	font-weight: 600;
+	font-size: 0.78rem;
+	color: var(--accent);
+}
+
+.info-body {
+	color: var(--text);
+}
+
+.info-close {
+	align-self: flex-end;
+	font-size: 0.75rem;
+	padding: 0.2rem 0.6rem;
+}
+
+@media (max-width: 560px) {
+	/* A fixed sheet: never clipped, never off-screen, and closable with the thumb that opened it. */
+	.info-panel {
+		position: fixed;
+		left: 0.75rem;
+		right: 0.75rem;
+		top: auto;
+		bottom: 0.75rem;
+		width: auto;
+		box-shadow: var(--shadow-float);
+	}
+}
+
+/* ---- period cards ----
+   One collapsible card per circadian period — the same <details> grammar as the area folds. Collapsed it is a
+   header: the name, when it starts (with the wall-clock time a sun boundary resolves to today), and its level at
+   a glance. Expanded, the controls sit on their own responsive grid: a desktop reads them in a line or two, a
+   phone stacks them, and nothing ever scrolls sideways or hides behind a scrollbar — which is what the
+   seven-column table this replaces did. */
+
+/* Unique to a period header: the start time, sitting between the name and the right-aligned level hint. The
+   fold, summary, title, hint and chevron all come from the unified "section folds" block above. */
+.period-summary-start {
+	color: var(--muted);
+	font-size: 0.82rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.period-actions {
+	margin-left: auto;
+	display: flex;
+	gap: 0.3rem;
+	white-space: nowrap;
+}
+
+.period-actions button {
+	padding: 0.15rem 0.45rem;
+	font-size: 0.78rem;
+}
+
+.period-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+	gap: 0.8rem 1.25rem;
+	margin-bottom: 0.9rem;
+}
+
+.pfield {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.35rem;
+	min-width: 0;
+}
+
+.pfield-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+/* ---- preset dropdowns ---- */
+
+.preset {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.preset-select {
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 100%;
+}
+
+/* ---- the structured start control ---- */
+
+.start-editor {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.start-editor .cell {
+	min-width: 0;
+}
+
+.start-editor .start-minutes {
+	width: 4.5rem;
+}
+
+.start-editor .cell-note {
+	flex-basis: 100%;
+}
+
+/* ---- daylight chart ----
+   A year of daylight as hand-built SVG. The background is three stacked themed bands — night, civil twilight,
+   daylight — never a flat black; the period boundaries and the today marker sit over them. Additive. */
+
+.daylight-chart {
+	margin-bottom: 1rem;
+	container: daylightchart / inline-size;
+
+	/* 730 is DaylightChart's viewBox width. tan(atan2(a, b)) is a / b. */
+	--chart-unit: tan(atan2(730px, 100cqw));
+}
+
+.daylight-svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--panel);
+}
+
+.daylight-night { fill: var(--daylight-night); }
+.daylight-twilight { fill: var(--daylight-twilight); }
+.daylight-day { fill: var(--daylight-day); }
+
+.daylight-grid {
+	stroke: var(--line);
+	stroke-width: 1;
+	opacity: 0.45;
+}
+
+.daylight-month {
+	stroke: var(--line);
+	stroke-width: 1;
+	opacity: 0.3;
+}
+
+/* Every chart label carries a --daylight-halo outline (paint-order draws the stroke first, under the fill) so it
+   stays legible over the mid-tone bands in both themes — the halo is dark where the text is light and light where
+   it is dark, so it always separates the glyphs from the band behind them. */
+.daylight-axis,
+.daylight-period-label,
+.daylight-mark-label,
+.daylight-dst-label {
+	paint-order: stroke fill;
+	stroke: var(--daylight-halo);
+	stroke-width: 2.4px;
+	stroke-linejoin: round;
+	stroke-linecap: round;
+}
+
+.daylight-axis {
+	fill: var(--text);
+	opacity: 0.9;
+	font-size: 9px;
+	font-family: var(--mono);
+}
+
+/* The month row sits in a gutter under the plot rather than over the night band, so it has no band to be read
+   against and the halo would only thicken into the glyphs. */
+.daylight-month-label {
+	stroke: none;
+	opacity: 0.75;
+}
+
+.daylight-period {
+	fill: none;
+	stroke: var(--accent);
+	stroke-width: 1.5;
+	opacity: 0.95;
+}
+
+.daylight-period-label {
+	fill: var(--accent);
+	font-size: 9px;
+	font-weight: 600;
+}
+
+.daylight-today {
+	stroke: var(--text);
+	stroke-width: 1;
+	stroke-dasharray: 3 3;
+	opacity: 0.7;
+}
+
+/* Daylight-saving changeover markers: faint and dashed, so the hour-step in the curves reads as intentional. */
+.daylight-dst {
+	stroke: var(--muted);
+	stroke-width: 1;
+	stroke-dasharray: 2 4;
+	opacity: 0.5;
+}
+
+.daylight-dst-label {
+	fill: var(--muted);
+	font-size: 7px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}
+
+.daylight-mark {
+	fill: var(--text);
+}
+
+.daylight-mark-label {
+	fill: var(--text);
+	font-size: 9px;
+	font-weight: 600;
+	font-family: var(--mono);
+}
+
+.daylight-caption {
+	color: var(--muted);
+	font-size: 0.82rem;
+	margin: 0.5rem 0 0;
+}
+
+/* Chart type is in SVG user units, so it shrinks with the drawing: 9 units rendered 3.8 real pixels at 390 px.
+   --chart-unit is the viewBox width over the rendered width, so multiplying a wanted pixel size by it holds a
+   label the same physical size at any width. Sizing and the two viewBox widths are in docs/mechanisms.md.
+
+   The 15-unit cap is DaylightChart.MaxLabelUnits, which sizes the label spread and the month gutter from it.
+   Raise it here alone and close boundaries overlap, and December meets the last period label again. */
+@supports (font-size: calc(tan(atan2(1px, 1px)) * 1px)) {
+	@container daylightchart (min-width: 1px) {
+		.daylight-axis,
+		.daylight-period-label,
+		.daylight-mark-label {
+			font-size: min(calc(var(--chart-unit) * 10.1px), 15px);
+		}
+
+		.daylight-dst-label {
+			font-size: min(calc(var(--chart-unit) * 7.9px), 11.7px);
+		}
+
+		/* The halo is a stroke, so it scales with the viewBox too and would thicken into the glyphs. */
+		.daylight-axis,
+		.daylight-period-label,
+		.daylight-mark-label,
+		.daylight-dst-label {
+			stroke-width: calc(var(--chart-unit) * 2.7px);
+		}
+	}
+}
+
+/* ---- house-mode options ----
+   One row per option: its value and a radio group for its single Kind, with the sub-fields that kind uses
+   revealed beneath. Additive. */
+
+.housemode-options {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+}
+
+.housemode-note {
+	margin-bottom: 0;
+}
+
+.housemode-option {
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--panel-2);
+	padding: 0.7rem 0.85rem;
+}
+
+.housemode-option.orphan {
+	border-color: var(--bad);
+	border-style: dashed;
+}
+
+.housemode-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.6rem 1rem;
+	flex-wrap: wrap;
+}
+
+.housemode-value {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+}
+
+.housemode-kinds {
+	display: inline-flex;
+	gap: 0.15rem 0.75rem;
+	flex-wrap: wrap;
+}
+
+.housemode-kind {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	font-size: 0.85rem;
+	color: var(--text);
+	white-space: nowrap;
+}
+
+.housemode-sub {
+	margin-top: 0.7rem;
+	padding-top: 0.7rem;
+	border-top: 1px solid var(--line);
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+}
+
+.housemode-field {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.3rem;
+	min-width: 0;
+}
+
+.housemode-field-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+/* The label around the box only, so the (i) beside it can stay outside the label. Same gap as the
+   .housemode-field-label it sits in, whose weight, size and colour it inherits. */
+.housemode-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	cursor: pointer;
+}
+
+.housemode-resets {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	border-left: 2px solid var(--line);
+	padding-left: 0.75rem;
+}
+
+.housemode-resets-head {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.78rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted);
+}
+
+.housemode-presence {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	width: 100%;
+}
+
+.housemode-grace {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.housemode-grace .cell.num {
+	width: 4.5rem;
+}
+
+/* ---- house-mode option folds ----
+   One collapsible card per option — the same <details> grammar as an area or a period fold. Collapsed it is a
+   header: the option value, its Kind, and a hint of its key settings; expanded, the full editor. Additive: the
+   .housemode-kinds / .housemode-sub / .housemode-field rules above still style the body unchanged. */
+
+/* Unique to a house-mode header: the orphan state (an option the live select no longer offers), the mono option
+   value, the Kind badge, and the body spacing. Everything else — fold, summary, hover, open state, hint,
+   chevron — comes from the unified "section folds" block above. */
+.housemode-fold.orphan {
+	border-color: var(--bad);
+	border-left-color: var(--bad);
+	border-style: dashed;
+}
+
+.housemode-fold > .housemode-kinds {
+	margin-top: 0.75rem;
+}
+
+.housemode-fold > .housemode-sub {
+	margin-bottom: 0.9rem;
+}
+
+/* The option value reads as the card's name, styled exactly like an area or period title — plain body face,
+   white, not the mono/accent that a bare <code> would give it (which is why the markup is a <span>). */
+.housemode-summary-value {
+	font-weight: 600;
+	font-size: 1.02rem;
+	color: var(--text);
+}
+
+.housemode-summary-kind {
+	text-transform: none;
+}
+
+/* ---- modes-page additions ---- */
+
+.chip.normal { color: var(--muted); }
+
+.mode-card-reset {
+	font-size: 0.8rem;
+	color: var(--muted);
+	font-style: italic;
+}
+
+/* ---- 10-web-ux: form controls — larger, normal weight, one rule catches them all ---- */
+
+/* Additive: the base rule at ~line 1018 is left untouched. The typed arms below carry a plain
+   [type=...] attribute selector so they match the base rule's specificity (0,1,1) exactly and win by
+   source order — a :where() arm would sit at (0,0,1) and lose to the base rule, leaving text inputs at
+   0.85rem while selects grew, the very inconsistency this block removes. The :not([type]) arm (kept in
+   :where(), zero-plus-element) catches the type-less name inputs as a safety net for any future
+   omission. No width is set here, so the existing width rules (.picker-select, .cell.wide,
+   select.cell.wide) keep winning on the properties they set. Every colour is a variable, so both
+   themes are covered. */
+input:where(:not([type])),
+input[type="text"], input[type="number"], input[type="password"], input[type="time"], input[type="search"],
+select {
+	background: var(--bg);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-control);
+	font: inherit;            /* body font, weight 400 — never the UA's form font */
+	font-size: 0.95rem;       /* up from 0.85rem */
+	font-weight: 400;         /* explicit: names must not render bold anywhere */
+	padding: 0.4rem 0.6rem;   /* up from 0.3rem 0.45rem */
+	line-height: 1.4;
+}
+
+/* Numeric cells keep the mono face but grow with the rest. */
+.cell.num {
+	width: 7rem;              /* up from 6rem, so the larger font still fits */
+	font-size: 0.9rem;
+}
+
+/* ---- the house bar ----
+   The board's chrome: the master switch, the house mode and who's home, in ONE strip.
+
+   They used to be a card and then two more, stacked — about three hundred pixels before the first lane, which
+   on a phone is the entire first screen. Almost all of that height was a second line under each fact restating
+   what the fact already said, so the compaction is mostly deletion: the "everything is fine" line moved into
+   the toggle's hover, the mode's meaning into the value's, and the who's-home table became one row of chips.
+   What each mode actually does is now written out in full on the House tab, which is where somebody reading
+   about modes rather than glancing at one is standing.
+
+   Three cells, hairline-separated, wrapping to a column on a narrow screen with no media query — auto-fit
+   collapses the track count by itself. The master switch is LAST: it is the one control here that stops
+   everything, and it is also the one touched twice a year, so it keeps the panel's edge colour for the two
+   states that are news and otherwise sits quietly at the end. */
+
+.housebar {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+	gap: 0 var(--space-5);
+	background: var(--panel);
+	border: var(--rule);
+	border-left: 3px solid var(--idle);
+	border-radius: var(--radius-panel);
+	padding: 0.55rem 0.9rem;
+	margin-bottom: var(--space-4);
+}
+
+/* Only the two states that are news colour the edge. A green bar across the whole strip whenever nothing is
+   wrong is the same permanent reassurance the note line already refuses to print, and it made the master the
+   loudest thing on a board that is about rooms. Switched on therefore looks like any other panel. */
+.housebar:has(.housebar-master.on) { border-left-color: var(--line); }
+.housebar:has(.housebar-master.off) { border-left-color: var(--idle); }
+.housebar:has(.housebar-master.unknown) { border-left-color: var(--warn); }
+
+/* A hairline between cells rather than three boxes: one panel with internal rules reads as one strip, and
+   three panels read as three things to look at. The rule disappears on the first cell of a wrapped row —
+   there is no reliable selector for that, so it is drawn on the left and simply not drawn on the first. */
+.housebar-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	min-width: 0;
+	padding-left: var(--space-5);
+	border-left: var(--rule-inner);
+}
+
+.housebar-cell:first-child {
+	padding-left: 0;
+	border-left: 0;
+}
+
+.housebar-lab {
+	color: var(--muted);
+	font-size: var(--text-xs);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: var(--label-track);
+}
+
+/* The fact and its control on one line. The pills wrap under the value when the cell is narrow. */
+.housebar-main {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+	min-height: 30px;
+}
+
+.housebar-value {
+	font-weight: 600;
+	font-size: 1.05rem;
+	line-height: 1.2;
+	white-space: nowrap;
+}
+
+.housebar-value.unknown {
+	color: var(--muted);
+	font-style: italic;
+	font-weight: 500;
+}
+
+/* Only news gets a line. Paused and unreachable keep theirs; "lights adjust automatically" does not. */
+.housebar-note {
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--text-sm);
+	line-height: 1.35;
+	max-width: 46ch;
+}
+
+.housebar-note.ok { color: var(--ok); }
+.housebar-note.bad { color: var(--bad); }
+
+/* The master's switch is the room switch at the same size, not a scaled-up one: it is the same kind of control
+   and reads as such. Left-aligned with the cell, because margin-left:auto pushed the old button to the far edge
+   of a third of the strip and made a small control look like a big one by sitting alone. */
+.housebar-master .switch {
+	padding-left: 0;
+}
+
+/* One row of chips, not one row per person: a household of three cost three rows to say three words. */
+.people-row {
+	gap: var(--space-2);
+}
+
+.person-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	background: var(--chip);
+	border-radius: var(--radius-chip);
+	padding: 0.15rem 0.45rem;
+	font-size: var(--text-sm);
+	max-width: 100%;
+}
+
+.person-chip-name {
+	font-weight: 550;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.person-chip-state {
+	color: var(--muted);
+	font-size: var(--text-xs);
+}
+
+.person-chip.home .person-chip-state {
+	color: var(--ok);
+}
+
+/* The switch row reuses the .pill look, but these pills are buttons. The current one lights in the
+   accent; the rest are quiet until hovered. Disabled while Home Assistant has not answered. */
+.mode-pill-row {
+	display: flex;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+}
+
+button.mode-pill {
+	border: 1px solid var(--line);
+	border-radius: var(--radius-control);
+	padding: 0.3rem 0.85rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--muted);
+	background: var(--panel-2);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+button.mode-pill:hover:not(:disabled) {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+button.mode-pill.current {
+	color: var(--accent);
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+button.mode-pill:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* The state dot on a person's chip: filled when home, hollow when away, dashed when unknown. */
+.person-dot {
+	flex: none;
+	width: 0.7rem;
+	height: 0.7rem;
+	border-radius: 50%;
+	border: 1px solid var(--muted);
+	background: transparent;
+}
+
+.person-dot.home {
+	background: var(--ok);
+	border-color: var(--ok);
+}
+
+.person-dot.unknown {
+	border-style: dashed;
+}
+
+/* ---- the activity timeline ----
+   A log, not a grid of cards: one row per report, room and time down the left where an eye scans, the words
+   to the right. It borrows the dashboard's left-edge colour families through AreaView.Family, so a row reads
+   the same way a card does — blue when the engine decided, amber when a person did, grey when neither. Rows
+   sit flush against one another with hairline rules rather than in separate boxes, because a hundred boxes
+   is a hundred things to look at and this page is read by scanning. */
+
+.log {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.log-row {
+	display: grid;
+	grid-template-columns: 12rem 1fr;
+	gap: 0 1rem;
+	padding: 0.55rem 1rem;
+	border-left: 3px solid var(--line);
+}
+
+.log-row + .log-row {
+	border-top: 1px solid var(--line);
+}
+
+.log-row.family-machine { border-left-color: var(--machine); }
+.log-row.family-human { border-left-color: var(--human); }
+.log-row.family-idle { border-left-color: var(--idle); }
+
+/* The left column: the two facts a reader is scanning for. Tabular numerals so the times line up into a
+   column instead of drifting by a pixel per digit. */
+.log-when {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.log-time {
+	color: var(--muted);
+	font-family: var(--mono);
+	font-size: 0.82rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.log-room {
+	font-weight: 550;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* A house-wide row belongs to no room, so it must not look like one. Muted and unweighted against the room
+   names above and below it: the eye scanning that column for a room skips it, which is the point — nothing in
+   this row is a claim about a room. The rooms it was assembled from are in its title. */
+.log-room-house {
+	font-weight: 450;
+	color: var(--muted);
+	font-style: italic;
+}
+
+.log-body {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.log-what {
+	line-height: 1.35;
+}
+
+/* The reading behind the decision — "lux 86, dark below 40". Quieter than the event above it, but never
+   hidden behind a tooltip: it is the answer somebody came to this page for. */
+.log-why {
+	color: var(--muted);
+	font-size: 0.85rem;
+	line-height: 1.35;
+}
+
+/* The filter and the new-reports button, on one line above the timeline. */
+.log-bar {
+	display: flex;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: 0.75rem 1rem;
+	margin-bottom: 0.4rem;
+}
+
+.log-filter {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.log-filter-label {
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--muted);
+}
+
+.log-filter .cell.wide {
+	width: min(18rem, 100%);
+}
+
+/* Deliberately a button and not a live insert: the list must not move under someone who is reading it. */
+.log-new {
+	margin-left: auto;
+	background: var(--panel-2);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-control);
+	padding: 0.35rem 0.7rem;
+	color: var(--accent);
+	font-size: 0.82rem;
+	cursor: pointer;
+}
+
+.log-new:hover {
+	background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.log-foot {
+	margin: 0.9rem 0 0;
+	color: var(--muted);
+	font-size: 0.85rem;
+}
+
+/* On a phone the two columns become two lines: 12rem of room name beside the text would leave the text a
+   strip too narrow to read a sentence in. */
+@media (max-width: 560px) {
+	.log-row {
+		grid-template-columns: 1fr;
+		gap: 0.15rem;
+	}
+
+	.log-when {
+		flex-direction: row;
+		align-items: baseline;
+		gap: 0.5rem;
+	}
+}
+
+/* ============================================================================
+   THE SHARED VOCABULARY
+   Icons, state chips and the sentence primitive: the three things every page is
+   expected to use rather than re-invent. See docs/design/visual-foundation.md.
+   ============================================================================ */
+
+/* ---- icons ----
+   Drawn once as <symbol>s by <IconSprite>, used everywhere by <Icon>. The glyph takes the text colour of
+   wherever it sits (currentColor) and its one flat accent from --icon-accent, which each theme sets to brass.
+   The sizes are a short list on purpose: 18px beside a line of body text, 15px on a chip, 22px on a card head. */
+.ic {
+	width: 18px;
+	height: 18px;
+	flex: 0 0 auto;
+	display: block;
+}
+
+.ic-sm { width: 15px; height: 15px; }
+.ic-lg { width: 22px; height: 22px; }
+
+/* A section head's glyph is furniture, not the subject: muted outline, brass accent, never competing with the
+   heading beside it. */
+.ic-head {
+	color: var(--muted);
+	width: 17px;
+	height: 17px;
+}
+
+/* ---- state chips ----
+   Room state read as SHAPE plus colour. It used to be colour alone, which says nothing to a colourblind reader
+   and nothing at all in a greyscale screenshot. Inside a chip the glyph's accent collapses to currentColor, so
+   outline and accent are one semantic colour: the shape carries the meaning and the colour agrees with it,
+   rather than the two saying different things. */
+.state-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.15rem 0.5rem 0.15rem 0.4rem;
+	border-radius: var(--radius-chip);
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+	cursor: default;
+	--icon-accent: currentColor;
+}
+
+.state-chip .ic {
+	width: 14px;
+	height: 14px;
+}
+
+/* The quiet state has no glyph at all — the dark-cockpit rule carried into iconography. A shape means something
+   is happening; a room merely watching gets a dot and no claim on the eye. */
+.state-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: currentColor;
+	flex: 0 0 auto;
+	opacity: 0.75;
+}
+
+/* Colour and well are separate rules because the mark is used both ways: a chip needs the well, and a bare
+   mark in a dense row needs the colour without a painted box behind it. */
+.state-machine { color: var(--machine); }
+.state-human { color: var(--human); }
+.state-warn { color: var(--warn); }
+.state-idle { color: var(--idle); }
+
+.state-chip:not(.state-bare).state-machine { background: var(--machine-bg); }
+.state-chip:not(.state-bare).state-human { background: var(--human-bg); }
+.state-chip:not(.state-bare).state-warn { background: var(--warn-bg); }
+.state-chip:not(.state-bare).state-idle { background: var(--idle-bg); }
+
+/* The mark alone: the same glyph, the same semantic colour, no box and no word. For a lane, a list row or
+   anywhere the text beside it already says what is happening. */
+.state-chip.state-bare {
+	padding: 0;
+	background: none;
+	gap: 0;
+	width: 15px;
+	height: 15px;
+	justify-content: center;
+}
+
+.state-chip.state-bare .ic {
+	width: 15px;
+	height: 15px;
+}
+
+/*
+   A lit room's glyph is tinted with the Kelvin it was actually commanded to (inline style, straight off the
+   snapshot), so the chip and the lamp beside it report one fact.
+
+   The GLYPH, not the word. Kelvin colours are rgb(255, g, b) — at 6000 K that is very nearly white, which is
+   correct as light and invisible as text on a pale panel. Caught in the light theme, where a cool-white chip
+   read as an empty box. So the word keeps the semantic colour and stays legible, and the warmth is carried by
+   the shape it belongs to.
+
+   --kelvin-weight / --kelvin-shade are what make one rule work in both themes: dark takes the colour as-is
+   against a dark well, light pulls it toward ink until a 6000 K mark clears 3:1 against its own background.
+   Hue survives the pull, so a 2200 K night dim and a 4500 K midday white are still visibly different rooms.
+*/
+.state-chip.state-kelvin .ic {
+	color: color-mix(in srgb, var(--state-kelvin, var(--machine)) var(--kelvin-weight), var(--kelvin-shade));
+}
+
+/* The warning dim blinks because it is the one state that wants to be noticed right now — and it blinks in
+   addition to having its own shape, never instead of one. Motion-sensitive readers keep the shape. */
+.state-blink {
+	animation: state-blink 1.1s step-end infinite;
+}
+
+@keyframes state-blink {
+	50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.state-blink {
+		animation: none;
+	}
+}
+
+/* The sprite itself never draws. It is a bag of definitions hosted once by the layout; without this it
+   reserves a line box at the top of every page. */
+.icon-sprite {
+	display: none;
+}
+
+/* ---- sentences ----
+   A room's behaviour as prose with its values inline and editable: reading the sentence and changing it are the
+   same act. Line-height is generous because every other word is a boxed control, and tokens on a tight line
+   make the paragraph vibrate. */
+.sentences {
+	display: flex;
+	flex-direction: column;
+}
+
+/* margin: 0 because these are <p> elements and the UA's 1em margins would stack on top of the padding, which
+   opens a hole between a sentence and the rule under it wide enough to read as a missing paragraph. */
+.sentence {
+	margin: 0;
+	padding: 0.6rem 0;
+	border-top: var(--rule-inner);
+	font-size: var(--text-base);
+	line-height: 1.9;
+}
+
+.sentence:first-child {
+	border-top: 0;
+}
+
+/* The token. Brass on hover and focus, because brass means "you can change this" — the accent budget's whole
+   job in one control. An amber dot, not an amber box, marks a value this room owns: the box is about
+   editability and the dot about provenance, and merging them would make one signal do two jobs. */
+.tok {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: var(--chip);
+	border: var(--stroke-hair) solid var(--line);
+	border-radius: var(--radius-chip);
+	padding: 0.05rem 0.45rem;
+	margin: 0 1px;
+	font-family: var(--mono);
+	font-size: var(--text-md);
+	font-weight: 600;
+	color: inherit;
+	line-height: 1.7;
+	white-space: nowrap;
+	cursor: pointer;
+	vertical-align: baseline;
+}
+
+.tok:hover,
+.tok[aria-expanded="true"] {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.tok:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* Not editable, and saying so in the shape: a dashed edge reads as "a value, not a control" without needing a
+   tooltip to explain the difference. */
+.tok-fixed {
+	border-style: dashed;
+	color: var(--muted);
+	cursor: default;
+}
+
+.tok-fixed:hover {
+	border-color: var(--line);
+	color: var(--muted);
+}
+
+/* The provenance dot. Amber, and the same amber the settings rows use for an override, so "this one is mine" is
+   one mark learned once. Deliberately NOT the accent: brass says editable, amber says changed. */
+.tok-own-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--warn);
+	flex: 0 0 auto;
+}
+
+/* Not editable and not a control: the House tab's defaults render this way, because editing a default is the
+   rarer act and its rows are one tap below. */
+.tok-static {
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+}
+
+/* The token popover: curated common values, one tap each. One of the two things on a page that genuinely
+   floats, so one of the two that keeps a shadow.
+
+   position: absolute against .tok-host, which is position: relative. Anchoring a popover to a container that is
+   not a positioning context drops it in the page's bottom-left corner — a bug this project has fixed once
+   already, and the reason .tok-host exists at all. */
+.tok-host {
+	position: relative;
+	display: inline-block;
+}
+
+.tok-pop {
+	position: absolute;
+	z-index: 70;
+	left: 0;
+	top: calc(100% + 4px);
+	min-width: 10rem;
+	max-width: min(16rem, 80vw);
+	background: var(--panel);
+	border: var(--rule);
+	border-radius: var(--radius-panel);
+	box-shadow: var(--shadow-float);
+	padding: 4px;
+	text-align: left;
+	white-space: normal;
+	line-height: 1.5;   /* its own, never the sentence's 1.9 — a list is not prose */
+}
+
+.tok-pop button {
+	display: block;
+	width: 100%;
+	text-align: left;
+	background: none;
+	border: 0;
+	border-radius: var(--radius-chip);
+	padding: 0.3rem 0.6rem;
+	font-family: var(--mono);
+	font-size: var(--text-md);
+	color: var(--text);
+}
+
+.tok-pop button:hover:not(:disabled) {
+	background: var(--chip);
+	border-color: transparent;
+}
+
+.tok-pop button.cur {
+	color: var(--accent);
+	font-weight: 700;
+}
+
+.tok-pop-note {
+	display: block;
+	padding: 0.3rem 0.6rem 0.35rem;
+	font-size: var(--text-xs);
+	line-height: 1.45;
+	color: var(--muted);
+	font-family: var(--font-sans);
+}
+
+/* On a phone the popover becomes a sheet pinned above the bottom edge: a token near the right-hand margin would
+   otherwise open a card half off the screen, and there is no CSS that flips it. The same move the info popover
+   already makes, for the same reason. */
+@media (max-width: 560px) {
+	.tok-pop {
+		position: fixed;
+		left: 0.75rem;
+		right: 0.75rem;
+		top: auto;
+		bottom: 0.75rem;
+		max-width: none;
+		min-width: 0;
+	}
+
+	.tok-pop button {
+		padding: 0.55rem 0.7rem;   /* a row a thumb can hit */
+	}
+}
+
+/* A figure set inside a sentence — a response curve, a band. Sized to the line it sits on and given the same
+   air a token gets, so a paragraph with one in it does not develop a bulge. */
+/* Straddling the baseline rather than standing on it: an inline box's baseline is its bottom edge, so a 20px
+   figure aligned to the baseline floats a whole line above the words it belongs to. */
+.sentence-figure {
+	display: inline-flex;
+	align-items: center;
+	vertical-align: -0.4em;
+	margin: 0 2px;
+}
+
+.curve-glyph {
+	width: 40px;
+	height: 20px;
+	display: block;
+}
+
+/* The legend under a set of sentences: what the amber dot means, said once, where the dots are. */
+.sentence-legend {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin: 0.15rem 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* ============================================================================
+   THE BOARD — Pages/Dashboard.razor (ui-design-c.md §5.1, "C4")
+   The home surface: an exception tray, room swim-lanes on a shared time axis
+   under the schedule band, one now-line through everything, and the decision
+   log below.
+
+   The problem this block is mostly solving is SEVENTEEN LANES. A swim-lane
+   board reads beautifully at six and becomes a scrolling wall at seventeen, so
+   three things buy the height back:
+
+     - a quiet room costs a CHIP, not a row (.board-quiet). Same room, same tap
+       through to its page, a fifth of the height. Which rooms qualify is
+       BoardView.Partition's decision, not this file's;
+     - a floor is headed only when it has a lane to head, so six floor groups
+       do not become six separators over nothing;
+     - the tracks scroll sideways under a name column that stays put, which is
+       the design's accepted phone compromise — sideways, never a vertical hunt.
+
+   Radii: chart MARKS (a block, a band segment) are 2px, below the smallest
+   surface radius on purpose — a two-pixel sliver at --radius-chip is a dot with
+   no length, and a five-second visit to the hall has to stay visible. Every
+   surface here keeps the scale.
+   ============================================================================ */
+
+/* ---- the exception tray ----
+   The rooms worth a look, hoisted above the board so the board beneath can be
+   scanned rather than read. The edge carries the family: amber for the one
+   state that is about to act, violet for the three where somebody's decision is
+   standing. Never the accent — these are states, and the accent means "you can
+   change this". */
+.tray {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.6rem;
+	margin: 0 0 0.85rem;
+}
+
+.tray-chip {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	background: var(--panel);
+	border: var(--rule);
+	border-left: 3px solid var(--line);
+	border-radius: var(--radius-control);
+	padding: 0.45rem 0.8rem;
+	font-size: var(--text-md);
+	color: var(--text);
+	text-decoration: none;
+}
+
+.tray-chip:hover {
+	background: var(--panel-2);
+}
+
+.tray-chip:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.tray-warn { border-left-color: var(--warn); }
+.tray-human { border-left-color: var(--human); }
+
+.tray-text b {
+	font-weight: 650;
+}
+
+/* The whole reassurance budget: one sentence about every room that is fine. */
+.tray-quiet {
+	color: var(--muted);
+	font-size: var(--text-md);
+}
+
+/* ---- the board panel ---- */
+.board {
+	background: var(--panel);
+	border: var(--rule);
+	border-radius: var(--radius-panel);
+	overflow: hidden;
+}
+
+.board-head,
+.board-loghead {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-4);
+	padding: var(--space-4) var(--space-5) var(--space-3);
+}
+
+.board-loghead {
+	padding: 0;
+	margin: var(--space-6) 0 var(--space-3);
+}
+
+/* An h2 that has to look like every other uppercase section label rather than
+   like the page-wide h2 rule, whose margins are meant for a bare heading.
+   Its own flex row, so the lanes glyph centres on the word: .board-head aligns
+   its children on the baseline for the clock beside it, and an SVG has no
+   baseline to align to — it would hang low against the text. */
+.board-title {
+	display: flex;
+	align-items: center;
+	gap: 0.45rem;
+	margin: 0;
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.board-span {
+	font-family: var(--mono);
+	font-size: var(--text-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Said out loud because a restart wipes the morning: without it an empty lane
+   reads as a room that did nothing rather than as history the board never had. */
+.board-since {
+	margin-left: auto;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* ---- the time grid ----
+   The axis, the band and every lane are one flex row each: a sticky gutter the
+   width of the name column, then a track. Sharing the gutter is what makes a
+   block, its hour and its period line up — an axis drawn across the full width
+   would be off by the name column and quietly lie about when things happened. */
+/* direction: rtl on the scroller, ltr back on its content. That is the one CSS-only way to open a
+   horizontal scroller at its RIGHT edge, and where it opens is load-bearing here: the board's right-hand
+   end is now and what happens next, and a phone that opened on four-hours-ago would hide the live edge
+   behind a swipe nobody knew to make. Content direction is restored immediately, so nothing reads
+   right-to-left; position:sticky is physical and the name column still pins to the left. */
+.board-scroll {
+	overflow-x: auto;
+	direction: rtl;
+}
+
+.board-grid {
+	--lane-name: 128px;
+	direction: ltr;
+	position: relative;
+	min-width: 680px;
+}
+
+.board-axis,
+.board-band,
+.lane {
+	display: flex;
+	align-items: stretch;
+}
+
+.board-gutter,
+.lane-name {
+	position: sticky;
+	left: 0;
+	z-index: 3;
+	width: var(--lane-name);
+	flex: 0 0 auto;
+	background: var(--panel);
+	border-right: var(--rule);
+}
+
+/* The gridlines are one repeating background rather than an element per room
+   per hour: seventeen lanes times seven hours is 119 divs that say nothing. The
+   window is snapped to whole hours precisely so this can work. */
+.board-track {
+	position: relative;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	background: var(--lane);
+	background-image: linear-gradient(to right, var(--grid) 1px, transparent 1px);
+	background-size: var(--hour-w) 100%;
+}
+
+.board-track-bare {
+	background-color: transparent;
+}
+
+.board-axis {
+	height: 26px;
+	border-top: var(--rule);
+	border-bottom: var(--rule);
+}
+
+.board-tick {
+	position: absolute;
+	bottom: 5px;
+	transform: translateX(-50%);
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* The end ticks hang inward instead of centring, so neither is half-clipped by
+   the name column or the panel's right edge. */
+.board-tick-first { transform: translateX(0); }
+.board-tick-last { transform: translateX(-100%); }
+
+/* ---- the schedule band ----
+   What the house was told to do, above what each room actually did. */
+.board-band {
+	height: 24px;
+	border-bottom: var(--rule);
+}
+
+.band-seg {
+	position: absolute;
+	top: 4px;
+	bottom: 4px;
+	border-radius: 2px;
+	opacity: 0.8;
+}
+
+/* Dark ink, in both themes, and not a token: a segment's colour is a Kelvin, so
+   it is always rgb(255, g, b) — bright by construction. --text would vanish on
+   it in the dark theme and --accent-ink is white in the light one. */
+.band-name {
+	position: absolute;
+	top: 0;
+	line-height: 24px;
+	padding-left: 6px;
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: rgba(20, 22, 16, 0.78);
+	white-space: nowrap;
+}
+
+.board-band-none {
+	position: absolute;
+	left: 6px;
+	line-height: 24px;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* ---- a lane ----
+   A link, not a row with a click handler: the room page is a page, and a link
+   is what a keyboard, a middle click and a screen reader all already understand. */
+.lane {
+	height: 34px;
+	border-bottom: var(--rule-inner);
+	text-decoration: none;
+	color: inherit;
+}
+
+.lane:hover .board-track {
+	background-color: var(--panel-2);
+}
+
+.lane:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+.lane-name {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0 0.5rem;
+	font-size: var(--text-md);
+	font-weight: 600;
+}
+
+.lane-room {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* A floor header, and it appears only when the floor has a lane under it. */
+.board-floor {
+	display: flex;
+	align-items: center;
+	height: 22px;
+	background: var(--panel-2);
+	border-bottom: var(--rule-inner);
+}
+
+.board-floor-name {
+	position: sticky;
+	left: 0;
+	padding: 0 0.5rem;
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* ---- what a room did ----
+   A lit block wears the warmth the engine actually commanded (--blk, straight
+   off the snapshot); the rest wear their semantic colour. Off-by-hand is hatched
+   rather than filled, because nothing was lit and a solid block would say it was. */
+.blk {
+	position: absolute;
+	top: 7px;
+	bottom: 7px;
+	border-radius: 2px;
+}
+
+.blk-lit {
+	background: var(--blk, var(--machine));
+	opacity: 0.85;
+}
+
+.blk-hand {
+	background: var(--human);
+	opacity: 0.8;
+}
+
+.blk-dimming {
+	background: var(--warn);
+}
+
+.blk-held {
+	background: repeating-linear-gradient(45deg, var(--idle) 0 3px, transparent 3px 7px);
+}
+
+/* What happens next: a dotted mark in the same 2px stroke family as the now-line,
+   with the time and the verb beside it. */
+.lane-mark {
+	position: absolute;
+	top: 4px;
+	bottom: 4px;
+	width: 0;
+	border-left: var(--stroke-mark) dotted var(--muted);
+}
+
+.lane-mark i {
+	position: absolute;
+	left: 5px;
+	top: 50%;
+	transform: translateY(-50%);
+	font-style: normal;
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+/* ---- movement the room turned down ----
+   A refusal has no duration, so it is a tick rather than a stretch: the room was
+   dark before it and dark after, and a block would claim a state that never
+   existed. Solid where .lane-mark is dotted, and short rather than full height,
+   because the dotted full-height line already means "the future" on this lane and
+   a second one would read as a second prediction. The warn hue is the same one the
+   log's refusal rows carry, so the two surfaces name the cause in one colour.
+
+   The label only appears on hover: fourteen rooms' refusals with their reasons
+   spelled out would be a wall of text across the board, and the reason is also on
+   the title for a reader who never hovers.
+
+   Hover is the whole of it, deliberately not "hover or focus". The mark lives
+   inside the room's link and is not focusable, so a :focus-visible rule here
+   matched nothing while reading as though keyboard access were handled. Giving it
+   a tab stop of its own would put one stop per refusal inside a single link, which
+   is worse than the log rows that already carry every reason in full. */
+/* Full height rather than inset, so the tick always breaks out of any block it lands on and meets the lane's
+   own background top and bottom. Inset it was --warn drawn inside a filled span — measured 1.06:1 against the
+   hand violet, and 1.00:1 where a refusal fell inside the minimum-width overhang of a PreOff block, which is
+   not low contrast but invisible. The outline covers the part that still overlaps. */
+.lane-refusal {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 0;
+	border-left: var(--stroke-mark) solid var(--warn);
+	outline: 1px solid var(--panel);
+}
+
+.lane-refusal i {
+	position: absolute;
+	left: 5px;
+	top: 50%;
+	transform: translateY(-50%);
+	display: none;
+	padding: 1px 4px;
+	border-radius: var(--radius-sm, 3px);
+
+	/* The label is read over whatever the lane is drawing, so it carries its own ground rather than trusting
+	   the track to be empty behind it. */
+	background: var(--panel);
+	font-style: normal;
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	color: var(--warn);
+	white-space: nowrap;
+	pointer-events: none;
+	z-index: 1;
+}
+
+/* A refusal in the right-hand third would be cut off by the track's overflow, so its label opens leftwards
+   instead. The clip is silent — no ellipsis — so a reason mid-word was simply lost. */
+.lane-refusal.lane-refusal-late i {
+	left: auto;
+	right: 5px;
+}
+
+.lane-refusal:hover i {
+	display: block;
+}
+
+/* ---- the now-line ----
+   One line through the axis, the band and every lane. Below the sticky name
+   column deliberately: scrolled far enough back it slides under the names
+   rather than cutting across them. */
+.board-now {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	z-index: 2;
+	width: var(--stroke-mark);
+	background: var(--now);
+	pointer-events: none;
+}
+
+/* The tag, unlike the line, sits ABOVE the sticky gutter (z-index 4 against its 3). It rides on the axis
+   row, where the gutter is empty, and scrolled far enough back it would otherwise be sliced in half by
+   that empty box and read "6:13" — caught on a phone, where the board opens with now near the left edge. */
+.board-now-tag {
+	position: absolute;
+	top: 3px;
+	z-index: 4;
+	transform: translateX(-50%);
+	background: var(--now);
+	color: var(--bg);
+	border-radius: var(--radius-chip);
+	padding: 0 6px;
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	font-weight: 700;
+	pointer-events: none;
+}
+
+/* ---- the quiet shelf ----
+   Where fourteen rooms go so three can be read. Absent entirely below
+   BoardView.LaneBudget, because in a two-room house an empty track IS the
+   answer and a footnote instead of a lane would look like a fault. */
+.board-quiet {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 0.45rem;
+	padding: var(--space-3) var(--space-5);
+	border-top: var(--rule);
+	background: var(--panel-2);
+}
+
+.board-quiet-lab,
+.board-quiet-floor {
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.board-quiet-floor {
+	font-weight: 600;
+	margin-left: 0.35rem;
+}
+
+.quiet-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	background: var(--panel);
+	border: var(--rule);
+	border-radius: var(--radius-chip);
+	padding: 0.1rem 0.45rem;
+	font-size: var(--text-sm);
+	color: var(--muted);
+	text-decoration: none;
+}
+
+.quiet-chip:hover {
+	color: var(--text);
+	border-color: var(--muted);
+}
+
+.quiet-chip:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* ---- the legend and the footnotes ----
+   Glyph plus swatch per key: the one place the shape language is taught where
+   the colour is also explained (§6.2). */
+.board-foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.35rem 1rem;
+	padding: var(--space-3) var(--space-5);
+	border-top: var(--rule);
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+.board-key {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+
+.board-swatch {
+	width: 14px;
+	height: 9px;
+	border-radius: 2px;
+	flex: 0 0 auto;
+}
+
+.board-swatch-next {
+	width: 0;
+	height: 12px;
+	border-radius: 0;
+	border-left: var(--stroke-mark) dotted var(--muted);
+}
+
+/* Solid where the next-mark is dotted, and the same warn hue the tick itself carries — the key has to be
+   the mark, not an approximation of it, or a reader matching one to the other gets it wrong. */
+.board-swatch-refusal {
+	width: 0;
+	height: 12px;
+	border-radius: 0;
+	border-left: var(--stroke-mark) solid var(--warn);
+}
+
+.board-foot-end {
+	margin-left: auto;
+}
+
+.board-note {
+	margin: 0;
+	padding: var(--space-3) var(--space-5);
+	border-top: var(--rule);
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* A log row's room name is the way through to that room's page. Coloured only
+   on hover: twelve accented names down the left edge is texture. */
+.log-room-link {
+	color: inherit;
+	text-decoration: none;
+}
+
+.log-room-link:hover {
+	color: var(--accent);
+}
+
+/* The board's own log rows: one line each, time and room beside one another and
+   the reading beside the event. On the Activity page the log IS the page and can
+   afford two lines a row; here it sits under a board, and twelve two-line rows
+   would outweigh the thing they explain. Same markup, same colours, one line. */
+.log-compact .log-row {
+	grid-template-columns: 13rem 1fr;
+	padding: 0.35rem 1rem;
+}
+
+.log-compact .log-when {
+	flex-direction: row;
+	align-items: baseline;
+	gap: 0.55rem;
+}
+
+.log-compact .log-body {
+	flex-direction: row;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 0 0.4rem;
+}
+
+/* The dash belongs to the layout, not to the sentence: ActivityView hands over two
+   strings precisely so a surface can set them side by side or stacked. */
+.log-compact .log-why::before {
+	content: "— ";
+}
+
+.rooms-off a,
+.log-foot a {
+	color: var(--accent);
+	text-decoration: none;
+	font-weight: 600;
+}
+
+.rooms-off a:hover,
+.log-foot a:hover {
+	text-decoration: underline;
+}
+
+/* On a phone the name column narrows and the meta line drops below the title
+   rather than being squeezed against it. The tracks keep scrolling sideways —
+   that is the design's stated compromise, and it is the only one. */
+@media (max-width: 640px) {
+	.board-grid {
+		--lane-name: 100px;
+	}
+
+	.lane-name {
+		font-size: var(--text-sm);
+		padding: 0 0.4rem;
+	}
+
+	.board-since {
+		margin-left: 0;
+		width: 100%;
+	}
+
+	.board-foot-end {
+		margin-left: 0;
+	}
+}
+
+/* The log's own two-line fallback, at the width the shipped rows already take it:
+   13rem of room name beside a sentence leaves the sentence a strip too narrow to
+   read, whether or not the rows are the compact ones. */
+@media (max-width: 560px) {
+	.log-compact .log-row {
+		grid-template-columns: 1fr;
+		gap: 0.1rem;
+	}
+}
+
+/* ============================================================================
+   THE ROOM PAGE  —  Pages/Room.razor  (ui-design-c.md §5.2, "C2")
+   One room, whole: what it is doing, why, and every knob that decides it.
+
+   The layout is designed against one constraint — twenty-one settings plus live
+   state plus gear plus two destructive actions is a very long page if you let it
+   be. Three devices keep it short, and all three are the design's own:
+
+     · pairs where there is width. The header and the evidence sit side by side;
+       so do "In this room" and "What happened here". Two hundred pixels not
+       spent stacking is two hundred pixels of settings still on screen.
+     · the detail view is behind one reveal, and inside it the sections are
+       columns rather than a stack. Somebody finds a setting by what it changes.
+     · the rare sections start folded, and a setting that cannot take effect is
+       not drawn at all. A greyed row still costs a reader.
+
+   Colour is entirely borrowed: the state families for what the engine is doing,
+   the amber provenance dot for what this room has changed, brass for what can be
+   pressed, and the lamp's own Kelvin for the light itself. §6.2 refused glyphs on
+   this page's card heads — the glowing room header is the page's mark — so the
+   only icons here are the state glyphs, which carry meaning rather than decorate.
+   ============================================================================ */
+
+.room-back {
+	display: inline-block;
+	color: var(--muted);
+	font-size: var(--text-sm);
+	font-weight: 600;
+	text-decoration: none;
+	margin: 0 0 var(--space-3);
+}
+
+.room-back:hover {
+	color: var(--accent);
+}
+
+/* The claim and its evidence, side by side. They are one thought: somebody reading "too bright to switch on"
+   wants the lux reading in the same glance, not one scroll below it. */
+.room-top {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 21rem;
+	gap: var(--space-5);
+	align-items: start;
+	margin-bottom: var(--space-5);
+}
+
+.room-lead {
+	min-width: 0;
+}
+
+.room-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	flex-wrap: wrap;
+}
+
+.room-name {
+	font-size: var(--text-xl);
+	margin: 0;
+	flex: 0 1 auto;
+}
+
+/* Blazor moves focus to the page's h1 on every navigation, so a screen reader lands on what the page is about.
+   That must not paint a box around the room's name for somebody who arrived with a mouse; a keyboard reader
+   still gets the ring, because :focus-visible is exactly the distinction. */
+.room-name:focus:not(:focus-visible) {
+	outline: none;
+}
+
+.room-since {
+	font-size: var(--text-sm);
+	color: var(--muted);
+	font-family: var(--mono);
+}
+
+/* The room's switch sits at the end of the header row, pushed away from the name so a thumb aiming at it
+   cannot be aiming at anything else. */
+.room-head .switch {
+	margin-left: auto;
+}
+
+/* ---- the lamp ----
+   The one glow the flat rule keeps, because it is data: the room's light in the warmth it was actually
+   commanded to. A ring around it drains toward the engine's armed deadline — the same countdown the card
+   grid draws as a bar, drawn here as the shape the header already is. */
+.room-glow {
+	position: relative;
+	width: 54px;
+	height: 54px;
+	display: grid;
+	place-items: center;
+	flex: 0 0 auto;
+}
+
+.room-ring {
+	position: absolute;
+	inset: 0;
+	border-radius: 50%;
+	background: conic-gradient(var(--accent) var(--room-ring, 0deg), var(--glow-track) 0);
+	-webkit-mask: radial-gradient(circle, transparent 63%, #000 64%);
+	mask: radial-gradient(circle, transparent 63%, #000 64%);
+}
+
+.room-core {
+	position: relative;
+	z-index: 1;
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	background: var(--glow-track);
+	border: 1px solid var(--line);
+}
+
+.room-glow-lit .room-core {
+	background: var(--room-lamp, var(--machine));
+	border-color: transparent;
+	box-shadow: 0 0 var(--room-lamp-spread, 10px) 2px var(--room-lamp, var(--machine));
+}
+
+/* What is true now, then what happens next. The second line is muted because it is a prediction and the
+   first is a reading; overdue turns it amber, because a prediction that expired is the news. */
+.room-says {
+	font-size: var(--text-base);
+	margin: var(--space-3) 0 0;
+	max-width: 60ch;
+}
+
+.room-next {
+	font-size: var(--text-sm);
+	color: var(--muted);
+	margin: var(--space-1) 0 0;
+	max-width: 60ch;
+}
+
+.room-next.room-overdue {
+	color: var(--warn);
+}
+
+/* ---- what the engine saw ----
+   A table, not prose: these are readings, and a reader is scanning down them for the one that explains what
+   they came for. Mono on the values so the times and the levels line up into a column. */
+.room-facts {
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+}
+
+.room-fact-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--text-sm);
+}
+
+/* 9.5rem, measured rather than guessed: the labels are uppercase with letter-spacing, and inside a 336px aside
+   the two paddings take 34px of the column. "Last movement" needs 110px of content, so anything under 9.5rem
+   wraps every label to two lines. Wrapping is left ON rather than forced off — "If someone walks in" needs
+   146px and is allowed the second line, because it appears only when a room is actually blocked. */
+.room-fact-table th {
+	text-align: left;
+	color: var(--muted);
+	font-weight: 600;
+	padding: 0.3rem var(--space-4) 0.3rem 1.15rem;
+	vertical-align: top;
+	width: 9.5rem;
+}
+
+.room-fact-table td {
+	padding: 0.3rem 1.15rem 0.3rem 0;
+	font-family: var(--mono);
+	font-size: var(--text-sm);
+	line-height: 1.5;
+}
+
+/* The measurement under the answer: its own line, quieter, and NOT monospaced — it is a sentence about a
+   reading rather than a reading, and the mono face was what made it look like the thing to read first.
+
+   --font-sans by name, NOT inherit: this span's parent is .room-fact-table td, which sets var(--mono), so
+   `inherit` resolved straight back to the face this rule exists to escape. (The idiom was borrowed from
+   .log-cat, where it works only because that element is a <button> and buttons do not inherit fonts.) */
+.fact-detail {
+	display: block;
+	margin-top: 0.1rem;
+	color: var(--muted);
+	font-family: var(--font-sans);
+	font-size: var(--text-xs);
+	line-height: 1.4;
+}
+
+/* The one cell whose value is a sentence, not a reading. Mono is right for "70 % · warm white" and wrong for
+   "The house is asleep — movement won't light the room", which in mono wrapped to three lines and became the
+   heaviest thing in a table meant to be scanned. */
+.room-fact-table td.fact-prose {
+	font-family: var(--font-sans);
+}
+
+.room-fact-table tr:last-child th,
+.room-fact-table tr:last-child td {
+	padding-bottom: 0.9rem;
+}
+
+.room-fact-empty {
+	margin: 0;
+	padding: 0 1.15rem 1rem;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* ---- cards ----
+   A head, then the content. No glyph: §6.2 refused card-head icons on this page, and four repeated marks
+   down one column would be texture rather than information. */
+.room-card {
+	padding: 0;
+	overflow: visible;
+}
+
+.room-card-head {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+	padding: 0.85rem 1.15rem 0.5rem;
+}
+
+.room-card-title {
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.room-card-note {
+	font-size: var(--text-sm);
+	color: var(--muted);
+	margin-left: auto;
+}
+
+.room-card-foot {
+	margin: 0;
+	padding: 0.6rem 1.15rem 0.9rem;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* ---- the save line ----
+   This page has no save bar, so it owes the reader a standing answer to "did that land?". Pushed to the
+   right of the card head, where the eye returns after touching a token. */
+.room-save {
+	margin-left: auto;
+	font-size: var(--text-sm);
+	font-family: var(--mono);
+}
+
+.room-save-ok { color: var(--muted); }
+.room-save-pending { color: var(--warn); }
+.room-save-bad { color: var(--bad); }
+
+.room-save-now {
+	padding: 0.15rem 0.5rem;
+	font-size: var(--text-sm);
+}
+
+.room-sentences {
+	padding: 0 1.15rem 0.4rem;
+}
+
+/* The bar under the sentences. It never lets the page pretend the sentences are the whole story, and it
+   carries the one number that says how far this room has strayed from the house. */
+.room-morebar {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	padding: 0.6rem 1.15rem;
+	border-top: var(--rule);
+	background: var(--panel-2);
+}
+
+.room-more {
+	background: none;
+	border: 0;
+	padding: 0;
+	color: var(--accent);
+	font-weight: 650;
+	font-size: var(--text-md);
+}
+
+.room-more:hover:not(:disabled) {
+	text-decoration: underline;
+}
+
+.room-more-note {
+	font-size: var(--text-sm);
+	color: var(--muted);
+	margin-left: auto;
+	text-align: right;
+}
+
+/* On a phone the note is not a right-hand aside, it is a paragraph. Measured at 390px: beside the button it
+   had about 210px to say "7 rooms follow these exactly; Stue, Kjokken and 8 others carry their own values",
+   which came out as four ragged right-aligned lines wrapped around a one-word button. Stacked and left-aligned
+   it is the same sentence at full width, and the button is back at the start of a line where a thumb expects
+   the control. */
+@media (max-width: 560px) {
+	.room-morebar {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-2);
+	}
+
+	.room-more-note {
+		margin-left: 0;
+		text-align: left;
+	}
+}
+
+/* ---- the detail view ----
+   Columns rather than a stack: twenty-one settings in one column is a page nobody reaches the bottom of.
+   Multi-column with break-inside: avoid packs the sections by height, so two short ones share the space a
+   tall one leaves — which a two-column grid, whose rows are as tall as their tallest cell, would waste. */
+.room-groups {
+	padding: var(--space-4) 1.15rem 1.15rem;
+	border-top: var(--rule);
+	columns: 2;
+	column-gap: var(--space-4);
+}
+
+.sgroup {
+	break-inside: avoid;
+	margin: 0 0 var(--space-4);
+	border: var(--rule);
+	border-radius: var(--radius-panel);
+	background: var(--panel);
+	/* NOT overflow: hidden — the same removal, for the same reason, as the section folds above. The clip was
+	   only ever rounding the head's corners, and it paid for that by cutting everything that legitimately
+	   leaves the box: measured, a focus ring on the head button was clipped on three of its four sides, which
+	   is a keyboard reader losing the one mark that says where they are. Anything added inside that paints to
+	   this edge must now carry its own matching radius (the head does, below) — there is nothing left to
+	   clip it. */
+}
+
+.sgroup-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	width: 100%;
+	text-align: left;
+	background: var(--panel-2);
+	border: 0;
+	/* The head rounds itself, because the group no longer clips it. Shut, the head IS the card and takes the
+	   full radius; open, only the top two — the body owns the bottom edge. */
+	border-radius: var(--radius-panel);
+	padding: 0.5rem 0.75rem;
+	flex-wrap: wrap;
+}
+
+.sgroup-open > .sgroup-head {
+	border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+}
+
+.sgroup-head:hover:not(:disabled) {
+	border-color: transparent;
+	color: var(--accent);
+}
+
+.sgroup-title {
+	font-weight: 650;
+	font-size: var(--text-md);
+	flex: 0 0 auto;
+}
+
+/* How many of this section's settings the room owns, in the same amber the dots use — so a folded section
+   still says whether anything inside it has been changed. */
+.sgroup-count {
+	flex: 0 0 auto;
+	min-width: 1.15rem;
+	padding: 0 0.3rem;
+	border-radius: var(--radius-chip);
+	background: var(--warn-bg);
+	color: var(--warn);
+	font-size: var(--text-xs);
+	font-weight: 700;
+	text-align: center;
+	line-height: 1.5;
+}
+
+.sgroup-note {
+	flex: 1 1 100%;
+	font-size: var(--text-sm);
+	color: var(--muted);
+	order: 3;
+}
+
+.sgroup-head .area-chevron {
+	margin-left: auto;
+	order: 2;
+}
+
+.sgroup-open > .sgroup-head .area-chevron {
+	transform: rotate(45deg);
+}
+
+.sgroup-body {
+	padding: 0 0.75rem;
+}
+
+/* ---- one setting ----
+   Label, what it changes, where the value came from — then the control. The provenance line under the help
+   is the row's real work: an amber dot says "this room decided this", and the only road back is offered
+   right there, naming the number it would go back to. */
+.srow {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	padding: 0.6rem 0;
+	border-top: var(--rule-inner);
+	flex-wrap: wrap;
+}
+
+.srow:first-child {
+	border-top: 0;
+}
+
+.srow-text {
+	flex: 1 1 12rem;
+	min-width: 0;
+}
+
+.srow-label {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	font-size: var(--text-md);
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.srow-help {
+	font-size: var(--text-sm);
+	color: var(--muted);
+	line-height: 1.4;
+	margin-top: 1px;
+}
+
+.srow-inherit {
+	font-size: var(--text-xs);
+	color: var(--muted);
+}
+
+/* Brass, because it is a thing you press; and it names the number so the act can be predicted rather than
+   tried. Clearing the room's value is a different act from typing the house's number in, and the wording
+   is the only place that difference is visible. */
+.srow-revert {
+	background: none;
+	border: 0;
+	padding: 0;
+	font-size: var(--text-xs);
+	font-weight: 650;
+	color: var(--accent);
+}
+
+.srow-revert:hover:not(:disabled) {
+	text-decoration: underline;
+	border-color: transparent;
+}
+
+.srow-control {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex: 0 0 auto;
+	margin-left: auto;
+}
+
+/* ---- the stepper ----
+   A number in its own natural grain, with the keyboard one tap deeper. Brass on the arrows because they are
+   the thing you press; the readout muted while the value is the house's and solid once the room owns it. */
+.stepper {
+	display: inline-flex;
+	align-items: center;
+	border: var(--stroke-control) solid var(--line);
+	border-radius: var(--radius-control);
+	overflow: hidden;
+	background: var(--panel-2);
+	flex: 0 0 auto;
+}
+
+.stepper-step,
+.stepper-value {
+	background: none;
+	border: 0;
+	border-radius: 0;
+	padding: 0;
+}
+
+.stepper-step {
+	width: 30px;
+	height: 30px;
+	color: var(--accent);
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.stepper-step:hover:not(:disabled) {
+	background: var(--chip);
+	border-color: transparent;
+}
+
+.stepper-step:disabled {
+	color: var(--muted);
+}
+
+.stepper-value {
+	min-width: 5.5rem;
+	height: 30px;
+	padding: 0 0.25rem;
+	font-family: var(--mono);
+	font-size: var(--text-sm);
+	font-weight: 650;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.stepper-value:hover:not(:disabled) {
+	border-color: transparent;
+	color: var(--accent);
+}
+
+.stepper-inherited {
+	color: var(--muted);
+	font-weight: 500;
+}
+
+.stepper-input {
+	width: 5.5rem;
+	height: 30px;
+	border: 0;
+	border-radius: 0;
+	background: var(--bg);
+	text-align: center;
+	font-family: var(--mono);
+}
+
+/* ---- the number box ----
+   What a setting whose range spans decades gets instead of a stepper: a real field, always open, because the
+   value is typed rather than nudged. Same 30px height, same control radius and same 1.5px border as the
+   stepper beside it, so the two read as one family of controls and not as a field somebody bolted on.
+
+   The refusal sits under the box in --bad and wraps to the box's own width rather than the row's, so a long
+   sentence pushes the row taller instead of shoving the label off a phone. Empty it is removed outright, so
+   the live region costs no layout while it has nothing to say. Right-aligned with the control, which is where
+   the eye already is after pressing Enter. */
+.numbox {
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 0.25rem;
+	flex: 0 0 auto;
+}
+
+.numbox-row {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.35rem;
+}
+
+.numbox-input[type="number"] {
+	width: 7rem;
+	padding: 0.25rem 0.5rem;
+	border-width: var(--stroke-control);
+	background: var(--panel-2);
+	font-family: var(--mono);
+	font-size: var(--text-sm);
+	font-weight: 650;
+	text-align: right;
+	appearance: textfield;    /* Firefox, and the standard property */
+}
+
+/* The browser's own spinner is removed, not styled. It nudges by one, which is the grain this control exists
+   to reject — a chip promising a step of 1 lx on a field whose useful range is 3 to 10 000. It also lands as a
+   pale block inside a dark box, drawn by the platform in a palette no theme here defines. Arrow keys still
+   step for anyone who wants that, and a phone still gets the numeric keypad from type="number". */
+.numbox-input::-webkit-outer-spin-button,
+.numbox-input::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+
+/* Muted while the value is still the house's — the same fact the stepper's readout carries. */
+.numbox-inherited[type="number"] {
+	color: var(--muted);
+	font-weight: 500;
+}
+
+.numbox-input[aria-invalid="true"] {
+	border-color: var(--bad);
+}
+
+.numbox-refusal {
+	max-width: 15rem;
+	color: var(--bad);
+	font-size: var(--text-xs);
+	line-height: 1.35;
+	text-align: right;
+}
+
+.numbox-refusal:empty {
+	display: none;
+}
+
+/* ---- a segmented choice ----
+   Every option visible without a tap, which is what a four-way rule deserves: "how the room decides it's
+   dark" is not a value to nudge, it is a decision to see the alternatives of. */
+.seg {
+	display: inline-flex;
+	gap: 3px;
+	padding: 3px;
+	background: var(--panel-2);
+	border: var(--rule);
+	border-radius: var(--radius-control);
+	flex-wrap: wrap;
+}
+
+.seg button {
+	background: none;
+	border: 1px solid transparent;
+	border-radius: var(--radius-chip);
+	padding: 0.2rem 0.45rem;
+	font-size: var(--text-sm);
+	font-weight: 600;
+	color: var(--muted);
+}
+
+.seg button:hover:not(:disabled) {
+	color: var(--accent);
+	border-color: transparent;
+}
+
+.seg button.cur {
+	background: var(--panel);
+	border-color: var(--line);
+	color: var(--text);
+}
+
+/* ---- the pair at the bottom ---- */
+.room-columns {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-5);
+	align-items: start;
+}
+
+.room-columns > .room-card {
+	margin-bottom: var(--space-4);
+}
+
+/* Inside a card, the pick-by-hand and identity folds are already framed by the card, so they lose their own
+   frame and keep only the rule that separates them from what is above. */
+.room-card > .sgroup {
+	margin: 0;
+	border: 0;
+	border-top: var(--rule);
+	border-radius: 0;
+}
+
+/* …and its head with it. The head rounds itself now that .sgroup no longer clips; inside a card there is no
+   frame for it to round to, and a rounded head against a square edge reads as a misplaced box. */
+.room-card > .sgroup > .sgroup-head {
+	border-radius: 0;
+}
+
+.room-card > .sgroup > .sgroup-body {
+	padding: 0 1.15rem 0.5rem;
+}
+
+.room-card > .sgroup .lede {
+	margin: 0.6rem 0;
+	font-size: var(--text-sm);
+}
+
+/* ---- the gear ----
+   What discovery found, each with the × that leaves it out of this room. Squared up, not pilled: the pill
+   shape survives only where the shape is the meaning. The light / motion / lux families are distinguished
+   by a left edge in the semantic colours rather than by three more icons. */
+.room-gear {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	padding: 0.2rem 1.15rem 0.6rem;
+}
+
+.gchip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	background: var(--chip);
+	border-radius: var(--radius-chip);
+	border-left: 3px solid var(--line);
+	padding: 0.25rem 0.45rem 0.25rem 0.5rem;
+	font-size: var(--text-sm);
+	max-width: 100%;
+}
+
+.gchip-light { border-left-color: var(--machine); }
+.gchip-motion { border-left-color: var(--now); }
+.gchip-lux { border-left-color: var(--info); }
+
+/* An entity somebody took out of the room, and the way back in. The × used to be one-way. */
+.gchip-out {
+	border-left-color: var(--idle);
+	opacity: 0.75;
+}
+
+.gchip .chip-id {
+	font-size: var(--text-xs);
+}
+
+.room-gear-error {
+	margin: 0 1.15rem 0.8rem;
+}
+
+.room-actions {
+	margin: 0;
+	padding: 0.6rem 1.15rem 1rem;
+	border-top: var(--rule);
+	display: flex;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+}
+
+.room-card .setup-panel,
+.room-card > .notice {
+	margin: 0 1.15rem 1rem;
+}
+
+/* ---- this room's own log ----
+   The card holds the last few; the Activity page holds the rest. Inside a card it drops the outer frame the
+   whole-house timeline has, and the room column goes with it — every row here is this room. */
+.room-log {
+	border: 0;
+	border-radius: 0;
+	border-top: var(--rule);
+}
+
+.room-log .log-row {
+	grid-template-columns: 5rem 1fr;
+	padding: 0.45rem 1.15rem;
+}
+
+/* ---- narrow ----
+   Everything unstacks in one step. The phone is not a second design: it is this one in a single column,
+   with the sections still folded and the rare ones still closed. */
+@media (max-width: 1000px) {
+	.room-top {
+		grid-template-columns: 1fr;
+	}
+
+	.room-columns {
+		grid-template-columns: 1fr;
+	}
+
+	.room-groups {
+		columns: 1;
+	}
+}
+
+@media (max-width: 560px) {
+	.room-head {
+		gap: var(--space-3);
+	}
+
+	.room-name {
+		font-size: var(--text-lg);
+	}
+
+	/* The switch keeps its own row rather than being squeezed against the name. */
+	.room-head .switch {
+		margin-left: 0;
+	}
+
+	.srow-control {
+		margin-left: 0;
+	}
+
+	/* Narrower here, and the longer labels take a second line rather than a third of the row: on a 390px screen
+	   the answer needs the space more than the question does. */
+	.room-fact-table th {
+		width: 7rem;
+		padding-left: 1rem;
+	}
+
+	.room-log .log-row {
+		grid-template-columns: 4rem 1fr;
+		padding: 0.45rem 1rem;
+	}
+}
+
+
+
+/* ============================================================================
+   THE ACTIVITY FILTERS — Pages/Activity.razor (C1)
+   The room select, the category chips and the line that says what they are
+   holding back, as one block above the timeline.
+
+   Three decisions worth writing down:
+
+     - CHIPS, NOT A DROPDOWN OF CHECKBOXES. The owner asked for the categories
+       to be visible without opening anything and switchable in one tap. Seven
+       chips wrap onto two or three rows on a phone; they never scroll
+       sideways, because a filter half of which is off-screen is a filter
+       nobody knows the shape of.
+     - THE TICK IS A SHAPE. A chip that is on is brass AND carries a filled
+       square; off is a hollow one. Colour alone is the mistake the state
+       glyphs were redrawn to fix, and it is no more readable here.
+     - BRASS IS CORRECT HERE. Rule 3 gives --accent to editability and primary
+       action, and names the active tab as one. A chip that is letting rows
+       through is the same kind of mark. Nothing on this block is a state, so
+       no semantic colour appears on it.
+   ============================================================================ */
+
+/* One block, one border: the two filters compose, and two loose controls above
+   a panel would read as two unrelated decisions. */
+.log-filters {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	background: var(--panel);
+	border: var(--rule);
+	border-radius: var(--radius-panel);
+	padding: 0.7rem 0.9rem;
+	margin-bottom: 0.75rem;
+}
+
+/* The bar inside the block loses the margin it carried when it stood alone. */
+.log-filters .log-bar {
+	margin-bottom: 0;
+}
+
+.log-cats {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem;
+}
+
+/* The uppercase label sits on the chips' own baseline rather than above them:
+   the row is one control, and a stacked label would cut it in two. */
+.log-cats > .log-filter-label {
+	margin-right: 0.2rem;
+}
+
+.log-cat {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	min-height: 32px;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	border-radius: var(--radius-chip);
+	padding: 0.3rem 0.6rem;
+	color: var(--muted);
+	font-family: inherit;
+	font-size: var(--text-md);
+	line-height: 1.2;
+	cursor: pointer;
+}
+
+.log-cat:hover {
+	color: var(--text);
+	border-color: var(--accent);
+}
+
+.log-cat:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* Shape first, colour second: filled when the category is letting rows through,
+   hollow when it is not. Readable in greyscale and on a phone in sunlight. */
+.log-cat-mark {
+	width: 11px;
+	height: 11px;
+	flex: 0 0 auto;
+	border: var(--stroke-control) solid currentColor;
+	border-radius: 3px;
+	background: transparent;
+}
+
+.log-cat.on {
+	background: var(--chip);
+	border-color: var(--accent);
+	color: var(--text);
+}
+
+.log-cat.on .log-cat-mark {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+/* How many reports the category holds in the room on offer. Tabular so seven
+   counts stacked in a wrapped row form a column rather than a stagger. */
+.log-cat-count {
+	color: var(--muted);
+	font-size: var(--text-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+/* A category with nothing in it stays on the page and stays pressable — "this
+   room has never reported a manual change" is an answer, and a chip that vanished
+   at zero would take the reader's map of the page with it. */
+.log-cat.empty {
+	opacity: 0.6;
+}
+
+/* What the filters are holding back, and the single tap out of it. */
+.log-hidden {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.5rem 0.75rem;
+	margin: 0;
+	color: var(--muted);
+	font-size: var(--text-sm);
+}
+
+.log-reset {
+	background: none;
+	border: var(--rule);
+	border-radius: var(--radius-control);
+	padding: 0.3rem 0.65rem;
+	color: var(--accent);
+	font-family: inherit;
+	font-size: var(--text-sm);
+	cursor: pointer;
+}
+
+.log-reset:hover {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.log-reset:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* The empty state's way out is a sentence's worth of air away from the text
+   above it, since it is the only thing in that panel to press. */
+.empty .log-reset {
+	margin-top: 0.4rem;
+	font-size: var(--text-md);
+	padding: 0.4rem 0.8rem;
+}
+
+/* Phones. The chips fill the width in whatever combination fits, which both
+   removes the ragged right edge and turns each one into a thumb-sized target.
+   The label takes a row of its own rather than stealing width from the first
+   chip. */
+@media (max-width: 560px) {
+	.log-cats > .log-filter-label {
+		flex: 1 0 100%;
+		margin-right: 0;
+	}
+
+	.log-cat {
+		flex: 1 1 auto;
+		justify-content: flex-start;
+		min-height: 38px;
+	}
+
+	.log-cat-count {
+		margin-left: auto;
+	}
+}
+/* ============================================================================
+   THE HOUSE TAB  —  Pages/ConfigEditor.razor  (ui-design-c.md §5.3, "C3")
+   Everything that isn't one room: what every room starts with, the day's
+   schedule, the modes, the people, and the engine itself.
+
+   Almost nothing here is new, and that is the point. The cards are the room
+   page's cards (.room-card, .room-card-head, .room-sentences, .room-morebar,
+   .room-groups, .sgroup, .srow, .stepper, .seg), because the two surfaces
+   teach one model and a reader who learned it on a room should recognise it
+   on the house. What this block adds is only what the House tab has and the
+   room page does not:
+
+     · a room LIST, where the room page has one room. A row is a switch you
+       can hit and a link you cannot hit by accident — the two are siblings,
+       never nested, because a control inside an anchor is neither valid
+       markup nor a thing a thumb can aim at.
+     · a rule list, where a mode is a bold name and a sentence on one line.
+     · the small adjustments a card needs when it holds a chart or a rule list
+       rather than settings rows.
+
+   The House section itself owns no card rules any more: every group there is a
+   GroupFold, so its styling is the shared .group-* block further up. The one
+   thing that needed adding for it is .group-body-flush, beside .group-body.
+   ============================================================================ */
+
+/* Blazor moves focus to the page's h1 on every navigation, so a screen reader
+   lands on what the page is about. That must not paint a box around the title
+   for somebody who arrived with a mouse. Keyed on the tabindex FocusOnNavigate
+   itself adds, which is the narrowest possible target: nothing can Tab to a
+   tabindex="-1" element, so no keyboard user loses a ring they could have
+   earned. :focus-visible alone does not do it — Chrome matches it for
+   programmatic focus on a fresh load, which is exactly this case. */
+h1[tabindex="-1"]:focus {
+	outline: none;
+}
+
+/* ---- the room list ----
+   One row per room: its power switch, its name, its slug, how far it strays,
+   and the way through to its own page. The left edge is the dashboard's live
+   family colour and flat grey when the room is switched off — settings and
+   board speak one colour language, so "violet means somebody touched it" is
+   learned once. */
+
+.room-rows {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	margin-bottom: var(--space-4);
+}
+
+.room-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	background: var(--panel);
+	border: var(--rule);
+	border-left: 3px solid var(--idle);
+	border-radius: var(--radius-panel);
+	padding: 0.4rem 0.75rem;
+	min-width: 0;
+}
+
+.room-row.family-machine { border-left-color: var(--machine); }
+.room-row.family-human { border-left-color: var(--human); }
+.room-row.family-idle { border-left-color: var(--idle); }
+.room-row.family-off { border-left-color: var(--line); }
+
+/* The link is everything except the switch, so the row is one large target and
+   the switch is a small one carved out of it. */
+.room-open {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem 0.7rem;
+	flex: 1 1 auto;
+	min-width: 0;
+	flex-wrap: wrap;
+	padding: 0.35rem 0;
+	color: inherit;
+	text-decoration: none;
+	border-radius: var(--radius-control);
+}
+
+.room-open:hover .area-title {
+	color: var(--accent);
+}
+
+.room-open:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* A room with no page yet — no Home Assistant area, or added since the last
+   save. It keeps the row's shape so the list stays a list, and says why. */
+.room-open-shut {
+	cursor: default;
+}
+
+.room-open-chevron {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-right: 2px solid var(--muted);
+	border-top: 2px solid var(--muted);
+	transform: rotate(45deg);
+}
+
+.room-open:hover .room-open-chevron {
+	border-color: var(--accent);
+}
+
+.room-drop {
+	padding: 0.1rem 0.45rem;
+	font-size: var(--text-xs);
+}
+
+/* The way back for a room that names no area: without one it has no page, and
+   everything on that page would be out of reach. Full width on its own line,
+   because a picker squeezed into a row header is a picker nobody uses. */
+.room-adopt {
+	flex: 1 1 16rem;
+	min-width: 0;
+}
+
+/* ---- the cards ----
+   The room page's card, on a page that also holds ordinary form fields. The
+   fields keep their own padding rather than inheriting the card's zero. */
+
+.house-card {
+	margin-bottom: var(--space-5);
+}
+
+.house-card .room-card-head {
+	align-items: center;
+}
+
+.house-chart {
+	padding: 0.2rem 1.15rem 0.5rem;
+}
+
+/* The all-rooms sentences carry no amber dots — these values ARE the house —
+   so the reveal bar is the only thing under them, and it needs the rule the
+   legend would otherwise have separated it with. It sits at the bottom edge of
+   its fold only while All settings is shut; with the groups open it is a
+   divider mid-panel and must keep its corners square.
+   :last-child is what tells the two apart, and it is why the room page's copy
+   was missed: the bar is painted (--panel-2) and its container is rounded with
+   overflow: visible, so wherever it lands last it draws two square corners over
+   a rounded edge. Measured on /room/{id} with All settings shut — the bar's
+   bottom sat 1px inside a card rounded at 8px. Both containers are named here;
+   .room-morebar is used in exactly these two places. */
+.group-body-flush > .room-morebar:last-child,
+.room-card > .room-morebar:last-child {
+	border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+}
+
+/* Picking which room to add. An accent edge because it is a step in a flow
+   rather than a resting part of the page — the same mark the re-setup panel
+   carries, for the same reason. */
+.house-add {
+	border-left: 3px solid var(--accent);
+	margin-bottom: var(--space-4);
+}
+
+/* ---- the rules ----
+   A house mode as one line: its name in bold, then what it does as a sentence
+   with its two tunable values inline. The sentence machinery renders block
+   elements, so they are pulled back inline here — a mode is a line, not a
+   paragraph with a heading. */
+
+.house-rules {
+	padding: 0 1.15rem 0.6rem;
+}
+
+.house-rule {
+	padding: 0.6rem 0;
+	border-top: var(--rule-inner);
+	font-size: var(--text-base);
+	line-height: 1.9;
+}
+
+.house-rule:first-child {
+	border-top: 0;
+}
+
+.house-rule .sentences,
+.house-rule .sentence {
+	display: inline;
+	padding: 0;
+	border-top: 0;
+}
+
+.house-rule-name {
+	font-weight: 700;
+}
+
+/* The mode the house is standing on. Green rather than accent: it is a state,
+   and state is never the accent. */
+.house-rule-now {
+	margin-left: var(--space-2);
+	padding: 0.05rem 0.4rem;
+	border-radius: var(--radius-chip);
+	background: var(--ok-bg);
+	color: var(--ok);
+	font-size: var(--text-xs);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+/* ---- narrow ----
+   One column, and a room row of exactly two lines: the name over the summary,
+   with the chevron pinned to the right edge rather than wrapping to a line of
+   its own — which is what a chevron in the flex flow does, and it turns every
+   room into three lines of mostly nothing. */
+@media (max-width: 640px) {
+	.house-chart,
+	.house-rules {
+		padding-left: 1rem;
+		padding-right: 1rem;
+	}
+
+	.room-row {
+		position: relative;
+		padding: 0.3rem 0.6rem;
+	}
+
+	.room-open {
+		row-gap: 0;
+		padding-right: var(--space-4);
+	}
+
+	.room-open .area-summary-hint {
+		margin-left: 0;
+		flex-basis: 100%;
+	}
+
+	.room-open-chevron {
+		position: absolute;
+		right: 0.7rem;
+		top: calc(50% - 5px);
+	}
+}
+
+/* ============================================================================
+   WHAT SWITCHING A ROOM ON WILL COMMAND  —  Components/SwitchOnNoteView.razor
+
+   A Home Assistant area holds whatever Home Assistant put in it, and one live
+   living room resolves to 34 light entities: access-point status LEDs, relay
+   indicators, five colour channels of a lamp already managed under its own
+   name, and the fridge. The note that says so is raised by the room's switch on
+   both surfaces that carry one — the House tab's room row and the room page's
+   header — so it is one block of rules, not two.
+
+   Almost nothing here is new. It is a .notice holding .gchip chips, because a
+   list of entities is already what the room page's "In this room" card draws
+   and a second chip would be a second vocabulary. What this adds is the amber
+   edge on a suspect, the reason beside its name, and the neutral edge for the
+   quiet tier — a room of ordinary lamps is a remark, not a warning, and must
+   not be painted as one.
+   ============================================================================ */
+
+/* The quiet tier. .notice defaults to the warning edge, which is right for the
+   flagged case and wrong for "here is what this room now commands". */
+.notice.info {
+	border-left-color: var(--info);
+}
+
+.switch-note {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+/* The lead is the sentence the switch just earned, so it is the one thing here
+   in ink rather than muted. */
+.switch-note-lead {
+	display: block;
+}
+
+/* A grid of one column rather than a wrapping row: each suspect is two lines —
+   a name and a reason — so they never fit side by side, and left to wrap they
+   come out as a ragged stack of thirteen different widths. One column makes it
+   a list, which is what it is. */
+.switch-note-suspects {
+	display: grid;
+	gap: var(--space-1);
+}
+
+/* A suspect wears the warning edge the notice does, so a chip carries its own
+   verdict when the eye lands on it rather than on the sentence above. */
+.gchip-suspect {
+	border-left-color: var(--warn);
+	align-items: baseline;
+	gap: 0.15rem 0.4rem;
+	flex-wrap: wrap;
+}
+
+/* The reason, which is the whole of what makes this advice rather than an
+   accusation: it is what somebody weighs before they act on it. */
+.chip-why {
+	flex-basis: 100%;
+	color: var(--muted);
+	font-size: var(--text-xs);
+}
+
+.switch-note-rest,
+.switch-note-advice {
+	margin: 0;
+}
+
+.switch-note-advice a {
+	margin-left: var(--space-2);
+	white-space: nowrap;
+}
+
+.switch-note .panel-actions {
+	margin: 0;
+	padding: 0;
+	border-top: 0;
+}
+
+/* Inside the House tab's room list the note is a sibling of the row it belongs
+   to, and that list already spaces its children. */
+.room-rows > .switch-note {
+	margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+	.switch-note-advice a {
+		display: block;
+		margin-left: 0;
+		white-space: normal;
+	}
+}
+/* ---- a thread out of a section ----
+   Two groups moved from Areas to House, and the room page's own settings are
+   read against the house's baseline. Both are a sentence pointing somewhere
+   else, so both are a link — but one of them switches a section on this same
+   page rather than navigating, which has to be a button to work. It is given
+   the anchor's own look so a reader meets one kind of thread, not two. */
+.thread {
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	color: var(--accent);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.thread:hover,
+.thread:focus-visible {
+	text-decoration: none;
+}
+
+
+/* ============================================================================
+   THE THEME PICKER  —  Components/ThemePicker.razor
+   Which palette this browser paints in, on the top bar because it is a per-
+   browser choice about the chrome and not a line of house configuration — see
+   the component's own note for why it is not on the House tab.
+
+   It costs the bar as little as a control can: no panel, no border of its own
+   until it is hovered or focused, and a label at the section-label size the
+   rest of the UI already uses for "this is what the thing beside me is". Rule
+   3 holds — the accent appears only on focus, where it means "you are editing
+   this", the same as every other control.
+   ============================================================================ */
+
+.theme-picker {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	margin-left: auto;    /* the far end of the bar: chrome, not navigation */
+}
+
+.theme-picker-label {
+	color: var(--muted);
+	font-size: var(--text-xs);
+	font-weight: 600;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+}
+
+/* Transparent until touched, so three tabs and a mark do not become three tabs,
+   a mark and a box. The border appears on hover and turns accent on focus. */
+.theme-select {
+	background: none;
+	border: 1px solid transparent;
+	border-radius: var(--radius-control);
+	padding: 0.2rem 0.35rem;
+	color: var(--text);
+	font: inherit;
+	font-size: var(--text-md);
+	line-height: 1.3;
+	cursor: pointer;
+}
+
+.theme-select:hover {
+	border-color: var(--line);
+}
+
+.theme-select:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+/* An open native dropdown paints its own list with the UA's colours, and a
+   transparent background would leave the closed control's options unreadable on
+   some engines. The list gets the panel it sits on. */
+.theme-select option {
+	background: var(--panel);
+	color: var(--text);
+}
+
+/*
+   Phones. The bar wraps and .nav takes a row of its own, which would push the
+   picker onto a third row and spend about a sixth of the board's height on
+   chrome. Ordering puts it beside the brand on the first row instead; the DOM
+   order stays brand, navigation, picker, which is the order to read them in.
+*/
+@media (max-width: 560px) {
+	.theme-picker {
+		order: 2;
+	}
+
+	.nav {
+		order: 3;
+	}
+
+	.theme-picker-label {
+		display: none;    /* the option's own words say what it is */
+	}
+
+	.theme-select {
+		border-color: var(--line);    /* nothing else on that row is pressable, so say that this is */
+		padding: 0.35rem 0.4rem;
+	}
+
+	/*
+	   The word beside the mark goes, so the bar stays two rows. The name and the picker together are wider
+	   than a 390px screen, and a third row costs about 34px of every page below it — on the board that is
+	   most of a lane. The mark keeps the product's identity, carries "Adaptive lighting" as its accessible
+	   label, and the page's own heading is the next thing down. Measured at 390x844.
+	*/
+	.brand-text {
+		display: none;
+	}
+}
+
+/* ==================================================================================================
+   THE LEVELS CARD — what this room is set to, period by period, and how daylight lifts it.
+   Room.razor · LevelsEditor.razor · LuxCurveChart.razor
+
+   PROMINENT WITHOUT BEING LOUD. This is the first settings surface on the page and it never folds,
+   because it answers the question a room page is opened for. But on most of seventeen rooms it will
+   have nothing to report, so nominal is grey: an inherited value is drawn in --muted, carries no
+   mark, and the card's head carries no count. The only ink a following room spends is the warmth
+   swatches, and those are data. Everything amber is something somebody chose — the dark-cockpit rule
+   applied to a settings group rather than to a board.
+   ============================================================================================== */
+
+.room-levels-card .room-card-head {
+	flex-wrap: wrap;
+}
+
+.lvl-lede {
+	padding-top: 0;
+	padding-bottom: 0.5rem;
+}
+
+/* ---- one period ----
+   A grid and not a table: four columns of controls do not fit 390px, and a settings row whose last
+   control lives behind a horizontal scrollbar is one nobody finds. Stacked on a phone, three columns
+   from the width at which two preset dropdowns and their labels stop crowding each other. */
+.lvl {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: var(--space-2) var(--space-4);
+	padding: 0.7rem 1.15rem;
+	border-top: var(--rule-inner);
+	border-left: var(--stroke-mark) solid transparent;
+}
+
+@media (min-width: 780px) {
+	.lvl {
+		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr) minmax(11rem, 1fr);
+		align-items: start;
+	}
+}
+
+/* The row that is actually running, marked the way the schedule editor marks its active card — the
+   same accent edge, so "this is the one in force" reads identically on both pages. */
+.lvl-now {
+	border-left-color: var(--accent);
+	background: var(--panel-2);
+}
+
+.lvl-when {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 0.3rem 0.45rem;
+	min-width: 0;
+}
+
+.lvl-name {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.lvl-start {
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+.lvl-cell {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.25rem;
+	min-width: 0;
+}
+
+.lvl-cell-head {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	min-height: 1rem;
+}
+
+.lvl-cell-label {
+	font-size: var(--text-xs);
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* Muted while the schedule decides it, solid once the room does — the same fact the amber dot beside
+   the label carries, said again where the eye is when it opens the list. The stepper's readout already
+   works this way; this is that rule reaching a dropdown. */
+.lvl-cell:not(.lvl-set) .preset-select,
+.lvl-cell:not(.lvl-set) .cell.num {
+	color: var(--muted);
+}
+
+.lvl-inherit {
+	font-size: var(--text-xs);
+	color: var(--muted);
+}
+
+/* Brass, because it is a thing you press, and it names the number it goes back to so the act can be
+   predicted rather than tried — the same wording contract .srow-revert keeps. */
+.lvl-revert {
+	background: none;
+	border: 0;
+	padding: 0;
+	font-size: var(--text-xs);
+	font-weight: 650;
+	color: var(--accent);
+	text-align: left;
+}
+
+.lvl-revert:hover:not(:disabled) {
+	text-decoration: underline;
+	border-color: transparent;
+}
+
+/* The actual warmth, not only its number: 2700 K and 4500 K are two different rooms, and a column of
+   four-digit numbers is the one form in which that difference is invisible.
+
+   --kelvin-weight / --kelvin-shade are the same pair the state chip's glyph uses, and they are needed for
+   the same reason: a Kelvin colour is rgb(255, g, b), so above about 4000 K it is very nearly white —
+   correct as light, and all but invisible as a filled block on a pale panel. Measured at 4500 K in the
+   light theme, where the swatch had disappeared entirely. Dark takes the colour as it comes. */
+.lvl-swatch {
+	width: 22px;
+	height: 10px;
+	border-radius: 2px;
+	flex: 0 0 auto;
+	background: color-mix(in srgb, var(--lvl-kelvin, var(--machine)) var(--kelvin-weight), var(--kelvin-shade));
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent);
+}
+
+/* ---- a period that no longer exists ----
+   Kept by the schema because a missing period is nearly always a rename in progress. Shown here, and
+   removable, because kept silently it is baggage that springs back the day the name returns. */
+.lvl-orphan {
+	background: var(--warn-bg);
+}
+
+.lvl-orphan .lvl-start {
+	color: var(--warn);
+}
+
+.lvl-orphan-value {
+	font-family: var(--mono);
+	font-size: var(--text-md);
+}
+
+.lvl-drop {
+	font-size: var(--text-sm);
+	padding: 0.2rem 0.55rem;
+	color: var(--warn);
+	border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+}
+
+/* ---- the daylight half ---- */
+
+.lvl-daylight {
+	border-top: var(--rule);
+	padding: 0.7rem 1.15rem 0.9rem;
+}
+
+.lvl-daylight-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+}
+
+.lvl-daylight-title {
+	font-size: var(--text-md);
+	font-weight: 650;
+}
+
+.lvl-daylight .room-card-foot {
+	padding: 0.5rem 0 0;
+}
+
+/* ---- the curve ----
+   Hand-built inline SVG, themed with the page's own tokens: no chart library, no CDN, nothing fetched.
+   The line is drawn in the accent because the line IS the control here — the same reason CurveGlyph's
+   path is — and in the same 2px mark weight the board's now-line uses. */
+.luxc {
+	margin-top: var(--space-3);
+}
+
+.luxc-plot {
+	position: relative;
+	container: luxcurve / inline-size;
+
+	/* 620 is LuxCurve.ViewWidth. */
+	--chart-unit: tan(atan2(620px, 100cqw));
+}
+
+.luxc-svg {
+	display: block;
+	width: 100%;
+	height: auto;
+	overflow: visible;
+}
+
+/* What a finger actually touches, laid over the plot area by LuxCurve.SurfaceStyle so the drawing and
+   the target cannot disagree about where the plot is.
+
+   touch-action: none is not a nicety — without it a touch drag scrolls the page and the chart never
+   moves, which is the whole feature gone on the device most likely to be holding it. */
+.luxc-surface {
+	position: absolute;
+	touch-action: none;
+	cursor: crosshair;
+}
+
+.luxc-dragging .luxc-surface {
+	cursor: grabbing;
+}
+
+.luxc-field {
+	fill: var(--lane);
+}
+
+.luxc-grid {
+	stroke: var(--grid);
+	stroke-width: var(--stroke-hair);
+}
+
+.luxc-axis {
+	fill: var(--muted);
+	font-family: var(--font-sans);
+	font-size: 10px;
+}
+
+/* Six decades will not fit across a phone: measured at 390 px, "10000 lx" and "100000 lx" ran together into
+   one word. Alternate labels are marked in the markup, counted from the right so the top decade survives, and
+   dropped here. The gridlines stay, so the decades the labels no longer name are still marked. */
+@media (max-width: 44rem) {
+	.luxc-axis.luxc-thin,
+	.luxc-decade.luxc-thin {
+		display: none;
+	}
+}
+
+.luxc-decade {
+	fill: var(--muted);
+	font-family: var(--font-sans);
+	font-size: 9px;
+	opacity: 0.72;
+}
+
+.luxc-line {
+	fill: none;
+	stroke: var(--accent);
+	stroke-width: var(--stroke-mark);
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* The house's own reading, in the live-edge colour the board's now-line uses. */
+.luxc-now {
+	stroke: var(--now);
+	stroke-width: var(--stroke-mark);
+	opacity: 0.75;
+}
+
+.luxc-now-dot {
+	fill: var(--now);
+}
+
+.luxc-now-label {
+	fill: var(--now);
+	font-family: var(--font-sans);
+	font-size: 10px;
+	font-weight: 650;
+}
+
+.luxc-handle {
+	fill: var(--panel);
+	stroke: var(--accent);
+	stroke-width: var(--stroke-mark);
+	cursor: grab;
+}
+
+.luxc-handle:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.luxc-held {
+	fill: var(--accent);
+}
+
+.luxc-caption {
+	margin: var(--space-2) 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted);
+	line-height: 1.45;
+}
+
+/* On a phone the chart is about a third of its desktop size, and everything inside it scales with the
+   viewBox — so ten user units of type land as under six real pixels.
+
+   These were fixed user-unit bumps keyed to the viewport. Same idiom as the daylight chart now, keyed to the
+   chart rather than the window, so a narrow chart in a wide sidebar behaves too.
+
+   The targets are pixel sizes, not the user-unit numbers above: this plot is 1013 px wide at a 1280 px window,
+   so 10 units were already rendering at 16.3. Taking the stylesheet figure would have shrunk it by a third. */
+@supports (font-size: calc(tan(atan2(1px, 1px)) * 1px)) {
+	@container luxcurve (min-width: 1px) {
+		.luxc-axis,
+		.luxc-now-label {
+			font-size: min(calc(var(--chart-unit) * 16.3px), 20px);
+		}
+
+		.luxc-decade {
+			font-size: min(calc(var(--chart-unit) * 14.7px), 18px);
+		}
+	}
+}
+
+/* Constant-size type does not buy back the room between decades, so the thinning above and the decade drop
+   below both stay, and stay keyed to the viewport: they are the fallback for a browser that skipped the block
+   above, and a phone is narrow on both measures anyway. */
+@media (max-width: 560px) {
+	.luxc-decade {
+		display: none;
+	}
+
+	/* Geometry properties, so a handle that is a fair mark at full size is still one at a third of it. What a
+	   finger actually hits is .luxc-surface, which is the whole plot. */
+	.luxc-handle {
+		r: 12;
+		stroke-width: 3.5;
+	}
+}
+
+/* ===== wizard (agent W) =====
+   The commissioning board — what the .onboarding panel becomes while no room is switched on.
+
+   Almost nothing here is a new idea. The floor headers, the switch, the person chips, the sentences and their
+   tokens, the gear chips and the panel are all shipped classes reused as they stand; what is added is the
+   findings strip, the checklist, the roll-call's grid and the commit block. Every colour is a token, in both
+   themes, so nothing below needs a theme of its own.
+
+   docs/design/first-run-wizard.md is the specification; docs/design/mockups/first-run.html renders it. */
+
+/* ---- the findings strip: orientation in five numbers ----
+   Glyphless on purpose (ui-design-c §6.2: glyphs mark sections, counts stay text). The one glyph marks the one
+   chip that is a fact rather than a count, so it reads as a different kind of thing. */
+.comm-strip {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin: 0 0 var(--space-4);
+}
+
+.comm-fact {
+	background: var(--panel-2);
+	border: var(--rule);
+	border-radius: var(--radius-chip);
+	padding: var(--space-3) var(--space-5);
+	min-width: 86px;
+	text-align: center;
+}
+
+.comm-fact .n {
+	font-size: var(--text-xl);
+	font-weight: 650;
+	font-family: var(--mono);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.15;
+}
+
+/* .comm-fact .w is styled with the other micro-labels further down this block. */
+
+.comm-fact.mode {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	text-align: left;
+	min-width: 0;
+}
+
+.comm-fact.mode .ic {
+	color: var(--muted);
+}
+
+/* The adopted select's name is a name, not a number, so it drops the tabular figures and the mono face with them. */
+.comm-fact.mode .n {
+	font-size: var(--text-base);
+	font-family: inherit;
+}
+
+.comm-fact.mode .w {
+	letter-spacing: 0.08em;
+}
+
+/* ---- the checklist ----
+   A left edge in the accent while a sheet is open, muted once it has an answer. Neither is a tick: the status
+   line under each title is a summary of the document, so a second visit reads as a review. */
+.comm-list {
+	display: flex;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+	margin: 0;
+}
+
+.comm-item {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	align-items: flex-start;
+	background: var(--panel);
+	border: var(--rule);
+	border-left: 3px solid var(--line);
+	border-radius: var(--radius-control);
+	padding: 7px 13px;
+	text-align: left;
+	min-width: 150px;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+
+.comm-item .ti {
+	font-weight: 650;
+	font-size: var(--text-md);
+}
+
+.comm-item .st {
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* The one mark an item carries: which sheet is open. The status line under the title already says what the
+   answer is, so a done-tick would be a second and weaker claim beside it. */
+.comm-item.open {
+	border-left-color: var(--accent);
+}
+
+.comm-item:hover {
+	border-color: var(--accent);
+}
+
+/* ---- a question sheet ----
+   The shipped .panel with a head and a body, because a sheet is a card that opens in place rather than a
+   dialog: nothing on this page is modal, on a page whose whole promise is that nothing happens until you say so. */
+.comm-sheet {
+	margin: var(--space-4) 0;
+	padding: 0;
+	overflow: visible;
+}
+
+.sheet-head {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	padding: var(--space-4) 18px 2px;
+	flex-wrap: wrap;
+}
+
+.sheet-head .note {
+	font-size: var(--text-sm);
+	color: var(--muted);
+	margin-left: auto;
+}
+
+.sheet-body {
+	padding: var(--space-1) 18px var(--space-4);
+}
+
+.sheet-actions {
+	display: flex;
+	gap: 10px;
+	padding: 10px 0 2px;
+	flex-wrap: wrap;
+}
+
+.sheet-actions button {
+	border: var(--stroke-control) solid var(--line);
+	border-radius: var(--radius-control);
+	background: none;
+	padding: 0.35rem 0.9rem;
+	font: inherit;
+	font-size: var(--text-md);
+	font-weight: 600;
+	color: inherit;
+	cursor: pointer;
+}
+
+/* .sheet-actions button.primary was here, restating background/border-color/color from button.primary
+   above. Same element, same three declarations, no override — deleted rather than kept in step. */
+
+.comm-sheet .smallprint,
+.commit-after .smallprint,
+.commit-promise .smallprint {
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* The wizard's micro-label. Written out twice inside this block — once for the findings strip, once for the
+   sheets and legend — as byte-identical declarations 25 lines apart. The roll-call column heads are the same
+   recipe at slightly different values and are deliberately still their own rule, above. */
+.comm-fact .w,
+.comm-sheet .lab,
+.comm-label .lab,
+.legend .lab {
+	font-size: var(--text-xs);
+	font-weight: 700;
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.comm-sheet .mono {
+	font-family: var(--mono);
+}
+
+.comm-sheet .mode-name {
+	font-weight: 650;
+}
+
+/* The house name is free text, so it is an input wearing the token's clothes rather than a token: same fill,
+   same radius, same mono face, and the same brass on focus that means "you can change this". */
+.tok-text {
+	width: 9rem;
+	max-width: 40vw;
+	cursor: text;
+	white-space: normal;
+}
+
+.tok-text:focus {
+	outline: none;
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+/* Inline in the sentence, so the chips sit on the line rather than breaking it into three blocks. */
+.comm-sheet .people-row {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	vertical-align: middle;
+	padding: 0;
+}
+
+.person-chip.out {
+	opacity: 0.55;
+	background: none;
+	border-color: var(--line);
+}
+
+.person-chip.out .person-chip-name {
+	text-decoration: line-through;
+}
+
+/* ---- the roll-call ---- */
+.comm-label {
+	margin: var(--space-6) 0 var(--space-2);
+}
+
+.comm-t {
+	background: var(--panel);
+	border: var(--rule);
+	border-radius: var(--radius-panel);
+	overflow: hidden;
+}
+
+/* One grid, shared by the head and every row, so a count and its column cannot drift apart. */
+.comm-cols,
+.comm-row {
+	display: grid;
+	grid-template-columns: 56px minmax(130px, 1.4fr) 64px 64px 88px 2fr;
+	gap: 0 10px;
+	align-items: center;
+}
+
+.comm-cols {
+	padding: var(--space-3) var(--space-4) var(--space-1);
+}
+
+.comm-cols span {
+	font-size: var(--text-xs);
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+	font-weight: 700;
+}
+
+.comm-row {
+	padding: 7px var(--space-4);
+	border-top: var(--rule-inner);
+	cursor: pointer;
+}
+
+.comm-row:hover,
+.comm-row.open {
+	background: var(--panel-2);
+}
+
+.comm-row:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: -2px;
+}
+
+.comm-row .rn {
+	font-weight: 650;
+	font-size: var(--text-md);
+	min-width: 0;
+}
+
+/* The global code rule gives an entity id a filled, brass-on-panel badge. Right for an id quoted inside prose;
+   wrong here, where display:block stretched it into a grey bar the width of the column under every room name.
+   The slug is a whisper under the name, so it keeps only the mono face. */
+.comm-row .rn code {
+	display: block;
+	background: none;
+	padding: 0;
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	color: var(--muted);
+	font-weight: 400;
+}
+
+.comm-row .c {
+	font-family: var(--mono);
+	font-size: var(--text-sm);
+	color: var(--muted);
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.comm-row .c b {
+	color: var(--text);
+	font-weight: 600;
+}
+
+.comm-row .notes {
+	display: flex;
+	gap: 5px;
+	flex-wrap: wrap;
+	align-items: center;
+	min-width: 0;
+}
+
+.note-chip {
+	display: inline-flex;
+	align-items: center;
+	border-radius: var(--radius-chip);
+	padding: 0.05rem 0.5rem;
+	font-size: var(--text-xs);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.note-chip.warn {
+	background: var(--warn-bg);
+	color: var(--warn);
+}
+
+.note-chip.info {
+	background: var(--idle-bg);
+	color: var(--info);
+}
+
+/* Muted, one word, and gone entirely on the phone. Seventeen green verdicts would be the reassurance
+   dashboard this design guards against. */
+.note-ready {
+	font-size: var(--text-xs);
+	color: var(--muted);
+	opacity: 0.7;
+}
+
+/* The desktop columns already carry the counts, so the phone's meta line keeps only its chips. */
+.comm-row .cnt {
+	display: none;
+}
+
+.comm-unfold {
+	border-top: var(--rule-inner);
+	background: var(--panel-2);
+	padding: var(--space-1) var(--space-4) 10px;
+}
+
+.comm-unfold .sentence {
+	font-size: var(--text-md);
+	line-height: 1.8;
+	padding: 0.45rem 0;
+}
+
+.comm-unfold .room-gear {
+	padding: 0.5rem 0 0.1rem;
+}
+
+.comm-nearmiss,
+.comm-escape {
+	margin: 10px 2px 0;
+	font-size: var(--text-sm);
+	color: var(--muted);
+	max-width: 72ch;
+}
+
+/* ---- commit ----
+   The promise, the one button, and the legend. Everything is in flow on a desk; the phone block below makes
+   only the button bar sticky, so a thumb never scrolls seventeen rows to find it.
+
+   The pick zone is what bounds that stickiness. A sticky element is held inside its containing block, so
+   without this the button floated up over the question sheets — a control promising to switch rooms on,
+   sitting on top of a sentence about who lives here. */
+.comm-pickzone {
+	position: relative;
+}
+
+.commit-copy {
+	padding: 10px 0 0;
+	margin-top: var(--space-2);
+	border-top: var(--rule-inner);
+}
+
+.commit-promise {
+	margin: 0;
+	font-size: var(--text-md);
+}
+
+.commit-bar {
+	padding: var(--space-3) 0;
+}
+
+.bigbtn {
+	display: inline-block;
+	background: var(--accent);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-panel);
+	padding: 11px 22px;
+	font: inherit;
+	font-size: var(--text-base);
+	font-weight: 700;
+	color: var(--accent-ink);
+	cursor: pointer;
+}
+
+/* No .bigbtn:disabled. It set opacity 0.4 where button:disabled sets 0.45, which made the commit button the
+   one disabled control in the app that faded differently from every other one. .bigbtn carries the size
+   deltas only; the disabled look is the app's. */
+
+.commit-after .smallprint {
+	display: block;
+}
+
+.legend {
+	display: flex;
+	gap: var(--space-5);
+	flex-wrap: wrap;
+	align-items: center;
+	margin: var(--space-4) 2px 0;
+	padding-top: 10px;
+}
+
+.legend .key {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* ---- the phone ----
+   One column; rows fold to two lines; "Ready" goes silent, because silence is the phone's verdict; the commit
+   bar pins itself to the bottom edge. */
+@media (max-width: 560px) {
+	.comm-strip {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-3);
+	}
+
+	.comm-fact {
+		min-width: 0;
+		padding: 7px var(--space-3);
+	}
+
+	.comm-fact .n {
+		font-size: 20px;
+	}
+
+	.comm-fact.mode {
+		grid-column: 1 / -1;
+	}
+
+	.comm-list {
+		flex-direction: column;
+	}
+
+	.comm-item {
+		width: 100%;
+		min-width: 0;
+	}
+
+	.comm-cols {
+		display: none;
+	}
+
+	.comm-row {
+		grid-template-columns: 44px 1fr auto;
+		grid-template-areas:
+			"sw name lx"
+			"sw meta meta";
+		gap: 1px var(--space-3);
+		padding: var(--space-3) 10px;
+	}
+
+	.comm-row .sw {
+		grid-area: sw;
+	}
+
+	.comm-row .rn {
+		grid-area: name;
+	}
+
+	/* The slug is a desk fact. On two lines it costs the room the note chips need. */
+	.comm-row .rn code {
+		display: none;
+	}
+
+	.comm-row .c {
+		display: none;
+	}
+
+	.comm-row .c.lx {
+		display: block;
+		grid-area: lx;
+		font-size: var(--text-sm);
+	}
+
+	.comm-row .meta {
+		grid-area: meta;
+	}
+
+	.comm-row .cnt {
+		display: inline;
+		font-size: var(--text-xs);
+		color: var(--muted);
+		font-family: var(--mono);
+	}
+
+	.note-ready {
+		display: none;
+	}
+
+	.tok-text {
+		max-width: 60vw;
+	}
+
+	.commit-bar {
+		position: sticky;
+		bottom: 0;
+		z-index: 20;
+		background: var(--bg);
+		border-top: var(--rule-inner);
+		padding: var(--space-3) 0;
+	}
+
+	.bigbtn {
+		display: block;
+		width: 100%;
+		text-align: center;
+	}
+}
+/* ===== end wizard ===== */
+/* ===== period select (agent P) ===== */
+
+/* Tying the schedule to a Home Assistant dropdown. Everything here lives inside a GroupFold, so the block
+   owns no background of its own — .field already carries the row rhythm the rest of the settings page uses,
+   and a second surface inside the fold would read as a box nobody put there. */
+
+.periodselect {
+	display: flex;
+	flex-direction: column;
+}
+
+/* The two directions, side by side. A row rather than a stack, because the whole point of the control is that
+   they are alternatives to each other and reading them as a list invites ticking both. */
+.periodselect-authority {
+	display: inline-flex;
+	gap: 0.15rem 1.1rem;
+	flex-wrap: wrap;
+}
+
+.periodselect-choice {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	white-space: nowrap;
+	color: var(--text);
+}
+
+/* A notice inside a fold: the fold's body already insets it, so the default bottom margin would stack a gap
+   under it that nothing sits in. Column, because each of these is a sentence, its consequence, and sometimes
+   a button — and the three read as a block rather than a paragraph. */
+.periodselect-warning {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	margin: 0.6rem 0 0;
+}
+
+.periodselect-warning .panel-actions {
+	margin-top: 0.25rem;
+}
+
+.periodselect-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	margin-top: 0.8rem;
+}
+
+/* One live option, one period. A grid rather than a spread row: with space-between, a 22rem select and a
+   six-character option string sat a third of a screen apart and the eye had to cross the gap once per row to
+   find out what it was reading. Two columns put the answer next to the question and line the dropdowns up. */
+.periodselect-row {
+	display: grid;
+	grid-template-columns: minmax(6rem, 13rem) minmax(0, 22rem);
+	align-items: center;
+	gap: 0.3rem 1rem;
+}
+
+.periodselect-row select {
+	width: 100%;
+}
+
+/* Stacked on a phone, where 13rem + 22rem cannot both fit and the option strings are whatever somebody typed
+   into a helper — so their width is not something this page gets to assume. */
+@media (max-width: 560px) {
+	.periodselect-row {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.periodselect-option {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+/* The rename cases, held apart from the live rows by a rule rather than by a heading: they are the same kind
+   of row, and what makes them different is that Home Assistant no longer offers them — which each row's own
+   badge already says. */
+.periodselect-orphans {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	margin-top: 0.8rem;
+	padding-top: 0.7rem;
+	border-top: 1px solid var(--line);
+}
+
+.periodselect-orphan {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem 0.7rem;
+	flex-wrap: wrap;
+}
+
+.periodselect-orphan-text {
+	color: var(--muted);
+	font-size: var(--text-sm);
+	min-width: 0;
+}
+
+/* The schedule editor's one line when Home Assistant owns the time of day. A notice rather than a badge
+   because it is about every Start field below it, not about one of them — and it has to survive being read
+   at a glance by somebody who is about to edit a control that does nothing. */
+.period-authority {
+	margin-bottom: 0.9rem;
+}
+
+/* ===== end period select ===== */
+
+/* ===== mode authority ===== */
+
+/* What a control that is switched off but still editable looks like. Muted and small, because it sits under a
+   field somebody may still want to fill in for later. Greying the control itself would read as disabled, and
+   the setting is kept, not refused. */
+.mode-dormant {
+	display: block;
+	margin-top: 0.35rem;
+	color: var(--muted);
+	font-size: var(--text-sm);
+	font-style: italic;
+}
+
+/* The one place the dormant rules are listed together. Same shape as .periodselect-warning and for the same
+   reason: a notice inside a panel, where the default bottom margin stacks a gap nothing sits in. */
+.mode-dormant-rules {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	margin: 0.6rem 0 0;
+}
+
+/* ===== end mode authority ===== */
+
+/* ==============================================================================================
+   ===== colour + include all =====
+   ============================================================================================== */
+
+/* The room's one warmth question, above the periods rather than inside each of them: it is a fact about
+   the fixtures, and four copies of it would read as four separate decisions. */
+.lvl-warmth {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.4rem 0.7rem;
+	padding: 0.7rem 1.15rem;
+	border-top: var(--rule-inner);
+}
+
+.lvl-warmth-lab {
+	font-size: var(--text-xs);
+	letter-spacing: var(--label-track);
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* Wraps to its own line under 30rem or so rather than squeezing the dropdown: the sentence is the whole
+   explanation of why the warmth column below has gone. */
+.lvl-warmth-note {
+	flex: 1 1 18rem;
+	min-width: 0;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+/* Two columns once the warmth cell is gone. Left at three, the brightness control sits at a third of the
+   row with an empty half beside it, which reads as a control that failed to render. */
+@media (min-width: 780px) {
+	.lvl-nocolour {
+		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr);
+	}
+}
+
+/* The board's bulk action across every floor, on the roll-call's own label row so it reads as a heading
+   control rather than as another kind of room row. */
+.comm-label {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.3rem 0.8rem;
+}
+
+.comm-all {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-left: auto;
+	font-size: var(--text-sm);
+	cursor: pointer;
+}
+
+/* ===== end colour + include all ===== */
+
+/* ===== re-setup include all ===== */
+
+/* Matches .comm-all on the first-run board, minus the margin-left:auto: this one heads a list rather than
+   sharing a row with a label. */
+.setup-all {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-bottom: var(--space-3);
+	font-size: var(--text-sm);
+	cursor: pointer;
+}
+
+/* ===== end re-setup include all ===== */
+
+/* ===== gate polarity ===== */
+
+/* Sits under the entity list inside a SettingRow, so it indents with the chips rather than the label. */
+.gate-invert {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	margin-top: var(--space-2);
+	font-size: var(--text-sm);
+	color: var(--muted);
+	cursor: pointer;
+}
+
+/* ===== end gate polarity ===== */
+
+/* ===== a period that waits for movement ===== */
+
+/* The room list spans the whole period grid: the chips and the add row need more than one 230px column, and a
+   picker that wraps inside one reads as a broken control. */
+.period-motion-rooms {
+	grid-column: 1 / -1;
+}
+
+.period-motion-rooms .list-picker {
+	width: 100%;
+}
+
+/* The label around the box only, so the (i) beside it can stay outside the label. Inherits the weight, size
+   and colour of the .pfield-label it sits in. */
+.pfield-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	cursor: pointer;
+}
+
+/* The period grid has no help styling of its own; this matches .field-help, one step smaller for the card. */
+.pfield-help {
+	color: var(--muted);
+	font-size: 0.78rem;
+	max-width: 60rem;
+}
+
+/* ===== end a period that waits for movement ===== */

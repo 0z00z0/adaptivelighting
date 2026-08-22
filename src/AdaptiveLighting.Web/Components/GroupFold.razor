@@ -1,0 +1,39 @@
+@* The open attribute is decided once, so Blazor's diff never overrides a fold that was toggled by hand. *@
+
+<details class="panel group-fold" open="@_openInitially">
+	<summary class="group-summary">
+		<span class="group-title">@Title</span>
+		@if (Description is { Length: > 0 })
+		{
+			<span class="group-desc">@Description</span>
+		}
+		<span class="area-chevron" aria-hidden="true"></span>
+	</summary>
+
+	<div class="group-body @(Flush ? "group-body-flush" : null)">
+		@ChildContent
+	</div>
+</details>
+
+@code {
+	[Parameter, EditorRequired]
+	public string Title { get; set; } = "";
+
+	[Parameter]
+	public string? Description { get; set; }
+
+	/// <summary>Whether the fold starts open; read once.</summary>
+	[Parameter]
+	public bool Open { get; set; }
+
+	/// <summary>Drops the body's padding, for content that already spans the fold edge to edge.</summary>
+	[Parameter]
+	public bool Flush { get; set; }
+
+	[Parameter, EditorRequired]
+	public RenderFragment? ChildContent { get; set; }
+
+	private bool _openInitially;
+
+	protected override void OnInitialized() => _openInitially = Open;
+}

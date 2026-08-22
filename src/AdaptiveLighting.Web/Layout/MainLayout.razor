@@ -1,0 +1,30 @@
+@inherits LayoutComponentBase
+
+@* The sprite is hosted here and never by a page: two copies mean two elements per glyph id, and <use>
+   resolves to whichever the browser saw first. *@
+<IconSprite />
+
+<div class="shell">
+	<header class="topbar">
+		<div class="brand">
+			<Icon Name="@Glyph.App" Class="brand-mark" Label="Adaptive lighting" />
+			<span class="brand-text">Adaptive lighting</span>
+		</div>
+		<nav class="nav">
+			<NavLink class="nav-link" href="" Match="NavLinkMatch.All">Dashboard</NavLink>
+			<NavLink class="nav-link" href="activity">Activity</NavLink>
+			<NavLink class="nav-link" href="config">Configuration</NavLink>
+		</nav>
+		<ThemePicker />
+	</header>
+
+	<main class="content">
+		@Body
+	</main>
+
+	<footer class="footer">
+		<span class="footer-warn">
+			LAN only &mdash; no login. Anyone on your network can change these settings.
+		</span>
+	</footer>
+</div>

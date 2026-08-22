@@ -1,0 +1,56 @@
+@* A plain number input cannot say "absent": blank reads as 0, and 0 % is a real instruction, hence the
+   explicit switch. *@
+
+<div class="nullable">
+	<input type="checkbox" checked="@Value.HasValue" @onchange="OnToggle" title="Set a value" />
+	@if (Value is { } value)
+	{
+		@if (Presets is { Count: > 0 } presets)
+		{
+			<PresetSelect Value="@value" ValueChanged="@(v => Commit(v))" Options="@presets" Unit="%" />
+		}
+		else
+		{
+			<input class="cell num" type="number" step="1" min="0" max="100" value="@Invariant(value)" @onchange="OnTyped" />
+		}
+	}
+	else
+	{
+		<span class="inherit">@Placeholder</span>
+	}
+</div>
+
+@code {
+	[Parameter]
+	public double? Value { get; set; }
+
+	/// <summary>When set, the value is picked from these presets instead of typed.</summary>
+	[Parameter]
+	public IReadOnlyList<PresetChoice>? Presets { get; set; }
+
+	[Parameter]
+	public EventCallback<double?> ValueChanged { get; set; }
+
+	/// <summary>The value the switch seeds when it is turned on.</summary>
+	[Parameter]
+	public double Seed { get; set; }
+
+	[Parameter]
+	public string Placeholder { get; set; } = "none";
+
+	private Task OnToggle(ChangeEventArgs args) =>
+		Commit(args.Value is true ? Seed : null);
+
+	private Task OnTyped(ChangeEventArgs args) =>
+		Commit(double.TryParse(args.Value as string, CultureInfo.InvariantCulture, out double parsed) ? parsed : Value);
+
+	private Task Commit(double? value)
+	{
+		Value = value;
+		return ValueChanged.InvokeAsync(value);
+	}
+
+	// Razor renders a bare @double through the current culture. Under nb-NO 12.5 becomes value="12,5", no
+	// browser reads that as a number, and the box shows empty over a clamp that is really set.
+	private static string Invariant(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+}

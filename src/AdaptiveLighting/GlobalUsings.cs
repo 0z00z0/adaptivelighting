@@ -1,0 +1,11 @@
+global using System;
+global using System.Reactive.Linq;
+global using System.Collections.Generic;
+global using System.Linq;
+
+global using Microsoft.Extensions.Logging;
+
+global using NetDaemon.AppModel;
+global using NetDaemon.HassModel;
+
+global using AdaptiveLighting.Extensions;

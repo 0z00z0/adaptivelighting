@@ -1,0 +1,90 @@
+@* Stored as the label's name: the registry matches either name or id, and the shipped default
+   "adaptive-exclude" is already a name, so storing ids would rewrite every document. A stored value that
+   matches no live label stays selected, since Home Assistant can be briefly unreadable. *@
+
+<div class="picker">
+	@if (_manual || !HasOptions)
+	{
+		<input type="text"
+			   class="picker-text"
+			   placeholder="@Placeholder"
+			   value="@Value"
+			   @onchange="OnTyped" />
+	}
+	else
+	{
+		<select class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
+			<option value="">@NoneLabel</option>
+			@foreach (LabelOption option in Options)
+			{
+				<option value="@option.Name">@option.Name</option>
+			}
+			@if (IsUnlisted)
+			{
+				@* Never dropped: the stored value is the one thing this field must not lose. *@
+				<option value="@Value">@Value</option>
+			}
+		</select>
+	}
+
+	<button type="button" class="picker-mode" @onclick="ToggleMode" disabled="@(!HasOptions)">
+		@(_manual ? "Pick from list" : "Type a label")
+	</button>
+
+	@if (!HasOptions)
+	{
+		<span class="picker-note">@EmptyNote</span>
+	}
+	else if (IsUnlisted)
+	{
+		<span class="picker-note">@UnknownNote</span>
+	}
+</div>
+
+@code {
+	[Parameter]
+	public string? Value { get; set; }
+
+	[Parameter]
+	public EventCallback<string?> ValueChanged { get; set; }
+
+	/// <summary>Every label Home Assistant knows; empty is an ordinary answer.</summary>
+	[Parameter]
+	public IReadOnlyList<LabelOption> Options { get; set; } = [];
+
+	[Parameter]
+	public string NoneLabel { get; set; } = "(none)";
+
+	[Parameter]
+	public string Placeholder { get; set; } = "adaptive";
+
+	/// <summary>What to say when the house has made no labels at all.</summary>
+	[Parameter]
+	public string EmptyNote { get; set; } =
+		"You haven't created any labels in Home Assistant yet. Labels are made under Settings → Areas, labels & zones → Labels — create one there, then pick it here.";
+
+	/// <summary>What to say when the stored value matches no live label.</summary>
+	[Parameter]
+	public string UnknownNote { get; set; } = "No label with this name exists in Home Assistant yet.";
+
+	private bool _manual;
+
+	private bool HasOptions => Options.Count > 0;
+
+	private bool IsUnlisted =>
+		Value is { Length: > 0 } && !Options.Any(option => string.Equals(option.Name, Value, StringComparison.OrdinalIgnoreCase));
+
+	private Task OnPicked(string picked) => Commit(picked);
+
+	private Task OnTyped(ChangeEventArgs args) => Commit(args.Value as string);
+
+	private void ToggleMode() => _manual = !_manual;
+
+	private Task Commit(string? raw)
+	{
+		// "" normalises to null at the edge, as the entity pickers do; the schema uses null for "not set".
+		string? value = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+		Value = value;
+		return ValueChanged.InvokeAsync(value);
+	}
+}

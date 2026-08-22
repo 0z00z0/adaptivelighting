@@ -1,0 +1,51 @@
+@* A stored value not on the list is shown as its own entry, never snapped to a neighbour. *@
+
+<span class="preset">
+	<select class="cell preset-select" @bind:get="Key(Value)" @bind:set="OnPicked">
+		@foreach (PresetChoice option in Options)
+		{
+			<option value="@Key(option.Value)">@option.Label</option>
+		}
+		@if (IsUnlisted)
+		{
+			<option value="@Key(Value)">@Custom(Value)</option>
+		}
+	</select>
+</span>
+
+@code {
+	[Parameter]
+	public double Value { get; set; }
+
+	[Parameter]
+	public EventCallback<double> ValueChanged { get; set; }
+
+	/// <summary>The presets to offer, from <see cref="Presets"/>.</summary>
+	[Parameter, EditorRequired]
+	public IReadOnlyList<PresetChoice> Options { get; set; } = [];
+
+	/// <summary>Unit written after a value the list does not carry, e.g. <c>%</c> or <c>K</c>.</summary>
+	[Parameter]
+	public string? Unit { get; set; }
+
+	private bool IsUnlisted => !Options.Any(option => Matches(option.Value, Value));
+
+	// Invariant string keys, so the select round-trips without an index that goes stale when a custom entry appears.
+	private static string Key(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+	private string Custom(double value) =>
+		Unit is { Length: > 0 } ? $"{Key(value)} {Unit} — custom" : $"{Key(value)} — custom";
+
+	private static bool Matches(double left, double right) => Math.Abs(left - right) < 0.001;
+
+	private Task OnPicked(string picked) =>
+		double.TryParse(picked, NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
+			? Commit(value)
+			: Task.CompletedTask;
+
+	private Task Commit(double value)
+	{
+		Value = value;
+		return ValueChanged.InvokeAsync(value);
+	}
+}

@@ -1,0 +1,84 @@
+@* Inline and not a sprite file: a <use href="sprite.svg#id"> is a cross-document reference the strict content
+   policy refuses silently, and an <img src> would isolate the glyph from the cascade, so the currentColor
+   outline and the var(--icon-accent) fill would both render flat. *@
+
+<svg class="icon-sprite" aria-hidden="true" focusable="false">
+	<defs>
+		<symbol id="i-app" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+			<circle cx="10" cy="12" r="2.2" fill="var(--icon-accent, currentColor)" stroke="none" />
+			<line x1="6.2" y1="12" x2="4.4" y2="12" />
+			<line x1="7.4" y1="9.4" x2="6.1" y2="8.1" />
+			<line x1="7.4" y1="14.6" x2="6.1" y2="15.9" />
+			<path d="M14.6 8.4 A5.8 5.8 0 0 1 14.6 15.6" />
+			<path d="M17.3 6.2 A9.3 9.3 0 0 1 17.3 17.8" />
+		</symbol>
+
+		<symbol id="i-areas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round">
+			<rect x="4" y="4.5" width="16" height="15" rx="1.6" />
+			<line x1="13" y1="4.5" x2="13" y2="12" />
+			<line x1="4" y1="12" x2="9.5" y2="12" />
+			<circle cx="16.5" cy="8.2" r="1.9" fill="var(--icon-accent, currentColor)" stroke="none" />
+		</symbol>
+
+		<symbol id="i-schedule" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+			<path d="M3.5 18.5 C7.5 18.5 7.5 9.5 12 9.5 C16.5 9.5 16.5 18.5 20.5 18.5" />
+			<circle cx="12" cy="5.2" r="1.9" fill="var(--icon-accent, currentColor)" stroke="none" />
+		</symbol>
+
+		<symbol id="i-modes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+			<circle cx="12" cy="12" r="5.6" />
+			<line x1="6.9" y1="6.9" x2="5.8" y2="5.8" stroke="var(--icon-accent, currentColor)" />
+			<line x1="17.1" y1="6.9" x2="18.2" y2="5.8" />
+			<line x1="6.9" y1="17.1" x2="5.8" y2="18.2" />
+			<line x1="17.1" y1="17.1" x2="18.2" y2="18.2" />
+			<line x1="12" y1="12" x2="8.7" y2="8.7" stroke="var(--icon-accent, currentColor)" stroke-width="1.8" />
+			<circle cx="12" cy="12" r="1.3" fill="var(--icon-accent, currentColor)" stroke="none" />
+		</symbol>
+
+		<symbol id="i-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M4 10.8 L12 4.3 L20 10.8" />
+			<path d="M6.2 9.4 V19.5 H17.8 V9.4" />
+			<line x1="12" y1="10.4" x2="12" y2="13.9" stroke="var(--icon-accent, currentColor)" />
+			<path d="M14.2 11.9 A3 3 0 1 1 9.8 11.9" stroke="var(--icon-accent, currentColor)" />
+		</symbol>
+
+		<symbol id="i-residents" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M4 10.8 L12 4.3 L20 10.8" />
+			<path d="M6.2 9.4 V19.5 H17.8 V9.4" />
+			<circle cx="12" cy="11.9" r="1.9" fill="var(--icon-accent, currentColor)" stroke="none" />
+			<path d="M8.9 17.6 A3.1 3.1 0 0 1 15.1 17.6" />
+		</symbol>
+
+		<symbol id="i-lanes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+			<line x1="3.7" y1="7.2" x2="17.6" y2="7.2" />
+			<line x1="3.7" y1="12" x2="12.4" y2="12" />
+			<line x1="3.7" y1="16.8" x2="20.3" y2="16.8" />
+			<line x1="15.2" y1="4.4" x2="15.2" y2="19.6" stroke="var(--icon-accent, currentColor)" stroke-width="1.8" />
+		</symbol>
+
+		@* State glyphs: stroke 2 and not 1.7, because these live on 13-15px chips, below the optical-size rule's
+		   ~16px threshold. Their accent is overridden to currentColor at the point of use. *@
+		<symbol id="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d="M18.8 12 A6.8 6.8 0 1 1 15.4 6.1" />
+			<path d="M12.6 6 L15.4 6.1 L14 3.5" />
+			<circle cx="12" cy="12" r="2" fill="var(--icon-accent, currentColor)" stroke="none" />
+		</symbol>
+
+		<symbol id="i-manual" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+			<circle cx="12" cy="7.4" r="3.1" fill="var(--icon-accent, currentColor)" stroke="none" />
+			<path d="M5.4 19 A6.6 6.6 0 0 1 18.6 19" />
+		</symbol>
+
+		<symbol id="i-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+			<circle cx="12" cy="12" r="7.6" />
+			<line x1="16.6" y1="6.6" x2="7.4" y2="17.4" stroke="var(--icon-accent, currentColor)" />
+		</symbol>
+
+		@* A shape of its own and not the auto loop in amber: sharing a shape makes "lit and settled" and
+		   "about to go dark" identical in greyscale. *@
+		<symbol id="i-dimming" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+			<circle cx="12" cy="12" r="7.6" />
+			<path d="M12 12 L12 5.6 A6.4 6.4 0 0 1 18.4 12 Z" fill="var(--icon-accent, currentColor)" stroke="none" />
+		</symbol>
+	</defs>
+</svg>

@@ -1,0 +1,1571 @@
+@page "/room/{AreaId}"
+@implements IDisposable
+@inject LightingEngineHost Engine
+@inject HaCatalog Catalog
+@inject AreaSnapshotCache Cache
+@inject ActivityLog Log
+@inject NavigationManager Nav
+@inject ILogger<Room> Logger
+
+@* There is no save bar. An edit mutates this page's own copy of the room and starts a short timer; when it
+   expires RoomWrite re-reads the document, puts this one room into it, and sends that through
+   LightingEngineHost.Save, which stays the only way configuration reaches disk. The sentences and the All
+   settings sections cover the same settings twice, which is intended. *@
+
+<PageTitle>@PageName &mdash; Adaptive lighting</PageTitle>
+
+@if (_loadError is { Length: > 0 } loadError)
+{
+	<h1>This room can't be shown</h1>
+	<div class="notice bad">
+		<strong>The configuration file couldn't be read.</strong>
+		<p>@loadError</p>
+		<p>Every room is in that one file, so nothing can be shown or changed until it parses. <a href="config">Open the Configuration page</a> to repair it.</p>
+	</div>
+}
+else if (_room is not { } room)
+{
+	<h1>No such room</h1>
+	<div class="empty">
+		<strong>Nothing here is set up as <code>@AreaId</code>.</strong>
+		<p>The room may have been removed, or its Home Assistant area may have been changed.</p>
+		<p><a href="">Back to the dashboard</a> &mdash; or <a href="config?section=areas">see every room</a>.</p>
+	</div>
+}
+else
+{
+	<a class="room-back" href="">&lsaquo; Dashboard</a>
+
+	<div class="room-top">
+		<div class="room-lead">
+			<header class="room-head">
+				<span class="room-glow @(IsLit ? "room-glow-lit" : null)" style="@GlowStyle" aria-hidden="true">
+					@if (Countdown is { } remaining)
+					{
+						<span class="room-ring" style="@RingStyle" title="@CountdownTitle"></span>
+					}
+					<span class="room-core"></span>
+				</span>
+
+				<h1 class="room-name">@RoomName</h1>
+
+				@if (_snapshot is { } live)
+				{
+					<StateChip State="@live.State" Kelvin="@live.ColorTempKelvin" Title="@StateTitle(live)" />
+					<span class="room-since">@RoomFacts.Since(live, _now)</span>
+				}
+				else
+				{
+					<span class="badge">no report yet</span>
+				}
+
+				@* Writes an explicit true or false, never an absent key, and saves like every other edit here. *@
+				<button type="button"
+						class="switch @(IsEnabled ? "on" : null)"
+						role="switch"
+						aria-checked="@(IsEnabled ? "true" : "false")"
+						aria-label="@($"Automatic lighting in {RoomName}")"
+						title="@SwitchTitle"
+						@onclick="ToggleEnabled">
+					<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+					<span class="switch-word">@(IsEnabled ? "on" : "off")</span>
+				</button>
+			</header>
+
+			@if (_snapshot is { } snapshot)
+			{
+				<p class="room-says">@RoomFacts.Headline(snapshot)</p>
+
+				@if (RoomFacts.NextLine(snapshot, _now, Name) is { Length: > 0 } next)
+				{
+					<p class="room-next @(RoomFacts.IsOverdue(snapshot, _now) ? "room-overdue" : null)">@next</p>
+				}
+			}
+			else
+			{
+				<p class="room-says">This room hasn't reported yet. It appears here the first time the engine decides something about it.</p>
+			}
+
+			@if (!IsEnabled)
+			{
+				<div class="notice">
+					<strong>Switched off.</strong> Nothing below is commanded while the switch is off &mdash; the
+					settings are kept, and take effect the moment you switch the room on.
+				</div>
+			}
+
+			@* Raised by the switch above, and not raised again for this room while the page is open. *@
+			@if (_switchOnNote is { } switchOn)
+			{
+				<SwitchOnNoteView Note="@switchOn" AdviceHref="config?section=house" Dismissed="@DismissSwitchOnNote" />
+			}
+		</div>
+
+		<aside class="panel room-facts">
+			<div class="room-card-head">
+				<span class="room-card-title">Right now &mdash; what the engine saw</span>
+			</div>
+
+			@if (_snapshot is { } facts)
+			{
+				<table class="room-fact-table">
+					<tbody>
+						@foreach (RoomFact fact in RoomFacts.For(facts, _now, Name))
+						{
+							<tr>
+								<th scope="row">@fact.Label</th>
+								<td title="@fact.Title" class="@(fact.IsProse ? "fact-prose" : null)">
+									@fact.Value
+									@if (fact.Detail is { Length: > 0 } detail)
+									{
+										<span class="fact-detail">@detail</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+			else
+			{
+				<p class="room-fact-empty">
+					Nothing measured yet. Readings appear as soon as this room reports &mdash; usually within a
+					minute of the engine starting.
+				</p>
+			}
+		</aside>
+	</div>
+
+	@* A refused save stays until it is resolved: until then the file on disk is not what is on screen. *@
+	@if (_failure is { } failure)
+	{
+		<div class="notice bad">
+			<strong>Not saved.</strong> @failure.Message
+			@if (failure.Validation.Errors.Count > 0)
+			{
+				<ul>
+					@foreach (string error in failure.Validation.Errors)
+					{
+						<li>@error</li>
+					}
+				</ul>
+			}
+			<div class="panel-actions">
+				@* No retry on a conflict: the same save refuses again until the room is read afresh. *@
+				@if (failure.Status is not SaveStatus.Conflicted)
+				{
+					<button type="button" class="primary" @onclick="Commit">Try again</button>
+				}
+				<button type="button" class="@(failure.Status is SaveStatus.Conflicted ? "primary" : null)" @onclick="Discard">
+					@(failure.Status is SaveStatus.Conflicted ? "Reload this room" : "Discard my changes")
+				</button>
+			</div>
+		</div>
+	}
+	else if (_validation is { } validation && validation.AreaErrors.Count > 0 && AreaErrorFor(validation) is { } mine)
+	{
+		@* An area-level error costs this room, not the save. *@
+		<div class="notice warn">
+			<strong>This room will be skipped.</strong> @mine.Message
+		</div>
+	}
+
+	<section class="panel room-card room-levels-card">
+		<div class="room-card-head">
+			<span class="room-card-title">Brightness &amp; warmth</span>
+			@if (RoomLevels.OwnCount(_document.Periods, room) is > 0 and int chosen)
+			{
+				<span class="sgroup-count" title="Periods this room sets for itself">@chosen</span>
+			}
+			<span class="room-save @SaveClass" role="status">@SaveLine</span>
+		</div>
+
+		<p class="room-card-foot lvl-lede">@LevelsLede</p>
+
+		<LevelsEditor Periods="@_document.Periods"
+					  Room="@room"
+					  Defaults="@_document.Defaults"
+					  Resolved="@_preview.Resolved"
+					  ActivePeriod="@ActivePeriodId"
+					  Changed="@MarkDirty" />
+
+		<div class="lvl-daylight">
+			<div class="lvl-daylight-head">
+				<span class="lvl-daylight-title">Brighten with daylight</span>
+				<button type="button"
+						class="switch @(BrightensWithDaylight ? "on" : null)"
+						role="switch"
+						aria-checked="@(BrightensWithDaylight ? "true" : "false")"
+						aria-label="Brighten with daylight"
+						@onclick="() => SetFlag(nameof(AreaSettings.LuxBrightnessEnabled), !BrightensWithDaylight)">
+					<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+					<span class="switch-word">@(BrightensWithDaylight ? "on" : "off")</span>
+				</button>
+			</div>
+
+			@if (BrightensWithDaylight)
+			{
+				<LuxCurveChart Settings="@Effective"
+							   BaseBrightnessPct="@DaylightBasePct"
+							   PeriodName="@ActivePeriodName"
+							   Reading="@LiveLux"
+							   Changed="@OnCurveEdited" />
+			}
+			else
+			{
+				<p class="room-card-foot">
+					This room holds the schedule's brightness whatever the weather. Switched on, a bright day lifts
+					it above the schedule so it doesn't read as gloomy against a bright window.
+				</p>
+			}
+		</div>
+	</section>
+
+	<section class="panel room-card">
+		<div class="room-card-head">
+			<span class="room-card-title">How this room behaves</span>
+			<span class="room-save @SaveClass" role="status">@SaveLine</span>
+			@if (_dirty)
+			{
+				<button type="button" class="room-save-now" @onclick="Commit">Save now</button>
+			}
+		</div>
+
+		<div class="room-sentences">
+			<SentenceView Sentences="@AreaSentences.ForArea(room, _document.Defaults)"
+						  Edited="@OnEdited"
+						  Reverted="@OnReverted"
+						  Note="@TokenNote" />
+		</div>
+
+		<div class="room-morebar">
+			<button type="button"
+					class="room-more"
+					aria-expanded="@(_showAll ? "true" : "false")"
+					@onclick="() => _showAll = !_showAll">
+				All settings @(_showAll ? "▴" : "▾")
+			</button>
+			@* Kept short: at 390px this bar has 340px, and a longer sentence wraps to three lines. *@
+			<span class="room-more-note">
+				@OwnLine &mdash;
+				<a href="config?section=house">baseline under House</a>
+			</span>
+		</div>
+
+		@if (_showAll)
+		{
+			<div class="room-groups">
+				@foreach (RoomSettingGroup group in RoomSettings.Groups)
+				{
+					RoomSettingGroup current = group;
+					bool open = IsOpen(current);
+
+					<div class="sgroup @(open ? "sgroup-open" : null)">
+						<button type="button"
+								class="sgroup-head"
+								aria-expanded="@(open ? "true" : "false")"
+								@onclick="() => Toggle(current)">
+							<span class="sgroup-title">@current.Title</span>
+							@if (OwnCountIn(current) is > 0 and int changed)
+							{
+								<span class="sgroup-count" title="Settings this room states for itself">@changed</span>
+							}
+							<span class="sgroup-note">@current.Note</span>
+							<span class="area-chevron" aria-hidden="true"></span>
+						</button>
+
+						@if (open)
+						{
+							<div class="sgroup-body">
+								@foreach (RoomSetting setting in current.Settings.Where(item => item.AppliesTo(Effective)))
+								{
+									RoomSetting item = setting;
+
+									<SettingRow Label="@item.Label"
+												Help="@item.Help"
+												IsOwn="@RoomSettings.IsOwn(room, item.Key)"
+												HouseText="@RoomSettings.Describe(null, _document.Defaults, item.Key)"
+												Reverted="@(() => Revert(item.Key))">
+										@switch (item.Control)
+										{
+											case RoomControl.Flag:
+												<button type="button"
+														class="switch @(RoomSettings.Flag(room, _document.Defaults, item.Key) ? "on" : null)"
+														role="switch"
+														aria-checked="@(RoomSettings.Flag(room, _document.Defaults, item.Key) ? "true" : "false")"
+														aria-label="@item.Label"
+														@onclick="() => SetFlag(item.Key, !RoomSettings.Flag(room, _document.Defaults, item.Key))">
+													<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+												</button>
+												break;
+
+											case RoomControl.Choice:
+												<div class="seg" role="group" aria-label="@item.Label">
+													@foreach (TokenChoice option in RoomSettings.ChoicesFor(item.Key))
+													{
+														TokenChoice choice = option;
+														<button type="button"
+																class="@(IsCurrentChoice(item.Key, choice) ? "cur" : null)"
+																aria-pressed="@(IsCurrentChoice(item.Key, choice) ? "true" : "false")"
+																@onclick="() => SetChoice(item.Key, choice.Value)">@choice.Text</button>
+													}
+												</div>
+												break;
+
+											case RoomControl.Entity:
+												<EntityPicker Value="@RoomSettings.Entity(room, _document.Defaults, item.Key)"
+															  ValueChanged="@(value => SetEntity(item.Key, value))"
+															  Options="@_sunEntities"
+															  NoneLabel="(the house's sun entity)"
+															  Placeholder="sun.sun" />
+												break;
+
+											default:
+												<Stepper Value="@RoomSettings.Shown(room, _document.Defaults, item.Key)"
+														 Text="@RoomSettings.Describe(room, _document.Defaults, item.Key)"
+														 Label="@item.Label"
+														 Step="@item.Step"
+														 Min="@item.Min"
+														 Max="@item.Max"
+														 IsOwn="@RoomSettings.IsOwn(room, item.Key)"
+														 ValueChanged="@(value => SetNumber(item.Key, value))" />
+
+												@if (string.Equals(item.Key, nameof(AreaSettings.LuxBrightnessGamma), StringComparison.Ordinal))
+												{
+													<CurveGlyph Exponent="@RoomSettings.Shown(room, _document.Defaults, item.Key)"
+																Label="@CurvePath.Describe(RoomSettings.Shown(room, _document.Defaults, item.Key))" />
+												}
+												break;
+										}
+									</SettingRow>
+								}
+
+								@* Not overridable, so these have no twin in the defaults and cannot be rows above,
+								   but they are movement rules and belong in this section. *@
+								@if (string.Equals(current.Title, RoomSettings.MovementSection, StringComparison.Ordinal))
+								{
+									<SettingRow Label="Don't switch on while"
+												Help="The room won't light itself while any of these is on: a projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Tick the box for the opposite, so it holds while they are off — for a &quot;lighting allowed&quot; switch you turn off. Offered from the whole house, since a blocker often belongs to no room.">
+										<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
+														  ValueChanged="@(value => SetList(value, list => room.IgnoreWhenOn = list))"
+														  Options="@_blockers"
+														  NameResolver="@Name"
+														  KnownResolver="@Catalog.Knows"
+														  EmptyLabel="Nothing blocks this room."
+														  AddLabel="Add a blocker…"
+														  Placeholder="binary_sensor.projector_is_on" />
+
+										@if (room.IgnoreWhenOn is { Count: > 0 })
+										{
+											<label class="gate-invert">
+												<input type="checkbox"
+													   checked="@(room.IgnoreWhenOnInverted is true)"
+													   @onchange="args => SetInvert(args.Value is true, value => room.IgnoreWhenOnInverted = value)" />
+												while these are off instead
+											</label>
+										}
+									</SettingRow>
+
+									<SettingRow Label="Don't switch off while"
+												Help="The room won't turn its own lights off while any of these is on, so the countdown, the warning dim and the leaving sweep leave it alone: a meeting light, a guest switch. It never turns anything on, and switching off by hand still works. Tick the box for the opposite, so it holds while they are off.">
+										<EntityListPicker Value="@(room.KeepLitWhenOn ?? [])"
+														  ValueChanged="@(value => SetList(value, list => room.KeepLitWhenOn = list))"
+														  Options="@_blockers"
+														  NameResolver="@Name"
+														  KnownResolver="@Catalog.Knows"
+														  EmptyLabel="Nothing holds this room's lights on."
+														  AddLabel="Add one…"
+														  Placeholder="input_boolean.meeting" />
+
+										@if (room.KeepLitWhenOn is { Count: > 0 })
+										{
+											<label class="gate-invert">
+												<input type="checkbox"
+													   checked="@(room.KeepLitWhenOnInverted is true)"
+													   @onchange="args => SetInvert(args.Value is true, value => room.KeepLitWhenOnInverted = value)" />
+												while these are off instead
+											</label>
+										}
+									</SettingRow>
+
+									<SettingRow Label="Run a scene instead, on movement"
+												Help="When movement would light this room, it runs this scene instead of setting its own brightness and warmth, and leaves it alone afterwards. Everything that can refuse to light the room still refuses — the master switch, this room's switch, an empty house, sleep, too much daylight, a blocker above. A scene is what happens instead of switching on, never a reason to.">
+										<EntityPicker Value="@room.SceneOnMotion"
+													  ValueChanged="@(value => Set(() => room.SceneOnMotion = value))"
+													  Options="@_scenes"
+													  NameResolver="@Name"
+													  KnownResolver="@Catalog.Knows"
+													  NoneLabel="(this room's own brightness and warmth)"
+													  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+													  Placeholder="scene.stue_kveld" />
+									</SettingRow>
+
+									<SettingRow Label="Run a scene instead, when empty"
+												Help="When the room has been empty long enough to go off, it runs this scene and stays there — atmospheric lighting rather than darkness. The warning dim before switching off does not run, since nothing is about to go off. Leaving the house still switches the room off, and switching it off by hand still works.">
+										<EntityPicker Value="@room.SceneWhenEmpty"
+													  ValueChanged="@(value => Set(() => room.SceneWhenEmpty = value))"
+													  Options="@_scenes"
+													  NameResolver="@Name"
+													  KnownResolver="@Catalog.Knows"
+													  NoneLabel="(switch the lights off)"
+													  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+													  Placeholder="scene.stue_natt" />
+									</SettingRow>
+								}
+							</div>
+						}
+					</div>
+				}
+
+				@* Not overridable: these are what the room is, not how it behaves. *@
+				<div class="sgroup @(_identityOpen ? "sgroup-open" : null)">
+					<button type="button"
+							class="sgroup-head"
+							aria-expanded="@(_identityOpen ? "true" : "false")"
+							@onclick="() => _identityOpen = !_identityOpen">
+						<span class="sgroup-title">Room identity</span>
+						<span class="sgroup-note">What this room is called, and which Home Assistant area it is</span>
+						<span class="area-chevron" aria-hidden="true"></span>
+					</button>
+
+					@if (_identityOpen)
+					{
+						<div class="sgroup-body">
+							<SettingRow Label="Name" Help="What this room is called everywhere here. Leave it empty and it follows the Home Assistant area's name, so renaming it there renames it here.">
+								<input type="text"
+									   class="cell wide"
+									   value="@room.Name"
+									   placeholder="@RoomName"
+									   aria-label="Name"
+									   @onchange="OnNameChanged" />
+							</SettingRow>
+
+							<SettingRow Label="Home Assistant area" Help="Which area this room is. Changing it looks for lights and sensors again, so what is found below changes with it, and this page moves to the new address.">
+								<AreaPicker Value="@room.AreaId" ValueChanged="@OnAreaChanged" Areas="@_areas" />
+							</SettingRow>
+						</div>
+					}
+				</div>
+			</div>
+		}
+	</section>
+
+	<div class="room-columns">
+		<section class="panel room-card">
+			<div class="room-card-head">
+				<span class="room-card-title">In this room</span>
+				<span class="room-card-note">found automatically from Home Assistant</span>
+			</div>
+
+			@if (_preview.Resolved is { } resolved)
+			{
+				<div class="room-gear">
+					@foreach (string light in resolved.Lights)
+					{
+						string entityId = light;
+						<span class="gchip gchip-light">
+							<span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code>
+							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
+						</span>
+					}
+					@foreach (string sensor in resolved.MotionSensors)
+					{
+						string entityId = sensor;
+						<span class="gchip gchip-motion">
+							<span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code>
+							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
+						</span>
+					}
+					@foreach (string sensor in resolved.LuxSensors)
+					{
+						string entityId = sensor;
+						<span class="gchip gchip-lux">
+							<span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code>
+							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
+						</span>
+					}
+				</div>
+
+				@* The shared predicate and not the sensor count: a room judging by the sun, or with a hand-pinned
+				   sensor, is not counted as dark for want of one. The commissioning board reads the same rule. *@
+				@if (CommissioningVerdicts.CountsAsDarkForWantOfASensor(room, _document.Defaults, resolved.LuxSensors.Count))
+				{
+					<p class="room-card-foot">No light-level sensor here &mdash; the room counts as dark, so movement lights it.</p>
+				}
+				else if (resolved.LuxSensors.Count > 1)
+				{
+					<p class="room-card-foot">@resolved.LuxSensors.Count light-level sensors here &mdash; the room reads the average of whichever are still reporting.</p>
+				}
+			}
+			else
+			{
+				<div class="notice bad room-gear-error">@_preview.Error</div>
+			}
+
+			@* The exclusions are listed so the × is reversible from the page that performed it. *@
+			@if (room.ExcludeEntities is { Count: > 0 } excluded)
+			{
+				<p class="room-card-foot">Left out of this room, by hand:</p>
+				<div class="room-gear">
+					@foreach (string entity in excluded)
+					{
+						string entityId = entity;
+						<span class="gchip gchip-out">
+							<span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code>
+							<button type="button" class="chip-remove" title="@($"Let discovery find {Name(entityId)} again")" @onclick="() => Include(entityId)">&times;</button>
+						</span>
+					}
+				</div>
+			}
+
+			<div class="sgroup @(_pickersOpen ? "sgroup-open" : null)">
+				<button type="button"
+						class="sgroup-head"
+						aria-expanded="@(_pickersOpen ? "true" : "false")"
+						@onclick="() => _pickersOpen = !_pickersOpen">
+					<span class="sgroup-title">Not right? Pick by hand</span>
+					<span class="sgroup-note">@PickedByHandNote</span>
+					<span class="area-chevron" aria-hidden="true"></span>
+				</button>
+
+				@if (_pickersOpen)
+				{
+					<div class="sgroup-body">
+						<p class="lede">
+							Each list you fill in <strong>replaces</strong> the automatic choice for that list only. Use it
+							when Home Assistant's room assignments don't match reality &mdash; a hallway sensor that
+							watches this room, a lamp filed under the wrong room. Fixing the room in Home Assistant is
+							usually better.
+						</p>
+
+						@* Each list is offered in two blocks: what the room resolves to now, then everything else
+						   it could use. Discovery prefers a light group over the bulbs inside it and keeps one
+						   entity per device, so without the second block a room reached through one group offers
+						   one light. Naming an entity by hand overrules the include label, which is why All must
+						   stay reachable. *@
+						@if (room.AreaId is { Length: > 0 })
+						{
+							<div class="field">
+								<div class="field-control checks">
+									<label>
+										<input type="checkbox" @bind:get="_showAllEntities" @bind:set="OnShowAllChanged" />
+										offer entities from the whole house
+									</label>
+								</div>
+								<div class="field-help">@ScopeNote</div>
+							</div>
+						}
+
+						@if (LabelFilterApplies)
+						{
+							<div class="field">
+								<div class="field-control">
+									<div class="seg" role="group" aria-label="Which of this room's entities to offer">
+										<button type="button"
+												class="@(_labelledOnly ? "cur" : null)"
+												aria-pressed="@(_labelledOnly ? "true" : "false")"
+												@onclick="() => SetLabelFilter(true)">Labelled &ldquo;@IncludeLabel&rdquo;</button>
+										<button type="button"
+												class="@(_labelledOnly ? null : "cur")"
+												aria-pressed="@(_labelledOnly ? "false" : "true")"
+												@onclick="() => SetLabelFilter(false)">All</button>
+									</div>
+								</div>
+								<div class="field-help">@LabelNote</div>
+							</div>
+						}
+
+						<SettingRow Label="Lights" Help="Empty means every light found in this room. Name any here and only those are managed — nothing else in the room is touched, whatever labels it carries.">
+							<EntityListPicker Value="@(room.Lights ?? [])"
+											  ValueChanged="@(value => SetList(value, list => room.Lights = list))"
+											  Options="@_lightChoices"
+											  Others="@_lightOthers"
+											  OthersLabel="@OthersLabel"
+											  NameResolver="@Name"
+											  KnownResolver="@Catalog.Knows"
+											  EmptyLabel="Found in this room."
+											  AddLabel="Add a light…"
+											  EmptyNote="@EmptyNote("lights")"
+											  Placeholder="light.example" />
+						</SettingRow>
+
+						<SettingRow Label="Motion sensors" Help="Empty means every motion sensor found in this room. Name any here and only those wake the lights.">
+							<EntityListPicker Value="@(room.MotionSensors ?? [])"
+											  ValueChanged="@(value => SetList(value, list => room.MotionSensors = list))"
+											  Options="@_motionChoices"
+											  Others="@_motionOthers"
+											  OthersLabel="@OthersLabel"
+											  NameResolver="@Name"
+											  KnownResolver="@Catalog.Knows"
+											  EmptyLabel="Found in this room."
+											  AddLabel="Add a motion sensor…"
+											  EmptyNote="@EmptyNote("motion sensors")"
+											  Placeholder="binary_sensor.example" />
+						</SettingRow>
+
+						<SettingRow Label="Light-level sensor" Help="Which reading decides whether this room is dark. Only needed when the room has more than one — otherwise the one that is found is used.">
+							<EntityPicker Value="@room.LuxSensor"
+										  ValueChanged="@(value => Set(() => room.LuxSensor = value))"
+										  Options="@_luxChoices"
+										  Others="@_luxOthers"
+										  OthersLabel="@OthersLabel"
+										  NoneLabel="(the one found in this room)"
+										  EmptyNote="@EmptyNote("light-level sensors")"
+										  Placeholder="sensor.example_illuminance" />
+						</SettingRow>
+					</div>
+				}
+			</div>
+
+			@if (_setupOpen)
+			{
+				<SetupAgainPanel Config="@_document"
+								 PreTicked="@SetupScope"
+								 PlanFor="@PlanSetup"
+								 NameOf="@AreaName"
+								 Confirmed="@ApplySetup"
+								 Cancelled="@(() => _setupOpen = false)"
+								 CommitNote="The rebuild is saved as soon as you confirm, and cannot be undone from here." />
+			}
+			else if (_removing)
+			{
+				<div class="notice warn">
+					<strong>Remove @RoomName?</strong>
+					<p>
+						The room stops being managed and its settings are gone. Its lights and sensors stay exactly as
+						they are in Home Assistant &mdash; this app simply stops touching them. Setting the room up
+						again later starts from scratch.
+					</p>
+					<div class="panel-actions">
+						<button type="button" class="danger" @onclick="Remove">Remove this room</button>
+						<button type="button" @onclick="() => _removing = false">Keep it</button>
+					</div>
+				</div>
+			}
+			else
+			{
+				<div class="panel-actions room-actions">
+					@if (room.AreaId is { Length: > 0 })
+					{
+						<button type="button" @onclick="OpenSetup" disabled="@(!HomeAssistantIsAnswering)">Set this room up again</button>
+					}
+					<button type="button" class="danger" @onclick="() => _removing = true">Remove this room</button>
+				</div>
+			}
+		</section>
+
+		<section class="panel room-card">
+			<div class="room-card-head">
+				<span class="room-card-title">What happened here</span>
+				<span class="room-card-note">newest first</span>
+			</div>
+
+			@if (RoomLog is { Count: > 0 } rows)
+			{
+				@* Through ActivityView.Rows, so this card collapses runs the same way the timeline does. *@
+				<ol class="log room-log">
+					@foreach (ActivityRow row in rows)
+					{
+						<li class="log-row family-@row.Family" @key="row.Sequence">
+							<div class="log-when">
+								<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(row.At)</time>
+							</div>
+							<div class="log-body">
+								<span class="log-what">@row.Line.What</span>
+								@if (row.Line.Why is { Length: > 0 } why)
+								{
+									<span class="log-why">@why</span>
+								}
+							</div>
+						</li>
+					}
+				</ol>
+				<p class="room-card-foot">@LogFoot</p>
+			}
+			else
+			{
+				<p class="room-card-foot">
+					Nothing recorded for this room yet. Recording starts when adaptive lighting starts, and a room
+					appears the first time it decides something.
+				</p>
+			}
+		</section>
+	</div>
+}
+
+@code {
+	/// <summary>How long the page waits for the hand to settle before writing.</summary>
+	/// <remarks>A save rebuilds every area controller in the house, so a write per press would restart every
+	/// room's vacancy timer while a stepper is held down.</remarks>
+	private static readonly TimeSpan SaveDelay = TimeSpan.FromMilliseconds(1200);
+
+	/// <summary>How many of this room's log entries the card holds; the Activity page has the rest.</summary>
+	private const int LogRows = 6;
+
+	/// <summary>The Home Assistant area id in the URL.</summary>
+	[Parameter]
+	public string AreaId { get; set; } = "";
+
+	private AdaptiveLightingConfig _document = new();
+	private AreaConfig? _room;
+	private string? _loadedFor;
+	private string? _loadError;
+
+	private AreaPreview _preview = new(null, null);
+	private AreaSnapshot? _snapshot;
+	private DateTimeOffset _now = DateTimeOffset.Now;
+
+	// Fields, not getters: each of these parses the schedule or reads Home Assistant, and this page renders once a
+	// second and again on every frame of a chart drag.
+	private TimePeriodConfig? _activePeriod;
+	private double? _liveLux;
+
+	private ValidationResult? _validation;
+	private SaveResult? _failure;
+
+	// The one slot of the document this page may write, and that slot as it stood on disk when it was read.
+	private RoomWriteToken _write = new(null, "");
+
+	// Whether the pending write is the room's removal. The page still holds the object, so the intent has to be
+	// carried separately.
+	private bool _removed;
+
+	private bool _dirty;
+	private DateTimeOffset? _savedAt;
+	private CancellationTokenSource? _saveCts;
+
+	// Per-visit, never persisted: the note is advice about this house right now.
+	private SwitchOnNote? _switchOnNote;
+	private bool _switchOnDismissed;
+
+	private bool _showAll;
+	private bool _identityOpen;
+	private bool _pickersOpen;
+	private bool _setupOpen;
+	private bool _removing;
+	private readonly HashSet<string> _openedGroups = new(StringComparer.Ordinal);
+
+	// Everything Home Assistant has, read once per document load. The pickers' fallback, not what they show.
+	private IReadOnlyList<AreaOption> _areas = [];
+	private IReadOnlyList<EntityOption> _lights = [];
+	private IReadOnlyList<EntityOption> _motionSensors = [];
+	private IReadOnlyList<EntityOption> _luxSensors = [];
+	private IReadOnlyList<EntityOption> _blockers = [];
+	private IReadOnlyList<EntityOption> _sunEntities = [];
+	private IReadOnlyList<EntityOption> _scenes = [];
+
+	// What the pick-by-hand lists offer. Rebuilt when the room changes, not read in a getter: each of these reads a
+	// friendly name per entity and this page redraws once a second.
+	private IReadOnlyList<EntityOption> _lightChoices = [];
+	private IReadOnlyList<EntityOption> _motionChoices = [];
+	private IReadOnlyList<EntityOption> _luxChoices = [];
+	private IReadOnlyList<EntityOption> _lightOthers = [];
+	private IReadOnlyList<EntityOption> _motionOthers = [];
+	private IReadOnlyList<EntityOption> _luxOthers = [];
+	private bool _showAllEntities;
+
+	// Whether the second block of each list is held to the house's include label. On by default, matching the rule
+	// the engine applies, so the short list and the running house agree.
+	private bool _labelledOnly = true;
+
+	private IDisposable? _subscription;
+	private IDisposable? _ticker;
+
+	/// <inheritdoc/>
+	protected override void OnInitialized()
+	{
+		// Sampled: a house waking up pushes a burst of transitions, and this page redraws a lot of markup.
+		_subscription = Cache.Changes
+			.Sample(TimeSpan.FromMilliseconds(400))
+			.SubscribeSafe(_ => InvokeAsync(() =>
+			{
+				ReadLiveState();
+				StateHasChanged();
+			}), Logger);
+
+		// Once a second, because the relative times and the countdown ring are only honest while they move. Safe
+		// only because every control here is a button; the one text box holds what was typed because its bound
+		// value does not change under it.
+		_ticker = Observable.Interval(TimeSpan.FromSeconds(1))
+			.SubscribeSafe(_ => InvokeAsync(() =>
+			{
+				_now = DateTimeOffset.Now;
+				ReadLiveState();
+				StateHasChanged();
+			}), Logger);
+	}
+
+	/// <inheritdoc/>
+	/// <remarks>Reloads only when the route names a different room: Blazor re-runs this for reasons unrelated
+	/// to the URL, and re-reading the document on each would drop an edit the save timer has not written.</remarks>
+	protected override void OnParametersSet()
+	{
+		if (string.Equals(_loadedFor, AreaId, StringComparison.Ordinal))
+			return;
+
+		Load();
+	}
+
+	private void Load()
+	{
+		_loadedFor = AreaId;
+		_failure = null;
+		_dirty = false;
+		_savedAt = null;
+		_setupOpen = false;
+		_removing = false;
+		_removed = false;
+		_switchOnNote = null;
+		_switchOnDismissed = false;
+
+		try
+		{
+			_document = Engine.Store.Load();
+			_loadError = null;
+		}
+		catch (LightingConfigException exception)
+		{
+			_loadError = exception.Message;
+			_room = null;
+			return;
+		}
+
+		_room = _document.Areas.FirstOrDefault(area => string.Equals(area.AreaId, AreaId, StringComparison.Ordinal));
+		_write = RoomWrite.Open(_document, AreaId);
+
+		LoadCatalog();
+		Refresh();
+	}
+
+	/// <summary>Re-reads the registry once per document load, never once per render.</summary>
+	/// <remarks>These lists change when the house changes; a getter would hit the registry sixty times a minute.</remarks>
+	private void LoadCatalog()
+	{
+		Catalog.Invalidate();
+
+		_areas = Catalog.Areas(_document.Global);
+		_sunEntities = Catalog.EntitiesInDomains("sun");
+		_blockers = Catalog.EntitiesInDomains("binary_sensor", "input_boolean", "switch", "media_player");
+		_scenes = Catalog.EntitiesInDomains("scene");
+		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _document.Global.EffectiveMotionDeviceClasses]);
+		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_document.Global.IlluminanceDeviceClass]);
+		_lights = Catalog.EntitiesInDomains("light");
+	}
+
+	/// <summary>Re-derives everything that follows from the document: the validator's verdict, what discovery
+	/// now resolves in this room, and what the room is doing.</summary>
+	private void Refresh()
+	{
+		if (_room is not { } room)
+			return;
+
+		_validation = Engine.Validate(_document);
+		_preview = Catalog.PreviewArea(room, _document.Defaults, _document.Global);
+
+		AreaEntities inArea = Catalog.EntitiesInArea(room.AreaId, _document.Global);
+
+		_lightChoices = Scope(inArea.Lights, _lights, room.Lights);
+		_motionChoices = Scope(inArea.MotionSensors, _motionSensors, room.MotionSensors);
+		_luxChoices = Scope(inArea.LuxSensors, _luxSensors, room.LuxSensor is { Length: > 0 } lux ? [lux] : null);
+
+		// Only while the lists are scoped to the room. Widened to the house they already hold everything.
+		AreaEntities others = ScopeToArea
+			? Catalog.OtherEntitiesInArea(room.AreaId, _document.Global, _labelledOnly)
+			: AreaEntities.Empty;
+
+		_lightOthers = Beyond(others.Lights, _lightChoices);
+		_motionOthers = Beyond(others.MotionSensors, _motionChoices);
+		_luxOthers = Beyond(others.LuxSensors, _luxChoices);
+
+		ReadLiveState();
+	}
+
+	/// <summary>Everything else, minus whatever the first block already offers.</summary>
+	/// <remarks>A hand-picked entity reaches both lists, since <see cref="Scope"/> carries it into the first and
+	/// it is in the room; listing it twice would let one entity be picked from two places in one dropdown.</remarks>
+	private static IReadOnlyList<EntityOption> Beyond(
+		IReadOnlyList<EntityOption> others,
+		IReadOnlyList<EntityOption> offered)
+	{
+		HashSet<string> already = new(offered.Select(option => option.EntityId), StringComparer.Ordinal);
+
+		return [.. others.Where(option => !already.Contains(option.EntityId))];
+	}
+
+	/// <summary>Whether the pick-by-hand lists are filtered to this room's own entities; a room naming no Home
+	/// Assistant area has nothing to filter to.</summary>
+	private bool ScopeToArea => !_showAllEntities && _room?.AreaId is { Length: > 0 };
+
+	/// <summary>What one picker offers: this room's entities, unless the lists have been widened.</summary>
+	/// <remarks>The in-area list comes from the same resolver the card above runs, so the scoped list cannot
+	/// disagree with what the room would resolve, and a configured value survives the filter.</remarks>
+	private IReadOnlyList<EntityOption> Scope(
+		IReadOnlyList<EntityOption> inArea,
+		IReadOnlyList<EntityOption> everywhere,
+		IReadOnlyList<string>? configured)
+	{
+		if (!ScopeToArea)
+			return everywhere;
+
+		// An entity picked from outside the area stays listed and stays selected: the filter is a default, and
+		// must never drop a chosen value.
+		IEnumerable<EntityOption> outsiders = configured is null
+			? []
+			: everywhere.Where(option =>
+				configured.Contains(option.EntityId, StringComparer.Ordinal)
+				&& !inArea.Any(local => string.Equals(local.EntityId, option.EntityId, StringComparison.Ordinal)));
+
+		return [.. inArea.Concat(outsiders).OrderBy(option => option.FriendlyName, StringComparer.CurrentCulture)];
+	}
+
+	/// <summary>Widens or narrows the pickers; changes what is offered, never what is configured.</summary>
+	private void OnShowAllChanged(bool showAll)
+	{
+		_showAllEntities = showAll;
+		Refresh();
+	}
+
+	/// <summary>The line under the tick-box: what the lists are showing right now.</summary>
+	private string ScopeNote => ScopeToArea
+		? "Showing what Home Assistant puts in this room. Anything you have already picked stays listed even if it is elsewhere."
+		: "Showing every one in the house.";
+
+	private const string OthersLabel = "Everything else in this room";
+
+	/// <summary>The house's include label, or empty when it manages every light it finds.</summary>
+	private string IncludeLabel => _document.Global.IncludeLabel ?? string.Empty;
+
+	/// <summary>Whether the label filter is worth offering: with no include label both states of the control
+	/// show the same list.</summary>
+	private bool LabelFilterApplies => ScopeToArea && IncludeLabel.Length > 0;
+
+	/// <summary>The line under the filter: what the second block of each list is holding right now.</summary>
+	private string LabelNote => _labelledOnly
+		? $"Everything else in this room that carries the “{IncludeLabel}” label — what adaptive lighting manages on its own."
+		: "Everything else in this room, labelled or not. Naming one here manages it whatever labels it carries.";
+
+	/// <summary>Narrows or widens the second block; changes what is offered, never what is configured.</summary>
+	private void SetLabelFilter(bool labelledOnly)
+	{
+		_labelledOnly = labelledOnly;
+		Refresh();
+	}
+
+	/// <summary>Why a picker has nothing to offer; an empty scoped list is ordinary.</summary>
+	private string EmptyNote(string what) =>
+		!HomeAssistantIsAnswering ? "Waiting for Home Assistant — type an id for now."
+		: ScopeToArea ? $"No {what} in this room. Tick “offer entities from the whole house” to pick from anywhere."
+		: $"No {what} anywhere in Home Assistant — type an id if one is coming.";
+
+	/// <summary>This room's newest report, by area id first and display name second, which is the same join the
+	/// snapshot cache and the settings list use.</summary>
+	private void ReadLiveState()
+	{
+		if (_room is not { } room)
+			return;
+
+		_snapshot = Cache.Snapshots.FirstOrDefault(snapshot =>
+				snapshot.AreaId is { Length: > 0 } areaId && string.Equals(areaId, room.AreaId, StringComparison.Ordinal))
+			?? Cache.Snapshots.FirstOrDefault(snapshot =>
+				string.Equals(snapshot.AreaName, RoomName, StringComparison.OrdinalIgnoreCase));
+
+		// Resolved here and never taken from the snapshot's PeriodName: the levels table has to be right for a
+		// room that has never reported, and a stale snapshot would leave the now badge on last night's period.
+		// Through Schedule, so this badge, the schedule editor's and the mode cards come out of one calculator,
+		// and the engine's latch is handed over where one is running, or a period that waits for movement would
+		// be badged from its start time.
+		//
+		// The select is read only when it is allowed to decide. Under the default authority InForceNow discards
+		// the value, so an unguarded read on the one-second ticker is a Home Assistant lookup per second per
+		// open room page, thrown away.
+		(TimeOnly? sunrise, TimeOnly? sunset) = Catalog.SunTimesToday();
+		string? selectValue = Schedule.HomeAssistantDecides(_document.Global)
+			? Catalog.CurrentStateOf(_document.Global.PeriodSelect?.EntityId)
+			: null;
+
+		_activePeriod = Schedule.InForceNow(
+			_document.Periods,
+			_document.Global,
+			new SunTimes(sunrise, sunset),
+			_now,
+			selectValue,
+			Schedule.HeldBackRule(Engine)).Period;
+
+		_liveLux = _preview.Resolved is { } resolved ? Catalog.LuxIn(resolved, _document.Global) : null;
+	}
+
+	/// <summary>The line under the card's head: how much of the schedule this room has taken over, in words.</summary>
+	private string LevelsLede
+	{
+		get
+		{
+			if (_room is not { } room)
+				return string.Empty;
+
+			int periods = _document.Periods.Count;
+			int chosen = RoomLevels.OwnCount(_document.Periods, room);
+			int orphaned = RoomLevels.Orphans(_document.Periods, room).Count;
+
+			// Orphans are counted apart, never folded in: they are not among the periods on screen.
+			string kept = orphaned switch
+			{
+				0 => string.Empty,
+				1 => " One more is kept from a period the schedule no longer has.",
+				_ => $" {orphaned} more are kept from periods the schedule no longer has."
+			};
+
+			if (chosen == 0)
+			{
+				return periods == 0
+					? "Nothing to follow yet — the schedule has no periods." + kept
+					: "Every period follows the house's schedule. Change one here and only this room changes." + kept;
+			}
+
+			return $"{chosen} of {periods} {(periods == 1 ? "period is" : "periods are")} this room's own; the rest follow the schedule." + kept;
+		}
+	}
+
+	/// <summary>The period in force right now, by name, or <c>null</c> when none resolves.</summary>
+	private string? ActivePeriodName => _activePeriod?.Name;
+
+	/// <summary>The same period by id, which is what the levels table matches its rows on.</summary>
+	private string? ActivePeriodId => _activePeriod?.Key;
+
+	private bool BrightensWithDaylight => Effective.LuxBrightnessEnabled;
+
+	/// <summary>The level the daylight curve rises from: what this room runs during the period in force.</summary>
+	/// <remarks>With no period resolved this falls back to the first row, never to <c>LuxBrightnessMaxPct</c>,
+	/// the curve's ceiling, which as a base makes both ends equal and draws the curve flat. Both branches read
+	/// through <see cref="RoomLevels.Rows"/>; off <c>_document.Periods</c> they would read the schedule's number
+	/// and skip the room's own override.</remarks>
+	private double DaylightBasePct
+	{
+		get
+		{
+			IReadOnlyList<RoomLevelRow> rows = RoomLevels.Rows(_document.Periods, _room);
+
+			if (_activePeriod is not { } period)
+				return rows.FirstOrDefault()?.BrightnessPct ?? DefaultDaylightBasePct;
+
+			return rows
+				.FirstOrDefault(row => string.Equals(row.PeriodId, period.Key, StringComparison.OrdinalIgnoreCase))
+				?.BrightnessPct ?? period.BrightnessPct;
+		}
+	}
+
+	/// <summary>What the curve rises from when the document has no periods to borrow a level from.</summary>
+	/// <remarks>Must match <c>LuxCurveChart</c>'s own parameter default, or an empty schedule draws a flat line.</remarks>
+	private const double DefaultDaylightBasePct = 80;
+
+	private double? LiveLux => _liveLux;
+
+	/// <summary>Applies one setting a drag or an arrow key changed, through the path the stepper uses.</summary>
+	private Task OnCurveEdited(CurveEdit edit) => SetNumber(edit.Key, edit.Value);
+
+	/// <summary>What this room is called, everywhere on this page.</summary>
+	/// <remarks>Through <see cref="AreaNaming"/> and never off the document, so a room stating no name of its
+	/// own is called what Home Assistant calls its area. That is also what the engine puts in every snapshot,
+	/// which is what makes the two name-based joins on this page find the same room.</remarks>
+	private string RoomName => _room is { } room ? AreaNaming.DisplayName(room, Catalog.AreaRegistry) : AreaId;
+
+	private string PageName => _room is null ? AreaId : RoomName;
+
+	private bool IsEnabled => _room is { } room && AreaView.IsEnabled(room, _document.Defaults);
+
+	/// <summary>The room's settings with its inheritance resolved.</summary>
+	private AreaSettings Effective => _room is { } room ? room.Effective(_document.Defaults) : _document.Defaults;
+
+	private string SwitchTitle => IsEnabled
+		? "On — the lights in this room are managed. Switch off to leave them alone."
+		: "Off — this room is watched but its lights are never changed.";
+
+	private bool IsLit => _snapshot is { State: AreaState.AutoActive or AreaState.PreOff or AreaState.OverriddenOn, BrightnessPct: > 0 };
+
+	/// <summary>The header lamp, glowing in the warmth the room was commanded to.</summary>
+	/// <remarks>A hand-held room has levels the engine never chose, so it glows violet.</remarks>
+	private string GlowStyle
+	{
+		get
+		{
+			if (_snapshot is not { } snapshot || !IsLit)
+				return string.Empty;
+
+			string colour = snapshot.State == AreaState.OverriddenOn || snapshot.ColorTempKelvin is null
+				? "var(--human)"
+				: KelvinColour.Css(snapshot.ColorTempKelvin.Value);
+
+			double strength = 6 + (snapshot.BrightnessPct ?? 50) / 6;
+
+			return $"--room-lamp: {colour}; --room-lamp-spread: {strength.ToString("0", CultureInfo.InvariantCulture)}px;";
+		}
+	}
+
+	private double? Countdown => _snapshot is { } snapshot ? RoomFacts.Countdown(snapshot, _now) : null;
+
+	/// <summary>The ring around the lamp, drained to how much of the armed countdown is left.</summary>
+	private string RingStyle =>
+		Countdown is { } remaining
+			? $"--room-ring: {(remaining * 360).ToString("0.0", CultureInfo.InvariantCulture)}deg;"
+			: string.Empty;
+
+	private string CountdownTitle =>
+		_snapshot is { NextChangeAt: { } due } ? $"Next change {RoomFacts.In(due, _now)}." : string.Empty;
+
+	private static string StateTitle(AreaSnapshot snapshot) => $"State: {snapshot.State}";
+
+	/// <summary>The validator's complaint about this room, when it has one.</summary>
+	/// <remarks>Matched on <see cref="AreaConfig.DisplayName"/>, never <see cref="RoomName"/>: the validator is
+	/// pure and files errors under the document's own name, so joining on the resolved name finds nothing.</remarks>
+	private AreaError? AreaErrorFor(ValidationResult validation) =>
+		_room is { } room
+			? validation.AreaErrors.FirstOrDefault(error =>
+				string.Equals(error.AreaName, room.DisplayName, StringComparison.OrdinalIgnoreCase))
+			: null;
+
+	private string OwnLine
+	{
+		get
+		{
+			if (_room is not { } room)
+				return string.Empty;
+
+			int own = RoomSettings.OwnCount(room);
+
+			// Short: see the note's markup for the 390px measurement that set the length.
+			return own == 0
+				? $"all {AreaView.OverridableSettingCount} follow the house"
+				: $"{own} of {AreaView.OverridableSettingCount} are this room's own";
+		}
+	}
+
+	/// <summary>Whether a section is open; every section arrives folded, and the set is per visit.</summary>
+	private bool IsOpen(RoomSettingGroup group) => _openedGroups.Contains(group.Title);
+
+	private void Toggle(RoomSettingGroup group)
+	{
+		if (!_openedGroups.Remove(group.Title))
+			_openedGroups.Add(group.Title);
+	}
+
+	/// <summary>How many of a section's settings this room states for itself, for the badge on a folded section.</summary>
+	private int OwnCountIn(RoomSettingGroup group) =>
+		_room is { } room ? group.Settings.Count(setting => RoomSettings.IsOwn(room, setting.Key)) : 0;
+
+	private bool IsCurrentChoice(string key, TokenChoice choice) =>
+		string.Equals(RoomSettings.ChoiceName(_room, _document.Defaults, key), choice.Value, StringComparison.Ordinal);
+
+	// No default for this: only the page knows whether a pick waits behind a save bar or applies itself.
+	private const string TokenNote = "Applied about a second after you pick. The line above says when it saved.";
+
+	private Task OnEdited(SentenceEdit edit)
+	{
+		if (_room is not { } room)
+			return Task.CompletedTask;
+
+		// A key the page cannot apply means the sentence and the page have drifted apart.
+		if (!RoomSettings.Apply(room, edit))
+		{
+			Logger.LogWarning("A sentence offered an edit to {Key}, which this page does not know how to apply.", edit.Key);
+			return Task.CompletedTask;
+		}
+
+		return MarkDirty();
+	}
+
+	/// <summary>Sends a value back to following the house by clearing the room's property, never by copying the
+	/// house's current number into it.</summary>
+	private Task OnReverted(string key) => Revert(key);
+
+	private Task Revert(string key)
+	{
+		if (_room is not { } room || !RoomSettings.Clear(room, key))
+			return Task.CompletedTask;
+
+		return MarkDirty();
+	}
+
+	private Task SetNumber(string key, double value)
+	{
+		if (_room is not { } room)
+			return Task.CompletedTask;
+
+		RoomSettings.SetShown(room, key, value);
+
+		return MarkDirty();
+	}
+
+	private Task SetFlag(string key, bool value)
+	{
+		if (_room is not { } room)
+			return Task.CompletedTask;
+
+		RoomSettings.SetFlag(room, key, value);
+
+		return MarkDirty();
+	}
+
+	// Through RoomSettings.Apply, the same path the sentence tokens take, so the two choice rows cannot end up
+	// writing different properties from the same words.
+	private Task SetChoice(string key, string value)
+	{
+		if (_room is not { } room || !RoomSettings.Apply(room, new SentenceEdit(key, TokenKind.Choice, value)))
+			return Task.CompletedTask;
+
+		return MarkDirty();
+	}
+
+	private Task SetEntity(string key, string? value)
+	{
+		if (_room is not { } room)
+			return Task.CompletedTask;
+
+		RoomSettings.SetEntity(room, key, value);
+
+		return MarkDirty();
+	}
+
+	private Task Set(Action mutate)
+	{
+		mutate();
+
+		return MarkDirty();
+	}
+
+	private Task SetList(IReadOnlyList<string> value, Action<List<string>?> assign)
+	{
+		// An empty list and a null list are different instructions: null means "discover", [] would mean "this
+		// room has no lights", which is never what clearing the last chip meant.
+		assign(value.Count == 0 ? null : [.. value]);
+
+		return MarkDirty();
+	}
+
+	/// <summary>Sets a gate's polarity, storing <c>null</c> and not <c>false</c> for the ordinary reading.</summary>
+	// Null keeps the key out of the file for every room that never inverted one, the same rule SetList follows.
+	private Task SetInvert(bool inverted, Action<bool?> assign)
+	{
+		assign(inverted ? true : null);
+
+		return MarkDirty();
+	}
+
+	private Task OnNameChanged(ChangeEventArgs args)
+	{
+		if (_room is not { } room)
+			return Task.CompletedTask;
+
+		string typed = args.Value as string ?? string.Empty;
+		room.Name = string.IsNullOrWhiteSpace(typed) ? null : typed.Trim();
+
+		return MarkDirty();
+	}
+
+	/// <summary>Moves the room to a different Home Assistant area, which is also a change of address: the route
+	/// names the area id, so it saves at once and follows the room to its new URL.</summary>
+	/// <remarks>The new area's name is not copied into the document: names resolve from the registry at the
+	/// point of use, so writing one freezes this room at today's name. The navigation must stay behind the save
+	/// check, or a refused save has <see cref="OnParametersSet"/> reload from disk and clear the edit.</remarks>
+	private void OnAreaChanged(string? areaId)
+	{
+		if (_room is not { } room || areaId is not { Length: > 0 })
+			return;
+
+		room.AreaId = areaId;
+		_dirty = true;
+		Commit();
+
+		if (_failure is not null || _loadError is { Length: > 0 })
+		{
+			// Everything derived from the document still describes the old area. Other edits re-derive through
+			// MarkDirty; this path saves at once, so it re-derives here before the failure renders.
+			Refresh();
+			return;
+		}
+
+		Nav.NavigateTo($"room/{Uri.EscapeDataString(areaId)}");
+	}
+
+	private async Task ToggleEnabled()
+	{
+		if (_room is not { } room)
+			return;
+
+		// An explicit true or false, never null; inheritance stays for documents that predate the switch.
+		bool switchingOn = !IsEnabled;
+		room.Enabled = switchingOn;
+
+		// After MarkDirty, never before: MarkDirty re-runs discovery, so the note is built from the same preview the
+		// card below shows.
+		await MarkDirty();
+
+		_switchOnNote = switchingOn && !_switchOnDismissed
+			? SwitchOnWarning.For(RoomName, Catalog.LightsIn(room, _document.Defaults, _document.Global), _document.Global.IncludeLabel)
+			: null;
+	}
+
+	/// <summary>Puts the switch-on note away for the rest of this visit.</summary>
+	private void DismissSwitchOnNote()
+	{
+		_switchOnNote = null;
+		_switchOnDismissed = true;
+	}
+
+	/// <summary>Drops one discovered entity from this room without switching the room to a hand-picked list, so
+	/// discovery keeps finding everything else.</summary>
+	private Task Exclude(string entityId)
+	{
+		if (_room is not { } room)
+			return Task.CompletedTask;
+
+		List<string> excluded = room.ExcludeEntities is { } existing ? [.. existing] : [];
+
+		if (!excluded.Contains(entityId, StringComparer.Ordinal))
+			excluded.Add(entityId);
+
+		room.ExcludeEntities = excluded;
+
+		return MarkDirty();
+	}
+
+	/// <summary>The way back from <see cref="Exclude"/>.</summary>
+	private Task Include(string entityId)
+	{
+		if (_room is not { } room || room.ExcludeEntities is not { } excluded)
+			return Task.CompletedTask;
+
+		List<string> kept = [.. excluded.Where(existing => !string.Equals(existing, entityId, StringComparison.Ordinal))];
+		room.ExcludeEntities = kept.Count == 0 ? null : kept;
+
+		return MarkDirty();
+	}
+
+	/// <summary>Records that the in-memory document has moved ahead of the file, and starts the timer that
+	/// catches it up.</summary>
+	/// <remarks>Re-validates here so a problem is on screen before the write is attempted. Nothing on this path
+	/// writes; <see cref="Commit"/> is the only thing that does.</remarks>
+	private Task MarkDirty()
+	{
+		_dirty = true;
+		Refresh();
+
+		_saveCts?.Cancel();
+		_saveCts?.Dispose();
+		_saveCts = new CancellationTokenSource();
+
+		// Fire and forget. SaveAfterQuiet swallows its own cancellation and logs the rest, so nothing here can
+		// surface as an unobserved exception on a thread-pool thread.
+		_ = SaveAfterQuiet(_saveCts.Token);
+
+		return Task.CompletedTask;
+	}
+
+	private async Task SaveAfterQuiet(CancellationToken token)
+	{
+		try
+		{
+			await Task.Delay(SaveDelay, token).ConfigureAwait(false);
+
+			await InvokeAsync(() =>
+			{
+				Commit();
+				StateHasChanged();
+			}).ConfigureAwait(false);
+		}
+		catch (OperationCanceledException)
+		{
+			// A newer edit superseded this timer, or the page went away. Either way there is nothing to write here.
+		}
+		catch (ObjectDisposedException)
+		{
+			// The circuit closed while the timer was running; Dispose has already written whatever was pending.
+		}
+		catch (Exception exception)
+		{
+			Logger.LogError(exception, "The room page could not save after an edit.");
+		}
+	}
+
+	/// <summary>Writes this room into the document as it is on disk now, through the one save pipeline.</summary>
+	/// <remarks>This room and nothing else: the page reads the document once, on open, and stays open, so
+	/// writing its own copy back would send every other room as it stood at page load. The page's object graph
+	/// is not swapped afterwards, since reloading its copy here would pull the document out from under an edit
+	/// in progress.</remarks>
+	private void Commit()
+	{
+		if (!_dirty || _loadError is { Length: > 0 })
+			return;
+
+		_saveCts?.Cancel();
+
+		try
+		{
+			RoomWriteResult write = RoomWrite.Save(Engine, _write, _removed ? null : _room, RoomName);
+			SaveResult result = write.Result;
+			_write = write.Token;
+
+			// A conflict carries no verdict on this document, so it must not replace the one on screen.
+			if (result.Status is not SaveStatus.Conflicted)
+				_validation = result.Validation;
+
+			if (result.Written)
+			{
+				_dirty = false;
+				_savedAt = DateTimeOffset.Now;
+				_failure = null;
+			}
+			else
+			{
+				_failure = result;
+			}
+		}
+		catch (LightingConfigException exception)
+		{
+			_loadError = exception.Message;
+		}
+	}
+
+	/// <summary>Throws away everything unsaved by re-reading the file.</summary>
+	private void Discard()
+	{
+		_loadedFor = null;
+		OnParametersSet();
+	}
+
+	private string SaveLine
+	{
+		get
+		{
+			if (_failure is not null)
+				return "not saved";
+
+			if (_dirty)
+				return "saving in a moment…";
+
+			return _savedAt is { } saved
+				? $"saved {saved.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)}"
+				: "every change here applies and saves by itself";
+		}
+	}
+
+	private string SaveClass => _failure is not null ? "room-save-bad" : _dirty ? "room-save-pending" : "room-save-ok";
+
+	private bool HomeAssistantIsAnswering => Catalog.IsHomeAssistantReady && _areas.Count > 0;
+
+	private IReadOnlyCollection<string> SetupScope =>
+		_room?.AreaId is { Length: > 0 } areaId ? [areaId] : [];
+
+	private void OpenSetup()
+	{
+		_removing = false;
+		_setupOpen = true;
+	}
+
+	/// <summary>The plan for setting this room up again, carrying nothing but this room.</summary>
+	/// <remarks><see cref="AreaSetupService.Plan"/> proposes every unconfigured area it finds, whatever the
+	/// scope. The extras are dropped here and not at apply time, so the panel's warning stays true to what
+	/// confirming does.</remarks>
+	private SetupPlan PlanSetup(IReadOnlyCollection<string> scope) =>
+		Catalog.PlanSetup(_document, scope) with { NewAreas = [] };
+
+	/// <summary>Carries out a confirmed rebuild, saved at once instead of after the usual pause.</summary>
+	/// <remarks><see cref="AreaSetupService.Apply"/> replaces the room object, so the page has to find it again.</remarks>
+	private void ApplySetup(SetupPlan plan)
+	{
+		AreaSetupService.Apply(_document, plan);
+		_setupOpen = false;
+
+		_room = _document.Areas.FirstOrDefault(area => string.Equals(area.AreaId, AreaId, StringComparison.Ordinal));
+
+		_dirty = true;
+		Commit();
+		Refresh();
+	}
+
+	/// <summary>Removes the room and leaves for the board; this page's subject no longer exists.</summary>
+	private void Remove()
+	{
+		if (_room is not { } room)
+			return;
+
+		_document.Areas.Remove(room);
+		_removed = true;
+		_dirty = true;
+		Commit();
+
+		if (_failure is null)
+			Nav.NavigateTo("");
+		else
+			_removing = false;
+	}
+
+	private string Name(string entityId) => Catalog.FriendlyNameOf(entityId) ?? entityId;
+
+	private string AreaName(string areaId) =>
+		_areas.FirstOrDefault(area => string.Equals(area.Id, areaId, StringComparison.Ordinal))?.Name ?? areaId;
+
+	private string PickedByHandNote
+	{
+		get
+		{
+			if (_room is not { } room)
+				return string.Empty;
+
+			List<string> parts = [];
+
+			if (room.Lights is { Count: > 0 } lights)
+				parts.Add($"{lights.Count} {(lights.Count == 1 ? "light" : "lights")}");
+
+			if (room.MotionSensors is { Count: > 0 } motion)
+				parts.Add($"{motion.Count} motion {(motion.Count == 1 ? "sensor" : "sensors")}");
+
+			if (room.LuxSensor is { Length: > 0 })
+				parts.Add("a light-level sensor");
+
+			// Blockers are not counted: that list lives in Movement & timing, not in this fold.
+			return parts.Count == 0
+				? "nothing is picked by hand here"
+				: $"picked by hand: {string.Join(", ", parts)}";
+		}
+	}
+
+	/// <summary>This room's reports, sifted; the card and its footer both read it, so the two counts agree.</summary>
+	private IReadOnlyList<ActivityEntry> RoomReports =>
+		_room is null ? [] : ActivityView.Shown(ActivityView.InRoom(Log.Entries, RoomName));
+
+	private IReadOnlyList<ActivityRow> RoomLog => ActivityView.Rows(RoomReports, LogRows);
+
+	private string LogFoot
+	{
+		get
+		{
+			int total = RoomReports.Count;
+			int shown = RoomLog.Count;
+
+			// Only the row budget earns the second sentence; a collapsed run is still on this card.
+			return shown >= LogRows && total > shown
+				? $"The newest {shown} of {total} reports from this room. The rest are on the Activity page."
+				: "Everything this room has reported since the engine started.";
+		}
+	}
+
+	/// <inheritdoc/>
+	/// <remarks>An edit still inside its quiet window is written on the way out. The flush stays inside the
+	/// try: a Dispose that throws part way through is not retried, so an unguarded throw strands the one-second
+	/// ticker and the snapshot subscription for the life of the process, per browser tab.</remarks>
+	public void Dispose()
+	{
+		try
+		{
+			_saveCts?.Cancel();
+
+			if (_dirty)
+				Commit();
+		}
+		finally
+		{
+			_saveCts?.Dispose();
+			_subscription?.Dispose();
+			_ticker?.Dispose();
+		}
+	}
+}

@@ -1,0 +1,71 @@
+@inject IJSRuntime Js
+@inject ILogger<ThemePicker> Logger
+
+@* Stored in the browser and never in the YAML; AppThemes owns the list and the fallback for an unknown id. *@
+<label class="theme-picker">
+	<span class="theme-picker-label">Theme</span>
+	<select class="theme-select" @bind:get="_selected" @bind:set="OnPicked">
+		@foreach (AppTheme theme in AppThemes.All)
+		{
+			<option value="@theme.Id">@theme.Name</option>
+		}
+	</select>
+</label>
+
+@code {
+	// The first paint happens before any circuit exists, so the server cannot know what this browser stored.
+	// theme.js has already painted by then, and only the select's chosen option needs correcting.
+	private string _selected = AppThemes.System.Id;
+
+	// An exception out of OnAfterRenderAsync or an event handler is an unhandled circuit exception, and this
+	// component sits in the layout, so it would take every page down.
+	private static bool IsSurvivable(Exception exception) =>
+		exception is JSDisconnectedException or JSException or OperationCanceledException;
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender)
+		{
+			return;
+		}
+
+		string? stored;
+
+		try
+		{
+			stored = await Js.InvokeAsync<string?>("adaptiveLightingTheme.stored");
+		}
+		catch (Exception exception) when (IsSurvivable(exception))
+		{
+			Logger.LogDebug(exception, "Could not read the stored theme; the picker keeps its default selection.");
+			return;
+		}
+
+		AppTheme theme = AppThemes.Resolve(stored);
+
+		if (theme.Id == _selected)
+		{
+			return;
+		}
+
+		_selected = theme.Id;
+		StateHasChanged();
+	}
+
+	// Resolved before storing, so the id written is one this build ships; the head script applies the same rule.
+	private async Task OnPicked(string picked)
+	{
+		AppTheme theme = AppThemes.Resolve(picked);
+		_selected = theme.Id;
+
+		try
+		{
+			await Js.InvokeVoidAsync("adaptiveLightingTheme.apply", theme.Id);
+		}
+		catch (Exception exception) when (IsSurvivable(exception))
+		{
+			// The pick is lost, not the page; the top bar has no surface to report it on.
+			Logger.LogWarning(exception, "Could not apply the theme '{Theme}' in the browser.", theme.Id);
+		}
+	}
+}

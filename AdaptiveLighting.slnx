@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AdaptiveLighting.Extensions/AdaptiveLighting.Extensions.csproj" />
+    <Project Path="src/AdaptiveLighting.NetDaemon/AdaptiveLighting.NetDaemon.csproj" />
+    <Project Path="src/AdaptiveLighting.Web/AdaptiveLighting.Web.csproj" />
+    <Project Path="src/AdaptiveLighting/AdaptiveLighting.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AdaptiveLighting.Tests/AdaptiveLighting.Tests.csproj" />
+  </Folder>
+</Solution>

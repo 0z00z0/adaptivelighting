@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>AdaptiveLighting</PackageId>
+    <Description>Motion- and daylight-driven adaptive lighting for Home Assistant, as a NetDaemon library. Per-room state machines, a house-wide circadian schedule, lux/sun darkness gating, manual-override detection and house modes (Normal/Sleep/Away/Guest) with scenes. Configured from YAML or the companion web UI; references no generated entity types, so it runs against any Home Assistant instance.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Only what the engine compiles against. NetDaemon.AppModel carries the app-model/options/logging
+      abstractions the engine binds (ILogger, and IAppConfig<T> in the host bootstrap); NetDaemon.HassModel
+      carries IHaContext and the Entity/registry types. The engine schedules on System.Reactive's IScheduler
+      (transitive) — not INetDaemonScheduler — and does its own logging via Microsoft.Extensions.Logging, so
+      the host-oriented NetDaemon.Extensions.{Logging,Scheduling,Mqtt} packages were removed in Phase C: none
+      was bound against by any file here, and both hosts reference the ones they need directly.
+    -->
+    <PackageReference Include="NetDaemon.AppModel" Version="26.21.0" />
+    <PackageReference Include="NetDaemon.HassModel" Version="26.21.0" />
+    <!--
+      Explicit rather than transitive. YamlDotNet was already in the graph via NetDaemon.AppModel, and
+      AdaptiveLighting.Configuration.LightingConfigDocument compiles against it directly — a
+      compile-time dependency has no business being an accident of somebody else's package graph.
+      17.1.0 is exactly the version NetDaemon.AppModel 26.21.0 resolves, so this pins what the process
+      already loads rather than introducing a second opinion.
+    -->
+    <PackageReference Include="YamlDotNet" Version="17.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdaptiveLighting.Extensions\AdaptiveLighting.Extensions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Tests reach a couple of internals (the room-role heuristic) without widening the public API. -->
+    <InternalsVisibleTo Include="AdaptiveLighting.Tests" />
+  </ItemGroup>
+
+</Project>

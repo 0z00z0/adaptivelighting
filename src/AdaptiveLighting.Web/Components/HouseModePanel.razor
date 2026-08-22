@@ -1,0 +1,112 @@
+@* No write path here: the parent calls ModeService.SelectHouseMode, which re-resolves the entity against the
+   configuration before it acts. *@
+
+<div class="housebar-cell">
+	<span class="housebar-lab">House mode</span>
+
+	@if (HouseMode is not { } houseMode)
+	{
+		<div class="housebar-note">
+			No house mode set up. <a href="config?section=housemodes">Add one under House modes</a>.
+		</div>
+	}
+	else
+	{
+		<div class="housebar-main">
+			<span class="housebar-value @(Available ? null : "unknown")" title="@MeaningLine">
+				@(Available ? houseMode.CurrentValue : "unknown")
+			</span>
+
+			<div class="mode-pill-row">
+				@foreach (HouseModeOptionView option in houseMode.Options)
+				{
+					HouseModeOptionView pick = option;
+					<button type="button"
+							class="mode-pill @(pick.IsCurrent ? "current" : "")"
+							disabled="@(!houseMode.IsAvailable)"
+							title="Switch the house to @pick.Value"
+							@onclick="() => OnSelect.InvokeAsync(pick.Value)">
+						@pick.Value
+					</button>
+				}
+			</div>
+		</div>
+
+		@if (!Available)
+		{
+			<p class="housebar-note">Waiting for Home Assistant &mdash; the mode can't be read or changed right now.</p>
+		}
+		@if (Confirmation is { Length: > 0 } confirmation)
+		{
+			<p class="housebar-note ok">@confirmation</p>
+		}
+		@if (Message is { Length: > 0 } message)
+		{
+			<p class="housebar-note bad">@message</p>
+		}
+	}
+</div>
+
+@code {
+	/// <summary>The house-mode select as the service reads it, or <c>null</c> when none is configured.</summary>
+	[Parameter, EditorRequired]
+	public HouseModeView? HouseMode { get; set; }
+
+	/// <summary>The failure text of the last switch attempt, shown until the next successful switch.</summary>
+	[Parameter]
+	public string? Message { get; set; }
+
+	/// <summary>A transient confirmation; the dashboard's ticker clears it after a few seconds.</summary>
+	[Parameter]
+	public string? Confirmation { get; set; }
+
+	[Parameter]
+	public EventCallback<string> OnSelect { get; set; }
+
+	/// <summary>Whether the mode can be shown: Home Assistant answered and the option is a usable value.</summary>
+	private bool Available => HouseMode is { IsAvailable: true, CurrentValue: { Length: > 0 } };
+
+	private HouseModeOptionView? Current =>
+		HouseMode?.Options.FirstOrDefault(option => option.IsCurrent);
+
+	/// <summary>One sentence for the current mode: what it does, plus its reset summary when one exists.</summary>
+	private string? MeaningLine
+	{
+		get
+		{
+			if (Current is not { } option)
+				return null;
+
+			string meaning = Sentence(Describe(option));
+
+			return option.ResetSummary is { Length: > 0 } reset
+				? $"{meaning} {Sentence(reset)}"
+				: meaning;
+		}
+	}
+
+	/// <summary>The bare meaning clause for an option, before it is turned into a sentence.</summary>
+	private static string Describe(HouseModeOptionView option) => option.Kind switch
+	{
+		ModeKind.Away => option.Scene is { Length: > 0 } scene
+			? $"runs the {scene} scene and pauses automatic lighting"
+			: option.Preview.EffectSummary,
+		ModeKind.Guest => option.Scene is { Length: > 0 } scene
+			? $"{option.Preview.EffectSummary}, plus the {scene} scene"
+			: option.Preview.EffectSummary,
+		ModeKind.Sleep => option.ClampPeriod is { Length: > 0 } clamp
+			? $"night levels (\"{clamp}\" period) in the rooms that sleep"
+			: "night levels — but no night period is set (see Configuration → Schedule)",
+		_ => option.Preview.EffectSummary
+	};
+
+	/// <summary>Capitalises the first letter and ensures a trailing full stop.</summary>
+	private static string Sentence(string text)
+	{
+		if (text.Length == 0)
+			return text;
+
+		string body = char.ToUpper(text[0], CultureInfo.CurrentCulture) + text[1..];
+		return body.EndsWith('.') ? body : body + ".";
+	}
+}

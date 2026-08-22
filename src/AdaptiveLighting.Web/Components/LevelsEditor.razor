@@ -1,0 +1,251 @@
+@* A row is drawn for every period but written only once it says something: RoomLevels creates a row on the
+   first value set and drops it when the last is cleared, or four drawn rows would pin four values nobody
+   chose and the schedule would stop reaching this room. Nothing here writes to disk. *@
+
+<div class="levels">
+	@* Asked once for the room and not once per period: warmth is a fact about the fixtures. *@
+	<div class="lvl-warmth">
+		<label class="lvl-warmth-lab" for="lvl-warmth">Warmth</label>
+		<select id="lvl-warmth" class="cell" @bind:get="WarmthNow" @bind:set="SetWarmth">
+			@foreach (TokenChoice option in AreaSentences.WarmthChoices)
+			{
+				<option value="@option.Value">@option.Text</option>
+			}
+		</select>
+		@if (NoColourTemperature)
+		{
+			<span class="lvl-warmth-note">@AreaSentences.NoColourTemperature</span>
+		}
+	</div>
+
+	@if (Periods.Count == 0)
+	{
+		<div class="empty">
+			The schedule has no periods yet, so there is nothing for this room to agree or disagree with.
+			<a href="config?section=schedule">Set the day up</a> first.
+		</div>
+	}
+
+	@foreach (RoomLevelRow row in RoomLevels.Rows(Periods, Room))
+	{
+		RoomLevelRow current = row;
+		bool isNow = string.Equals(current.PeriodId, ActivePeriod, StringComparison.OrdinalIgnoreCase);
+
+		<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(current.IsOwn ? "lvl-own" : null) @(isNow ? "lvl-now" : null)" @key="current.PeriodId">
+			<div class="lvl-when">
+				<span class="lvl-name">@PeriodName(current.Name)</span>
+				@if (isNow)
+				{
+					<span class="badge active-now" title="This period is in force right now.">now</span>
+				}
+				<span class="lvl-start">@StartOf(current.PeriodId)</span>
+			</div>
+
+			<div class="lvl-cell @(current.Brightness == LevelSource.Room ? "lvl-set" : null)">
+				<span class="lvl-cell-head">
+					<span class="lvl-cell-label">Brightness</span>
+					@if (current.Brightness == LevelSource.Room)
+					{
+						<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+					}
+				</span>
+
+				<PresetSelect Value="@current.BrightnessPct"
+							  ValueChanged="@(value => SetBrightness(current.PeriodId, value))"
+							  Options="@Presets.BrightnessPct"
+							  Unit="%" />
+
+				@if (current.Brightness == LevelSource.Room)
+				{
+					<button type="button" class="lvl-revert" @onclick="() => ClearBrightness(current.PeriodId)">
+						Follow the schedule (@TokenFormat.Percent(ScheduleBrightness(current.PeriodId)))
+					</button>
+				}
+				else
+				{
+					<span class="lvl-inherit">the schedule's</span>
+				}
+			</div>
+
+			@* Dropped and not disabled, but anything a period already pinned stays in the document and comes
+			   back with the control. *@
+			@if (!NoColourTemperature)
+			{
+				<div class="lvl-cell @(current.Colour == LevelSource.Room ? "lvl-set" : null)">
+					<span class="lvl-cell-head">
+						<span class="lvl-cell-label">Warmth</span>
+						@* The same KelvinColour conversion the state chip and the board use. *@
+						<span class="lvl-swatch" style="@Swatch(current.ColorTempKelvin)" title="@($"{current.ColorTempKelvin} K")" aria-hidden="true"></span>
+						@if (current.Colour == LevelSource.Room)
+						{
+							<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+						}
+					</span>
+
+					<PresetSelect Value="@current.ColorTempKelvin"
+								  ValueChanged="@(value => SetColour(current.PeriodId, value))"
+								  Options="@Presets.ColorTempKelvin"
+								  Unit="K" />
+
+					@if (current.Colour == LevelSource.Room)
+					{
+						<button type="button" class="lvl-revert" @onclick="() => ClearColour(current.PeriodId)">
+							Follow the schedule (@ScheduleKelvin(current.PeriodId) K)
+						</button>
+					}
+					else
+					{
+						<span class="lvl-inherit">the schedule's</span>
+					}
+				</div>
+			}
+		</div>
+	}
+
+	@* Rows this room wrote for a period the schedule no longer has: periods carry stable ids, so a rename
+	   cannot strand one. *@
+	@{
+		IReadOnlyList<RoomLevelOrphan> orphans = RoomLevels.Orphans(Periods, Room);
+
+		// Hoisted: read inside the loop it would be recomputed twice per orphan, on a page that ticks at 1 Hz.
+		IReadOnlyList<TimePeriodConfig> free = orphans.Count > 0 ? RoomLevels.FreePeriods(Periods, Room) : [];
+	}
+
+	@foreach (RoomLevelOrphan orphan in orphans)
+	{
+		RoomLevelOrphan current = orphan;
+
+		<div class="lvl lvl-orphan" @key="@($"orphan:{current.PeriodId}")">
+			<div class="lvl-when">
+				<span class="lvl-name">@current.Name</span>
+				<span class="lvl-start">no period is called this any more</span>
+			</div>
+
+			<div class="lvl-cell lvl-orphan-says">
+				<span class="lvl-cell-label">This room still pins</span>
+				<span class="lvl-orphan-value">@current.Says</span>
+			</div>
+
+			<div class="lvl-cell">
+				<span class="lvl-cell-label">Move it to a period, or remove it</span>
+				@if (free.Count > 0)
+				{
+					<select class="cell" value="" @onchange="@(args => Repoint(current.PeriodId, args.Value as string))">
+						<option value="">move it to&hellip;</option>
+						@foreach (TimePeriodConfig period in free)
+						{
+							<option value="@period.Key">@period.Name</option>
+						}
+					</select>
+				}
+				<button type="button" class="lvl-drop" @onclick="() => Drop(current.PeriodId)">Remove it</button>
+			</div>
+		</div>
+	}
+</div>
+
+@code {
+	/// <summary>The document's period list, read here and never edited.</summary>
+	[Parameter, EditorRequired]
+	public List<TimePeriodConfig> Periods { get; set; } = [];
+
+	/// <summary>The room being edited, in place.</summary>
+	[Parameter, EditorRequired]
+	public AreaConfig Room { get; set; } = new();
+
+	/// <summary>The house's own settings, which the warmth question follows where the room says nothing.</summary>
+	[Parameter, EditorRequired]
+	public AreaSettings Defaults { get; set; } = new();
+
+	/// <summary>What discovery makes of the room, which settles a warmth left on detect.</summary>
+	/// <remarks><c>null</c> while the room cannot be resolved at all, when only the stated answer is known.</remarks>
+	[Parameter]
+	public ResolvedArea? Resolved { get; set; }
+
+	/// <summary>The id of the period in force right now, or <c>null</c> when none is.</summary>
+	[Parameter]
+	public string? ActivePeriod { get; set; }
+
+	/// <summary>Raised after any change, so the page can re-validate and start its save timer.</summary>
+	[Parameter]
+	public EventCallback Changed { get; set; }
+
+	/// <summary>The same placeholder the schedule editor uses for an unnamed period.</summary>
+	private static string PeriodName(string name) => name is { Length: > 0 } ? name : "unnamed period";
+
+	// The select below stays on the stated answer: snapping it to the detected one would read as the pick
+	// being refused.
+	private bool NoColourTemperature =>
+		(Resolved?.EffectiveColorControl ?? AreaSentences.WarmthOf(Room, Defaults)) is ColorControl.EqualChannels;
+
+	private string WarmthNow => AreaSentences.WarmthOf(Room, Defaults).ToString();
+
+	/// <summary>Writes the room's own answer; a value no member matches is ignored.</summary>
+	private Task SetWarmth(string value)
+	{
+		if (!Enum.TryParse(value, out ColorControl picked))
+			return Task.CompletedTask;
+
+		Room.ColorControl = picked;
+
+		return Changed.InvokeAsync();
+	}
+
+	/// <summary>When the period starts, in the engine's own reading of its Start string.</summary>
+	private string StartOf(string periodId) =>
+		Found(periodId) is { } found ? PeriodStartText.Describe(found.Start) ?? "start not set" : string.Empty;
+
+	private double ScheduleBrightness(string periodId) => Found(periodId)?.BrightnessPct ?? 0;
+
+	private int ScheduleKelvin(string periodId) => Found(periodId)?.ColorTempKelvin ?? 0;
+
+	private TimePeriodConfig? Found(string periodId) => Periods.ByKey(periodId);
+
+	// KelvinColour.Css writes its own invariant integers, so no decimal comma reaches the colour function.
+	private static string Swatch(int kelvin) => $"--lvl-kelvin: {KelvinColour.Css(kelvin)}";
+
+	private Task SetBrightness(string periodId, double value)
+	{
+		RoomLevels.SetBrightness(Room, periodId, value);
+
+		return Changed.InvokeAsync();
+	}
+
+	private Task ClearBrightness(string periodId)
+	{
+		RoomLevels.SetBrightness(Room, periodId, null);
+
+		return Changed.InvokeAsync();
+	}
+
+	// Kelvin is a whole number in the schema while the preset control carries a double. Rounded and not
+	// truncated: 2699.6 filed as 2699 shows nowhere on the page.
+	private Task SetColour(string periodId, double value)
+	{
+		RoomLevels.SetColorTemp(Room, periodId, (int)Math.Round(value, MidpointRounding.AwayFromZero));
+
+		return Changed.InvokeAsync();
+	}
+
+	private Task ClearColour(string periodId)
+	{
+		RoomLevels.SetColorTemp(Room, periodId, null);
+
+		return Changed.InvokeAsync();
+	}
+
+	private Task Drop(string periodId)
+	{
+		RoomLevels.Remove(Room, periodId);
+
+		return Changed.InvokeAsync();
+	}
+
+	private Task Repoint(string fromPeriodId, string? toPeriodId)
+	{
+		if (toPeriodId is not { Length: > 0 } target || !RoomLevels.Repoint(Room, fromPeriodId, target))
+			return Task.CompletedTask;
+
+		return Changed.InvokeAsync();
+	}
+}

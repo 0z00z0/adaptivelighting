@@ -1,0 +1,24 @@
+<svg class="curve-glyph @Class"
+	 viewBox="0 0 40 20"
+	 fill="none"
+	 role="@(Label is { Length: > 0 } ? "img" : null)"
+	 aria-label="@(Label is { Length: > 0 } ? Label : null)"
+	 aria-hidden="@(Label is { Length: > 0 } ? null : "true")"
+	 focusable="false">
+	<line x1="0" y1="19.5" x2="40" y2="19.5" stroke="var(--grid)" stroke-width="1" />
+	<line x1="0.5" y1="0" x2="0.5" y2="20" stroke="var(--grid)" stroke-width="1" />
+	<path d="@CurvePath.Power(Exponent)" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
+
+@code {
+	/// <summary>The shape: 1 is a straight rise, above 1 holds back and then climbs, below 1 lifts early.</summary>
+	[Parameter, EditorRequired]
+	public double Exponent { get; set; } = 1;
+
+	/// <summary>What the curve means, for a screen reader.</summary>
+	[Parameter]
+	public string? Label { get; set; }
+
+	[Parameter]
+	public string? Class { get; set; }
+}

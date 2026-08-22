@@ -1,0 +1,46 @@
+name: release
+
+# Tag a release to publish: git tag v0.1.0-preview.1 && git push origin v0.1.0-preview.1
+# The tag drives the package version, so the four packages always ship as a matched set.
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The push below. This is the whole credential story: GITHUB_TOKEN is minted for the run, so there is no
+      # secret to create, rotate or forget.
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Version from tag
+        run: echo "PKG_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - run: dotnet restore AdaptiveLighting.slnx
+      - run: dotnet build AdaptiveLighting.slnx -c Release --no-restore -p:Version=$PKG_VERSION
+      - run: dotnet test AdaptiveLighting.slnx -c Release --no-build
+
+      - run: dotnet pack AdaptiveLighting.slnx -c Release --no-build -p:Version=$PKG_VERSION -o artifacts
+
+      # GitHub Packages is the only feed these packages go to. Settled 2026-08-09; nuget.org is not a fallback
+      # and not a later step. This job is the only publish path, so keep it the only place a source is named.
+      #
+      # GITHUB_TOKEN, not a PAT: it is minted per run, so there is no secret to create, rotate or forget, and
+      # nothing that expires and breaks a release with no warning. A PAT was considered and dropped — the
+      # argument for it was that one credential could also serve restore, but restore happens on a developer's
+      # machine against the user-level NuGet.Config and never touches this job.
+      #
+      # --no-symbols: pack writes a .snupkg beside each .nupkg, and push would send it uninvited. GitHub
+      # Packages has no symbol server, so that is a failed step in exchange for nothing.
+      #
+      # No --skip-duplicate. It turns the 409 that means "this version is already live" into a green build
+      # while the old bits stay deployed, which is the one failure a release job exists to catch.
+      - name: Push to GitHub Packages
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "${{ secrets.GITHUB_TOKEN }}" --source https://nuget.pkg.github.com/0z00z0/index.json --no-symbols

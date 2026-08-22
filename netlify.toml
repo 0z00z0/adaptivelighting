@@ -1,0 +1,48 @@
+# The documentation site. Netlify builds the Astro/Starlight app in website/ and serves its dist/.
+# Connect this repo at app.netlify.com -> Add new site -> Import an existing project; these settings
+# are picked up automatically, so nothing needs configuring in the Netlify UI.
+[build]
+  base = "website"
+  command = "npm run build"
+  publish = "dist"
+
+  # Skip the build when a push touched no documentation. Exit 0 means "nothing changed, skip";
+  # any other code builds. Root-relative pathspecs (:/) so it does not matter that this command runs
+  # from the base directory. If HEAD^ is missing (first build, shallow clone) git exits non-zero and
+  # the build runs - failing towards building is the safe direction.
+  ignore = "git diff --quiet HEAD^ HEAD -- :/website :/netlify.toml"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Astro emits fingerprinted assets, so they can be cached hard; HTML must not be.
+[[headers]]
+  for = "/_astro/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Two pages the site used to publish and no longer does. The 2.0 rewrite made this site user-facing
+# only: /architecture described the engine's internals and /web-ui duplicated what the app now
+# explains on its own screens. Both were live and are the kind of URL somebody keeps in a bookmark or
+# a forum reply, so they redirect to the surviving page that answers the same question rather than
+# becoming 404s on the day 2.0 lands. 301 because the move is permanent, and the splat forms catch
+# anchors and any deeper path.
+[[redirects]]
+  from = "/architecture"
+  to = "/overview/"
+  status = 301
+
+[[redirects]]
+  from = "/architecture/*"
+  to = "/overview/"
+  status = 301
+
+[[redirects]]
+  from = "/web-ui"
+  to = "/user-guide/"
+  status = 301
+
+[[redirects]]
+  from = "/web-ui/*"
+  to = "/user-guide/"
+  status = 301

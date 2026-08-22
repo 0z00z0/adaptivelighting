@@ -1,0 +1,36 @@
+@* The people shown are the ones the engine watches: ModeService.GetPeople mirrors PresenceMonitor. *@
+
+<div class="housebar-cell">
+	<span class="housebar-lab">Who's home</span>
+
+	@if (People.Count == 0)
+	{
+		<div class="housebar-note">
+			No people to watch. Adaptive lighting assumes someone is always home.
+		</div>
+	}
+	else
+	{
+		<div class="housebar-main people-row">
+			@foreach (PersonView person in People)
+			{
+				<span class="person-chip @DotClass(person)" title="@($"{person.Name} — {StateWord(person)}")">
+					<span class="person-dot @DotClass(person)" aria-hidden="true"></span>
+					<span class="person-chip-name">@person.Name</span>
+					<span class="person-chip-state">@StateWord(person)</span>
+				</span>
+			}
+		</div>
+	}
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public IReadOnlyList<PersonView> People { get; set; } = [];
+
+	private static string DotClass(PersonView person) =>
+		!person.IsAvailable ? "unknown" : person.IsHome ? "home" : "";
+
+	private static string StateWord(PersonView person) =>
+		!person.IsAvailable ? "unknown" : person.IsHome ? "home" : "away";
+}

@@ -1,0 +1,52 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+
+# Test output
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+coverage*.xml
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local runtime config: never commit a Home Assistant token
+appsettings.Development.json
+appsettings.*.Local.json
+
+# Docs site (Astro/Starlight)
+node_modules/
+website/dist/
+website/.astro/
+
+# Agent worktrees are scratch, never content
+.claude/worktrees/
+
+# Session working files: briefs, one-off measurement scripts. Never part of the package.
+scratchpad/
+
+# The UI host edits a real document locally; never commit one (this repo is public).
+# The .bak too: LightingEngineHost.Save writes one beside the document on every save, so a real house
+# copied in here leaks through its backup even when the document itself is ignored.
+tools/uihost/local.yaml
+tools/uihost/*.yaml
+tools/uihost/*.yaml.bak
+tools/uihost/last-seen/

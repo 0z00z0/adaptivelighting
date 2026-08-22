@@ -1,0 +1,52 @@
+<div class="notice @(Note.IsWarning ? "warn" : "info") switch-note">
+	<strong class="switch-note-lead">@Note.Lead</strong>
+
+	@if (Note.Suspicious.Count > 0)
+	{
+		<div class="switch-note-suspects">
+			@foreach (SuspectLight suspect in Note.Suspicious)
+			{
+				<span class="gchip gchip-suspect">
+					<span class="chip-name">@suspect.Name</span>
+					<code class="chip-id">@suspect.EntityId</code>
+					<span class="chip-why">@suspect.Reason</span>
+				</span>
+			}
+		</div>
+	}
+
+	@if (Note.OthersLine is { Length: > 0 } others)
+	{
+		<p class="switch-note-rest">@others</p>
+	}
+
+	@if (Note.Advice is { Length: > 0 } advice)
+	{
+		<p class="switch-note-advice">
+			@advice
+			@if (AdviceHref is { Length: > 0 } href)
+			{
+				<a href="@href">Open Finding lights &amp; sensors</a>
+			}
+		</p>
+	}
+
+	<div class="panel-actions">
+		<button type="button" @onclick="Dismiss">Got it</button>
+	</div>
+</div>
+
+@code {
+	/// <summary>The note to render, built by <see cref="SwitchOnWarning.For"/> and never here.</summary>
+	[Parameter, EditorRequired]
+	public SwitchOnNote Note { get; set; } = new("", [], [], null);
+
+	/// <summary>Where the include-label setting lives, when it is on another page.</summary>
+	[Parameter]
+	public string? AdviceHref { get; set; }
+
+	[Parameter]
+	public EventCallback Dismissed { get; set; }
+
+	private Task Dismiss() => Dismissed.InvokeAsync();
+}

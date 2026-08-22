@@ -1,0 +1,85 @@
+using AdaptiveLighting.Configuration;
+
+namespace AdaptiveLighting.Engine;
+
+/// <summary>Which periods wait for movement before they begin, and which of those have begun on a given local day.</summary>
+// One instance per engine. ModeMonitor is the only writer; every area's CircadianCalculator reads it through
+// IsHeldBack and leaves a period out of the table until the house has moved. Holding nothing stands the whole
+// rule down.
+public sealed class MotionPeriodLatch
+{
+	// Settled in the constructor and never written again, so it is read without the gate.
+	private readonly HashSet<string> _held;
+
+	// Guards _begunOn only. Written from Home Assistant's threads, read from every area's tick.
+	private readonly object _gate = new();
+
+	private readonly Dictionary<string, DateOnly> _begunOn = new(StringComparer.OrdinalIgnoreCase);
+
+	public MotionPeriodLatch(IEnumerable<string>? heldPeriods = null)
+	{
+		_held = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (string key in heldPeriods ?? [])
+			if (key?.Trim() is { Length: > 0 } trimmed)
+				_held.Add(trimmed);
+	}
+
+	/// <summary>The latch for <paramref name="periods"/>, holding back every one that asks to start on motion.</summary>
+	// The single branch on period authority, mirroring PeriodSelectReader's: under Home Assistant's the dropdown
+	// is the only boundary, so nothing is held and nothing can be started by movement.
+	public static MotionPeriodLatch For(IReadOnlyList<TimePeriodConfig>? periods, GlobalConfig? global)
+	{
+		if (global?.PeriodSelect is { EntityId: not null, Authority: PeriodAuthority.HomeAssistant })
+			return new MotionPeriodLatch();
+
+		return new MotionPeriodLatch(
+			(periods ?? []).Where(period => period.StartsOnMotion).Select(period => period.Key));
+	}
+
+	/// <summary>The periods that do not begin on the clock.</summary>
+	public IReadOnlyCollection<string> HeldPeriods => _held;
+
+	/// <summary>Whether <paramref name="periodKey"/> waits for movement instead of beginning on its <c>Start</c>.</summary>
+	public bool Holds(string? periodKey) => periodKey is { Length: > 0 } && _held.Contains(periodKey);
+
+	/// <summary>Whether the instance of <paramref name="periodKey"/> that began on <paramref name="day"/> has started.</summary>
+	public bool HasBegun(string? periodKey, DateOnly day)
+	{
+		if (periodKey is not { Length: > 0 })
+			return false;
+
+		lock (_gate)
+			return _begunOn.TryGetValue(periodKey, out DateOnly begun) && begun == day;
+	}
+
+	/// <summary>Whether the calculator must leave <paramref name="periodKey"/> out of the table for <paramref name="instanceDay"/>.</summary>
+	public bool IsHeldBack(string? periodKey, DateOnly instanceDay) =>
+		Holds(periodKey) && !HasBegun(periodKey, instanceDay);
+
+	public void MarkBegun(string? periodKey, DateOnly day)
+	{
+		if (periodKey is not { Length: > 0 })
+			return;
+
+		lock (_gate)
+			_begunOn[periodKey] = day;
+	}
+
+	/// <summary>Claims the day's one start of <paramref name="periodKey"/>, or answers <c>false</c> when it is spent.</summary>
+	// Atomic, so two sensors tripping at once cannot both start the period.
+	public bool TryBegin(string? periodKey, DateOnly day)
+	{
+		if (periodKey is not { Length: > 0 })
+			return false;
+
+		lock (_gate)
+		{
+			if (_begunOn.TryGetValue(periodKey, out DateOnly begun) && begun == day)
+				return false;
+
+			_begunOn[periodKey] = day;
+			return true;
+		}
+	}
+}

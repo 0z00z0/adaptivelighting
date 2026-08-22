@@ -1,0 +1,25 @@
+@* An <svg> without focusable="false" is a tab stop in some browsers, and one without aria-hidden or a label is
+   an unnamed graphic a screen reader stops on. Neither shows on screen. *@
+
+<svg class="ic @Class"
+	 role="@(Label is { Length: > 0 } ? "img" : null)"
+	 aria-label="@(Label is { Length: > 0 } ? Label : null)"
+	 aria-hidden="@(Label is { Length: > 0 } ? null : "true")"
+	 focusable="false">
+	<use href="@($"#{Name}")" />
+</svg>
+
+@code {
+	/// <summary>Which glyph, as a <see cref="Glyph"/> constant.</summary>
+	// A name the sprite does not define renders an empty box in silence; a Glyph constant makes that a compile error.
+	[Parameter, EditorRequired]
+	public string Name { get; set; } = "";
+
+	/// <summary>Extra classes: <c>ic-sm</c>, <c>ic-lg</c>, <c>ic-head</c>, or a page's own.</summary>
+	[Parameter]
+	public string? Class { get; set; }
+
+	/// <summary>What the glyph means, when it is the only thing saying it.</summary>
+	[Parameter]
+	public string? Label { get; set; }
+}

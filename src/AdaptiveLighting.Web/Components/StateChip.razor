@@ -1,0 +1,53 @@
+@* Every state that means something has its own outline, so colour is never the only carrier. *@
+
+<span class="state-chip @Mark.Family @(Bare ? "state-bare" : null) @(Kelvin is not null && StateGlyph.TakesKelvinTint(State) ? "state-kelvin" : null)"
+	  style="@KelvinStyle"
+	  role="@(ShowsWord ? null : "img")"
+	  aria-label="@(ShowsWord ? null : Mark.Word)"
+	  title="@(Title is { Length: > 0 } ? Title : Mark.Word)">
+	@if (Mark.Icon is { Length: > 0 } glyph)
+	{
+		<Icon Name="@glyph" Class="@(Mark.Blinks ? "state-blink" : null)" />
+	}
+	else
+	{
+		<span class="state-dot" aria-hidden="true"></span>
+	}
+
+	@if (ShowsWord)
+	{
+		<span class="state-word">@Mark.Word</span>
+	}
+</span>
+
+@code {
+	[Parameter, EditorRequired]
+	public AreaState State { get; set; }
+
+	/// <summary>The colour temperature the room was commanded to, ignored unless
+	/// <see cref="StateGlyph.TakesKelvinTint"/> says the state carries one.</summary>
+	[Parameter]
+	public int? Kelvin { get; set; }
+
+	/// <summary>Whether the chip says the state in words as well as in shape.</summary>
+	[Parameter]
+	public bool ShowWord { get; set; } = true;
+
+	/// <summary>The mark alone: no well, no word, no padding, for a dense list.</summary>
+	[Parameter]
+	public bool Bare { get; set; }
+
+	/// <summary>A fuller explanation for the hover title, falling back to the chip's own word.</summary>
+	[Parameter]
+	public string? Title { get; set; }
+
+	private StateMark Mark => StateGlyph.For(State);
+
+	private bool ShowsWord => ShowWord && !Bare;
+
+	/// <summary>A lit room's mark takes the light's own warmth, converted by <see cref="KelvinColour"/>.</summary>
+	private string? KelvinStyle =>
+		Kelvin is { } kelvin && StateGlyph.TakesKelvinTint(State)
+			? $"--state-kelvin: {KelvinColour.Css(kelvin)};"
+			: null;
+}
