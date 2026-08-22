@@ -545,6 +545,32 @@ calls. Every duplicate has a device id and every group helper has none, so the d
 its own guard. `LightAudit` infers channels from id suffixes instead, which is a convention; a device is a fact
 the registry records.
 
+### Colour control reads four answers, not two
+
+`supported_color_modes` on the area's resolved lights is read once, when the area resolves, because the
+alternative is a state read per light per tick. `ColorControl.Auto` then settles on what those fixtures said:
+
+| What the fixtures say | What the room commands |
+|---|---|
+| any light offers `color_temp` | `color_temp_kelvin` |
+| a colour channel, but no `color_temp` anywhere | every channel at one value |
+| every light that answered offers neither | brightness alone, no colour field at all |
+| no light answered | `color_temp_kelvin` |
+
+The last two rows are the same silence to a single tri-state, which is why `ResolvedArea` carries
+`LightsSupportAnyColour` beside `LightsSupportColorTemp`: only the pair separates *nothing answered* from
+*nothing has colour*. A light with no readable `supported_color_modes` is not counted at all, so a house still
+starting up falls in the fourth row and keeps its kelvin until a fixture says otherwise; resolving it to
+anything else would strip colour from every room until the next rebuild.
+
+Row three is not a member of `ColorControl`. That enum's ordinals are pinned and an unknown member name is a
+`FormatException` at start-up in an older engine, so "no colour" is `ResolvedArea.CommandsColour` instead — a
+property the controller and the levels table both read. A brightness-only dimmer beside a real lamp changes
+nothing: one fixture with colour puts the room in row one or two.
+
+Detection settles `Auto` only. A stated `Kelvin` or `EqualChannels` is an owner overruling the fixtures, which
+is needed in both directions because Home Assistant sometimes advertises a capability a fixture lacks.
+
 ---
 
 ## The web layer

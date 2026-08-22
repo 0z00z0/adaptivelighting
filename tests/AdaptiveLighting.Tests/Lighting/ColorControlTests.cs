@@ -237,6 +237,47 @@ public sealed class ColorControlTests
 		Assert.AreEqual(ColorControl.EqualChannels, Resolve(ha, ColorControl.Auto, Light, "light.b").EffectiveColorControl);
 	}
 
+	// ===================== fixtures with no colour of any kind =====================
+
+	[TestMethod]
+	public void A_Brightness_Only_Room_Commands_No_Colour_At_All()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Light, "off", new() { [SupportedColorModes] = new[] { "brightness" } });
+
+		ResolvedArea area = Resolve(ha, ColorControl.Auto, Light);
+
+		Assert.AreEqual<bool?>(false, area.LightsSupportAnyColour, "the fixture answered, and what it answered has no colour in it");
+		Assert.IsFalse(area.CommandsColour);
+		Assert.IsFalse(area.CommandsKelvin, "a colour temperature the fixtures cannot take must not be reported as theirs");
+	}
+
+	[TestMethod]
+	public void One_Fixture_With_Colour_Keeps_A_Brightness_Only_Room_Commanding_It()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Light, "off", new() { [SupportedColorModes] = new[] { "brightness" } });
+		ha.SetState("light.b", "off", new() { [SupportedColorModes] = new[] { "color_temp" } });
+
+		ResolvedArea area = Resolve(ha, ColorControl.Auto, Light, "light.b");
+
+		Assert.IsTrue(area.CommandsColour, "the dimmer beside a real lamp must not take the lamp's kelvin away");
+		Assert.IsTrue(area.CommandsKelvin);
+	}
+
+	[TestMethod]
+	public void A_Room_Whose_Fixtures_Have_Not_Answered_Still_Commands_Colour()
+	{
+		FakeHaContext ha = new();
+		// No state at all, which is what a house still starting up looks like.
+
+		ResolvedArea area = Resolve(ha, ColorControl.Auto, Light);
+
+		Assert.IsNull(area.LightsSupportAnyColour, "silence is not the same answer as 'no colour'");
+		Assert.IsTrue(area.CommandsColour, "a start-up with nothing read yet must not lock the room out of colour");
+		Assert.IsTrue(area.CommandsKelvin);
+	}
+
 	// ===================== a person overruling the fixtures, both ways =====================
 
 	[TestMethod]
@@ -275,17 +316,80 @@ public sealed class ColorControlTests
 		Assert.IsTrue(actuator.Last is { On: true, BrightnessPct: 70, ColorTempKelvin: 2700, EqualChannels: false });
 	}
 
+	// ===================== the four things Auto can find, as commands =====================
+
+	[TestMethod]
+	public void Auto_Over_A_Colour_Temperature_Fixture_Commands_Kelvin_And_No_Channels()
+	{
+		FakeLightActuator actuator = Lit(ColorControl.Auto, "color_temp");
+
+		Assert.IsTrue(actuator.Last is { On: true, BrightnessPct: 70, ColorTempKelvin: 2700, EqualChannels: false });
+	}
+
+	[TestMethod]
+	public void Auto_Over_A_Colour_Channel_Fixture_Commands_Channels_And_No_Kelvin()
+	{
+		FakeLightActuator actuator = Lit(ColorControl.Auto, "rgb");
+
+		Assert.IsTrue(actuator.Last is { On: true, BrightnessPct: 70, ColorTempKelvin: null, EqualChannels: true });
+	}
+
+	[TestMethod]
+	public void Auto_Over_A_Brightness_Only_Fixture_Commands_Neither_Kelvin_Nor_Channels()
+	{
+		FakeLightActuator actuator = Lit(ColorControl.Auto, "brightness");
+
+		Assert.IsTrue(actuator.Last is { On: true, BrightnessPct: 70, ColorTempKelvin: null, EqualChannels: false },
+			"a dimmer takes the brightness and nothing else; a kelvin here is a figure nobody can honour");
+	}
+
+	[TestMethod]
+	public void Auto_Over_A_Fixture_That_Has_Not_Answered_Commands_Kelvin()
+	{
+		FakeLightActuator actuator = Lit(ColorControl.Auto);
+
+		Assert.IsTrue(actuator.Last is { On: true, BrightnessPct: 70, ColorTempKelvin: 2700, EqualChannels: false },
+			"a house still starting up keeps the schedule's kelvin until a fixture says otherwise");
+	}
+
+	[TestMethod]
+	public void A_Stated_Kelvin_Reaches_A_Brightness_Only_Room_Anyway()
+	{
+		FakeLightActuator actuator = Lit(ColorControl.Kelvin, "brightness");
+
+		Assert.IsTrue(actuator.Last is { ColorTempKelvin: 2700, EqualChannels: false },
+			"detection only settles Auto; a stated answer is an owner overruling the fixtures");
+	}
+
+	[TestMethod]
+	public void Stated_Equal_Channels_Reach_A_Brightness_Only_Room_Anyway()
+	{
+		FakeLightActuator actuator = Lit(ColorControl.EqualChannels, "brightness");
+
+		Assert.IsTrue(actuator.Last is { ColorTempKelvin: null, EqualChannels: true });
+	}
+
 	/// <summary>Starts an area at 20:00, inside "evening", and lights it with a movement.</summary>
-	private static FakeLightActuator Lit(ColorControl mode)
+	/// <param name="mode">The room's warmth answer, stated or left on detect.</param>
+	/// <param name="supportedColorModes">What the fixture advertises; none at all is a light that never answered.</param>
+	private static FakeLightActuator Lit(ColorControl mode, params string[] supportedColorModes)
 	{
 		TestScheduler scheduler = new();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
 
 		FakeHaContext ha = new();
-		ha.SetState(Motion, "off");
-		ha.SetState(Light, "off");
 
-		AreaSettings settings = new() { Darkness = DarknessSource.Always, ColorControl = mode };
+		if (supportedColorModes.Length > 0)
+			ha.SetState(Light, "off", new() { [SupportedColorModes] = supportedColorModes });
+		else
+			ha.SetState(Light, "off");
+
+		// Built through the resolver, or what the fixtures say would never reach the controller at all.
+		ResolvedArea area = Resolve(ha, mode, Light) with
+		{
+			Settings = new AreaSettings { Darkness = DarknessSource.Always, ColorControl = mode }
+		};
+
 		GlobalConfig global = new() { SmoothTransitions = false, CircadianTickSeconds = 60 };
 
 		List<TimePeriodConfig> table =
@@ -297,7 +401,7 @@ public sealed class ColorControlTests
 		FakeLightActuator actuator = new();
 
 		using AreaController controller = new(
-			ha, scheduler, new ResolvedArea("Test", settings, [Light], [Motion], [], []), global, table,
+			ha, scheduler, area, global, table,
 			new CircadianCalculator(table, global, () => SunTimes.Unknown),
 			actuator, new FakeStatePublisher(), new BehaviorSubject<HouseState>(HouseState.Initial),
 			NullLoggerFactory.Instance);

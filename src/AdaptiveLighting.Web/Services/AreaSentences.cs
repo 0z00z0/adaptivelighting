@@ -73,6 +73,10 @@ public static class AreaSentences
 	public const string NoColourTemperature =
 		"The schedule's kelvin figure does nothing for these lights, so they run at neutral white.";
 
+	/// <summary>The same, for a room whose lights have no colour of any kind to command.</summary>
+	public const string NoColourAtAll =
+		"These lights have no colour to set, so they take the brightness alone and no colour command at all.";
+
 	/// <summary>How the room's warmth is commanded, following the house wherever the room says nothing.</summary>
 	public static ColorControl WarmthOf(AreaConfig? area, AreaSettings defaults)
 	{

@@ -295,6 +295,14 @@ against each other.
 
 ### Fixed
 
+- **A room whose lights have no colour is no longer told a colour temperature.** *Detect from lights* read a
+  fixture that offers only brightness as silence, and silence resolved to kelvin, so the room was commanded
+  `color_temp_kelvin` no lamp in it could take and the levels table offered a warmth column to match.
+  Detection now separates *nothing answered* from *everything answered, and none of it has colour*: the first
+  keeps kelvin, because a house still starting up must not lock a room out of colour, and the second commands
+  neither kelvin nor equal channels. `ColorControl` is unchanged — its ordinals are pinned — and a stated
+  *Colour temperature* or *No colour temperature* still overrules the fixtures either way.
+
 - **A room page open across another writer's save no longer reverts it.** A debounced autosave wrote the whole
   document back from the picture the page read on open. Two of the other writers are the engine itself, both
   landing during that visit: area discovery 30 s after start, and the schema-migrating rewrite inside `Reload`.

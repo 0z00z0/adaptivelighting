@@ -76,12 +76,6 @@ rewritten to suit one.
   clock-started one would**, so the transition feels the same whenever you arrive. Needs the calculator to know
   *when* a period began, not just whether.
 
-- **Colour control's *Detect from lights* reports a colour temperature that is not there.** A room whose
-  fixtures have no colour temperature still renders as though they do; the toilet is the worked example.
-  `AreaEntityResolver.ColorTempCapabilityOf` returns null when no fixture answered, and
-  `ResolvedArea.EffectiveColorControl` reads null as Kelvin, so silence is treated as capability. Detection
-  must consider only the room's live, included lights.
-
 - **The daylight lift climbs past the day level.** *Brighten with daylight* has been observed near 100 % in the
   toilet. It should not exceed the *Day* period's brightness, which gives the lift a ceiling without
   reintroducing a per-period cap.
