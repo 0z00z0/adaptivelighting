@@ -224,7 +224,7 @@ public sealed class RoomFactsTests
 
 		Assert.IsNull(RoomFacts.AutoOnNote(older));
 		Assert.IsFalse(RoomFacts.For(older, Now).Any(fact => fact.Label == "If someone walks in"));
-		Assert.AreEqual("Movement in the dark turns the lights on.", RoomFacts.NextLine(older, Now));
+		Assert.AreEqual("Awaiting movement.", RoomFacts.NextLine(older, Now));
 	}
 
 	/// <summary>Away is in this list because none of these reports says who is home.</summary>
@@ -236,7 +236,7 @@ public sealed class RoomFactsTests
 			Assert.IsNull(RoomFacts.AutoOnNote(Report(blockedBy: quiet)), $"{quiet} is already stated elsewhere on the page");
 		}
 
-		Assert.AreEqual("Movement in the dark turns the lights on.", RoomFacts.NextLine(Report(blockedBy: AutoOnBlock.None), Now));
+		Assert.AreEqual("Awaiting movement.", RoomFacts.NextLine(Report(blockedBy: AutoOnBlock.None), Now));
 	}
 
 	// ===================== the countdown =====================

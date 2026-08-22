@@ -1360,6 +1360,14 @@ button.mode-card:disabled {
 	}
 }
 
+/* The same floating bar carrying only the confirmation, on a page with no save buttons to sit beside. It
+   shrinks to the words: a full-width rail for four of them reads as a rail with something missing. */
+.savebar-alone {
+	width: auto;
+	max-width: calc(100vw - 3rem);
+	padding: 0.45rem 0.8rem;
+}
+
 /* ---- controls ---- */
 
 button {
@@ -5289,6 +5297,15 @@ h1[tabindex="-1"]:focus {
 .group-body-flush > .room-morebar:last-child,
 .room-card > .room-morebar:last-child {
 	border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+}
+
+/* First in its own card the bar has nothing above it to be separated from, and its two top corners now meet
+   the card's rounded edge. Longhands, not the shorthand: while All settings is shut the bar is first and last
+   at once, and a shorthand here would square the two bottom corners the rule above just rounded. */
+.room-card > .room-morebar:first-child {
+	border-top: 0;
+	border-top-left-radius: var(--radius-panel);
+	border-top-right-radius: var(--radius-panel);
 }
 
 /* Picking which room to add. An accent edge because it is a step in a flow

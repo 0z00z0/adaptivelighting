@@ -54,6 +54,26 @@ public static class PeriodStartText
 			? $"{start} · waits for movement in {rooms}"
 			: $"{start} · waits for movement";
 
+	/// <summary>The same boundary as <see cref="Describe"/> with the prose stripped, for a row that already
+	/// names the period: <c>"06:45"</c>, <c>"sunrise"</c>, <c>"sunset -01:00"</c>.</summary>
+	public static string? Short(string? start)
+	{
+		if (!PeriodStart.TryParse(start, out PeriodStart? parsed) || parsed is null)
+			return null;
+
+		if (parsed.FixedTime is { } time)
+			return time.ToString("HH\\:mm", CultureInfo.InvariantCulture);
+
+		string anchor = parsed.SunEvent == SunEvent.Sunrise ? "sunrise" : "sunset";
+
+		if (parsed.Offset == TimeSpan.Zero)
+			return anchor;
+
+		string sign = parsed.Offset < TimeSpan.Zero ? "-" : "+";
+
+		return string.Create(CultureInfo.InvariantCulture, $"{anchor} {sign}{parsed.Offset.Duration():hh\\:mm}");
+	}
+
 	/// <summary>What the engine will make of a Start string, in words, or <c>null</c> when it will refuse it.</summary>
 	public static string? Describe(string? start)
 	{

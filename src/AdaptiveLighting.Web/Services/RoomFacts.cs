@@ -130,7 +130,6 @@ public static class RoomFacts
 			{ State: AreaState.Away } => "Nobody home.",
 			{ State: AreaState.Disabled } => "This room never changes by itself.",
 			{ State: AreaState.AutoVacant, IsDark: false } => "Off, watching. Too bright to switch on right now.",
-			{ State: AreaState.AutoVacant, LastCommandAt: null } => "Watching for movement. The lights haven't been touched yet.",
 			_ => "Off, watching for movement."
 		};
 	}
@@ -167,7 +166,7 @@ public static class RoomFacts
 			AreaState.AutoVacant when snapshot is { IsDark: false, DarknessDetail: { Length: > 0 } detail } =>
 				$"Movement will light it once it's dark — {detail}.",
 			AreaState.AutoVacant when snapshot.IsDark is false => "Movement will light it once it's dark.",
-			AreaState.AutoVacant => "Movement in the dark turns the lights on.",
+			AreaState.AutoVacant => "Awaiting movement.",
 
 			AreaState.Away when snapshot.IsAnyoneHome is true => "Wakes when the house leaves away mode.",
 			AreaState.Away => "Wakes when the first person comes home.",
