@@ -39,6 +39,30 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.DoesNotContain(area.Lights.ToArray(), "switch.noise", "a switch is not a light");
 	}
 
+	/// <summary>The daylight sensor is the room's own choice, carried through untouched and separate from the darkness sensors.</summary>
+	[TestMethod]
+	public void A_Rooms_Daylight_Sensor_Is_Carried_Through_And_Never_Discovered()
+	{
+		var ha = new FakeHaContext();
+		var registry = new FakeAreaRegistry();
+		registry.Areas["stue"] = ["light.stue_tak", "binary_sensor.stue_motion", "sensor.stue_lux"];
+		ha.SetState("light.stue_tak", "off");
+		ha.SetState("binary_sensor.stue_motion", "off", new() { ["device_class"] = "motion" });
+		ha.SetState("sensor.stue_lux", "10", new() { ["device_class"] = "illuminance" });
+
+		AreaConfig plain = new() { Name = "Stue", AreaId = "stue" };
+		Assert.IsTrue(Resolver(ha, registry).TryResolve(plain, new AreaSettings(), out var untouched, out _));
+		Assert.IsNull(untouched!.DaylightSensor,
+			"a room that says nothing reads the house's outdoor sensor, which is decided at the controller");
+		CollectionAssert.AreEqual(new[] { "sensor.stue_lux" }, untouched.LuxSensors.ToArray());
+
+		AreaConfig chosen = new() { Name = "Stue", AreaId = "stue", DaylightSensor = " sensor.utelys " };
+		Assert.IsTrue(Resolver(ha, registry).TryResolve(chosen, new AreaSettings(), out var picked, out _));
+		Assert.AreEqual("sensor.utelys", picked!.DaylightSensor, "trimmed, and not required to be in this room");
+		CollectionAssert.AreEqual(new[] { "sensor.stue_lux" }, picked.LuxSensors.ToArray(),
+			"and the darkness sensors are untouched by the choice");
+	}
+
 	// ===================== the registry lists rows, not devices =====================
 
 	// A disabled entity is still a registry row and still comes back from EntitiesInArea, with no state at all.

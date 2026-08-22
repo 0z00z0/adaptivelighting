@@ -41,31 +41,45 @@
 				<span class="lvl-start">@StartOf(current.PeriodId)</span>
 			</div>
 
-			<div class="lvl-cell @(current.Brightness == LevelSource.Room ? "lvl-set" : null)">
-				<span class="lvl-cell-head">
-					<span class="lvl-cell-label">Brightness</span>
+			@* Dropped while the curve owns this period. Anything the room pinned stays in the document and comes
+			   back with the control. *@
+			@if (OnTheCurve(current.PeriodId))
+			{
+				<div class="lvl-cell">
+					<span class="lvl-cell-head">
+						<span class="lvl-cell-label">Brightness</span>
+					</span>
+					<span class="lvl-inherit">the daylight curve's</span>
+				</div>
+			}
+			else
+			{
+				<div class="lvl-cell @(current.Brightness == LevelSource.Room ? "lvl-set" : null)">
+					<span class="lvl-cell-head">
+						<span class="lvl-cell-label">Brightness</span>
+						@if (current.Brightness == LevelSource.Room)
+						{
+							<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+						}
+					</span>
+
+					<PresetSelect Value="@current.BrightnessPct"
+								  ValueChanged="@(value => SetBrightness(current.PeriodId, value))"
+								  Options="@Presets.BrightnessPct"
+								  Unit="%" />
+
 					@if (current.Brightness == LevelSource.Room)
 					{
-						<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+						<button type="button" class="lvl-revert" @onclick="() => ClearBrightness(current.PeriodId)">
+							Follow the schedule (@TokenFormat.Percent(ScheduleBrightness(current.PeriodId)))
+						</button>
 					}
-				</span>
-
-				<PresetSelect Value="@current.BrightnessPct"
-							  ValueChanged="@(value => SetBrightness(current.PeriodId, value))"
-							  Options="@Presets.BrightnessPct"
-							  Unit="%" />
-
-				@if (current.Brightness == LevelSource.Room)
-				{
-					<button type="button" class="lvl-revert" @onclick="() => ClearBrightness(current.PeriodId)">
-						Follow the schedule (@TokenFormat.Percent(ScheduleBrightness(current.PeriodId)))
-					</button>
-				}
-				else
-				{
-					<span class="lvl-inherit">the schedule's</span>
-				}
-			</div>
+					else
+					{
+						<span class="lvl-inherit">the schedule's</span>
+					}
+				</div>
+			}
 
 			@* Dropped and not disabled, but anything a period already pinned stays in the document and comes
 			   back with the control. *@
@@ -206,6 +220,9 @@
 
 		return PeriodStartText.Short(found.Start) is { Length: > 0 } boundary ? $"[{boundary}]" : "start not set";
 	}
+
+	/// <summary>Whether the daylight curve owns this period's brightness, which leaves the room nothing to set.</summary>
+	private bool OnTheCurve(string periodId) => Found(periodId)?.UseDaylightCurve == true;
 
 	private double ScheduleBrightness(string periodId) => Found(periodId)?.BrightnessPct ?? 0;
 

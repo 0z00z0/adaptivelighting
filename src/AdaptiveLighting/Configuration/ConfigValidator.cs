@@ -159,28 +159,32 @@ public static class ConfigValidator
 					+ "has no lux reading and counts as dark. Name the house's outdoor sensor, or give the room a LuxSensor.");
 	}
 
-	/// <summary>The daylight brightness adjustment is on somewhere, but the document guarantees no lux reading at all.</summary>
+	/// <summary>A period runs the daylight curve, but the document names no sensor for it to read.</summary>
 	/// <remarks>
-	///     Naming <see cref="GlobalConfig.OutdoorLuxSensor"/> is not enough on its own: a room reads it only when it
-	///     sets <see cref="AreaConfig.FollowOutdoorLux"/>. One document-level warning, because the validator cannot run
-	///     discovery and a room may still find a sensor of its own at runtime.
+	///     The curve reads <see cref="GlobalConfig.OutdoorLuxSensor"/> unless a room names its own
+	///     <see cref="AreaConfig.DaylightSensor"/>, so the house sensor is what covers the rooms that say nothing.
+	///     With no reading at all the curve sits at its dark end, which is a level nobody chose.
 	/// </remarks>
 	private static void ValidateLuxBrightnessSource(AdaptiveLightingConfig config, ValidationResult result)
 	{
-		bool someRoomHasAReading =
-			config.Areas.Any(area => area.LuxSensor is { Length: > 0 })
-			|| (config.Global.OutdoorLuxSensor is { Length: > 0 } && config.Areas.Any(area => area.FollowOutdoorLux == true));
-
-		if (someRoomHasAReading)
+		if (!config.Periods.Any(period => period.UseDaylightCurve))
 			return;
 
-		if (!config.Areas.Any(area => area.Effective(config.Defaults).LuxBrightnessEnabled))
+		if (config.Global.OutdoorLuxSensor is { Length: > 0 })
+			return;
+
+		// Named per room, this is only a gap for the rooms that did not name one.
+		IReadOnlyList<string> unsupplied =
+			[.. config.Areas.Where(area => area.DaylightSensor is not { Length: > 0 }).Select(area => area.DisplayName)];
+
+		if (unsupplied.Count == 0)
 			return;
 
 		result.AddWarning(
-			"LuxBrightnessEnabled is on for at least one room, but no room is guaranteed a lux reading: give those rooms "
-			+ "a LuxSensor, or set FollowOutdoorLux on them and name Global.OutdoorLuxSensor. Rooms that discover an "
-			+ "illuminance sensor of their own still follow the daylight; the rest keep the schedule's brightness.");
+			$"At least one period follows the daylight curve, but Global.OutdoorLuxSensor names no sensor, so "
+			+ $"{unsupplied.Count} room(s) have nothing to read ({string.Join(", ", unsupplied)}). Name the house's "
+			+ "outdoor light-level sensor, or give each of those rooms a DaylightSensor of its own. Until then the "
+			+ "curve holds those rooms at LuxBrightnessMinPct.");
 	}
 
 	private static void ValidateGlobal(
@@ -796,10 +800,10 @@ public static class ConfigValidator
 			result.AddError($"[{scope}] NightTransitionSeconds must not be negative (is {settings.NightTransitionSeconds}).");
 	}
 
-	/// <summary>The daylight brightness curve: two anchors, a ceiling and a shaping exponent.</summary>
+	/// <summary>The daylight brightness curve: two lux anchors, two brightness ends and a shaping exponent.</summary>
 	/// <remarks>
-	///     Checked whether or not the feature is switched on, since a bad number comes alive the moment the switch
-	///     is flipped. Every default is valid, so a document predating the feature passes untouched.
+	///     Checked whether or not a period runs the curve, since a bad number comes alive the moment one does.
+	///     Every default is valid, so a document predating the feature passes untouched.
 	/// </remarks>
 	private static void ValidateLuxBrightness(string scope, AreaSettings settings, ValidationResult result)
 	{
@@ -811,6 +815,9 @@ public static class ConfigValidator
 		if (settings.LuxBrightnessFullLux <= settings.LuxBrightnessStartLux)
 			result.AddError($"[{scope}] LuxBrightnessFullLux ({settings.LuxBrightnessFullLux}) must be above LuxBrightnessStartLux ({settings.LuxBrightnessStartLux}).");
 
+		if (settings.LuxBrightnessMinPct is < MinBrightnessPct or > MaxBrightnessPct)
+			result.AddError($"[{scope}] LuxBrightnessMinPct is {settings.LuxBrightnessMinPct}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
+
 		if (settings.LuxBrightnessMaxPct is < MinBrightnessPct or > MaxBrightnessPct)
 			result.AddError($"[{scope}] LuxBrightnessMaxPct is {settings.LuxBrightnessMaxPct}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
 
@@ -818,8 +825,5 @@ public static class ConfigValidator
 		// level at any reading, pitch dark included.
 		if (settings.LuxBrightnessGamma <= 0)
 			result.AddError($"[{scope}] LuxBrightnessGamma must be positive (is {settings.LuxBrightnessGamma}); 1 is a straight line, above 1 holds the level back until it is properly bright.");
-
-		if (settings.LuxBrightnessEnabled && settings.LuxBrightnessMaxPct <= MinBrightnessPct)
-			result.AddWarning($"[{scope}] LuxBrightnessEnabled is on but LuxBrightnessMaxPct is {settings.LuxBrightnessMaxPct}, so daylight can never raise the brightness above the schedule.");
 	}
 }

@@ -12,9 +12,9 @@ public sealed class LuxCurveTests
 {
 	private static AreaSettings Settings() => new()
 	{
-		LuxBrightnessEnabled = true,
 		LuxBrightnessStartLux = 100,
 		LuxBrightnessFullLux = 10_000,
+		LuxBrightnessMinPct = 40,
 		LuxBrightnessMaxPct = 100,
 		LuxBrightnessGamma = 1
 	};
@@ -83,21 +83,21 @@ public sealed class LuxCurveTests
 		AreaSettings settings = Settings();
 		settings.LuxBrightnessGamma = 1.6;
 
-		(double X, double Y)[] points = Points(LuxCurve.Path(settings, 40, 10_000, samples: 21));
+		(double X, double Y)[] points = Points(LuxCurve.Path(settings, 10_000, samples: 21));
 
 		foreach ((double x, double y) in points)
 		{
 			double lux = LuxCurve.LuxAt(x / LuxCurve.PlotWidth, 10_000);
 
 			// The path is written to three decimals, so half a thousandth of a user unit is the tightest useful bound.
-			Assert.AreEqual(LuxCurve.Y(LuxBrightnessCurve.Raise(40, lux, settings)), y, 5e-4);
+			Assert.AreEqual(LuxCurve.Y(LuxBrightnessCurve.Brightness(lux, settings)), y, 5e-4);
 		}
 	}
 
 	[TestMethod]
-	public void The_Line_Starts_At_The_Schedules_Level_And_Only_Climbs()
+	public void The_Line_Starts_At_The_Dark_End_And_Only_Climbs()
 	{
-		(double X, double Y)[] points = Points(LuxCurve.Path(Settings(), 40, 10_000, samples: 40));
+		(double X, double Y)[] points = Points(LuxCurve.Path(Settings(), 10_000, samples: 40));
 
 		Assert.AreEqual(LuxCurve.Y(40), points[0].Y, 1e-6);
 
@@ -118,13 +118,29 @@ public sealed class LuxCurveTests
 		AreaSettings settings = Settings();
 		settings.LuxBrightnessMaxPct = 85;
 
-		CurvePoint start = LuxCurve.StartHandle(settings, 40, 10_000);
+		CurvePoint start = LuxCurve.StartHandle(settings, 10_000);
 		CurvePoint full = LuxCurve.FullHandle(settings, 10_000);
 
 		Assert.AreEqual(LuxCurve.X(LuxCurve.FractionOf(100, 10_000)), start.X, 1e-9);
-		Assert.AreEqual(LuxCurve.Y(40), start.Y, 1e-9, "the foot of the curve is the period's own level");
+		Assert.AreEqual(LuxCurve.Y(40), start.Y, 1e-9, "the foot of the curve is the curve's own dark end");
 		Assert.AreEqual(LuxCurve.X(1), full.X, 1e-9);
 		Assert.AreEqual(LuxCurve.Y(85), full.Y, 1e-9);
+	}
+
+	/// <summary>Neither handle is bounded by the schedule: both reach every percentage a lamp can take.</summary>
+	[TestMethod]
+	public void Both_Ends_Reach_The_Whole_Range()
+	{
+		AreaSettings settings = Settings();
+
+		foreach (double percent in new double[] { 0, 50, 100 })
+		{
+			settings.LuxBrightnessMinPct = percent;
+			settings.LuxBrightnessMaxPct = percent;
+
+			Assert.AreEqual(LuxCurve.Y(percent), LuxCurve.StartHandle(settings, 10_000).Y, 1e-9);
+			Assert.AreEqual(LuxCurve.Y(percent), LuxCurve.FullHandle(settings, 10_000).Y, 1e-9);
+		}
 	}
 
 	[TestMethod]
@@ -135,23 +151,28 @@ public sealed class LuxCurveTests
 			AreaSettings settings = Settings();
 			settings.LuxBrightnessGamma = gamma;
 
-			CurvePoint handle = LuxCurve.ShapeHandle(settings, 30, 10_000);
+			CurvePoint handle = LuxCurve.ShapeHandle(settings, 10_000);
 			double lux = LuxCurve.LuxAt(handle.X / LuxCurve.PlotWidth, 10_000);
 
-			Assert.AreEqual(LuxCurve.Y(LuxBrightnessCurve.Raise(30, lux, settings)), handle.Y, 1e-6);
+			Assert.AreEqual(LuxCurve.Y(LuxBrightnessCurve.Brightness(lux, settings)), handle.Y, 1e-6);
 		}
 	}
 
-	/// <summary>The engine's headroom is never a signed difference, so with none every exponent draws one flat line.</summary>
+	/// <summary>A flat curve has nothing to shape, in either direction.</summary>
 	[TestMethod]
-	public void There_Is_No_Shaping_Handle_Without_Headroom()
+	public void There_Is_No_Shaping_Handle_Without_A_Span()
 	{
 		AreaSettings settings = Settings();
 		settings.LuxBrightnessMaxPct = 60;
 
-		Assert.IsTrue(LuxCurve.HasHeadroom(settings, 40));
-		Assert.IsFalse(LuxCurve.HasHeadroom(settings, 60));
-		Assert.IsFalse(LuxCurve.HasHeadroom(settings, 80));
+		settings.LuxBrightnessMinPct = 40;
+		Assert.IsTrue(LuxCurve.HasSpan(settings), "40 to 60 is a span to shape");
+
+		settings.LuxBrightnessMinPct = 60;
+		Assert.IsFalse(LuxCurve.HasSpan(settings), "the two ends are the same level");
+
+		settings.LuxBrightnessMinPct = 80;
+		Assert.IsTrue(LuxCurve.HasSpan(settings), "a curve that falls is still a curve to shape");
 	}
 
 	[TestMethod]
@@ -222,6 +243,6 @@ public sealed class LuxCurveTests
 	[TestMethod]
 	public void One_Point_Is_Not_A_Curve()
 	{
-		Assert.ThrowsException<ArgumentOutOfRangeException>(() => LuxCurve.Path(Settings(), 40, 10_000, samples: 1));
+		Assert.ThrowsException<ArgumentOutOfRangeException>(() => LuxCurve.Path(Settings(), 10_000, samples: 1));
 	}
 }

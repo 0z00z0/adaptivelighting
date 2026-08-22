@@ -70,21 +70,28 @@ have no house-wide baseline, so they are described under [a room's own facts](#a
 `Either` is no longer a choice. A room still set to it reads as **Sensor**, and the next save writes
 that.
 
-### Brightness from daylight
+### Daylight curve
 
-*Lifting the room above the schedule when it is bright outside.* Off until you switch it on, and it
-only ever adds light — a period already brighter than *Brightest it goes* is left alone.
+*The brightness given to the periods that follow the light outside.* A period is put on the curve in
+the schedule, not here — see [Brightness: a number, or the daylight curve](#brightness-a-number-or-the-daylight-curve).
+This section shapes the curve for this room.
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
-| **Brighten with daylight** | On a bright day the room is lifted above the schedule's brightness, so it doesn't look gloomy against a bright window. | off | `LuxBrightnessEnabled` |
-| **Daylight level where brightening starts** | At or below this reading outside, the schedule's brightness is used unchanged. | 100 lx | `LuxBrightnessStartLux` |
-| **Daylight level for full brightness** | At or above this reading the room holds the brightest it goes. 10 000 lx is a bright overcast day. | 10 000 lx | `LuxBrightnessFullLux` |
-| **Brightest it goes** | The brightness the room is raised toward. | 100 % | `LuxBrightnessMaxPct` |
-| **Curve shape** | 1 rises steadily. Above 1 holds back until it is properly bright out; below 1 lifts the room as soon as the light outside starts climbing. | 1 | `LuxBrightnessGamma` |
+| **Dark end** | At or under this reading outside, the room holds the level below. 100 lx is a dull room. | 100 lx | `LuxBrightnessStartLux` |
+| **Brightness at the dark end** | How bright the room is while it is dark outside. | 40 % | `LuxBrightnessMinPct` |
+| **Bright end** | At or over this reading the room is as bright as the curve takes it. 10 000 lx is a bright overcast day. | 10 000 lx | `LuxBrightnessFullLux` |
+| **Brightness at the bright end** | How bright the room is on a bright day. | 100 % | `LuxBrightnessMaxPct` |
+| **Curve shape** | 1 rises steadily. Above 1 holds back until it is properly bright out; below 1 moves the room as soon as the light outside starts climbing. | 1 | `LuxBrightnessGamma` |
 
-The last four appear only once *Brighten with daylight* is on. The reading comes from the room's own
-sensor, or from the house's outdoor sensor when the room follows it.
+Both ends go anywhere from 0 to 100 %. Nothing in the schedule limits them, and setting the bright
+end under the dark end makes the curve fall instead of rise.
+
+**The reading comes from the house's outdoor sensor**, [*Outdoor light sensor*](#the-house). An
+indoor sensor measures the room's own lamps, so a room following one would chase itself. To read
+something else here, set **Daylight sensor** under a room's own facts; any light-level sensor in the
+house can be picked. With no sensor named at all the room holds the brightness at the dark end, and
+the Configuration page says so.
 
 ### Room behaviour
 
@@ -117,6 +124,7 @@ These belong to one room and have no house-wide baseline. They live on the room'
 | The room's name | Left alone, the room is called whatever Home Assistant calls its area, so a rename over there arrives here. | `Name` |
 | Home Assistant area | Which area the room is. Everything else is found from it. | `AreaId` |
 | **Not right? Pick by hand → Lights / Motion sensors / Light-level sensor** | Each list you fill in replaces the automatic choice for that list alone, and ignores the labels. Leave empty to use whatever is found. | `Lights`, `MotionSensors`, `LuxSensor` |
+| **Not right? Pick by hand → Daylight sensor** | Which reading the daylight curve follows here. Left alone it is the house's outdoor sensor; an indoor one measures this room's own lamps, so the curve would chase itself. Any light-level sensor in the house can be picked. | `DaylightSensor` |
 | The **×** on a found chip | Leaves one entity out of this room — a fridge's own light sensor, a hallway lamp filed under the wrong room. Listed afterwards so you can put it back. | `ExcludeEntities` |
 | **Don't switch on while** | While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Offered from the whole house, since a blocker often belongs to no room. | `IgnoreWhenOn` |
 | **Don't switch off while** | While any of these is on, the room won't turn its own lights off: the countdown, the warning dim and the leaving sweep all leave it alone. It never turns anything *on*, and switching off by hand still works. | `KeepLitWhenOn` |
@@ -159,7 +167,7 @@ A period runs from its start until the next period begins.
 | **Period name** | `morning`, `day`, `evening`, `night` — free-form, and what the board and the logs call it. Rename it whenever you like; nothing points at the name. | `Name` |
 | *(not on screen)* | The period's id, minted once when it is created. Everything that refers to a period refers to this. | `Id` |
 | **Starts** | A clock time (`22:30`) or a sun event with an optional offset (`sunrise`, `sunset-01:00`, `sunrise+00:45`). | `Start` |
-| **Brightness** | The target brightness while this period runs. | `BrightnessPct` |
+| **Brightness** | Either a number of your own, or the daylight curve. See below. | `UseDaylightCurve`, `BrightnessPct` |
 | **Colour temperature** | The target warmth, in kelvin. | `ColorTempKelvin` |
 | **Also switches house mode to** | When this period starts, switch the house to this mode option. | `SetsModeId` |
 | **Blend between periods** / **Blend over** | Lights drift to the next period's level instead of stepping at the boundary. | `SmoothTransitions`, `BlendMinutes` (default on, 30 min) |
@@ -169,6 +177,20 @@ A period runs from its start until the next period begins.
 Quote clock times in the file: bare `06:00` is not a string in YAML. Keep at least one clock-time
 boundary — far north a sun-anchored boundary can be unresolvable around midsummer and midwinter, and
 a period that cannot be placed is skipped.
+
+### Brightness: a number, or the daylight curve
+
+Every period carries one choice:
+
+- **Specify brightness** — the period's own percentage. This is the default, and what a file written
+  before the choice existed means.
+- **Use daylight curve** — the light outside sets the level instead, along
+  [the curve](#daylight-curve) each room shapes for itself.
+
+Several periods can use the curve, and one curve then covers them all. A period on the curve shows
+no percentage: the curve makes it irrelevant. The number stays in the file, so switching back
+restores what you typed. The curve diagram appears on a room's page only while some period is using
+it.
 
 ### A period that waits for movement
 
@@ -224,7 +246,7 @@ hours → Away, someone moves → Normal.
 | **Only manage lights with (label)** | When set, only lights carrying this Home Assistant label are managed. Leave empty to manage every light that's found. Lights only — filtering sensors would make a half-labelled house deaf. | none | `IncludeLabel` |
 | **Never touch (label)** | Anything carrying this label is invisible to the app. Always wins over the include label. | `adaptive-exclude` | `ExcludeLabel` |
 | **Counts as motion (label)** | A sensor with this label is treated as a motion sensor whatever its type. | `adaptive-motion` | `MotionLabel` |
-| **Outdoor light sensor** | The house's outdoor sensor, read by the rooms that ask for it. | none | `OutdoorLuxSensor` |
+| **Outdoor light sensor** | The house's outdoor sensor. The daylight curve reads it in every room; for darkness a room reads it only if it asks to. | none | `OutdoorLuxSensor` |
 | **What counts as a motion sensor** | Device classes that qualify a `binary_sensor`. Listing any **replaces** the built-in set rather than adding to it. | motion, occupancy, presence | `MotionDeviceClasses` |
 | **What counts as a light-level sensor** | The device class that qualifies a `sensor`. | `illuminance` | `IlluminanceDeviceClass` |
 
@@ -274,3 +296,10 @@ id.
 
 Your own Home Assistant automations do not migrate: the published event is `adaptive_lighting_area`
 with an `area` field, and nothing publishes the old `laget_lighting_zone` any more.
+
+**`LuxBrightnessEnabled` does not migrate either, and nothing is lost by hand.** *Brighten with
+daylight* was switched on per room; the daylight curve is chosen per period, which covers the whole
+house, so there is no faithful translation between them. A file still carrying the key loads fine,
+the log says once what to set instead, and the next save drops it. Until a period is set to **Use
+daylight curve** no room follows the light outside. Everything that shapes the curve — the two ends,
+the two readings, the curve shape, and any per-room override of them — survives untouched.
