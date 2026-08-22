@@ -188,8 +188,9 @@ public class AreaSettings
 	/// <summary>How the room's warmth is commanded, or whether it can be at all.</summary>
 	/// <remarks>
 	///     <see cref="ColorControl.Auto"/> reads the fixtures: a room whose resolved lights all lack <c>color_temp</c>
-	///     is driven as <see cref="ColorControl.EqualChannels"/> unconfigured. The other two members overrule that,
-	///     which is needed both ways because Home Assistant sometimes advertises a capability a fixture lacks.
+	///     but offer a colour channel is driven as <see cref="ColorControl.EqualChannels"/> unconfigured, and one
+	///     whose lights offer no colour at all takes no colour command. The other two members overrule that, which
+	///     is needed both ways because Home Assistant sometimes advertises a capability a fixture lacks.
 	/// </remarks>
 	public ColorControl ColorControl { get; set; } = ColorControl.Auto;
 
@@ -245,8 +246,9 @@ public class AreaSettings
 public enum ColorControl
 {
 	/// <summary>
-	///     The default: all of the room's lights lacking <c>color_temp</c> reads as <see cref="EqualChannels"/>,
-	///     anything else as <see cref="Kelvin"/>.
+	///     The default: all of the room's lights lacking <c>color_temp</c> but offering a colour channel reads as
+	///     <see cref="EqualChannels"/>, lights with no colour at all as no colour command, anything else as
+	///     <see cref="Kelvin"/>.
 	/// </summary>
 	Auto = 0,
 

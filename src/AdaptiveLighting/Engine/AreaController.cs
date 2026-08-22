@@ -851,11 +851,12 @@ public sealed class AreaController : IDisposable
 
 		double brightness = target.Clamp(target.BrightnessPct * brightnessFactor);
 
-		// Composed here, not per service call: the fixtures were read once when the area resolved.
-		bool equalChannels = _area.EffectiveColorControl is ColorControl.EqualChannels;
+		// Composed here, not per service call: the fixtures were read once when the area resolved. A room whose
+		// lights offer no colour at all takes neither field, so it is commanded on brightness alone.
+		bool equalChannels = _area.CommandsColour && _area.EffectiveColorControl is ColorControl.EqualChannels;
 
 		LightCommand command = new(
-			true, brightness, equalChannels ? null : target.ColorTempKelvin, TransitionSeconds(), equalChannels);
+			true, brightness, _area.CommandsKelvin ? target.ColorTempKelvin : null, TransitionSeconds(), equalChannels);
 
 		Send(command);
 		Publish(reason);

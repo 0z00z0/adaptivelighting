@@ -14,7 +14,7 @@
 		</select>
 		@if (NoColourTemperature)
 		{
-			<span class="lvl-warmth-note">@AreaSentences.NoColourTemperature</span>
+			<span class="lvl-warmth-note">@NoColourNote</span>
 		}
 	</div>
 
@@ -174,9 +174,16 @@
 	private static string PeriodName(string name) => name is { Length: > 0 } ? name : "unnamed period";
 
 	// The select below stays on the stated answer: snapping it to the detected one would read as the pick
-	// being refused.
+	// being refused. The engine owns whether the kelvin reaches the fixtures, so it is asked rather than
+	// re-derived here.
 	private bool NoColourTemperature =>
-		(Resolved?.EffectiveColorControl ?? AreaSentences.WarmthOf(Room, Defaults)) is ColorControl.EqualChannels;
+		Resolved is { } resolved
+			? !resolved.CommandsKelvin
+			: AreaSentences.WithoutColourTemperature(Room, Defaults);
+
+	/// <summary>Which of the two reasons the room is offered no kelvin.</summary>
+	private string NoColourNote =>
+		Resolved is { CommandsColour: false } ? AreaSentences.NoColourAtAll : AreaSentences.NoColourTemperature;
 
 	private string WarmthNow => AreaSentences.WarmthOf(Room, Defaults).ToString();
 
