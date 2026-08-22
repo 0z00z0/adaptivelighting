@@ -72,6 +72,31 @@ rewritten to suit one.
   toilet. It should not exceed the *Day* period's brightness, which gives the lift a ceiling without
   reintroducing a per-period cap.
 
+- **Publishing is blocked: the packages are still linked to the archived repository, and are now private.**
+  Measured 2026-08-22 — `users/0z00z0/packages/nuget/AdaptiveLighting` reports
+  `repository: 0z00z0/adaptivelighting-archive`, `visibility: private`. The `v2.0.0-preview.5` tag built and
+  tested green and then failed on push with `403 Forbidden`: a release job's per-run token can only write
+  packages linked to its own repository. The packages also inherited the archive's visibility when it was made
+  private, so an outside consumer of a public MIT project can no longer restore them at all. Each of the four
+  packages needs its linked repository changed to `0z00z0/adaptivelighting` and its visibility set back to
+  public, in the package settings. The alternative, a personal access token held as a repository secret, is
+  what the project deliberately avoids. Until this is done no release can be published and no house can be
+  updated past `2.0.0-preview.4`.
+
+- **The daylight curve becomes a per-period mode, replacing the lift.** Each period carries a choice:
+  *specify brightness*, which is today's behaviour and the default, or *use daylight curve*, where the curve
+  decides the brightness instead. The curve diagram is shown only when at least one period claims it, and a
+  claiming period hides its own percentage, which the curve makes irrelevant. Several periods may claim it,
+  and the curve then spans them all. The curve is draggable across the full 0-100 % range, so no ceiling is
+  needed and the plan's brightest level does not constrain it.
+  - A claiming period keeps its stored percentage in the document, hidden, so the choice is reversible without
+    losing what was typed.
+  - **The reading comes from the house's outdoor sensor**, since an indoor sensor measures the room's own
+    lamps. A configuration with no outdoor sensor defined is warned about. A room may override which sensor it
+    reads, chosen from all light-level sensors, in its own settings.
+  - `LuxBrightnessEnabled` is removed: the period decides alone, and one mechanism replaces two.
+  - Texts throughout are reworked to plain, short wording.
+
 ## Parked
 
 - **The daylight chart is only 101 px tall on a phone, which caps its labels.** The corner and the label spread
