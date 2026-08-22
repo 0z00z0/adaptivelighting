@@ -22,6 +22,13 @@ against each other.
     plan's brightest period no longer bounds it. A bright end set under the dark end makes the curve fall.
   - A period on the curve **hides its own percentage and keeps it in the document**, so switching back
     restores what was typed.
+  - **The curve's dark end is seeded from the period that claims it** — half that period's own percentage,
+    clamped to 0–100 % and rounded to one decimal, so a 15 % night starts the curve at 7.5 % and a 90 % day
+    at 45 %. It fires only as the curve goes from unused to used: a second period joining leaves the value
+    alone, since it may have been dragged into place by then, and turning the curve off everywhere and on
+    again seeds afresh. Only the house default is written, so a room stating its own dark end keeps it. This
+    is an editing action, so a hand-written document runs untouched and the schema default stands as the
+    reserve for one where the curve was never claimed through the editor.
   - The curve diagram is shown on a room's page only while at least one period claims the curve.
   - **The reading comes from the house's outdoor sensor.** An indoor sensor measures the room's own lamps, so
     the curve would chase itself. A room may override it with `DaylightSensor`, chosen from any light-level
