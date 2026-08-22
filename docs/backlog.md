@@ -101,6 +101,14 @@ rewritten to suit one.
 
 ## Open questions
 
+- **The durable log's retention is a byte budget, not a time budget.** One active 2 MiB generation plus one
+  rotated copy. Measured at B1: about 111 kB/h, so a generation fills in roughly 19 hours and the retained
+  window swings between about 19 and 38 hours depending where in the cycle it is read. The stated intent was
+  24 hours, which this meets at that volume and would miss in a chattier house, since the rate scales with
+  room count and event traffic. Anything older is overwritten and cannot be recovered, which also bounds what
+  the file can answer after the fact. A time-bounded budget, or a documented volume assumption, would make the
+  window predictable.
+
 - **`StartsOnMotionAreas` is written into every period on save** as `[]`, because it is a non-nullable
   `List<string>`. `ConfigNormalizer.cs:76` clears it for a period that does not wait for movement and the
   serialiser writes it out regardless, so every period in every document carries the key — including in a house
