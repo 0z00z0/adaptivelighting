@@ -2,53 +2,53 @@ using AdaptiveLighting.Configuration;
 
 namespace AdaptiveLighting.Engine;
 
-/// <summary>Raises an area's scheduled brightness toward a ceiling as the light outside climbs.</summary>
+/// <summary>Sets the brightness from the light outside, for the periods that hand it that job.</summary>
 // Interpolation is on log10(lux), so each decade gets an equal share of the curve. Pure and open-loop: no clock,
-// no Home Assistant, no servo, and it can only add light. AreaSettings.LuxBrightnessMaxPct is the only ceiling,
-// so a night period asking 15 % in a room reading 1 000 lx lands near 58 % unless sleep mode clamps it.
+// no Home Assistant, no servo. It replaces the period's own level rather than adding to it, so both ends are free
+// across 0-100 % and nothing about the schedule bounds them.
 public sealed class LuxBrightnessCurve
 {
 	private readonly AreaSettings _settings;
 	private readonly Func<double?> _readLux;
 
-	// In the engine readLux is IlluminanceGate.ReadLux, so the curve and the darkness gate read the same sensors.
+	// readLux is the daylight reading, which is the house's outdoor sensor unless the room named its own. Never
+	// the darkness gate's sensor: an indoor one measures the lamps this curve is setting.
 	public LuxBrightnessCurve(AreaSettings settings, Func<double?> readLux)
 	{
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
 		_readLux = readLux ?? throw new ArgumentNullException(nameof(readLux));
 	}
 
-	/// <summary><paramref name="target"/> with its brightness raised for the current reading.</summary>
-	// A disabled area gets the same instance back, so reference equality holds through the curve.
+	/// <summary><paramref name="target"/> with the curve's brightness where its period asked for the curve.</summary>
+	// A period that specifies its own brightness gets the same instance back, so reference equality holds.
 	public LightTarget Apply(LightTarget target)
 	{
 		ArgumentNullException.ThrowIfNull(target);
 
-		if (!_settings.LuxBrightnessEnabled)
+		if (!target.UsesDaylightCurve)
 			return target;
 
-		double raised = Raise(target.BrightnessPct, _readLux(), _settings);
-
-		// Clamp() is the physical 0-100 range only; the period imposes no floor or cap.
-		return target with { BrightnessPct = target.Clamp(raised) };
+		return target with { BrightnessPct = target.Clamp(Brightness(_readLux(), _settings)) };
 	}
 
-	/// <summary><paramref name="scheduleBrightnessPct"/> raised toward <see cref="AreaSettings.LuxBrightnessMaxPct"/> by how far <paramref name="lux"/> has travelled up the curve.</summary>
-	// lux is null when no sensor resolved.
-	public static double Raise(double scheduleBrightnessPct, double? lux, AreaSettings settings)
+	/// <summary>The brightness the curve asks for at <paramref name="lux"/>.</summary>
+	// lux is null when no sensor resolved, which reads as the dark end.
+	public static double Brightness(double? lux, AreaSettings settings)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
 
-		// Headroom, never a signed difference: a ceiling below what the period asked for adds nothing, it does
-		// not dim the room because the sun is out.
-		double headroom = Math.Max(0, settings.LuxBrightnessMaxPct - scheduleBrightnessPct);
-		double raised = scheduleBrightnessPct + (Position(lux, settings) * headroom);
+		double dark = double.IsFinite(settings.LuxBrightnessMinPct) ? settings.LuxBrightnessMinPct : 0;
+		double bright = double.IsFinite(settings.LuxBrightnessMaxPct) ? settings.LuxBrightnessMaxPct : dark;
+
+		// Signed, not headroom: both ends are dragged freely, so a dark end above the bright one is a curve that
+		// falls, not one that is ignored.
+		double value = dark + (Position(lux, settings) * (bright - dark));
 
 		// A NaN or an infinity reaching a light command is an outage.
-		return double.IsFinite(raised) ? raised : scheduleBrightnessPct;
+		return Math.Clamp(double.IsFinite(value) ? value : dark, 0, 100);
 	}
 
-	/// <summary>How far up the curve <paramref name="lux"/> sits, 0 for no adjustment to 1 for the full ceiling.</summary>
+	/// <summary>How far up the curve <paramref name="lux"/> sits, 0 at the dark end to 1 at the bright end.</summary>
 	// Every degenerate case answers 0.
 	public static double Position(double? lux, AreaSettings settings)
 	{
@@ -78,8 +78,8 @@ public sealed class LuxBrightnessCurve
 		return Shape(Math.Clamp(fraction, 0, 1), settings);
 	}
 
-	// A non-positive gamma passes through unshaped: Math.Pow(0, 0) is 1, so gamma zero would hand back the full
-	// ceiling at the bottom of the curve, a pitch-dark night commanding the daylight level.
+	// A non-positive gamma passes through unshaped: Math.Pow(0, 0) is 1, so gamma zero would hand back the bright
+	// end at the bottom of the curve, a pitch-dark night commanding the daylight level.
 	private static double Shape(double fraction, AreaSettings settings)
 	{
 		double gamma = settings.LuxBrightnessGamma;

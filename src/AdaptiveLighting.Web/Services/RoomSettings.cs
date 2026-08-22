@@ -202,38 +202,34 @@ public static class RoomSettings
 			]),
 
 		new RoomSettingGroup(
-			"Brightness from daylight",
-			"Lifting the room above the schedule when it is bright outside",
+			"Daylight curve",
+			"The brightness the periods that follow the light outside are given",
 			[
 				new RoomSetting(
-					nameof(AreaSettings.LuxBrightnessEnabled),
-					"Brighten with daylight",
-					"On a bright day this room is lifted above the schedule's brightness, so it doesn't look gloomy against a bright window. It reads the room's light-level sensor even when the room decides darkness by the sun, and without one nothing changes.",
-					RoomControl.Flag),
-				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessStartLux),
-					"Daylight level where brightening starts",
-					"At or under this reading the schedule's brightness is used unchanged. Above it the room starts climbing. 100 lx is a dull room.",
-					RoomControl.Number, Unit: "lx", Step: 50, Min: 1,
-					AppliesWhen: settings => settings.LuxBrightnessEnabled),
+					"Dark end",
+					"At or under this reading outside, the room holds the level below. 100 lx is a dull room.",
+					RoomControl.Number, Unit: "lx", Step: 50, Min: 1),
+				new RoomSetting(
+					nameof(AreaSettings.LuxBrightnessMinPct),
+					"Brightness at the dark end",
+					"How bright the room is while it is dark outside. Nothing about the schedule limits it.",
+					RoomControl.Number, Unit: "%", Step: 5, Min: 0, Max: 100),
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessFullLux),
-					"Daylight level for full brightness",
-					"At or over this reading the room sits at the brightest it goes. 10 000 lx is a bright overcast day. Must be above the level where brightening starts.",
-					RoomControl.Number, Unit: "lx", Step: 1000, Min: 1,
-					AppliesWhen: settings => settings.LuxBrightnessEnabled),
+					"Bright end",
+					"At or over this reading the room is as bright as the curve takes it. 10 000 lx is a bright overcast day. Must be above the dark end.",
+					RoomControl.Number, Unit: "lx", Step: 1000, Min: 1),
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessMaxPct),
-					"Brightest it goes",
-					"How bright daylight may push this room, as a percentage. It only ever adds light — a period already brighter than this is left alone, and a period with a cap of its own still holds the room under that cap.",
-					RoomControl.Number, Unit: "%", Step: 5, Min: 0, Max: 100,
-					AppliesWhen: settings => settings.LuxBrightnessEnabled),
+					"Brightness at the bright end",
+					"How bright the room is on a bright day. Set it under the dark end's level and the curve falls instead of rising.",
+					RoomControl.Number, Unit: "%", Step: 5, Min: 0, Max: 100),
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessGamma),
 					"Curve shape",
-					"How the climb between the two levels is shaped. 1 rises steadily; above 1 holds back until it is properly bright out; below 1 lifts the room as soon as the light outside starts climbing.",
-					RoomControl.Number, Step: 0.1, Min: 0.1, Max: 5,
-					AppliesWhen: settings => settings.LuxBrightnessEnabled)
+					"How the climb between the two ends is shaped. 1 rises steadily; above 1 holds back until it is properly bright out; below 1 moves the room as soon as the light outside starts climbing.",
+					RoomControl.Number, Step: 0.1, Min: 0.1, Max: 5)
 			]),
 
 		new RoomSettingGroup(

@@ -664,6 +664,76 @@ public sealed class LightingConfigDocumentTests
 			"reported, or nothing rewrites the file and the translation runs again on every load");
 	}
 
+	// ===================== the daylight curve is a per-period choice =====================
+
+	/// <summary>A document written before the choice existed means "specify brightness", which is the absent value.</summary>
+	[TestMethod]
+	public void A_Period_With_No_UseDaylightCurve_Key_Loads_As_Specify_Brightness()
+	{
+		const string yaml = """
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Periods:
+			    - Name: evening
+			      Start: "18:00"
+			      BrightnessPct: 70
+			""";
+
+		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml);
+
+		Assert.IsFalse(read.Config.Periods.Single().UseDaylightCurve);
+		Assert.AreEqual(70d, read.Config.Periods.Single().BrightnessPct, "and its own level is what runs");
+	}
+
+	[TestMethod]
+	public void A_Period_On_The_Curve_Round_Trips_And_Keeps_Its_Hidden_Percentage()
+	{
+		AdaptiveLightingConfig config = new()
+		{
+			Periods =
+			[
+				new() { Name = "day", Start = "09:00", BrightnessPct = 90, UseDaylightCurve = true },
+				new() { Name = "night", Start = "22:30", BrightnessPct = 15 }
+			]
+		};
+
+		AdaptiveLightingConfig back = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(config)).Config;
+
+		Assert.IsTrue(back.Periods[0].UseDaylightCurve);
+		Assert.AreEqual(90d, back.Periods[0].BrightnessPct,
+			"the curve hides the percentage on screen; the document keeps it, so switching back restores it");
+		Assert.IsFalse(back.Periods[1].UseDaylightCurve);
+		Assert.AreEqual(15d, back.Periods[1].BrightnessPct);
+	}
+
+	/// <summary>The old per-room switch is an unmatched key now, and an unmatched key is silence.</summary>
+	[TestMethod]
+	public void A_Document_Still_Carrying_LuxBrightnessEnabled_Loads_Without_Complaint()
+	{
+		const string yaml = """
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Defaults:
+			    LuxBrightnessEnabled: true
+			    LuxBrightnessStartLux: 250
+			  Periods:
+			    - Name: day
+			      Start: "09:00"
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			      LuxBrightnessEnabled: false
+			""";
+
+		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml);
+
+		Assert.AreEqual(1, read.Config.Areas.Count, "the stale key must not cost the document its rooms");
+		Assert.AreEqual(250d, read.Config.Defaults.LuxBrightnessStartLux, "and the keys beside it still bind");
+		Assert.IsFalse(read.Config.Periods.Single().UseDaylightCurve,
+			"the removed switch translates to nothing: the curve is claimed per period now");
+
+		Assert.IsFalse(LightingConfigDocument.Serialize(read.Config).Contains("LuxBrightnessEnabled", StringComparison.Ordinal),
+			"and the next save drops it");
+	}
+
 	[TestMethod]
 	public void A_Document_Written_With_The_Pre_2_0_Keys_Loads_With_Its_Areas_And_Says_So()
 	{

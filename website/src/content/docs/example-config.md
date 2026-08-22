@@ -63,10 +63,14 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     SmoothTransitions: true
     BlendMinutes: 30
 
-    # The house's outdoor light sensor. Rooms read it only if they ask to, with
-    # FollowOutdoorLux — one shaded outdoor sensor reads hundreds of lux while
-    # the rooms behind it are dark. A room with no reading at all counts as dark
-    # and lights on movement.
+    # The house's outdoor light sensor, and two separate questions.
+    # For DARKNESS a room reads it only if it asks to, with FollowOutdoorLux —
+    # one shaded outdoor sensor reads hundreds of lux while the rooms behind it
+    # are dark. A room with no reading at all counts as dark and lights on
+    # movement.
+    # For the DAYLIGHT CURVE every room reads it without asking, unless the room
+    # names a DaylightSensor of its own. An indoor sensor measures the room's own
+    # lamps, so the curve would chase itself.
     # OutdoorLuxSensor: sensor.outdoor_illuminance
 
     # How long a LIGHT-LEVEL sensor may go without reporting before it stops
@@ -159,12 +163,14 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     SunElevationThreshold: 3.0  # "Dark when the sun is below", in degrees
     SunEntity: sun.sun
 
-    # Brightening with daylight. Off by default; it only ever adds light, up to
-    # LuxBrightnessMaxPct.
-    LuxBrightnessEnabled: false
-    LuxBrightnessStartLux: 100      # at or below this, the schedule is used unchanged
-    LuxBrightnessFullLux: 10000     # at or above this, the room holds its ceiling
-    LuxBrightnessMaxPct: 100        # the brightness it is raised toward
+    # The daylight curve, which sets the brightness for the periods that carry
+    # UseDaylightCurve. It replaces the period's own level rather than adding to
+    # it, so both ends are free across 0-100 and nothing in the schedule bounds
+    # them. Setting the bright end under the dark end makes the curve fall.
+    LuxBrightnessStartLux: 100      # the dark end, in lux: a dull room
+    LuxBrightnessMinPct: 40         # how bright the room is at or under it
+    LuxBrightnessFullLux: 10000     # the bright end: a bright overcast day
+    LuxBrightnessMaxPct: 100        # how bright the room is at or over it
     LuxBrightnessGamma: 1.0         # 1 rises steadily; above 1 holds back
 
     # Fades. Long at night because eyes are dark-adapted, snappy by day.
@@ -215,8 +221,12 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     - Id: day-1x8m
       Name: day
       Start: sunrise+00:45
-      BrightnessPct: 90
       ColorTempKelvin: 4500
+      # The light outside sets the brightness for this period, along the curve
+      # each room shapes under its LuxBrightness* settings. BrightnessPct is
+      # kept and does nothing while this is true, so turning it off restores 90.
+      UseDaylightCurve: true
+      BrightnessPct: 90
 
     - Id: evening-4pb3
       Name: evening
@@ -229,8 +239,8 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       Start: "22:30"
       BrightnessPct: 15
       ColorTempKelvin: 2200
-      # BrightnessPct is the whole answer for this period: 15 % is what a room
-      # runs at night.
+      # No UseDaylightCurve here, so BrightnessPct is the whole answer for this
+      # period: 15 % is what a room runs at night. An absent key means the same.
       # SetsModeId switches the house to a mode option when the period starts.
       # It names the option's Id, not the text the dropdown shows.
       # SetsModeId: sover-b6t1
@@ -298,15 +308,17 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
         - binary_sensor.soverom_mmwave_presence
 
     # 5. A hallway with no sensor of its own that follows the weather: it gates
-    #    on the sun, and reads the house's outdoor sensor to lift its brightness
-    #    on a bright day. Naming Sun is the point of the entry — left at the
-    #    default a room with no sensor is simply always dark. FollowOutdoorLux
-    #    is file-only.
+    #    on the sun, and shapes the daylight curve for itself rather than taking
+    #    the house's. Naming Sun is the point of the entry — left at the default
+    #    a room with no sensor is simply always dark. FollowOutdoorLux is
+    #    file-only. Whether the curve runs at all is a period's choice, not this
+    #    room's.
     - AreaId: kjellergang
       Enabled: true
       Darkness: Sun
       FollowOutdoorLux: true
-      LuxBrightnessEnabled: true
+      LuxBrightnessMinPct: 25
+      DaylightSensor: sensor.nord_illuminance
 
     # 6. Outdoors: opts out of the leaving sweep, gated on the sun, and fully
     #    explicit — no discovery is used for a slot you fill in. Found by set-up

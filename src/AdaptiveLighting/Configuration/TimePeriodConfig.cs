@@ -52,7 +52,14 @@ public class TimePeriodConfig
 	/// <remarks>Naming the kitchen keeps a bedroom sensor at 06:05 from starting the morning for the whole house.</remarks>
 	public List<string> StartsOnMotionAreas { get; set; } = [];
 
+	/// <summary>The level this period holds, unless <see cref="UseDaylightCurve"/> hands that to the curve.</summary>
+	// Kept in the document while the curve runs, so switching back restores what was typed.
 	public double BrightnessPct { get; set; } = 80;
+
+	/// <summary>Whether the daylight curve sets the brightness for this period instead of <see cref="BrightnessPct"/>.</summary>
+	// A bool and not an enum: an absent key binds to false, where an unknown enum name is a FormatException at
+	// start-up. False is "specify brightness", which is what a document written before the curve existed means.
+	public bool UseDaylightCurve { get; set; }
 
 	public int ColorTempKelvin { get; set; } = 3500;
 
