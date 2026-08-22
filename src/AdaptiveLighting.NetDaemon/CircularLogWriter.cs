@@ -26,7 +26,7 @@ public sealed class CircularLogWriter
 	public const string FolderName = "log";
 
 	/// <summary>What one file may reach; there are two files, so the directory never exceeds twice this.</summary>
-	public const int MaxFileBytes = 2 * 1024 * 1024;
+	public const int MaxFileBytes = 10 * 1024 * 1024;
 
 	/// <summary>What one line may reach, so no single event can approach <see cref="MaxFileBytes"/>.</summary>
 	public const int MaxLineChars = 4096;

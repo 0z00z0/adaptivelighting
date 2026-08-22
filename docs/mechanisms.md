@@ -942,19 +942,20 @@ constraint the console template has, for the same reason, and it is why neither 
 
 ### The cap is a ceiling, not a retention policy
 
-One active file capped at 2 MiB and exactly one rolled generation, which the next rotation overwrites:
+One active file capped at 10 MiB and exactly one rolled generation, which the next rotation overwrites:
 `b1.log` and `b1.1.log`, forever. There is no numbered series, no date in a file name and no retained count,
 so the directory holds two files after a year for the same reason it holds two after an hour. **The rotation
 cannot itself fill `/config`, because rotation is the thing that has no growth term.** The hard ceiling is
-4 MiB.
+20 MiB.
 
 The size check runs *before* the append, so the active file never exceeds the cap; and an empty file is never
 rolled, so a line longer than the whole cap cannot rotate on every call and keep nothing. A line is capped at
 4096 characters of its own, which is what keeps one event from approaching the file cap.
 
-Three representative engine lines measure 147, 165 and 194 bytes, **170 on average**. 2 MiB is therefore about
-12 000 lines guaranteed and about 24 000 at best — several days at a few thousand lines a day, and 4 MiB in
-`/config` costs nothing worth optimising.
+Three representative engine lines measure 147, 165 and 194 bytes, **170 on average**. 10 MiB is therefore about
+61 000 lines guaranteed and about 123 000 at best. A house logging 111 kB an hour fills one generation in
+about 94 hours, so the pair holds between four and eight days, and 20 MiB in `/config` costs nothing worth
+optimising.
 
 Every line is appended and the handle closed. A held handle would be faster, and the tail of the file
 immediately before a crash is the part this exists to read.

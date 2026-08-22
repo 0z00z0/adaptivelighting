@@ -101,13 +101,12 @@ rewritten to suit one.
 
 ## Open questions
 
-- **The durable log's retention is a byte budget, not a time budget.** One active 2 MiB generation plus one
-  rotated copy. Measured at B1: about 111 kB/h, so a generation fills in roughly 19 hours and the retained
-  window swings between about 19 and 38 hours depending where in the cycle it is read. The stated intent was
-  24 hours, which this meets at that volume and would miss in a chattier house, since the rate scales with
-  room count and event traffic. Anything older is overwritten and cannot be recovered, which also bounds what
-  the file can answer after the fact. A time-bounded budget, or a documented volume assumption, would make the
-  window predictable.
+- **The durable log's retention is a byte budget, not a time budget.** One active 10 MiB generation plus one
+  rotated copy, so the directory never exceeds 20 MiB. At the 111 kB/h measured on a live house a generation
+  fills in about 94 hours and the pair holds between four and eight days, which clears the 24 hours intended
+  with room to spare. The window still moves with room count and event traffic rather than with the clock, so
+  a much chattier house retains proportionally less. A time-bounded budget would make it predictable; the
+  larger cap makes it comfortable.
 
 - **`StartsOnMotionAreas` is written into every period on save** as `[]`, because it is a non-nullable
   `List<string>`. `ConfigNormalizer.cs:76` clears it for a period that does not wait for movement and the
