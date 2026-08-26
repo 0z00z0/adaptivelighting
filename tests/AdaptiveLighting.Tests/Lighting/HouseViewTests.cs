@@ -24,7 +24,7 @@ public sealed class HouseViewTests
 	public void A_Changed_Room_Counts_Its_Own_Settings()
 	{
 		AreaConfig room = Room("Kontor");
-		room.LuxBrightnessEnabled = true;
+		room.LuxBrightnessMinPct = 30;
 		room.LuxBrightnessMaxPct = 90;
 
 		Assert.AreEqual($"2 of {AreaView.OverridableSettingCount} changed", HouseView.RoomSummary(room));

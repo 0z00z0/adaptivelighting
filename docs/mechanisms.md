@@ -199,7 +199,8 @@ worse off than a bare one.
 
 A room does **not** follow the house's outdoor sensor unless it asks to (`FollowOutdoorLux`). One shaded
 outdoor sensor reading several hundred lux while the rooms behind it sit dark otherwise makes a whole house
-refuse to light itself.
+refuse to light itself. This is darkness only: the daylight curve reads the outdoor sensor in every room,
+without asking, for the opposite reason — an indoor sensor is measuring the lamps it would be setting.
 
 Staleness is measured against `LastUpdated`, not `LastChanged`, or a sensor steadily reporting 3 lx is
 condemned for being consistent. Home Assistant resets entity timestamps on restart, so immediately after one
@@ -278,8 +279,9 @@ whole: brightness, warmth and `SetsModeId` together, for every room.
 It is implemented by **leaving the boundary out of the table**, not by a rule anywhere downstream.
 `CircadianCalculator.ResolveBoundaries` skips a held period, so the wrap keeps the previous period in force and
 the next period's own `Start` overtakes it without anything having to notice. Every question the engine asks —
-`ActivePeriodId`, `GetTarget`, the blend — comes out of that one table, which is why the name and the levels
-cannot disagree about a period that has not begun.
+`ActivePeriodId`, `GetTarget`, the blend — comes out of that one table, and so does the dashboard's schedule
+band through `PeriodsAcross`, which is why the name, the levels and the drawing cannot disagree about a period
+that has not begun.
 
 Four things bound it, and each of them is a house that would otherwise misbehave:
 
@@ -358,13 +360,62 @@ mode overwritten on no evidence, on a path a corrupt file could trigger at every
 After a Home Assistant restart an `input_select` reads `unavailable` for a while. Anything reading one has to
 survive that without acting on it.
 
+### The daylight curve is a per-period mode
+
+Each period carries one choice, `TimePeriodConfig.UseDaylightCurve`: *specify brightness*, which is its own
+`BrightnessPct`, or *use daylight curve*, where the light outside decides instead. Several periods may claim
+the curve, and one curve then spans them all. `CircadianCalculator.ToTarget` copies the flag onto
+`LightTarget.UsesDaylightCurve` from the **active period alone**, as `FromRoom` is copied, so a blend across a
+boundary cannot report one period's name beside the other's rule.
+
+The curve **replaces** the level rather than adding to it. That is what frees both of its ends: it runs from
+`LuxBrightnessMinPct` at `LuxBrightnessStartLux` and below to `LuxBrightnessMaxPct` at `LuxBrightnessFullLux`
+and above, each draggable across the whole 0–100 %, and the schedule's brightest period bounds neither. The
+span is **signed**, so a bright end under the dark end is a curve that falls, not a curve that is ignored.
+Interpolation is on `log10(lux)`, so each decade gets an equal share, and `LuxBrightnessGamma` shapes it.
+
+A period on the curve keeps its `BrightnessPct` in the document, hidden on screen. Switching back restores
+what was typed, and nothing has to be re-entered to try the curve for an evening.
+
+#### The dark end is seeded by the period that claims the curve
+
+The curve's dark end is what a period gives when it is dark outside, so no single number suits every period
+that might claim it: a plan asking for 15 % at night and 90 % by day is served badly by one figure sitting
+between them. `DaylightCurveMode.Set` therefore writes `Defaults.LuxBrightnessMinPct` to **half the claiming
+period's own `BrightnessPct`**, clamped to 0–100 % and rounded to one decimal. Night at 15 % seeds 7.5;
+day at 90 % seeds 45.
+
+It fires only as the curve goes from **unused to used** — no period on it at all, and one being put on it.
+A second period joining seeds nothing, because by then the value may have been dragged into place by hand and
+overwriting it would undo that. Turning the curve off on every period and on again counts as claiming it
+afresh and seeds once more. Only the house default is written: a room stating its own dark end keeps it.
+
+**This is an editing action, not engine logic.** The engine reads whatever the document holds, so a
+hand-written file runs with nothing seeded, and `AreaSettings.LuxBrightnessMinPct`'s schema default is the
+fallback for a document where the curve was never claimed through the editor. The seeding is the normal path
+to that number; the schema default is the reserve.
+
+**The reading is the house's outdoor sensor**, `Global.OutdoorLuxSensor`, unless the room names its own
+`AreaConfig.DaylightSensor`. Never the darkness sensor: an indoor sensor measures the lamps the curve is
+setting, so a closed loop oscillates. That makes it a different question from `FollowOutdoorLux`, which is
+about darkness only, and `LuxReader` is the one implementation both questions read through. With no sensor
+named at all the curve holds its dark end, which is a level nobody chose — `ConfigValidator` warns for exactly
+that, naming the rooms with nothing to read.
+
+A boundary into or out of a curve period is a **step**, not a blend. The blend interpolates the two periods'
+stored levels and the curve then replaces the result, so the whole blend window sits at the curve's answer.
+Two adjacent periods both on the curve have no step at all, because the curve is continuous across them.
+
+`LuxBrightnessEnabled` is gone. It was per room while the mode is per period, so no translation exists; the
+key parses as silence and `LightingConfigDocument.RetiredKeys` logs it once on load.
+
 ### Order of composition: period, then daylight curve, then sleep clamp
 
 `AreaController.ResolveTarget` composes in that fixed order.
 
 The curve lives in `ResolveTarget` and not in `ApplyTarget` because `OnTick` compares `ResolveTarget()`
 against the standing target and retargets on a difference — **that is the only thing that ever notices the sun
-coming out.** In `ApplyTarget` alone it would raise the level on the next motion event and never before,
+coming out.** In `ApplyTarget` alone it would set the level on the next motion event and never before,
 which in a hallway is effectively never.
 
 The clamp goes last so a bright reading during an afternoon nap cannot lift a sleep-respecting room past the
@@ -585,18 +636,22 @@ page is answerable in the test project, not in the markup.
 
 ### Which period is in force is one question, asked in one place
 
-Four surfaces answer "which period is in force now". Three of them compute it and one reads it:
+Five surfaces answer which period is in force. Three compute it for an instant, one reads it, and one draws a
+stretch of them:
 
-- `Room.razor`'s now badge, its chart caption and the daylight curve's base level;
+- `Room.razor`'s now badge and its levels table's highlighted row;
 - `PeriodsEditor.razor`'s "active now" badge and its hover;
 - `ModeService`'s mode cards;
 - `RoomFacts`, which reads the snapshot's period name. That is the engine's own answer at report time, not a
-  fourth computation.
+  computation of its own;
+- the dashboard's schedule band, which asks for the whole board window rather than a single instant.
 
-The three that compute go through `Schedule.InForceNow`, over a calculator from `Schedule.CalculatorFor`, and
-that is the only place the web layer builds one. A hand-rolled `ResolveBoundaries` plus `ActiveIndex` does not
-know that a period waiting for movement is left out of the table, and badges the morning from 06:30 in a house
-still running night levels.
+The four that compute go through a calculator from `Schedule.CalculatorFor`, and that is the only place the web
+layer builds one; the three answering for an instant go on through `Schedule.InForceNow`. A hand-rolled
+`ResolveBoundaries` plus `ActiveIndex` does not know that a period waiting for movement is left out of the
+table, and badges the morning from 06:30 in a house still running night levels. A band laying its own
+boundaries out carries that fault twice: it draws a held period from its `Start`, and under
+`PeriodAuthority.HomeAssistant` it draws the clock's schedule while the engine runs the dropdown's period.
 
 **A shared factory rather than a value the engine publishes**, because `PeriodsEditor` renders `ConfigEditor`'s
 unsaved draft. The badge has to follow the periods being edited, and a published answer could only ever
@@ -611,6 +666,17 @@ Provenance rides back in `PeriodInForce.Rule`, because the editor's hover has to
 `HeldBack` is the difference between `CircadianCalculator.ActivePeriodId`, which respects the hold, and
 `ScheduledPeriodId`, which ignores it, so the web layer reads the movement rule off the engine's own two
 answers instead of gaining a third.
+
+### The schedule band is that same table, over a stretch
+
+`CircadianCalculator.PeriodsAcross` answers with the periods in force between two instants, clipped to them.
+Boundaries are placed per local day, from the day before the stretch through the day after, so a window opening
+inside yesterday's last period and one reaching past midnight both come out whole; one day's sun times serve
+them all. A period waiting for movement is absent, so the one before it holds the stretch its `Start` would have
+taken. Under an override there are no boundaries at all: the named period holds the whole stretch, because that
+is what the engine is running.
+
+`BoardView.Band` turns those stretches into percentages of the board's width and decides nothing else.
 
 ### The activity record renders per event, the engine publishes per area
 
@@ -711,9 +777,9 @@ discoveries are cached — a throw must never become a standing answer of "nothi
 
 ### DST
 
-Every boundary is resolved **through the time zone**, never at the window's own offset, and the first day is
-taken through the zone rather than from `window.Start.Date`. The two ambiguous hours a year resolve as
-standard time.
+Every boundary is resolved **through the time zone**, never at the offset the instant asking happens to carry:
+the day a boundary belongs to is taken through the zone, and its wall clock is placed on that day. The two
+ambiguous hours a year resolve as standard time.
 
 A boundary's *instant*, which is what the wake-up is armed at, resolves the same way: `ConvertTimeToUtc` for
 the autumn hour that happens twice, and a walk to the first minute that exists for the spring-forward gap,
@@ -1137,6 +1203,8 @@ the size. The remaining limit is the chart's own height, which is a design quest
 | 30 s | `DiscoverySettle` | how long Home Assistant's state cache needs before the registry reads whole |
 | 1 s | `BoundaryTimer.Lead` | the wake fires just past the boundary, so the instant the callback reads is on the new period's side of it; short enough that nobody can see it and long enough to cover a timer that fires a hair early |
 | ~3× | lux ladder ratio | illuminance spans four orders of magnitude; a fixed step is unusable at one end or the other |
+| half the claiming period's level | seeded `LuxBrightnessMinPct` | the dark end is what that period gives when it is dark outside, and it has to land under the period's own level without collapsing to nothing; one fixed figure suits neither a 15 % night nor a 90 % day |
+| 40 % / 100 % | `LuxBrightnessMinPct` / `LuxBrightnessMaxPct` schema defaults | the reserve for a document where the curve was never claimed through the editor, and the bright end throughout; 100 lx to 10 000 lx spans a dull room to a bright overcast day |
 | 22 | overridable per-room settings | `RoomSettings.Keys` derives it by reflection over the nullable twins; `AreaView.OverridableSettingCount` hard-codes it and a test holds the two together |
 | ~3 px | board mark de-duplication gap | a screen bound, not a clock bound, because the suppressed-off path republishes per movement |
 | 12.5 / 14 / 15 / 20 / 25 px | the type scale | one step up from 11 / 12.5 / 13.5 / 19 / 24, which read as small and hard to read at a muted colour that already passed AA |

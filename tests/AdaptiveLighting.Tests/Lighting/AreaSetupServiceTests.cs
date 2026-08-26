@@ -366,9 +366,9 @@ public sealed class AreaSetupServiceTests
 		AreaConfig area = new()
 		{
 			AreaId = "gang",
-			LuxBrightnessEnabled = true,
 			LuxBrightnessStartLux = 250,
 			LuxBrightnessFullLux = 8000,
+			LuxBrightnessMinPct = 30,
 			LuxBrightnessMaxPct = 80,
 			LuxBrightnessGamma = 1.4
 		};
@@ -558,6 +558,7 @@ public sealed class AreaSetupServiceTests
 		+ (area.KeepLitWhenOnInverted is not null ? 1 : 0)
 		+ (area.SceneOnMotion is { Length: > 0 } ? 1 : 0)
 		+ (area.SceneWhenEmpty is { Length: > 0 } ? 1 : 0)
+		+ (area.DaylightSensor is { Length: > 0 } ? 1 : 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>Property names that are the room's identity or its entity lists, not one of its settings.</summary>
@@ -584,6 +585,7 @@ public sealed class AreaSetupServiceTests
 		// Per-room entity choices with no twin in AreaSettings, so they are pinned entities, not overrides.
 		nameof(AreaConfig.SceneOnMotion),
 		nameof(AreaConfig.SceneWhenEmpty),
+		nameof(AreaConfig.DaylightSensor),
 
 		// Survives the rebuild, so it is never one of the losses.
 		nameof(AreaConfig.Enabled),

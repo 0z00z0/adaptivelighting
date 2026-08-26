@@ -201,36 +201,23 @@ else
 					  ActivePeriod="@ActivePeriodId"
 					  Changed="@MarkDirty" />
 
-		<div class="lvl-daylight">
-			<div class="lvl-daylight-head">
-				<span class="lvl-daylight-title">Brighten with daylight</span>
-				<button type="button"
-						class="switch @(BrightensWithDaylight ? "on" : null)"
-						role="switch"
-						aria-checked="@(BrightensWithDaylight ? "true" : "false")"
-						aria-label="Brighten with daylight"
-						@onclick="() => SetFlag(nameof(AreaSettings.LuxBrightnessEnabled), !BrightensWithDaylight)">
-					<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-					<span class="switch-word">@(BrightensWithDaylight ? "on" : "off")</span>
-				</button>
-			</div>
+		@* Only where a period asked for it. With none the chart has nothing to describe, and its handles would
+		   edit numbers that change nothing. *@
+		@if (CurvePeriodNames.Count > 0)
+		{
+			<div class="lvl-daylight">
+				<div class="lvl-daylight-head">
+					<span class="lvl-daylight-title">Daylight curve</span>
+				</div>
 
-			@if (BrightensWithDaylight)
-			{
 				<LuxCurveChart Settings="@Effective"
-							   BaseBrightnessPct="@DaylightBasePct"
-							   PeriodName="@ActivePeriodName"
-							   Reading="@LiveLux"
+							   PeriodNames="@CurvePeriodNames"
+							   Reading="@DaylightLux"
 							   Changed="@OnCurveEdited" />
-			}
-			else
-			{
-				<p class="room-card-foot">
-					This room holds the schedule's brightness whatever the weather. Switched on, a bright day lifts
-					it above the schedule so it doesn't read as gloomy against a bright window.
-				</p>
-			}
-		</div>
+
+				<p class="room-card-foot">@DaylightSourceNote</p>
+			</div>
+		}
 	</section>
 
 	@* All settings, the gear and the log sit together at the foot of the page. *@
@@ -614,6 +601,15 @@ else
 											  Placeholder="binary_sensor.example" />
 						</SettingRow>
 
+						<SettingRow Label="Daylight sensor" Help="Which reading the daylight curve follows here. The house's outdoor sensor by default, because an indoor one measures this room's own lamps and the curve would chase itself. Any light-level sensor in the house can be picked.">
+							<EntityPicker Value="@room.DaylightSensor"
+										  ValueChanged="@(value => Set(() => room.DaylightSensor = value))"
+										  Options="@_luxSensors"
+										  NoneLabel="@OutdoorSensorLabel"
+										  EmptyNote="@EmptyNote("light-level sensors")"
+										  Placeholder="sensor.example_illuminance" />
+						</SettingRow>
+
 						<SettingRow Label="Light-level sensor" Help="Which reading decides whether this room is dark. Only needed when the room has more than one — otherwise the one that is found is used.">
 							<EntityPicker Value="@room.LuxSensor"
 										  ValueChanged="@(value => Set(() => room.LuxSensor = value))"
@@ -737,7 +733,7 @@ else
 	// Fields, not getters: each of these parses the schedule or reads Home Assistant, and this page renders once a
 	// second and again on every frame of a chart drag.
 	private TimePeriodConfig? _activePeriod;
-	private double? _liveLux;
+	private double? _daylightLux;
 
 	private ValidationResult? _validation;
 	private SaveResult? _failure;
@@ -1010,7 +1006,7 @@ else
 			selectValue,
 			Schedule.HeldBackRule(Engine)).Period;
 
-		_liveLux = _preview.Resolved is { } resolved ? Catalog.LuxIn(resolved, _document.Global) : null;
+		_daylightLux = Catalog.LuxOf(DaylightSensorId);
 	}
 
 	/// <summary>The line under the card's head: how much of the schedule this room has taken over, in words.</summary>
@@ -1051,33 +1047,38 @@ else
 	/// <summary>The same period by id, which is what the levels table matches its rows on.</summary>
 	private string? ActivePeriodId => _activePeriod?.Key;
 
-	private bool BrightensWithDaylight => Effective.LuxBrightnessEnabled;
+	/// <summary>The periods that hand their brightness to the curve, in schedule order.</summary>
+	/// <remarks>Empty hides the chart: with no period on the curve its handles would edit numbers nothing reads.</remarks>
+	private IReadOnlyList<string> CurvePeriodNames =>
+	[
+		.. _document.Periods
+			.Where(period => period.UseDaylightCurve)
+			.Select(period => period.Name is { Length: > 0 } name ? name : "unnamed period")
+	];
 
-	/// <summary>The level the daylight curve rises from: what this room runs during the period in force.</summary>
-	/// <remarks>With no period resolved this falls back to the first row, never to <c>LuxBrightnessMaxPct</c>,
-	/// the curve's ceiling, which as a base makes both ends equal and draws the curve flat. Both branches read
-	/// through <see cref="RoomLevels.Rows"/>; off <c>_document.Periods</c> they would read the schedule's number
-	/// and skip the room's own override.</remarks>
-	private double DaylightBasePct
-	{
-		get
-		{
-			IReadOnlyList<RoomLevelRow> rows = RoomLevels.Rows(_document.Periods, _room);
+	/// <summary>Which sensor the curve reads here: this room's own, or the house's outdoor one.</summary>
+	private string? DaylightSensorId =>
+		_room?.DaylightSensor is { Length: > 0 } own ? own
+		: _document.Global.OutdoorLuxSensor is { Length: > 0 } house ? house
+		: null;
 
-			if (_activePeriod is not { } period)
-				return rows.FirstOrDefault()?.BrightnessPct ?? DefaultDaylightBasePct;
+	/// <summary>The daylight reading behind the chart. Read on the tick, never in a getter: this page redraws every second.</summary>
+	private double? DaylightLux => _daylightLux;
 
-			return rows
-				.FirstOrDefault(row => string.Equals(row.PeriodId, period.Key, StringComparison.OrdinalIgnoreCase))
-				?.BrightnessPct ?? period.BrightnessPct;
-		}
-	}
+	/// <summary>What "say nothing" means on the daylight picker, which is the house's own choice.</summary>
+	private string OutdoorSensorLabel =>
+		_document.Global.OutdoorLuxSensor is { Length: > 0 } house
+			? $"(the house's outdoor sensor — {Name(house)})"
+			: "(the house's outdoor sensor — none is named)";
 
-	/// <summary>What the curve rises from when the document has no periods to borrow a level from.</summary>
-	/// <remarks>Must match <c>LuxCurveChart</c>'s own parameter default, or an empty schedule draws a flat line.</remarks>
-	private const double DefaultDaylightBasePct = 80;
+	/// <summary>Where the curve's reading comes from, said under the chart.</summary>
+	private string DaylightSourceNote =>
+		_room?.DaylightSensor is { Length: > 0 } own
+			? $"Reading {Name(own)}, this room's own choice. Change it under All settings."
+			: _document.Global.OutdoorLuxSensor is { Length: > 0 } house
+				? $"Reading {Name(house)}, the house's outdoor sensor."
+				: "No outdoor sensor is named, so the curve holds the level at its dark end. Name one under House, or pick one for this room under All settings.";
 
-	private double? LiveLux => _liveLux;
 
 	/// <summary>Applies one setting a drag or an arrow key changed, through the path the stepper uses.</summary>
 	private Task OnCurveEdited(CurveEdit edit) => SetNumber(edit.Key, edit.Value);

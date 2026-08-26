@@ -22,11 +22,17 @@ public class AreaConfig
 	/// <summary>Whether this room reads <see cref="GlobalConfig.OutdoorLuxSensor"/> when it has no lux sensor of its own.</summary>
 	/// <remarks>
 	///     An opt-in: a room that says nothing has no lux reading and counts as dark, and its own <see cref="LuxSensor"/>
-	///     still wins. The reading is taken whatever <see cref="AreaSettings.Darkness"/> consults, because the daylight
-	///     curve follows it too. <c>null</c> and <c>false</c> mean the same thing; nullable only so <c>OmitNull</c> keeps
-	///     an unasked room out of the file.
+	///     still wins. Darkness only; the daylight curve reads <see cref="DaylightSensor"/> instead. <c>null</c> and
+	///     <c>false</c> mean the same thing; nullable only so <c>OmitNull</c> keeps an unasked room out of the file.
 	/// </remarks>
 	public bool? FollowOutdoorLux { get; set; }
+
+	/// <summary>Which light-level sensor the daylight curve reads here; <c>null</c> reads <see cref="GlobalConfig.OutdoorLuxSensor"/>.</summary>
+	/// <remarks>
+	///     Separate from <see cref="LuxSensor"/>, which decides darkness. An indoor sensor measures the room's own
+	///     lamps, so the curve would chase itself; the house's outdoor reading is the default for that reason.
+	/// </remarks>
+	public string? DaylightSensor { get; set; }
 
 	/// <summary>Entities that block auto-on while they are on: a projector, a "do not disturb" flag.</summary>
 	public List<string>? IgnoreWhenOn { get; set; }
@@ -88,14 +94,14 @@ public class AreaConfig
 	/// <inheritdoc cref="AreaSettings.LuxHysteresis"/>
 	public double? LuxHysteresis { get; set; }
 
-	/// <inheritdoc cref="AreaSettings.LuxBrightnessEnabled"/>
-	public bool? LuxBrightnessEnabled { get; set; }
-
 	/// <inheritdoc cref="AreaSettings.LuxBrightnessStartLux"/>
 	public double? LuxBrightnessStartLux { get; set; }
 
 	/// <inheritdoc cref="AreaSettings.LuxBrightnessFullLux"/>
 	public double? LuxBrightnessFullLux { get; set; }
+
+	/// <inheritdoc cref="AreaSettings.LuxBrightnessMinPct"/>
+	public double? LuxBrightnessMinPct { get; set; }
 
 	/// <inheritdoc cref="AreaSettings.LuxBrightnessMaxPct"/>
 	public double? LuxBrightnessMaxPct { get; set; }
@@ -151,9 +157,9 @@ public class AreaConfig
 			ColorControl = ColorControl ?? defaults.ColorControl,
 			LuxThreshold = LuxThreshold ?? defaults.LuxThreshold,
 			LuxHysteresis = LuxHysteresis ?? defaults.LuxHysteresis,
-			LuxBrightnessEnabled = LuxBrightnessEnabled ?? defaults.LuxBrightnessEnabled,
 			LuxBrightnessStartLux = LuxBrightnessStartLux ?? defaults.LuxBrightnessStartLux,
 			LuxBrightnessFullLux = LuxBrightnessFullLux ?? defaults.LuxBrightnessFullLux,
+			LuxBrightnessMinPct = LuxBrightnessMinPct ?? defaults.LuxBrightnessMinPct,
 			LuxBrightnessMaxPct = LuxBrightnessMaxPct ?? defaults.LuxBrightnessMaxPct,
 			LuxBrightnessGamma = LuxBrightnessGamma ?? defaults.LuxBrightnessGamma,
 			SunElevationThreshold = SunElevationThreshold ?? defaults.SunElevationThreshold,

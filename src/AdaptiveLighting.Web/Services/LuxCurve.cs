@@ -99,23 +99,23 @@ public static class LuxCurve
 	public static double X(double fraction) => Math.Clamp(fraction, 0, 1) * PlotWidth;
 
 	/// <summary>The engine's curve across the whole axis, as an SVG <c>d</c> in the plot's own user units.</summary>
-	public static string Path(AreaSettings settings, double baseBrightnessPct, double axisMaxLux, int samples = 112)
+	public static string Path(AreaSettings settings, double axisMaxLux, int samples = 112)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
 		ArgumentOutOfRangeException.ThrowIfLessThan(samples, 2);
 
 		StringBuilder path = new();
 
-		// Every y comes from the engine's own Raise, so the drawn line cannot differ from the applied rule.
+		// Every y comes from the engine's own Brightness, so the drawn line cannot differ from the applied rule.
 		for (int step = 0; step < samples; step++)
 		{
 			double fraction = (double)step / (samples - 1);
-			double raised = LuxBrightnessCurve.Raise(baseBrightnessPct, LuxAt(fraction, axisMaxLux), settings);
+			double brightness = LuxBrightnessCurve.Brightness(LuxAt(fraction, axisMaxLux), settings);
 
 			path.Append(step == 0 ? 'M' : 'L')
 				.Append(Num(X(fraction)))
 				.Append(' ')
-				.Append(Num(Y(raised)));
+				.Append(Num(Y(brightness)));
 
 			if (step != samples - 1)
 				path.Append(' ');
@@ -124,15 +124,17 @@ public static class LuxCurve
 		return path.ToString();
 	}
 
-	/// <summary>The foot of the curve: the reading at which brightening starts, at the period's own level.</summary>
-	public static CurvePoint StartHandle(AreaSettings settings, double baseBrightnessPct, double axisMaxLux)
+	/// <summary>The dark end: the reading the curve starts to climb from, and the level it holds below it.</summary>
+	public static CurvePoint StartHandle(AreaSettings settings, double axisMaxLux)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
 
-		return new CurvePoint(X(FractionOf(settings.LuxBrightnessStartLux, axisMaxLux)), Y(baseBrightnessPct));
+		return new CurvePoint(
+			X(FractionOf(settings.LuxBrightnessStartLux, axisMaxLux)),
+			Y(settings.LuxBrightnessMinPct));
 	}
 
-	/// <summary>The head of the curve: the reading at which the room is as bright as it goes.</summary>
+	/// <summary>The bright end: the reading the curve reaches its top at, and how bright that is.</summary>
 	public static CurvePoint FullHandle(AreaSettings settings, double axisMaxLux)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
@@ -141,15 +143,13 @@ public static class LuxCurve
 	}
 
 	/// <summary>The shaping handle: halfway up the span, standing on the curve itself.</summary>
-	public static CurvePoint ShapeHandle(AreaSettings settings, double baseBrightnessPct, double axisMaxLux)
+	public static CurvePoint ShapeHandle(AreaSettings settings, double axisMaxLux)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
 
 		double lux = ShapeLux(settings);
 
-		return new CurvePoint(
-			X(FractionOf(lux, axisMaxLux)),
-			Y(LuxBrightnessCurve.Raise(baseBrightnessPct, lux, settings)));
+		return new CurvePoint(X(FractionOf(lux, axisMaxLux)), Y(LuxBrightnessCurve.Brightness(lux, settings)));
 	}
 
 	public static double ShapeLux(AreaSettings settings)
@@ -162,11 +162,13 @@ public static class LuxCurve
 		return Math.Pow(10, Math.Log10(start) + (ShapeFraction * (Math.Log10(full) - Math.Log10(start))));
 	}
 
-	public static bool HasHeadroom(AreaSettings settings, double baseBrightnessPct)
+	/// <summary>Whether the curve's two ends are far enough apart for a shaping handle to mean anything.</summary>
+	// Either direction: a curve dragged to fall answers the same as one that rises.
+	public static bool HasSpan(AreaSettings settings)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
 
-		return settings.LuxBrightnessMaxPct - baseBrightnessPct > 0.5;
+		return Math.Abs(settings.LuxBrightnessMaxPct - settings.LuxBrightnessMinPct) > 0.5;
 	}
 
 	/// <summary>The exponent that would put the curve through a dragged point.</summary>

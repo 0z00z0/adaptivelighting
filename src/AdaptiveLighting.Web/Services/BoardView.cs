@@ -1,5 +1,4 @@
 using AdaptiveLighting.Abstractions;
-using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
 namespace AdaptiveLighting.Web.Services;
@@ -406,75 +405,33 @@ public static class BoardView
 
 	// ===================== the schedule band =====================
 
-	/// <summary>The day's periods as segments of the board's width.</summary>
+	/// <summary>The day's periods as segments of the board's width, as the engine's own table places them.</summary>
 	/// <remarks>
-	///     Every boundary is placed through the zone, never at the window's own offset: a period's <c>Start</c> is a
-	///     wall-clock time, and the offset turning it into an instant is the one in force on its own day, which
-	///     twice a year is not the window's. Boundaries are placed for the day before, the day of and the day after,
-	///     then sorted, so a window straddling midnight gets a band that does too. One day's sun times serve all
-	///     three. A period the engine's own calculator cannot place is left out here as well.
+	///     The stretches come from <see cref="CircadianCalculator.PeriodsAcross"/>, which is the table every other
+	///     answer in this application comes out of: a period still waiting for movement is absent, a dropdown that
+	///     owns the time of day names the whole band, and a boundary the sun cannot place is left out. Nothing
+	///     about the schedule is decided here beyond the arithmetic that turns an instant into a percentage.
 	/// </remarks>
-	/// <param name="sun">The day's sun times, for the sun-anchored boundaries.</param>
-	/// <param name="zone">
-	///     The household's time zone. Defaults to <see cref="TimeZoneInfo.Local"/>; named explicitly only by tests,
-	///     which must not depend on the machine they run on.
-	/// </param>
-	public static IReadOnlyList<BandSegment> Band(
-		IReadOnlyList<TimePeriodConfig> periods,
-		SunTimes sun,
-		BoardWindow window,
-		TimeZoneInfo? zone = null)
+	public static IReadOnlyList<BandSegment> Band(CircadianCalculator calculator, BoardWindow window)
 	{
-		ArgumentNullException.ThrowIfNull(periods);
-		ArgumentNullException.ThrowIfNull(sun);
+		ArgumentNullException.ThrowIfNull(calculator);
 		ArgumentNullException.ThrowIfNull(window);
-
-		TimeZoneInfo local = zone ?? TimeZoneInfo.Local;
-
-		// Through the zone, not window.Start.Date: the window carries the offset it was built at, which on the
-		// morning of a clock change names the wrong hour and can name the wrong day with it.
-		DateTime firstDay = TimeZoneInfo.ConvertTime(window.Start, local).Date;
-
-		List<(DateTimeOffset At, TimePeriodConfig Period)> boundaries = [];
-
-		foreach (TimePeriodConfig period in periods)
-		{
-			if (!PeriodStart.TryParse(period.Start, out PeriodStart? start) || start!.Resolve(sun) is not { } time)
-				continue;
-
-			for (int day = -1; day <= 1; day++)
-				boundaries.Add((Instant(firstDay.AddDays(day) + time.ToTimeSpan(), local), period));
-		}
-
-		if (boundaries.Count == 0)
-			return [];
-
-		boundaries.Sort((left, right) => left.At.CompareTo(right.At));
 
 		List<BandSegment> segments = [];
 
-		for (int index = 0; index < boundaries.Count; index++)
+		foreach (PeriodSpan span in calculator.PeriodsAcross(window.Start, window.End))
 		{
-			DateTimeOffset from = boundaries[index].At;
-			DateTimeOffset to = index + 1 < boundaries.Count ? boundaries[index + 1].At : window.End;
+			double left = Math.Max(0, window.PercentAt(span.From));
+			double right = Math.Min(100, window.PercentAt(span.To));
 
-			if (to <= window.Start || from >= window.End)
-				continue;
-
-			double left = Math.Max(0, window.PercentAt(from));
-			double right = Math.Min(100, window.PercentAt(to));
 			if (right - left <= 0)
 				continue;
 
-			segments.Add(new BandSegment(boundaries[index].Period.Name, left, right - left, boundaries[index].Period.ColorTempKelvin));
+			segments.Add(new BandSegment(span.Period.Name, left, right - left, span.Period.ColorTempKelvin));
 		}
 
 		return segments;
 	}
-
-	// The two ambiguous hours a year are left to TimeZoneInfo.GetUtcOffset, which reads both as standard time.
-	private static DateTimeOffset Instant(DateTime wallClock, TimeZoneInfo zone) =>
-		new(wallClock, zone.GetUtcOffset(wallClock));
 
 	public static bool IsLabelled(BandSegment segment)
 	{
