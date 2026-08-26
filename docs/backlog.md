@@ -13,17 +13,19 @@ rewritten to suit one.
 
 ## Next up
 
-- **The two night switches become one three-step control.** A room carries *is gentle while the house sleeps*
-  and *never comes on by itself while the house sleeps* as two checkboxes, and the second implies the first —
-  `AreaSentences.cs:238` already writes them with `else if`. Replace with one stepped choice: **normal → dims
-  while the house sleeps → dims and does not come on**. The document keeps both fields; no house changes
-  behaviour.
-  **Why these are not the night period's percentage:** the night period is driven by the clock and these by the
-  house mode, so going to bed at 21:00 or sleeping until 10:00 is only ever handled by the mode; the sleep
-  clamp is the
-  only ceiling left since per-period ceilings were cut, without which a night period asking 15 % lands near
-  58 % in a room reading 1000 lx; the period is house-wide where these are per room; and the auto-on block is
-  not a level at all — 0 % still sends a turn-on.
+- **`ResolveBoundaries` places the hold against the instant, not against the day the boundary falls on.**
+  `CircadianCalculator.cs:364` derives the instance day from `now` alone, so a boundary still ahead of the
+  current time is tested against *yesterday's* hold. `NextBoundary` (`CircadianCalculator.cs:313`) reads that
+  list, so a period whose today instance is still waiting for movement can be handed back as the next boundary,
+  while one whose yesterday instance was held back drops out of it. `PeriodsAcross`
+  (`CircadianCalculator.cs:276-283`) already gives each day its own instance and is the rule to bring the
+  instant-shaped path onto. A latent inconsistency in the engine, not in the band that exposed it; it belongs
+  in its own change.
+
+- **The room page scrolls sideways at 390 px.** With a settings group open, `scrollWidth` measures 531 against
+  an `innerWidth` of 390. The warmth `.seg` control is 474 px wide and `.srow-control` is `flex: 0 0 auto`
+  (`app.css:4638-4644`), so the row never wraps; the narrow-viewport relaxation at `app.css:4855` covers
+  `.steps` only. Pre-existing and independent of the stepped rows — hiding those leaves the number unchanged.
 
 - **Every info text moves behind the ⓘ button, leaving the label alone.** The settings pages are too long to
   read, and worst on a phone where everything stacks into one column. A row becomes label + control, and all
@@ -39,15 +41,6 @@ rewritten to suit one.
 
   | Period | Brightness | Warmth |
   | --- | --- | --- |
-
-- **Fix the dashboard's period ribbon, which draws a schedule the engine is not running.** `BoardView.Band`
-  (`BoardView.cs:449-500`) lays the day's boundaries out itself from `PeriodStart.TryParse` and
-  `PeriodStart.Resolve`: a third boundary layout beside `CircadianCalculator.ResolveBoundaries` and the room
-  page's, blind to both things that move a period away from its `Start`. A period still waiting for movement is
-  drawn as though it had begun, and under `PeriodAuthority.HomeAssistant` the dropdown's choice does not reach
-  the ribbon at all, so the band names one period while the engine runs another. The fix is to finish the
-  consolidation: the band takes the boundaries the calculator resolves, which means handing it the held-back
-  predicate and the override reader the calculator already takes.
 
 - **The blend starts when the period actually begins.** A period whose `Start` was 06:30 but which movement
   began at 06:45 arrives already part-way through its blend, because the window trails the boundary and the
@@ -68,6 +61,13 @@ rewritten to suit one.
 - **The user guide has no screenshots.** Every `📷 [screenshot: …]` slot is still a placeholder.
 
 - **The first-run wizard is undocumented.** The user guide covers every other screen; the wizard ships without a section.
+
+- **The four packages are private, and only an organisation owner can change that.** The organisation blocks
+  public package creation, so every publish lands private. No token or script reaches it: the package API
+  offers `GET`, `DELETE` and `restore`, and nothing that sets visibility. The fix is *Organization settings →
+  Packages → Package Creation → enable Public*, then each package set public individually. Houses are
+  unaffected — they authenticate and restore as now. What is blocked is an outside consumer of an MIT-licensed
+  project.
 
 ## Open questions
 
@@ -98,10 +98,3 @@ rewritten to suit one.
   senses movement, so in a house where many rooms lack a sensor it becomes one sentence holding every name.
   The tension runs both ways: adopting the cap shortens the line but hides exactly the list somebody needs in
   order to go and fix those rooms.
-
-- **Symbols reach nobody.** `Directory.Build.props` sets `IncludeSymbols` + `SymbolPackageFormat=snupkg` and
-  wires Source Link, so four symbol packages are built per release — and `release.yml` pushes with
-  `--no-symbols` because GitHub Packages has no symbol server, so all four are dropped every time. A stack
-  trace from a live house resolves to a method with no line number. `DebugType=embedded` puts the debug data
-  inside the DLL, which needs no symbol server and would make the trace resolve, at the cost of a larger DLL in
-  every deploy.
