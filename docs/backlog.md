@@ -31,15 +31,6 @@ rewritten to suit one.
   description, help text, a control's label, and sub-control text (whether that last level exists is part of
   the question). One shared stylesheet for the levels, not per-page styling.
 
-- **Cut the room page's standing prose.** Named cases:
-  - *"Watching for movement. The lights haven't been touched yet."* — a line that reports nothing happening
-    earns no space. Drop it and the other nothing-yet lines.
-  - *"Movement in the dark turns the lights on."* → *"Awaiting movement"* or similar.
-  - *"6 of 6 periods are this room's own; the rest follow the schedule."* — shorten.
-  - *"every change here applies and saves by itself"* — remove, and confirm a write with a brief toast at the
-    foot of the screen instead.
-  - *"Morgen every day at 06:45"* → *"Morgen [06:45]"*.
-
 - **Brightness and warmth become stepped sliders, laid out as a table.** A slider with fixed steps is easier
   to set than a dropdown or a continuous control. Brightness shows a *house default* marker and the percentage
   only, with no per-step wording; warmth shows the same marker and keeps the wording each step already has in
@@ -48,9 +39,6 @@ rewritten to suit one.
 
   | Period | Brightness | Warmth |
   | --- | --- | --- |
-
-- **Move *How this room behaves* to the top of the room settings**, with *All settings*, *In this room* and
-  *What happened here* together at the foot of the page.
 
 - **Fix the dashboard's period ribbon, which draws a schedule the engine is not running.** `BoardView.Band`
   (`BoardView.cs:449-500`) lays the day's boundaries out itself from `PeriodStart.TryParse` and
@@ -68,35 +56,6 @@ rewritten to suit one.
   clock-started one would**, so the transition feels the same whenever you arrive. Needs the calculator to know
   *when* a period began, not just whether.
 
-- **Publishing is blocked: the packages are still linked to the archived repository, and are now private.**
-  Measured 2026-08-22 — `users/0z00z0/packages/nuget/AdaptiveLighting` reports
-  `repository: 0z00z0/adaptivelighting-archive`, `visibility: private`. The `v2.0.0-preview.5` tag built and
-  tested green and then failed on push with `403 Forbidden`: a release job's per-run token can only write
-  packages linked to its own repository. The packages also inherited the archive's visibility when it was made
-  private, so an outside consumer of a public MIT project can no longer restore them at all. Each of the four
-  packages needs its linked repository changed to `0z00z0/adaptivelighting` and its visibility set back to
-  public, in the package settings. The alternative, a personal access token held as a repository secret, is
-  what the project deliberately avoids. Until this is done no release can be published and no house can be
-  updated past `2.0.0-preview.4`.
-
-- **A house that had the old daylight lift on loses it, and has to choose the curve again.** The lift was
-  switched on per room (`LuxBrightnessEnabled`); the curve is claimed per period, which is house-wide. No
-  translation between the two exists — a per-room switch cannot be turned into a per-period one without
-  inventing an answer for the rooms that disagree, and turning the curve on for *every* period because one
-  room asked for a lift is a larger behaviour change than losing it. **Nothing is migrated on purpose.** A
-  house upgrading past this change runs every period on its own percentage until somebody picks *use daylight
-  curve*, and the stale `LuxBrightnessEnabled` key parses as silence with one warning on load. The decision
-  wanted: whether to leave it as is (the current behaviour), or ship a one-off note in the UI naming the rooms
-  whose old key is still in the file. The curve's shaping settings — the two anchors, the exponent — survive
-  the upgrade untouched and need nothing.
-
-- **The old lift's ceiling is gone and nothing replaced it.** *Brighten with daylight* was once observed near
-  100 % in the toilet, and the ask was that it not exceed the *Day* period's brightness. The curve replaces
-  the level rather than adding to it, so the complaint no longer applies in that shape: the bright end is now
-  a number that is chosen, per house and per room, rather than a lift that climbs. Worth re-checking against a
-  live house once a period has been on the curve for a few days, in case the wanted rule was really "not
-  brighter than the brightest thing the plan asks for anywhere".
-
 ## Parked
 
 - **The daylight chart is only 101 px tall on a phone, which caps its labels.** The corner and the label spread
@@ -111,6 +70,14 @@ rewritten to suit one.
 - **The first-run wizard is undocumented.** The user guide covers every other screen; the wizard ships without a section.
 
 ## Open questions
+
+- **A boundary into or out of a curve period is a step, not a blend.** The blend interpolates the two
+  periods' stored levels and the daylight curve then replaces the result, so a boundary with the curve on
+  one side and a stated percentage on the other changes level in a single move. Two adjacent periods both
+  on the curve have no step, and neither do two that both state a percentage. Removing the step means
+  moving the curve inside `CircadianCalculator`, which breaks the composition order
+  `AreaController.ResolveTarget` holds — period, then curve, then sleep clamp (`docs/mechanisms.md`,
+  *Order of composition*). The step is the current behaviour.
 
 - **The durable log's retention is a byte budget, not a time budget.** One active 10 MiB generation plus one
   rotated copy, so the directory never exceeds 20 MiB. At the 111 kB/h measured on a live house a generation
