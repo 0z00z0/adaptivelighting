@@ -20,6 +20,21 @@ public sealed class BoardViewTests
 	/// <summary>The board's own window at <see cref="Now"/>: 17:00 to midnight, seven whole hours.</summary>
 	private static BoardWindow Window() => BoardWindow.Around(Now, BoardView.LookBack, BoardView.LookAhead);
 
+	/// <summary>The table the band draws, built the one way the web layer is allowed to build one.</summary>
+	/// <remarks>
+	///     The zone is named, so the band tests mean the same on a UTC build agent. A null <paramref name="heldBack"/>
+	///     places every period on its own <c>Start</c>, and a null <paramref name="global"/> leaves the schedule
+	///     deciding the time of day.
+	/// </remarks>
+	private static CircadianCalculator Table(
+		IReadOnlyList<TimePeriodConfig> periods,
+		SunTimes? sun = null,
+		GlobalConfig? global = null,
+		string? selectValue = null,
+		Func<string, DateOnly, bool>? heldBack = null) =>
+		Schedule.CalculatorFor(
+			periods, global ?? new GlobalConfig(), sun ?? SunTimes.Unknown, selectValue, heldBack, Oslo);
+
 	private static DateTimeOffset At(int hour, int minute = 0, int second = 0) =>
 		new(2026, 7, 27, hour, minute, second, TimeSpan.FromHours(2));
 
@@ -598,14 +613,13 @@ public sealed class BoardViewTests
 	public void The_Band_Is_The_Day_The_Engine_Is_Running()
 	{
 		IReadOnlyList<BandSegment> band = BoardView.Band(
+			Table(
 			[
 				new TimePeriodConfig { Name = "Day", Start = "06:00", ColorTempKelvin = 4300 },
 				new TimePeriodConfig { Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
 				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
-			],
-			SunTimes.Unknown,
-			Window(),
-			Oslo);
+			]),
+			Window());
 
 		CollectionAssert.AreEqual(new[] { "Day", "Evening", "Night" }, band.Select(segment => segment.Name).ToArray());
 		Assert.AreEqual(0, band[0].LeftPct, 1e-9, "the day period was already running when the board began");
@@ -618,13 +632,12 @@ public sealed class BoardViewTests
 	public void A_Boundary_The_Day_Cannot_Place_Is_Left_Out()
 	{
 		IReadOnlyList<BandSegment> band = BoardView.Band(
+			Table(
 			[
 				new TimePeriodConfig { Name = "Evening", Start = "sunset-01:00", ColorTempKelvin = 2700 },
 				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
-			],
-			SunTimes.Unknown,
-			Window(),
-			Oslo);
+			]),
+			Window());
 
 		Assert.IsTrue(band.All(segment => segment.Name == "Night"), "polar night left only the fixed boundary");
 	}
@@ -634,10 +647,8 @@ public sealed class BoardViewTests
 	public void An_Unparseable_Start_Is_Left_Out()
 	{
 		IReadOnlyList<BandSegment> band = BoardView.Band(
-			[new TimePeriodConfig { Name = "Broken", Start = "half past whenever", ColorTempKelvin = 2700 }],
-			SunTimes.Unknown,
-			Window(),
-			Oslo);
+			Table([new TimePeriodConfig { Name = "Broken", Start = "half past whenever", ColorTempKelvin = 2700 }]),
+			Window());
 
 		Assert.AreEqual(0, band.Count);
 	}
@@ -647,17 +658,75 @@ public sealed class BoardViewTests
 	public void A_Window_That_Reaches_Midnight_Still_Bands()
 	{
 		IReadOnlyList<BandSegment> band = BoardView.Band(
+			Table(
 			[
 				new TimePeriodConfig { Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
 				new TimePeriodConfig { Name = "Small hours", Start = "01:00", ColorTempKelvin = 2200 }
-			],
-			SunTimes.Unknown,
-			Window(),
-			Oslo);
+			]),
+			Window());
 
 		Assert.AreEqual(2, band.Count);
 		Assert.AreEqual("Small hours", band[0].Name, "the board opens inside the previous night's period");
 		Assert.AreEqual("Evening", band[1].Name);
+	}
+
+	/// <summary>A period still waiting for movement is not drawn as though it had begun.</summary>
+	/// <remarks>
+	///     The engine leaves a held period out of the table, so the one before it keeps running through the stretch
+	///     its <c>Start</c> would have taken. A band laying the boundaries out of its own would name the night from
+	///     22:30 in a house still at evening levels.
+	/// </remarks>
+	[TestMethod]
+	public void A_Period_Waiting_For_Movement_Is_Not_Banded()
+	{
+		IReadOnlyList<BandSegment> band = BoardView.Band(
+			Table(
+			[
+				new TimePeriodConfig { Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
+				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200, StartsOnMotion = true }
+			],
+			heldBack: (period, _) => period == "Night"),
+			Window());
+
+		Assert.IsFalse(band.Any(segment => segment.Name == "Night"), "it has not begun, so nothing on the board says it has");
+		Assert.IsTrue(band.All(segment => segment.Kelvin == 2700), "the evening's warmth runs to the right edge");
+		Assert.AreEqual(0, band[0].LeftPct, 1e-9);
+		Assert.AreEqual(100, band[^1].LeftPct + band[^1].WidthPct, 1e-6, "and it holds the stretch 22:30 would have taken");
+	}
+
+	/// <summary>Under Home Assistant's authority the dropdown names the band, whatever the clock would have placed.</summary>
+	/// <remarks>
+	///     The clock is 21:37 and the schedule's evening runs until 22:30, so a band resolving from the table alone
+	///     names a period the engine is not running.
+	/// </remarks>
+	[TestMethod]
+	public void The_Dropdown_Names_The_Whole_Band_Where_It_Owns_The_Time_Of_Day()
+	{
+		GlobalConfig global = new()
+		{
+			PeriodSelect = new PeriodSelectConfig
+			{
+				Entity = "input_select.time_of_day",
+				Authority = PeriodAuthority.HomeAssistant,
+				Options = [new PeriodSelectOptionConfig { Value = "Vinter", PeriodId = "Night" }]
+			}
+		};
+
+		IReadOnlyList<BandSegment> band = BoardView.Band(
+			Table(
+			[
+				new TimePeriodConfig { Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
+				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
+			],
+			global: global,
+			selectValue: "Vinter"),
+			Window());
+
+		Assert.AreEqual(1, band.Count, "the dropdown moved the period, so there is no boundary left to draw");
+		Assert.AreEqual("Night", band[0].Name);
+		Assert.AreEqual(2200, band[0].Kelvin);
+		Assert.AreEqual(0, band[0].LeftPct, 1e-9);
+		Assert.AreEqual(100, band[0].WidthPct, 1e-6);
 	}
 
 	// ===================== the schedule band across a clock change =====================
@@ -672,14 +741,13 @@ public sealed class BoardViewTests
 			new DateTimeOffset(2026, 3, 29, 5, 0, 0, TimeSpan.FromHours(2)), BoardView.LookBack, BoardView.LookAhead);
 
 		IReadOnlyList<BandSegment> band = BoardView.Band(
+			Table(
 			[
 				new TimePeriodConfig { Name = "Night", Start = "00:00", ColorTempKelvin = 2200 },
 				new TimePeriodConfig { Name = "Small hours", Start = "01:30", ColorTempKelvin = 2500 },
 				new TimePeriodConfig { Name = "Morning", Start = "05:00", ColorTempKelvin = 4300 }
-			],
-			SunTimes.Unknown,
-			window,
-			Oslo);
+			]),
+			window);
 
 		CollectionAssert.AreEqual(
 			new[] { "Night", "Small hours", "Morning" }, band.Select(segment => segment.Name).ToArray());
@@ -697,14 +765,13 @@ public sealed class BoardViewTests
 			new DateTimeOffset(2026, 10, 25, 4, 0, 0, TimeSpan.FromHours(1)), BoardView.LookBack, BoardView.LookAhead);
 
 		IReadOnlyList<BandSegment> band = BoardView.Band(
+			Table(
 			[
 				new TimePeriodConfig { Name = "Night", Start = "00:00", ColorTempKelvin = 2200 },
 				new TimePeriodConfig { Name = "Small hours", Start = "01:30", ColorTempKelvin = 2500 },
 				new TimePeriodConfig { Name = "Morning", Start = "04:00", ColorTempKelvin = 4300 }
-			],
-			SunTimes.Unknown,
-			window,
-			Oslo);
+			]),
+			window);
 
 		CollectionAssert.AreEqual(
 			new[] { "Night", "Small hours", "Morning" }, band.Select(segment => segment.Name).ToArray());
