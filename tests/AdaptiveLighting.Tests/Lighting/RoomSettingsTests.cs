@@ -354,8 +354,6 @@ public sealed class RoomSettingsTests
 	{
 		RoomSetting luxThreshold = Setting(nameof(AreaSettings.LuxThreshold));
 		RoomSetting sunBelow = Setting(nameof(AreaSettings.SunElevationThreshold));
-		RoomSetting startLux = Setting(nameof(AreaSettings.LuxBrightnessStartLux));
-
 		Assert.IsFalse(luxThreshold.AppliesTo(new AreaSettings { Darkness = DarknessSource.Sun }),
 			"a room that gates on the sun has no lux threshold to set");
 		Assert.IsTrue(luxThreshold.AppliesTo(new AreaSettings { Darkness = DarknessSource.Lux }));
@@ -366,9 +364,23 @@ public sealed class RoomSettingsTests
 			"a windowless room consults neither signal");
 		Assert.IsFalse(sunBelow.AppliesTo(new AreaSettings { Darkness = DarknessSource.Lux }),
 			"a sensor room with nothing to read counts as dark; it no longer falls back to the sun");
+	}
 
-		Assert.IsFalse(startLux.AppliesTo(new AreaSettings { LuxBrightnessEnabled = false }));
-		Assert.IsTrue(startLux.AppliesTo(new AreaSettings { LuxBrightnessEnabled = true }));
+	// The curve is claimed per period, house-wide, so no room setting can know whether it is running.
+	[TestMethod]
+	public void The_Curve_Settings_Are_Always_Offered()
+	{
+		foreach (string key in new[]
+		{
+			nameof(AreaSettings.LuxBrightnessStartLux),
+			nameof(AreaSettings.LuxBrightnessFullLux),
+			nameof(AreaSettings.LuxBrightnessMinPct),
+			nameof(AreaSettings.LuxBrightnessMaxPct),
+			nameof(AreaSettings.LuxBrightnessGamma)
+		})
+		{
+			Assert.IsTrue(Setting(key).AppliesTo(new AreaSettings()), key);
+		}
 	}
 
 	// A sensor room with nothing to read counts as dark and does not fall back to the sun; the help text is the

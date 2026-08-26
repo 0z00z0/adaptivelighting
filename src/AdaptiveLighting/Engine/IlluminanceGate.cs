@@ -16,17 +16,9 @@ public sealed class IlluminanceGate
 	private const string NoReadingDetail = "no light sensor here is still reporting, so the room counts as dark";
 
 	private readonly IHaContext _ha;
-	private readonly IReadOnlyList<string> _luxEntityIds;
+	private readonly LuxReader _reader;
 	private readonly AreaSettings _settings;
-	private readonly TimeSpan _staleAfter;
-	private readonly Func<DateTimeOffset> _now;
-	private readonly DateTimeOffset _startedAt;
 	private readonly ILogger _logger;
-
-	// Home Assistant resets every entity's timestamp on restart, so its own fields cannot tell a sensor that died
-	// last week from one that reported a minute before the restart. The tracker survives a restart and answers
-	// false when it has no record.
-	private readonly IEntityLastSeen? _lastSeen;
 
 	// Guards _isDark and the _last* readings below. Held across a whole verdict so the detail matches it.
 	private readonly object _gate = new();
@@ -55,13 +47,9 @@ public sealed class IlluminanceGate
 		ArgumentNullException.ThrowIfNull(luxEntityIds);
 
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
-		_luxEntityIds = [.. luxEntityIds.Where(id => id is { Length: > 0 })];
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
-		_staleAfter = staleAfter;
-		_now = now ?? throw new ArgumentNullException(nameof(now));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
-		_lastSeen = lastSeen;
-		_startedAt = _now();
+		_reader = new LuxReader(ha, luxEntityIds, staleAfter, now, lastSeen);
 	}
 
 	/// <summary>Whether the area currently counts as dark.</summary>
@@ -99,7 +87,7 @@ public sealed class IlluminanceGate
 	};
 
 
-	private bool HasNoLuxSensor => _luxEntityIds.Count == 0;
+	private bool HasNoLuxSensor => _reader.EntityIds.Count == 0;
 
 	// "3 of 4 sensors" is the only place a household hears that one of its sensors stopped reporting; a
 	// single-sensor room is left off, where "1 of 1" is noise.
@@ -113,75 +101,9 @@ public sealed class IlluminanceGate
 		: $"no sun elevation from {_settings.SunEntity}";
 
 	/// <summary>The area's current illuminance, or <c>null</c> when no sensor resolved or none is reporting a usable number.</summary>
-	// The one place the area's lux is read, so the darkness verdict and LuxBrightnessCurve consult the same
-	// sensors. Several are averaged geometrically, because perceived brightness goes with the logarithm: 170 lx
-	// and 3000 lx mean 714, where an arithmetic 1585 lands on the other side of a 1000 lx threshold. Free of side
-	// effects, so reading the number cannot disturb what DarknessDetail says about the last verdict.
-	public double? ReadLux() => AverageLux(out _, out _);
-
-	private double? AverageLux(out int used, out int offered)
-	{
-		offered = _luxEntityIds.Count;
-		used = 0;
-
-		if (offered == 0)
-			return null;
-
-		List<double> readings = [];
-
-		foreach (string entityId in _luxEntityIds)
-		{
-			EntityState? state = _ha.GetState(entityId);
-
-			if (state.StateAsDouble() is not { } lux || IsStale(entityId, state))
-				continue;
-
-			readings.Add(lux);
-		}
-
-		used = readings.Count;
-
-		if (used == 0)
-			return null;
-
-		// Non-positive readings are dropped: one 0 lx would drag a geometric mean to 0, and a negative has no log.
-		List<double> positive = [.. readings.Where(lux => lux > 0)];
-
-		// Nothing left means every sensor says pitch dark, which is a reading of 0 and not an absent reading.
-		if (positive.Count == 0)
-			return 0;
-
-		return GeometricMean(positive);
-	}
-
-	// Computed in log space so a room with many sensors cannot overflow the product.
-	private static double GeometricMean(List<double> readings) =>
-		readings.Count == 1 ? readings[0] : Math.Exp(readings.Sum(Math.Log) / readings.Count);
-
-	/// <summary>Whether a sensor has gone quiet for longer than the house allows.</summary>
-	// LastUpdated, never LastChanged: a sensor sitting at a steady 3 lx all night would be condemned for being
-	// consistent. A missing timestamp counts as fresh.
-	private bool IsStale(string entityId, EntityState? state)
-	{
-		if (_staleAfter <= TimeSpan.Zero)
-			return false;
-
-		// The tracker outranks Home Assistant's fields because it survives the restart that resets them.
-		if (_lastSeen is not null)
-			return _lastSeen.HasBeenSilentFor(entityId, _staleAfter);
-
-		if (state?.LastUpdated is not { } reported)
-			return false;
-
-		DateTimeOffset now = _now();
-
-		// Grace period of one window. Home Assistant resets timestamps on restart, so before it elapses "silent
-		// since start-up" and "only just started" look the same.
-		if (now - _startedAt < _staleAfter)
-			return false;
-
-		return now - reported > _staleAfter;
-	}
+	// The one place the area's darkness reading is taken. Free of side effects, so reading the number cannot
+	// disturb what DarknessDetail says about the last verdict.
+	public double? ReadLux() => _reader.Read();
 
 	/// <summary>The lux verdict: dark with no sensor, <c>null</c> when sensors exist but none reports, otherwise the average against the threshold.</summary>
 	// No sensor is dark: with no reading the lux gate has nothing to refuse on. Hysteresis is one-sided,
@@ -198,7 +120,7 @@ public sealed class IlluminanceGate
 			return true;
 		}
 
-		double? reading = AverageLux(out int used, out int offered);
+		double? reading = _reader.Read(out int used, out int offered);
 		_lastLuxUsed = used;
 		_lastLuxOffered = offered;
 
@@ -239,7 +161,7 @@ public sealed class IlluminanceGate
 				"Darkness source is Lux and the area has {Count} lux sensor(s) ({Sensors}), but none of them is reporting a "
 				+ "usable number: unavailable, unknown, or silent for longer than the staleness window. The area counts as "
 				+ "dark until one of them answers again, so movement will light it.",
-				_luxEntityIds.Count, string.Join(", ", _luxEntityIds));
+				_reader.EntityIds.Count, string.Join(", ", _reader.EntityIds));
 		}
 
 		return true;

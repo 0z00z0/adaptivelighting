@@ -21,6 +21,11 @@ public sealed record LightTarget(
 	int ColorTempKelvin,
 	RoomLevelSource FromRoom = RoomLevelSource.None)
 {
+	/// <summary>Whether the period in force hands its brightness to the daylight curve.</summary>
+	// Carried from the active period alone, as FromRoom is, so a blend across a boundary cannot report one
+	// period's name beside the other's rule.
+	public bool UsesDaylightCurve { get; init; }
+
 	// The physical bound a lamp can take, and nothing else: a period imposes no floor or ceiling.
 	public double Clamp(double brightnessPct) => Math.Clamp(brightnessPct, 0, 100);
 }
@@ -220,7 +225,10 @@ public sealed class CircadianCalculator
 	// One path for both, so a room's own replacement is clamped the same way the schedule's value is.
 	private static LightTarget ToTarget(TimePeriodConfig period, PeriodLevels levels)
 	{
-		LightTarget target = new(period.Name, levels.BrightnessPct, levels.ColorTempKelvin, levels.FromRoom);
+		LightTarget target = new(period.Name, levels.BrightnessPct, levels.ColorTempKelvin, levels.FromRoom)
+		{
+			UsesDaylightCurve = period.UseDaylightCurve
+		};
 
 		return target with { BrightnessPct = target.Clamp(levels.BrightnessPct) };
 	}

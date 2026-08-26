@@ -8,7 +8,7 @@ using Microsoft.Reactive.Testing;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
-/// <summary>The daylight brightness adjustment as the area uses it: which sensor it reads, when it is re-evaluated, and what outranks it.</summary>
+/// <summary>The daylight curve as the area uses it: which sensor it reads, when it is re-evaluated, and what outranks it.</summary>
 // Every fixture gates on DarknessSource.Always; any other source lets a bright reading answer "do not light
 // this room".
 [TestClass]
@@ -38,12 +38,15 @@ public sealed class LuxBrightnessControllerTests
 	};
 
 	/// <summary>A started area at 20:00, inside "evening", whose 70 % is the number every assertion moves from.</summary>
+	// The curve's dark end is 70 too, so a dark reading and the period's own number agree: every assertion that
+	// moves off 70 is the curve doing something, and never the mode choice alone.
 	private static Fixture Build(
 		Action<AreaSettings>? tweak = null,
+		bool eveningOnTheCurve = false,
 		string lux = "5",
 		string? luxSensor = Lux,
 		string? outdoorLux = null,
-		bool followOutdoorLux = false,
+		string? daylightSensor = null,
 		HouseModeConfig? houseMode = null)
 	{
 		TestScheduler scheduler = new();
@@ -64,6 +67,7 @@ public sealed class LuxBrightnessControllerTests
 			Darkness = DarknessSource.Always,
 			LuxBrightnessStartLux = 100,
 			LuxBrightnessFullLux = 10000,
+			LuxBrightnessMinPct = 70,
 			LuxBrightnessMaxPct = 100
 		};
 		tweak?.Invoke(settings);
@@ -79,12 +83,16 @@ public sealed class LuxBrightnessControllerTests
 		List<TimePeriodConfig> table =
 		[
 			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700, UseDaylightCurve = eveningOnTheCurve },
 			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		];
 
 		ResolvedArea area = new(
-			"Hallway", settings, [Light], [Motion], luxSensor is null ? [] : [luxSensor], [], followOutdoorLux);
+			"Hallway", settings, [Light], [Motion], luxSensor is null ? [] : [luxSensor], [])
+		{
+			DaylightSensor = daylightSensor
+		};
+
 		FakeLightActuator actuator = new();
 		BehaviorSubject<HouseState> house = new(HouseState.Initial);
 
@@ -106,113 +114,116 @@ public sealed class LuxBrightnessControllerTests
 		return fixture.Actuator.Last!.BrightnessPct!.Value;
 	}
 
-	// ===================== off is off =====================
+	// ===================== a period that states its own brightness =====================
 
 	[TestMethod]
-	public void With_The_Feature_Off_A_Blazing_Sensor_Changes_Nothing()
+	public void A_Period_Off_The_Curve_Ignores_A_Blazing_Sky()
 	{
-		Assert.AreEqual(70d, CommandedOnMotion(Build(lux: "20000")));
+		Assert.AreEqual(70d, CommandedOnMotion(Build(outdoorLux: "20000")));
 	}
 
 	[TestMethod]
-	public void With_The_Feature_Off_A_Changing_Reading_Commands_Nothing_On_A_Tick()
+	public void A_Period_Off_The_Curve_Commands_Nothing_On_A_Tick()
 	{
-		Fixture area = Build(lux: "5");
+		Fixture area = Build(outdoorLux: "5");
 		CommandedOnMotion(area);
 		area.Actuator.Clear();
 
-		area.Ha.SetState(Lux, "20000");
+		area.Ha.SetState(OutdoorLux, "20000");
 		area.Scheduler.AdvanceBy(TimeSpan.FromSeconds(90).Ticks);
 
 		Assert.AreEqual(0, area.Actuator.Applied.Count,
-			"the tick re-reads the world, but with the feature off the world it reads has not moved");
+			"the tick re-reads the world, but a period that states its own brightness does not care what it reads");
 	}
 
-	// ===================== on =====================
+	// ===================== a period on the curve =====================
 
 	[TestMethod]
-	public void A_Dark_Reading_Still_Gives_The_Schedules_Level()
+	public void A_Dark_Reading_Gives_The_Curves_Dark_End()
 	{
-		Assert.AreEqual(70d, CommandedOnMotion(Build(settings => settings.LuxBrightnessEnabled = true, lux: "5")));
-	}
-
-	[TestMethod]
-	public void A_Bright_Reading_Raises_The_Room_To_The_Ceiling()
-	{
-		Assert.AreEqual(100d, CommandedOnMotion(Build(settings => settings.LuxBrightnessEnabled = true, lux: "20000")));
+		Assert.AreEqual(70d, CommandedOnMotion(Build(eveningOnTheCurve: true, outdoorLux: "5")));
 	}
 
 	[TestMethod]
-	public void The_Log_Midpoint_Lands_Halfway_Between_The_Schedule_And_The_Ceiling()
+	public void A_Bright_Reading_Gives_The_Curves_Bright_End()
 	{
-		double commanded = CommandedOnMotion(Build(settings => settings.LuxBrightnessEnabled = true, lux: "1000"));
-
-		Assert.AreEqual(85, commanded, 1e-9, "70 % plus half of the 30 points of headroom");
+		Assert.AreEqual(100d, CommandedOnMotion(Build(eveningOnTheCurve: true, outdoorLux: "20000")));
 	}
 
 	[TestMethod]
-	public void An_Unavailable_Sensor_Falls_Back_To_The_Schedule()
+	public void The_Log_Midpoint_Lands_Halfway_Between_The_Curves_Two_Ends()
 	{
-		Assert.AreEqual(70d, CommandedOnMotion(Build(settings => settings.LuxBrightnessEnabled = true, lux: "unavailable")));
+		double commanded = CommandedOnMotion(Build(eveningOnTheCurve: true, outdoorLux: "1000"));
+
+		Assert.AreEqual(85, commanded, 1e-9, "70 % plus half of the 30 points between the two ends");
+	}
+
+	/// <summary>The period's own number is gone, not merely hidden: the curve answers the same whatever it says.</summary>
+	[TestMethod]
+	public void The_Periods_Own_Percentage_No_Longer_Reaches_The_Lights()
+	{
+		Fixture area = Build(eveningOnTheCurve: true, outdoorLux: "20000");
+
+		Assert.AreEqual(100d, CommandedOnMotion(area), "and the period asked for 70");
+	}
+
+	[TestMethod]
+	public void An_Unavailable_Sensor_Holds_The_Curves_Dark_End()
+	{
+		Assert.AreEqual(70d, CommandedOnMotion(Build(eveningOnTheCurve: true, outdoorLux: "unavailable")));
 	}
 
 	// ===================== which sensor =====================
 
-	// The curve reads whatever the darkness gate reads, one sensor per room, and the outdoor sensor is opt-in.
 	[TestMethod]
-	public void A_Room_That_Follows_The_Outdoor_Sensor_Brightens_With_It()
+	public void The_Curve_Reads_The_Houses_Outdoor_Sensor()
 	{
-		Fixture area = Build(
-			settings => settings.LuxBrightnessEnabled = true,
-			luxSensor: null,
-			outdoorLux: "20000",
-			followOutdoorLux: true);
+		Fixture area = Build(eveningOnTheCurve: true, lux: "5", outdoorLux: "20000");
 
-		Assert.AreEqual(100d, CommandedOnMotion(area));
+		Assert.AreEqual(100d, CommandedOnMotion(area),
+			"the room's own indoor sensor reads 5 lx, and the curve is not reading it");
 	}
 
+	/// <summary>An indoor sensor measures the room's own lamps, so the darkness sensor never feeds the curve.</summary>
 	[TestMethod]
-	public void A_Room_That_Did_Not_Ask_Keeps_The_Schedules_Brightness()
+	public void The_Curve_Does_Not_Read_The_Darkness_Sensor()
 	{
-		Fixture area = Build(
-			settings => settings.LuxBrightnessEnabled = true,
-			luxSensor: null,
-			outdoorLux: "20000");
+		Fixture area = Build(eveningOnTheCurve: true, lux: "20000", outdoorLux: "5");
 
 		Assert.AreEqual(70d, CommandedOnMotion(area),
-			"blazing outside, but this room never asked to look — so the schedule stands, as it did before the feature existed");
+			"the room's own sensor is blazing and the sky is dark; the curve follows the sky");
 	}
 
 	[TestMethod]
-	public void A_Room_With_Its_Own_Sensor_Ignores_The_Outdoor_One()
+	public void A_Room_Can_Override_Which_Sensor_The_Curve_Reads()
 	{
-		Fixture area = Build(
-			settings => settings.LuxBrightnessEnabled = true,
-			lux: "5",
-			outdoorLux: "20000");
+		Fixture area = Build(eveningOnTheCurve: true, lux: "20000", outdoorLux: "5", daylightSensor: Lux);
 
-		Assert.AreEqual(70d, CommandedOnMotion(area));
+		Assert.AreEqual(100d, CommandedOnMotion(area),
+			"named for this room, the sensor the curve refused above is exactly the one it now reads");
 	}
 
 	[TestMethod]
-	public void A_Room_With_No_Sensor_Anywhere_Keeps_The_Schedule()
+	public void With_No_Sensor_Named_Anywhere_The_Curve_Holds_Its_Dark_End()
 	{
-		Fixture area = Build(settings => settings.LuxBrightnessEnabled = true, luxSensor: null);
+		Fixture area = Build(eveningOnTheCurve: true, lux: "20000", luxSensor: Lux);
 
-		Assert.AreEqual(70d, CommandedOnMotion(area));
+		Assert.AreEqual(70d, CommandedOnMotion(area),
+			"no outdoor sensor and no room override is a level nobody chose, which is what the validator warns about");
 	}
 
 	// ===================== the tick is what notices =====================
 
-	// Nothing subscribes to the lux sensor, so the tick is the only thing that notices, and the adjustment applies where the target is resolved.
+	// Nothing subscribes to the lux sensor, so the tick is the only thing that notices, and the curve applies
+	// where the target is resolved.
 	[TestMethod]
 	public void The_Tick_Retargets_When_It_Gets_Brighter_Outside()
 	{
-		Fixture area = Build(settings => settings.LuxBrightnessEnabled = true, lux: "5");
+		Fixture area = Build(eveningOnTheCurve: true, outdoorLux: "5");
 		Assert.AreEqual(70d, CommandedOnMotion(area));
 		area.Actuator.Clear();
 
-		area.Ha.SetState(Lux, "20000");
+		area.Ha.SetState(OutdoorLux, "20000");
 		area.Scheduler.AdvanceBy(TimeSpan.FromSeconds(90).Ticks);
 
 		Assert.AreEqual(100d, area.Actuator.Last?.BrightnessPct);
@@ -220,21 +231,17 @@ public sealed class LuxBrightnessControllerTests
 
 	// ===================== what still outranks it =====================
 
-
-	// Ordering: the sleep clamp runs after the daylight adjustment, or an afternoon nap keeps the raised level.
+	// Ordering: the sleep clamp runs after the curve, or an afternoon nap keeps the daylight level.
 	[TestMethod]
 	public void The_Sleep_Clamp_Beats_A_Bright_Reading()
 	{
 		Fixture area = Build(
-			settings =>
-			{
-				settings.LuxBrightnessEnabled = true;
-				settings.RespectSleepMode = true;
-			},
-			lux: "20000",
+			settings => settings.RespectSleepMode = true,
+			eveningOnTheCurve: true,
+			outdoorLux: "20000",
 			houseMode: SoverMode());
 
-		Assert.AreEqual(100d, CommandedOnMotion(area), "awake, the bright sky takes the hallway to the ceiling");
+		Assert.AreEqual(100d, CommandedOnMotion(area), "awake, the bright sky takes the hallway to the curve's top");
 
 		area.House.OnNext(new HouseState(true, ModeKind.Sleep, false) { ModeValue = "Sover" });
 
@@ -243,20 +250,79 @@ public sealed class LuxBrightnessControllerTests
 
 	// The pre-off dim is a fraction of what the room is holding, not of the schedule's level.
 	[TestMethod]
-	public void The_Pre_Off_Dim_Is_Half_Of_The_Raised_Level()
+	public void The_Pre_Off_Dim_Is_Half_Of_The_Curves_Level()
 	{
 		Fixture area = Build(
-			settings =>
-			{
-				settings.LuxBrightnessEnabled = true;
-				settings.PreOffBrightnessFactor = 0.5;
-			},
-			lux: "20000");
+			settings => settings.PreOffBrightnessFactor = 0.5,
+			eveningOnTheCurve: true,
+			outdoorLux: "20000");
 
 		Assert.AreEqual(100d, CommandedOnMotion(area));
 
 		area.Scheduler.AdvanceBy(TimeSpan.FromSeconds(601).Ticks);
 
 		Assert.AreEqual(50d, area.Actuator.Last?.BrightnessPct);
+	}
+
+	// ===================== several periods on the curve =====================
+
+	/// <summary>The curve spans every period that claims it, and each takes the same reading.</summary>
+	[TestMethod]
+	public void Every_Period_On_The_Curve_Takes_The_Same_Level()
+	{
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		FakeHaContext ha = new();
+		ha.SetState(Motion, "off");
+		ha.SetState(Light, "off");
+		ha.SetState(OutdoorLux, "20000");
+
+		// Long enough that nothing goes empty over the twelve hours advanced below.
+		AreaSettings settings = new()
+		{
+			VacancyTimeoutSeconds = 100_000,
+			Darkness = DarknessSource.Always,
+			LuxBrightnessStartLux = 100,
+			LuxBrightnessFullLux = 10000,
+			LuxBrightnessMinPct = 70,
+			LuxBrightnessMaxPct = 100
+		};
+
+		GlobalConfig global = new()
+		{
+			SmoothTransitions = false,
+			CircadianTickSeconds = 60,
+			OutdoorLuxSensor = OutdoorLux
+		};
+
+		List<TimePeriodConfig> table =
+		[
+			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500, UseDaylightCurve = true },
+			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700, UseDaylightCurve = true }
+		];
+
+		CircadianCalculator circadian = new(table, global, () => SunTimes.Unknown, zone: TimeZoneInfo.Utc);
+
+		ResolvedArea area = new("Hallway", settings, [Light], [Motion], [], []);
+		FakeLightActuator actuator = new();
+
+		AreaController controller = new(
+			ha, scheduler, area, global, table, circadian,
+			actuator, new FakeStatePublisher(), new BehaviorSubject<HouseState>(HouseState.Initial),
+			NullLoggerFactory.Instance, areaId: "hallway");
+
+		controller.Start();
+		ha.Trigger(Motion, "on");
+
+		Assert.AreEqual(100d, actuator.Last?.BrightnessPct, "evening, on the curve, at 20 000 lx");
+		Assert.AreEqual(2700, actuator.Last?.ColorTempKelvin);
+
+		// Into "day", whose own 90 % differs from evening's 70 %, so an inherited period level would show here.
+		// The warmth is what proves the boundary was crossed: the two levels are the same, which is the claim.
+		scheduler.AdvanceBy(TimeSpan.FromHours(12).Ticks);
+
+		Assert.AreEqual(4500, actuator.Last?.ColorTempKelvin, "the day period is in force now");
+		Assert.AreEqual(100d, actuator.Last?.BrightnessPct, "and day, on the same curve, at the same reading");
 	}
 }

@@ -2,8 +2,8 @@
 @inject ILogger<LuxCurveChart> Logger
 @implements IAsyncDisposable
 
-@* The x axis is logarithmic and every y on the line comes from LuxBrightnessCurve.Raise, so the picture is
-   the engine's own arithmetic. Nothing here writes: every change leaves as a CurveEdit. *@
+@* The x axis is logarithmic and every y on the line comes from LuxBrightnessCurve.Brightness, so the picture
+   is the engine's own arithmetic. Nothing here writes: every change leaves as a CurveEdit. *@
 
 <div class="luxc @(_grip == Grip.None ? null : "luxc-dragging")">
 	<div class="luxc-plot">
@@ -25,11 +25,11 @@
 							r="7"
 							tabindex="0"
 							role="slider"
-							aria-label="Daylight level where brightening starts"
+							aria-label="Where the curve starts to climb, and how bright the room is below it"
 							aria-valuemin="@LuxCurve.Num(StartSetting.Min)"
 							aria-valuemax="@LuxCurve.Num(StartSetting.Max ?? LuxCurve.AxisMaxCeilingLux)"
 							aria-valuenow="@LuxCurve.Num(Settings.LuxBrightnessStartLux)"
-							aria-valuetext="@LuxCurve.Lux(Settings.LuxBrightnessStartLux)"
+							aria-valuetext="@($"{LuxCurve.Lux(Settings.LuxBrightnessStartLux)}, {TokenFormat.Percent(Settings.LuxBrightnessMinPct)}")"
 							@onkeydown="@(args => OnKey(Grip.Start, args))" />
 				}
 
@@ -41,7 +41,7 @@
 							r="7"
 							tabindex="0"
 							role="slider"
-							aria-label="Daylight level for full brightness, and the brightest this room goes"
+							aria-label="Where the curve reaches its top, and how bright that is"
 							aria-valuemin="@LuxCurve.Num(FullSetting.Min)"
 							aria-valuemax="@LuxCurve.Num(FullSetting.Max ?? LuxCurve.AxisMaxCeilingLux)"
 							aria-valuenow="@LuxCurve.Num(Settings.LuxBrightnessFullLux)"
@@ -89,13 +89,9 @@
 	[Parameter, EditorRequired]
 	public AreaSettings Settings { get; set; } = new();
 
-	/// <summary>The level the curve rises from: what the period in force asks this room for.</summary>
+	/// <summary>The periods that follow the curve, so the caption can name them.</summary>
 	[Parameter]
-	public double BaseBrightnessPct { get; set; } = 80;
-
-	/// <summary>The period the base level came from, so the caption can name it.</summary>
-	[Parameter]
-	public string? PeriodName { get; set; }
+	public IReadOnlyList<string> PeriodNames { get; set; } = [];
 
 	/// <summary>The room's light-level reading right now, or <c>null</c> when no sensor answers.</summary>
 	[Parameter]
@@ -130,6 +126,8 @@
 
 	private static RoomSetting FullSetting => RoomSettings.Of(nameof(AreaSettings.LuxBrightnessFullLux));
 
+	private static RoomSetting MinSetting => RoomSettings.Of(nameof(AreaSettings.LuxBrightnessMinPct));
+
 	private static RoomSetting MaxSetting => RoomSettings.Of(nameof(AreaSettings.LuxBrightnessMaxPct));
 
 	private static RoomSetting ShapeSetting => RoomSettings.Of(nameof(AreaSettings.LuxBrightnessGamma));
@@ -140,12 +138,10 @@
 	private void Rebuild()
 	{
 		_axisMax = LuxCurve.AxisMaxLux(Settings, Reading);
-		_path = LuxCurve.Path(Settings, BaseBrightnessPct, _axisMax);
-		_start = LuxCurve.StartHandle(Settings, BaseBrightnessPct, _axisMax);
+		_path = LuxCurve.Path(Settings, _axisMax);
+		_start = LuxCurve.StartHandle(Settings, _axisMax);
 		_full = LuxCurve.FullHandle(Settings, _axisMax);
-		_shape = LuxCurve.HasHeadroom(Settings, BaseBrightnessPct)
-			? LuxCurve.ShapeHandle(Settings, BaseBrightnessPct, _axisMax)
-			: null;
+		_shape = LuxCurve.HasSpan(Settings) ? LuxCurve.ShapeHandle(Settings, _axisMax) : null;
 
 		_backdrop = Backdrop();
 	}
@@ -232,26 +228,27 @@
 	/// <summary>Turns a position in the plot into the settings the held handle stands for.</summary>
 	private Task Apply(double x, double y) => _grip switch
 	{
-		Grip.Start => SetStartLux(LuxCurve.RoundLux(LuxCurve.LuxAt(x, _axisMax))),
+		Grip.Start => SetStart(LuxCurve.RoundLux(LuxCurve.LuxAt(x, _axisMax)), Math.Round((1 - Math.Clamp(y, 0, 1)) * 100)),
 		Grip.Full => SetFull(LuxCurve.RoundLux(LuxCurve.LuxAt(x, _axisMax)), Math.Round((1 - Math.Clamp(y, 0, 1)) * 100)),
 		Grip.Shape => SetGamma(GammaAt(y)),
 		_ => Task.CompletedTask
 	};
 
 	/// <summary>The exponent that puts the curve through a dragged point.</summary>
-	// Read as a position within the headroom and not as a brightness, which is what the engine's shaping acts
-	// on, so the same drag means a different exponent under a period asking 20 % than under one asking 70 %.
+	// Read as a position across the span between the curve's two ends, which is what the engine's shaping acts
+	// on, so the same drag means a different exponent under a wide span than under a narrow one.
 	private double GammaAt(double y)
 	{
 		double brightness = (1 - Math.Clamp(y, 0, 1)) * 100;
-		double headroom = Settings.LuxBrightnessMaxPct - BaseBrightnessPct;
+		double span = Settings.LuxBrightnessMaxPct - Settings.LuxBrightnessMinPct;
 
-		if (headroom <= 0)
+		// Signed, so a curve dragged to fall still shapes; only a flat one has nothing to shape.
+		if (Math.Abs(span) < 0.5)
 			return Settings.LuxBrightnessGamma;
 
 		double gamma = LuxCurve.GammaFor(
 			LuxCurve.ShapeFraction,
-			(brightness - BaseBrightnessPct) / headroom,
+			(brightness - Settings.LuxBrightnessMinPct) / span,
 			ShapeSetting.Min,
 			ShapeSetting.Max ?? 5);
 
@@ -259,15 +256,19 @@
 		return Math.Round(gamma / ShapeSetting.Step, MidpointRounding.AwayFromZero) * ShapeSetting.Step;
 	}
 
-	/// <summary>Moves the foot of the curve, keeping it below the head. The validator refuses anchors that cross.</summary>
-	private Task SetStartLux(double lux)
+	/// <summary>Moves the dark end: the reading the climb starts at, and the level held below it.</summary>
+	// The lux anchor is kept under the bright end's; the validator refuses anchors that cross. The brightness is
+	// bounded by 0-100 alone, so the curve may be dragged to fall as readily as to rise.
+	private async Task SetStart(double lux, double brightnessPct)
 	{
 		double ceiling = Math.Max(StartSetting.Min, Settings.LuxBrightnessFullLux - 1);
 
-		return Raise(nameof(AreaSettings.LuxBrightnessStartLux), Math.Clamp(lux, StartSetting.Min, ceiling));
+		await Raise(nameof(AreaSettings.LuxBrightnessStartLux), Math.Clamp(lux, StartSetting.Min, ceiling)).ConfigureAwait(true);
+		await Raise(nameof(AreaSettings.LuxBrightnessMinPct),
+			Math.Clamp(brightnessPct, MinSetting.Min, MinSetting.Max ?? 100)).ConfigureAwait(true);
 	}
 
-	/// <summary>Moves the head of the curve: the reading full brightness happens at, and how bright that is.</summary>
+	/// <summary>Moves the bright end: the reading the curve tops out at, and how bright that is.</summary>
 	// The ceiling yields to the floor, never the reverse. StartLux has no configured maximum, so a saved
 	// { StartLux: 120000, FullLux: 200000 } puts the derived floor above the axis ceiling, and Math.Clamp throws
 	// when min > max, which out of an event handler takes the circuit down.
@@ -306,7 +307,8 @@
 
 		return (grip, horizontal) switch
 		{
-			(Grip.Start, true) => SetStartLux(LuxCurve.RoundLux(Nudge(Settings.LuxBrightnessStartLux, direction))),
+			(Grip.Start, true) => SetStart(LuxCurve.RoundLux(Nudge(Settings.LuxBrightnessStartLux, direction)), Settings.LuxBrightnessMinPct),
+			(Grip.Start, false) => SetStart(Settings.LuxBrightnessStartLux, Settings.LuxBrightnessMinPct + (direction * MinSetting.Step)),
 			(Grip.Full, true) => SetFull(LuxCurve.RoundLux(Nudge(Settings.LuxBrightnessFullLux, direction)), Settings.LuxBrightnessMaxPct),
 			(Grip.Full, false) => SetFull(Settings.LuxBrightnessFullLux, Settings.LuxBrightnessMaxPct + (direction * MaxSetting.Step)),
 			(Grip.Shape, false) => SetGamma(Settings.LuxBrightnessGamma - (direction * ShapeSetting.Step)),
@@ -365,7 +367,7 @@
 		if (Reading is { } reading)
 		{
 			double x = LuxCurve.X(LuxCurve.FractionOf(reading, _axisMax));
-			double y = LuxCurve.Y(LuxBrightnessCurve.Raise(BaseBrightnessPct, reading, Settings));
+			double y = LuxCurve.Y(LuxBrightnessCurve.Brightness(reading, Settings));
 
 			svg.Append($"<line x1=\"{LuxCurve.Num(x)}\" y1=\"0\" x2=\"{LuxCurve.Num(x)}\" y2=\"{LuxCurve.Num(LuxCurve.PlotHeight)}\" class=\"luxc-now\" />");
 			svg.Append($"<circle cx=\"{LuxCurve.Num(x)}\" cy=\"{LuxCurve.Num(y)}\" r=\"3.5\" class=\"luxc-now-dot\" />");
@@ -396,28 +398,33 @@
 	{
 		get
 		{
-			string from = PeriodName is { Length: > 0 } period
-				? $"From {period}'s {TokenFormat.Percent(BaseBrightnessPct)}"
-				: $"From {TokenFormat.Percent(BaseBrightnessPct)}";
-
 			string line =
-				$"{from}, this room climbs to {TokenFormat.Percent(Settings.LuxBrightnessMaxPct)} as the light outside "
-				+ $"goes from {LuxCurve.Lux(Settings.LuxBrightnessStartLux)} to {LuxCurve.Lux(Settings.LuxBrightnessFullLux)} — "
-				+ $"{CurvePath.Describe(Settings.LuxBrightnessGamma)}.";
+				$"{Follows} {TokenFormat.Percent(Settings.LuxBrightnessMinPct)} at "
+				+ $"{LuxCurve.Lux(Settings.LuxBrightnessStartLux)} or under, "
+				+ $"{TokenFormat.Percent(Settings.LuxBrightnessMaxPct)} from "
+				+ $"{LuxCurve.Lux(Settings.LuxBrightnessFullLux)} — {CurvePath.Describe(Settings.LuxBrightnessGamma)}.";
 
 			if (Reading is { } reading)
 			{
-				double raised = LuxBrightnessCurve.Raise(BaseBrightnessPct, reading, Settings);
-				line += $" It reads {LuxCurve.Lux(reading)} right now, which asks for {TokenFormat.Percent(Math.Round(raised))}.";
+				double brightness = LuxBrightnessCurve.Brightness(reading, Settings);
+				line += $" It reads {LuxCurve.Lux(reading)} outside now, so {TokenFormat.Percent(Math.Round(brightness))}.";
 			}
 			else
 			{
-				line += " This room has no light-level sensor, so nothing lifts it.";
+				line += " Nothing is reading the light outside, so the room stays at the level on the left.";
 			}
 
 			return line;
 		}
 	}
+
+	/// <summary>Which periods this curve speaks for, as the caption opens.</summary>
+	private string Follows => PeriodNames.Count switch
+	{
+		0 => "This room follows the light outside:",
+		1 => $"{PeriodNames[0]} follows the light outside:",
+		_ => $"{string.Join(", ", PeriodNames.Take(PeriodNames.Count - 1))} and {PeriodNames[^1]} follow the light outside:"
+	};
 
 	private static string Escape(string text) =>
 		text.Replace("&", "&amp;", StringComparison.Ordinal)

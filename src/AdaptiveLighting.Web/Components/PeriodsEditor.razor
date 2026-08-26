@@ -139,17 +139,38 @@
 				}
 
 				<div class="pfield">
+					@{
+						TimePeriodConfig levelPeriod = period;
+					}
 					<span class="pfield-label">
 						Brightness
 						<InfoPopover Label="Brightness">
-							How bright every managed room is held during this period, as a percentage. The two limits
-							below clamp it, and a room set to brighten with daylight can be lifted above it.
+							How bright every managed room is during this period. Either you say the number, or the
+							daylight curve says it — on the curve the room follows the light outside instead, and the
+							number below is kept but does nothing. Each room can shape its own curve.
 						</InfoPopover>
 					</span>
-					<PresetSelect Value="@period.BrightnessPct"
-								  ValueChanged="@(value => Set(() => period.BrightnessPct = value))"
-								  Options="@Presets.BrightnessPct"
-								  Unit="%" />
+					<select class="cell wide"
+							aria-label="Where this period's brightness comes from"
+							@bind:get="BrightnessModeOf(levelPeriod)"
+							@bind:set="@(value => SetBrightnessMode(levelPeriod, value))">
+						<option value="@SpecifyMode">Specify brightness</option>
+						<option value="@CurveMode">Use daylight curve</option>
+					</select>
+
+					@if (!period.UseDaylightCurve)
+					{
+						<PresetSelect Value="@period.BrightnessPct"
+									  ValueChanged="@(value => Set(() => period.BrightnessPct = value))"
+									  Options="@Presets.BrightnessPct"
+									  Unit="%" />
+					}
+					else
+					{
+						<div class="pfield-help">
+							The light outside decides. Shape the curve in any room's settings.
+						</div>
+					}
 				</div>
 
 				<div class="pfield">
@@ -222,6 +243,10 @@
 	[Parameter]
 	public GlobalConfig? Global { get; set; }
 
+	/// <summary>The house's baseline settings, edited in place when the curve is first claimed.</summary>
+	[Parameter, EditorRequired]
+	public AreaSettings Defaults { get; set; } = new();
+
 	private bool HasHouseMode => HouseMode?.Entity is { Length: > 0 };
 
 	// Under Home Assistant's period authority the Start fields decide nothing: the engine takes the period from
@@ -288,8 +313,21 @@
 			: period.Start;
 	}
 
+	private const string SpecifyMode = "specify";
+	private const string CurveMode = "curve";
+
+	private static string BrightnessModeOf(TimePeriodConfig period) => period.UseDaylightCurve ? CurveMode : SpecifyMode;
+
+	// The percentage is left where it is, so switching back restores what was typed. The first period to claim
+	// the curve seeds its dark end; see DaylightCurveMode.
+	private Task SetBrightnessMode(TimePeriodConfig period, string value) =>
+		Set(() => DaylightCurveMode.Set(
+			Periods, Defaults, period, string.Equals(value, CurveMode, StringComparison.Ordinal)));
+
 	private static string LevelSummary(TimePeriodConfig period) =>
-		string.Create(CultureInfo.InvariantCulture, $"{Math.Round(period.BrightnessPct)}% · {period.ColorTempKelvin}K");
+		period.UseDaylightCurve
+			? string.Create(CultureInfo.InvariantCulture, $"daylight · {period.ColorTempKelvin}K")
+			: string.Create(CultureInfo.InvariantCulture, $"{Math.Round(period.BrightnessPct)}% · {period.ColorTempKelvin}K");
 
 	/// <summary>The document's rooms as the picker offers them: named for a reader, valued as the area id.</summary>
 	private IReadOnlyList<EntityOption> MotionAreaOptions =>
