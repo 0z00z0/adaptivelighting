@@ -17,10 +17,12 @@ public sealed class RoomSettingsTests
 
 	// ===================== the sections =====================
 
+	// AllKeys, not Key: a stepped row writes more than one schema key, and every one of them still has to belong
+	// to a section.
 	[TestMethod]
 	public void Every_Overridable_Setting_Belongs_To_Exactly_One_Section()
 	{
-		string[] sectioned = [.. AllSettings.Select(setting => setting.Key)];
+		string[] sectioned = [.. AllSettings.SelectMany(setting => setting.AllKeys)];
 
 		CollectionAssert.AreEquivalent(
 			RoomSettings.Keys.ToArray(),
@@ -134,9 +136,15 @@ public sealed class RoomSettingsTests
 		{
 			Own(room, setting);
 
-			Assert.IsTrue(RoomSettings.IsOwn(room, setting.Key), $"{setting.Key} should now be the room's own");
+			foreach (string key in setting.AllKeys)
+				Assert.IsTrue(RoomSettings.IsOwn(room, key), $"{key} should now be the room's own");
+
 			Assert.IsTrue(RoomSettings.Clear(room, setting.Key), $"{setting.Key} must be revertable");
-			Assert.IsFalse(RoomSettings.IsOwn(room, setting.Key), $"{setting.Key} must follow the house again");
+
+			// Every key the row writes, not only the one it is filed under: half a stepped rule left pinned still
+			// reads as the room deciding its own night behaviour.
+			foreach (string key in setting.AllKeys)
+				Assert.IsFalse(RoomSettings.IsOwn(room, key), $"{key} must follow the house again");
 		}
 
 		Assert.AreEqual(0, RoomSettings.OwnCount(room));
@@ -470,7 +478,7 @@ public sealed class RoomSettingsTests
 		AreaSettings house = House;
 		AreaConfig room = new();
 
-		foreach (RoomSetting setting in AllSettings.Where(item => item.Control is not (RoomControl.Flag or RoomControl.Choice or RoomControl.Entity)))
+		foreach (RoomSetting setting in AllSettings.Where(item => item.Control is not (RoomControl.Flag or RoomControl.Choice or RoomControl.Steps or RoomControl.Entity)))
 		{
 			double shown = Math.Max(setting.Min, 5);
 
@@ -596,6 +604,10 @@ public sealed class RoomSettingsTests
 		{
 			case RoomControl.Flag:
 				RoomSettings.SetFlag(room, setting.Key, true);
+				break;
+
+			case RoomControl.Steps:
+				SleepSteps.Set(room, SleepStep.DimsAndStaysOff);
 				break;
 
 			// Keyed: there is more than one choice-typed setting, and setting Darkness for all of them leaves the

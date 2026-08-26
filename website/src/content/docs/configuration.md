@@ -107,10 +107,14 @@ the Configuration page says so.
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
 | **How warmth reaches these lights** | Most lights take a colour temperature in kelvin. Plain dimmers and colour strips do not, and those are driven with every channel at one value, which is neutral white. Left to **Detect from the lights** it reads the room's own fixtures. | Detect from the lights | `ColorControl` |
-| **Gentle while the house sleeps** | Held to the night period's limits, so a 03:00 glass of water gets a dim light. | off | `RespectSleepMode` |
-| **Never comes on by itself while the house sleeps** | For the bedroom itself. The wall switch still works. | off | `SleepBlocksAutoOn` |
+| **While the house sleeps** | Three steps. **Normal** treats the small hours like any other. **Dims** holds the room to the night period's limits, so a 03:00 glass of water gets a dim light. **Dims and stays off** also leaves movement unanswered — for the bedroom itself. The wall switch works at every step. | Normal | `RespectSleepMode` and `SleepBlocksAutoOn` |
 | **Stays on when everyone leaves** | For porch and security lights. | off | `SkipAwaySweep` |
 | **Lights up when the first person comes home** | Comes on to meet them if the house is dark, instead of waiting for a motion sensor. | off | `WelcomeHome` |
+
+*While the house sleeps* is one control over two fields: **Normal** is `false`/`false`, **Dims** is
+`true`/`false`, and **Dims and stays off** is `true`/`true`. A hand-written file may set
+`SleepBlocksAutoOn` without `RespectSleepMode`; it loads and runs, and the control shows it as **Dims and
+stays off**.
 
 ### Rarely needed
 

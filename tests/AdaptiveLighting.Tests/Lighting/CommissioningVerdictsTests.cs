@@ -114,12 +114,26 @@ public sealed class CommissioningVerdictsTests
 	// ===================== the role guesses =====================
 
 	[TestMethod]
-	public void The_Sleep_Flags_Read_As_Bedroom_Manners()
+	public void Any_Step_Above_Normal_Reads_As_Quiet_While_The_House_Sleeps()
 	{
-		AreaConfig room = new() { AreaId = "soverom", RespectSleepMode = true, SleepBlocksAutoOn = true };
+		foreach (SleepStep step in new[] { SleepStep.Dims, SleepStep.DimsAndStaysOff })
+		{
+			AreaConfig room = new() { AreaId = "soverom" };
+			SleepSteps.Set(room, step);
 
-		CollectionAssert.AreEqual(new[] { "bedroom manners" }, (System.Collections.ICollection)Words(
-			CommissioningVerdicts.For(room, Defaults, 1, 0, 2)));
+			CollectionAssert.AreEqual(
+				new[] { "quiet while the house sleeps" },
+				(System.Collections.ICollection)Words(CommissioningVerdicts.For(room, Defaults, 1, 0, 2)),
+				$"{step} is a night rule the roll call has to report");
+		}
+
+		AreaConfig plain = new() { AreaId = "soverom" };
+		SleepSteps.Set(plain, SleepStep.Normal);
+
+		CollectionAssert.DoesNotContain(
+			(System.Collections.ICollection)Words(CommissioningVerdicts.For(plain, Defaults, 1, 0, 2)),
+			"quiet while the house sleeps",
+			"a room on the first step has no night rule to report");
 	}
 
 	[TestMethod]

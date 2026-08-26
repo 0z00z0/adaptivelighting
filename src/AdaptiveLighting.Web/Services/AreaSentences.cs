@@ -230,11 +230,9 @@ public static class AreaSentences
 	{
 		List<string> clauses = [];
 
-		// Else-if: blocking auto-on already implies the gentler cap, and listing both reads as a contradiction.
-		if (effective.SleepBlocksAutoOn)
-			clauses.Add("never comes on by itself while the house sleeps");
-		else if (effective.RespectSleepMode)
-			clauses.Add("is gentle while the house sleeps");
+		// One clause, so the sentence cannot report the two stored flags as separate rules.
+		if (SleepSteps.Clause(effective) is { } night)
+			clauses.Add(night);
 
 		if (effective.SkipAwaySweep)
 			clauses.Add("stays on when everyone leaves");

@@ -89,8 +89,8 @@ public static class CommissioningVerdicts
 		if (luxSensorCount > 1 && area.LuxSensor is not { Length: > 0 })
 			notes.Add(new Verdict($"reads the average of {luxSensorCount} sensors", VerdictTone.Info));
 
-		if (effective.RespectSleepMode || effective.SleepBlocksAutoOn)
-			notes.Add(new Verdict("bedroom manners", VerdictTone.Info));
+		if (SleepSteps.Of(effective) is not SleepStep.Normal)
+			notes.Add(new Verdict("quiet while the house sleeps", VerdictTone.Info));
 
 		if (effective.WelcomeHome)
 			notes.Add(new Verdict("welcomes you home", VerdictTone.Info));

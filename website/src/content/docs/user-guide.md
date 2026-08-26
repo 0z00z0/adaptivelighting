@@ -224,7 +224,7 @@ mode when it begins. *Blend between periods* lets the lights drift to the next p
 instead of stepping at the boundary.
 
 What stops a motion event putting 100 % in your face at 03:00 is the night period's own brightness,
-held by *Gentle while the house sleeps* on the rooms you want kept dim.
+held by *While the house sleeps* set to **Dims** on the rooms that should stay dim.
 
 A period can instead **wait for movement**. Tick *Wait for movement before starting* and the period
 before it keeps running — the house stays at night levels — until somebody moves, and then it begins

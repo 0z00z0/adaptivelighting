@@ -267,11 +267,25 @@ else
 
 									<SettingRow Label="@item.Label"
 												Help="@item.Help"
-												IsOwn="@RoomSettings.IsOwn(room, item.Key)"
+												IsOwn="@RoomSettings.IsOwn(room, item)"
 												HouseText="@RoomSettings.Describe(null, _document.Defaults, item.Key)"
 												Reverted="@(() => Revert(item.Key))">
 										@switch (item.Control)
 										{
+											case RoomControl.Steps:
+												<div class="steps" role="group" aria-label="@item.Label">
+													@foreach (TokenChoice option in SleepSteps.Options)
+													{
+														TokenChoice step = option;
+														bool current = string.Equals(step.Value, SleepSteps.Of(room, _document.Defaults).ToString(), StringComparison.Ordinal);
+														<button type="button"
+																class="@(current ? "cur" : null)"
+																aria-pressed="@(current ? "true" : "false")"
+																@onclick="() => SetStep(step.Value)">@step.Text</button>
+													}
+												</div>
+												break;
+
 											case RoomControl.Flag:
 												<button type="button"
 														class="switch @(RoomSettings.Flag(room, _document.Defaults, item.Key) ? "on" : null)"
@@ -1155,8 +1169,12 @@ else
 	}
 
 	/// <summary>How many of a section's settings this room states for itself, for the badge on a folded section.</summary>
+	// Counts keys, not rows, so the badge and the "n of 22" line above it are the same number counted twice. A
+	// stepped row folds two keys and would otherwise report one while the denominator reports two.
 	private int OwnCountIn(RoomSettingGroup group) =>
-		_room is { } room ? group.Settings.Count(setting => RoomSettings.IsOwn(room, setting.Key)) : 0;
+		_room is { } room
+			? group.Settings.SelectMany(setting => setting.AllKeys).Count(key => RoomSettings.IsOwn(room, key))
+			: 0;
 
 	private bool IsCurrentChoice(string key, TokenChoice choice) =>
 		string.Equals(RoomSettings.ChoiceName(_room, _document.Defaults, key), choice.Value, StringComparison.Ordinal);
@@ -1207,6 +1225,16 @@ else
 			return Task.CompletedTask;
 
 		RoomSettings.SetFlag(room, key, value);
+
+		return MarkDirty();
+	}
+
+	private Task SetStep(string value)
+	{
+		if (_room is not { } room || !SleepSteps.TryParse(value, out SleepStep step))
+			return Task.CompletedTask;
+
+		SleepSteps.Set(room, step);
 
 		return MarkDirty();
 	}
