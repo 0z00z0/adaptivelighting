@@ -135,4 +135,16 @@ public sealed class TokenFormatTests
 			CultureInfo.CurrentCulture = original;
 		}
 	}
+
+	/// <summary>A half percent already in a file reads the same in the collapsed row as in the control above it.</summary>
+	[TestMethod]
+	public void A_Period_Level_Is_Written_As_The_Whole_Percent_The_Editor_Offers()
+	{
+		TimePeriodConfig period = new() { BrightnessPct = 62.5, ColorTempKelvin = 2700 };
+
+		StringAssert.Contains(TokenFormat.PeriodLevel(period), "63%");
+
+		period.UseDaylightCurve = true;
+		StringAssert.Contains(TokenFormat.PeriodLevel(period), "daylight");
+	}
 }

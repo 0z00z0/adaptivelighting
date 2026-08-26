@@ -61,7 +61,7 @@
 							aria-valuemin="@LuxCurve.Num(ShapeSetting.Min)"
 							aria-valuemax="@LuxCurve.Num(ShapeSetting.Max ?? 5)"
 							aria-valuenow="@LuxCurve.Num(Settings.LuxBrightnessGamma)"
-							aria-valuetext="@CurvePath.Describe(Settings.LuxBrightnessGamma)"
+							aria-valuetext="@Shape"
 							@onkeydown="@(args => OnKey(Grip.Shape, args))" />
 				}
 			</g>
@@ -173,22 +173,25 @@
 		exception is JSDisconnectedException or JSException or OperationCanceledException;
 
 	/// <summary>Takes hold of whichever handle the gesture started nearest, and applies at once so a tap moves it.</summary>
-	/// <param name="x">Where the pointer went down, as a fraction across the plot.</param>
-	/// <param name="y">The same, down the plot.</param>
+	/// <param name="x">Where the pointer went down, as a fraction across the drag surface.</param>
+	/// <param name="y">The same, down the surface.</param>
 	[JSInvokable]
 	public Task Grab(double x, double y)
 	{
-		double pointX = LuxCurve.X(x);
-		double pointY = y * LuxCurve.PlotHeight;
+		double acrossPlot = LuxCurve.AcrossPlot(x);
+		double downPlot = LuxCurve.DownPlot(y);
 
-		_grip = Nearest(pointX, pointY);
+		// Against where the handles are drawn, which is held inside the plot at the ends, so a grab aimed at the
+		// mark finds the mark.
+		_grip = Nearest(LuxCurve.X(acrossPlot), downPlot * LuxCurve.PlotHeight);
 
-		return Apply(x, y);
+		return Apply(acrossPlot, downPlot);
 	}
 
 	/// <summary>Moves the held handle, ignored when nothing is held.</summary>
 	[JSInvokable]
-	public Task Move(double x, double y) => _grip == Grip.None ? Task.CompletedTask : Apply(x, y);
+	public Task Move(double x, double y) =>
+		_grip == Grip.None ? Task.CompletedTask : Apply(LuxCurve.AcrossPlot(x), LuxCurve.DownPlot(y));
 
 	[JSInvokable]
 	public Task Drop()
@@ -340,7 +343,7 @@
 			svg.Append($"<line x1=\"0\" y1=\"{y}\" x2=\"{LuxCurve.Num(LuxCurve.PlotWidth)}\" y2=\"{y}\" class=\"luxc-grid\" />");
 
 			if (percent % 50 == 0)
-				svg.Append($"<text x=\"-8\" y=\"{LuxCurve.Num(LuxCurve.Y(percent) + 4)}\" text-anchor=\"end\" class=\"luxc-axis\">{percent} %</text>");
+				svg.Append($"<text x=\"{LuxCurve.Num(-LuxCurve.PercentLabelGap)}\" y=\"{LuxCurve.Num(LuxCurve.Y(percent) + 4)}\" text-anchor=\"end\" class=\"luxc-axis\">{percent} %</text>");
 		}
 
 		IReadOnlyList<double> decades = LuxCurve.Decades(_axisMax);
@@ -358,10 +361,10 @@
 			string thin = (decades.Count - 1 - index) % 2 == 1 ? " luxc-thin" : string.Empty;
 
 			svg.Append($"<line x1=\"{x}\" y1=\"0\" x2=\"{x}\" y2=\"{LuxCurve.Num(LuxCurve.PlotHeight)}\" class=\"luxc-grid\" />");
-			svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 16)}\" text-anchor=\"{anchor}\" class=\"luxc-axis{thin}\">{Escape(LuxCurve.Lux(lux))}</text>");
+			svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + LuxCurve.LuxLabelDrop)}\" text-anchor=\"{anchor}\" class=\"luxc-axis luxc-lux{thin}\">{Escape(LuxCurve.Lux(lux))}</text>");
 
 			if (DecadeWord(lux) is { Length: > 0 } word)
-				svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + 29)}\" text-anchor=\"{anchor}\" class=\"luxc-decade{thin}\">{Escape(word)}</text>");
+				svg.Append($"<text x=\"{x}\" y=\"{LuxCurve.Num(LuxCurve.PlotHeight + LuxCurve.DecadeWordDrop)}\" text-anchor=\"{anchor}\" class=\"luxc-decade{thin}\">{Escape(word)}</text>");
 		}
 
 		if (Reading is { } reading)
@@ -402,7 +405,7 @@
 				$"{Follows} {TokenFormat.Percent(Settings.LuxBrightnessMinPct)} at "
 				+ $"{LuxCurve.Lux(Settings.LuxBrightnessStartLux)} or under, "
 				+ $"{TokenFormat.Percent(Settings.LuxBrightnessMaxPct)} from "
-				+ $"{LuxCurve.Lux(Settings.LuxBrightnessFullLux)} — {CurvePath.Describe(Settings.LuxBrightnessGamma)}.";
+				+ $"{LuxCurve.Lux(Settings.LuxBrightnessFullLux)} — {Shape}.";
 
 			if (Reading is { } reading)
 			{
@@ -417,6 +420,10 @@
 			return line;
 		}
 	}
+
+	/// <summary>The drawn shape in words: the exponent read together with the direction the curve runs.</summary>
+	private string Shape =>
+		CurvePath.Describe(Settings.LuxBrightnessGamma, Settings.LuxBrightnessMaxPct - Settings.LuxBrightnessMinPct);
 
 	/// <summary>Which periods this curve speaks for, as the caption opens.</summary>
 	private string Follows => PeriodNames.Count switch

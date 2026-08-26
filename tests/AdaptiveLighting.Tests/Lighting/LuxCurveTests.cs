@@ -112,8 +112,9 @@ public sealed class LuxCurveTests
 		Assert.AreEqual(LuxCurve.PlotHeight, LuxCurve.Y(0), 1e-9);
 	}
 
+	/// <summary>A handle stands on its own reading, save at the ends of the axis, where it is held a mark inside.</summary>
 	[TestMethod]
-	public void The_Handles_Stand_On_The_Values_They_Set()
+	public void The_Handles_Stand_On_The_Values_They_Set_Except_Where_The_Axis_Runs_Out()
 	{
 		AreaSettings settings = Settings();
 		settings.LuxBrightnessMaxPct = 85;
@@ -123,7 +124,7 @@ public sealed class LuxCurveTests
 
 		Assert.AreEqual(LuxCurve.X(LuxCurve.FractionOf(100, 10_000)), start.X, 1e-9);
 		Assert.AreEqual(LuxCurve.Y(40), start.Y, 1e-9, "the foot of the curve is the curve's own dark end");
-		Assert.AreEqual(LuxCurve.X(1), full.X, 1e-9);
+		Assert.AreEqual(LuxCurve.PlotWidth - LuxCurve.HandleInset, full.X, 1e-9, "the bright end is at the top of the axis, so it is held inside");
 		Assert.AreEqual(LuxCurve.Y(85), full.Y, 1e-9);
 	}
 
@@ -229,15 +230,103 @@ public sealed class LuxCurveTests
 		}
 	}
 
+	/// <summary>The surface overreaches the plot, so a handle sitting on the boundary has target on both sides of it.</summary>
 	[TestMethod]
-	public void The_Drag_Surface_Covers_The_Plot_And_Nothing_Else()
+	public void The_Drag_Surface_Reaches_A_Margin_Past_The_Plot_On_Every_Side()
 	{
 		string style = LuxCurve.SurfaceStyle();
 
-		Assert.IsTrue(style.Contains($"left:{LuxCurve.Num(LuxCurve.PlotLeft / LuxCurve.ViewWidth * 100)}%", StringComparison.Ordinal), style);
-		Assert.IsTrue(style.Contains($"width:{LuxCurve.Num(LuxCurve.PlotWidth / LuxCurve.ViewWidth * 100)}%", StringComparison.Ordinal), style);
-		Assert.IsTrue(LuxCurve.PlotLeft + LuxCurve.PlotWidth <= LuxCurve.ViewWidth);
-		Assert.IsTrue(LuxCurve.PlotTop + LuxCurve.PlotHeight <= LuxCurve.ViewHeight);
+		Assert.IsTrue(LuxCurve.GrabMargin > 0, "a surface that stops where the plot stops cannot be pointed at on the edge");
+
+		double left = LuxCurve.PlotLeft - LuxCurve.GrabMargin;
+		double width = LuxCurve.PlotWidth + (2 * LuxCurve.GrabMargin);
+		double height = LuxCurve.PlotHeight + (2 * LuxCurve.GrabMargin);
+
+		Assert.IsTrue(style.Contains($"left:{LuxCurve.Num(left / LuxCurve.ViewWidth * 100)}%", StringComparison.Ordinal), style);
+		Assert.IsTrue(style.Contains($"width:{LuxCurve.Num(width / LuxCurve.ViewWidth * 100)}%", StringComparison.Ordinal), style);
+		Assert.IsTrue(style.Contains($"height:{LuxCurve.Num(height / LuxCurve.ViewHeight * 100)}%", StringComparison.Ordinal), style);
+
+		// Still inside the drawing, so the target cannot swallow a control beside the chart.
+		Assert.IsTrue(left >= 0);
+		Assert.IsTrue(LuxCurve.PlotTop - LuxCurve.GrabMargin >= 0);
+		Assert.IsTrue(left + width <= LuxCurve.ViewWidth);
+		Assert.IsTrue(LuxCurve.PlotTop - LuxCurve.GrabMargin + height <= LuxCurve.ViewHeight);
+	}
+
+	[TestMethod]
+	public void A_Pointer_On_The_Margin_Reads_As_The_Edge_Of_The_Plot()
+	{
+		double across = LuxCurve.GrabMargin / (LuxCurve.PlotWidth + (2 * LuxCurve.GrabMargin));
+		double down = LuxCurve.GrabMargin / (LuxCurve.PlotHeight + (2 * LuxCurve.GrabMargin));
+
+		Assert.AreEqual(0, LuxCurve.AcrossPlot(across), 1e-9, "the plot's left edge is a margin in from the surface's");
+		Assert.AreEqual(1, LuxCurve.AcrossPlot(1 - across), 1e-9);
+		Assert.AreEqual(0, LuxCurve.DownPlot(down), 1e-9);
+		Assert.AreEqual(1, LuxCurve.DownPlot(1 - down), 1e-9);
+
+		Assert.AreEqual(0, LuxCurve.AcrossPlot(0), 1e-9, "and the margin itself reads as the edge, never past it");
+		Assert.AreEqual(1, LuxCurve.AcrossPlot(1), 1e-9);
+		Assert.AreEqual(0, LuxCurve.DownPlot(0), 1e-9);
+		Assert.AreEqual(1, LuxCurve.DownPlot(1), 1e-9);
+
+		Assert.AreEqual(0.5, LuxCurve.AcrossPlot(0.5), 1e-9, "the middle of the surface is the middle of the plot");
+		Assert.AreEqual(0.5, LuxCurve.DownPlot(0.5), 1e-9);
+	}
+
+	/// <summary>A handle standing on an extreme is drawn a mark's width inside, so it never covers its own axis label.</summary>
+	[TestMethod]
+	public void A_Handle_At_Either_End_Of_The_Axis_Is_Drawn_Inside_The_Plot()
+	{
+		AreaSettings settings = Settings();
+		settings.LuxBrightnessStartLux = LuxCurve.AxisMinLux;
+		settings.LuxBrightnessFullLux = 10_000;
+
+		double left = LuxCurve.StartHandle(settings, 10_000).X;
+		double right = LuxCurve.FullHandle(settings, 10_000).X;
+
+		Assert.IsTrue(left >= LuxCurve.HandleInset, $"the dark end is drawn at {left}");
+		Assert.IsTrue(right <= LuxCurve.PlotWidth - LuxCurve.HandleInset, $"the bright end is drawn at {right}");
+
+		// Every axis label sits outside the plot, so a mark that stays inside it cannot reach one.
+		Assert.IsTrue(LuxCurve.HandleInset >= LuxCurve.NarrowHandleReach,
+			$"a mark reaching {LuxCurve.NarrowHandleReach} drawn {LuxCurve.HandleInset} in crosses the plot's edge");
+		Assert.IsTrue(LuxCurve.PercentLabelGap > 0, "and the labels are outside it");
+
+		// A handle away from the ends keeps standing on its own reading.
+		settings.LuxBrightnessStartLux = 100;
+		Assert.AreEqual(
+			LuxCurve.X(LuxCurve.FractionOf(100, 10_000)),
+			LuxCurve.StartHandle(settings, 10_000).X,
+			1e-9);
+	}
+
+	/// <summary>Only x is nudged: a handle moved down off the 100 % line would claim a level it does not set.</summary>
+	[TestMethod]
+	public void A_Handle_Is_Never_Nudged_Off_The_Level_It_Sets()
+	{
+		AreaSettings settings = Settings();
+		settings.LuxBrightnessStartLux = LuxCurve.AxisMinLux;
+		settings.LuxBrightnessMinPct = 100;
+		settings.LuxBrightnessMaxPct = 0;
+		settings.LuxBrightnessFullLux = 10_000;
+
+		Assert.AreEqual(LuxCurve.Y(100), LuxCurve.StartHandle(settings, 10_000).Y, 1e-9);
+		Assert.AreEqual(LuxCurve.Y(0), LuxCurve.FullHandle(settings, 10_000).Y, 1e-9);
+	}
+
+	/// <summary>The lux labels clear a handle resting on the 0 % line, mark and focus ring together.</summary>
+	[TestMethod]
+	public void The_Lux_Labels_Sit_Clear_Of_A_Handle_Standing_On_The_Foot_Of_The_Plot()
+	{
+		// The label hangs from its baseline, so what a handle can cover is the drop less a line of type.
+		Assert.IsTrue(LuxCurve.LuxLabelDrop - LuxCurve.AxisTextHeight >= LuxCurve.HandleReach,
+			$"a label dropped {LuxCurve.LuxLabelDrop} tops out under a handle reaching {LuxCurve.HandleReach}");
+
+		Assert.IsTrue(LuxCurve.DecadeWordDrop > LuxCurve.LuxLabelDrop + LuxCurve.AxisTextHeight,
+			"the decade word sits under the reading it names, not on it");
+
+		// The lowest ink on the chart still has to fit the drawing.
+		Assert.IsTrue(LuxCurve.PlotTop + LuxCurve.PlotHeight + LuxCurve.DecadeWordDrop < LuxCurve.ViewHeight);
 	}
 
 	[TestMethod]

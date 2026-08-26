@@ -92,4 +92,51 @@ public sealed class CurvePathTests
 		Assert.AreNotEqual(CurvePath.Describe(1), CurvePath.Describe(2.5));
 		Assert.AreNotEqual(CurvePath.Describe(2.5), CurvePath.Describe(0.4));
 	}
+
+	/// <summary>The span is the drop or climb between the curve's two ends, so its sign is the direction drawn.</summary>
+	[TestMethod]
+	public void A_Curve_That_Falls_Is_Never_Described_As_One_That_Rises()
+	{
+		foreach (double exponent in new[] { 0.4, 1.0, 2.5 })
+		{
+			string falling = CurvePath.Describe(exponent, -60);
+
+			foreach (string climbing in new[] { "lift", "climb", "rise" })
+				Assert.IsFalse(falling.Contains(climbing, StringComparison.Ordinal),
+					$"exponent {exponent} drawn falling reads \"{falling}\"");
+		}
+	}
+
+	[TestMethod]
+	public void A_Curve_That_Rises_Is_Described_As_It_Always_Was()
+	{
+		foreach (double exponent in new[] { 0.4, 1.0, 2.5 })
+			Assert.AreEqual(CurvePath.Describe(exponent), CurvePath.Describe(exponent, 60));
+	}
+
+	[TestMethod]
+	public void Every_Shape_And_Direction_Reads_Differently()
+	{
+		string[] phrases =
+		[
+			CurvePath.Describe(0.4, 60), CurvePath.Describe(1, 60), CurvePath.Describe(2.5, 60),
+			CurvePath.Describe(0.4, -60), CurvePath.Describe(1, -60), CurvePath.Describe(2.5, -60)
+		];
+
+		Assert.AreEqual(phrases.Length, phrases.Distinct(StringComparer.Ordinal).Count(),
+			string.Join(" / ", phrases));
+	}
+
+	/// <summary>Both ends on the same level draw one flat line, whatever the exponent says.</summary>
+	[TestMethod]
+	public void A_Curve_With_No_Span_Is_Described_As_Level_Whatever_Its_Exponent()
+	{
+		string level = CurvePath.Describe(1, 0);
+
+		foreach (double exponent in new[] { 0.1, 0.4, 1.0, 2.5, 5.0 })
+			Assert.AreEqual(level, CurvePath.Describe(exponent, 0));
+
+		Assert.AreNotEqual(level, CurvePath.Describe(1, 60), "a curve that climbs is not a level that holds");
+		Assert.AreNotEqual(level, CurvePath.Describe(1, -60));
+	}
 }

@@ -282,6 +282,49 @@ public sealed class ConfigNormalizerTests
 		Assert.IsNotNull(withRows.Global.PeriodSelect, "a mapping has been written — keep it");
 	}
 
+	/// <summary>A brightness is a whole percent from the save on, so no surface has to choose how to round one.</summary>
+	[TestMethod]
+	public void Normalize_RoundsAHalfPercentBrightnessToAWholeOne()
+	{
+		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+		config.Periods[0].BrightnessPct = 62.5;
+		config.Areas =
+		[
+			new AreaConfig
+			{
+				AreaId = "stue",
+				Levels = [new RoomLevelOverride { PeriodId = config.Periods[0].Key, BrightnessPct = 62.5 }]
+			}
+		];
+
+		ConfigNormalizer.Normalize(config);
+
+		Assert.AreEqual(63, config.Periods[0].BrightnessPct);
+		Assert.AreEqual(63, config.Areas[0].Levels![0].BrightnessPct);
+	}
+
+	[TestMethod]
+	public void Normalize_LeavesAWholePercentBrightnessAlone()
+	{
+		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+		double[] before = [.. config.Periods.Select(period => period.BrightnessPct)];
+
+		ConfigNormalizer.Normalize(config);
+
+		CollectionAssert.AreEqual(before, config.Periods.Select(period => period.BrightnessPct).ToArray());
+	}
+
+	/// <summary>Away from zero, so the number a person reads is the one they would have written.</summary>
+	[TestMethod]
+	public void A_Half_Rounds_Up_And_Not_To_The_Even_Neighbour()
+	{
+		Assert.AreEqual(63, ConfigNormalizer.Whole(62.5));
+		Assert.AreEqual(64, ConfigNormalizer.Whole(63.5));
+		Assert.AreEqual(62, ConfigNormalizer.Whole(62.4));
+		Assert.AreEqual(0, ConfigNormalizer.Whole(0.4));
+		Assert.AreEqual(100, ConfigNormalizer.Whole(100));
+	}
+
 	[TestMethod]
 	public void Normalize_LeavesADocumentWithoutAPeriodSelect_ByteIdentical()
 	{
