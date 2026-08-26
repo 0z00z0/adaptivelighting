@@ -10,6 +10,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2.0.0-preview.6] - 2026-08-26
+
 ### Changed
 
 - **The daylight curve is now a per-period mode, and replaces the per-room lift.** Every period carries one
@@ -36,6 +38,16 @@ against each other.
     naming the rooms with nothing to read.
   - The captions, setting names and help texts around the curve are rewritten in plainer, shorter wording.
 
+- **A room's night behaviour is one three-step control**, a rising ladder — *Normal*, *Dims*, *Dims and stays
+  off* — in place of two checkboxes where the second only meant anything with the first set. The impossible
+  combination, refusing to come on without holding the night limits, can no longer be picked.
+  - **The document is unchanged and no house behaves differently.** Each step writes the pair the checkboxes
+    always wrote: `RespectSleepMode` and `SleepBlocksAutoOn`, false/false, true/false, true/true. A file
+    already holding the block without the clamp loads and runs exactly as before, and the control shows it as
+    the top step.
+  - The wording in the settings row, the room sentence, the roll-call verdict, the sleep-mode help and the
+    docs site is plainer.
+
 ### Removed
 
 - **`LuxBrightnessEnabled` is gone.** The period decides alone; one mechanism replaces two. A document still
@@ -45,6 +57,39 @@ against each other.
     which is house-wide, so there is no faithful translation. A house that had the lift on in some rooms has
     it nowhere until a period is put on the curve. The curve's anchors, exponent and per-room overrides all
     survive the upgrade untouched.
+
+### Fixed
+
+- **The dashboard's schedule ribbon draws the periods the engine is running.** The band laid the day out of
+  its own copy of the boundary rules, so a period still waiting for movement was drawn from its configured
+  *Starts*, and under Home Assistant's period authority the dropdown's period never reached the band at all —
+  the ribbon named one period while the engine ran another. `CircadianCalculator` now answers with the periods
+  in force across a stretch, out of the same table every other answer comes from, and the band only turns
+  those into percentages.
+
+- **Six defects in the daylight-curve editor.**
+  - The chart's footnote sent the reader to *All settings*, which holds no *Daylight sensor* row. It names the
+    fold that does.
+  - A period holding 62.5 % read as two different numbers on two surfaces beside each other. Both round
+    through one helper, away from zero, so it reads 63 % in each, and the save pass stores the whole number.
+  - The shaping phrase described the exponent alone, so a curve dragged to fall was still said to rise. It
+    carries the direction between the two anchors, in the caption and in what a handle reports to a screen
+    reader.
+  - A handle standing at either end of the axis was drawn across its own label, behind a rectangular focus
+    ring. It is held inside the plot, and the ring is round.
+  - The gesture surface stopped where the plot did, leaving a handle on the boundary with nothing to aim at.
+    It reaches a margin past the plot on every side, and a pointer on that margin reads as the plot's edge.
+  - The write confirmation floated over the caption it was meant to sit beside. It sits in the card head,
+    beside the room page's other save states, and nothing is pinned to the viewport.
+
+### Internal
+
+- **Debug data ships inside the assemblies, so a stack trace from a deployed house resolves to a line
+  number.** `DebugType=embedded` replaces the four `.snupkg` symbol packages, which GitHub Packages has no
+  symbol server to serve and the release push discarded on every run. Source Link is unchanged and is what
+  maps the embedded data back to the repository. The cost is a larger assembly in every deploy: the four
+  packaged DLLs go from 1 099 264 to 1 462 272 bytes in total, the largest single rise being
+  `AdaptiveLighting.Web.dll` at 692 224 → 973 824.
 
 ## [2.0.0-preview.5] - 2026-08-22
 
@@ -447,13 +492,6 @@ against each other.
   its own setting's type. Per-room warmth was never affected.
 
 ### Internal
-
-- **Debug data ships inside the assemblies, so a stack trace from a deployed house resolves to a line
-  number.** `DebugType=embedded` replaces the four `.snupkg` symbol packages, which GitHub Packages has no
-  symbol server to serve and the release push discarded on every run. Source Link is unchanged and is what
-  maps the embedded data back to the repository. The cost is a larger assembly in every deploy: the four
-  packaged DLLs go from 1 099 264 to 1 462 272 bytes in total, the largest single rise being
-  `AdaptiveLighting.Web.dll` at 692 224 → 973 824.
 
 - **`Test1.cs` is gone.** The `dotnet new mstest` template's empty `TestMethod1` never asserted anything. The
   suite is one test smaller and no less covered.
