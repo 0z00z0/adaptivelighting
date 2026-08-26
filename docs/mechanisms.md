@@ -1187,6 +1187,34 @@ needs a 24-unit cap, which needs `MinGap` near 34, which puts five gaps into a p
 labels would cover the chart they annotate, and the desktop would carry the same spread for type a third of
 the size. The remaining limit is the chart's own height, which is a design question and not a defect.
 
+## The lux curve's handles, its target and its whole per cent
+
+Figures are in the chart's own user units, 620 across, unless a pixel is named.
+
+**A handle standing at either end of the axis is drawn `HandleInset` 16 inside the plot**, not on its true
+position. Every axis label sits outside the plot, so a mark that never crosses the plot's edge cannot reach
+one. Held in only by its own desktop reach of 9, a focused mark at 0 % and 1 lx measures **1.5 px outside the
+plot with 0.1 px of ink clear of "0 %"** at a 390 px viewport. At 16 it sits 2.0 px inside with a 4.9 px gap,
+and at 1280 px 14.7 px inside with 6.5 px. Widening the gutter instead is not open: "100 %" is 55 of the 62
+units there, and 390 px is where the stylesheet caps the axis type at its largest, so the type grows while the
+gutter cannot.
+
+**The drag surface reaches `GrabMargin` past the plot on every side**, and a pointer on that margin reads as
+the plot's edge. Boundary and target on one coordinate leaves a handle standing on an end with nothing around
+it to aim at; with the dark end driven to 1 lx the surface's left edge is **37.6 px left of the handle's
+centre**, and a press 10 px further left than the centre moves it. The margin is `PlotTop`, 14, so the surface
+can never spill out of the drawing.
+
+**The lux readings are written `LuxLabelDrop` 22 below the plot.** A label hangs from its baseline, so what a
+handle on the foot of the plot can cover is the drop less one line of type: 22 − `AxisTextHeight` 10 = 12,
+against a `HandleReach` of 9. At 16 the clearance is 6 and the mark covers the label.
+
+**A brightness per cent is rounded away from zero, never to the even neighbour**, by
+`ConfigNormalizer.Whole`. The control, the collapsed summary and the file have to agree, and 62.5 reading 62
+on one surface and 63 on the one beside it is the disagreement the single helper exists to close. Away from
+zero is also what reads as correct: 62.5 % becomes 63 %. The save pass stores the whole number, so the
+document settles on what both surfaces already show.
+
 ---
 
 ## Numbers that were chosen, not derived
@@ -1214,6 +1242,10 @@ the size. The remaining limit is the chart's own height, which is a design quest
 | 0.77 / 0.42 | `DaylightLabels.LabelAscent` / `LabelDescent` | how far a label's box reaches either side of its baseline, per unit of type size, measured off rendered charts at caps 16 to 24. `MinGap`, `MonthBaseline` and `ChartHeight` are arithmetic on these two and the cap |
 | 10.1 / 7.9 px | daylight chart label targets | what a 1280 px desktop already renders, so the desktop chart does not move |
 | 16.3 / 14.7 px | lux curve label targets | same rule, and this plot is 1013 px wide at 1280, so its "10 px" labels are already 16.3 |
+| 16 | `LuxCurve.HandleInset` | at the handle's own desktop reach of 9 a focused mark at 0 % and 1 lx measures 1.5 px outside the plot, 0.1 px clear of "0 %", at 390 px; at 16 it is 2.0 px inside with a 4.9 px gap |
+| 14 | `LuxCurve.GrabMargin` | `PlotTop`, the largest margin that cannot spill out of the drawing; it puts the drag surface's left edge 37.6 px clear of a handle sitting on 1 lx |
+| 22 | `LuxCurve.LuxLabelDrop` | the drop less one line of type is what a handle can cover: 22 − 10 = 12, against a reach of 9. At 16 the clearance is 6 |
+| away from zero | `ConfigNormalizer.Whole` | the control, the summary and the file must show one number, and 62.5 has to land somewhere; 63 is what reads as correct, and to-even would give 62 |
 
 ---
 
