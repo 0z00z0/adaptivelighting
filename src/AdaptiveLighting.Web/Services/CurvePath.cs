@@ -37,10 +37,32 @@ public static class CurvePath
 	}
 
 	/// <summary>The curve in words, for a screen reader and for the sentence's plain-text form.</summary>
+	/// <remarks>A curve that climbs, which is what <see cref="Power"/> draws and what a glyph beside a setting shows.</remarks>
 	public static string Describe(double exponent) => exponent switch
 	{
 		< 0.95 => "a curve that lifts early, then flattens",
 		> 1.05 => "a curve that holds back, then climbs steeply",
 		_ => "a straight, even rise"
 	};
+
+	/// <summary>The curve in words, as it is actually drawn.</summary>
+	/// <param name="exponent">The shape.</param>
+	/// <param name="span">What the curve gains from one end to the other. Negative falls, near zero is level.</param>
+	// The exponent alone cannot say this: the same shape run downhill is a curve that dims, and calling that one
+	// that lifts is the picture and the sentence disagreeing.
+	public static string Describe(double exponent, double span)
+	{
+		if (!double.IsFinite(span) || Math.Abs(span) < 0.5)
+			return "a level that does not change";
+
+		if (span > 0)
+			return Describe(exponent);
+
+		return exponent switch
+		{
+			< 0.95 => "a curve that dims early, then flattens",
+			> 1.05 => "a curve that holds on, then dims steeply",
+			_ => "a straight, even fall"
+		};
+	}
 }

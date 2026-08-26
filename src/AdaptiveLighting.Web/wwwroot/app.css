@@ -1360,14 +1360,6 @@ button.mode-card:disabled {
 	}
 }
 
-/* The same floating bar carrying only the confirmation, on a page with no save buttons to sit beside. It
-   shrinks to the words: a full-width rail for four of them reads as a rail with something missing. */
-.savebar-alone {
-	width: auto;
-	max-width: calc(100vw - 3rem);
-	padding: 0.45rem 0.8rem;
-}
-
 /* ---- controls ---- */
 
 button {
@@ -4427,6 +4419,18 @@ button.mode-pill:disabled {
 .room-save-pending { color: var(--warn); }
 .room-save-bad { color: var(--bad); }
 
+/* The confirmation of a write, carried by the same line rather than floated over the page: a bar pinned to the
+   viewport covers whatever body text is under it, which here was the daylight curve's caption. */
+.room-save-done {
+	color: var(--ok);
+}
+
+.room-save-done::before {
+	content: "✓";
+	margin-right: 0.3rem;
+	font-weight: 700;
+}
+
 .room-save-now {
 	padding: 0.15rem 0.5rem;
 	font-size: var(--text-sm);
@@ -5937,9 +5941,13 @@ h1[tabindex="-1"]:focus {
 	cursor: grab;
 }
 
+/* Painted on the circle rather than drawn round its box: an outline on an SVG shape is a rectangle, and a square
+   ring round a handle sitting on the axis covers the label under it. LuxCurve.HandleReach is how far this ink
+   goes, and the geometry is laid out against that figure. */
 .luxc-handle:focus-visible {
-	outline: 2px solid var(--accent);
-	outline-offset: 2px;
+	outline: none;
+	stroke: var(--text);
+	stroke-width: 4;
 }
 
 .luxc-held {
@@ -5983,10 +5991,22 @@ h1[tabindex="-1"]:focus {
 	}
 
 	/* Geometry properties, so a handle that is a fair mark at full size is still one at a third of it. What a
-	   finger actually hits is .luxc-surface, which is the whole plot. */
+	   finger actually hits is .luxc-surface, which is the plot and a margin around it. */
 	.luxc-handle {
 		r: 12;
 		stroke-width: 3.5;
+	}
+
+	/* Both the mark and the type grow here, and LuxCurve.LuxLabelDrop is set against the full-width sizes. The
+	   readings drop into the room the decade words just gave up, so a handle resting on the 0 % line clears
+	   them. Lengths inside an SVG are user units, so this is 12 of LuxCurve's, not 12 device pixels. */
+	.luxc-lux {
+		transform: translateY(12px);
+	}
+
+	/* The resting ring is 3.5 here, so 4 would barely read as focus. */
+	.luxc-handle:focus-visible {
+		stroke-width: 5.5;
 	}
 }
 

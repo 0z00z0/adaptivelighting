@@ -40,6 +40,39 @@ public static class LuxCurve
 	/// <summary>Where the shaping handle sits along the span between the two anchors, in log space.</summary>
 	public const double ShapeFraction = 0.5;
 
+	/// <summary>How far a handle's ink reaches from its centre, mark and focus ring together.</summary>
+	// Kept in step with .luxc-handle in app.css. A narrow chart draws a larger mark and shifts .luxc-lux down to
+	// match, so this figure is the one that holds where no shift applies.
+	public const double HandleReach = 9;
+
+	/// <summary>The furthest a handle's ink ever reaches, which is on the narrowest chart the stylesheet draws for.</summary>
+	// r 12 plus half of the 5.5 focus ring, both from the max-width 560px block in app.css.
+	public const double NarrowHandleReach = 15;
+
+	/// <summary>How far inside the plot a handle standing at either end of the axis is drawn.</summary>
+	// At least NarrowHandleReach, so the mark never crosses the plot's edge and therefore cannot reach an axis
+	// label, which all sit outside it. Held only its own desktop reach in, a focused mark measured 0.1 px from
+	// "0 %" at 390 px, where the stylesheet caps the axis type at its largest and the mark with it. The gutter
+	// cannot widen to meet it either: "100 %" is 55 of the 62 units there.
+	public const double HandleInset = 16;
+
+	/// <summary>How far the drag surface reaches past the plot, so a handle on the boundary has target around it.</summary>
+	// PlotTop, so the surface starts at the top of the drawing and can never spill out of it.
+	public const double GrabMargin = PlotTop;
+
+	/// <summary>The axis type's height in user units, as the stylesheet sets it on a chart at full width.</summary>
+	// The label positions below are chosen against it: it is what decides whether a handle can cover one.
+	public const double AxisTextHeight = 10;
+
+	/// <summary>How far left of the plot the percentage labels end.</summary>
+	public const double PercentLabelGap = 8;
+
+	/// <summary>How far below the plot the lux readings are written.</summary>
+	public const double LuxLabelDrop = 22;
+
+	/// <summary>How far below the plot the word naming a decade is written.</summary>
+	public const double DecadeWordDrop = 35;
+
 	/// <summary>The top of the axis: a whole decade, wide enough for both anchors and the live reading.</summary>
 	public static double AxisMaxLux(AreaSettings settings, double? reading)
 	{
@@ -98,6 +131,24 @@ public static class LuxCurve
 	/// <summary>A fraction across the axis as a distance from the plot's left edge.</summary>
 	public static double X(double fraction) => Math.Clamp(fraction, 0, 1) * PlotWidth;
 
+	/// <summary>Where a handle standing at <paramref name="fraction"/> across the axis is drawn.</summary>
+	// Held a mark's width inside the plot: drawn on the boundary, a handle at either end covers the axis label
+	// underneath it. Only x is moved, because the curve is flat beyond both anchors and the mark stays on the line.
+	public static double HandleX(double fraction) => Math.Clamp(X(fraction), HandleInset, PlotWidth - HandleInset);
+
+	/// <summary>A fraction across the drag surface as a fraction across the plot, so the margin reads as the edge.</summary>
+	public static double AcrossPlot(double fraction) => OffMargin(fraction, PlotWidth);
+
+	/// <summary>The same down the plot.</summary>
+	public static double DownPlot(double fraction) => OffMargin(fraction, PlotHeight);
+
+	private static double OffMargin(double fraction, double length)
+	{
+		double across = Math.Clamp(double.IsFinite(fraction) ? fraction : 0, 0, 1) * (length + (2 * GrabMargin));
+
+		return Math.Clamp((across - GrabMargin) / length, 0, 1);
+	}
+
 	/// <summary>The engine's curve across the whole axis, as an SVG <c>d</c> in the plot's own user units.</summary>
 	public static string Path(AreaSettings settings, double axisMaxLux, int samples = 112)
 	{
@@ -130,7 +181,7 @@ public static class LuxCurve
 		ArgumentNullException.ThrowIfNull(settings);
 
 		return new CurvePoint(
-			X(FractionOf(settings.LuxBrightnessStartLux, axisMaxLux)),
+			HandleX(FractionOf(settings.LuxBrightnessStartLux, axisMaxLux)),
 			Y(settings.LuxBrightnessMinPct));
 	}
 
@@ -139,7 +190,7 @@ public static class LuxCurve
 	{
 		ArgumentNullException.ThrowIfNull(settings);
 
-		return new CurvePoint(X(FractionOf(settings.LuxBrightnessFullLux, axisMaxLux)), Y(settings.LuxBrightnessMaxPct));
+		return new CurvePoint(HandleX(FractionOf(settings.LuxBrightnessFullLux, axisMaxLux)), Y(settings.LuxBrightnessMaxPct));
 	}
 
 	/// <summary>The shaping handle: halfway up the span, standing on the curve itself.</summary>
@@ -207,11 +258,13 @@ public static class LuxCurve
 	}
 
 	/// <summary>The inline style that lays the drag surface over the plot area, as percentages of the chart's box.</summary>
+	// A GrabMargin wider than the plot on every side. Boundary and target on the same coordinate leaves a handle
+	// resting on an axis with no pointer target beyond its centre; AcrossPlot maps the overreach back.
 	public static string SurfaceStyle() => string.Concat(
-		"left:", Num(PlotLeft / ViewWidth * 100), "%;",
-		"top:", Num(PlotTop / ViewHeight * 100), "%;",
-		"width:", Num(PlotWidth / ViewWidth * 100), "%;",
-		"height:", Num(PlotHeight / ViewHeight * 100), "%;");
+		"left:", Num((PlotLeft - GrabMargin) / ViewWidth * 100), "%;",
+		"top:", Num((PlotTop - GrabMargin) / ViewHeight * 100), "%;",
+		"width:", Num((PlotWidth + (2 * GrabMargin)) / ViewWidth * 100), "%;",
+		"height:", Num((PlotHeight + (2 * GrabMargin)) / ViewHeight * 100), "%;");
 
 	// Invariant: under nb-NO a bare double renders 7,4 and the browser reads no length at all.
 	public static string Num(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);

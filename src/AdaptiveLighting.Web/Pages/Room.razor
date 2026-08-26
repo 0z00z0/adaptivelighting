@@ -696,13 +696,6 @@ else
 		</section>
 	</div>
 
-	@* The Configuration page's save confirmation, floating alone: this page has no bar to sit it in. *@
-	@if (SaveToast is { Length: > 0 } toast)
-	{
-		<div class="savebar savebar-alone">
-			<span class="savebar-note ok savebar-toast" role="status">@toast</span>
-		</div>
-	}
 }
 
 @code {
@@ -711,8 +704,8 @@ else
 	/// room's vacancy timer while a stepper is held down.</remarks>
 	private static readonly TimeSpan SaveDelay = TimeSpan.FromMilliseconds(1200);
 
-	/// <summary>How long the write confirmation stays at the foot of the screen.</summary>
-	private static readonly TimeSpan ToastLingers = TimeSpan.FromSeconds(3.5);
+	/// <summary>How long the write confirmation stays on the save line.</summary>
+	private static readonly TimeSpan ConfirmationLingers = TimeSpan.FromSeconds(3.5);
 
 	/// <summary>How many of this room's log entries the card holds; the Activity page has the rest.</summary>
 	private const int LogRows = 6;
@@ -1072,12 +1065,14 @@ else
 			: "(the house's outdoor sensor — none is named)";
 
 	/// <summary>Where the curve's reading comes from, said under the chart.</summary>
+	// Names the fold the Daylight sensor row is actually in. All settings is a different section and holds no
+	// such row, so a reader sent there finds nothing.
 	private string DaylightSourceNote =>
 		_room?.DaylightSensor is { Length: > 0 } own
-			? $"Reading {Name(own)}, this room's own choice. Change it under All settings."
+			? $"Reading {Name(own)}, this room's own choice. Change it under “Not right? Pick by hand”."
 			: _document.Global.OutdoorLuxSensor is { Length: > 0 } house
 				? $"Reading {Name(house)}, the house's outdoor sensor."
-				: "No outdoor sensor is named, so the curve holds the level at its dark end. Name one under House, or pick one for this room under All settings.";
+				: "No outdoor sensor is named, so the curve holds the level at its dark end. Name one under House, or pick one for this room under “Not right? Pick by hand”.";
 
 
 	/// <summary>Applies one setting a drag or an arrow key changed, through the path the stepper uses.</summary>
@@ -1468,28 +1463,14 @@ else
 		OnParametersSet();
 	}
 
-	// Same split as the Configuration page: a refusal stands until it is resolved, a success is transient and
-	// leaves through the toast.
-	private string SaveLine
-	{
-		get
-		{
-			if (_failure is not null)
-				return "not saved";
+	/// <summary>Everything this page has to say about saving, in the one line the card heads already carry.</summary>
+	/// <remarks>The confirmation clears on the page's one-second ticker rather than a timer of its own, since
+	/// every read of this property happens in a render that ticker drives.</remarks>
+	private SaveNotice Save => SaveNotice.Of(_failure is not null, _dirty, _savedAt, _now, ConfirmationLingers);
 
-			return _dirty ? "saving in a moment…" : string.Empty;
-		}
-	}
+	private string SaveLine => Save.Text;
 
-	/// <summary>The write confirmation at the foot of the screen, or <c>null</c> once it has had its few seconds.</summary>
-	/// <remarks>Cleared by the page's one-second ticker rather than a timer of its own, since every read of this
-	/// property happens in a render that ticker drives.</remarks>
-	private string? SaveToast =>
-		_savedAt is { } saved && _now - saved < ToastLingers
-			? $"Saved {saved.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)}"
-			: null;
-
-	private string SaveClass => _failure is not null ? "room-save-bad" : _dirty ? "room-save-pending" : "room-save-ok";
+	private string SaveClass => Save.Class;
 
 	private bool HomeAssistantIsAnswering => Catalog.IsHomeAssistantReady && _areas.Count > 0;
 

@@ -1,14 +1,14 @@
 @* A stored value not on the list is shown as its own entry, never snapped to a neighbour. *@
 
 <span class="preset">
-	<select class="cell preset-select" @bind:get="Key(Value)" @bind:set="OnPicked">
+	<select class="cell preset-select" @bind:get="Key(Shown)" @bind:set="OnPicked">
 		@foreach (PresetChoice option in Options)
 		{
 			<option value="@Key(option.Value)">@option.Label</option>
 		}
 		@if (IsUnlisted)
 		{
-			<option value="@Key(Value)">@Custom(Value)</option>
+			<option value="@Key(Shown)">@Custom(Shown)</option>
 		}
 	</select>
 </span>
@@ -28,7 +28,13 @@
 	[Parameter]
 	public string? Unit { get; set; }
 
-	private bool IsUnlisted => !Options.Any(option => Matches(option.Value, Value));
+	/// <summary>The stored value as the whole number this control offers, which is the one the next save keeps.</summary>
+	// A half percent can arrive from a hand-edited file. It is shown rounded and picking it stores the rounded
+	// number: two surfaces showing one setting as two numbers is what this closes. The file is left alone until
+	// a save, which is ConfigNormalizer's job, not a load-time rewrite.
+	private double Shown => ConfigNormalizer.Whole(Value);
+
+	private bool IsUnlisted => !Options.Any(option => Matches(option.Value, Shown));
 
 	// Invariant string keys, so the select round-trips without an index that goes stale when a custom entry appears.
 	private static string Key(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);

@@ -1,3 +1,5 @@
+using AdaptiveLighting.Configuration;
+
 namespace AdaptiveLighting.Web.Services;
 
 /// <summary>How a value is written in a sentence, and how it is carried back.</summary>
@@ -56,6 +58,19 @@ public static class TokenFormat
 
 	/// <summary>The canonical carrying form: invariant, no thousands separator, no trailing zeros.</summary>
 	public static string Carry(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+
+	/// <summary>A period's brightness and warmth on one line, as a collapsed row shows them.</summary>
+	// Through ConfigNormalizer.Whole, which is also what the editor shows and what the next save stores: three
+	// roundings of their own is how one setting came to read 62.5 in the control and 62 here.
+	public static string PeriodLevel(TimePeriodConfig period)
+	{
+		ArgumentNullException.ThrowIfNull(period);
+
+		return period.UseDaylightCurve
+			? string.Create(CultureInfo.InvariantCulture, $"daylight · {period.ColorTempKelvin}K")
+			: string.Create(CultureInfo.InvariantCulture,
+				$"{ConfigNormalizer.Whole(period.BrightnessPct)}% · {period.ColorTempKelvin}K");
+	}
 }
 
 /// <summary>The curated shortlists a token's popover offers.</summary>

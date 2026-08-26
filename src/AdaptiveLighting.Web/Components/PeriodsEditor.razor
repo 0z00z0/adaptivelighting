@@ -324,10 +324,7 @@
 		Set(() => DaylightCurveMode.Set(
 			Periods, Defaults, period, string.Equals(value, CurveMode, StringComparison.Ordinal)));
 
-	private static string LevelSummary(TimePeriodConfig period) =>
-		period.UseDaylightCurve
-			? string.Create(CultureInfo.InvariantCulture, $"daylight · {period.ColorTempKelvin}K")
-			: string.Create(CultureInfo.InvariantCulture, $"{Math.Round(period.BrightnessPct)}% · {period.ColorTempKelvin}K");
+	private static string LevelSummary(TimePeriodConfig period) => TokenFormat.PeriodLevel(period);
 
 	/// <summary>The document's rooms as the picker offers them: named for a reader, valued as the area id.</summary>
 	private IReadOnlyList<EntityOption> MotionAreaOptions =>
