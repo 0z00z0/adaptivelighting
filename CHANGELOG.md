@@ -410,6 +410,13 @@ against each other.
 
 ### Internal
 
+- **Debug data ships inside the assemblies, so a stack trace from a deployed house resolves to a line
+  number.** `DebugType=embedded` replaces the four `.snupkg` symbol packages, which GitHub Packages has no
+  symbol server to serve and the release push discarded on every run. Source Link is unchanged and is what
+  maps the embedded data back to the repository. The cost is a larger assembly in every deploy: the four
+  packaged DLLs go from 1 099 264 to 1 462 272 bytes in total, the largest single rise being
+  `AdaptiveLighting.Web.dll` at 692 224 → 973 824.
+
 - **`Test1.cs` is gone.** The `dotnet new mstest` template's empty `TestMethod1` never asserted anything. The
   suite is one test smaller and no less covered.
 
