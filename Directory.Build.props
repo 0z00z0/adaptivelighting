@@ -28,14 +28,14 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <!--
-      Source Link, so a stack trace leads back to real source. The .snupkg these produce is packed and then
-      dropped: GitHub Packages has no symbol server, so release.yml pushes with symbols suppressed. Making
-      them actually reachable means DebugType=embedded, which changes what ships. See docs/backlog.md.
+      Debug data travels inside the DLL, so a stack trace off a deployed house resolves to a line number
+      with no symbol server in the picture: GitHub Packages has none. Source Link stays, and is what maps
+      that embedded data back to the repository. No separate .snupkg is packed, because nothing could
+      consume one. The cost is a larger assembly in every deploy.
     -->
+    <DebugType>embedded</DebugType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
     <!-- The code documents intent, not every public member; CS1591 would be noise, not a finding. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
