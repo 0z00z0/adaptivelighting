@@ -37,8 +37,8 @@ jobs:
       # argument for it was that one credential could also serve restore, but restore happens on a developer's
       # machine against the user-level NuGet.Config and never touches this job.
       #
-      # --no-symbols: pack writes a .snupkg beside each .nupkg, and push would send it uninvited. GitHub
-      # Packages has no symbol server, so that is a failed step in exchange for nothing.
+      # --no-symbols: GitHub Packages has no symbol server. Debug data is embedded in the assemblies
+      # instead, so no .snupkg is packed and the flag is a guard against one ever being pushed uninvited.
       #
       # No --skip-duplicate. It turns the 409 that means "this version is already live" into a green build
       # while the old bits stay deployed, which is the one failure a release job exists to catch.

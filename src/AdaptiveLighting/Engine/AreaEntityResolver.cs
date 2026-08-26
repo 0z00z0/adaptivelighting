@@ -33,6 +33,11 @@ public sealed record ResolvedArea(
 	/// <summary>A scene run in place of switching this area off when it goes empty, or <c>null</c>.</summary>
 	public string? SceneWhenEmpty { get; init; }
 
+	/// <summary>Which sensor the daylight curve reads here; <c>null</c> reads the house's outdoor sensor.</summary>
+	// Left unresolved for the same reason FollowOutdoorLux is: a room that says nothing keeps following the
+	// house when the house changes its mind.
+	public string? DaylightSensor { get; init; }
+
 	/// <summary>Whether any of the area's lights offers colour of any kind, or <c>null</c> when none answered.</summary>
 	// False is the brightness-only room, which is a different fact from LightsSupportColorTemp being null: that
 	// one covers both "nobody answered" and "nobody has colour", and only this separates them.
@@ -209,7 +214,8 @@ public sealed class AreaEntityResolver
 			IgnoreWhenOnInverted = area.IgnoreWhenOnInverted == true,
 			KeepLitWhenOnInverted = area.KeepLitWhenOnInverted == true,
 			SceneOnMotion = Trimmed(area.SceneOnMotion),
-			SceneWhenEmpty = Trimmed(area.SceneWhenEmpty)
+			SceneWhenEmpty = Trimmed(area.SceneWhenEmpty),
+			DaylightSensor = Trimmed(area.DaylightSensor)
 		};
 
 		return true;

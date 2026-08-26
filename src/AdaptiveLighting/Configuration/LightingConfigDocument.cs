@@ -97,7 +97,10 @@ public static class LightingConfigDocument
 		["ColorTempToleranceKelvin"] =
 			"the colour-temperature tolerance is now fixed and is no longer configurable per house.",
 		["ResetAtTime"] =
-			"ending a house mode at a time of day was removed; the mode now ends only where its own option says it does."
+			"ending a house mode at a time of day was removed; the mode now ends only where its own option says it does.",
+		["LuxBrightnessEnabled"] =
+			"the daylight curve is chosen per period now, not per room. Set UseDaylightCurve on the periods that "
+			+ "should follow the light outside; the other lux brightness settings still shape the curve."
 	};
 
 	private const string Header =

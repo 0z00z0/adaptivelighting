@@ -467,68 +467,94 @@ public sealed class ConfigValidatorTests
 		StringAssert.Contains(result.ToString(), "Gang", "the household needs to know which room to go and fix");
 	}
 
+	/// <summary>The curve reads the house's outdoor sensor, so a period claiming it with none named has nothing to read.</summary>
 	[TestMethod]
-	public void Switching_It_On_With_No_Lux_Sensor_Named_Anywhere_Only_Warns()
+	public void A_Period_On_The_Curve_With_No_Outdoor_Sensor_Only_Warns()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Defaults.LuxBrightnessEnabled = true;
+		config.Periods[0].UseDaylightCurve = true;
 
 		ValidationResult result = ConfigValidator.Validate(config);
 
-		Assert.IsTrue(result.IsValid, "no sensor is a room on the schedule alone, not a broken document");
-		Assert.IsTrue(result.Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)));
+		Assert.IsTrue(result.IsValid, "a missing reading is a level nobody chose, not a broken document");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)));
+		StringAssert.Contains(result.Warnings.Single(w => w.Contains("daylight curve", StringComparison.Ordinal)), "Stue",
+			"the household needs to know which room has nothing to read");
 	}
 
-	/// <summary>The daylight curve reads whatever the darkness gate reads, so an outdoor sensor no room follows feeds it nothing.</summary>
 	[TestMethod]
-	public void A_House_Wide_Outdoor_Sensor_Answers_That_Warning_Once_A_Room_Follows_It()
+	public void Naming_The_Houses_Outdoor_Sensor_Answers_That_Warning()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Defaults.LuxBrightnessEnabled = true;
+		config.Periods[0].UseDaylightCurve = true;
+
+		Assert.IsTrue(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)));
+
 		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
 
-		Assert.IsTrue(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
-			"the sensor is named but nothing reads it, so no room is guaranteed a reading");
-
-		config.Areas = [new() { Name = "Gang", AreaId = "gang", FollowOutdoorLux = true }];
-
-		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
-			"one outdoor sensor brightening the rooms that follow it is the case the feature was asked for");
+		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)),
+			"one outdoor sensor covers every room that did not name one of its own");
 	}
 
 	[TestMethod]
-	public void A_Rooms_Own_Pinned_Sensor_Answers_It_Too()
+	public void A_Rooms_Own_Daylight_Sensor_Answers_It_Too()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Defaults.LuxBrightnessEnabled = true;
-		config.Areas = [new() { Name = "Stue", AreaId = "stue", LuxSensor = "sensor.stue_lux" }];
+		config.Periods[0].UseDaylightCurve = true;
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", DaylightSensor = "sensor.stue_lux" }];
 
-		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)));
+		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)),
+			"the only room in the house reads a sensor it named itself");
+
+		config.Areas.Add(new AreaConfig { Name = "Gang", AreaId = "gang" });
+
+		Assert.IsTrue(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)),
+			"and a second room that named none brings the warning back");
+	}
+
+	/// <summary>The darkness sensors are a separate question, and answering that one does not answer this one.</summary>
+	[TestMethod]
+	public void A_Rooms_Darkness_Sensor_Does_Not_Answer_The_Curves_Warning()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Periods[0].UseDaylightCurve = true;
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", LuxSensor = "sensor.stue_lux", FollowOutdoorLux = true }];
+
+		Assert.IsTrue(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)),
+			"an indoor sensor measures the room's own lamps, so the curve does not read it");
 	}
 
 	[TestMethod]
-	public void A_Room_That_Opted_Out_Does_Not_Raise_The_Warning()
+	public void No_Period_On_The_Curve_Raises_Nothing()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Defaults.LuxBrightnessEnabled = true;
-		config.Areas = [new() { Name = "Stue", AreaId = "stue", LuxBrightnessEnabled = false }];
 
-		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("LuxBrightnessEnabled", StringComparison.Ordinal)),
-			"the only room in the house switched it off, so nothing is waiting on a sensor");
+		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)),
+			"nothing is waiting on a sensor while every period states its own brightness");
 	}
 
+	/// <summary>A brightness end outside 0-100 is refused at either end of the curve.</summary>
 	[TestMethod]
-	public void On_But_With_A_Ceiling_Of_Zero_Warns_Without_Refusing()
+	public void Both_Ends_Of_The_Curve_Are_Held_Inside_The_Physical_Range()
 	{
-		AdaptiveLightingConfig config = Minimal();
-		config.Defaults.LuxBrightnessEnabled = true;
-		config.Defaults.LuxBrightnessMaxPct = 0;
-		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+		AdaptiveLightingConfig low = Minimal();
+		low.Defaults.LuxBrightnessMinPct = -5;
 
-		ValidationResult result = ConfigValidator.Validate(config);
+		Assert.IsFalse(ConfigValidator.Validate(low).IsValid);
+		StringAssert.Contains(ConfigValidator.Validate(low).ToString(), "LuxBrightnessMinPct");
 
-		Assert.IsTrue(result.IsValid);
-		Assert.IsTrue(result.Warnings.Any(w => w.Contains("never raise", StringComparison.Ordinal)));
+		AdaptiveLightingConfig high = Minimal();
+		high.Defaults.LuxBrightnessMaxPct = 140;
+
+		Assert.IsFalse(ConfigValidator.Validate(high).IsValid);
+		StringAssert.Contains(ConfigValidator.Validate(high).ToString(), "LuxBrightnessMaxPct");
+
+		AdaptiveLightingConfig falling = Minimal();
+		falling.Defaults.LuxBrightnessMinPct = 90;
+		falling.Defaults.LuxBrightnessMaxPct = 20;
+
+		Assert.IsTrue(ConfigValidator.Validate(falling).IsValid,
+			"a curve that falls is a choice, not an error");
 	}
 
 	[TestMethod]

@@ -94,8 +94,13 @@ public class GlobalConfig
 	/// </remarks>
 	public PeriodSelectConfig? PeriodSelect { get; set; }
 
-	/// <summary>The house's outdoor lux sensor, offered to the rooms that ask for it by name.</summary>
-	/// <remarks>An opt-in: a room reads it only when it sets <see cref="AreaConfig.FollowOutdoorLux"/>, and a room that says nothing has no lux reading at all.</remarks>
+	/// <summary>The house's outdoor lux sensor: what the daylight curve reads, and what a room may follow for darkness.</summary>
+	/// <remarks>
+	///     Two separate questions. Darkness is an opt-in, taken only when a room sets
+	///     <see cref="AreaConfig.FollowOutdoorLux"/>, and a room that says nothing has no lux reading at all. The
+	///     daylight curve reads this sensor in every room unless the room names its own
+	///     <see cref="AreaConfig.DaylightSensor"/>.
+	/// </remarks>
 	public string? OutdoorLuxSensor { get; set; }
 
 	/// <summary>Whether areas have been discovered from the HA area registry once.</summary>
@@ -204,17 +209,16 @@ public class AreaSettings
 	/// <summary>Extra lux required to leave the dark state, so a sensor sitting on the threshold cannot flap.</summary>
 	public double LuxHysteresis { get; set; } = 10;
 
-	/// <summary>Whether the light outside also raises this area's brightness, on top of the circadian schedule.</summary>
-	/// <remarks>Off leaves the schedule's target object untouched, not raised by zero.</remarks>
-	public bool LuxBrightnessEnabled { get; set; }
-
-	/// <summary>The illuminance at which the daylight adjustment starts. Must be positive: the curve interpolates on <c>log10</c>.</summary>
+	/// <summary>The illuminance at which the daylight curve starts to climb. Must be positive: the curve interpolates on <c>log10</c>.</summary>
 	public double LuxBrightnessStartLux { get; set; } = 100;
 
 	public double LuxBrightnessFullLux { get; set; } = 10000;
 
-	/// <summary>The brightness the area is raised toward at <see cref="LuxBrightnessFullLux"/> and beyond.</summary>
-	/// <remarks>A ceiling, never a replacement: the curve can only add light, and a period already above it is left alone.</remarks>
+	/// <summary>The brightness the curve holds at <see cref="LuxBrightnessStartLux"/> and below.</summary>
+	// The curve's dark end. Free of the schedule: a period running the curve hides its own percentage.
+	public double LuxBrightnessMinPct { get; set; } = 40;
+
+	/// <summary>The brightness the curve holds at <see cref="LuxBrightnessFullLux"/> and above.</summary>
 	public double LuxBrightnessMaxPct { get; set; } = 100;
 
 	public double LuxBrightnessGamma { get; set; } = 1.0;
