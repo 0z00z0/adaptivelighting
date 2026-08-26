@@ -176,8 +176,10 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
                                # fixtures; Kelvin forces a colour temperature;
                                # EqualChannels drives every channel at one value,
                                # for dimmers and strips that take no kelvin.
-    RespectSleepMode: false    # "Gentle while the house sleeps"
-    SleepBlocksAutoOn: false   # "Never comes on by itself while the house sleeps"
+    RespectSleepMode: false    # "While the house sleeps". The two fields are one
+    SleepBlocksAutoOn: false   # stepped control: false/false is Normal,
+                               # true/false is Dims, true/true is Dims and stays
+                               # off.
     SkipAwaySweep: false       # "Stays on when everyone leaves"
     WelcomeHome: false         # lights on first arrival, when it's dark
 

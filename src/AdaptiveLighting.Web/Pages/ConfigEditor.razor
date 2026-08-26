@@ -574,6 +574,20 @@ else
 												<SettingRow Label="@item.Label" Help="@item.Help">
 													@switch (item.Control)
 													{
+														case RoomControl.Steps:
+															<div class="steps" role="group" aria-label="@item.Label">
+																@foreach (TokenChoice option in SleepSteps.Options)
+																{
+																	TokenChoice step = option;
+																	bool current = string.Equals(step.Value, SleepSteps.Of(_config.Defaults).ToString(), StringComparison.Ordinal);
+																	<button type="button"
+																			class="@(current ? "cur" : null)"
+																			aria-pressed="@(current ? "true" : "false")"
+																			@onclick="() => SetHouseStep(step.Value)">@step.Text</button>
+																}
+															</div>
+															break;
+
 														case RoomControl.Flag:
 															<button type="button"
 																	class="switch @(RoomSettings.Flag(null, _config.Defaults, item.Key) ? "on" : null)"
@@ -1562,6 +1576,15 @@ else
 	private void SetHouseFlag(string key, bool value)
 	{
 		RoomSettings.SetFlag(_config.Defaults, key, value);
+		Revalidate();
+	}
+
+	private void SetHouseStep(string value)
+	{
+		if (!SleepSteps.TryParse(value, out SleepStep step))
+			return;
+
+		SleepSteps.Set(_config.Defaults, step);
 		Revalidate();
 	}
 

@@ -281,20 +281,32 @@ public sealed class AreaSentencesTests
 
 		Assert.AreEqual(3, sentences.Count);
 		Assert.AreEqual(
-			"This room is gentle while the house sleeps, and welcomes the first person home.",
+			"This room dims while the house sleeps, and welcomes the first person home.",
 			sentences[2].PlainText);
 	}
 
-	/// <summary>Both flags on is an ordinary document; SleepBlocksAutoOn already implies RespectSleepMode.</summary>
+	/// <summary>The top step is one rule, so it gets one clause and never two that read as a contradiction.</summary>
 	[TestMethod]
-	public void The_Stronger_Sleep_Rule_Speaks_For_Both()
+	public void The_Top_Sleep_Step_Gets_One_Clause()
 	{
 		AreaConfig room = Room();
 		room.RespectSleepMode = true;
 		room.SleepBlocksAutoOn = true;
 
 		Assert.AreEqual(
-			"This room never comes on by itself while the house sleeps.",
+			"This room dims and does not come on while the house sleeps.",
+			AreaSentences.ForArea(room, Defaults())[2].PlainText);
+	}
+
+	/// <summary>A file may hold the block without the clamp, and the engine does not clamp such a room.</summary>
+	[TestMethod]
+	public void The_Block_Alone_Is_Not_Reported_As_Dimming()
+	{
+		AreaConfig room = Room();
+		room.SleepBlocksAutoOn = true;
+
+		Assert.AreEqual(
+			"This room does not come on while the house sleeps.",
 			AreaSentences.ForArea(room, Defaults())[2].PlainText);
 	}
 

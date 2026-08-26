@@ -26,6 +26,9 @@ public enum RoomControl
 
 	Choice,
 
+	/// <summary>A rising ladder of named steps, where each step writes more than one flag at once.</summary>
+	Steps,
+
 	Entity
 }
 
@@ -43,8 +46,13 @@ public sealed record RoomSetting(
 	double Step = 1,
 	double Min = 0,
 	double? Max = null,
-	Func<AreaSettings, bool>? AppliesWhen = null)
+	Func<AreaSettings, bool>? AppliesWhen = null,
+	IReadOnlyList<string>? Folds = null)
 {
+	/// <summary>Every schema key this row writes: its own, then whatever its steps fold in.</summary>
+	// A folded key has no row of its own, so this is what holds the sections and the schema to the same set.
+	public IReadOnlyList<string> AllKeys => Folds is null ? [Key] : [Key, .. Folds];
+
 	public bool AppliesTo(AreaSettings effective)
 	{
 		ArgumentNullException.ThrowIfNull(effective);
@@ -104,7 +112,11 @@ public static class RoomSettings
 		}
 
 		Keys = keys;
-		ByKey = Groups.SelectMany(group => group.Settings).ToDictionary(setting => setting.Key, StringComparer.Ordinal);
+
+		ByKey = Groups
+			.SelectMany(group => group.Settings)
+			.SelectMany(setting => setting.AllKeys.Select(key => (Key: key, Setting: setting)))
+			.ToDictionary(pair => pair.Key, pair => pair.Setting, StringComparer.Ordinal);
 	}
 
 	/// <summary>The most a light-level setting takes: the largest illuminance a 16-bit sensor reading can carry.</summary>
@@ -246,19 +258,15 @@ public static class RoomSettings
 					"Most lights take a colour temperature in kelvin. Plain dimmers and colour strips do not, and those are driven with every channel at one value, which is neutral white; the schedule's kelvin figure does nothing for them. Left to detect, this reads the room's own lights and needs no answer from you.",
 					RoomControl.Choice),
 				new RoomSetting(
-					nameof(AreaSettings.RespectSleepMode),
-					"Gentle while the house sleeps",
-					"In sleep mode this room is held to the night period's limits, so a 03:00 glass of water gets a dim light instead of the day's.",
-					RoomControl.Flag),
-				new RoomSetting(
-					nameof(AreaSettings.SleepBlocksAutoOn),
-					"Never comes on by itself while the house sleeps",
-					"In sleep mode movement leaves this room dark — for the bedroom itself. The wall switch still works, and what it turns on is held to the night period's limits only if the setting above is on as well.",
-					RoomControl.Flag),
+					SleepSteps.Key,
+					"While the house sleeps",
+					"Normal treats the small hours like any other. Dims holds the room to the night period's limits, so a 03:00 glass of water gets a dim light. Dims and stays off also leaves movement unanswered — for the bedroom itself. The wall switch works at every step.",
+					RoomControl.Steps,
+					Folds: [SleepSteps.BlockKey]),
 				new RoomSetting(
 					nameof(AreaSettings.SkipAwaySweep),
 					"Stays on when everyone leaves",
-					"The lights-off sweep skips this room when the house empties. For porch and security lights, which are wanted precisely when nobody's home.",
+					"The lights-off sweep skips this room when the house empties. For porch and security lights, which are wanted when nobody is home.",
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.WelcomeHome),
@@ -339,6 +347,16 @@ public static class RoomSettings
 		return RoomProperties.TryGetValue(key, out PropertyInfo? property) && property.GetValue(room) is not null;
 	}
 
+	/// <summary>Whether a row is this room's own, counting every key the row writes.</summary>
+	// The per-key reading stays the counting one: a stepped row owning two keys is two of the denominator, the
+	// same as the two switches it replaced.
+	public static bool IsOwn(AreaConfig room, RoomSetting setting)
+	{
+		ArgumentNullException.ThrowIfNull(setting);
+
+		return setting.AllKeys.Any(key => IsOwn(room, key));
+	}
+
 	public static int OwnCount(AreaConfig room)
 	{
 		ArgumentNullException.ThrowIfNull(room);
@@ -346,7 +364,7 @@ public static class RoomSettings
 		return Keys.Count(key => IsOwn(room, key));
 	}
 
-	/// <summary>Sends one setting back to following the house, clearing the property.</summary>
+	/// <summary>Sends one setting back to following the house, clearing its property and any key its row folds in.</summary>
 	/// <remarks>Never copies the house's current number in, which would pin the room to today's value.</remarks>
 	public static bool Clear(AreaConfig room, string key)
 	{
@@ -356,6 +374,16 @@ public static class RoomSettings
 			return false;
 
 		property.SetValue(room, null);
+
+		// A stepped row leaving one of its flags pinned would read as the room still deciding its own night rule.
+		if (ByKey.TryGetValue(key, out RoomSetting? setting))
+		{
+			foreach (string folded in setting.AllKeys)
+			{
+				if (RoomProperties.TryGetValue(folded, out PropertyInfo? twin))
+					twin.SetValue(room, null);
+			}
+		}
 
 		return true;
 	}
@@ -439,6 +467,7 @@ public static class RoomSettings
 			RoomControl.Fraction => TokenFormat.Percent(Shown(room, defaults, key)),
 			RoomControl.Number => TokenFormat.Number(Shown(room, defaults, key), setting.Unit),
 			RoomControl.Flag => Flag(room, defaults, key) ? "yes" : "no",
+			RoomControl.Steps => SleepSteps.Word(SleepSteps.Of(room, defaults)),
 			RoomControl.Choice => Word(key, ChoiceName(room, defaults, key)),
 			_ => Entity(room, defaults, key) is { Length: > 0 } entity ? entity : "none"
 		};

@@ -4814,6 +4814,58 @@ button.mode-pill:disabled {
 	color: var(--text);
 }
 
+/* ---- a stepped choice ----
+   A rising ladder rather than a set of alternatives: each step does everything the one before it does and more,
+   so the order carries meaning and the options never reflow out of it. On a phone the row is the whole column
+   and the steps stack, which is the only layout where all three labels stay readable at 390px. */
+.steps {
+	display: flex;
+	gap: 3px;
+	padding: 3px;
+	background: var(--panel-2);
+	border: var(--rule);
+	border-radius: var(--radius-control);
+}
+
+.steps button {
+	background: none;
+	border: 1px solid transparent;
+	border-radius: var(--radius-chip);
+	padding: 0.2rem 0.5rem;
+	font-size: var(--text-sm);
+	font-weight: 600;
+	color: var(--muted);
+	text-align: center;
+	white-space: nowrap;
+}
+
+.steps button:hover:not(:disabled) {
+	color: var(--accent);
+	border-color: transparent;
+}
+
+.steps button.cur {
+	background: var(--panel);
+	border-color: var(--line);
+	color: var(--text);
+}
+
+@media (max-width: 560px) {
+	/* The control takes its own line under the help text, so the ladder reads top to bottom. */
+	.srow-control:has(.steps) {
+		flex: 1 1 100%;
+	}
+
+	.steps {
+		flex-direction: column;
+		width: 100%;
+	}
+
+	.steps button {
+		text-align: left;
+	}
+}
+
 /* ---- the pair at the bottom ---- */
 .room-columns {
 	display: grid;
