@@ -278,8 +278,9 @@ whole: brightness, warmth and `SetsModeId` together, for every room.
 It is implemented by **leaving the boundary out of the table**, not by a rule anywhere downstream.
 `CircadianCalculator.ResolveBoundaries` skips a held period, so the wrap keeps the previous period in force and
 the next period's own `Start` overtakes it without anything having to notice. Every question the engine asks —
-`ActivePeriodId`, `GetTarget`, the blend — comes out of that one table, which is why the name and the levels
-cannot disagree about a period that has not begun.
+`ActivePeriodId`, `GetTarget`, the blend — comes out of that one table, and so does the dashboard's schedule
+band through `PeriodsAcross`, which is why the name, the levels and the drawing cannot disagree about a period
+that has not begun.
 
 Four things bound it, and each of them is a house that would otherwise misbehave:
 
@@ -585,18 +586,22 @@ page is answerable in the test project, not in the markup.
 
 ### Which period is in force is one question, asked in one place
 
-Four surfaces answer "which period is in force now". Three of them compute it and one reads it:
+Five surfaces answer which period is in force. Three compute it for an instant, one reads it, and one draws a
+stretch of them:
 
 - `Room.razor`'s now badge, its chart caption and the daylight curve's base level;
 - `PeriodsEditor.razor`'s "active now" badge and its hover;
 - `ModeService`'s mode cards;
 - `RoomFacts`, which reads the snapshot's period name. That is the engine's own answer at report time, not a
-  fourth computation.
+  computation of its own;
+- the dashboard's schedule band, which asks for the whole board window rather than a single instant.
 
-The three that compute go through `Schedule.InForceNow`, over a calculator from `Schedule.CalculatorFor`, and
-that is the only place the web layer builds one. A hand-rolled `ResolveBoundaries` plus `ActiveIndex` does not
-know that a period waiting for movement is left out of the table, and badges the morning from 06:30 in a house
-still running night levels.
+The four that compute go through a calculator from `Schedule.CalculatorFor`, and that is the only place the web
+layer builds one; the three answering for an instant go on through `Schedule.InForceNow`. A hand-rolled
+`ResolveBoundaries` plus `ActiveIndex` does not know that a period waiting for movement is left out of the
+table, and badges the morning from 06:30 in a house still running night levels. A band laying its own
+boundaries out carries that fault twice: it draws a held period from its `Start`, and under
+`PeriodAuthority.HomeAssistant` it draws the clock's schedule while the engine runs the dropdown's period.
 
 **A shared factory rather than a value the engine publishes**, because `PeriodsEditor` renders `ConfigEditor`'s
 unsaved draft. The badge has to follow the periods being edited, and a published answer could only ever
@@ -611,6 +616,17 @@ Provenance rides back in `PeriodInForce.Rule`, because the editor's hover has to
 `HeldBack` is the difference between `CircadianCalculator.ActivePeriodId`, which respects the hold, and
 `ScheduledPeriodId`, which ignores it, so the web layer reads the movement rule off the engine's own two
 answers instead of gaining a third.
+
+### The schedule band is that same table, over a stretch
+
+`CircadianCalculator.PeriodsAcross` answers with the periods in force between two instants, clipped to them.
+Boundaries are placed per local day, from the day before the stretch through the day after, so a window opening
+inside yesterday's last period and one reaching past midnight both come out whole; one day's sun times serve
+them all. A period waiting for movement is absent, so the one before it holds the stretch its `Start` would have
+taken. Under an override there are no boundaries at all: the named period holds the whole stretch, because that
+is what the engine is running.
+
+`BoardView.Band` turns those stretches into percentages of the board's width and decides nothing else.
 
 ### The activity record renders per event, the engine publishes per area
 
@@ -711,9 +727,9 @@ discoveries are cached — a throw must never become a standing answer of "nothi
 
 ### DST
 
-Every boundary is resolved **through the time zone**, never at the window's own offset, and the first day is
-taken through the zone rather than from `window.Start.Date`. The two ambiguous hours a year resolve as
-standard time.
+Every boundary is resolved **through the time zone**, never at the offset the instant asking happens to carry:
+the day a boundary belongs to is taken through the zone, and its wall clock is placed on that day. The two
+ambiguous hours a year resolve as standard time.
 
 A boundary's *instant*, which is what the wake-up is armed at, resolves the same way: `ConvertTimeToUtc` for
 the autumn hour that happens twice, and a walk to the first minute that exists for the spring-forward gap,

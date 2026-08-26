@@ -39,6 +39,9 @@ public enum PeriodDropReason
 // Surfaced so a vanished period is a logged warning and never a silent hole the table wraps over.
 public sealed record DroppedPeriod(string PeriodName, string Start, PeriodDropReason Reason);
 
+/// <summary>A stretch of time one period holds, bounded by the instants either side of it.</summary>
+public sealed record PeriodSpan(TimePeriodConfig Period, DateTimeOffset From, DateTimeOffset To);
+
 /// <summary>Turns the configured period table into the target for a given instant, for one room.</summary>
 // Pure with respect to time and I/O: the instant is an argument, the day's sun times arrive through a delegate,
 // and nothing here logs. Every member is safe to call from any thread; the drop record is the only mutable state
@@ -241,6 +244,60 @@ public sealed class CircadianCalculator
 	// about what the lights are doing. Only ModeMonitor's motion rule asks.
 	public string? ScheduledPeriodId(DateTimeOffset now) => KeyAt(ResolveBoundaries(now, respectHold: false), now);
 
+	/// <summary>The periods in force from <paramref name="from"/> to <paramref name="to"/>, in order, clipped to that stretch.</summary>
+	/// <remarks>
+	///     The same table every other answer here comes out of, laid out over a stretch instead of at an instant, so
+	///     a surface drawing the schedule cannot draw one the engine is not running. A period still waiting for
+	///     movement is absent, and its predecessor's stretch runs through where it would have started. Under an
+	///     override there is no boundary at all: the named period holds the whole stretch.
+	/// </remarks>
+	// Boundaries are placed per local day for the day before the stretch through the day after, so one opening
+	// inside yesterday's last period and one reaching past midnight both come out whole. One day's sun times serve
+	// them all.
+	public IReadOnlyList<PeriodSpan> PeriodsAcross(DateTimeOffset from, DateTimeOffset to)
+	{
+		if (to <= from)
+			return [];
+
+		if (OverriddenPeriod() is { } forced)
+			return [new PeriodSpan(forced, from, to)];
+
+		SunTimes sunTimes = _sunTimes();
+		List<(DateTimeOffset At, TimePeriodConfig Period)> boundaries = [];
+
+		for (DateOnly day = from.DayIn(_zone).AddDays(-1); day <= to.DayIn(_zone).AddDays(1); day = day.AddDays(1))
+		{
+			DateOnly instance = day;
+			Func<TimeOnly, DateOnly> instanceDay = _ => instance;
+
+			foreach ((PeriodStart start, TimePeriodConfig period) in _parsedStarts)
+				if (BoundaryOf(start, period, sunTimes, instanceDay) is { } resolved)
+					boundaries.Add((InstantOf(day, resolved), period));
+		}
+
+		boundaries.Sort((left, right) => left.At.CompareTo(right.At));
+
+		List<PeriodSpan> spans = new(boundaries.Count);
+
+		for (int index = 0; index < boundaries.Count; index++)
+		{
+			DateTimeOffset opens = boundaries[index].At;
+
+			// The last boundary runs to the end of the stretch: there is no later one to hand over to.
+			DateTimeOffset closes = index + 1 < boundaries.Count ? boundaries[index + 1].At : to;
+
+			DateTimeOffset clippedFrom = opens < from ? from : opens;
+			DateTimeOffset clippedTo = closes > to ? to : closes;
+
+			if (clippedTo <= clippedFrom)
+				continue;
+
+			spans.Add(new PeriodSpan(boundaries[index].Period, clippedFrom, clippedTo));
+		}
+
+		return spans;
+	}
+
 	/// <summary>The instant the next boundary after <paramref name="now"/> falls on, wrapping to the next local day.</summary>
 	// The moment a caller should ask its ordinary questions again; the answer it gets then still comes from
 	// ActivePeriodId. A period still waiting for movement is absent, so nothing wakes for a boundary that will
@@ -294,24 +351,37 @@ public sealed class CircadianCalculator
 		TimeOnly timeOfDay = now.TimeIn(_zone);
 		DateOnly today = now.DayIn(_zone);
 
-		// A sun-anchored boundary the sun entity cannot place is dropped, never guessed at. The table still covers
-		// the day by wrapping, so the drop has to be reported or the wrap is silent.
-		foreach ((PeriodStart? start, TimePeriodConfig? period) in _parsedStarts)
-			if (start.Resolve(sunTimes) is { } resolved)
-			{
-				// A boundary still ahead belongs to the instance that began yesterday, which is the one the wrap
-				// puts in force. Asking about today would ask about a period that has not come round yet.
-				if (respectHold
-					&& _heldBack?.Invoke(period.Key, resolved <= timeOfDay ? today : today.AddDays(-1)) == true)
-					continue;
+		// A boundary still ahead belongs to the instance that began yesterday, which is the one the wrap puts in
+		// force. Asking about today would ask about a period that has not come round yet.
+		DateOnly InstanceDay(TimeOnly resolved) => resolved <= timeOfDay ? today : today.AddDays(-1);
 
+		foreach ((PeriodStart start, TimePeriodConfig period) in _parsedStarts)
+			if (BoundaryOf(start, period, sunTimes, respectHold ? InstanceDay : null) is { } resolved)
 				boundaries.Add((resolved, period));
-			}
-			else
-				RecordDrop(new DroppedPeriod(period.Name, period.Start, PeriodDropReason.Unresolvable), raiseEvent: true);
 
 		boundaries.Sort((left, right) => left.Start.CompareTo(right.Start));
 		return boundaries;
+	}
+
+	// The one place a Start becomes a boundary: resolved against the day's sun times, reported when it cannot be,
+	// and left out while the instance beginning on instanceDay is still waiting for movement. A null instanceDay
+	// ignores the hold. It is a function of the resolved time because which instance is in force depends on where
+	// that time falls.
+	private TimeOnly? BoundaryOf(
+		PeriodStart start,
+		TimePeriodConfig period,
+		SunTimes sunTimes,
+		Func<TimeOnly, DateOnly>? instanceDay)
+	{
+		// A sun-anchored boundary the sun entity cannot place is dropped, never guessed at. The table still covers
+		// the day by wrapping, so the drop has to be reported or the wrap is silent.
+		if (start.Resolve(sunTimes) is not { } resolved)
+		{
+			RecordDrop(new DroppedPeriod(period.Name, period.Start, PeriodDropReason.Unresolvable), raiseEvent: true);
+			return null;
+		}
+
+		return instanceDay is not null && _heldBack?.Invoke(period.Key, instanceDay(resolved)) == true ? null : resolved;
 	}
 
 	// The last boundary at or before timeOfDay, wrapping to yesterday's last period.

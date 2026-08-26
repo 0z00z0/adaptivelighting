@@ -367,7 +367,7 @@ else
 	private BoardWindow _window = BoardWindow.Around(DateTimeOffset.Now, BoardView.LookBack, BoardView.LookAhead);
 	private IReadOnlyList<DateTimeOffset> _ticks = [];
 	private double _nowPercent;
-	private IReadOnlyList<TimePeriodConfig>? _periods;
+	private AdaptiveLightingConfig? _schedule;
 	private DateTimeOffset? _periodsStamp;
 	private MasterSwitchView? _masterSwitch;
 	private HouseModeView? _houseMode;
@@ -507,11 +507,11 @@ else
 		{
 			DateTimeOffset? stamp = Engine.Store.LastWrittenUtc;
 
-			if (_periods is null || stamp != _periodsStamp)
+			if (_schedule is null || stamp != _periodsStamp)
 			{
 				try
 				{
-					_periods = Engine.Store.Load().Periods;
+					_schedule = Engine.Store.Load();
 					_periodsStamp = stamp;
 				}
 				catch (LightingConfigException exception)
@@ -519,6 +519,12 @@ else
 					Logger.LogDebug(exception, "Could not read the schedule for the board; keeping the last good copy.");
 				}
 			}
+		}
+
+		if (_schedule is not { } schedule)
+		{
+			_band = [];
+			return;
 		}
 
 		SunTimes sun;
@@ -532,7 +538,18 @@ else
 			sun = SunTimes.Unknown;
 		}
 
-		_band = BoardView.Band(_periods ?? [], sun, _window);
+		// Read only where it is allowed to decide: under the default authority the value is discarded anyway, and
+		// an unguarded read on the one-second ticker is a Home Assistant lookup per second per open board.
+		string? selectValue = Schedule.HomeAssistantDecides(schedule.Global)
+			? Catalog.CurrentStateOf(schedule.Global.PeriodSelect?.EntityId)
+			: null;
+
+		// Through Schedule, so the band draws the table the engine is running: the dropdown's period where Home
+		// Assistant owns the time of day, and the engine's latch where a period waits for movement.
+		_band = BoardView.Band(
+			Schedule.CalculatorFor(
+				schedule.Periods, schedule.Global, sun, selectValue, Schedule.HeldBackRule(Engine)),
+			_window);
 	}
 
 	/// <summary>What a report is filed under, matching the snapshot cache's own key so the two agree.</summary>
