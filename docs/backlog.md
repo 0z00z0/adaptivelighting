@@ -42,6 +42,15 @@ rewritten to suit one.
   | Period | Brightness | Warmth |
   | --- | --- | --- |
 
+- **A retired configuration key reaches only the log, never the browser.** `RetiredKeys`
+  (`LightingConfigDocument.cs:88`) already carries a sentence per key and logs it on every load
+  (`LightingConfigDocument.cs:357`), but nobody watching the browser sees it. `ConfigValidator`
+  already carries a document-wide warning list read by the UI, on the same pattern used for a
+  daylight-curve period with no sensor to read (`ConfigValidator.cs:185`). Loading a document that
+  still holds a retired key should add one of those warnings, using the sentence `RetiredKeys`
+  already has — no new text, no new mechanism, just wiring what is already detected into what is
+  already shown. Generic to every key in the table and every house, not the one presently in use.
+
 - **The blend starts when the period actually begins.** A period whose `Start` was 06:30 but which movement
   began at 06:45 arrives already part-way through its blend, because the window trails the boundary and the
   boundary is still 06:30 (`mechanisms.md`, *A period that waits for movement*). It should ease from the moment
