@@ -10,6 +10,13 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.08.0] - 2026-08-27
+
+### Added
+
+- **The Configuration page shows the running package version.** A deployed instance can be identified without
+  inspecting the DLL.
+
 ## [2.0.0-preview.6] - 2026-08-26
 
 ### Changed
