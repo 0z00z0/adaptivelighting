@@ -58,6 +58,13 @@ rewritten to suit one.
   clock-started one would**, so the transition feels the same whenever you arrive. Needs the calculator to know
   *when* a period began, not just whether.
 
+- **Adopt GitHub Issues as this repo's tracker.** `0z00z0/adaptivelighting` currently has zero open
+  issues — this file is the only tracker in use. Per the *Tracker* section of
+  `Nextcloud\Projects\CLAUDE.md`, once a project has an issue tracker it is the source of truth and
+  this file becomes a mirror in its existing taxonomy and line format, not a second authority.
+  Read-only by default: creating, closing, editing or commenting on an issue needs explicit
+  approval, as does any push, unless standing approval is recorded here.
+
 ## Parked
 
 - **The daylight chart is only 101 px tall on a phone, which caps its labels.** The corner and the label spread
