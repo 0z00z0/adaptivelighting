@@ -2,8 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
-adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The packages —
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
+calendar-based, `YYYY.M.patch` (e.g. `2026.8.0`), unpadded to match the leading-zero stripping NuGet
+already applies on publish — see *Numbers that were chosen, not derived* in `docs/mechanisms.md`.
+The packages —
 `AdaptiveLighting`, `AdaptiveLighting.Web`, `AdaptiveLighting.Extensions` and
 `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
