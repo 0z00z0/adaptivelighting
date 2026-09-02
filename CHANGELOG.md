@@ -16,6 +16,18 @@ against each other.
 
 ### Added
 
+- **A manual change can hold a room until the movement clears, instead of for a fixed time.** *Manual changes
+  hold* offers two answers: *until the room empties*, which waits for the same quiet as *Lights stay on for*,
+  and *for a set time*, which is the clock it has always been. Offered per room and for the house, on the room
+  page, the House tab and in the plain-English sentence.
+  - Under *until the room empties* the level a person set stands while anyone is still in the room — every
+    movement restarts the wait — and is handed back as soon as they leave. The room then does what it does for
+    any empty room.
+  - The room page **hides the length while the hold waits for movement** and keeps it in the document, so
+    switching back restores what was typed.
+  - **This is the new default**, so a house that has never named the setting follows movement after upgrading.
+    A house that prefers the clock sets *for a set time*, per room or for the whole house.
+
 - **A setting the schema no longer has is shown on the Configuration page**, not only written to the log. The
   page names the key, says what it stopped doing, and says that saving once drops it. Every retired setting is
   covered, and document-wide warnings now reach the page in general, where before they reached the log alone.
