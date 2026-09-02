@@ -1140,6 +1140,111 @@ public sealed class LightingConfigDocumentTests
 			"and nothing here needs migrating: the only Zones: in the file belongs to somebody else");
 	}
 
+	// ===================== retired keys reaching something a person reads =====================
+	//
+	// The key is unmatched by the time the binder is done, so the read is the only place it can be seen. It used to
+	// reach the log alone, which nobody watching the browser is reading.
+
+	/// <summary>A document carrying one retired key, wherever in the section it sits.</summary>
+	private static string DocumentCarrying(string key) =>
+		$"""
+		{LightingConfigDocument.RootKey}:
+		  Defaults:
+		    {key}: 30
+		  Periods:
+		    - Name: day
+		      Start: "09:00"
+		""";
+
+	[TestMethod]
+	public void Every_Retired_Key_Is_Carried_Out_Of_The_Read_As_A_Sentence()
+	{
+		foreach (KeyValuePair<string, string> retired in LightingConfigDocument.RetiredKeys)
+		{
+			DocumentReadResult read = LightingConfigDocument.Deserialize(DocumentCarrying(retired.Key));
+
+			string sentence = read.Config.RetiredKeysInDocument.Single();
+
+			StringAssert.Contains(sentence, retired.Key,
+				"the sentence must name the key, or nobody can find it in the file");
+			StringAssert.Contains(sentence, retired.Value,
+				"and must carry what the table says the key stopped doing");
+
+			Assert.IsFalse(read.UsedLegacyKeys,
+				$"'{retired.Key}' is left in the file: finding it translates nothing, so it must not be read as a migration");
+		}
+	}
+
+	/// <summary>The log line and the sentence the browser gets are one wording, so neither can drift from the other.</summary>
+	[TestMethod]
+	public void The_Retired_Key_Sentence_Is_The_Line_That_Reaches_The_Log()
+	{
+		RecordingLogger logger = new();
+
+		DocumentReadResult read = LightingConfigDocument.Deserialize(DocumentCarrying("MaxBrightnessPct"), logger);
+
+		Assert.AreEqual(read.Config.RetiredKeysInDocument.Single(), logger.Warnings.Single());
+	}
+
+	[TestMethod]
+	public void One_Retired_Key_On_Four_Periods_Is_One_Sentence()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Periods:
+			    - Name: morning
+			      Start: "06:30"
+			      MaxBrightnessPct: 40
+			    - Name: day
+			      Start: "09:00"
+			      maxbrightnesspct: 90
+			    - Name: evening
+			      Start: "18:00"
+			      MaxBrightnessPct: 60
+			    - Name: night
+			      Start: "22:30"
+			      MaxBrightnessPct: 30
+			""");
+
+		Assert.AreEqual(1, read.Config.RetiredKeysInDocument.Count,
+			"a setting retired on every period is one thing to fix, not four lines of the same sentence");
+	}
+
+	[TestMethod]
+	public void A_Document_Carrying_No_Retired_Key_Says_Nothing()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(Populated()));
+
+		Assert.AreEqual(0, read.Config.RetiredKeysInDocument.Count);
+	}
+
+	/// <summary>What the sentence promises: saving once from the browser drops the key, and the sentence with it.</summary>
+	[TestMethod]
+	public void Saving_The_Document_Drops_The_Retired_Key_And_Its_Sentence()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(DocumentCarrying("MaxBrightnessPct"));
+
+		string saved = LightingConfigDocument.Serialize(read.Config);
+
+		Assert.IsFalse(saved.Contains("MaxBrightnessPct", StringComparison.Ordinal), "the save drops the key");
+		Assert.AreEqual(0, LightingConfigDocument.Deserialize(saved).Config.RetiredKeysInDocument.Count,
+			"so the next read has nothing left to say about it");
+	}
+
+	/// <summary>Nothing carries the list into the file, on the precedent of the two kill-switch views beside it.</summary>
+	[TestMethod]
+	public void Serialize_DoesNotWriteTheRetiredKeysItFound()
+	{
+		AdaptiveLightingConfig config = Populated();
+		config.RetiredKeysInDocument = ["'MaxBrightnessPct' is still set in the configuration"];
+
+		string yaml = LightingConfigDocument.Serialize(config);
+
+		Assert.IsFalse(yaml.Contains(nameof(AdaptiveLightingConfig.RetiredKeysInDocument), StringComparison.Ordinal));
+		Assert.IsFalse(yaml.Contains("still set in the configuration", StringComparison.Ordinal));
+	}
+
 	/// <summary>Captures everything logged at warning or above.</summary>
 	private sealed class RecordingLogger : ILogger
 	{

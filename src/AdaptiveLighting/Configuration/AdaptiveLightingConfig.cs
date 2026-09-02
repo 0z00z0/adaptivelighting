@@ -25,6 +25,15 @@ public class AdaptiveLightingConfig
 	[YamlIgnore]
 	public int ManagedAreaCount => Areas.Count(area => area.Effective(Defaults).Enabled);
 
+	/// <summary>One sentence per retired setting the document still carries, as the reader found them.</summary>
+	/// <remarks>
+	///     Filled by <see cref="LightingConfigDocument.Deserialize"/> and in memory only: both binders drop an
+	///     unmatched key, so nothing downstream of the parse can see one. Empty on a config built in memory, and
+	///     empty again after a save, which writes the document without the key.
+	/// </remarks>
+	[YamlIgnore]
+	public List<string> RetiredKeysInDocument { get; set; } = [];
+
 	/// <summary>The document a fresh installation starts from.</summary>
 	/// <remarks>
 	///     Names no entities. The placeholder area id is one Home Assistant does not know, so a fresh install fails

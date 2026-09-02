@@ -312,18 +312,19 @@ public sealed class CircadianCalculator
 	// not be crossed.
 	public DateTimeOffset? NextBoundary(DateTimeOffset now)
 	{
-		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = ResolveBoundaries(now);
-		if (boundaries.Count == 0)
-			return null;
-
 		TimeOnly timeOfDay = now.TimeIn(_zone);
 		DateOnly today = now.DayIn(_zone);
 
-		foreach ((TimeOnly start, TimePeriodConfig _) in boundaries)
+		// Each day's own table, because the hold is a question about one day's instance and these boundaries are
+		// still ahead. Asking the instant-shaped table would answer for yesterday.
+		foreach ((TimeOnly start, TimePeriodConfig _) in BoundariesOn(today))
 			if (start > timeOfDay)
 				return InstantOf(today, start);
 
-		return InstantOf(today.AddDays(1), boundaries[0].Start);
+		DateOnly tomorrow = today.AddDays(1);
+		List<(TimeOnly Start, TimePeriodConfig Period)> wrapped = BoundariesOn(tomorrow);
+
+		return wrapped.Count == 0 ? null : InstantOf(tomorrow, wrapped[0].Start);
 	}
 
 	/// <summary>A household wall clock on a household day, as the instant it happens at.</summary>
@@ -350,21 +351,32 @@ public sealed class CircadianCalculator
 	// would be worse.
 	private TimePeriodConfig? OverriddenPeriod() => PeriodWithKey(_periodOverride?.Invoke());
 
-	// The day's placeable boundaries, sorted. A period still waiting for movement is absent, so the wrap keeps the
-	// previous period running and the next period's own start overtakes it.
+	// The boundaries in force at an instant, sorted. A period still waiting for movement is absent, so the wrap
+	// keeps the previous period running and the next period's own start overtakes it.
+	// This answers what is in force now and nothing else: a boundary still ahead can only be in force through the
+	// wrap, and the instance the wrap puts in force began yesterday. A caller asking about a boundary that has yet
+	// to arrive wants BoundariesOn, which places it on the day it falls on.
 	private List<(TimeOnly Start, TimePeriodConfig Period)> ResolveBoundaries(DateTimeOffset now, bool respectHold = true)
 	{
-		SunTimes sunTimes = _sunTimes();
-		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = new(_parsedStarts.Count);
 		TimeOnly timeOfDay = now.TimeIn(_zone);
 		DateOnly today = now.DayIn(_zone);
 
-		// A boundary still ahead belongs to the instance that began yesterday, which is the one the wrap puts in
-		// force. Asking about today would ask about a period that has not come round yet.
 		DateOnly InstanceDay(TimeOnly resolved) => resolved <= timeOfDay ? today : today.AddDays(-1);
 
+		return Placed(respectHold ? InstanceDay : null);
+	}
+
+	// One local day's boundaries, each held against that day's own instance. The rule PeriodsAcross lays a day out
+	// by, so a boundary and the hold that governs it cannot come from different days.
+	private List<(TimeOnly Start, TimePeriodConfig Period)> BoundariesOn(DateOnly day) => Placed(_ => day);
+
+	private List<(TimeOnly Start, TimePeriodConfig Period)> Placed(Func<TimeOnly, DateOnly>? instanceDay)
+	{
+		SunTimes sunTimes = _sunTimes();
+		List<(TimeOnly Start, TimePeriodConfig Period)> boundaries = new(_parsedStarts.Count);
+
 		foreach ((PeriodStart start, TimePeriodConfig period) in _parsedStarts)
-			if (BoundaryOf(start, period, sunTimes, respectHold ? InstanceDay : null) is { } resolved)
+			if (BoundaryOf(start, period, sunTimes, instanceDay) is { } resolved)
 				boundaries.Add((resolved, period));
 
 		boundaries.Sort((left, right) => left.Start.CompareTo(right.Start));

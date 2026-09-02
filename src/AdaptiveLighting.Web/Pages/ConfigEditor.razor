@@ -94,7 +94,8 @@ else
 
 	@* Validator messages verbatim, and above the rail: an error in an unopened section still refuses the save,
 	   so it must not hide with its section. *@
-	@if (_liveValidation is { } validation && (validation.Errors.Count > 0 || validation.AreaErrors.Count > 0))
+	@if (_liveValidation is { } validation
+		&& (validation.Errors.Count > 0 || validation.AreaErrors.Count > 0 || validation.Warnings.Count > 0))
 	{
 		<div class="notice @(validation.IsValid ? "warn" : "bad")">
 			@if (validation.Errors.Count > 0)
@@ -114,6 +115,16 @@ else
 					@foreach (AreaError areaError in validation.AreaErrors)
 					{
 						<li><b>@areaError.AreaName</b>: @areaError.Message</li>
+					}
+				</ul>
+			}
+			@if (validation.Warnings.Count > 0)
+			{
+				<strong>Worth knowing &mdash; none of these stops anything:</strong>
+				<ul>
+					@foreach (string warning in validation.Warnings)
+					{
+						<li>@warning</li>
 					}
 				</ul>
 			}

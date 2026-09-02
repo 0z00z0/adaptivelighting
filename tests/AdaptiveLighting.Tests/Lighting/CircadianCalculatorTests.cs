@@ -698,6 +698,72 @@ public sealed class CircadianCalculatorTests
 			"day@07:00 will not be crossed, so evening@18:00 is the next thing worth waking for");
 	}
 
+	/// <summary>The hold answers for one named day, and a boundary ahead of now falls on today rather than yesterday.</summary>
+	[TestMethod]
+	public void NextBoundary_AsksTheHoldAboutTheDayTheBoundaryFallsOn()
+	{
+		List<(string Period, DateOnly Day)> asked = [];
+
+		CircadianCalculator calc = Holding((period, day) =>
+		{
+			asked.Add((period, day));
+			return false;
+		});
+
+		calc.NextBoundary(At(3));
+
+		Assert.IsTrue(asked.Count > 0, "the hold has to be consulted at all");
+		Assert.IsTrue(asked.TrueForAll(row => row.Day == new DateOnly(2026, 1, 15)),
+			$"every start ahead of 03:00 falls on today; asked about {string.Join(", ", asked.Select(row => $"{row.Period}/{row.Day:yyyy-MM-dd}"))}");
+	}
+
+	/// <summary>Yesterday's instance has begun and today's has not, so this boundary will not be crossed and nothing should wake for it.</summary>
+	[TestMethod]
+	public void NextBoundary_SkipsABoundaryAheadOfNow_WhoseOwnDayIsStillWaiting()
+	{
+		CircadianCalculator calc = Holding((period, day) => period == "day" && day == new DateOnly(2026, 1, 15));
+
+		Assert.AreEqual(new DateTimeOffset(2026, 1, 15, 18, 0, 0, TimeSpan.Zero), calc.NextBoundary(At(3)),
+			"the 07:00 start belongs to today's instance, which is still waiting, so evening@18:00 is next");
+	}
+
+	/// <summary>The mirror image: yesterday's instance was held back, today's has begun, and the boundary must not drop out.</summary>
+	[TestMethod]
+	public void NextBoundary_KeepsABoundaryAheadOfNow_WhoseOwnDayHasBegun()
+	{
+		CircadianCalculator calc = Holding((period, day) => period == "day" && day == new DateOnly(2026, 1, 14));
+
+		Assert.AreEqual(new DateTimeOffset(2026, 1, 15, 7, 0, 0, TimeSpan.Zero), calc.NextBoundary(At(3)),
+			"yesterday's hold says nothing about the instance starting at 07:00 today");
+	}
+
+	/// <summary>The wrap places its boundary on tomorrow, so tomorrow's instance is the one the hold answers for.</summary>
+	[TestMethod]
+	public void NextBoundary_WrappingToTomorrow_AsksAboutTomorrowsInstance()
+	{
+		CircadianCalculator calc = Holding((period, day) => period == "day" && day == new DateOnly(2026, 1, 16));
+
+		Assert.AreEqual(new DateTimeOffset(2026, 1, 16, 18, 0, 0, TimeSpan.Zero), calc.NextBoundary(At(23)),
+			"tomorrow's 07:00 is still waiting, so the wrap carries on to evening@18:00");
+	}
+
+	/// <summary>A day left with nothing placeable is not the end of the schedule; the next day's first start still arrives.</summary>
+	[TestMethod]
+	public void NextBoundary_WithTheWholeDayHeld_WakesForTomorrowsFirstStart()
+	{
+		CircadianCalculator calc = Holding((_, day) => day == new DateOnly(2026, 1, 15));
+
+		Assert.AreEqual(new DateTimeOffset(2026, 1, 16, 7, 0, 0, TimeSpan.Zero), calc.NextBoundary(At(12)),
+			"every start today is waiting, so the earliest one tomorrow is the first that will be crossed");
+	}
+
+	[TestMethod]
+	public void NextBoundary_IsNullWhileEveryDayAheadIsHeld()
+	{
+		Assert.IsNull(Holding((_, _) => true).NextBoundary(At(12)),
+			"nothing ahead will be crossed, so there is nothing to wake for");
+	}
+
 	[TestMethod]
 	public void NextBoundary_OnTheDayTheClocksGoForward_ArrivesWhenTheGapEnds()
 	{
