@@ -39,6 +39,7 @@ rewritten to suit one.
   its dropdown. The two dropdown steps that carry no wording are granularity nobody uses — drop them. The
   words *Brightness* and *Warmth* are not repeated per period; the periods read as rows:
 
+- Not all filter buttons in Activity log work. When unchecking, the events do not disappear from the activity list
   | Period | Brightness | Warmth |
   | --- | --- | --- |
 
@@ -57,6 +58,11 @@ rewritten to suit one.
   somebody walked in. **The blend keeps its full configured length and therefore finishes later than a
   clock-started one would**, so the transition feels the same whenever you arrive. Needs the calculator to know
   *when* a period began, not just whether.
+
+- **`PeriodsAcross` has no direct test.** `CircadianCalculator.PeriodsAcross` is exercised only through the
+  web schedule and board views, never on its own. It is now the reference rule for two paths — the per-day
+  table behind `NextBoundary` was brought onto it — so a change to it can break boundary resolution with
+  nothing failing that names it.
 
 - **Adopt GitHub Issues as this repo's tracker.** `0z00z0/adaptivelighting` currently has zero open
   issues — this file is the only tracker in use. Per the *Tracker* section of
