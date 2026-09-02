@@ -13,15 +13,6 @@ rewritten to suit one.
 
 ## Next up
 
-- **`ResolveBoundaries` places the hold against the instant, not against the day the boundary falls on.**
-  `CircadianCalculator.cs:364` derives the instance day from `now` alone, so a boundary still ahead of the
-  current time is tested against *yesterday's* hold. `NextBoundary` (`CircadianCalculator.cs:313`) reads that
-  list, so a period whose today instance is still waiting for movement can be handed back as the next boundary,
-  while one whose yesterday instance was held back drops out of it. `PeriodsAcross`
-  (`CircadianCalculator.cs:276-283`) already gives each day its own instance and is the rule to bring the
-  instant-shaped path onto. A latent inconsistency in the engine, not in the band that exposed it; it belongs
-  in its own change.
-
 - **The room page scrolls sideways at 390 px.** With a settings group open, `scrollWidth` measures 531 against
   an `innerWidth` of 390. The warmth `.seg` control is 474 px wide and `.srow-control` is `flex: 0 0 auto`
   (`app.css:4638-4644`), so the row never wraps; the narrow-viewport relaxation at `app.css:4855` covers
@@ -39,18 +30,10 @@ rewritten to suit one.
   its dropdown. The two dropdown steps that carry no wording are granularity nobody uses — drop them. The
   words *Brightness* and *Warmth* are not repeated per period; the periods read as rows:
 
-- Not all filter buttons in Activity log work. When unchecking, the events do not disappear from the activity list
   | Period | Brightness | Warmth |
   | --- | --- | --- |
 
-- **A retired configuration key reaches only the log, never the browser.** `RetiredKeys`
-  (`LightingConfigDocument.cs:88`) already carries a sentence per key and logs it on every load
-  (`LightingConfigDocument.cs:357`), but nobody watching the browser sees it. `ConfigValidator`
-  already carries a document-wide warning list read by the UI, on the same pattern used for a
-  daylight-curve period with no sensor to read (`ConfigValidator.cs:185`). Loading a document that
-  still holds a retired key should add one of those warnings, using the sentence `RetiredKeys`
-  already has — no new text, no new mechanism, just wiring what is already detected into what is
-  already shown. Generic to every key in the table and every house, not the one presently in use.
+- **Not every filter button in the Activity log works.** Unchecking one leaves its events in the list.
 
 - **The blend starts when the period actually begins.** A period whose `Start` was 06:30 but which movement
   began at 06:45 arrives already part-way through its blend, because the window trails the boundary and the

@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>2026.08.0</Version>
+    <Version>2026.9.0</Version>
     <Authors>0z00z0</Authors>
     <PackageProjectUrl>https://github.com/0z00z0/adaptivelighting</PackageProjectUrl>
     <RepositoryUrl>https://github.com/0z00z0/adaptivelighting</RepositoryUrl>

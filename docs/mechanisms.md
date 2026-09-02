@@ -137,6 +137,17 @@ clamps to 15 % in sleep mode where the retired key asked for 30 %. Half the ligh
 `LightingConfigDocument.RetiredKeys` exists only to say so in the log on load, because the log is the one
 place left where it can be said. The key stays in the file; only the next save drops it.
 
+### A retired key on the page
+
+The reader is the only thing that can see a retired key, because both binders drop an unmatched key and the
+document is bound after the translation pass. So the reader carries what it found on the configuration object
+itself, in memory only, and the validator forwards it.
+
+It is a warning and never an error: the document runs perfectly well with the key, and refusing the save would
+block the very page that removes it. One sentence per key however many places carry it, since a setting retired
+on four periods is one thing to fix, and the sentence is worded once and serves both the log and the page. It
+clears itself: a save writes the document without the key.
+
 ### A seed document names no entities
 
 `AdaptiveLightingConfig.CreateDefault` fills in the circadian table and nothing else. A seed full of
@@ -326,6 +337,20 @@ call: a save rebuilds the orchestrator, so a cached reference points at a latch 
 A document where **every** period sets `StartsOnMotion` places nothing at all from midnight until somebody
 moves, so the validator warns. It is a warning and not an error: it is a house that waits, not a document that
 cannot run.
+
+### Resolving the next boundary
+
+The motion hold is a question about one named day's instance, so a boundary and the hold governing it must come
+from the same day. Two tables answer it, and they answer different questions.
+
+The **instant** table stands behind `GetTarget` and `ActivePeriodId`: a start still ahead can only be in force
+through the wrap, and the instance the wrap puts in force began yesterday. The **per-day** table stands behind
+`NextBoundary` and `PeriodsAcross`, where a start is held against the day it falls on.
+
+Reading the instant table for a boundary yet to arrive asks about yesterday, and answers wrongly in both
+directions: a start whose own day has not begun is still woken for, and one held back the day before drops out
+of the schedule. A day with nothing placeable left falls through to the next day's earliest start rather than
+reporting no boundary at all.
 
 ### Who owns the time of day
 
@@ -558,6 +583,24 @@ Letting the `[NetDaemonApp]` bootstrap throw on a bad document would make the fa
 `ApplicationState.Error` has been disposed along with its DI scope and its `IHaContext`, leaving the host
 holding a dead connection and no way to rebuild. The browser could then save a corrected file and still not
 start the engine, which is the one thing the feature exists for.
+
+### Reporting a room that cannot be set up
+
+Rooms switched off and rooms carrying the exclude label are left out, neither being a fault. The problems
+already reported are held in `<stem>.setup-faults.json` beside the configuration document, one entry per room
+holding the problem's own sentence. A problem is announced the first time and then stays quiet; a changed
+problem reads as a new entry and is announced again.
+
+Only the problems standing at that start are written back, so a room that resolves is forgotten and the file is
+removed once every room resolves. Without that clearing, a problem could never be reported twice. The key is
+the area id where the document gives one, else the display name.
+
+Every failure degrades to announcing rather than to silence: an unreadable or wrong-shaped file, a failed write,
+and a path with no writable directory beside it all leave the standing problems announced, so the cost is a
+repeated card and never a silence.
+
+The trap: the notification id is derived from the card's title, so changing the title leaves a card raised under
+the old one standing until Home Assistant restarts.
 
 ### Entity resolution
 

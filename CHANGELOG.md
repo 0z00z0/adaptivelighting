@@ -12,6 +12,28 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.0] - 2026-09-02
+
+### Added
+
+- **A setting the schema no longer has is shown on the Configuration page**, not only written to the log. The
+  page names the key, says what it stopped doing, and says that saving once drops it. Every retired setting is
+  covered, and document-wide warnings now reach the page in general, where before they reached the log alone.
+
+### Fixed
+
+- **The next boundary is resolved against the day it falls on.** A period waiting for movement was matched
+  against the previous day's instance, so a start whose own day had not begun was still woken for, and one
+  held back the day before dropped out of the schedule.
+
+- **A room that is switched on but cannot be set up — no lights assigned to it in Home Assistant, or no motion
+  sensor — is reported once**, rather than at every engine start.
+  - The rooms already reported are remembered in a note beside the configuration document. A room whose
+    problem changes is reported again, and a room that resolves is forgotten, so a later regression is
+    reported afresh.
+  - The card is titled **rooms that could not be set up**, because the rooms it names are switched-on rooms
+    that failed setup, not rooms the owner switched off.
+
 ## [2026.08.0] - 2026-08-27
 
 ### Added
