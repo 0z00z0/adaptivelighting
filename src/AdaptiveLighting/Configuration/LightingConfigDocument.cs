@@ -79,13 +79,13 @@ public static class LightingConfigDocument
 			}
 		};
 
-	/// <summary>Keys a document may still carry that no longer do anything, and the sentence each earns in the log.</summary>
+	/// <summary>Keys a document may still carry that no longer do anything, and the sentence each earns.</summary>
 	/// <remarks>
 	///     Both binders ignore an unknown key, so a retired setting changes behaviour with nothing to point at it: a
 	///     night period written <c>{ BrightnessPct: 15, MaxBrightnessPct: 30 }</c> now clamps to 15 % in sleep mode
 	///     where it clamped to 30 %. The key is left in the file; only the next save drops it.
 	/// </remarks>
-	private static readonly Dictionary<string, string> RetiredKeys = new(StringComparer.OrdinalIgnoreCase)
+	internal static readonly Dictionary<string, string> RetiredKeys = new(StringComparer.OrdinalIgnoreCase)
 	{
 		["MaxBrightnessPct"] =
 			"per-period ceilings were removed, so this period no longer caps what it commands. Its BrightnessPct "
@@ -102,6 +102,12 @@ public static class LightingConfigDocument
 			"the daylight curve is chosen per period now, not per room. Set UseDaylightCurve on the periods that "
 			+ "should follow the light outside; the other lux brightness settings still shape the curve."
 	};
+
+	// One wording for the log and the browser. Two copies would drift, and the browser's is the one nobody reads
+	// twice to notice.
+	private static string RetiredKeySentence(string key, string reason) =>
+		$"'{key}' is still set in the configuration, but it no longer does anything: {reason} "
+		+ "Remove it, or save once from the browser and it will be dropped.";
 
 	private const string Header =
 		"""
@@ -148,7 +154,10 @@ public static class LightingConfigDocument
 	{
 		ArgumentNullException.ThrowIfNull(yaml);
 
-		(string current, bool usedLegacyKeys) = TranslateLegacyKeys(yaml, logger);
+		// Keyed, so a setting retired on four periods is one sentence and not four.
+		Dictionary<string, string> retired = new(StringComparer.OrdinalIgnoreCase);
+
+		(string current, bool usedLegacyKeys) = TranslateLegacyKeys(yaml, logger, retired);
 
 		// IgnoreUnmatchedProperties mirrors the .NET configuration binder, so a stale key cannot brick the UI that
 		// exists to remove it. It is also why TranslateLegacyKeys runs first: an unmatched Zones: would be passed
@@ -185,6 +194,9 @@ public static class LightingConfigDocument
 
 		// A present-but-empty section parses to null, meaning all defaults and no areas.
 		AdaptiveLightingConfig config = document[match] ?? new AdaptiveLightingConfig();
+
+		// The key is gone by the time the binder is done with it, so this is the only place it can be carried out of.
+		config.RetiredKeysInDocument = [.. retired.Values];
 
 		RepairStructuralNulls(config, logger);
 
@@ -306,7 +318,10 @@ public static class LightingConfigDocument
 	///     may legitimately carry a <c>Zones</c> key. Works on the node tree, not the text, so the word is not renamed
 	///     inside a room name or an entity id.
 	/// </remarks>
-	private static (string Yaml, bool UsedLegacyKeys) TranslateLegacyKeys(string yaml, ILogger? logger)
+	private static (string Yaml, bool UsedLegacyKeys) TranslateLegacyKeys(
+		string yaml,
+		ILogger? logger,
+		Dictionary<string, string> retired)
 	{
 		YamlStream stream = new();
 
@@ -324,7 +339,7 @@ public static class LightingConfigDocument
 
 		foreach (YamlDocument document in stream.Documents)
 			foreach (YamlNode section in SectionsOf(document.RootNode))
-				used |= Translate(section, logger);
+				used |= Translate(section, logger, retired);
 
 		if (!used)
 			return (yaml, false);
@@ -337,7 +352,7 @@ public static class LightingConfigDocument
 
 	/// <summary>Renames the legacy keys of one node and everything under it, in place.</summary>
 	/// <returns><c>true</c> when anything was renamed or dropped.</returns>
-	private static bool Translate(YamlNode node, ILogger? logger)
+	private static bool Translate(YamlNode node, ILogger? logger, Dictionary<string, string> retired)
 	{
 		bool used = false;
 
@@ -347,19 +362,19 @@ public static class LightingConfigDocument
 				// Materialised first: the renames below add to and remove from the very collection being walked.
 				foreach (KeyValuePair<YamlNode, YamlNode> child in mapping.Children.ToList())
 				{
-					used |= Translate(child.Value, logger);
+					used |= Translate(child.Value, logger, retired);
 
 					if (child.Key is not YamlScalarNode { Value: { Length: > 0 } name })
 						continue;
 
 					// `used` is not set here. The document is unchanged, and claiming a migration happened would send
 					// Reload writing the file back.
-					if (RetiredKeys.TryGetValue(name, out string? retired))
+					if (RetiredKeys.TryGetValue(name, out string? reason))
 					{
-						logger?.LogWarning(
-							"'{Setting}' is still set in the configuration, but it no longer does anything: {What} "
-							+ "Remove it, or save once from the browser and it will be dropped.",
-							name, retired);
+						string sentence = RetiredKeySentence(name, reason);
+
+						logger?.LogWarning("{RetiredSetting}", sentence);
+						retired.TryAdd(name, sentence);
 					}
 
 					// Before the key rename below: a key about to be renamed still carries its value under the old
@@ -401,7 +416,7 @@ public static class LightingConfigDocument
 
 			case YamlSequenceNode sequence:
 				foreach (YamlNode item in sequence.Children)
-					used |= Translate(item, logger);
+					used |= Translate(item, logger, retired);
 
 				break;
 		}
