@@ -67,6 +67,12 @@ public sealed class LightingEngineHost : IDisposable
 	/// </summary>
 	private readonly ILastPeriodStore? _lastPeriod;
 
+	/// <summary>
+	///     Handed to the orchestrator, so a room that cannot be set up is reported once instead of at every start.
+	///     Built here for the same reason as <see cref="_lastPeriod"/>: its path comes from the configuration document.
+	/// </summary>
+	private readonly IAreaSetupMemory? _setupMemory;
+
 	// Every transition of the orchestrator goes through this: two browser tabs saving must not interleave a
 	// Dispose with a Start.
 	private readonly Lock _gate = new();
@@ -106,6 +112,19 @@ public sealed class LightingEngineHost : IDisposable
 			_logger.LogWarning(exception,
 				"Could not place the note recording which circadian period the engine is in, beside {Path}. A period's "
 				+ "house mode will be applied only at a boundary the engine is running to see.",
+				_store.FilePath);
+		}
+
+		try
+		{
+			_setupMemory = new AreaSetupMemoryStore(_store.FilePath, _loggerFactory.CreateLogger<AreaSetupMemoryStore>());
+		}
+		catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+		{
+			// Without it the card comes back on every start, which is a nuisance and not a reason to have no engine.
+			_logger.LogWarning(exception,
+				"Could not place the note recording which rooms have already been reported as impossible to set up, "
+				+ "beside {Path}. Any such room will be reported again at every start.",
 				_store.FilePath);
 		}
 	}
@@ -538,7 +557,8 @@ public sealed class LightingEngineHost : IDisposable
 				new HaNotifier(_ha, _loggerFactory.CreateLogger<HaNotifier>()),
 				_loggerFactory,
 				_lastSeen,
-				_lastPeriod);
+				_lastPeriod,
+				_setupMemory);
 
 			orchestrator.Start();
 

@@ -22,6 +22,11 @@ public sealed class LightingOrchestrator : IDisposable
 	private const string NextSettingAttribute = "next_setting";
 	private const string FriendlyNameAttribute = "friendly_name";
 
+	/// <summary>The title of the setup-failure card, which is also what fixes its notification id in Home Assistant.</summary>
+	// HaNotifier derives the id from this, so changing the wording leaves any card raised under the old title
+	// standing beside the new one until Home Assistant restarts.
+	internal const string SetupFailureTitle = "Adaptive lighting: rooms that could not be set up";
+
 	private readonly IHaContext _ha;
 	private readonly IHaRegistry _registry;
 	private readonly IScheduler _scheduler;
@@ -36,6 +41,9 @@ public sealed class LightingOrchestrator : IDisposable
 
 	// Passed to the mode brain so a period boundary crossed during a restart is not lost.
 	private readonly ILastPeriodStore? _lastPeriod;
+
+	// Keeps the setup notification to once per problem. Null notifies on every start, as it did before there was one.
+	private readonly IAreaSetupMemory? _setupMemory;
 	private readonly ILogger _logger;
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
@@ -73,10 +81,12 @@ public sealed class LightingOrchestrator : IDisposable
 		INotifier notifier,
 		ILoggerFactory loggerFactory,
 		IEntityLastSeen? lastSeen = null,
-		ILastPeriodStore? lastPeriod = null)
+		ILastPeriodStore? lastPeriod = null,
+		IAreaSetupMemory? setupMemory = null)
 	{
 		_lastSeen = lastSeen;
 		_lastPeriod = lastPeriod;
+		_setupMemory = setupMemory;
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_registry = registry ?? throw new ArgumentNullException(nameof(registry));
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
@@ -133,7 +143,7 @@ public sealed class LightingOrchestrator : IDisposable
 			registry,
 			_config.Global,
 			_loggerFactory.CreateLogger<AreaEntityResolver>());
-		List<string> failures = new();
+		List<AreaSetupFault> failures = [];
 		List<ResolvedArea> running = [];
 
 		foreach (AreaConfig areaConfig in _config.Areas)
@@ -162,8 +172,14 @@ public sealed class LightingOrchestrator : IDisposable
 					continue;
 				}
 
-				_logger.LogError("Area {Area} disabled: {Error}", areaConfig.DisplayName, error);
-				failures.Add($"{areaConfig.DisplayName}: {error}");
+				_logger.LogError("Area {Area} could not be set up: {Error}", areaConfig.DisplayName, error);
+
+				// Keyed on the area id where there is one, so renaming a room in the document does not re-report it.
+				failures.Add(new AreaSetupFault(
+					areaConfig.AreaId is { Length: > 0 } key ? key : areaConfig.DisplayName,
+					areaConfig.DisplayName,
+					error ?? "It could not be set up."));
+
 				continue;
 			}
 
@@ -343,15 +359,21 @@ public sealed class LightingOrchestrator : IDisposable
 		_house.OnNext(state);
 	}
 
-	private void ReportFailures(List<string> failures)
+	/// <summary>Raises one card naming every room that is switched on but could not be set up, the first time each is seen.</summary>
+	// Recorded even when nothing failed: forgetting a room that now resolves is what lets a later regression notify
+	// again. The card names every standing problem, not only the new one, because it replaces the previous card.
+	private void ReportFailures(IReadOnlyList<AreaSetupFault> failures)
 	{
-		if (failures.Count == 0)
+		IReadOnlyList<AreaSetupFault> unreported = _setupMemory?.Record(failures) ?? failures;
+
+		if (unreported.Count == 0)
 			return;
 
-		string body = string.Join("", failures.Select(failure => $"<li>{failure}</li>"));
+		string body = string.Join("", failures.Select(failure => $"<li>{failure.Area}: {failure.Problem}</li>"));
 		_notifier.Notify(
-			"Adaptive lighting: areas disabled",
-			$"{failures.Count} of {_config.ManagedAreaCount} areas could not be resolved and are not being managed:<ul>{body}</ul>");
+			SetupFailureTitle,
+			$"{failures.Count} of {_config.ManagedAreaCount} rooms are switched on but could not be set up, so they are "
+			+ $"not being managed:<ul>{body}</ul>");
 	}
 
 	/// <summary>Reads the day's sun times off the sun entity.</summary>
