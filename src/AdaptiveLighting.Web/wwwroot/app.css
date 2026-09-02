@@ -4632,6 +4632,9 @@ button.mode-pill:disabled {
 	font-size: var(--text-xs);
 	font-weight: 650;
 	color: var(--accent);
+	/* A button centres its text. Once the house value is long enough to take a second line, that reads as a
+	   different column from the label and help above it. */
+	text-align: left;
 }
 
 .srow-revert:hover:not(:disabled) {
@@ -4795,6 +4798,13 @@ button.mode-pill:disabled {
 	border: var(--rule);
 	border-radius: var(--radius-control);
 	flex-wrap: wrap;
+}
+
+/* .srow-control is flex: 0 0 auto, so a group of long options keeps its full width even on its own line and
+   breaks out through the card edge. Letting this one row shrink is what lets the wrap above take effect. */
+.srow-control:has(.seg) {
+	flex-shrink: 1;
+	min-width: 0;
 }
 
 .seg button {
