@@ -43,6 +43,7 @@ public static class ConfigValidator
 		ValidateAreas(config, knownEntityIds, knownAreaIds, result);
 		ValidateOutdoorLuxOptIn(config, result);
 		ValidateLuxBrightnessSource(config, result);
+		ValidateRetiredKeys(config, result);
 
 		return result;
 	}
@@ -185,6 +186,18 @@ public static class ConfigValidator
 			+ $"{unsupplied.Count} room(s) have nothing to read ({string.Join(", ", unsupplied)}). Name the house's "
 			+ "outdoor light-level sensor, or give each of those rooms a DaylightSensor of its own. Until then the "
 			+ "curve holds those rooms at LuxBrightnessMinPct.");
+	}
+
+	/// <summary>Settings the document still carries that no longer do anything.</summary>
+	/// <remarks>
+	///     Forwarded, never derived: the key is unmatched by the time the document is bound, so only
+	///     <see cref="LightingConfigDocument.Deserialize"/> is in a position to see one. A warning, because the
+	///     document runs perfectly well with it and refusing the save would block the page that removes it.
+	/// </remarks>
+	private static void ValidateRetiredKeys(AdaptiveLightingConfig config, ValidationResult result)
+	{
+		foreach (string retired in config.RetiredKeysInDocument)
+			result.AddWarning(retired);
 	}
 
 	private static void ValidateGlobal(

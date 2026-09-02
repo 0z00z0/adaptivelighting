@@ -1361,4 +1361,55 @@ public sealed class ConfigValidatorTests
 		Assert.IsTrue(result.IsValid);
 		Assert.AreEqual(0, result.Warnings.Count, "every document today has no period select and must notice nothing");
 	}
+
+	// ===================== retired keys, from the file to the page =====================
+	//
+	// The reader is the only thing that can see one, so the validator forwards what it found. Every key in the
+	// table travels the same way: nothing here knows which key it is carrying.
+
+	[TestMethod]
+	public void Every_Retired_Key_Still_In_The_Document_Becomes_A_Warning()
+	{
+		foreach (KeyValuePair<string, string> retired in LightingConfigDocument.RetiredKeys)
+		{
+			AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+				$"""
+				{LightingConfigDocument.RootKey}:
+				  Defaults:
+				    {retired.Key}: 30
+				  Periods:
+				    - Name: day
+				      Start: "09:00"
+				  Areas:
+				    - Name: Stue
+				      AreaId: stue
+				""").Config;
+
+			ValidationResult result = ConfigValidator.Validate(config);
+
+			Assert.IsTrue(
+				result.Warnings.Any(warning => warning.Contains(retired.Key, StringComparison.Ordinal)),
+				$"'{retired.Key}' is still in the file and nothing on the page says so");
+		}
+	}
+
+	/// <summary>A key that does nothing cannot stop the house, and refusing the save would block the page that removes it.</summary>
+	[TestMethod]
+	public void A_Retired_Key_Never_Refuses_The_Document()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.RetiredKeysInDocument = ["'MaxBrightnessPct' is still set in the configuration, but it no longer does anything."];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid);
+		Assert.AreEqual(config.RetiredKeysInDocument.Single(), result.Warnings.Single(),
+			"the sentence reaches the page as the reader wrote it, unwrapped and unreworded");
+	}
+
+	[TestMethod]
+	public void A_Document_With_No_Retired_Key_Warns_About_None()
+	{
+		Assert.AreEqual(0, ConfigValidator.Validate(Minimal()).Warnings.Count);
+	}
 }
