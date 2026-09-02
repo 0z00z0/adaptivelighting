@@ -142,6 +142,13 @@ public static class RoomSettings
 		("Sun", nameof(DarknessSource.Sun)),
 		("Always dark", nameof(DarknessSource.Always)));
 
+	/// <summary>What ends a manual hold: a clock, or the room going quiet.</summary>
+	// Carried as bool.TrueString / bool.FalseString, which is what ChoiceName reads back off a boolean property,
+	// so the tick, the readout and the write all compare the same words.
+	public static IReadOnlyList<TokenChoice> HoldModeOptions { get; } = TokenChoices.Of(
+		("For a set time", bool.FalseString),
+		("Until the room empties", bool.TrueString));
+
 	/// <summary>How the room's warmth is commanded; <c>Auto</c> reads the fixtures and needs no answer.</summary>
 	public static IReadOnlyList<TokenChoice> ColorControlOptions { get; } = TokenChoices.Of(
 		("Detect from the lights", nameof(ColorControl.Auto)),
@@ -170,10 +177,16 @@ public static class RoomSettings
 					"How long the room sits dimmed before the lights go out. Any movement in that time brings them straight back. Must be shorter than the time above.",
 					RoomControl.Seconds, Step: 5, Min: 0),
 				new RoomSetting(
+					nameof(AreaSettings.OverrideUntilVacant),
+					"Manual changes hold",
+					"What hands a light somebody set by hand back to the room. Until the room empties waits for the same quiet as “Lights stay on for”, so the setting stands while anyone is still there and goes as soon as they leave. For a set time hands it back on a clock instead, whoever is in the room.",
+					RoomControl.Choice),
+				new RoomSetting(
 					nameof(AreaSettings.OverrideDurationMinutes),
 					"Manual changes hold for",
 					"How long a light somebody set manually is left alone before the room takes it back. Zero hands it back at the next re-check.",
-					RoomControl.Minutes, Step: 15, Min: 0),
+					RoomControl.Minutes, Step: 15, Min: 0,
+					AppliesWhen: settings => !settings.OverrideUntilVacant),
 				new RoomSetting(
 					nameof(AreaSettings.VacancyResetMinutes),
 					"After switching off manually, wait",
@@ -471,9 +484,12 @@ public static class RoomSettings
 
 	/// <summary>The shortlist a choice-typed setting offers, keyed so each setting gets its own words.</summary>
 	public static IReadOnlyList<TokenChoice> ChoicesFor(string key) =>
-		string.Equals(key, nameof(AreaSettings.ColorControl), StringComparison.Ordinal)
-			? ColorControlOptions
-			: DarknessOptions;
+		key switch
+		{
+			nameof(AreaSettings.ColorControl) => ColorControlOptions,
+			nameof(AreaSettings.OverrideUntilVacant) => HoldModeOptions,
+			_ => DarknessOptions
+		};
 
 	/// <summary>The chosen member of an enum-valued setting, by name, following the room's inheritance.</summary>
 	/// <remarks>The name, never the typed value, so one signature serves every enum-valued setting.</remarks>
@@ -517,6 +533,10 @@ public static class RoomSettings
 
 			case nameof(AreaSettings.OverrideDurationMinutes):
 				room.OverrideDurationMinutes = edit.Minutes;
+				return true;
+
+			case nameof(AreaSettings.OverrideUntilVacant):
+				room.OverrideUntilVacant = edit.Flag;
 				return true;
 
 			case nameof(AreaSettings.VacancyResetMinutes):
@@ -579,13 +599,23 @@ public static class RoomSettings
 		HouseProperties[key].SetValue(house, value);
 	}
 
-	/// <summary>Sets an enum-valued setting from the token a choice button carries.</summary>
+	/// <summary>Sets a choice-typed setting from the token a choice button carries.</summary>
 	/// <remarks>Parsed against the property's own type, never a named enum, so each setting writes its own kind.</remarks>
+	// The boolean arm is not optional tidiness: Enum.TryParse throws on a non-enum type, so a two-option choice
+	// stored as a bool would take the whole House tab down on the first click.
 	public static void SetChoice(AreaSettings house, string key, string value)
 	{
 		ArgumentNullException.ThrowIfNull(house);
 
 		PropertyInfo property = HouseProperties[key];
+
+		if (property.PropertyType == typeof(bool))
+		{
+			if (bool.TryParse(value, out bool flag))
+				property.SetValue(house, flag);
+
+			return;
+		}
 
 		if (Enum.TryParse(property.PropertyType, value, out object? parsed))
 			property.SetValue(house, parsed);
@@ -622,6 +652,10 @@ public static class RoomSettings
 
 			case nameof(AreaSettings.OverrideDurationMinutes):
 				house.OverrideDurationMinutes = edit.Minutes;
+				return true;
+
+			case nameof(AreaSettings.OverrideUntilVacant):
+				house.OverrideUntilVacant = edit.Flag;
 				return true;
 
 			case nameof(AreaSettings.VacancyResetMinutes):

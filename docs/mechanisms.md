@@ -486,6 +486,26 @@ restart on the wrong option. A remembered "already asked" latch would make both 
   `unavailable` with a context carrying neither user nor parent, which is exactly `PhysicalDevice`. Without
   that guard a Zigbee hiccup pins the area in `SuppressedOff` and the reconnect pins it in `OverriddenOn`.
 
+### What ends a manual hold
+
+`AreaSettings.OverrideUntilVacant` picks between two clocks and nothing else changes: the manual level stands,
+and `OnOverrideExpired` still asks where the room is when the countdown runs out.
+
+Set, the countdown is `VacancyTimeoutSeconds` and every motion event restarts it, so the level a person chose
+outlasts them while they are in the room and is handed back once they leave. `OverrideDurationMinutes` is
+ignored, and stays in the document so switching back restores what was typed. Clear, the countdown is that
+number of minutes and motion restarts nothing.
+
+The firing of a movement-led countdown is itself the proof the room is vacant, which is why one branch serves
+both: the countdown is exactly the vacancy timeout and motion restarts it, so `IsOccupied` is already false
+when it fires and the expiry lands on the empty-room branch without knowing which clock ran. `SuppressedOff`
+is the same shape one state over.
+
+It is a boolean beside the number rather than an enum over both. An absent key leaves the initialiser
+standing, where an unknown enum name is a `FormatException` at start-up and `LightingEngineHost.Reload` is
+documented never to throw. The initialiser is `true`, so a document that has never named the setting follows
+movement; turning it off is written out as `false`, because the writer omits nulls and not defaults.
+
 ### Auto-on gates
 
 `AreaController.AutoOnBlockNow` is the single place the auto-on gates are written. A second copy will drift.
@@ -1267,7 +1287,7 @@ document settles on what both surfaces already show.
 | 1000 lx | default darkness threshold | a shaded outdoor sensor measures 1000–3706 lx by day; 40 lx leaves rooms reading "not dark" all day |
 | geometric mean | multi-sensor lux | brightness is perceived logarithmically |
 | echo window + transition | manual-override detection | a 30 s fade otherwise reads as a person at the switch |
-| 22 | per-room settings count | the re-setup warning counts against it |
+| 23 | per-room settings count | the re-setup warning counts against it |
 | 3 | names before "and N others" | naming three beats spending a clause to avoid printing one word |
 | 2 % | `BrightnessTolerancePct` | HA reports brightness as a 0–255 integer against the engine's per cent, so a round trip lands ~1 % off; 2 % is wider than that and narrower than an eye |
 | 50 K | `ColorTempToleranceKelvin` | under 2 % at the warm end, invisible anywhere in the range |
@@ -1276,7 +1296,7 @@ document settles on what both surfaces already show.
 | ~3× | lux ladder ratio | illuminance spans four orders of magnitude; a fixed step is unusable at one end or the other |
 | half the claiming period's level | seeded `LuxBrightnessMinPct` | the dark end is what that period gives when it is dark outside, and it has to land under the period's own level without collapsing to nothing; one fixed figure suits neither a 15 % night nor a 90 % day |
 | 40 % / 100 % | `LuxBrightnessMinPct` / `LuxBrightnessMaxPct` schema defaults | the reserve for a document where the curve was never claimed through the editor, and the bright end throughout; 100 lx to 10 000 lx spans a dull room to a bright overcast day |
-| 22 | overridable per-room settings | `RoomSettings.Keys` derives it by reflection over the nullable twins; `AreaView.OverridableSettingCount` hard-codes it and a test holds the two together |
+| 23 | overridable per-room settings | `RoomSettings.Keys` derives it by reflection over the nullable twins; `AreaView.OverridableSettingCount` hard-codes it and a test holds the two together |
 | ~3 px | board mark de-duplication gap | a screen bound, not a clock bound, because the suppressed-off path republishes per movement |
 | 12.5 / 14 / 15 / 20 / 25 px | the type scale | one step up from 11 / 12.5 / 13.5 / 19 / 24, which read as small and hard to read at a muted colour that already passed AA |
 | 12.82 / 6.05 / 8.70 : 1 | muted text on the page background, Dark / Light / 0z0 | contrast floor per theme |

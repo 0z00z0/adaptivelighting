@@ -18,9 +18,23 @@ public static class AreaSentences
 	public static IReadOnlyList<TokenChoice> DimForChoices { get; } =
 		TokenChoices.Durations(10, 20, 30, 60, 120);
 
-	/// <summary>The shortlist offered for how long a manual change holds the room.</summary>
+	/// <summary>The one option in the hold shortlist that is not a length of time.</summary>
+	// Writes OverrideUntilVacant, not the duration, so the typed number survives a trip through this choice.
+	// Declared above HandHoldChoices: static initialisers run in source order and it would read null the other way.
+	public static TokenChoice HandHoldUntilEmpty { get; } = new(
+		"until the room empties",
+		bool.TrueString,
+		nameof(AreaSettings.OverrideUntilVacant),
+		TokenKind.Choice);
+
+	/// <summary>The shortlist offered for how long a manual change holds the room, with the way out of a clock at the end.</summary>
 	public static IReadOnlyList<TokenChoice> HandHoldChoices { get; } =
-		TokenChoices.DurationsInMinutes(30, 60, 120, 240, 480);
+		[.. TokenChoices.DurationsInMinutes(30, 60, 120, 240, 480), HandHoldUntilEmpty];
+
+	/// <summary>What the sentence offers once the hold already follows movement.</summary>
+	public static IReadOnlyList<TokenChoice> HandHoldModeChoices { get; } = TokenChoices.Of(
+		("until the room empties", bool.TrueString),
+		("for a set time", bool.FalseString));
 
 	/// <summary>The shortlist offered for the quiet a room needs before movement counts again.</summary>
 	public static IReadOnlyList<TokenChoice> HandOffWaitChoices { get; } =
@@ -205,15 +219,34 @@ public static class AreaSentences
 	}
 
 	/// <summary>The second sentence: what happens when a person overrules the engine at the wall.</summary>
-	private static Sentence Hands(AreaConfig? area, AreaSettings defaults, AreaSettings effective) =>
-		SentenceBuilder.Start("Manual changes hold for ")
-			.Duration(
+	// Two branches, like Movement's: a hold that waits for the room to empty has no length to show, so the rule
+	// itself becomes the token and the stored duration is only reachable after switching back.
+	private static Sentence Hands(AreaConfig? area, AreaSettings defaults, AreaSettings effective)
+	{
+		SentenceBuilder builder = SentenceBuilder.Start("Manual changes hold ");
+
+		if (effective.OverrideUntilVacant)
+		{
+			builder.Choice(
+				nameof(AreaSettings.OverrideUntilVacant),
+				"Manual changes hold",
+				bool.TrueString,
+				HandHoldModeChoices,
+				OriginOf(area, area?.OverrideUntilVacant),
+				defaults.OverrideUntilVacant.ToString());
+		}
+		else
+		{
+			builder.Text("for ").Duration(
 				nameof(AreaSettings.OverrideDurationMinutes),
 				"Manual changes hold for",
 				effective.OverrideDurationMinutes * 60,
 				HandHoldChoices,
 				OriginOf(area, area?.OverrideDurationMinutes),
-				defaults.OverrideDurationMinutes * 60)
+				defaults.OverrideDurationMinutes * 60);
+		}
+
+		return builder
 			.Text("; after somebody switches them off manually, movement is ignored until the room has been empty ")
 			.Duration(
 				nameof(AreaSettings.VacancyResetMinutes),
@@ -224,6 +257,7 @@ public static class AreaSentences
 				defaults.VacancyResetMinutes * 60)
 			.Text(".")
 			.Build();
+	}
 
 	/// <summary>The third sentence, which exists only when the room has a flag on.</summary>
 	private static Sentence? Flags(AreaConfig? area, AreaSettings effective)

@@ -133,6 +133,10 @@ public sealed class AreaControllerTests
 			PreOffSeconds = 30,
 			Darkness = DarknessSource.Lux,
 			OverrideDurationMinutes = 120,
+
+			// Pinned, unlike the shipped default: most of these tests are about the fixed hold's clock, and one
+			// that arms the vacancy timeout instead would be measuring a different rule under the same name.
+			OverrideUntilVacant = false,
 			VacancyResetMinutes = 10
 		};
 		tweak?.Invoke(settings);
@@ -331,7 +335,7 @@ public sealed class AreaControllerTests
 	}
 
 	[TestMethod]
-	public void Motion_While_Overridden_Extends_Nothing()
+	public void Motion_Under_A_Fixed_Hold_Extends_Nothing()
 	{
 		var t = Build(s => s.OverrideDurationMinutes = 5);
 		t.Ha.Trigger(Motion, "on");
@@ -347,6 +351,87 @@ public sealed class AreaControllerTests
 
 		Advance(t, TimeSpan.FromMinutes(1));
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "motion did not extend the override past its five minutes");
+	}
+
+	[TestMethod]
+	public void Motion_Under_A_Movement_Led_Hold_Restarts_It()
+	{
+		var t = Build(s =>
+		{
+			s.OverrideUntilVacant = true;
+			s.VacancyTimeoutSeconds = 300;
+		});
+
+		t.Ha.Trigger(Motion, "on");
+		Advance(t, TimeSpan.FromSeconds(30));
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
+		t.Actuator.Clear();
+
+		Advance(t, TimeSpan.FromMinutes(4));
+		t.Ha.Trigger(Motion, "off");
+		t.Ha.Trigger(Motion, "on");
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "motion must not push the manual levels around");
+
+		Advance(t, TimeSpan.FromMinutes(4));
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State,
+			"the five minutes restarted at the movement, so the manual level still stands");
+
+		Advance(t, TimeSpan.FromMinutes(1));
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State, "the room has now been motion-free for its whole timeout");
+		Assert.IsTrue(t.Actuator.Last is { On: false }, "an empty room settles off, the same as any other vacancy");
+	}
+
+	// The number is left in the document while the hold follows movement, so a stale one must not be able to end
+	// the hold early or hold it open.
+	[TestMethod]
+	public void A_Movement_Led_Hold_Ignores_The_Fixed_Duration()
+	{
+		var t = Build(s =>
+		{
+			s.OverrideUntilVacant = true;
+			s.VacancyTimeoutSeconds = 600;
+			s.OverrideDurationMinutes = 1;
+		});
+
+		t.Ha.Trigger(Motion, "on");
+		Advance(t, TimeSpan.FromSeconds(30));
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
+
+		Advance(t, TimeSpan.FromMinutes(5));
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State, "one minute has passed five times over and nothing ended");
+
+		Advance(t, TimeSpan.FromMinutes(5));
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State, "the ten-minute vacancy timeout is what ended it");
+	}
+
+	[TestMethod]
+	public void A_Movement_Led_Hold_Publishes_The_Vacancy_Timeout_As_Its_Expiry()
+	{
+		var start = new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
+
+		var t = Build(s =>
+		{
+			s.OverrideUntilVacant = true;
+			s.VacancyTimeoutSeconds = 300;
+		});
+
+		t.Ha.Trigger(Motion, "on");
+		Advance(t, TimeSpan.FromSeconds(30));
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
+
+		Assert.AreEqual(
+			start + TimeSpan.FromSeconds(30) + TimeSpan.FromMinutes(5),
+			t.Publisher.Snapshots[^1].NextChangeAt,
+			"the snapshot names the moment the quiet would run out, not a fixed duration");
+
+		Advance(t, TimeSpan.FromMinutes(2));
+		t.Ha.Trigger(Motion, "off");
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.AreEqual(
+			start + TimeSpan.FromSeconds(30) + TimeSpan.FromMinutes(2) + TimeSpan.FromMinutes(5),
+			t.Publisher.Snapshots[^1].NextChangeAt,
+			"a deadline that moved has to be republished, or the page counts down to a moment nothing happens at");
 	}
 
 	[TestMethod]

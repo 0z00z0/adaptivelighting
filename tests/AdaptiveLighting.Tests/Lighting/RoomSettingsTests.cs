@@ -374,6 +374,40 @@ public sealed class RoomSettingsTests
 			"a sensor room with nothing to read counts as dark; it no longer falls back to the sun");
 	}
 
+	[TestMethod]
+	public void The_Hold_Length_Is_Drawn_Only_When_A_Clock_Ends_The_Hold()
+	{
+		RoomSetting length = Setting(nameof(AreaSettings.OverrideDurationMinutes));
+
+		Assert.IsFalse(length.AppliesTo(new AreaSettings { OverrideUntilVacant = true }),
+			"a hold that waits for the room to empty has no length to set");
+
+		Assert.IsTrue(length.AppliesTo(new AreaSettings { OverrideUntilVacant = false }));
+
+		Assert.IsTrue(Setting(nameof(AreaSettings.OverrideUntilVacant)).AppliesTo(new AreaSettings()),
+			"the choice between the two is what stays on screen either way");
+	}
+
+	// Both words come back off the boolean, so a mismatch between what the button carries and what the property
+	// reads as would leave the segmented control with nothing ticked and no error.
+	[TestMethod]
+	public void Both_Hold_Modes_Are_Worded_By_The_Same_Words_They_Are_Carried_By()
+	{
+		AreaSettings house = new() { OverrideUntilVacant = true };
+
+		Assert.AreEqual("Until the room empties",
+			RoomSettings.Describe(null, house, nameof(AreaSettings.OverrideUntilVacant)));
+
+		RoomSettings.SetChoice(house, nameof(AreaSettings.OverrideUntilVacant), bool.FalseString);
+
+		Assert.IsFalse(house.OverrideUntilVacant, "a two-option choice stored as a bool has to be written, not silently dropped");
+		Assert.AreEqual("For a set time",
+			RoomSettings.Describe(null, house, nameof(AreaSettings.OverrideUntilVacant)));
+
+		foreach (TokenChoice option in RoomSettings.ChoicesFor(nameof(AreaSettings.OverrideUntilVacant)))
+			Assert.IsTrue(bool.TryParse(option.Value, out _), $"“{option.Text}” carries something the property cannot take");
+	}
+
 	// The curve is claimed per period, house-wide, so no room setting can know whether it is running.
 	[TestMethod]
 	public void The_Curve_Settings_Are_Always_Offered()
@@ -614,6 +648,10 @@ public sealed class RoomSettingsTests
 			// others following the house.
 			case RoomControl.Choice when setting.Key == nameof(AreaSettings.ColorControl):
 				room.ColorControl = ColorControl.EqualChannels;
+				break;
+
+			case RoomControl.Choice when setting.Key == nameof(AreaSettings.OverrideUntilVacant):
+				room.OverrideUntilVacant = false;
 				break;
 
 			case RoomControl.Choice:

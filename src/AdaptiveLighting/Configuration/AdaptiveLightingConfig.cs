@@ -190,7 +190,14 @@ public class AreaSettings
 
 	public double PreOffBrightnessFactor { get; set; } = 0.5;
 
+	/// <summary>How long a manual change holds the room, unless <see cref="OverrideUntilVacant"/> hands that to movement.</summary>
+	// Kept in the document while the hold follows movement, so switching back restores what was typed.
 	public int OverrideDurationMinutes { get; set; } = 120;
+
+	/// <summary>Whether a manual change holds until the room has been motion-free for <see cref="VacancyTimeoutSeconds"/> instead of for a fixed time.</summary>
+	// A bool and not an enum: an unknown enum name is a FormatException at start-up, where an absent key simply
+	// leaves this initialiser standing. Turning it off is written out as false, since the writer omits nulls only.
+	public bool OverrideUntilVacant { get; set; } = true;
 
 	/// <summary>Motion-free time after a manual turn-off before the suppression is lifted.</summary>
 	public int VacancyResetMinutes { get; set; } = 10;

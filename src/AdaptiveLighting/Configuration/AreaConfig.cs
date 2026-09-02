@@ -76,6 +76,9 @@ public class AreaConfig
 	/// <inheritdoc cref="AreaSettings.OverrideDurationMinutes"/>
 	public int? OverrideDurationMinutes { get; set; }
 
+	/// <inheritdoc cref="AreaSettings.OverrideUntilVacant"/>
+	public bool? OverrideUntilVacant { get; set; }
+
 	/// <inheritdoc cref="AreaSettings.VacancyResetMinutes"/>
 	public int? VacancyResetMinutes { get; set; }
 
@@ -152,6 +155,7 @@ public class AreaConfig
 			PreOffSeconds = PreOffSeconds ?? defaults.PreOffSeconds,
 			PreOffBrightnessFactor = PreOffBrightnessFactor ?? defaults.PreOffBrightnessFactor,
 			OverrideDurationMinutes = OverrideDurationMinutes ?? defaults.OverrideDurationMinutes,
+			OverrideUntilVacant = OverrideUntilVacant ?? defaults.OverrideUntilVacant,
 			VacancyResetMinutes = VacancyResetMinutes ?? defaults.VacancyResetMinutes,
 			Darkness = Darkness ?? defaults.Darkness,
 			ColorControl = ColorControl ?? defaults.ColorControl,
