@@ -35,6 +35,10 @@ rewritten to suit one.
 
 - **Not every filter button in the Activity log works.** Unchecking one leaves its events in the list.
 
+- **The "Don't switch on while" help text renders `&amp;quot;` literally** instead of the quotation marks it
+  stands for, so a reader sees the HTML escape. The neighbouring "Don't switch off while" row carries the same
+  text. Pre-existing and unrelated to the settings rows around it.
+
 - **The blend starts when the period actually begins.** A period whose `Start` was 06:30 but which movement
   began at 06:45 arrives already part-way through its blend, because the window trails the boundary and the
   boundary is still 06:30 (`mechanisms.md`, *A period that waits for movement*). It should ease from the moment
