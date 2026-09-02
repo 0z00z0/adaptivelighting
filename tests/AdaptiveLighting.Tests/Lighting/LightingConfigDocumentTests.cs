@@ -352,6 +352,34 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(0, config.Periods.Count);
 	}
 
+	// The shipped answer to "what does a manual change do", and the one setting whose absence is not neutral: a
+	// document written before it existed has to read as the movement-led hold and not as false.
+	[TestMethod]
+	public void Deserialize_WithNoHoldMode_LeavesTheHoldFollowingMovement()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"{LightingConfigDocument.RootKey}:\n  Defaults:\n    OverrideDurationMinutes: 45\n").Config;
+
+		Assert.IsTrue(config.Defaults.OverrideUntilVacant, "an absent key leaves the initialiser standing");
+		Assert.AreEqual(45, config.Defaults.OverrideDurationMinutes, "the typed number is still there to switch back to");
+	}
+
+	// Turning it off has to survive a save, which it only does because the writer omits nulls and not defaults.
+	[TestMethod]
+	public void RoundTrip_PreservesAHoldTurnedBackToAFixedTime()
+	{
+		AdaptiveLightingConfig original = Populated();
+		original.Defaults.OverrideUntilVacant = false;
+		original.Areas[0].OverrideUntilVacant = true;
+
+		AdaptiveLightingConfig reloaded = LightingConfigDocument
+			.Deserialize(LightingConfigDocument.Serialize(original)).Config;
+
+		Assert.IsFalse(reloaded.Defaults.OverrideUntilVacant, "a house that chose a fixed time must not read back as movement-led");
+		Assert.IsTrue(reloaded.Areas[0].OverrideUntilVacant);
+		Assert.IsNull(reloaded.Areas[1].OverrideUntilVacant, "a room that said nothing still inherits");
+	}
+
 	[TestMethod]
 	public void RoundTrip_NoHouseMode_EmitsNoHouseModeOrModeKeys()
 	{

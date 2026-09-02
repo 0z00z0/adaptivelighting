@@ -157,6 +157,7 @@ public static class AreaSetupService
 	public static int OverrideCount(AreaConfig area) =>
 		(area.VacancyTimeoutSeconds is not null ? 1 : 0) + (area.PreOffSeconds is not null ? 1 : 0)
 		+ (area.PreOffBrightnessFactor is not null ? 1 : 0) + (area.OverrideDurationMinutes is not null ? 1 : 0)
+		+ (area.OverrideUntilVacant is not null ? 1 : 0)
 		+ (area.VacancyResetMinutes is not null ? 1 : 0) + (area.Darkness is not null ? 1 : 0)
 		+ (area.ColorControl is not null ? 1 : 0)
 		+ (area.LuxThreshold is not null ? 1 : 0) + (area.LuxHysteresis is not null ? 1 : 0)

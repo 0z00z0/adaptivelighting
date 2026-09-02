@@ -33,9 +33,42 @@ public sealed class AreaSentencesTests
 			sentences[0].PlainText);
 
 		Assert.AreEqual(
-			"Manual changes hold for 2 h; after somebody switches them off manually, movement is ignored until the "
-			+ "room has been empty 10 min.",
+			"Manual changes hold until the room empties; after somebody switches them off manually, movement is "
+			+ "ignored until the room has been empty 10 min.",
 			sentences[1].PlainText);
+	}
+
+	[TestMethod]
+	public void A_Room_Held_On_A_Clock_Reads_As_A_Length_Of_Time()
+	{
+		AreaConfig room = Room();
+		room.OverrideUntilVacant = false;
+		room.OverrideDurationMinutes = 45;
+
+		StringAssert.StartsWith(
+			AreaSentences.ForArea(room, Defaults())[1].PlainText,
+			"Manual changes hold for 45 min;");
+	}
+
+	// The way out of each branch: a clock-held room can reach the movement-led hold from its own popover, and a
+	// movement-led one can get back. Without both, one of the two is a trap the sentence cannot leave.
+	[TestMethod]
+	public void Each_Hold_Mode_Offers_The_Other_From_Its_Own_Token()
+	{
+		AreaConfig clocked = Room();
+		clocked.OverrideUntilVacant = false;
+
+		SentenceToken length = TokenFor(AreaSentences.ForArea(clocked, Defaults()), nameof(AreaSettings.OverrideDurationMinutes));
+
+		TokenChoice wayOut = length.Choices.Single(choice => choice.Key == nameof(AreaSettings.OverrideUntilVacant));
+		Assert.AreEqual(bool.TrueString, wayOut.Value);
+		Assert.AreEqual(TokenKind.Choice, wayOut.Kind, "the escape writes a flag, so it cannot be read as a duration");
+
+		SentenceToken mode = TokenFor(AreaSentences.ForArea(Room(), Defaults()), nameof(AreaSettings.OverrideUntilVacant));
+
+		Assert.AreEqual("until the room empties", mode.Text);
+		Assert.IsTrue(mode.Choices.Any(choice => string.Equals(choice.Value, bool.FalseString, StringComparison.Ordinal)),
+			"a movement-led hold has to offer the way back to a clock");
 	}
 
 	[TestMethod]
@@ -253,6 +286,7 @@ public sealed class AreaSentencesTests
 		AreaConfig room = Room();
 		room.VacancyTimeoutSeconds = 300;
 		room.PreOffSeconds = 60;
+		room.OverrideUntilVacant = false;
 		room.OverrideDurationMinutes = 60;
 
 		IReadOnlyList<Sentence> sentences = AreaSentences.ForArea(room, Defaults());

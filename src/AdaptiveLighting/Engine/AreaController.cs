@@ -244,7 +244,12 @@ public sealed class AreaController : IDisposable
 					return;
 
 				case AreaState.OverriddenOn:
-					// Manual levels stand. Motion only records occupancy, which decides where expiry lands.
+					// Manual levels stand either way. Under a movement-led hold motion restarts the clock, which is
+					// what makes the hold outlast a person who is still in the room; under a fixed one it only
+					// records occupancy, which decides where expiry lands.
+					if (_area.Settings.OverrideUntilVacant)
+						RestartOverrideTimer();
+
 					Publish(TransitionReason.Motion);
 					return;
 
@@ -308,7 +313,7 @@ public sealed class AreaController : IDisposable
 				Enter(AreaState.OverriddenOn, TransitionReason.ManualOn);
 
 				// Restarted on every manual touch: the override outlasts the last thing the human did.
-				ArmCountdown(_overrideTimer, TimeSpan.FromMinutes(_area.Settings.OverrideDurationMinutes), OnOverrideExpired);
+				RestartOverrideTimer();
 
 				Publish(TransitionReason.ManualOn);
 				return;
@@ -957,6 +962,16 @@ public sealed class AreaController : IDisposable
 
 	private void RestartSuppressionTimer() =>
 		ArmCountdown(_suppressionTimer, TimeSpan.FromMinutes(_area.Settings.VacancyResetMinutes), OnSuppressionLifted);
+
+	private void RestartOverrideTimer() =>
+		ArmCountdown(_overrideTimer, OverrideHold(), OnOverrideExpired);
+
+	// A movement-led hold runs for exactly the vacancy timeout and motion restarts it, so IsOccupied is already
+	// false when it fires and OnOverrideExpired lands on the empty-room branch without knowing which mode ran.
+	private TimeSpan OverrideHold() =>
+		_area.Settings.OverrideUntilVacant
+			? TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds)
+			: TimeSpan.FromMinutes(_area.Settings.OverrideDurationMinutes);
 
 	// The single place all four state timers are armed, so a published deadline is never out of step with the
 	// timer that will honour it. Records both ends of the window for the snapshot's elapsed-versus-remaining.
