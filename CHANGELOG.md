@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.3] - 2026-09-03
+
 ### Changed
 
 - **The daylight curve moves from a house-wide, per-period choice to a per-room, per-period one.** A
