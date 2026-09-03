@@ -21,6 +21,15 @@ public sealed class FakeHaContext : IHaContext
 
 	public List<(string Type, object? Data)> SentEvents { get; } = [];
 
+	/// <summary>How many times <see cref="GetState"/> has been asked, whatever it answered.</summary>
+	// Group membership is read through the AttrStringList extension, which is GetState underneath, so for a walk
+	// over groups this count is the number of nodes it visited.
+	public int StateReads { get; private set; }
+
+	/// <summary>A ceiling on <see cref="StateReads"/>, past which <see cref="GetState"/> throws; <c>null</c> for none.</summary>
+	// Bounds a test by the work the code does instead of by the clock, so a loaded runner cannot turn it red.
+	public int? StateReadBudget { get; set; }
+
 	IObservable<Event> IHaContext.Events => _events;
 
 	/// <summary>Sets a state without announcing it. For arranging a fixture.</summary>
@@ -62,7 +71,19 @@ public sealed class FakeHaContext : IHaContext
 
 	public IObservable<StateChange> StateAllChanges() => _changes;
 
-	public EntityState? GetState(string entityId) => _states.GetValueOrDefault(entityId);
+	public EntityState? GetState(string entityId)
+	{
+		StateReads++;
+
+		if (StateReadBudget is int budget && StateReads > budget)
+			throw new InvalidOperationException(
+				$"Read {StateReads} entity states, one past the budget of {budget}, while reading '{entityId}'. "
+				+ "A walk over group membership is revisiting entities it has already been to, so it will not "
+				+ "terminate. Check that AreaEntityResolver.LeavesOf still keeps a visited set and still consults "
+				+ "it before pushing every member.");
+
+		return _states.GetValueOrDefault(entityId);
+	}
 
 	public IReadOnlyList<Entity> GetAllEntities() => [.. _states.Keys.Select(id => new Entity(this, id))];
 
