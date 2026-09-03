@@ -70,18 +70,23 @@
 				<span class="lvl-start">@StartOf(current.PeriodId)</span>
 			</div>
 
-			@* Dropped while the curve owns this period. Anything the room pinned stays in the document and comes
-			   back with the control. *@
-			@if (OnTheCurve(current.PeriodId))
-			{
-				<div class="lvl-cell lvl-cell-curve">
-					<span class="lvl-cell-label">Brightness</span>
+			@* Dropped while this room follows the curve for this period. Anything the room pinned stays in the
+			   document and comes back with the control. *@
+			<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
+				<span class="lvl-cell-label">Brightness</span>
+
+				<label class="lvl-curve-toggle">
+					<input type="checkbox" checked="@current.FollowsDaylightCurve"
+						   @onchange="args => SetFollowsDaylightCurve(current.PeriodId, args.Value is true)" />
+					Follow the daylight curve
+				</label>
+
+				@if (current.FollowsDaylightCurve)
+				{
 					<span class="lvl-inherit">the daylight curve's</span>
-				</div>
-			}
-			else
-			{
-				<div class="lvl-cell">
+				}
+				else
+				{
 					<PresetSlider Value="@current.BrightnessPct"
 								  AtDefault="@(current.Brightness == LevelSource.Schedule)"
 								  Inheritable="true"
@@ -98,8 +103,8 @@
 							}
 						</Mark>
 					</PresetSlider>
-				</div>
-			}
+				}
+			</div>
 
 			@* Dropped and not disabled, but anything a period already pinned stays in the document and comes
 			   back with the control. *@
@@ -286,9 +291,6 @@
 		return PeriodStartText.Short(found.Start) is { Length: > 0 } boundary ? $"[{boundary}]" : "start not set";
 	}
 
-	/// <summary>Whether the daylight curve owns this period's brightness, which leaves the room nothing to set.</summary>
-	private bool OnTheCurve(string periodId) => Found(periodId)?.UseDaylightCurve == true;
-
 	private TimePeriodConfig? Found(string periodId) => Periods.ByKey(periodId);
 
 	// KelvinColour.Css writes its own invariant integers, so no decimal comma reaches the colour function.
@@ -298,6 +300,19 @@
 	private Task SetBrightness(string periodId, double? value)
 	{
 		RoomLevels.SetBrightness(Room, periodId, value);
+
+		return Changed.InvokeAsync();
+	}
+
+	// currentBrightnessPct is whatever this cell already shows, room override or schedule, so the curve's dark
+	// end is seeded from the number that was on screen and not always the schedule's.
+	private Task SetFollowsDaylightCurve(string periodId, bool follow)
+	{
+		if (Found(periodId) is not { } period)
+			return Task.CompletedTask;
+
+		double currentBrightnessPct = RoomLevels.Rows(Periods, Room).Single(row => row.PeriodId == periodId).BrightnessPct;
+		RoomLevels.SetFollowsDaylightCurve(Room, period, currentBrightnessPct, follow);
 
 		return Changed.InvokeAsync();
 	}

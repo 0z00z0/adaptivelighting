@@ -99,8 +99,11 @@ public static class LightingConfigDocument
 		["ResetAtTime"] =
 			"ending a house mode at a time of day was removed; the mode now ends only where its own option says it does.",
 		["LuxBrightnessEnabled"] =
-			"the daylight curve is chosen per period now, not per room. Set UseDaylightCurve on the periods that "
-			+ "should follow the light outside; the other lux brightness settings still shape the curve."
+			"the daylight curve is chosen per room, per period now, through that room's own Levels row for the "
+			+ "period. Turn it on from the room's page; the other lux brightness settings still shape the curve.",
+		["UseDaylightCurve"] =
+			"a period can no longer hand its whole brightness to the curve. Each room decides for itself, per "
+			+ "period, through that room's own Levels row — the FollowDaylightCurve field there does what this used to."
 	};
 
 	// One wording for the log and the browser. Two copies would drift, and the browser's is the one nobody reads

@@ -228,7 +228,7 @@ public static class RoomSettings
 
 		new RoomSettingGroup(
 			"Daylight curve",
-			"The brightness the periods that follow the light outside are given",
+			"The brightness this room takes for whichever of its periods follow the light outside",
 			[
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessStartLux),

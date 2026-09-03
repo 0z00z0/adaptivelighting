@@ -206,8 +206,8 @@ else
 					  Test="@TestPeriod"
 					  Changed="@MarkDirty" />
 
-		@* Only where a period asked for it. With none the chart has nothing to describe, and its handles would
-		   edit numbers that change nothing. *@
+		@* Only where this room asked for it, for at least one period. With none the chart has nothing to
+		   describe, and its handles would edit numbers that change nothing. *@
 		@if (CurvePeriodNames.Count > 0)
 		{
 			<div class="lvl-daylight">
@@ -1096,12 +1096,11 @@ else
 	/// <summary>The same period by id, which is what the levels table matches its rows on.</summary>
 	private string? ActivePeriodId => _activePeriod?.Key;
 
-	/// <summary>The periods that hand their brightness to the curve, in schedule order.</summary>
-	/// <remarks>Empty hides the chart: with no period on the curve its handles would edit numbers nothing reads.</remarks>
+	/// <summary>The periods this room follows the daylight curve for, in schedule order.</summary>
+	/// <remarks>Empty hides the chart: with no period of this room's own on the curve its handles would edit numbers nothing reads.</remarks>
 	private IReadOnlyList<string> CurvePeriodNames =>
 	[
-		.. _document.Periods
-			.Where(period => period.UseDaylightCurve)
+		.. RoomLevels.CurvePeriods(_document.Periods, _room)
 			.Select(period => period.Name is { Length: > 0 } name ? name : "unnamed period")
 	];
 

@@ -24,8 +24,12 @@ public sealed class CurveBlendTests
 
 	private static DateTimeOffset At(int hour, int minute = 0) => new(2026, 1, 15, hour, minute, 0, TimeSpan.Zero);
 
-	private static TimePeriodConfig Period(string name, string start, double brightnessPct, bool onTheCurve) =>
-		new() { Name = name, Start = start, BrightnessPct = brightnessPct, ColorTempKelvin = 2700, UseDaylightCurve = onTheCurve };
+	private static TimePeriodConfig Period(string name, string start, double brightnessPct) =>
+		new() { Name = name, Start = start, BrightnessPct = brightnessPct, ColorTempKelvin = 2700 };
+
+	// A row for whichever periods this one room follows the curve for; the room named nowhere else in this
+	// file, so its own PeriodId is enough to key the row.
+	private static RoomLevelOverride OnCurve(string periodId) => new() { PeriodId = periodId, FollowDaylightCurve = true };
 
 	// The stored percentages are deliberately far from the curve's 50 %: 90 on the day side, 15 on the night side.
 	// A stored number that happened to agree with the curve would let the defect pass unnoticed.
@@ -33,13 +37,23 @@ public sealed class CurveBlendTests
 	{
 		List<TimePeriodConfig> table =
 		[
-			Period("day", "07:00", 90, dayOnCurve),
-			Period("evening", "18:00", 70, eveningOnCurve),
-			Period("night", "22:30", 15, nightOnCurve)
+			Period("day", "07:00", 90),
+			Period("evening", "18:00", 70),
+			Period("night", "22:30", 15)
+		];
+
+		List<RoomLevelOverride> levels =
+		[
+			.. new[]
+			{
+				dayOnCurve ? OnCurve("day") : null,
+				eveningOnCurve ? OnCurve("evening") : null,
+				nightOnCurve ? OnCurve("night") : null
+			}.OfType<RoomLevelOverride>()
 		];
 
 		return new CircadianCalculator(
-			table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 }, () => SunTimes.Unknown,
+			table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 }, () => SunTimes.Unknown, levels,
 			zone: TimeZoneInfo.Utc);
 	}
 
@@ -118,12 +132,12 @@ public sealed class CurveBlendTests
 	{
 		List<TimePeriodConfig> table =
 		[
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500, UseDaylightCurve = true },
+			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
 		];
 
 		CircadianCalculator calculator = new(
-			table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 }, () => SunTimes.Unknown,
+			table, new GlobalConfig { SmoothTransitions = true, BlendMinutes = 30 }, () => SunTimes.Unknown, [OnCurve("day")],
 			zone: TimeZoneInfo.Utc);
 
 		LightTarget lit = new LuxBrightnessCurve(Curve(), () => 1000d).Apply(calculator.GetTarget(At(18, 15))!);
@@ -141,12 +155,12 @@ public sealed class CurveBlendTests
 	{
 		List<TimePeriodConfig> table =
 		[
-			Period("day", "07:00", 90, onTheCurve: true),
-			Period("evening", "18:00", 70, onTheCurve: false)
+			Period("day", "07:00", 90),
+			Period("evening", "18:00", 70)
 		];
 
 		CircadianCalculator calculator = new(
-			table, new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown, zone: TimeZoneInfo.Utc);
+			table, new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown, [OnCurve("day")], zone: TimeZoneInfo.Utc);
 
 		Assert.AreEqual(CurveAtNoonLux, RoundTrip(calculator, At(17, 59)), 1e-9);
 		Assert.AreEqual(70, RoundTrip(calculator, At(18)), 1e-9);

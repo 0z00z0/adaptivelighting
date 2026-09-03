@@ -225,8 +225,9 @@ worse off than a bare one.
 
 A room does **not** follow the house's outdoor sensor unless it asks to (`FollowOutdoorLux`). One shaded
 outdoor sensor reading several hundred lux while the rooms behind it sit dark otherwise makes a whole house
-refuse to light itself. This is darkness only: the daylight curve reads the outdoor sensor in every room,
-without asking, for the opposite reason — an indoor sensor is measuring the lamps it would be setting.
+refuse to light itself. This is darkness only: the daylight curve reads the outdoor sensor by default, in
+any room that follows the curve for at least one period, without needing `FollowOutdoorLux` — for the
+opposite reason, an indoor sensor is measuring the lamps it would be setting.
 
 Staleness is measured against `LastUpdated`, not `LastChanged`, or a sensor steadily reporting 3 lx is
 condemned for being consistent. Home Assistant resets entity timestamps on restart, so immediately after one
@@ -417,13 +418,19 @@ mode overwritten on no evidence, on a path a corrupt file could trigger at every
 After a Home Assistant restart an `input_select` reads `unavailable` for a while. Anything reading one has to
 survive that without acting on it.
 
-### The daylight curve is a per-period mode
+### The daylight curve is a per-room, per-period opt-in
 
-Each period carries one choice, `TimePeriodConfig.UseDaylightCurve`: *specify brightness*, which is its own
-`BrightnessPct`, or *use daylight curve*, where the light outside decides instead. Several periods may claim
-the curve, and one curve then spans them all. `CircadianCalculator.ToTarget` copies the flag onto
-`LightTarget.UsesDaylightCurve` from the **active period alone**, as `FromRoom` is copied, so a blend across a
-boundary cannot report one period's name beside the other's rule.
+A period itself carries no curve choice: it has one `BrightnessPct`, house-wide, exactly as it did before the
+curve existed. A room opts a *period* into the curve through its own `Levels` row for that period —
+`RoomLevelOverride.FollowDaylightCurve` — never through anything on the period. Two rooms can therefore run
+the same evening period two different ways: one on the curve, one stating its own percentage.
+
+`CircadianCalculator.LevelsOf` resolves this per room per period, the same place `FromRoom` is resolved, and
+carries the answer as `PeriodLevels.UsesDaylightCurve`. `ToTarget` copies it onto `LightTarget.UsesDaylightCurve`
+from **this room's own row for the active period**, never from the period. `LuxBrightnessCurve.Apply` needed
+no change at all for this: it already read `LightTarget.UsesDaylightCurve` and `BlendEndpoints.LeavingUsesDaylightCurve`
+without caring where they came from, so re-pointing the source at the room instead of the period was the whole
+fix. A room with no row for a period is never on the curve for it, whatever another room's row says.
 
 The curve **replaces** the level rather than adding to it. That is what frees both of its ends: it runs from
 `LuxBrightnessMinPct` at `LuxBrightnessStartLux` and below to `LuxBrightnessMaxPct` at `LuxBrightnessFullLux`
@@ -431,36 +438,40 @@ and above, each draggable across the whole 0–100 %, and the schedule's brighte
 span is **signed**, so a bright end under the dark end is a curve that falls, not a curve that is ignored.
 Interpolation is on `log10(lux)`, so each decade gets an equal share, and `LuxBrightnessGamma` shapes it.
 
-A period on the curve keeps its `BrightnessPct` in the document, hidden on screen. Switching back restores
-what was typed, and nothing has to be re-entered to try the curve for an evening.
+A room's row for a period it follows the curve for keeps its `BrightnessPct` in the document, hidden on
+screen. Switching back restores what was typed, and nothing has to be re-entered to try the curve for an
+evening.
 
-#### The dark end is seeded by the period that claims the curve
+#### The dark end is seeded by the period this room first claims the curve for
 
-The curve's dark end is what a period gives when it is dark outside, so no single number suits every period
-that might claim it: a plan asking for 15 % at night and 90 % by day is served badly by one figure sitting
-between them. `DaylightCurveMode.Set` therefore writes `Defaults.LuxBrightnessMinPct` to **half the claiming
-period's own `BrightnessPct`**, clamped to 0–100 % and rounded to one decimal. Night at 15 % seeds 7.5;
-day at 90 % seeds 45.
+The curve's dark end is what a room gives when it is dark outside, so no single number suits every period a
+room might claim: a room asking for 15 % at night and 90 % by day is served badly by one figure sitting
+between them. `DaylightCurveMode.Set` therefore writes the room's own `AreaConfig.LuxBrightnessMinPct` to
+**half whatever brightness that room's cell already showed for the claiming period**, clamped to 0–100 % and
+rounded to one decimal. Night at 15 % seeds 7.5; day at 90 % seeds 45.
 
-It fires only as the curve goes from **unused to used** — no period on it at all, and one being put on it.
-A second period joining seeds nothing, because by then the value may have been dragged into place by hand and
-overwriting it would undo that. Turning the curve off on every period and on again counts as claiming it
-afresh and seeds once more. Only the house default is written: a room stating its own dark end keeps it.
+It fires only as the curve goes from **unused to used in this room**, and only while the room states no dark
+end of its own yet. A second period in the same room joining seeds nothing, because by then the value may
+have been dragged into place by hand and overwriting it would undo that; nor does it fire again once the room
+has any dark end at all, seeded or hand-set — that value now behaves like any other setting the room states
+for itself, and stands until changed by hand. The house's own `Defaults.LuxBrightnessMinPct` is never touched
+by this: seeding always writes the *room's* value, and a room that says nothing simply inherits the house
+default as it always did.
 
 **This is an editing action, not engine logic.** The engine reads whatever the document holds, so a
 hand-written file runs with nothing seeded, and `AreaSettings.LuxBrightnessMinPct`'s schema default is the
-fallback for a document where the curve was never claimed through the editor. The seeding is the normal path
-to that number; the schema default is the reserve.
+fallback for a document where no room ever claimed the curve through the editor. The seeding is the normal
+path to that number; the schema default is the reserve.
 
 **The reading is the house's outdoor sensor**, `Global.OutdoorLuxSensor`, unless the room names its own
 `AreaConfig.DaylightSensor`. Never the darkness sensor: an indoor sensor measures the lamps the curve is
 setting, so a closed loop oscillates. That makes it a different question from `FollowOutdoorLux`, which is
 about darkness only, and `LuxReader` is the one implementation both questions read through. With no sensor
 named at all the curve holds its dark end, which is a level nobody chose — `ConfigValidator` warns for exactly
-that, naming the rooms with nothing to read.
+that, naming the rooms that follow the curve for some period and have nothing to read.
 
-Two adjacent periods both on the curve have no boundary to draw at all, because the curve is continuous
-across them.
+Two adjacent periods a room follows the curve for both have no boundary to draw at all for that room, because
+the curve is continuous across them.
 
 #### The blend's endpoints are each side's own answer
 
@@ -481,8 +492,9 @@ The accepted consequence: during a blend out of a curve period the leaving endpo
 passing cloud retargets the room mid-blend. That already happened for the whole of a curve period; the blend
 window now begins it thirty minutes earlier.
 
-`LuxBrightnessEnabled` is gone. It was per room while the mode is per period, so no translation exists; the
-key parses as silence and `LightingConfigDocument.RetiredKeys` logs it once on load.
+`LuxBrightnessEnabled` is gone, and so is the period-level `UseDaylightCurve` that briefly replaced it: no
+translation exists for either onto the room's own `FollowDaylightCurve`, so both keys parse as silence and
+`LightingConfigDocument.RetiredKeys` logs each once on load.
 
 ### Order of composition: period, then daylight curve, then sleep clamp
 
@@ -499,9 +511,10 @@ question of the curve and the two can be read as having swapped places.
 
 #### The sleep clamp asks the curve for its clamp period's level
 
-The clamp names a period and takes that period's brightness as the night's ceiling. Where the named period is
-on the daylight curve, the answer comes from the curve rather than from the stored figure the period keeps and
-does not use — so a house whose night period follows the light outside is capped by the light outside.
+The clamp names a period and takes that period's brightness, for this room, as the night's ceiling. Where this
+room follows the daylight curve for the named period, the answer comes from the curve rather than from the
+stored figure the room's row keeps and does not use — so a room that follows the light outside at night is
+capped by the light outside, and a room that does not is capped by its own stated percentage as before.
 
 The lux sensor is therefore read twice in a sleeping room: once for the target and once for the ceiling. A
 reading that moves between the two shifts the cap by a hair, which is invisible, and the result stays monotone

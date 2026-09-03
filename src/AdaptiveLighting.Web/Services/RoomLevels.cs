@@ -20,14 +20,15 @@ public sealed record RoomLevelRow(
 	double BrightnessPct,
 	LevelSource Brightness,
 	int ColorTempKelvin,
-	LevelSource Colour)
+	LevelSource Colour,
+	bool FollowsDaylightCurve)
 {
 	/// <summary>Whether this room states anything at all for this period, which is what draws the row's mark.</summary>
-	public bool IsOwn => Brightness == LevelSource.Room || Colour == LevelSource.Room;
+	public bool IsOwn => Brightness == LevelSource.Room || Colour == LevelSource.Room || FollowsDaylightCurve;
 }
 
 /// <summary>A row this room states for a period the schedule no longer has.</summary>
-public sealed record RoomLevelOrphan(string PeriodId, double? BrightnessPct, int? ColorTempKelvin)
+public sealed record RoomLevelOrphan(string PeriodId, double? BrightnessPct, int? ColorTempKelvin, bool FollowsDaylightCurve)
 {
 	// A row with values but no period id survives normalisation, so the blank case reaches the screen.
 	public string Name => PeriodId is { Length: > 0 } named ? named : "(a row with no period)";
@@ -44,6 +45,9 @@ public sealed record RoomLevelOrphan(string PeriodId, double? BrightnessPct, int
 
 			if (ColorTempKelvin is { } kelvin)
 				parts.Add($"{kelvin.ToString(CultureInfo.InvariantCulture)} K");
+
+			if (FollowsDaylightCurve)
+				parts.Add("the daylight curve");
 
 			return parts.Count == 0 ? "nothing" : string.Join(" · ", parts);
 		}
@@ -74,7 +78,8 @@ public static class RoomLevels
 				own?.BrightnessPct ?? period.BrightnessPct,
 				own?.BrightnessPct is not null ? LevelSource.Room : LevelSource.Schedule,
 				own?.ColorTempKelvin ?? period.ColorTempKelvin,
-				own?.ColorTempKelvin is not null ? LevelSource.Room : LevelSource.Schedule));
+				own?.ColorTempKelvin is not null ? LevelSource.Room : LevelSource.Schedule,
+				own?.FollowDaylightCurve == true));
 		}
 
 		return rows;
@@ -93,7 +98,7 @@ public static class RoomLevels
 			.. room.Levels
 				.Where(level => !level.IsEmpty)
 				.Where(level => periods.ByKey(level.PeriodId) is null)
-				.Select(level => new RoomLevelOrphan(level.PeriodId, level.BrightnessPct, level.ColorTempKelvin))
+				.Select(level => new RoomLevelOrphan(level.PeriodId, level.BrightnessPct, level.ColorTempKelvin, level.FollowDaylightCurve == true))
 		];
 	}
 
@@ -116,6 +121,24 @@ public static class RoomLevels
 		ArgumentNullException.ThrowIfNull(room);
 
 		Edit(room, periodId, level => level.ColorTempKelvin = kelvin);
+	}
+
+	/// <summary>Puts this room's period on or off the daylight curve, seeding the room's dark end on first adoption.</summary>
+	/// <remarks>The percentage stays where it is either way, so switching back off restores what was typed; see <see cref="DaylightCurveMode"/>.</remarks>
+	public static void SetFollowsDaylightCurve(AreaConfig room, TimePeriodConfig period, double currentBrightnessPct, bool follow)
+	{
+		ArgumentNullException.ThrowIfNull(room);
+		ArgumentNullException.ThrowIfNull(period);
+
+		Edit(room, period.Key, level => DaylightCurveMode.Set(room, level, currentBrightnessPct, follow));
+	}
+
+	/// <summary>The schedule's periods this room follows the daylight curve for, in schedule order.</summary>
+	public static IReadOnlyList<TimePeriodConfig> CurvePeriods(IReadOnlyList<TimePeriodConfig> periods, AreaConfig? room)
+	{
+		ArgumentNullException.ThrowIfNull(periods);
+
+		return [.. periods.Where(period => Stated(room, period.Key)?.FollowDaylightCurve == true)];
 	}
 
 	/// <summary>Drops everything this room says about a period, which is the road back from an orphan.</summary>

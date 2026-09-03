@@ -817,11 +817,11 @@ public sealed class LightingConfigDocumentTests
 			"reported, or nothing rewrites the file and the translation runs again on every load");
 	}
 
-	// ===================== the daylight curve is a per-period choice =====================
+	// ===================== the daylight curve is a per-room, per-period choice =====================
 
-	/// <summary>A document written before the choice existed means "specify brightness", which is the absent value.</summary>
+	/// <summary>A document from before this choice moved to the room means "specify brightness": the key is retired, dropped, and reported.</summary>
 	[TestMethod]
-	public void A_Period_With_No_UseDaylightCurve_Key_Loads_As_Specify_Brightness()
+	public void A_Period_Still_Carrying_UseDaylightCurve_Loads_With_Its_Own_Level_And_A_Retired_Key_Warning()
 	{
 		const string yaml = """
 			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
@@ -829,33 +829,53 @@ public sealed class LightingConfigDocumentTests
 			    - Name: evening
 			      Start: "18:00"
 			      BrightnessPct: 70
+			      UseDaylightCurve: true
 			""";
 
 		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml);
 
-		Assert.IsFalse(read.Config.Periods.Single().UseDaylightCurve);
-		Assert.AreEqual(70d, read.Config.Periods.Single().BrightnessPct, "and its own level is what runs");
+		Assert.AreEqual(70d, read.Config.Periods.Single().BrightnessPct, "the period's own level is what runs now");
+		StringAssert.Contains(read.Config.RetiredKeysInDocument.Single(), "UseDaylightCurve");
 	}
 
 	[TestMethod]
-	public void A_Period_On_The_Curve_Round_Trips_And_Keeps_Its_Hidden_Percentage()
+	public void A_Rooms_Curve_Opt_In_Round_Trips_And_Keeps_Its_Hidden_Percentage()
 	{
 		AdaptiveLightingConfig config = new()
 		{
 			Periods =
 			[
-				new() { Name = "day", Start = "09:00", BrightnessPct = 90, UseDaylightCurve = true },
+				new() { Name = "day", Start = "09:00", BrightnessPct = 90 },
 				new() { Name = "night", Start = "22:30", BrightnessPct = 15 }
+			],
+			Areas =
+			[
+				new()
+				{
+					Name = "Stue",
+					AreaId = "stue",
+					Levels =
+					[
+						new() { PeriodId = "day", BrightnessPct = 55, FollowDaylightCurve = true },
+						new() { PeriodId = "night", BrightnessPct = 10 }
+					]
+				}
 			]
 		};
 
 		AdaptiveLightingConfig back = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(config)).Config;
+		IReadOnlyList<RoomLevelOverride> levels = back.Areas.Single().Levels;
 
-		Assert.IsTrue(back.Periods[0].UseDaylightCurve);
-		Assert.AreEqual(90d, back.Periods[0].BrightnessPct,
+		// Matched by key, not by the literal "day"/"night" written above: the read mints a stable Id for each
+		// period and repoints every Levels row onto it, same as it would for a hand-edited document.
+		RoomLevelOverride day = levels.Single(level => level.PeriodId == back.Periods[0].Key);
+		Assert.IsTrue(day.FollowDaylightCurve == true);
+		Assert.AreEqual(55d, day.BrightnessPct,
 			"the curve hides the percentage on screen; the document keeps it, so switching back restores it");
-		Assert.IsFalse(back.Periods[1].UseDaylightCurve);
-		Assert.AreEqual(15d, back.Periods[1].BrightnessPct);
+
+		RoomLevelOverride night = levels.Single(level => level.PeriodId == back.Periods[1].Key);
+		Assert.IsFalse(night.FollowDaylightCurve == true);
+		Assert.AreEqual(10d, night.BrightnessPct);
 	}
 
 	/// <summary>The old per-room switch is an unmatched key now, and an unmatched key is silence.</summary>
@@ -880,8 +900,8 @@ public sealed class LightingConfigDocumentTests
 
 		Assert.AreEqual(1, read.Config.Areas.Count, "the stale key must not cost the document its rooms");
 		Assert.AreEqual(250d, read.Config.Defaults.LuxBrightnessStartLux, "and the keys beside it still bind");
-		Assert.IsFalse(read.Config.Periods.Single().UseDaylightCurve,
-			"the removed switch translates to nothing: the curve is claimed per period now");
+		Assert.AreEqual(0, read.Config.Areas.Single().Levels.Count,
+			"the removed switch translates to nothing: the curve is opted into per room, per period now, and this document opts nothing in");
 
 		Assert.IsFalse(LightingConfigDocument.Serialize(read.Config).Contains("LuxBrightnessEnabled", StringComparison.Ordinal),
 			"and the next save drops it");

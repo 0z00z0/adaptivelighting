@@ -275,6 +275,81 @@ public sealed class RoomLevelsTests
 		Assert.IsTrue(orphan.Name.Length > 0, "but it is not drawn as a blank");
 	}
 
+	// ===================== the daylight curve is a per-room, per-period choice =====================
+
+	[TestMethod]
+	public void Following_The_Curve_Marks_The_Row_As_The_Rooms_Own()
+	{
+		AreaConfig room = Room();
+		TimePeriodConfig kveld = Day().Single(period => period.Name == "kveld");
+
+		RoomLevels.SetFollowsDaylightCurve(room, kveld, 70, true);
+
+		RoomLevelRow row = RoomLevels.Rows(Day(), room).Single(r => r.PeriodId == "kveld");
+
+		Assert.IsTrue(row.FollowsDaylightCurve);
+		Assert.IsTrue(row.IsOwn, "the room states something for this period, even with no brightness or colour of its own");
+		Assert.AreEqual(1, RoomLevels.OwnCount(Day(), room));
+	}
+
+	[TestMethod]
+	public void Switching_Off_The_Curve_Leaves_The_Stored_Percentage_In_Place()
+	{
+		AreaConfig room = Room();
+		TimePeriodConfig kveld = Day().Single(period => period.Name == "kveld");
+
+		RoomLevels.SetBrightness(room, "kveld", 40);
+		RoomLevels.SetFollowsDaylightCurve(room, kveld, 40, true);
+		RoomLevels.SetFollowsDaylightCurve(room, kveld, 40, false);
+
+		RoomLevelRow row = RoomLevels.Rows(Day(), room).Single(r => r.PeriodId == "kveld");
+
+		Assert.IsFalse(row.FollowsDaylightCurve);
+		Assert.AreEqual(40, row.BrightnessPct, "switching back off restores the number that was kept but inert");
+	}
+
+	[TestMethod]
+	public void Clearing_Everything_Including_The_Curve_Drops_The_Row()
+	{
+		AreaConfig room = Room();
+		TimePeriodConfig kveld = Day().Single(period => period.Name == "kveld");
+
+		RoomLevels.SetFollowsDaylightCurve(room, kveld, 70, true);
+		Assert.AreEqual(1, room.Levels.Count);
+
+		RoomLevels.SetFollowsDaylightCurve(room, kveld, 70, false);
+		Assert.AreEqual(0, room.Levels.Count, "a row saying nothing at all is not kept");
+	}
+
+	[TestMethod]
+	public void CurvePeriods_Names_Only_The_Periods_This_Room_Follows_It_For()
+	{
+		AreaConfig room = Room();
+		TimePeriodConfig morgen = Day().Single(period => period.Name == "morgen");
+		TimePeriodConfig natt = Day().Single(period => period.Name == "natt");
+
+		RoomLevels.SetFollowsDaylightCurve(room, morgen, 60, true);
+		RoomLevels.SetFollowsDaylightCurve(room, natt, 30, true);
+		RoomLevels.SetBrightness(room, "dag", 50);
+
+		CollectionAssert.AreEqual(
+			new[] { "morgen", "natt" },
+			RoomLevels.CurvePeriods(Day(), room).Select(period => period.Name).ToArray(),
+			"in schedule order, and never the period a room only states a plain brightness for");
+	}
+
+	[TestMethod]
+	public void An_Orphaned_Curve_Only_Row_Still_Says_What_It_Held()
+	{
+		AreaConfig room = Room();
+		room.Levels.Add(new RoomLevelOverride { PeriodId = "kveldstemning", FollowDaylightCurve = true });
+
+		RoomLevelOrphan orphan = RoomLevels.Orphans(Day(), room).Single();
+
+		Assert.IsTrue(orphan.FollowsDaylightCurve);
+		StringAssert.Contains(orphan.Says, "daylight curve", "or the row reads as holding nothing, which it does not");
+	}
+
 	[TestMethod]
 	public void An_Empty_Schedule_Draws_No_Rows()
 	{
