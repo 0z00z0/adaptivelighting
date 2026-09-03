@@ -348,7 +348,7 @@ else
 								@if (string.Equals(current.Title, RoomSettings.MovementSection, StringComparison.Ordinal))
 								{
 									<SettingRow Label="Don't switch on while"
-												Help="The room won't light itself while any of these is on: a projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Tick the box for the opposite, so it holds while they are off — for a &quot;lighting allowed&quot; switch you turn off. Offered from the whole house, since a blocker often belongs to no room.">
+												Help="The room won't light itself while any of these is on: a projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Tick the box for the opposite, so it holds while they are off — for a “lighting allowed” switch you turn off. Offered from the whole house, since a blocker often belongs to no room.">
 										<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
 														  ValueChanged="@(value => SetList(value, list => room.IgnoreWhenOn = list))"
 														  Options="@_blockers"
