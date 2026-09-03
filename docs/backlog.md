@@ -32,6 +32,15 @@ rewritten to suit one.
   with lights and no sensor now resolves and runs, but discovery does not offer it, so it has to be added by
   hand. Whether discovery should propose such rooms is a separate decision.
 
+- **Three group-recursion guards in the entity resolver fail on their own wall clock under load.**
+  `A_Light_Group_That_Contains_Itself…`, `A_Motion_Group_That_Contains_Itself…` and
+  `Illuminance_Groups_Nest_Overlap…` carry `[Timeout(10000)]` and go red on that timeout, never on an
+  assertion, during a loaded full run; alone they finish in under a second, and a quiet full run passes in
+  21 s against a loaded run's 39 s. Observed three times in one day on untouched code. A wall-clock timeout is
+  the one kind of test that can go red with nothing wrong, and CI runs on a shared runner, so this can turn
+  `main` red for no reason. The guard is worth keeping — it exists to stop an infinite loop hanging the
+  suite — but it wants a bound that is not the wall clock, or a much larger one.
+
 - **Not every filter button in the Activity log works.** Unchecking one leaves its events in the list.
 
 - **A room page's Test countdown is drawn locally, so it does not survive leaving the page.** Navigating away
