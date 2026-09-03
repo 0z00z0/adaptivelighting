@@ -158,11 +158,14 @@
 						<option value="@CurveMode">Use daylight curve</option>
 					</select>
 
+					@* Inheritable is off here on purpose: this IS the house's answer, so there is nothing above it
+					   to borrow, and a leftmost stop meaning "borrow" would point at nothing. *@
 					@if (!period.UseDaylightCurve)
 					{
-						<PresetSelect Value="@period.BrightnessPct"
-									  ValueChanged="@(value => Set(() => period.BrightnessPct = value))"
+						<PresetSlider Value="@period.BrightnessPct"
+									  ValueChanged="@(value => Set(() => period.BrightnessPct = value ?? period.BrightnessPct))"
 									  Options="@Presets.BrightnessPct"
+									  AriaLabel="Brightness for this period"
 									  Unit="%" />
 					}
 					else
@@ -181,9 +184,11 @@
 							print. Low is candlelight, high is daylight; the list below names the familiar stops.
 						</InfoPopover>
 					</span>
-					<PresetSelect Value="@period.ColorTempKelvin"
-								  ValueChanged="@(value => Set(() => period.ColorTempKelvin = (int)Math.Round(value)))"
+					<PresetSlider Value="@period.ColorTempKelvin"
+								  ValueChanged="@(value => Set(() => period.ColorTempKelvin = value is { } kelvin ? (int)Math.Round(kelvin) : period.ColorTempKelvin))"
 								  Options="@Presets.ColorTempKelvin"
+								  ShowStepWording="true"
+								  AriaLabel="Colour temperature for this period"
 								  Unit="K" />
 				</div>
 

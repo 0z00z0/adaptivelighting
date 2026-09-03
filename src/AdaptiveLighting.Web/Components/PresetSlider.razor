@@ -1,0 +1,166 @@
+@* Fixed stops on a rail, so a value is dragged rather than hunted for in a list. The leftmost stop is not a
+   number: where Inheritable is set it means "state nothing here", and it is drawn as a hatched track and a
+   hollow thumb so it can never be read as the dimmest setting.
+
+   A stored value the ladder does not carry gets a position of its own, never the nearest stop. Opening the
+   page has to leave a hand-edited document exactly as it was. *@
+
+<div class="psl @(OnDefault ? "psl-default" : null)">
+	<div class="psl-head">
+		@if (Label is { Length: > 0 })
+		{
+			<span class="psl-label">@Label</span>
+		}
+
+		<span class="psl-read">
+			@if (Mark is not null)
+			{
+				@Mark
+			}
+
+			@if (OnDefault)
+			{
+				<span class="psl-glyph" aria-hidden="true"></span>
+				<span class="psl-default-text">@DefaultLabel</span>
+				<span class="psl-borrowed">@PlainText</span>
+			}
+			else
+			{
+				<span class="psl-value">@StepText</span>
+				@if (_unlisted)
+				{
+					<span class="psl-custom">custom</span>
+				}
+			}
+		</span>
+	</div>
+
+	<div class="psl-line">
+		@if (Inheritable)
+		{
+			<span class="psl-home" title="@DefaultLabel" aria-hidden="true"></span>
+		}
+
+		<input class="psl-range" type="range" min="0" max="@Invariant(Max)" step="1" value="@Invariant(_position)"
+			   style="@Fill"
+			   aria-label="@AriaLabel"
+			   aria-valuetext="@SpokenValue"
+			   @onchange="OnMoved" />
+	</div>
+</div>
+
+@code {
+	/// <summary>The number in force here: this surface's own, or the one it is borrowing.</summary>
+	[Parameter]
+	public double Value { get; set; }
+
+	/// <summary>Whether <see cref="Value"/> is borrowed from above rather than stated on this surface.</summary>
+	[Parameter]
+	public bool AtDefault { get; set; }
+
+	/// <summary>The stops to offer, from <see cref="Presets"/>.</summary>
+	[Parameter, EditorRequired]
+	public IReadOnlyList<PresetChoice> Options { get; set; } = [];
+
+	/// <summary>Whether the rail carries a leftmost stop meaning "state nothing here".</summary>
+	/// <remarks><c>false</c> where there is nothing above to borrow from, as on the house's own schedule.</remarks>
+	[Parameter]
+	public bool Inheritable { get; set; }
+
+	/// <summary>What the leftmost stop is called, e.g. <c>the schedule's</c>.</summary>
+	[Parameter]
+	public string DefaultLabel { get; set; } = "the house default";
+
+	/// <summary>Unit written after a bare number, e.g. <c>%</c> or <c>K</c>.</summary>
+	[Parameter]
+	public string? Unit { get; set; }
+
+	/// <summary>Whether the readout carries each stop's own wording, or only its number.</summary>
+	[Parameter]
+	public bool ShowStepWording { get; set; }
+
+	/// <summary>Shown beside the control on a narrow screen, where the table's heading row is gone.</summary>
+	[Parameter]
+	public string? Label { get; set; }
+
+	/// <summary>Names the control for a screen reader, which has no heading row to read.</summary>
+	[Parameter]
+	public string AriaLabel { get; set; } = "";
+
+	/// <summary>Drawn at the start of the readout: a warmth swatch, an own-setting dot.</summary>
+	[Parameter]
+	public RenderFragment? Mark { get; set; }
+
+	/// <summary><c>null</c> asks to go back to the default; a number states one here.</summary>
+	[Parameter]
+	public EventCallback<double?> ValueChanged { get; set; }
+
+	private List<double> _steps = [];
+	private int _position;
+	private bool _unlisted;
+
+	// Worked out once per parameter change, not per read: Max, the fill fraction and the readout all want it,
+	// on a page that re-renders at 1 Hz.
+	protected override void OnParametersSet()
+	{
+		_steps = [.. Options.Select(option => option.Value)];
+
+		double shown = Shown;
+		int found = _steps.FindIndex(step => Matches(step, shown));
+
+		_unlisted = !OnDefault && found < 0;
+
+		if (_unlisted)
+		{
+			_steps.Add(shown);
+			_steps.Sort();
+			found = _steps.FindIndex(step => Matches(step, shown));
+		}
+
+		_position = OnDefault ? 0 : Math.Max(found, 0) + Offset;
+	}
+
+	private bool OnDefault => Inheritable && AtDefault;
+
+	// A half percent can arrive from a hand-edited file. It is shown rounded and moving the rail stores the
+	// rounded number, so two surfaces never show one setting as two numbers. The file itself is left alone
+	// until a save, which is ConfigNormalizer's job.
+	private double Shown => ConfigNormalizer.Whole(Value);
+
+	private int Offset => Inheritable ? 1 : 0;
+
+	private int Max => Math.Max(_steps.Count - 1 + Offset, 0);
+
+	/// <summary>The stop's own wording where the surface asks for it, and the bare number otherwise.</summary>
+	private string StepText =>
+		ShowStepWording && Options.FirstOrDefault(option => Matches(option.Value, Shown)) is { } named
+			? named.Label
+			: PlainText;
+
+	private string PlainText => Unit is { Length: > 0 } unit ? $"{Invariant(Shown)} {unit}" : Invariant(Shown);
+
+	private string SpokenValue => OnDefault ? $"{DefaultLabel}, {PlainText}" : StepText;
+
+	// A decimal comma in a style attribute is not a length, and the track would render unfilled under nb-NO.
+	private string Fill =>
+		$"--psl-fill: {Invariant(Max > 0 ? _position * 100.0 / Max : 0)}%";
+
+	private static string Invariant(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+	private static bool Matches(double left, double right) => Math.Abs(left - right) < 0.001;
+
+	private Task OnMoved(ChangeEventArgs args)
+	{
+		if (!int.TryParse(args.Value as string, NumberStyles.Integer, CultureInfo.InvariantCulture, out int picked))
+			return Task.CompletedTask;
+
+		if (Inheritable && picked == 0)
+			return ValueChanged.InvokeAsync(null);
+
+		int index = picked - Offset;
+
+		return index >= 0 && index < _steps.Count
+			? ValueChanged.InvokeAsync(_steps[index])
+			: Task.CompletedTask;
+	}
+}
