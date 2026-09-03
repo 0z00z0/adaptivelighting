@@ -12,6 +12,53 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.2] - 2026-09-03
+
+### Added
+
+- **Set-up offers a room that has lights and no movement sensor**, where before it proposed only rooms with
+  both. Each such room says on its own row that it never lights itself, and one line under the table explains
+  what it does instead: the wall switch lights it, and the hold is what ends it.
+
+### Changed
+
+- **A boundary between a period on the daylight curve and one stating a percentage eases instead of
+  stepping**, and it eases from where the curve actually left the light rather than from the stored number the
+  curve period keeps but does not use.
+
+- **A sleep-clamp period that follows the daylight curve takes its night ceiling from the curve**, not from
+  that stored number. With the boundary above, a curve period's stored percentage no longer reaches a lamp by
+  any path, so the interface's promise that it is kept and does nothing is now true without qualification.
+
+- **A period waiting for movement eases from the moment somebody arrived**, rather than from a boundary an
+  empty house went by. The blend keeps its full length and so finishes later than a clock-started one would,
+  instead of arriving part-way through.
+
+- **A settings row is its name and its control**, with the explanation behind the ⓘ rather than printed under
+  every setting. An entity list takes the card's full width instead of running off the edge on a phone, and
+  two help lines that showed their HTML escape now read as the punctuation they meant.
+
+- **The durable log rolls daily and keeps a fortnight**, replacing one 10 MiB file plus a single rotated
+  generation that held between four and eight days. File names carry their date, so the old undated pair is
+  removed at the first start on this version. The cost is disk: a 20 MiB ceiling becomes 60 MiB, about 37 MB
+  at the rate a house actually logs.
+  - `CircularLogSink` and `CircularLogWriter` are replaced by `DurableLogFormatter`, `DurableLogFile` and
+    `LogFailureReport`. It is a change to the package's public surface, and no house names any of them.
+
+### Fixed
+
+- **Every filter button on the Activity page removes what it counts.** A report belongs to one category rather
+  than to several, so the number beside a button is how many lines switching it off takes away, and the eight
+  add up to what the page holds. The dashboard summary no longer repeats in words a turned-down movement the
+  lanes beside it already mark.
+
+- **A period that names no rooms for its movement-led start no longer writes an empty `StartsOnMotionAreas`
+  into the document.** An existing document carrying the key still loads and still means what it meant; the
+  next save drops it.
+
+- **The three self-referencing-group tests in the entity resolver's suite are bounded by the number of entity
+  states the walk reads**, not by a wall clock, so a loaded runner cannot turn them red.
+
 ## [2026.9.1] - 2026-09-02
 
 ### Added

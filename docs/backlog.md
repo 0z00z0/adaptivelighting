@@ -15,42 +15,30 @@ Three sections: **queued**, **parked**, and **open questions**. An item moves be
 rewritten to suit one. On the tracker the same three are the `parked` label, the `question` label, and
 no label at all for what is queued.
 
+A **struck** item is done and waiting to be closed on the tracker. Its body is replaced by the release
+that carried it, because the detail under a finished item describes behaviour that no longer exists.
+An item with no number is one this file records before the tracker has minted one.
+
 ---
 
 ## Next up
 
-- #17 **The room page scrolls sideways at 390 px.** With a settings group open, `scrollWidth` measures 531
-  against an `innerWidth` of 390. The warmth `.seg` control is 474 px wide and `.srow-control` is
-  `flex: 0 0 auto` (`app.css:4638-4644`), so the row never wraps; the narrow-viewport relaxation at
-  `app.css:4855` covers `.steps` only. Pre-existing and independent of the stepped rows — hiding those
-  leaves the number unchanged.
+- ~~#17 **The room page scrolls sideways at 390 px.**~~ Done in 2026.9.2.
 
-- #18 **Every info text moves behind the ⓘ button, leaving the label alone.** The settings pages are too
-  long to read, and worst on a phone where everything stacks into one column. A row becomes label +
-  control, and all prose — description and help alike — lives behind the button. Needs a level inventory
-  first: heading, description, help text, a control's label, and sub-control text (whether that last level
-  exists is part of the question). One shared stylesheet for the levels, not per-page styling.
+- ~~#18 **Every info text moves behind the ⓘ button, leaving the label alone.**~~ Done in 2026.9.2.
 
 - #19 **`Components/NullableNumber.razor` is referenced by nothing, and is now the only live consumer of
   `Components/PresetSelect.razor`.** Both were left in place, with their six tests, because removing them
   drops the test count — a decision to take deliberately rather than in passing. The wider sweep this
   belongs to is #38.
 
-- #20 **Automatic room discovery still proposes only rooms that have both lights and a movement sensor.** A
-  room with lights and no sensor now resolves and runs, but discovery does not offer it, so it has to be
-  added by hand. Whether discovery should propose such rooms is a separate decision.
+- ~~#20 **Automatic room discovery still proposes only rooms that have both lights and a movement sensor.**~~
+  Done in 2026.9.2.
 
-- #21 **Three group-recursion guards in the entity resolver fail on their own wall clock under load.**
-  `A_Light_Group_That_Contains_Itself…`, `A_Motion_Group_That_Contains_Itself…` and
-  `Illuminance_Groups_Nest_Overlap…` carry `[Timeout(10000)]` and go red on that timeout, never on an
-  assertion, during a loaded full run; alone they finish in under a second, and a quiet full run passes in
-  21 s against a loaded run's 39 s. Observed three times in one day on untouched code. A wall-clock timeout is
-  the one kind of test that can go red with nothing wrong, and CI runs on a shared runner, so this can turn
-  `main` red for no reason. The guard is worth keeping — it exists to stop an infinite loop hanging the
-  suite — but it wants a bound that is not the wall clock, or a much larger one.
+- ~~#21 **Three group-recursion guards in the entity resolver fail on their own wall clock under load.**~~
+  Done in 2026.9.2.
 
-- #22 **Not every filter button in the Activity log works.** Unchecking one leaves its events in the list.
-  Implemented and committed on the local branch `feat/activity-filters` at `f85f01c`, awaiting merge.
+- ~~#22 **Not every filter button in the Activity log works.**~~ Done in 2026.9.2.
 
 - #23 **A room page's Test countdown is drawn locally, so it does not survive leaving the page.** Navigating
   away and back within the ten seconds shows plain Test buttons while the engine's return is still pending.
@@ -65,17 +53,9 @@ no label at all for what is queued.
   nothing worse, and the person pressing Test owns the colour. Closing it means giving `LightCommand` an
   optional channel vector and teaching `HaLightActuator` to send and compare it.
 
-- #25 **The "Don't switch on while" help text renders `&amp;quot;` literally** instead of the quotation marks it
-  stands for, so a reader sees the HTML escape. The neighbouring "Don't switch off while" row carries the same
-  text. Pre-existing and unrelated to the settings rows around it.
+- ~~#25 **The "Don't switch on while" help text renders the HTML escape literally.**~~ Done in 2026.9.2.
 
-- #26 **The blend starts when the period actually begins.** A period whose `Start` was 06:30 but which movement
-  began at 06:45 arrives already part-way through its blend, because the window trails the boundary and the
-  boundary is still 06:30 (`mechanisms.md`, *A period that waits for movement*). It should ease from the moment
-  somebody walked in. **The blend keeps its full configured length and therefore finishes later than a
-  clock-started one would**, so the transition feels the same whenever you arrive. Needs the calculator to know
-  *when* a period began, not just whether. Implemented and committed on the local branch `feat/blend-start` at
-  `85bb554`, awaiting merge.
+- ~~#26 **The blend starts when the period actually begins.**~~ Done in 2026.9.2.
 
 - #27 **`PeriodsAcross` has no direct test.** `CircadianCalculator.PeriodsAcross` is exercised only through the
   web schedule and board views, never on its own. It is now the reference rule for two paths — the per-day
@@ -88,6 +68,25 @@ no label at all for what is queued.
 
 - #29 **`tools/uihost` hard-codes port 5199, so two worktrees cannot run it at once.** Parallel efforts collide on
   it; reading a port from the command line would let each look at its own.
+
+- _wants an issue_ — **The UI host never attaches the engine, so the commissioning board cannot be looked at
+  as shipped.** `tools/uihost` raises area events but starts no engine, and the board reads what the engine
+  publishes. Driving it means hand-patching `tools/uihost/Program.cs` to call `Attach` and reverting
+  afterwards. Same shape as #28, and the two are probably one job.
+
+- _wants an issue_ — **`ModePreview.PreviewBrightness` and `PreviewKelvin` are dead.** Both are populated from
+  an unresolved target and asserted in eight tests, and no page renders either. The house-mode preview has no
+  room, so there is no single daylight-curve answer to show even if a page wanted one — deleting them is the
+  likely answer, and the eight tests go with them. Belongs to the #38 sweep.
+
+- _wants an issue_ — **The group-recursion budget is opt-in per test.** `FakeHaContext.StateReadBudget` is
+  unset by default, so a future test that builds a self-referencing group hangs the suite exactly as before
+  unless it sets the budget itself. Making it default-on means every test paying for the counter and some
+  legitimate walk tripping it, which is the trade to weigh.
+
+- _wants an issue_ — **`comm-nearmiss` is a misnomer.** The commissioning board's two paragraphs still carry
+  that class after the near-miss line was replaced (#37). Renaming touches `app.css` and the component
+  together, and neither may move alone.
 
 - #38 **The web project carries dead code.** `Components/NullableNumber.razor` and the `Components/PresetSelect.razor`
   it alone consumes are the first named instance (#19); the task is the sweep, not that one pair. Find what else
@@ -116,30 +115,12 @@ no label at all for what is queued.
 
 ## Open questions
 
-- #34 **A boundary into or out of a curve period is a step, not a blend.** The blend interpolates the two
-  periods' stored levels and the daylight curve then replaces the result, so a boundary with the curve on
-  one side and a stated percentage on the other changes level in a single move. Two adjacent periods both
-  on the curve have no step, and neither do two that both state a percentage. Removing the step means
-  moving the curve inside `CircadianCalculator`, which breaks the composition order
-  `AreaController.ResolveTarget` holds — period, then curve, then sleep clamp (`docs/mechanisms.md`,
-  *Order of composition*). The step is the current behaviour.
+- ~~#34 **A boundary into or out of a curve period is a step, not a blend.**~~ Done in 2026.9.2.
 
-- #35 **The durable log's retention is a byte budget, not a time budget.** One active 10 MiB generation plus one
-  rotated copy, so the directory never exceeds 20 MiB. At the 111 kB/h measured on a live house a generation
-  fills in about 94 hours and the pair holds between four and eight days, which clears the 24 hours intended
-  with room to spare. The window still moves with room count and event traffic rather than with the clock, so
-  a much chattier house retains proportionally less. A time-bounded budget would make it predictable; the
-  larger cap makes it comfortable.
+- ~~#35 **The durable log's retention is a byte budget, not a time budget.**~~ Done in 2026.9.2.
 
-- #36 **`StartsOnMotionAreas` is written into every period on save** as `[]`, because it is a non-nullable
-  `List<string>`. `ConfigNormalizer.cs:76` clears it for a period that does not wait for movement and the
-  serialiser writes it out regardless, so every period in every document carries the key — including in a house
-  that never adopted the feature. The cost is noise in a file a person reads, nothing behavioural. Making it
-  nullable would keep the key out; the load path already repairs null to an empty list
-  (`LightingConfigDocument.cs:285`), so nothing downstream would notice.
+- ~~#36 **`StartsOnMotionAreas` is written into every period on save.**~~ Done in 2026.9.2.
 
-- #37 **`CommissioningVerdicts.NearMiss` writes an unbounded room list** where `HouseView.NameList` caps at three
-  and falls back to "Stue, Kjøkken and 15 others". The line names the rooms that have lights but nothing that
-  senses movement, so in a house where many rooms lack a sensor it becomes one sentence holding every name.
-  The tension runs both ways: adopting the cap shortens the line but hides exactly the list somebody needs in
-  order to go and fix those rooms.
+- ~~#37 **`CommissioningVerdicts.NearMiss` writes an unbounded room list.**~~ Struck without being built: the
+  near-miss line it asked about is gone, replaced by one sentence said once for a house that names no rooms at
+  all. There is no list to cap, so the question has no subject.

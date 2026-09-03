@@ -86,6 +86,21 @@ hand-edited file just because the application booted.
 This asymmetry is load-bearing: any surface reading a freshly loaded document is reading an **un-normalised**
 one, so it must not assume a normaliser rule has already been applied.
 
+#### A list is nullable purely so the serialiser omits it
+
+`TimePeriodConfig.StartsOnMotionAreas` is `List<string>?` for one reason: the serialiser writes nothing for
+null and writes an empty sequence for an empty list. Null and empty **mean the same thing** to every reader —
+any room's movement starts the period — so the normaliser writes null and one shape only ever reaches a file.
+
+Two readers would otherwise tell them apart, and both would be wrong to:
+
+- the load path's repair walks the list and would report a clean document as damaged;
+- the page's change token serialises the **un-normalised** document, so an empty list and an absent key hash
+  differently and the page believes an untouched document has been edited.
+
+An existing document carrying the empty key still loads and still means what it meant. The next ordinary save
+drops it, which is the normaliser's usual contract and not a migration.
+
 `Either` is the exception. `LightingConfigDocument.LegacyValues` rewrites the YAML scalar `Either` to `Lux` on
 the **load** path, not only on save. Every web surface reads through `LightingEngineHost.Store.Load()`, which
 is `LightingConfigDocument.Deserialize`, so **no page can ever see `DarknessSource.Either`** however the file
@@ -321,8 +336,25 @@ began, and the house waits for movement as it would have without the restart. Mo
 immediately rather than leaving it to the tick, because a config save rebuilds the whole engine and the latch is
 in memory.
 
-The blend is unchanged, which means a period started at 06:45 whose `Start` was 06:30 arrives already part-way
-through its blend. The window trails the boundary, and the boundary is still 06:30.
+#### The blend eases from the arrival, not from the boundary
+
+A period started at 06:45 whose `Start` was 06:30 blends from 06:45. It keeps its configured length and
+therefore finishes later than the same period started by the clock, rather than arriving part-way through a
+window that ran while nobody was there.
+
+That needs the latch to carry **when** a period began, not merely whether. The instant travels with the hold
+as one value, so no surface can read the hold without also reading the arrival — the pair cannot be assembled
+wrongly by a caller, because there is no second lookup to get wrong.
+
+Three cases carry no instant and fall back to the boundary:
+
+- no latch at all, which is every pure calculator and the mode cards with no engine running;
+- a period nothing started, where there is no arrival to blend from;
+- a start seeded from the note on disk. That run is gone and its arrival with it, and a restart inside a
+  period must not restart the blend — a deploy would otherwise re-run every held period's fade.
+
+A blend still running when the next start comes round is cut off by it. The next period is in force from its
+own boundary, and an unfinished fade out of the previous one has nothing left to ease towards.
 
 `GetPeriodTarget(id)` sits outside all of it. The sleep clamp asks for a period by id and gets the one it
 named, held or not.
@@ -427,9 +459,27 @@ about darkness only, and `LuxReader` is the one implementation both questions re
 named at all the curve holds its dark end, which is a level nobody chose — `ConfigValidator` warns for exactly
 that, naming the rooms with nothing to read.
 
-A boundary into or out of a curve period is a **step**, not a blend. The blend interpolates the two periods'
-stored levels and the curve then replaces the result, so the whole blend window sits at the curve's answer.
-Two adjacent periods both on the curve have no step at all, because the curve is continuous across them.
+Two adjacent periods both on the curve have no boundary to draw at all, because the curve is continuous
+across them.
+
+#### The blend's endpoints are each side's own answer
+
+The brightness interpolation resolves **after** the curve, inside the period stage, so the order in
+*Order of composition* is untouched: period, then daylight curve, then sleep clamp.
+
+Each side of a boundary contributes the level it actually resolves to — the curve's answer on a curve side,
+the stored `BrightnessPct` on a stated side — and the blend interpolates between those two. Where both sides
+are the same kind the arithmetic reproduces the number the old order gave, exactly: two stated periods
+interpolate two stored levels as before, and two curve periods interpolate two readings of one continuous
+curve. **Only a mixed boundary moves**, and it moves from a step to an ease that starts where the light
+actually was.
+
+Colour temperature still blends in the calculator. The curve never touches kelvin, so there is nothing for
+the two stages to disagree about.
+
+The accepted consequence: during a blend out of a curve period the leaving endpoint is a live reading, so a
+passing cloud retargets the room mid-blend. That already happened for the whole of a curve period; the blend
+window now begins it thirty minutes earlier.
 
 `LuxBrightnessEnabled` is gone. It was per room while the mode is per period, so no translation exists; the
 key parses as silence and `LightingConfigDocument.RetiredKeys` logs it once on load.
@@ -444,7 +494,18 @@ coming out.** In `ApplyTarget` alone it would set the level on the next motion e
 which in a hallway is effectively never.
 
 The clamp goes last so a bright reading during an afternoon nap cannot lift a sleep-respecting room past the
-night rules.
+night rules. **That order is unchanged, and worth restating as unchanged**, because the clamp now asks a
+question of the curve and the two can be read as having swapped places.
+
+#### The sleep clamp asks the curve for its clamp period's level
+
+The clamp names a period and takes that period's brightness as the night's ceiling. Where the named period is
+on the daylight curve, the answer comes from the curve rather than from the stored figure the period keeps and
+does not use — so a house whose night period follows the light outside is capped by the light outside.
+
+The lux sensor is therefore read twice in a sleeping room: once for the target and once for the ceiling. A
+reading that moves between the two shifts the cap by a hair, which is invisible, and the result stays monotone
+under the minimum because both readings run through the same curve.
 
 ### A restart across a boundary is not a period entry
 
@@ -644,6 +705,15 @@ The timer callback swallows everything, because the registry throws until the fi
 an unobserved exception on a thread-pool scheduler ends the process. Discovery finding nothing is logged and
 retried on the next start, with the flag left clear.
 
+#### Membership is lights alone
+
+A room qualifies on having lights. A movement sensor is not part of the test, so a room with lights and no
+sensor is proposed, and says on its own row that it lights at the wall and never by itself — the row carries
+the consequence, because a room listed with no qualifier reads as one that will light on movement.
+
+The no-light-level warning is narrowed to rooms that **have** a movement sensor. Nothing else consults the
+darkness gate, so raising it against a room that can never reach that gate names a fault the room cannot have.
+
 ### The host reports faults rather than throwing
 
 Letting the `[NetDaemonApp]` bootstrap throw on a bad document would make the failure loud, but an app in
@@ -682,6 +752,12 @@ ordinally. The last two exist so **the answer never depends on registry enumerat
 
 - Group membership is walked **transitively**, under a visited set. Without the visited set a self-containing
   group hangs the resolver.
+  - The guard against that is tested by **counting nodes visited, not seconds**. A group that contains itself
+    makes the walk unbounded rather than slow, and a clock cannot tell those two apart — a loaded runner
+    reads as a hang and a fast one reads as a pass. `FakeHaContext.StateReadBudget` counts every state read,
+    which over a walk across groups is the nodes visited, and the budget is **200** against a measured 27, 46
+    and 28 on healthy code. It throws in flight, because an unbounded walk never returns to be asserted on.
+    The budget is opt-in per test, so a test that builds a self-referencing group has to set it.
 - Promoted group members are re-filtered by domain. The actuator calls `light.turn_on` unconditionally, so a
   non-light that slipped through the promotion reaches a service call that cannot work.
 - Several entities on one Home Assistant **device** are one fixture — typically a combined entity beside its
@@ -808,6 +884,23 @@ per-room facts even when a house-wide action caused them.
 The circadian tick republishes **every room every pass**, so a room dark from dusk to dawn reports hundreds of
 times. Those repeats are never adjacent, because all rooms are re-checked in the same pass; a rule keyed on
 adjacency would collapse nothing in any house with more than one room.
+
+### Every report lands in exactly one category
+
+`ActivityView.Categorise` returns one member, never a set. One is the floor and one is the ceiling, and each
+bound is a visible fault:
+
+- a report in **no** category is a row no combination of chips can bring back, so the page holds a line it can
+  never show;
+- a report in **two** survives either of them being switched off, which is a button that does not remove what
+  it counts — and it makes the chip counts sum past the number of reports the page holds.
+
+So the number beside a chip is exactly how many rows switching it off takes away, and the eight sum to the
+page's own total. Categories follow the words the row shows rather than the report behind it, because that is
+what a reader is switching off.
+
+The dashboard summary reads the same categorisation and drops a turned-down movement the board's lanes already
+mark, rather than spending a row of its budget saying in words what is drawn immediately above it.
 
 ### The mode an area found when it started is not a mode change
 
@@ -989,6 +1082,22 @@ control it heads, so every rail carries its label again.
 A value the ladder does not carry is given a stop of its own, in sorted order, never the nearest one. That is
 what stops opening a page rewriting a hand-edited document.
 
+### The text ladder in a settings row
+
+Five levels of words appear on a settings surface, and a row paints only two of them: the setting's **name**
+and its **provenance** — where the value came from and the road back. The whole explanation lives behind the
+ⓘ, so a column of rows reads as a list of settings rather than as prose with controls buried in it. Anything
+a control says for itself — a checkbox's own label, an empty state, a placeholder — belongs to the control
+and stays where it is. Both the room page and the House tab draw all five from one stylesheet; a page styling
+its own rows teaches two models of one thing.
+
+**The trap is that `.srow-control` must be allowed to shrink.** It is `flex: 0 0 auto` so an ordinary widget
+keeps its natural width beside the label, and a control that wants a line of its own then breaks out through
+the card's edge instead of wrapping. Measured at a 390 px viewport with two blockers listed, the page's
+scroll width was **1239** — `.chips` inside an unconstrained parent lays out at `max-content` and never wraps.
+An entity list is the case that has to go further and take the card's full width: it is a block, not a widget
+beside a label, and squeezed into what is left it wraps to one chip per line.
+
 ### Shutdown order: the snapshot cache stops before Kestrel
 
 The host stops hosted services in reverse registration order, and `GenericWebHostService` is registered by
@@ -1160,25 +1269,28 @@ attaches inside the one `UseSerilog` that `UseIsoTimestampLogging` already makes
 constraint the console template has, for the same reason, and it is why neither is a flag on
 `AddAdaptiveLighting`.
 
-### The cap is a ceiling, not a retention policy
+### Retention is bounded twice, and both bounds are stated
 
-One active file capped at 10 MiB and exactly one rolled generation, which the next rotation overwrites:
-`b1.log` and `b1.1.log`, forever. There is no numbered series, no date in a file name and no retained count,
-so the directory holds two files after a year for the same reason it holds two after an hour. **The rotation
-cannot itself fill `/config`, because rotation is the thing that has no growth term.** The hard ceiling is
-20 MiB.
+Files roll **daily** and carry their date, `b1-20260903.log`, so a reader asking what happened on a named
+night opens that night's file. Two bounds hold the directory down and neither is derived from the other:
+`DurableLogFile.RetainedFileTime` is **14 days**, which is what a reader gets in the ordinary case, and
+`RetainedFileCount` is **15** files of `MaxFileBytes` **4 MiB**, which is the hard ceiling at **60 MiB**.
 
-The size check runs *before* the append, so the active file never exceeds the cap; and an empty file is never
-rolled, so a line longer than the whole cap cannot rotate on every call and keep nothing. A line is capped at
-4096 characters of its own, which is what keeps one event from approaching the file cap.
+A single byte ceiling cannot promise a fortnight and a single time limit cannot promise a ceiling, which is
+why both are set. At the measured **111 kB an hour** a fortnight is about **37 MB**, comfortably inside 60 MiB
+and comfortably outside the 20 MiB the previous pair of files allowed — a 20 MiB ceiling and time-bounded
+retention cannot both hold, and the fortnight is the one worth keeping. A day that logs unusually hard rolls
+within itself at 4 MiB and spends more of the file count, which is the ceiling doing its job.
 
-Three representative engine lines measure 147, 165 and 194 bytes, **170 on average**. 10 MiB is therefore about
-61 000 lines guaranteed and about 123 000 at best. A house logging 111 kB an hour fills one generation in
-about 94 hours, so the pair holds between four and eight days, and 20 MiB in `/config` costs nothing worth
-optimising.
+A line is capped at 4096 characters of its own, which keeps one event from approaching a file's cap.
 
-Every line is appended and the handle closed. A held handle would be faster, and the tail of the file
-immediately before a crash is the part this exists to read.
+The sink **holds the handle** rather than appending and closing per line. Closing per line was the safer-
+looking choice and bought nothing measurable: 50 of 50 lines survive a hard kill with the handle held, so the
+tail immediately before a crash — the part this exists to read — is there either way.
+
+File names carry a date, and the previous build's did not. `b1.log` and `b1.1.log` therefore match no
+retention rule and would sit in `/config` for ever, so they are removed at the first start on a build that
+names files this way.
 
 ### A secret is kept out by construction, not by redaction at call sites
 
@@ -1186,11 +1298,16 @@ Three properties, together:
 
 **The rendered message is never taken.** `LogEvent.RenderMessage` hands back the interpolated string with the
 secret already in it, and redacting after that is a text search for a thing that is already present.
-`CircularLogSink` walks `MessageTemplate.Tokens` instead, so the literal halves of the template and the
+`DurableLogFormatter` walks `MessageTemplate.Tokens` instead, so the literal halves of the template and the
 runtime values stay separate and every value can be filtered before it is joined to anything.
 
-**There is no free-text way in.** The sink takes a `LogEvent`, and `CircularLogWriter.Append` is reached from
-nowhere else. No call site has an `Append(string)` to reach for, so there is no call site that could forget.
+**There is no free-text way in.** The formatter is an `ITextFormatter` and takes a `LogEvent`, and the file
+`DurableLogFile` opens is written through nothing else. No call site has an `Append(string)` to reach for, so
+there is no call site that could forget.
+
+Serilog's own failures go through `LogFailureReport`, which holds back a repeat of the same message rather
+than writing one line per lost event: a sink that cannot write is a fault worth seeing once, and a fault
+that reports itself per event is how a full disk becomes an unreadable console.
 
 **One filter, two tests.** `LoggedValue` drops a property whose *name* reads as a credential — `token`,
 `password`, `passwd`, `pwd`, `secret`, `credential`, `api_key`, `connectionstring` — whole, including anything
@@ -1374,6 +1491,11 @@ document settles on what both surfaces already show.
 | 14 | `LuxCurve.GrabMargin` | `PlotTop`, the largest margin that cannot spill out of the drawing; it puts the drag surface's left edge 37.6 px clear of a handle sitting on 1 lx |
 | 22 | `LuxCurve.LuxLabelDrop` | the drop less one line of type is what a handle can cover: 22 − 10 = 12, against a reach of 9. At 16 the clearance is 6 |
 | away from zero | `ConfigNormalizer.Whole` | the control, the summary and the file must show one number, and 62.5 has to land somewhere; 63 is what reads as correct, and to-even would give 62 |
+| 4 MiB | `DurableLogFile.MaxFileBytes` | a day's logging at the measured 111 kB/h is about 2.7 MB, so an ordinary day is one file and a hard-logging one rolls within itself rather than spilling the whole budget |
+| 15 | `DurableLogFile.RetainedFileCount` | one file per day for a fortnight, plus a file's worth of slack for the days that roll twice |
+| 14 days | `DurableLogFile.RetainedFileTime` | how far back a reader can look in the ordinary case, which a byte budget alone cannot promise |
+| 60 MiB | durable log hard ceiling | 15 × 4 MiB. A fortnight at the measured rate is 37 MB, so the ceiling and the fortnight cannot both fit under the 20 MiB the previous scheme allowed |
+| 200 | `AreaEntityResolverTests.LoopBudget` | states read on a healthy resolve measure 27, 46 and 28, so the budget is wide enough not to fire on ordinary work and narrow enough to stop an unbounded walk in flight |
 | unpadded month | version format `YYYY.M.patch` | `2026.08.0` was the first calendar-versioned release, tagged with a zero-padded month for string sort order; the published NuGet packages came back as `2026.8.0` regardless, because NuGet strips a leading zero from each numeric segment on publish. From the next release on, the tag and the packages agree by not padding in the first place |
 
 ---
