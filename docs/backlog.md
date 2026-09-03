@@ -33,6 +33,10 @@ rewritten to suit one.
   | Period | Brightness | Warmth |
   | --- | --- | --- |
 
+- **Automatic room discovery still proposes only rooms that have both lights and a movement sensor.** A room
+  with lights and no sensor now resolves and runs, but discovery does not offer it, so it has to be added by
+  hand. Whether discovery should propose such rooms is a separate decision.
+
 - **Not every filter button in the Activity log works.** Unchecking one leaves its events in the list.
 
 - **The "Don't switch on while" help text renders `&amp;quot;` literally** instead of the quotation marks it
