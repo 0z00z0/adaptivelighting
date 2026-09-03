@@ -1,3 +1,4 @@
+using System.Numerics;
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
@@ -628,11 +629,8 @@ public sealed class ActivityLogTests
 
 		Assert.AreEqual("Movement, but the master switch is off", ActivityView.Describe(muzzled).What);
 
-		ActivityCategory categories = ActivityView.Categorise(muzzled);
-
-		Assert.IsTrue(categories.HasFlag(ActivityCategory.Movement), "somebody moved, and the row says so");
-		Assert.IsTrue(categories.HasFlag(ActivityCategory.Declined), "and nothing happened, which is the other chip");
-		Assert.IsTrue(categories.HasFlag(ActivityCategory.House), "and it names the master switch, so the house chip offers it");
+		Assert.AreEqual(ActivityCategory.Movement, ActivityView.Categorise(muzzled),
+			"the row is worded as movement, so switching the movement chip off has to take it away");
 	}
 
 	[TestMethod]
@@ -712,9 +710,12 @@ public sealed class ActivityLogTests
 
 	// ===================== the category filter =====================
 
-	/// <summary>A report in no category is a row no combination of chips can show.</summary>
+	/// <summary>
+	///     A report in no category is a row no combination of chips can show. A report in two is a row that
+	///     survives either of them being switched off, which is a button that does nothing.
+	/// </summary>
 	[TestMethod]
-	public void Every_Report_The_Engine_Can_Publish_Lands_In_A_Category()
+	public void Every_Report_The_Engine_Can_Publish_Lands_In_Exactly_One_Category()
 	{
 		bool?[] verdicts = [null, true, false];
 		AutoOnBlock?[] blocks = [null, .. Enum.GetValues<AutoOnBlock>().Cast<AutoOnBlock?>()];
@@ -741,11 +742,53 @@ public sealed class ActivityLogTests
 
 							Assert.AreEqual(categories, categories & ActivityView.AllCategories,
 								$"{reason} in {state} claimed a category the chips do not offer");
+
+							Assert.AreEqual(1, BitOperations.PopCount((uint)categories),
+								$"{reason} in {state} (dark: {dark?.ToString() ?? "unchecked"}, master switch: "
+								+ $"{(killSwitch ? "off" : "on")}, blocked by {block?.ToString() ?? "nothing recorded"}) "
+								+ $"is filed under {categories}; switching any one of those off leaves the row on "
+								+ "the page, which is a filter button that does nothing");
 						}
 					}
 				}
 			}
 		}
+	}
+
+	/// <summary>
+	///     The defect the chips were built with: a chip counting reports it cannot remove. Every category is
+	///     walked, so a chip that goes dead again fails here rather than in somebody's house.
+	/// </summary>
+	[TestMethod]
+	public void Switching_A_Chip_Off_Removes_Exactly_The_Reports_It_Counts()
+	{
+		IReadOnlyList<ActivityEntry> entries = EveryShapeOfReport();
+		IReadOnlyList<ActivityFilterChip> chips = ActivityView.Chips(entries, ActivityView.AllCategories);
+
+		Assert.AreEqual(8, chips.Count, "every category is offered as a chip");
+
+		foreach (ActivityFilterChip chip in chips)
+		{
+			Assert.IsTrue(chip.Count > 0,
+				$"{chip.Label} counts nothing the engine can publish, so it is a button with no purpose");
+
+			int left = ActivityView.InCategories(entries, ActivityView.AllCategories & ~chip.Category).Count;
+
+			Assert.AreEqual(entries.Count - chip.Count, left,
+				$"{chip.Label} says {chip.Count} reports and switching it off removed "
+				+ $"{entries.Count - left}; the number beside a chip is what unticking it takes away");
+		}
+	}
+
+	/// <summary>Counts that overlap cannot be read: the eight beside the chips have to be the whole of it.</summary>
+	[TestMethod]
+	public void The_Chip_Counts_Add_Up_To_Every_Report_Held()
+	{
+		IReadOnlyList<ActivityEntry> entries = EveryShapeOfReport();
+
+		Assert.AreEqual(
+			entries.Count,
+			ActivityView.Chips(entries, ActivityView.AllCategories).Sum(chip => chip.Count));
 	}
 
 	/// <summary>The same invariant as above, read from the page's end.</summary>
@@ -771,8 +814,8 @@ public sealed class ActivityLogTests
 		Assert.IsTrue(Has(ActivityCategory.Movement, Report("Stue", AreaState.AutoActive, TransitionReason.Motion)),
 			"a motion sensor reported");
 
-		Assert.IsTrue(Has(ActivityCategory.LightChange, Report("Stue", AreaState.AutoActive, TransitionReason.Motion)),
-			"movement that lit the room is a light change as well");
+		Assert.IsFalse(Has(ActivityCategory.LightChange, Report("Stue", AreaState.AutoActive, TransitionReason.Motion)),
+			"the row reads 'Movement — lights on', so it belongs to the movement chip and to that one only");
 
 		Assert.IsTrue(Has(ActivityCategory.LightChange, Report("Stue", AreaState.AutoActive, TransitionReason.CircadianTick)),
 			"the circadian re-aim");
@@ -790,8 +833,9 @@ public sealed class ActivityLogTests
 			"a tick is not a movement report");
 	}
 
+	/// <summary>The two darkness verdicts are one chip each: the room that is ready, and the room that was refused.</summary>
 	[TestMethod]
-	public void The_Darkness_Verdict_Is_Its_Own_Category()
+	public void A_Room_Dark_Enough_Is_The_Darkness_Chip_And_One_Too_Bright_Is_The_Refusal()
 	{
 		AreaSnapshot dusk = Report(
 			"Stue", AreaState.AutoVacant, TransitionReason.CircadianTick,
@@ -801,8 +845,11 @@ public sealed class ActivityLogTests
 			"Stue", AreaState.AutoVacant, TransitionReason.CircadianTick,
 			isDark: false, darknessDetail: "lux 86, dark below 40");
 
-		Assert.IsTrue(Has(ActivityCategory.Illumination, dusk));
-		Assert.IsTrue(Has(ActivityCategory.Illumination, bright));
+		Assert.AreEqual(ActivityCategory.Illumination, ActivityView.Categorise(dusk),
+			"'Dark enough — movement will light the room' is the verdict itself, and nothing was turned down");
+
+		Assert.AreEqual(ActivityCategory.Declined, ActivityView.Categorise(bright),
+			"'Too bright to switch on' is a refusal, and the user guide sends a reader there to find it");
 
 		Assert.AreEqual("lux 86, dark below 40", ActivityView.Describe(bright).Why,
 			"the chip and the reading it promises have to be on the same row");
@@ -943,22 +990,23 @@ public sealed class ActivityLogTests
 
 		AreaSnapshot expired = Report("Stue", AreaState.AutoVacant, TransitionReason.OverrideExpired);
 
-		Assert.IsTrue(Has(ActivityCategory.ManualChange, expired));
-		Assert.IsTrue(Has(ActivityCategory.LightChange, expired),
-			"an override running out hands the room back by commanding it, either way it lands");
+		Assert.AreEqual(ActivityCategory.ManualChange, ActivityView.Categorise(expired),
+			"the row reads 'The manual change ran its course', which is the end of somebody's decision, not a "
+			+ "light change somebody would look for under that chip");
 
 		Assert.IsFalse(Has(ActivityCategory.ManualChange, Report("Stue", AreaState.AutoActive, TransitionReason.Motion)),
 			"the engine acting on movement is not somebody's hand");
 	}
 
-	/// <summary>All three shapes a refusal can arrive in: a held room, a blocked room, a room too bright.</summary>
+	/// <summary>The shapes a refusal arrives in, and the one that goes to the movement chip instead.</summary>
 	[TestMethod]
 	public void The_Refusals_Are_Reachable_On_Their_Own()
 	{
 		AreaSnapshot ignored = Report("Stue", AreaState.SuppressedOff, TransitionReason.Motion);
 
-		Assert.IsTrue(Has(ActivityCategory.Declined, ignored));
-		Assert.IsTrue(Has(ActivityCategory.Movement, ignored), "it is still a motion report");
+		Assert.AreEqual(ActivityCategory.Movement, ActivityView.Categorise(ignored),
+			"'Movement, but the lights were switched off manually' is a movement row, and switching the movement "
+			+ "chip off must not leave it standing");
 
 		Assert.IsTrue(Has(ActivityCategory.Declined, Report(
 			"Soverom", AreaState.AutoVacant, TransitionReason.CircadianTick,
@@ -982,7 +1030,7 @@ public sealed class ActivityLogTests
 	}
 
 	[TestMethod]
-	public void A_Blocked_Room_Names_Its_Block_Whatever_The_Engines_Reason_Was()
+	public void A_Blocked_Room_Names_Its_Block_And_Is_Never_Hidden_When_The_Page_Opens()
 	{
 		foreach (TransitionReason reason in Enum.GetValues<TransitionReason>())
 		{
@@ -991,9 +1039,14 @@ public sealed class ActivityLogTests
 				isDark: true, darknessDetail: "lux 12, dark below 40",
 				mode: HouseMode.Sleep, autoOnBlockedBy: AutoOnBlock.Sleep);
 
-			// Start-up refused nothing; it only read the room. Its row is background alone.
+			// Start-up refused nothing; it only read the room. Every other reason files the row under a chip
+			// that is showing when the page opens, so the reason a light did not come on is never hidden.
 			if (reason is not TransitionReason.Startup)
-				Assert.IsTrue(Has(ActivityCategory.Declined, asleep), $"{reason}: the block is a refusal in every report");
+			{
+				Assert.AreNotEqual(
+					ActivityCategory.None, ActivityView.Categorise(asleep) & ActivityView.DefaultCategories,
+					$"{reason}: a blocked room is why somebody opened this page, and it opened without the row");
+			}
 
 			ActivityLine line = ActivityView.Describe(asleep);
 
@@ -1621,6 +1674,18 @@ public sealed class ActivityLogTests
 				$"the board above already shows {drawn}; repeating it in words spends the whole row budget");
 		}
 
+		// A movement the engine turned down is worded as movement, so the summary leaves it to the lane mark
+		// BoardView.Refusals already paints for the same report. Pinned, because it reads like a loss otherwise.
+		AreaSnapshot refused = Report(
+			"Gang", AreaState.AutoVacant, TransitionReason.Motion,
+			isDark: false, autoOnBlockedBy: AutoOnBlock.NotDark);
+
+		Assert.AreEqual(ActivityCategory.None, ActivityView.Categorise(refused) & ActivityView.SummaryCategories,
+			"the lanes draw this one, and the summary carries only what they cannot");
+
+		Assert.AreNotEqual(ActivityCategory.None, ActivityView.Categorise(refused) & ActivityView.DefaultCategories,
+			"the Activity page still opens with it, which is where somebody goes to read the reason");
+
 		// The narrowing is the summary's alone. The page the footer links to still opens on the wide set.
 		Assert.AreNotEqual(ActivityCategory.None, ActivityView.DefaultCategories & ActivityCategory.Movement);
 		Assert.AreNotEqual(ActivityCategory.None, ActivityView.DefaultCategories & ActivityCategory.LightChange);
@@ -1761,6 +1826,39 @@ public sealed class ActivityLogTests
 	/// <summary>One quiet re-check that reached a darkness verdict, the report a house publishes once a minute.</summary>
 	private static AreaSnapshot Dusk(string area, bool dark, string detail, DateTimeOffset at) =>
 		Report(area, AreaState.AutoVacant, TransitionReason.CircadianTick, at: at, isDark: dark, darknessDetail: detail);
+
+	/// <summary>Every report the engine can publish and the page would draw, one entry each.</summary>
+	/// <remarks>The six inputs the categoriser reads, walked, then sifted as the page sifts them.</remarks>
+	private static IReadOnlyList<ActivityEntry> EveryShapeOfReport()
+	{
+		bool?[] verdicts = [null, true, false];
+		AutoOnBlock?[] blocks = [null, .. Enum.GetValues<AutoOnBlock>().Cast<AutoOnBlock?>()];
+		List<ActivityEntry> entries = [];
+		long sequence = 0;
+
+		foreach (TransitionReason reason in Enum.GetValues<TransitionReason>())
+		{
+			foreach (AreaState state in Enum.GetValues<AreaState>())
+			{
+				foreach (bool? dark in verdicts)
+				{
+					foreach (bool killSwitch in new[] { false, true })
+					{
+						foreach (AutoOnBlock? block in blocks)
+						{
+							entries.Add(Entry(
+								++sequence,
+								Report(
+									"Stue", state, reason, isDark: dark, darknessDetail: "lux 12, dark below 40",
+									killSwitch: killSwitch, autoOnBlockedBy: block)));
+						}
+					}
+				}
+			}
+		}
+
+		return ActivityView.Shown(entries);
+	}
 
 	private static bool Has(ActivityCategory category, AreaSnapshot snapshot) =>
 		(ActivityView.Categorise(snapshot) & category) != ActivityCategory.None;
