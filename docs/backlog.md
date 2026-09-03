@@ -71,6 +71,13 @@ rewritten to suit one.
   table behind `NextBoundary` was brought onto it — so a change to it can break boundary resolution with
   nothing failing that names it.
 
+- **The UI host seeds no activity, so the Activity page cannot be looked at.** Driving it means hand-editing
+  `tools/uihost/Program.cs` to seed reports and reverting afterwards. A dozen seeded reports spread across the
+  categories would make the page drivable as shipped.
+
+- **`tools/uihost` hard-codes port 5199, so two worktrees cannot run it at once.** Parallel efforts collide on
+  it; reading a port from the command line would let each look at its own.
+
 - **Adopt GitHub Issues as this repo's tracker.** `0z00z0/adaptivelighting` currently has zero open
   issues — this file is the only tracker in use. Per the *Tracker* section of
   `Nextcloud\Projects\CLAUDE.md`, once a project has an issue tracker it is the source of truth and
