@@ -124,8 +124,9 @@ Top to bottom:
   has an empty track, and past six rooms the quiet ones drop to chips.
 - **What's worth knowing** — the exceptions, newest first, each line naming the room, what it did
   and why. Room names link through to their pages. It carries only what the lanes cannot draw:
-  somebody overriding the engine by hand, the engine declining to light a room and why, a change of
-  house mode, and the house emptying, filling or being switched off. The line under it counts the
+  somebody overriding the engine by hand, a room the engine could have lit and did not, a change of
+  house mode, and the house emptying, filling or being switched off. Movement that was turned down
+  is marked on the room's own lane instead, so it is not repeated here. The line under it counts the
   everyday reports waiting on the Activity page.
 
 Rooms you have switched off get no lane. A line under the board says how many are hidden and where
@@ -197,7 +198,8 @@ The **Activity** page is the whole house's decisions, newest first.
 
 Filter by room, and by category: *Movement*, *Light change*, *Darkness*, *Manual changes*, *Nothing
 happened*, *Mode changes*, *House*, and *Background tasks* — which starts hidden. The other seven
-start showing.
+start showing. Every report is in one category and no more, so the number beside a button is exactly
+how many lines switching it off takes away, and the eight add up to what the page is holding.
 
 *Nothing happened* carries the reason the engine declined, with the evidence:
 

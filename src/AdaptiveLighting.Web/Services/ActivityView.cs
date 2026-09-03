@@ -35,8 +35,9 @@ public sealed record ActivityRow(
 
 /// <summary>What a row is about, as the activity page's filter chips divide it.</summary>
 /// <remarks>
-///     Categories follow the words the row shows, not the report behind it. Flags, so a report belonging in two
-///     places stays reachable from either chip.
+///     Categories follow the words the row shows, not the report behind it. A report is in exactly one of them,
+///     so that switching a chip off removes precisely the reports it counts. Flags all the same, because a chip
+///     set is what the filter carries.
 /// </remarks>
 [Flags]
 public enum ActivityCategory
@@ -246,63 +247,61 @@ public static class ActivityView
 
 	/// <summary>What a report is about, as the chips divide it.</summary>
 	/// <remarks>
-	///     Tracks <see cref="Describe"/> branch for branch. No catch-all: a reason added to the enum has to be
-	///     placed here by hand, and until it is, an exhaustive test fails.
+	///     Ordered, and tracks <see cref="Describe"/> branch for branch: the chip follows the words the row
+	///     shows. One answer, never several — a report filed under two chips survives either being switched
+	///     off, which is a button that does nothing. No catch-all above the last line: a reason added to the
+	///     enum has to be placed here by hand, and until it is, an exhaustive test fails.
 	/// </remarks>
-	/// <returns>Every category it belongs to. Never <see cref="ActivityCategory.None"/>.</returns>
+	/// <returns>The one category it belongs to. Never <see cref="ActivityCategory.None"/>.</returns>
 	public static ActivityCategory Categorise(AreaSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 
-		// Describe replaces the row's words here, so the categories go with them. A refused movement is the one
-		// exception, in both places.
-		if (snapshot.KillSwitchActive && !IsDeclinedMotion(snapshot))
+		// Describe's first two branches, in its order: a refused movement is worded as movement even under the
+		// master switch, and everything else the switch touches is worded as the house.
+		if (IsDeclinedMotion(snapshot))
+			return ActivityCategory.Movement;
+
+		if (snapshot.KillSwitchActive)
 			return ActivityCategory.House;
 
 		// Start-up decided nothing, so it is housekeeping outright and never the darkness or refusal chips.
 		if (snapshot.Reason is TransitionReason.Startup)
 			return ActivityCategory.Background;
 
-		ActivityCategory categories = ActivityCategory.None;
-
+		// Every remaining motion report is worded "Movement…", so the movement chip has to take all of them or
+		// switching it off leaves rows that plainly are movement.
 		if (snapshot.Reason is TransitionReason.Motion)
-			categories |= ActivityCategory.Movement;
+			return ActivityCategory.Movement;
 
-		if (CommandedTheLights(snapshot))
-			categories |= ActivityCategory.LightChange;
+		if (snapshot.Reason is TransitionReason.HouseModeChanged)
+			return ActivityCategory.Mode;
 
-		if (NamesTheDarknessVerdict(snapshot))
-			categories |= ActivityCategory.Illumination;
+		if (snapshot.Reason is TransitionReason.EveryoneLeft
+			or TransitionReason.FirstPersonArrived
+			or TransitionReason.SceneHold)
+			return ActivityCategory.House;
 
 		if (snapshot.Reason is TransitionReason.ManualOn
 			or TransitionReason.ManualOff
 			or TransitionReason.OverrideExpired
 			or TransitionReason.SuppressionLifted)
-			categories |= ActivityCategory.ManualChange;
+			return ActivityCategory.ManualChange;
 
+		// Ahead of the light change and the darkness verdict: a room the engine could have lit and did not is
+		// what somebody filters for when a light failed to come on, and its words lead with the refusal.
 		if (WasDeclined(snapshot))
-			categories |= ActivityCategory.Declined;
+			return ActivityCategory.Declined;
 
-		if (snapshot.Reason is TransitionReason.HouseModeChanged)
-			categories |= ActivityCategory.Mode;
+		if (CommandedTheLights(snapshot))
+			return ActivityCategory.LightChange;
 
-		if (snapshot.Reason is TransitionReason.EveryoneLeft
-			or TransitionReason.FirstPersonArrived
-			or TransitionReason.SceneHold)
-			categories |= ActivityCategory.House;
+		if (NamesTheDarknessVerdict(snapshot))
+			return ActivityCategory.Illumination;
 
-		// A refused movement past the return above names the master switch, so the house chip must offer it.
-		if (snapshot.KillSwitchActive)
-			categories |= ActivityCategory.House;
-
-		// A tick is housekeeping only when nothing above claimed it: the same reason carries the circadian re-aim
+		// A tick reaches here only when nothing above claimed it: the same reason carries the circadian re-aim
 		// and the dusk verdict, and Background starts switched off, so miscounting either hides it by default.
-		if (snapshot.Reason is TransitionReason.AdoptedAtStartup
-			or TransitionReason.EnablementChanged
-			|| (snapshot.Reason is TransitionReason.CircadianTick && categories == ActivityCategory.None))
-			categories |= ActivityCategory.Background;
-
-		return categories;
+		return ActivityCategory.Background;
 	}
 
 	/// <summary>What an entry is about, whichever of the two kinds it is.</summary>
