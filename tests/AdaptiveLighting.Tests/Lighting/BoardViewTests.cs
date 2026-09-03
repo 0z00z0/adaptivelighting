@@ -31,7 +31,7 @@ public sealed class BoardViewTests
 		SunTimes? sun = null,
 		GlobalConfig? global = null,
 		string? selectValue = null,
-		Func<string, DateOnly, bool>? heldBack = null) =>
+		Func<string, DateOnly, PeriodHold>? heldBack = null) =>
 		Schedule.CalculatorFor(
 			periods, global ?? new GlobalConfig(), sun ?? SunTimes.Unknown, selectValue, heldBack, Oslo);
 
@@ -685,7 +685,7 @@ public sealed class BoardViewTests
 				new TimePeriodConfig { Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
 				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200, StartsOnMotion = true }
 			],
-			heldBack: (period, _) => period == "Night"),
+			heldBack: (period, _) => new PeriodHold(period == "Night", null)),
 			Window());
 
 		Assert.IsFalse(band.Any(segment => segment.Name == "Night"), "it has not begun, so nothing on the board says it has");

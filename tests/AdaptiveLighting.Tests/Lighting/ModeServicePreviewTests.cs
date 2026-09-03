@@ -226,7 +226,7 @@ public sealed class ModeServicePreviewTests
 		AdaptiveLightingConfig config = HeldMorning();
 		MotionPeriodLatch latch = MotionPeriodLatch.For(config.Periods, config.Global);
 
-		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(8), NoSun, null, latch.IsHeldBack);
+		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(8), NoSun, null, latch.StateOf);
 
 		Assert.AreEqual("night", preview.ActivePeriodName, "08:00 on the clock is the morning, which nobody has started");
 		Assert.AreEqual(15d, preview.PreviewBrightness);
@@ -239,7 +239,7 @@ public sealed class ModeServicePreviewTests
 		MotionPeriodLatch latch = MotionPeriodLatch.For(config.Periods, config.Global);
 		latch.MarkBegun("day", new DateOnly(2026, 1, 15));
 
-		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(8), NoSun, null, latch.IsHeldBack);
+		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(8), NoSun, null, latch.StateOf);
 
 		Assert.AreEqual("day", preview.ActivePeriodName);
 		Assert.AreEqual(90d, preview.PreviewBrightness);
@@ -268,7 +268,7 @@ public sealed class ModeServicePreviewTests
 
 		Assert.AreEqual(
 			"day",
-			ModeService.ComputePreview(config, ModeKind.Normal, At(8), NoSun, "Dag", latch.IsHeldBack).ActivePeriodName);
+			ModeService.ComputePreview(config, ModeKind.Normal, At(8), NoSun, "Dag", latch.StateOf).ActivePeriodName);
 	}
 
 	/// <summary>The mode cards resolve through the running engine's latch, so a held period leaves the card on the period the house is running.</summary>

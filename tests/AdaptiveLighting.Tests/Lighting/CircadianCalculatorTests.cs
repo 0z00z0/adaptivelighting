@@ -557,9 +557,13 @@ public sealed class CircadianCalculatorTests
 
 	// ---- a period that waits for movement ------------------------------------------------------------
 
-	/// <summary>A calculator holding back whatever <paramref name="heldBack"/> says is still waiting.</summary>
+	/// <summary>A calculator holding back whatever <paramref name="heldBack"/> says is still waiting, with no arrival recorded.</summary>
 	private static CircadianCalculator Holding(Func<string, DateOnly, bool> heldBack, GlobalConfig? global = null) =>
-		new(Table, global ?? new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown, null, null, heldBack,
+		Holding((period, day) => new PeriodHold(heldBack(period, day), null), global);
+
+	/// <summary>A calculator reading <paramref name="hold"/> for both the hold and the instant movement began.</summary>
+	private static CircadianCalculator Holding(Func<string, DateOnly, PeriodHold> hold, GlobalConfig? global = null) =>
+		new(Table, global ?? new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown, null, null, hold,
 			TimeZoneInfo.Utc);
 
 	[TestMethod]
@@ -640,6 +644,129 @@ public sealed class CircadianCalculatorTests
 			"day@07:00 is behind us, so the instance in question is today's");
 		Assert.AreEqual(new DateOnly(2026, 1, 14), asked.Single(row => row.Period == "night").Day,
 			"night@22:30 is ahead of us, so the instance in question is the one that began yesterday");
+	}
+
+	// ---- the blend starts when the period actually begins ---------------------------------------------
+
+	private static GlobalConfig Blending(int blendMinutes = 30) =>
+		new() { SmoothTransitions = true, BlendMinutes = blendMinutes };
+
+	/// <summary>A calculator whose "day" was started by movement at <paramref name="arrival"/>, nothing else held.</summary>
+	private static CircadianCalculator BegunAt(DateTimeOffset arrival, int blendMinutes = 30) =>
+		Holding(
+			(period, _) => period == "day" ? new PeriodHold(false, arrival) : PeriodHold.OnTheClock,
+			Blending(blendMinutes));
+
+	/// <summary>Movement at 07:20 into a 30-minute blend is halfway at 07:35, not fully arrived as the 07:00 boundary would have it.</summary>
+	[TestMethod]
+	public void APeriodStartedByMovement_EasesFromTheArrival_NotFromItsStart()
+	{
+		double half = BegunAt(At(7, 20)).GetTarget(At(7, 35))!.BrightnessPct;
+
+		Assert.AreEqual(52.5, half, 0.001,
+			$"15 of the blend's 30 minutes have run since somebody walked in at 07:20; got {half}");
+	}
+
+	[TestMethod]
+	public void AtTheArrival_TheBlendStillReadsThePreviousPeriodsLevels()
+	{
+		Assert.AreEqual(15d, BegunAt(At(7, 20)).GetTarget(At(7, 20))!.BrightnessPct, 0.001,
+			"night's level at the instant somebody walked in, so the room takes no step to start easing");
+	}
+
+	/// <summary>The blend keeps its configured length and therefore finishes later than a clock-started one.</summary>
+	[TestMethod]
+	public void AMovementStartedBlend_KeepsItsFullLength_AndSoEndsLaterThanAClockStartedOne()
+	{
+		CircadianCalculator arrived = BegunAt(At(7, 20));
+		CircadianCalculator onTheClock = Holding((_, _) => PeriodHold.OnTheClock, Blending());
+
+		Assert.AreEqual(90d, onTheClock.GetTarget(At(7, 30))!.BrightnessPct, 0.001,
+			"a clock-started blend is over 30 minutes after the 07:00 start");
+		Assert.IsTrue(arrived.GetTarget(At(7, 30))!.BrightnessPct < 90,
+			"the same instant is only ten minutes into a blend that began at 07:20");
+		Assert.IsTrue(arrived.GetTarget(At(7, 49))!.BrightnessPct < 90, "29 minutes in, still easing");
+		Assert.AreEqual(90d, arrived.GetTarget(At(7, 50))!.BrightnessPct, 0.001,
+			"and it arrives a full 30 minutes after the movement, 20 minutes later than the clock-started one");
+	}
+
+	/// <summary>A restart seeds the start without an instant, and the blend must not restart at the restart.</summary>
+	[TestMethod]
+	public void APeriodBegunWithNoRecordedArrival_StillEasesFromItsStart()
+	{
+		CircadianCalculator calc = Holding((_, _) => PeriodHold.OnTheClock, Blending());
+
+		Assert.AreEqual(52.5, calc.GetTarget(At(7, 15))!.BrightnessPct, 0.001,
+			"halfway through the window that trails the 07:00 boundary, as it was before movement carried an instant");
+	}
+
+	/// <summary>The boundary is the earliest a period can ease from: an arrival before it is not a blend origin.</summary>
+	[TestMethod]
+	public void AnArrivalBeforeTheBoundary_LeavesTheBlendOnTheBoundary()
+	{
+		Assert.AreEqual(52.5, BegunAt(At(6, 40)).GetTarget(At(7, 15))!.BrightnessPct, 0.001,
+			"07:00 is the later of the two, so the blend runs from there and not from 06:40");
+	}
+
+	/// <summary>Movement that never comes leaves the period out of the table, so there is no blend to move.</summary>
+	[TestMethod]
+	public void MovementThatNeverArrives_LeavesThePreviousPeriodWhereItWas()
+	{
+		CircadianCalculator calc = Holding((period, _) => new PeriodHold(period == "day", null), Blending());
+
+		LightTarget target = calc.GetTarget(At(8))!;
+
+		Assert.AreEqual("night", target.PeriodName);
+		Assert.AreEqual(15d, target.BrightnessPct, 0.001, "night arrived at 22:30 and its own blend is long over");
+	}
+
+	/// <summary>A blend still running when the next period's start comes round is cut off by it, not carried into it.</summary>
+	/// <remarks>
+	///     Movement can start a period right up to the moment the next one is due, so the last few minutes of its
+	///     blend have nowhere to run. The evening eases from its own 18:00 start, as it would have anyway.
+	/// </remarks>
+	[TestMethod]
+	public void MovementArrivingJustBeforeTheNextBoundary_LeavesTheNextPeriodEasingFromItsOwnStart()
+	{
+		CircadianCalculator calc = BegunAt(At(17, 50));
+
+		Assert.AreEqual("day", calc.GetTarget(At(17, 55))!.PeriodName, "five minutes into the day's own blend");
+
+		LightTarget evening = calc.GetTarget(At(18, 15))!;
+
+		Assert.AreEqual("evening", evening.PeriodName);
+		Assert.AreEqual(80d, evening.BrightnessPct, 0.001,
+			"halfway from the day's 90 % to the evening's 70 %: the day's arrival is not the evening's");
+	}
+
+	/// <summary>A wrapped period's arrival belongs to yesterday's instance, so the blend has to reach across midnight for it.</summary>
+	[TestMethod]
+	public void AWrappedPeriodStartedByMovement_EasesFromAnArrivalOnTheOtherSideOfMidnight()
+	{
+		DateTimeOffset arrival = new(2026, 1, 14, 23, 50, 0, TimeSpan.Zero);
+
+		CircadianCalculator calc = Holding(
+			(period, day) => period == "night" && day == new DateOnly(2026, 1, 14)
+				? new PeriodHold(false, arrival)
+				: PeriodHold.OnTheClock,
+			Blending());
+
+		LightTarget target = calc.GetTarget(At(0, 5))!;
+
+		Assert.AreEqual("night", target.PeriodName);
+		Assert.AreEqual(42.5, target.BrightnessPct, 0.001,
+			"15 of 30 minutes since movement at 23:50, halfway from the evening's 70 % to the night's 15 %");
+	}
+
+	/// <summary>Blending off is still a step, whatever instant movement recorded.</summary>
+	[TestMethod]
+	public void AnArrival_DoesNotReintroduceABlendWhereTransitionsAreOff()
+	{
+		CircadianCalculator calc = Holding(
+			(period, _) => period == "day" ? new PeriodHold(false, At(7, 20)) : PeriodHold.OnTheClock,
+			new GlobalConfig { SmoothTransitions = false });
+
+		Assert.AreEqual(90d, calc.GetTarget(At(7, 35))!.BrightnessPct, 0.001);
 	}
 
 	// ===================== the next boundary =====================

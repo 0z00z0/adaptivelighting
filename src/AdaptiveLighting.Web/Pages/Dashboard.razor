@@ -548,7 +548,7 @@ else
 		// Assistant owns the time of day, and the engine's latch where a period waits for movement.
 		_band = BoardView.Band(
 			Schedule.CalculatorFor(
-				schedule.Periods, schedule.Global, sun, selectValue, Schedule.HeldBackRule(Engine)),
+				schedule.Periods, schedule.Global, sun, selectValue, Schedule.PeriodHoldRule(Engine)),
 			_window);
 	}
 
