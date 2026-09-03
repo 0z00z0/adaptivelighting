@@ -20,15 +20,38 @@ public sealed class LuxBrightnessCurve
 	}
 
 	/// <summary><paramref name="target"/> with the curve's brightness where its period asked for the curve.</summary>
-	// A period that specifies its own brightness gets the same instance back, so reference equality holds.
+	// Outside a blend, a period that specifies its own brightness gets the same instance back, so reference
+	// equality holds.
 	public LightTarget Apply(LightTarget target)
 	{
 		ArgumentNullException.ThrowIfNull(target);
+
+		if (target.Blend is { } blend)
+			return target with { BrightnessPct = target.Clamp(Blended(target, blend)) };
 
 		if (!target.UsesDaylightCurve)
 			return target;
 
 		return target with { BrightnessPct = target.Clamp(Brightness(_readLux(), _settings)) };
+	}
+
+	// The interpolation runs after the curve, so each side contributes the level it resolves to. Interpolating
+	// first and replacing the result makes a curve side's stored percentage, inert everywhere else, visible for
+	// the length of the blend. Measured on the shipped sample leaving the curve at sunset minus an hour, 300 lx:
+	// the curve held 58.1 %, the boundary jumped to the stored 90 %, and the blend brought it down to 70 %, a
+	// rise of 31.9 points followed by a fall of 20, at the darkest end of the day.
+	// Apply must reach here for a target off the curve too: curve-to-stated has the curve on the leaving side.
+	private double Blended(LightTarget target, BlendEndpoints blend)
+	{
+		// One reading for both ends. Two calls could straddle a sensor update and put a step inside the blend.
+		double curve = blend.LeavingUsesDaylightCurve || target.UsesDaylightCurve
+			? Brightness(_readLux(), _settings)
+			: 0;
+
+		double from = blend.LeavingUsesDaylightCurve ? curve : blend.LeavingBrightnessPct;
+		double to = target.UsesDaylightCurve ? curve : blend.ArrivingBrightnessPct;
+
+		return from + ((to - from) * blend.Fraction);
 	}
 
 	/// <summary>The brightness the curve asks for at <paramref name="lux"/>.</summary>

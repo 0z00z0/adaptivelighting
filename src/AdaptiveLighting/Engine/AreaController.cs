@@ -927,8 +927,12 @@ public sealed class AreaController : IDisposable
 			return target;
 		}
 
-		// The clamp period's own brightness is the ceiling.
-		return target with { BrightnessPct = target.Clamp(Math.Min(target.BrightnessPct, sleepPeriod.BrightnessPct)) };
+		// The clamp period's own brightness is the ceiling, and where that period runs the curve the curve owns
+		// the number. Reading it unresolved makes the stored percentage, inert everywhere else, the night's cap.
+		// The clamp still runs last, on a target the curve has already set; only what it reads for the cap moved.
+		double ceiling = _luxBrightness.Apply(sleepPeriod).BrightnessPct;
+
+		return target with { BrightnessPct = target.Clamp(Math.Min(target.BrightnessPct, ceiling)) };
 	}
 
 	private void ApplyTarget(TransitionReason reason, double brightnessFactor = 1.0)

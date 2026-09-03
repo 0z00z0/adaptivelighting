@@ -12,6 +12,15 @@ public enum RoomLevelSource
 	ColorTemp = 2
 }
 
+/// <summary>The two ends of a blend in progress, before the daylight curve has had its say about either.</summary>
+// Carried so LuxBrightnessCurve can resolve each side against the light outside and interpolate afterwards.
+// The arriving side's own curve flag is LightTarget.UsesDaylightCurve, which the active period already sets.
+public sealed record BlendEndpoints(
+	double LeavingBrightnessPct,
+	bool LeavingUsesDaylightCurve,
+	double ArrivingBrightnessPct,
+	double Fraction);
+
 /// <summary>What the lights should be right now.</summary>
 // FromRoom says which values came from the room's own AreaConfig.Levels, and is carried here so nothing
 // downstream re-reads the room's overrides and reaches a different answer.
@@ -25,6 +34,11 @@ public sealed record LightTarget(
 	// Carried from the active period alone, as FromRoom is, so a blend across a boundary cannot report one
 	// period's name beside the other's rule.
 	public bool UsesDaylightCurve { get; init; }
+
+	/// <summary>The blend this target sits inside, or <c>null</c> when no blend is running.</summary>
+	// BrightnessPct already holds the interpolated level, so a consumer that ignores this reads what it always
+	// read. LuxBrightnessCurve is the one that redoes the interpolation with the curve's endpoints in place.
+	public BlendEndpoints? Blend { get; init; }
 
 	// The physical bound a lamp can take, and nothing else: a period imposes no floor or ceiling.
 	public double Clamp(double brightnessPct) => Math.Clamp(brightnessPct, 0, 100);
@@ -192,7 +206,15 @@ public sealed class CircadianCalculator
 		double kelvin = Interpolate(leaving.ColorTempKelvin, arriving.ColorTempKelvin, blend);
 
 		// FromRoom comes from the active period alone: it is the rule the reported period name promises.
-		return ToTarget(active.Period, arriving with { BrightnessPct = brightness, ColorTempKelvin = (int)Math.Round(kelvin) });
+		LightTarget target = ToTarget(active.Period, arriving with { BrightnessPct = brightness, ColorTempKelvin = (int)Math.Round(kelvin) });
+
+		// The raw endpoints travel alongside the interpolated level, so the curve can replace either side and redo
+		// the brightness. Kelvin is finished here: the curve never touches it.
+		return target with
+		{
+			Blend = new BlendEndpoints(
+				leaving.BrightnessPct, previous.Period.UseDaylightCurve, arriving.BrightnessPct, blend)
+		};
 	}
 
 	/// <summary>The raw target of the period keyed <paramref name="periodKey"/>, ignoring the clock.</summary>

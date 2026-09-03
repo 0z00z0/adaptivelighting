@@ -43,6 +43,7 @@ public sealed class LuxBrightnessControllerTests
 	private static Fixture Build(
 		Action<AreaSettings>? tweak = null,
 		bool eveningOnTheCurve = false,
+		bool nightOnTheCurve = false,
 		string lux = "5",
 		string? luxSensor = Lux,
 		string? outdoorLux = null,
@@ -84,7 +85,7 @@ public sealed class LuxBrightnessControllerTests
 		[
 			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700, UseDaylightCurve = eveningOnTheCurve },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
+			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, UseDaylightCurve = nightOnTheCurve }
 		];
 
 		ResolvedArea area = new(
@@ -246,6 +247,73 @@ public sealed class LuxBrightnessControllerTests
 		area.House.OnNext(new HouseState(true, ModeKind.Sleep, false) { ModeValue = "Sover" });
 
 		Assert.AreEqual(15d, area.Actuator.Last?.BrightnessPct, "and asleep, the night period's own level takes it back");
+	}
+
+	// ===================== a clamp period that runs the curve =====================
+
+	// The clamp asks the calculator for the clamp period's level, and a curve period's stored number is inert.
+	// Reading it unresolved made the night's ceiling a figure the room shows nowhere else.
+	[TestMethod]
+	public void A_Clamp_Period_On_The_Curve_Takes_Its_Ceiling_From_The_Light_Outside()
+	{
+		Fixture area = Build(
+			settings =>
+			{
+				settings.RespectSleepMode = true;
+				settings.LuxBrightnessMinPct = 30;
+			},
+			nightOnTheCurve: true,
+			outdoorLux: "5",
+			houseMode: SoverMode());
+
+		Assert.AreEqual(70d, CommandedOnMotion(area), "awake, the evening states its own 70 %");
+
+		area.House.OnNext(new HouseState(true, ModeKind.Sleep, false) { ModeValue = "Sover" });
+
+		Assert.AreEqual(30d, area.Actuator.Last?.BrightnessPct,
+			"asleep, the ceiling is the curve's dark end and never the night period's inert 15 %");
+	}
+
+	/// <summary>The ceiling follows the reading, so it is the curve answering and not one fixed number.</summary>
+	[TestMethod]
+	public void A_Clamp_Period_On_The_Curve_Moves_Its_Ceiling_With_The_Reading()
+	{
+		Fixture area = Build(
+			settings =>
+			{
+				settings.RespectSleepMode = true;
+				settings.LuxBrightnessMinPct = 30;
+			},
+			nightOnTheCurve: true,
+			outdoorLux: "1000",
+			houseMode: SoverMode());
+
+		CommandedOnMotion(area);
+		area.House.OnNext(new HouseState(true, ModeKind.Sleep, false) { ModeValue = "Sover" });
+
+		// 1 000 lx is the log midpoint of the 100 and 10 000 anchors: halfway from 30 % to 100 % is 65 %.
+		Assert.AreEqual(65d, area.Actuator.Last?.BrightnessPct);
+	}
+
+	// The control for the two above: same curve, same reading, only the clamp period's own flag moved.
+	[TestMethod]
+	public void A_Clamp_Period_Off_The_Curve_Keeps_Its_Stored_Ceiling()
+	{
+		Fixture area = Build(
+			settings =>
+			{
+				settings.RespectSleepMode = true;
+				settings.LuxBrightnessMinPct = 30;
+			},
+			outdoorLux: "5",
+			houseMode: SoverMode());
+
+		Assert.AreEqual(70d, CommandedOnMotion(area));
+
+		area.House.OnNext(new HouseState(true, ModeKind.Sleep, false) { ModeValue = "Sover" });
+
+		Assert.AreEqual(15d, area.Actuator.Last?.BrightnessPct,
+			"the night period states its own level, so 15 % is the ceiling and the curve has no say");
 	}
 
 	// The pre-off dim is a fraction of what the room is holding, not of the schedule's level.
