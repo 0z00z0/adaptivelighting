@@ -24,14 +24,9 @@ rewritten to suit one.
   description, help text, a control's label, and sub-control text (whether that last level exists is part of
   the question). One shared stylesheet for the levels, not per-page styling.
 
-- **Brightness and warmth become stepped sliders, laid out as a table.** A slider with fixed steps is easier
-  to set than a dropdown or a continuous control. Brightness shows a *house default* marker and the percentage
-  only, with no per-step wording; warmth shows the same marker and keeps the wording each step already has in
-  its dropdown. The two dropdown steps that carry no wording are granularity nobody uses — drop them. The
-  words *Brightness* and *Warmth* are not repeated per period; the periods read as rows:
-
-  | Period | Brightness | Warmth |
-  | --- | --- | --- |
+- **`Components/NullableNumber.razor` is referenced by nothing, and is now the only live consumer of
+  `Components/PresetSelect.razor`.** Both were left in place, with their six tests, because removing them
+  drops the test count — a decision to take deliberately rather than in passing.
 
 - **Automatic room discovery still proposes only rooms that have both lights and a movement sensor.** A room
   with lights and no sensor now resolves and runs, but discovery does not offer it, so it has to be added by

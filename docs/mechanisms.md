@@ -506,6 +506,15 @@ standing, where an unknown enum name is a `FormatException` at start-up and `Lig
 documented never to throw. The initialiser is `true`, so a document that has never named the setting follows
 movement; turning it off is written out as `false`, because the writer omits nulls and not defaults.
 
+### A movement-led hold in a room with no movement sensor
+
+A movement-led hold is judged on the last movement seen. A room with no motion sensor sees none, so nothing
+ever restarts the countdown: it runs once for the full `VacancyTimeoutSeconds` and then settles the room
+empty. That is the whole mechanism, and it is why a room without a sensor needs no mode of its own.
+
+The constraint that follows: anything re-arming the hold while the room reads as vacant would hold such a room
+lit for ever, there being no second event to end it.
+
 ### Auto-on gates
 
 `AreaController.AutoOnBlockNow` is the single place the auto-on gates are written. A second copy will drift.
@@ -923,6 +932,24 @@ not showing, and that row then becomes the first non-empty one and silently take
 
 Empty rows are pruned after every edit rather than at save time, because anything reading `AreaConfig.Levels`
 counts a leftover row as an override.
+
+### The borrowing stop on a preset slider
+
+The leftmost stop of `PresetSlider` states nothing and lets the surface above supply the number. Four signals
+say so at once — a hatched rail, a hollow thumb, a lit cap at the rail's end, and the readout in `--idle`
+naming the borrowed number in words — because any one of them alone reads as the dimmest setting rather than
+as borrowing.
+
+`--idle` is reused instead of a colour being added. It is already the token for watching without commanding,
+which is what borrowing is, and it is defined in every theme block — which is what the
+colour-lives-in-several-places trap exists to prevent.
+
+The heading row is shown from **780 px** upward, and each rail's own label is hidden there because the heading
+is saying it. Below that width the rows stack, and a heading row above stacked periods names nothing near the
+control it heads, so every rail carries its label again.
+
+A value the ladder does not carry is given a stop of its own, in sorted order, never the nearest one. That is
+what stops opening a page rewriting a hand-edited document.
 
 ### Shutdown order: the snapshot cache stops before Kestrel
 

@@ -12,6 +12,25 @@ against each other.
 
 ## [Unreleased]
 
+### Added
+
+- **A room that has lights but no movement sensor is set up and runs**, where before it was refused and
+  disappeared from the interface. Nothing there ever lights itself; switching its lights on by hand puts the
+  room on the ordinary manual hold, and the lights go off when that hold runs out. A room with no lights at
+  all is still reported as a room that could not be set up.
+
+### Changed
+
+- **The room's brightness and warmth are stepped sliders, laid out as a table**, with *Period*, *Brightness*
+  and *Warmth* said once at the top instead of on every row.
+  - The leftmost stop means *follow the schedule*. It is drawn so it cannot be read as the dimmest setting —
+    hatched rail, hollow thumb, a lit cap at the end of the rail, and the borrowed number in words rather than
+    as a set value. **The separate revert button is gone**, the stop being the way back.
+  - The schedule editor takes the same sliders, without that stop: the house's own schedule has nothing above
+    it to borrow from.
+  - **2500 K and 5000 K are dropped from the warmth stops.** Neither carries a name, and on a rail an unnamed
+    step is a position the thumb has to cross to reach one that means something.
+
 ## [2026.9.0] - 2026-09-02
 
 ### Added
