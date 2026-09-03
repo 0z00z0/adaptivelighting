@@ -183,7 +183,7 @@ A period runs from its start until the next period begins.
 | **Also switches house mode to** | When this period starts, switch the house to this mode option. | `SetsModeId` |
 | **Blend between periods** / **Blend over** | Lights drift to the next period's level instead of stepping at the boundary. | `SmoothTransitions`, `BlendMinutes` (default on, 30 min) |
 | **Wait for movement before starting** | The period does not begin at its *Starts*. The one before it keeps running until somebody moves. | `StartsOnMotion` |
-| **Movement in** | Which rooms' movement may start it. Empty means any room the engine watches. | `StartsOnMotionAreas` |
+| **Movement in** | Which rooms' movement may start it. Name none and any room the engine watches will do, and the key is left out of the file. | `StartsOnMotionAreas` |
 
 Quote clock times in the file: bare `06:00` is not a string in YAML. Keep at least one clock-time
 boundary — far north a sun-anchored boundary can be unresolvable around midsummer and midwinter, and

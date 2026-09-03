@@ -276,13 +276,10 @@ public static class LightingConfigDocument
 			area.Levels = levels;
 		}
 
-		// Never null in the model, and the normaliser clears it on every save, so a hand-emptied key would throw
-		// there before the engine ever read it.
+		// Nullable by design, as an area's entity lists are: absent and emptied both mean any room, so only the
+		// contents are repaired. Repairing the absence here would report every clean document as needing repair.
 		foreach (TimePeriodConfig period in periods)
-		{
-			repaired |= NullSafeList(period.StartsOnMotionAreas, out List<string> startsOnMotionAreas);
-			period.StartsOnMotionAreas = startsOnMotionAreas;
-		}
+			repaired |= DropBlanks(period.StartsOnMotionAreas);
 
 		if (repaired)
 			logger?.LogWarning(

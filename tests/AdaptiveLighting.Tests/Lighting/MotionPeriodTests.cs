@@ -334,6 +334,21 @@ public sealed class MotionPeriodTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an empty room list means any room the engine watches");
 	}
 
+	// The shape a saved document actually has: the key is omitted, so the list arrives null. It must land on the
+	// same branch as the empty one above, or a house that named no room would start on nothing.
+	[TestMethod]
+	public void MotionStart_NoRoomListAtAll_CountsTheSameAsAnEmptyOne()
+	{
+		List<TimePeriodConfig> periods = Periods();
+		periods[0].StartsOnMotionAreas = null;
+
+		Rig rig = Started(periods, QuarterPastMorning);
+
+		Move(rig, Kjokken);
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an absent room list means any room the engine watches");
+	}
+
 	// An area id nothing resolves must never widen to "any room"; it can only fire nowhere.
 	[TestMethod]
 	public void MotionStart_NamedRoomThatResolvesNoSensor_NeverFires()

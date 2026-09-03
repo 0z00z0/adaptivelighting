@@ -99,7 +99,7 @@
 								stored by area id.
 							</InfoPopover>
 						</span>
-						<EntityListPicker Value="@period.StartsOnMotionAreas"
+						<EntityListPicker Value="@MotionAreasOf(period)"
 										  ValueChanged="@(value => SetMotionAreas(period, value))"
 										  Options="@MotionAreaOptions"
 										  NameResolver="@AreaNameOf"
@@ -349,8 +349,11 @@
 	private AreaConfig? RoomWithId(string areaId) =>
 		Areas.FirstOrDefault(area => string.Equals(area.AreaId, areaId, StringComparison.Ordinal));
 
+	/// <summary>The rooms a period names, with an unnamed one read as the empty list the picker expects.</summary>
+	private static IReadOnlyList<string> MotionAreasOf(TimePeriodConfig period) => period.StartsOnMotionAreas ?? [];
+
 	private IReadOnlyList<string> MotionRoomNames(TimePeriodConfig period) =>
-		[.. period.StartsOnMotionAreas.Select(AreaNameOf)];
+		[.. MotionAreasOf(period).Select(AreaNameOf)];
 
 	private string MotionRoomsHelp(TimePeriodConfig period) =>
 		PeriodStartText.MotionRooms(MotionRoomNames(period)) is { } rooms
@@ -389,8 +392,10 @@
 	private Task SetStartsOnMotion(TimePeriodConfig period, bool value) =>
 		Set(() => period.StartsOnMotion = value);
 
+	// Null when the last room is taken off, matching what the normaliser writes. ConfigStamp hashes the document
+	// unnormalised, so an empty list here reads as a change against a document that simply omits the key.
 	private Task SetMotionAreas(TimePeriodConfig period, IReadOnlyList<string> areaIds) =>
-		Set(() => period.StartsOnMotionAreas = [.. areaIds]);
+		Set(() => period.StartsOnMotionAreas = areaIds.Count > 0 ? [.. areaIds] : null);
 
 	/// <summary>What a period starts as, in the one place that decides it.</summary>
 	// The id is minted here and never left to the save-time migration: a room level set before the first save

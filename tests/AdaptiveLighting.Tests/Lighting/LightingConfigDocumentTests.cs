@@ -202,6 +202,131 @@ public sealed class LightingConfigDocumentTests
 			LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(opted)).Config.Areas[0].FollowOutdoorLux);
 	}
 
+	// ===================== StartsOnMotionAreas stays out of a document that names no room =====================
+
+	[TestMethod]
+	public void Save_WritesNoStartsOnMotionAreas_WhenNoPeriodNamesARoom()
+	{
+		AdaptiveLightingConfig config = new()
+		{
+			Periods =
+			[
+				new() { Name = "day", Start = "07:00" },
+				new() { Name = "morning", Start = "06:00", StartsOnMotion = true }
+			],
+			Areas = [new() { Name = "Stue", AreaId = "stue" }]
+		};
+
+		ConfigNormalizer.Normalize(config);
+
+		Assert.IsFalse(
+			LightingConfigDocument.Serialize(config).Contains("StartsOnMotionAreas", StringComparison.Ordinal),
+			"a house that never named a room must not acquire the key on every save");
+	}
+
+	[TestMethod]
+	public void Save_KeepsStartsOnMotionAreas_WhenAPeriodNamesRooms()
+	{
+		AdaptiveLightingConfig config = new()
+		{
+			Periods =
+			[
+				new()
+				{
+					Name = "morning", Start = "06:00", StartsOnMotion = true, StartsOnMotionAreas = ["kjokken", "gang"]
+				}
+			],
+			Areas = [new() { Name = "Kjøkken", AreaId = "kjokken" }, new() { Name = "Gang", AreaId = "gang" }]
+		};
+
+		ConfigNormalizer.Normalize(config);
+
+		AdaptiveLightingConfig reloaded = LightingConfigDocument
+			.Deserialize(LightingConfigDocument.Serialize(config)).Config;
+
+		CollectionAssert.AreEqual(
+			new[] { "kjokken", "gang" }, reloaded.Periods[0].StartsOnMotionAreas,
+			"a named list is the whole point of the setting and must survive a save");
+	}
+
+	/// <summary>A document naming rooms keeps them, and is then byte-identical through any further load and save.</summary>
+	// Compared from the first save and not from the hand-written text, because the loader mints a period id the
+	// hand-written file has not got.
+	[TestMethod]
+	public void RoundTrip_LeavesAWrittenRoomListByteIdentical()
+	{
+		string handWritten = $"""
+			{LightingConfigDocument.RootKey}:
+			  Periods:
+			    - Id: morning-1
+			      Name: morning
+			      Start: "06:00"
+			      StartsOnMotion: true
+			      StartsOnMotionAreas:
+			        - kjokken
+			  Areas:
+			    - Name: Kjøkken
+			      AreaId: kjokken
+			""";
+
+		string saved = LightingConfigDocument.Serialize(LightingConfigDocument.Deserialize(handWritten).Config);
+
+		StringAssert.Contains(saved, "kjokken", "the one thing the setting exists to say must survive the save");
+
+		Assert.AreEqual(saved, LightingConfigDocument.Serialize(LightingConfigDocument.Deserialize(saved).Config));
+	}
+
+	/// <summary>An existing document carrying the empty key still loads, and the next save drops it.</summary>
+	[TestMethod]
+	public void An_Existing_Empty_StartsOnMotionAreas_Loads_As_Any_Room_And_Is_Dropped_On_Save()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Periods:
+			    - Name: morning
+			      Start: "06:30"
+			      StartsOnMotion: true
+			      StartsOnMotionAreas: []
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			""").Config;
+
+		Assert.AreEqual(0, config.Periods.Single().StartsOnMotionAreas!.Count,
+			"the key written by every earlier save still reads as the empty list it is");
+
+		ConfigNormalizer.Normalize(config);
+
+		Assert.IsFalse(
+			LightingConfigDocument.Serialize(config).Contains("StartsOnMotionAreas", StringComparison.Ordinal),
+			"and the next save is what clears the noise out of the file");
+	}
+
+	/// <summary>A document that simply omits the key needs no repair, so loading it reports none.</summary>
+	// The repair pass logs one warning for the whole document, so a repair claimed here would be a warning a
+	// person sees on every load of a perfectly clean file.
+	[TestMethod]
+	public void Load_ReportsNoRepair_ForADocumentThatOmitsStartsOnMotionAreas()
+	{
+		RecordingLogger logger = new();
+
+		LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Periods:
+			    - Name: morning
+			      Start: "06:30"
+			      StartsOnMotion: true
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			""", logger);
+
+		Assert.AreEqual(0, logger.Warnings.Count,
+			"an absent key is the normal shape of the document, not damage to be repaired");
+	}
+
 	[TestMethod]
 	public void RoundTrip_PreservesPeriods()
 	{
@@ -944,9 +1069,10 @@ public sealed class LightingConfigDocumentTests
 			GlobalConfig.DefaultMotionDeviceClasses.Count, config.Global.EffectiveMotionDeviceClasses.Count);
 	}
 
-	// The same failure inside a period: the normaliser, the validator and ModeMonitor all walk this list.
+	// The same failure inside a period: the normaliser, the validator and ModeMonitor all walk this list. It is
+	// nullable here, so the guard is that nothing throws and the period still means any room.
 	[TestMethod]
-	public void An_Emptied_StartsOnMotionAreas_Loads_As_No_Rooms()
+	public void An_Emptied_StartsOnMotionAreas_Loads_As_Any_Room()
 	{
 		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
 			$"""
@@ -958,12 +1084,11 @@ public sealed class LightingConfigDocumentTests
 			      StartsOnMotionAreas:
 			""").Config;
 
-		Assert.IsNotNull(config.Periods.Single().StartsOnMotionAreas, "an emptied key must not come back as null");
-		Assert.AreEqual(0, config.Periods.Single().StartsOnMotionAreas.Count);
+		Assert.IsNull(config.Periods.Single().StartsOnMotionAreas, "an emptied key names no room, same as no key");
 
 		// The normaliser is where it threw: it rewrites the list whenever StartsOnMotion is on.
 		ConfigNormalizer.Normalize(config);
-		Assert.AreEqual(0, config.Periods.Single().StartsOnMotionAreas.Count);
+		Assert.IsNull(config.Periods.Single().StartsOnMotionAreas);
 	}
 
 	// The same failure one level down. This list is read by the normaliser on every save, not only by the engine.

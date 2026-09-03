@@ -48,9 +48,13 @@ public class TimePeriodConfig
 	/// </remarks>
 	public bool StartsOnMotion { get; set; }
 
-	/// <summary>Which rooms' movement may start it, by area id. Empty means any room the engine watches.</summary>
-	/// <remarks>Naming the kitchen keeps a bedroom sensor at 06:05 from starting the morning for the whole house.</remarks>
-	public List<string> StartsOnMotionAreas { get; set; } = [];
+	/// <summary>Which rooms' movement may start it, by area id. <c>null</c> and empty both mean any room the engine watches.</summary>
+	/// <remarks>
+	///     Naming the kitchen keeps a bedroom sensor at 06:05 from starting the morning for the whole house. Nullable
+	///     only so <c>OmitNull</c> keeps the key out of a period that names no rooms; <see cref="ConfigNormalizer"/>
+	///     writes <c>null</c> and never an empty list, so the two never both occur in a saved document.
+	/// </remarks>
+	public List<string>? StartsOnMotionAreas { get; set; }
 
 	/// <summary>The level this period holds, unless <see cref="UseDaylightCurve"/> hands that to the curve.</summary>
 	// Kept in the document while the curve runs, so switching back restores what was typed.

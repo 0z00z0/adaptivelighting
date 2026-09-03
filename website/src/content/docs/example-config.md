@@ -213,7 +213,7 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       ColorTempKelvin: 3000
       # This period waits for somebody to get up rather than starting at 06:30.
       # Until then the night period keeps running. Never before 06:30, once per
-      # local day, and an empty StartsOnMotionAreas means any room the engine
+      # local day, and leaving StartsOnMotionAreas out means any room the engine
       # watches. The next period's own Start overtakes one that never began.
       StartsOnMotion: true
       StartsOnMotionAreas:
