@@ -1,13 +1,13 @@
 using System.Globalization;
 using System.Text;
 
-using Serilog.Core;
 using Serilog.Events;
+using Serilog.Formatting;
 using Serilog.Parsing;
 
 namespace AdaptiveLighting.NetDaemon;
 
-/// <summary>Writes each log event to the durable copy, rendering it from the template instead of the message.</summary>
+/// <summary>Renders one log event for the durable file, from the template instead of the message.</summary>
 /// <remarks>
 ///     <para>
 ///         <c>LogEvent.RenderMessage</c> is never called: it hands back the interpolated string, secrets and all.
@@ -20,7 +20,7 @@ namespace AdaptiveLighting.NetDaemon;
 ///         on a value this type is trying to bound.
 ///     </para>
 /// </remarks>
-public sealed class CircularLogSink : ILogEventSink
+public sealed class DurableLogFormatter : ITextFormatter
 {
 	/// <summary>Full ISO date, and the offset with it: this file is read days later and across midnight.</summary>
 	public const string TimestampFormat = "yyyy-MM-dd HH:mm:ss.fffzzz";
@@ -28,19 +28,20 @@ public sealed class CircularLogSink : ILogEventSink
 	/// <summary>How much of an exception a line will carry, stack trace included.</summary>
 	public const int MaxExceptionLength = 2000;
 
+	/// <summary>What one line may reach, so no single event can approach the file's size limit.</summary>
+	public const int MaxLineChars = 4096;
+
 	private const string SourceContextProperty = "SourceContext";
 	private const int MaxTemplateTextLength = 1024;
+	private const string Ellipsis = "...";
 
-	private readonly CircularLogWriter _writer;
-
-	public CircularLogSink(CircularLogWriter writer) =>
-		_writer = writer ?? throw new ArgumentNullException(nameof(writer));
-
-	public void Emit(LogEvent logEvent)
+	/// <summary>Writes the rendered line, which the file sink counts towards its size limit.</summary>
+	public void Format(LogEvent logEvent, TextWriter output)
 	{
 		ArgumentNullException.ThrowIfNull(logEvent);
+		ArgumentNullException.ThrowIfNull(output);
 
-		_writer.Append(Render(logEvent));
+		output.WriteLine(Render(logEvent));
 	}
 
 	/// <summary>The one line <paramref name="logEvent"/> becomes.</summary>
@@ -63,7 +64,23 @@ public sealed class CircularLogSink : ILogEventSink
 		if (logEvent.Exception is { } exception)
 			line.Append(" | ").Append(LoggedValue.Text(exception.ToString(), MaxExceptionLength));
 
-		return line.ToString();
+		return Cap(line.ToString());
+	}
+
+	// The file sink writes the last event within its size limit in full, so the cap here is what bounds the
+	// overshoot past DurableLogFile.MaxFileBytes.
+	private static string Cap(string line)
+	{
+		if (line.Length <= MaxLineChars)
+			return line;
+
+		int cut = MaxLineChars;
+
+		// Never split a surrogate pair; a lone half encodes as U+FFFD and reads as corruption.
+		if (char.IsHighSurrogate(line[cut - 1]))
+			cut--;
+
+		return string.Concat(line.AsSpan(0, cut), Ellipsis);
 	}
 
 	private static string Rendered(MessageTemplateToken token, LogEvent logEvent) =>

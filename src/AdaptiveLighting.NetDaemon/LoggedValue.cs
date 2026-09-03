@@ -9,8 +9,8 @@ namespace AdaptiveLighting.NetDaemon;
 /// <summary>The one place a runtime value becomes text in the durable log.</summary>
 /// <remarks>
 ///     <para>
-///         Nothing reaches the file except through here: <see cref="CircularLogSink"/> renders the message template
-///         itself and never asks Serilog for a rendered message, and the writer takes no free text.
+///         Nothing reaches the file except through here: <see cref="DurableLogFormatter"/> renders the message
+///         template itself and never asks Serilog for a rendered message, so the file sink is handed a finished line.
 ///     </para>
 ///     <para>
 ///         Two filters. A property whose name reads as a credential is replaced whole, covering <c>{Token}</c>,

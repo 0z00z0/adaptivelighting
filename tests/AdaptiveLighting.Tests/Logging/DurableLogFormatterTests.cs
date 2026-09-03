@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 using AdaptiveLighting.NetDaemon;
@@ -13,7 +14,7 @@ namespace AdaptiveLighting.Tests.Logging;
 
 /// <summary>What one log event becomes on disk: a dated single line, never the interpolated message.</summary>
 [TestClass]
-public sealed class CircularLogSinkTests
+public sealed class DurableLogFormatterTests
 {
 	private const string LongLivedToken =
 		"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI5YjEyIiwiaWF0IjoxNzU0MzUyMDAwfQ.Qm9ndXNTaWduYXR1cmVGb3JBVGVzdA";
@@ -60,7 +61,7 @@ public sealed class CircularLogSinkTests
 	[TestMethod]
 	public void Every_Line_Opens_With_A_Full_Iso_Date_And_An_Offset()
 	{
-		string line = CircularLogSink.Render(Event("nothing happened"));
+		string line = DurableLogFormatter.Render(Event("nothing happened"));
 
 		// Shape, not a wall clock: CI runs in UTC.
 		Assert.IsTrue(
@@ -71,7 +72,7 @@ public sealed class CircularLogSinkTests
 	[TestMethod]
 	public void The_Timestamp_Is_The_Events_Own_Instant_And_Keeps_Its_Offset()
 	{
-		string line = CircularLogSink.Render(Event("nothing happened"));
+		string line = DurableLogFormatter.Render(Event("nothing happened"));
 
 		StringAssert.StartsWith(line, "2026-08-05 00:03:12.000+02:00 ");
 	}
@@ -84,19 +85,19 @@ public sealed class CircularLogSinkTests
 			level: LogEventLevel.Warning,
 			properties: [("SourceContext", "AdaptiveLighting.Engine.AreaController")]);
 
-		StringAssert.Contains(CircularLogSink.Render(logEvent), "WRN AdaptiveLighting.Engine.AreaController | stue is lit");
+		StringAssert.Contains(DurableLogFormatter.Render(logEvent), "WRN AdaptiveLighting.Engine.AreaController | stue is lit");
 	}
 
 	[TestMethod]
 	public void A_Missing_Source_Context_Reads_As_A_Dash_Rather_Than_A_Gap()
 	{
-		StringAssert.Contains(CircularLogSink.Render(Event("nothing happened")), " DBG - | nothing happened");
+		StringAssert.Contains(DurableLogFormatter.Render(Event("nothing happened")), " DBG - | nothing happened");
 	}
 
 	[TestMethod]
 	public void An_Exception_Joins_The_Same_Line_Rather_Than_Starting_New_Ones()
 	{
-		string line = CircularLogSink.Render(Event("could not write", new IOException("the disk is full")));
+		string line = DurableLogFormatter.Render(Event("could not write", new IOException("the disk is full")));
 
 		Assert.IsFalse(line.Contains('\n'), line);
 		StringAssert.Contains(line, "System.IO.IOException");
@@ -106,7 +107,7 @@ public sealed class CircularLogSinkTests
 	[TestMethod]
 	public void A_Multi_Line_Property_Cannot_Fake_A_Second_Entry()
 	{
-		string line = CircularLogSink.Render(Event(
+		string line = DurableLogFormatter.Render(Event(
 			"{Detail}",
 			properties: [("Detail", "lux 86\r\n2026-08-05 00:00:00.000+02:00 ERR forged | everything is fine")]));
 
@@ -119,7 +120,7 @@ public sealed class CircularLogSinkTests
 	[TestMethod]
 	public void A_Token_Passed_As_A_Property_Never_Reaches_The_Line()
 	{
-		string line = CircularLogSink.Render(Event(
+		string line = DurableLogFormatter.Render(Event(
 			"connecting to {Host} with {Token}",
 			properties: [("Host", "10.0.0.22"), ("Token", LongLivedToken)]));
 
@@ -130,7 +131,7 @@ public sealed class CircularLogSinkTests
 	[TestMethod]
 	public void A_Token_Under_An_Innocent_Property_Name_Is_Still_Caught_By_Its_Shape()
 	{
-		string line = CircularLogSink.Render(Event("read {Value}", properties: [("Value", LongLivedToken)]));
+		string line = DurableLogFormatter.Render(Event("read {Value}", properties: [("Value", LongLivedToken)]));
 
 		Assert.IsFalse(line.Contains("eyJ", StringComparison.Ordinal), line);
 	}
@@ -139,7 +140,7 @@ public sealed class CircularLogSinkTests
 	public void A_Template_That_Is_Itself_Runtime_Text_Is_Filtered_Like_Any_Other_Value()
 	{
 		// ILogger.Log(someString) compiles, and then the template is runtime data too.
-		string line = CircularLogSink.Render(Event("mounting smb://espen:hunter2@nas/config"));
+		string line = DurableLogFormatter.Render(Event("mounting smb://espen:hunter2@nas/config"));
 
 		Assert.IsFalse(line.Contains("hunter2", StringComparison.Ordinal), line);
 	}
@@ -147,7 +148,7 @@ public sealed class CircularLogSinkTests
 	[TestMethod]
 	public void A_Credential_Inside_An_Exception_Message_Is_Filtered_Too()
 	{
-		string line = CircularLogSink.Render(Event(
+		string line = DurableLogFormatter.Render(Event(
 			"login failed",
 			new InvalidOperationException("rejected password=hunter2 for the share")));
 
@@ -157,7 +158,7 @@ public sealed class CircularLogSinkTests
 	[TestMethod]
 	public void A_Property_The_Template_Names_But_The_Event_Lacks_Is_Left_As_Its_Placeholder()
 	{
-		StringAssert.Contains(CircularLogSink.Render(Event("area {AreaName} reported")), "area {AreaName} reported");
+		StringAssert.Contains(DurableLogFormatter.Render(Event("area {AreaName} reported")), "area {AreaName} reported");
 	}
 
 	// ===================== through the real logging pipeline =====================
@@ -166,21 +167,71 @@ public sealed class CircularLogSinkTests
 	public void A_Token_Logged_Through_ILogger_Never_Reaches_The_File()
 	{
 		using TempDirectory temp = new();
-		CircularLogWriter writer = new(temp.Path, "b1");
 
-		using Serilog.Core.Logger serilog = new LoggerConfiguration()
-			.MinimumLevel.Debug()
-			.WriteTo.Sink(new CircularLogSink(writer))
-			.CreateLogger();
+		using (Serilog.Core.Logger serilog = DurableLogFile
+			.AddTo(new LoggerConfiguration().MinimumLevel.Debug(), temp.Path, "b1")
+			.CreateLogger())
+		{
+			using SerilogLoggerFactory factory = new(serilog);
 
-		using SerilogLoggerFactory factory = new(serilog);
+			factory.CreateLogger("AdaptiveLighting.Ha.Connection")
+				.LogInformation("connecting to {Host} as {Token}", "10.0.0.22", LongLivedToken);
+		}
 
-		factory.CreateLogger("AdaptiveLighting.Ha.Connection")
-			.LogInformation("connecting to {Host} as {Token}", "10.0.0.22", LongLivedToken);
-
-		string written = File.ReadAllText(writer.ActivePath);
+		string written = File.ReadAllText(Directory.GetFiles(temp.Path).Single());
 
 		Assert.IsFalse(written.Contains("eyJ", StringComparison.Ordinal), written);
 		StringAssert.Contains(written, "INF AdaptiveLighting.Ha.Connection | connecting to 10.0.0.22 as " + LoggedValue.Hidden);
+	}
+
+	// ===================== the cap that bounds the file's overshoot =====================
+
+	// One property caps at LoggedValue.MaxValueLength, so reaching the line cap takes many of them.
+	private static LogEvent Sprawling(string piece, int count, string? lead = null)
+	{
+		(string Name, object? Value)[] properties =
+		[
+			.. lead is null ? Array.Empty<(string, object?)>() : [("Lead", (object?)lead)],
+			.. Enumerable.Range(0, count).Select(index => ("P" + index, (object?)piece))
+		];
+
+		return Event(string.Concat(properties.Select(pair => "{" + pair.Name + "}")), properties: properties);
+	}
+
+	[TestMethod]
+	public void One_Very_Long_Line_Is_Truncated_So_A_File_Cannot_Overshoot_By_More_Than_A_Line()
+	{
+		string line = DurableLogFormatter.Render(Sprawling(new string('x', 256), 20));
+
+		Assert.AreEqual(DurableLogFormatter.MaxLineChars + 3, line.Length);
+	}
+
+	[DataTestMethod]
+	[DataRow(null)]
+	[DataRow("x")]
+	public void The_Cap_Never_Splits_A_Surrogate_Pair_Into_A_Replacement_Character(string? lead)
+	{
+		// The lead shifts the run by one character, so one of the two rows puts the cut inside a pair.
+		string line = DurableLogFormatter.Render(Sprawling(string.Concat(Enumerable.Repeat("\U0001F600", 128)), 20, lead));
+
+		Assert.IsTrue(line.Length <= DurableLogFormatter.MaxLineChars + 3, line.Length.ToString(CultureInfo.InvariantCulture));
+		Assert.IsFalse(char.IsHighSurrogate(line[^4]), "the last kept character is half a pair");
+		Assert.IsFalse(line.Contains('�'), "a lone surrogate half encoded as a replacement character");
+	}
+
+	[TestMethod]
+	public void A_Line_Written_Through_The_Sink_Carries_The_Trailing_Newline_The_File_Counts()
+	{
+		using TempDirectory temp = new();
+
+		using (Serilog.Core.Logger serilog = DurableLogFile
+			.AddTo(new LoggerConfiguration().MinimumLevel.Debug(), temp.Path, "b1")
+			.CreateLogger())
+			serilog.Information("one line");
+
+		string written = File.ReadAllText(Directory.GetFiles(temp.Path).Single());
+
+		Assert.AreEqual(1, File.ReadAllLines(Directory.GetFiles(temp.Path).Single()).Length);
+		Assert.IsTrue(written.EndsWith(Environment.NewLine, StringComparison.Ordinal), written);
 	}
 }

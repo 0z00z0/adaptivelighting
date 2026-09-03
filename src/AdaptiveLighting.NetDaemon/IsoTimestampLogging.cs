@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using Serilog;
+using Serilog.Debugging;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
 
@@ -46,25 +47,26 @@ public static class IsoTimestampLogging
 					outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}",
 					theme: AnsiConsoleTheme.Code);
 
-			if (DurableCopy(context) is { } durable)
-				logger.WriteTo.Sink(durable);
+			if (DurableDirectoryFor(context) is { } directory)
+			{
+				// The file sink reports a failure to open only through SelfLog, which nothing else here turns on.
+				SelfLog.Enable(new LogFailureReport().Write);
+
+				DurableLogFile.AddTo(logger, directory, DurableDirectory.Stem(context.Configuration));
+			}
 		});
 	}
 
-	/// <summary>The sink that outlives a restart, or <c>null</c> when this machine has nowhere durable to put it.</summary>
-	private static CircularLogSink? DurableCopy(HostBuilderContext context)
+	/// <summary>Where the durable copy goes, or <c>null</c> when this machine has nowhere that outlives a deploy.</summary>
+	private static string? DurableDirectoryFor(HostBuilderContext context)
 	{
 		// This runs while the logger is being built, so there is no host logger to resolve; the console is what exists.
 		using ILoggerFactory factory = LoggerFactory.Create(logging => logging.AddConsole());
 
-		string? directory = DurableDirectory.Subfolder(
+		return DurableDirectory.Subfolder(
 			context.Configuration,
 			context.HostingEnvironment.ContentRootPath,
-			CircularLogWriter.FolderName,
+			DurableLogFile.FolderName,
 			factory.CreateLogger(typeof(IsoTimestampLogging).FullName!));
-
-		return directory is null
-			? null
-			: new CircularLogSink(new CircularLogWriter(directory, DurableDirectory.Stem(context.Configuration)));
 	}
 }
