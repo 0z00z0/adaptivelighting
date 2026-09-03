@@ -142,7 +142,7 @@ public sealed class ModeMonitor : IDisposable
 		_motionPeriods = motionPeriods ?? MotionPeriodLatch.For(periods, global);
 
 		_circadian = new CircadianCalculator(
-			periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod, _motionPeriods.IsHeldBack, _zone);
+			periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod, _motionPeriods.StateOf, _zone);
 
 		_boundary = new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
 
@@ -646,7 +646,7 @@ public sealed class ModeMonitor : IDisposable
 			start = periodKey is { Length: > 0 }
 				&& MotionMayStart(periodKey, sensor)
 				&& StartHasPassed(periodKey, now)
-				&& _motionPeriods.TryBegin(periodKey, today);
+				&& _motionPeriods.TryBegin(periodKey, today, now);
 
 			if (start)
 			{

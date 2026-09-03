@@ -32,7 +32,7 @@ public sealed class ScheduleTests
 		GlobalConfig? global = null,
 		string? selectValue = null,
 		SunTimes? sun = null,
-		Func<string, DateOnly, bool>? heldBack = null) =>
+		Func<string, DateOnly, PeriodHold>? heldBack = null) =>
 		Schedule.InForceNow(periods, global ?? new GlobalConfig(), sun ?? Sun, now, selectValue, heldBack, Zone);
 
 	[TestMethod]
@@ -201,14 +201,14 @@ public sealed class ScheduleTests
 		List<TimePeriodConfig> periods = WaitsForMovement();
 		MotionPeriodLatch latch = MotionPeriodLatch.For(periods, new GlobalConfig());
 
-		PeriodInForce waiting = InForce(periods, At(7), heldBack: latch.IsHeldBack);
+		PeriodInForce waiting = InForce(periods, At(7), heldBack: latch.StateOf);
 
 		Assert.AreEqual("natt", waiting.Period?.Name, "07:00 is past 06:30, but nobody has moved");
 		Assert.AreEqual(PeriodInForceRule.HeldBack, waiting.Rule);
 
 		latch.MarkBegun("morgen", new DateOnly(2026, 8, 11));
 
-		PeriodInForce begun = InForce(periods, At(7), heldBack: latch.IsHeldBack);
+		PeriodInForce begun = InForce(periods, At(7), heldBack: latch.StateOf);
 
 		Assert.AreEqual("morgen", begun.Period?.Name, "movement started it, so it is the period in force");
 		Assert.AreEqual(PeriodInForceRule.Clock, begun.Rule);
@@ -250,7 +250,7 @@ public sealed class ScheduleTests
 		};
 
 		MotionPeriodLatch latch = MotionPeriodLatch.For(config.Periods, config.Global);
-		Func<string, DateOnly, bool> heldBack = latch.IsHeldBack;
+		Func<string, DateOnly, PeriodHold> heldBack = latch.StateOf;
 		SunTimes sun = SunTimes.Unknown;
 
 		// Room.razor: the document's own periods and globals, the page's instant, the engine's latch.

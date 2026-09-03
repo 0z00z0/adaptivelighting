@@ -101,7 +101,7 @@ public sealed class MotionPeriodTests
 			latch);
 
 		CircadianCalculator rooms = new(
-			periods, global, () => SunTimes.Unknown, null, periodSelect?.ReadPeriod, latch.IsHeldBack);
+			periods, global, () => SunTimes.Unknown, null, periodSelect?.ReadPeriod, latch.StateOf);
 
 		monitor.Start();
 		return new Rig(ha, scheduler, monitor, rooms);
@@ -191,6 +191,32 @@ public sealed class MotionPeriodTests
 		Assert.AreEqual(60d, target.BrightnessPct);
 		Assert.AreEqual(3000, target.ColorTempKelvin, "warmth arrives with the brightness, not on a later tick");
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "and so does its SetsModeId");
+	}
+
+	/// <summary>The instant movement arrived reaches every area's calculator, so the blend eases from it and not from the Start.</summary>
+	// Asserted as shape and never as a level: these rooms run on TimeZoneInfo.Local, and CI is not this box.
+	[TestMethod]
+	public void Motion_CarriesTheInstantItArrivedAt_SoTheBlendEasesFromThere()
+	{
+		GlobalConfig blending = new()
+		{
+			CircadianTickSeconds = 60,
+			HouseMode = Mode(),
+			SmoothTransitions = true,
+			BlendMinutes = 30
+		};
+
+		Rig rig = Started(Periods(), QuarterPastMorning, global: blending);
+
+		Move(rig, Gang);
+
+		DateTimeOffset halfway = QuarterPastMorning.AddMinutes(15);
+
+		Assert.AreEqual("morning", rig.Rooms.ActivePeriodId(halfway), "the movement began it");
+		Assert.IsTrue(rig.Rooms.GetTarget(halfway)!.BrightnessPct < 60,
+			"three quarters of an hour past the 06:30 Start but only halfway into the blend, so it has not fully arrived");
+		Assert.AreEqual(60d, rig.Rooms.GetTarget(QuarterPastMorning.AddMinutes(30))!.BrightnessPct, 0.001,
+			"and it arrives a full 30 minutes after the movement");
 	}
 
 	[TestMethod]

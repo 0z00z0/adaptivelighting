@@ -268,7 +268,7 @@ public sealed class LightingOrchestrator : IDisposable
 			config.Levels,
 			// Null unless Home Assistant owns the periods.
 			_periodSelect?.ReadPeriod,
-			_motionPeriods!.IsHeldBack);
+			_motionPeriods!.StateOf);
 
 		// The calculator stays pure and the logging happens here. Parse failures are already known, so drain
 		// DroppedPeriods; sun-anchor failures surface per day through the event.

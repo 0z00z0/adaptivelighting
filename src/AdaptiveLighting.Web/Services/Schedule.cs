@@ -41,20 +41,20 @@ public static class Schedule
 		return global.PeriodSelect is { Authority: PeriodAuthority.HomeAssistant, EntityId: not null };
 	}
 
-	/// <summary>Whether a period that waits for movement has begun yet, or <c>null</c> while nothing is running.</summary>
+	/// <summary>Where a period that waits for movement stands, or <c>null</c> while nothing is running.</summary>
 	/// <remarks>Asked per call: a save rebuilds the orchestrator with a new latch, and no page outlives that.</remarks>
-	public static Func<string, DateOnly, bool>? HeldBackRule(LightingEngineHost engine)
+	public static Func<string, DateOnly, PeriodHold>? PeriodHoldRule(LightingEngineHost engine)
 	{
 		ArgumentNullException.ThrowIfNull(engine);
 
-		return engine.MotionPeriods is { } latch ? latch.IsHeldBack : null;
+		return engine.MotionPeriods is { } latch ? latch.StateOf : null;
 	}
 
 	/// <summary>A calculator that resolves the period as the engine's does: from the select under Home Assistant's authority, from the clock otherwise.</summary>
 	/// <remarks>
 	///     Every surface builds its calculator here, so none of them can reach a different answer from the engine's.
 	///     The select's period is resolved once and closed over, so every card describes one instant. A
-	///     <c>periodHeldBack</c> is handed over, never rebuilt: a fresh latch has recorded nothing, so it answers
+	///     <c>periodHold</c> is handed over, never rebuilt: a fresh latch has recorded nothing, so it answers
 	///     "not begun" for every held period all day.
 	/// </remarks>
 	public static CircadianCalculator CalculatorFor(
@@ -62,7 +62,7 @@ public static class Schedule
 		GlobalConfig global,
 		SunTimes sun,
 		string? selectValue = null,
-		Func<string, DateOnly, bool>? periodHeldBack = null,
+		Func<string, DateOnly, PeriodHold>? periodHold = null,
 		TimeZoneInfo? zone = null)
 	{
 		ArgumentNullException.ThrowIfNull(periods);
@@ -73,14 +73,14 @@ public static class Schedule
 		string? forced = NamedBySelect(periods, global, selectValue)?.Key;
 
 		return new CircadianCalculator(
-			periods, global, () => sun, null, forced is null ? null : () => forced, periodHeldBack, zone);
+			periods, global, () => sun, null, forced is null ? null : () => forced, periodHold, zone);
 	}
 
 	/// <summary>The period in force at <paramref name="now"/>, and which rule decided it.</summary>
 	/// <remarks>
 	///     Every page asks this, so none can badge a period the engine is not running. The fallback to the clock
 	///     fires on the same three cases the engine falls back on: an unreadable select, an option no row maps, and
-	///     a mapping naming a period the schedule no longer has. A <c>null</c> <paramref name="periodHeldBack"/>
+	///     a mapping naming a period the schedule no longer has. A <c>null</c> <paramref name="periodHold"/>
 	///     places every period on its clock start.
 	/// </remarks>
 	public static PeriodInForce InForceNow(
@@ -89,7 +89,7 @@ public static class Schedule
 		SunTimes sun,
 		DateTimeOffset now,
 		string? selectValue,
-		Func<string, DateOnly, bool>? periodHeldBack = null,
+		Func<string, DateOnly, PeriodHold>? periodHold = null,
 		TimeZoneInfo? zone = null)
 	{
 		ArgumentNullException.ThrowIfNull(periods);
@@ -101,7 +101,7 @@ public static class Schedule
 
 		// Built without the select: the branch above already took that case, and the calculator would only
 		// re-resolve it.
-		CircadianCalculator calculator = CalculatorFor(periods, global, sun, null, periodHeldBack, zone);
+		CircadianCalculator calculator = CalculatorFor(periods, global, sun, null, periodHold, zone);
 
 		string? activeKey = calculator.ActivePeriodId(now);
 		if (calculator.PeriodWithKey(activeKey) is not { } active)

@@ -399,7 +399,7 @@ public sealed class ModeService
 	///     Pure with respect to time and Home Assistant: the instant and the sun times are arguments, and the
 	///     period maths is the engine's own <see cref="CircadianCalculator"/>. The counts honour each area's
 	///     overrides and only enabled areas, matching the engine's <c>IsEngineAllowed</c> gate. A <c>null</c>
-	///     <c>periodHeldBack</c> places every period on its clock start.
+	///     <c>periodHold</c> places every period on its clock start.
 	/// </remarks>
 	public static ModePreview ComputePreview(
 		AdaptiveLightingConfig config,
@@ -407,7 +407,7 @@ public sealed class ModeService
 		DateTimeOffset now,
 		SunTimes sun,
 		string? periodSelectValue = null,
-		Func<string, DateOnly, bool>? periodHeldBack = null)
+		Func<string, DateOnly, PeriodHold>? periodHold = null)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 		ArgumentNullException.ThrowIfNull(sun);
@@ -419,7 +419,7 @@ public sealed class ModeService
 		return BuildPreview(
 			config,
 			kind,
-			Schedule.CalculatorFor(config.Periods, config.Global, sun, periodSelectValue, periodHeldBack).GetTarget(now));
+			Schedule.CalculatorFor(config.Periods, config.Global, sun, periodSelectValue, periodHold).GetTarget(now));
 	}
 
 	/// <summary>What the period select reads right now, or <c>null</c> when this house's own schedule decides.</summary>
@@ -433,7 +433,7 @@ public sealed class ModeService
 			? _catalog.CurrentStateOf(Config.Global.PeriodSelect!.EntityId)
 			: null;
 
-	private Func<string, DateOnly, bool>? HeldBack() => Schedule.HeldBackRule(_engine);
+	private Func<string, DateOnly, PeriodHold>? HeldBack() => Schedule.PeriodHoldRule(_engine);
 
 	/// <summary>Split from <see cref="ComputePreview"/> so the card loop resolves one target and reuses it across every non-Away option.</summary>
 	private static ModePreview BuildPreview(AdaptiveLightingConfig config, ModeKind kind, LightTarget? target)

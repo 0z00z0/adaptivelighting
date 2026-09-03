@@ -286,7 +286,7 @@
 		string? value = Global is null ? null : Catalog.CurrentStateOf(Global.PeriodSelect?.EntityId);
 
 		return Schedule.InForceNow(
-			Periods, global, sun, DateTimeOffset.Now, value, Schedule.HeldBackRule(Engine));
+			Periods, global, sun, DateTimeOffset.Now, value, Schedule.PeriodHoldRule(Engine));
 	}
 
 	private static string DisplayName(TimePeriodConfig period) =>

@@ -66,9 +66,10 @@ public sealed class CircadianCalculator
 	// Absent except under HomeAssistant period authority, never installed and answering null.
 	private readonly Func<string?>? _periodOverride;
 
-	// Answers whether a period that waits for movement has still not begun on the local day its instance would
-	// have started. Installed by the host, so this stays a predicate and never reads motion.
-	private readonly Func<string, DateOnly, bool>? _heldBack;
+	// Where a period that waits for movement stands on the local day its instance would have started: whether it
+	// is still waiting, and the instant it began. Installed by the host, so this stays a function and never reads
+	// motion.
+	private readonly Func<string, DateOnly, PeriodHold>? _hold;
 	private readonly TimeZoneInfo _zone;
 
 	// Keyed by TimePeriodConfig.Key. First row wins on a duplicate, matching what the validator reports.
@@ -99,9 +100,9 @@ public sealed class CircadianCalculator
 
 	// roomLevels is what one room runs instead of the schedule; null or empty answers for the house. Rows naming
 	// no configured period are never matched. periodOverride comes from PeriodSelectReader.ReadPeriod alone, and
-	// null resolves from the schedule. periodHeldBack comes from MotionPeriodLatch.IsHeldBack, and null places
-	// every period on its own Start. zone is the household's: a boundary is a wall clock and the instants handed
-	// in are not.
+	// null resolves from the schedule. periodHold comes from MotionPeriodLatch.StateOf, and null places every
+	// period on its own Start and eases every blend from the boundary. zone is the household's: a boundary is a
+	// wall clock and the instants handed in are not.
 	/// <summary>Creates a calculator over <paramref name="periods"/>, whose order is irrelevant.</summary>
 	public CircadianCalculator(
 		IReadOnlyList<TimePeriodConfig> periods,
@@ -109,14 +110,14 @@ public sealed class CircadianCalculator
 		Func<SunTimes> sunTimes,
 		IReadOnlyList<RoomLevelOverride>? roomLevels = null,
 		Func<string?>? periodOverride = null,
-		Func<string, DateOnly, bool>? periodHeldBack = null,
+		Func<string, DateOnly, PeriodHold>? periodHold = null,
 		TimeZoneInfo? zone = null)
 	{
 		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_sunTimes = sunTimes ?? throw new ArgumentNullException(nameof(sunTimes));
 		_periodOverride = periodOverride;
-		_heldBack = periodHeldBack;
+		_hold = periodHold;
 		_zone = zone ?? TimeZoneInfo.Local;
 
 		Dictionary<string, RoomLevelOverride> levels = new(StringComparer.OrdinalIgnoreCase);
@@ -175,7 +176,10 @@ public sealed class CircadianCalculator
 			return ToTarget(active.Period, arriving);
 
 		(TimeOnly Start, TimePeriodConfig Period) previous = boundaries[(index - 1 + boundaries.Count) % boundaries.Count];
-		double blend = BlendFraction(active.Start, timeOfDay);
+
+		double blend = MovementArrival(active.Start, active.Period, now) is { } arrived
+			? Math.Clamp((now - arrived).TotalMinutes / _global.BlendMinutes, 0, 1)
+			: BlendFraction(active.Start, timeOfDay);
 
 		if (blend >= 1)
 			return ToTarget(active.Period, arriving);
@@ -401,7 +405,7 @@ public sealed class CircadianCalculator
 			return null;
 		}
 
-		return instanceDay is not null && _heldBack?.Invoke(period.Key, instanceDay(resolved)) == true ? null : resolved;
+		return instanceDay is not null && _hold?.Invoke(period.Key, instanceDay(resolved)).HeldBack == true ? null : resolved;
 	}
 
 	// The last boundary at or before timeOfDay, wrapping to yesterday's last period.
@@ -413,6 +417,29 @@ public sealed class CircadianCalculator
 				index = i;
 
 		return index < 0 ? boundaries.Count - 1 : index;
+	}
+
+	/// <summary>When movement began this instance of <paramref name="period"/>, where that is later than its <c>Start</c>.</summary>
+	// The blend eases from the moment somebody walked in, not from a boundary that went by on an empty house: a
+	// period whose 06:30 start was not claimed until 06:45 would otherwise arrive half a 30-minute window in. The
+	// window keeps its configured length, so it ends 15 minutes later than a clock-started one would.
+	// The instance day is resolved as ResolveBoundaries does, or a boundary before midnight would be asked about
+	// today while the instance in force began yesterday.
+	// Null covers three cases that all want the boundary: no latch, a period nothing started, and a start seeded
+	// by a restart, which records no instant because the run that began the period is gone.
+	private DateTimeOffset? MovementArrival(TimeOnly start, TimePeriodConfig period, DateTimeOffset now)
+	{
+		if (_hold is null)
+			return null;
+
+		TimeOnly timeOfDay = now.TimeIn(_zone);
+		DateOnly today = now.DayIn(_zone);
+		DateOnly instanceDay = start <= timeOfDay ? today : today.AddDays(-1);
+
+		DateTimeOffset? begun = _hold(period.Key, instanceDay).BegunAt;
+
+		// The boundary is the earliest a period may ease from; an arrival at or before it is the boundary's own case.
+		return begun > InstantOf(instanceDay, start) ? begun : null;
 	}
 
 	// How far the blend away from the boundary has progressed: 0 at the boundary, 1 once BlendMinutes have passed.
