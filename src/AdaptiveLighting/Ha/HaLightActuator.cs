@@ -20,8 +20,8 @@ public sealed class HaLightActuator : ILightActuator
 	private const string SceneDomain = "scene";
 	private const string TurnOnService = "turn_on";
 	private const string TurnOffService = "turn_off";
-	private const string BrightnessAttribute = "brightness";
-	private const string ColorTempAttribute = "color_temp_kelvin";
+	private const string BrightnessAttribute = LightAttributes.Brightness;
+	private const string ColorTempAttribute = LightAttributes.ColorTempKelvin;
 	private const string SupportedColorModesAttribute = "supported_color_modes";
 
 	private const string BrightnessPctKey = "brightness_pct";
@@ -34,7 +34,7 @@ public sealed class HaLightActuator : ILightActuator
 	private const string RgbwwMode = "rgbww";
 
 	// Home Assistant reports brightness on 0-255 but accepts it as a percentage. Convert before comparing.
-	private const double MaxRawBrightness = 255.0;
+	private const double MaxRawBrightness = LightAttributes.MaxRawBrightness;
 
 	// Every channel at the top of its range: neutral white, with brightness_pct doing the dimming.
 	private const int EqualChannelValue = 255;
