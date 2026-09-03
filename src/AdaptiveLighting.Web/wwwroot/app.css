@@ -2321,8 +2321,9 @@ select.cell.wide {
 
 /* Every container that can hold an (i) must be a positioning context, or its panel falls back to the viewport
    and lands bottom-left. .field/.pfield cover the area, period and settings forms; the housemode-* ones cover
-   the house-mode option cards; .section-head covers a sub-section header like "Mode options". */
-.field, .pfield, .housemode-field, .housemode-resets-head, .section-head {
+   the house-mode option cards; .section-head covers a sub-section header like "Mode options"; .srow covers
+   every settings row, whose whole explanation is behind its (i). */
+.field, .pfield, .housemode-field, .housemode-resets-head, .section-head, .srow {
 	position: relative;
 }
 
@@ -4796,12 +4797,6 @@ button.mode-pill:disabled {
 	line-height: 1.35;
 }
 
-.srow-help {
-	font-size: var(--text-sm);
-	color: var(--muted);
-	line-height: 1.4;
-	margin-top: 1px;
-}
 
 .srow-inherit {
 	font-size: var(--text-xs);
@@ -4986,11 +4981,27 @@ button.mode-pill:disabled {
 	flex-wrap: wrap;
 }
 
-/* .srow-control is flex: 0 0 auto, so a group of long options keeps its full width even on its own line and
-   breaks out through the card edge. Letting this one row shrink is what lets the wrap above take effect. */
-.srow-control:has(.seg) {
+/* .srow-control is flex: 0 0 auto, so a control that wants a full-width line keeps its whole natural width and
+   breaks out through the card edge. Letting these rows shrink is what lets the wrap take effect. A picker is
+   the worse case of the two: measured at a 390px viewport with two blockers listed, the page's scroll width
+   was 1239 against the viewport, because .chips inside an unconstrained parent lays out at max-content and
+   never wraps. */
+.srow-control:has(.seg),
+.srow-control:has(.picker) {
 	flex-shrink: 1;
 	min-width: 0;
+}
+
+/* An entity list is a block, not a widget that sits beside a label: the chips, the add row and the polarity
+   checkbox all want the card's full width, and squeezed into what is left beside a label they wrap to one
+   chip per line. Later than the rule above on purpose — a list picker contains a .picker of its own. */
+.srow-control:has(.list-picker) {
+	flex: 1 1 100%;
+	min-width: 0;
+	/* Stacked, or the polarity checkbox beside it takes a third of the row and the chips wrap to one id per
+	   line. .gate-invert is written to sit under the list; a flex row is what put it alongside. */
+	flex-direction: column;
+	align-items: stretch;
 }
 
 .seg button {
@@ -7057,3 +7068,33 @@ h1[tabindex="-1"]:focus {
 }
 
 /* ===== end rooms with no motion sensor ===== */
+
+/* ===== the settings-row text ladder ===== */
+
+/* Five levels of words appear on a settings surface, and only two of them are painted in the row itself.
+   Named here so a new surface reuses the ladder instead of inventing a sixth:
+
+     1  .room-more / .room-more-note   the card heading and the line beside it
+     2  .sgroup-title                  the group heading, which is the thing pressed
+     3  .sgroup-note                   what the group is for, one line, read before it is opened
+     4  .srow-label                    the setting's name — with its whole explanation behind the (i)
+     5  .srow-inherit / .srow-revert    where the value came from, and the only road back
+
+   Everything a control says for itself — a checkbox's own label, an empty state, a placeholder — belongs to
+   the control and is not part of this ladder.
+
+   Both surfaces draw all five from this stylesheet. A page that styles its own rows makes the room page and
+   the House tab teach two models of one thing. */
+
+/* The (i) never shrinks: the label beside it is the flexible half, and a squeezed icon is an unhittable one. */
+.srow-label > .info {
+	flex: 0 0 auto;
+}
+
+/* The label carries the whole row's text now, so it wraps rather than forcing the control off the line. */
+.srow-label {
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+/* ===== end the settings-row text ladder ===== */

@@ -6,12 +6,11 @@
 			{
 				<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
 			}
+			@if (Help is { Length: > 0 } help)
+			{
+				<InfoPopover Label="@Label">@help</InfoPopover>
+			}
 		</div>
-
-		@if (Help is { Length: > 0 } help)
-		{
-			<div class="srow-help">@help</div>
-		}
 
 		@if (IsOwn && HouseText is { Length: > 0 } house)
 		{
