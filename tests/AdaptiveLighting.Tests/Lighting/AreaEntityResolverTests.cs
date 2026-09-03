@@ -10,6 +10,12 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class AreaEntityResolverTests
 {
+	// What the self-referencing-group tests below are bounded by: the work the walk does, never the wall clock, so
+	// a busy runner cannot turn them red. On healthy code those three read 27, 46 and 28 states, so 200 carries
+	// four times the widest and is still passed in microseconds by a walk that revisits. Never a [Timeout] here:
+	// a group that contains itself is unbounded, not slow, and a clock cannot tell the two apart.
+	private const int LoopBudget = 200;
+
 	private static AreaEntityResolver Resolver(
 		FakeHaContext ha,
 		FakeAreaRegistry registry,
@@ -360,10 +366,9 @@ public sealed class AreaEntityResolverTests
 	// Home Assistant lets a household build a group that contains itself. LeavesOf walks under a visited set;
 	// without one this never returns, and a resolver that hangs takes the whole house with it.
 	[TestMethod]
-	[Timeout(10000)]
 	public void A_Light_Group_That_Contains_Itself_Terminates_And_Still_Lights_The_Room()
 	{
-		FakeHaContext ha = new();
+		FakeHaContext ha = new() { StateReadBudget = LoopBudget };
 		FakeAreaRegistry registry = new();
 		registry.Areas["gang"] = ["light.loop_a", "light.loop_b", "light.self", "light.bulb", "binary_sensor.m"];
 		ha.SetState("light.loop_a", "off", new() { ["entity_id"] = new[] { "light.loop_b" } });
@@ -525,10 +530,9 @@ public sealed class AreaEntityResolverTests
 	}
 
 	[TestMethod]
-	[Timeout(10000)]
 	public void A_Motion_Group_That_Contains_Itself_Terminates_And_Still_Watches_The_Room()
 	{
-		FakeHaContext ha = new();
+		FakeHaContext ha = new() { StateReadBudget = LoopBudget };
 		FakeAreaRegistry registry = new();
 		registry.Areas["gang"] = ["light.l", "binary_sensor.loop_a", "binary_sensor.loop_b", "binary_sensor.self", "binary_sensor.pir"];
 		ha.SetState("light.l", "off");
@@ -571,10 +575,9 @@ public sealed class AreaEntityResolverTests
 
 	/// <summary>Nesting, overlap and self-reference behave for illuminance as they do everywhere else.</summary>
 	[TestMethod]
-	[Timeout(10000)]
 	public void Illuminance_Groups_Nest_Overlap_And_Loop_Like_Every_Other_Domain()
 	{
-		FakeHaContext ha = new();
+		FakeHaContext ha = new() { StateReadBudget = LoopBudget };
 		FakeAreaRegistry registry = new();
 		registry.Areas["nest"] = ["light.l", "binary_sensor.m", "sensor.outer", "sensor.leaf_1", "sensor.leaf_2"];
 		ha.SetState("light.l", "off");
@@ -590,7 +593,7 @@ public sealed class AreaEntityResolverTests
 		CollectionAssert.AreEqual(new[] { "sensor.outer" }, nested.LuxSensors.ToArray(),
 			"membership is transitive here too, and the intermediate group is in no area");
 
-		FakeHaContext loopy = new();
+		FakeHaContext loopy = new() { StateReadBudget = LoopBudget };
 		FakeAreaRegistry loopyRegistry = new();
 		loopyRegistry.Areas["loop"] = ["light.l", "binary_sensor.m", "sensor.a", "sensor.b"];
 		loopy.SetState("light.l", "off");
