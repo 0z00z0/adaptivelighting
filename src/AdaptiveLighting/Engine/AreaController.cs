@@ -77,6 +77,12 @@ public sealed class AreaController : IDisposable
 	// area decides on, so every timer, hold and gate carries on around it.
 	private bool _levelTesting;
 
+	// The fixtures as they stood before a test, for a room holding levels the engine did not choose. Null while
+	// the engine owns them, because ReassertLights resolves a fresher answer than any capture could. Read once
+	// per test and cleared as it is spent, so a second press cannot overwrite it with the first test's own levels
+	// and a second return cannot apply it twice.
+	private IReadOnlyList<(string Light, LightCommand Command)>? _capturedLevels;
+
 	// A hold-lit entity refused the engine's own off after the countdown that would have sent it had already fired.
 	// Nothing else would ever run it again, so OnTick settles it once the hold releases.
 	private bool _offHeldBack;
@@ -207,9 +213,16 @@ public sealed class AreaController : IDisposable
 			if (_circadian.GetPeriodTarget(periodKey) is not { } target)
 				return "That period is no longer in the schedule.";
 
+			RefreshDarkness();
+
+			// Give the levels back to whoever owns them: the engine is asked for its own when the test ends, and a
+			// person's cannot be derived, so they are read now. Not on a second press, which would read the first
+			// test's levels as if they were somebody's.
+			if (!_levelTesting)
+				_capturedLevels = LevelsAreSomebodyElses() ? CaptureLights() : null;
+
 			// The engine's own answer for that period, curve included, so the room shows what it would really do
 			// and no second reading of the settings can drift from this one.
-			RefreshDarkness();
 			SendUnrecorded(TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0));
 
 			_levelTesting = true;
@@ -363,6 +376,10 @@ public sealed class AreaController : IDisposable
 			// While disabled, away or holding a scene there is nothing to override.
 			if (_state is AreaState.Disabled or AreaState.Away or AreaState.SceneHold)
 				return;
+
+			// A hand at the switch is the newest word on these levels, so a running test's return is dropped
+			// rather than sent ten seconds later over the top of it.
+			AbandonLevelTest();
 
 			bool turnedOn = change.TurnedOn();
 
@@ -1036,15 +1053,54 @@ public sealed class AreaController : IDisposable
 		if (!_area.Settings.Enabled)
 			return "Automatic lighting is switched off for this room, so its lights are not the engine's to move.";
 
-		// Both hold levels the engine did not choose and cannot reproduce, so there would be no way back from a
-		// test. Refusing is the only reading of "leave the room as it would have been".
-		if (_state is AreaState.OverriddenOn)
-			return "Somebody set these lights by hand. A test would replace their levels with no way to put them back.";
-
-		if (_state is AreaState.SceneHold)
-			return $"A scene ({_house.ActiveScene}) is holding this room.";
-
 		return null;
+	}
+
+	// The two states whose levels the engine did not choose and cannot resolve again: a hand at the switch, and a
+	// house scene. EnterSceneHold clears _standingScene, so ReassertLights would take a scene-held room to dark.
+	private bool LevelsAreSomebodyElses() =>
+		_state is AreaState.OverriddenOn or AreaState.SceneHold;
+
+	/// <summary>Reads this room's fixtures as they stand, as commands that would put them back.</summary>
+	// Colour channels are outside what a LightCommand can say, so a hand-set colour in a room commanded at equal
+	// channels comes back as neutral white.
+	private IReadOnlyList<(string Light, LightCommand Command)> CaptureLights()
+	{
+		List<(string Light, LightCommand Command)> captured = [];
+
+		foreach (string light in _area.Lights)
+		{
+			EntityState? state = _ha.GetState(light);
+			if (state is null)
+				continue;
+
+			if (!state.IsOn())
+			{
+				captured.Add((light, LightCommand.TurnOff(TransitionSeconds())));
+				continue;
+			}
+
+			double? raw = state.AttrDouble(LightAttributes.Brightness);
+			double? kelvin = state.AttrDouble(LightAttributes.ColorTempKelvin);
+
+			captured.Add((light, new LightCommand(
+				true,
+				raw is { } brightness ? brightness / LightAttributes.MaxRawBrightness * 100 : null,
+				kelvin is { } warmth ? (int)Math.Round(warmth) : null,
+				TransitionSeconds())));
+		}
+
+		return captured;
+	}
+
+	/// <summary>Drops a running test's return, leaving the fixtures exactly where they are.</summary>
+	// For a hand at the switch mid-test: the person has just said what these lights are, so the capture is stale
+	// and the return would arrive ten seconds later over the top of it.
+	private void AbandonLevelTest()
+	{
+		_levelTest.Disposable = Disposable.Empty;
+		_levelTesting = false;
+		_capturedLevels = null;
 	}
 
 	private void OnLevelTestElapsed()
@@ -1058,7 +1114,7 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
-	/// <summary>Ends a running level test by putting the room back where the engine wants it now.</summary>
+	/// <summary>Ends a running level test by giving the levels back to whoever owns them.</summary>
 	private void EndLevelTest()
 	{
 		_levelTest.Disposable = Disposable.Empty;
@@ -1067,7 +1123,25 @@ public sealed class AreaController : IDisposable
 			return;
 
 		_levelTesting = false;
-		ReassertLights();
+
+		// Same rule, two owners: the engine resolves its own levels afresh, and a person's are the ones read
+		// before the test. Taken before it is used, so a second return cannot apply the same capture twice.
+		IReadOnlyList<(string Light, LightCommand Command)>? captured = _capturedLevels;
+		_capturedLevels = null;
+
+		if (captured is null)
+		{
+			ReassertLights();
+			return;
+		}
+
+		// Declared before each command, exactly as the way in does it, or the room reads the return as a person
+		// and falls into a fresh hold on top of the one it is already keeping.
+		foreach ((string light, LightCommand command) in captured)
+		{
+			_detector.ExpectCommand(light, command);
+			_actuator.Apply(light, command);
+		}
 	}
 
 	/// <summary>Re-sends what the engine wants this room to be right now, changing no state and arming no timer.</summary>
