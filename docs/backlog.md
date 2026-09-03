@@ -69,22 +69,22 @@ An item with no number is one this file records before the tracker has minted on
 - #29 **`tools/uihost` hard-codes port 5199, so two worktrees cannot run it at once.** Parallel efforts collide on
   it; reading a port from the command line would let each look at its own.
 
-- _wants an issue_ — **The UI host never attaches the engine, so the commissioning board cannot be looked at
+- #39 **The UI host never attaches the engine, so the commissioning board cannot be looked at
   as shipped.** `tools/uihost` raises area events but starts no engine, and the board reads what the engine
   publishes. Driving it means hand-patching `tools/uihost/Program.cs` to call `Attach` and reverting
   afterwards. Same shape as #28, and the two are probably one job.
 
-- _wants an issue_ — **`ModePreview.PreviewBrightness` and `PreviewKelvin` are dead.** Both are populated from
+- #40 **`ModePreview.PreviewBrightness` and `PreviewKelvin` are dead.** Both are populated from
   an unresolved target and asserted in eight tests, and no page renders either. The house-mode preview has no
   room, so there is no single daylight-curve answer to show even if a page wanted one — deleting them is the
   likely answer, and the eight tests go with them. Belongs to the #38 sweep.
 
-- _wants an issue_ — **The group-recursion budget is opt-in per test.** `FakeHaContext.StateReadBudget` is
+- #41 **The group-recursion budget is opt-in per test.** `FakeHaContext.StateReadBudget` is
   unset by default, so a future test that builds a self-referencing group hangs the suite exactly as before
   unless it sets the budget itself. Making it default-on means every test paying for the counter and some
   legitimate walk tripping it, which is the trade to weigh.
 
-- _wants an issue_ — **`comm-nearmiss` is a misnomer.** The commissioning board's two paragraphs still carry
+- #42 **`comm-nearmiss` is a misnomer.** The commissioning board's two paragraphs still carry
   that class after the near-miss line was replaced (#37). Renaming touches `app.css` and the component
   together, and neither may move alone.
 
