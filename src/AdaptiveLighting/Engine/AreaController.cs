@@ -39,6 +39,10 @@ public sealed class AreaController : IDisposable
 	private readonly SerialDisposable _overrideTimer = new();
 	private readonly SerialDisposable _suppressionTimer = new();
 
+	// The return a level test owes the room. A SerialDisposable, so a second test drops the first one's pending
+	// return and the room is left with exactly one, ten seconds from the newest press.
+	private readonly SerialDisposable _levelTest = new();
+
 	// Wakes the area at the boundary itself, so a lit room reaches the new period's levels then and not up to a
 	// whole CircadianTickSeconds later. The periodic tick below is the safety net and still runs.
 	private readonly BoundaryTimer _boundary;
@@ -68,6 +72,10 @@ public sealed class AreaController : IDisposable
 	// ReportDeclinedMotion. Both are cleared the moment the area actually lights.
 	private AutoOnBlock? _reportedDecline;
 	private string? _reportedDeclineEntity;
+
+	// Whether a level test is holding the fixtures. Never a state of the machine: the test changes nothing the
+	// area decides on, so every timer, hold and gate carries on around it.
+	private bool _levelTesting;
 
 	// A hold-lit entity refused the engine's own off after the countdown that would have sent it had already fired.
 	// Nothing else would ever run it again, so OnTick settles it once the hold releases.
@@ -150,12 +158,66 @@ public sealed class AreaController : IDisposable
 		_boundary = new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
 	}
 
+	/// <summary>How long a level test holds the room before the engine takes it back.</summary>
+	public const double LevelTestSeconds = 10;
+
 	public string Name => _area.Name;
+
+	/// <summary>The Home Assistant area this controller was built for, or <c>null</c> for one configured without.</summary>
+	public string? AreaId => _areaId;
 
 	/// <summary>The current state, for tests and diagnostics only; the engine drives itself.</summary>
 	public AreaState State
 	{
 		get { lock (_gate) return _state; }
+	}
+
+	/// <summary>Whether a level test is holding this room's fixtures right now.</summary>
+	public bool IsTestingLevels
+	{
+		get { lock (_gate) return _levelTesting; }
+	}
+
+	/// <summary>Why a level test cannot run here, or <c>null</c> when one can.</summary>
+	public string? LevelTestRefusal()
+	{
+		lock (_gate)
+			return RefuseLevelTest();
+	}
+
+	/// <summary>
+	///     Puts the period <paramref name="periodKey"/> names on this room's real lights for
+	///     <see cref="LevelTestSeconds"/> seconds, then hands the room back to the engine.
+	/// </summary>
+	/// <returns><c>null</c> once the test is running, or the sentence saying why it is not.</returns>
+	/// <remarks>
+	///     The room's own state machine is untouched: no hold is started or cleared, and no timer is armed,
+	///     cancelled or restarted. The return is scheduled on the engine's own scheduler, so it happens whether or
+	///     not whoever pressed is still watching.
+	/// </remarks>
+	public string? TestPeriod(string periodKey)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(periodKey);
+
+		lock (_gate)
+		{
+			if (RefuseLevelTest() is { } refusal)
+				return refusal;
+
+			if (_circadian.GetPeriodTarget(periodKey) is not { } target)
+				return "That period is no longer in the schedule.";
+
+			// The engine's own answer for that period, curve included, so the room shows what it would really do
+			// and no second reading of the settings can drift from this one.
+			RefreshDarkness();
+			SendUnrecorded(TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0));
+
+			_levelTesting = true;
+			_levelTest.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
+
+			_logger.LogInformation("{Area}: testing period '{Period}' for {Seconds}s.", Name, target.PeriodName, LevelTestSeconds);
+			return null;
+		}
 	}
 
 	/// <summary>Subscribes and publishes the opening snapshot, leaving the lights as found.</summary>
@@ -863,17 +925,24 @@ public sealed class AreaController : IDisposable
 		// Before every command: it picks the fade length and it is what the snapshot reports.
 		RefreshDarkness();
 
-		double brightness = target.Clamp(target.BrightnessPct * brightnessFactor);
+		Send(TargetCommand(target, brightnessFactor));
+		Publish(reason);
+	}
 
-		// Composed here, not per service call: the fixtures were read once when the area resolved. A room whose
-		// lights offer no colour at all takes neither field, so it is commanded on brightness alone.
+	/// <summary>What this area's fixtures are told to be for <paramref name="target"/>.</summary>
+	// Composed here, not per service call: the fixtures were read once when the area resolved. A room whose
+	// lights offer no colour at all takes neither field, so it is commanded on brightness alone. Reads the
+	// darkness verdict through TransitionSeconds, so the caller refreshes it first.
+	private LightCommand TargetCommand(LightTarget target, double brightnessFactor)
+	{
 		bool equalChannels = _area.CommandsColour && _area.EffectiveColorControl is ColorControl.EqualChannels;
 
-		LightCommand command = new(
-			true, brightness, _area.CommandsKelvin ? target.ColorTempKelvin : null, TransitionSeconds(), equalChannels);
-
-		Send(command);
-		Publish(reason);
+		return new(
+			true,
+			target.Clamp(target.BrightnessPct * brightnessFactor),
+			_area.CommandsKelvin ? target.ColorTempKelvin : null,
+			TransitionSeconds(),
+			equalChannels);
 	}
 
 	/// <summary>Lights the area for movement: its scene when it names one, otherwise the period's levels.</summary>
@@ -934,18 +1003,101 @@ public sealed class AreaController : IDisposable
 	private void Send(LightCommand command)
 	{
 		_standingScene = null;
-
-		foreach (string light in _area.Lights)
-		{
-			// Always declared before sending: a command reaching HA before the expectation that explains it
-			// defeats the detector's primary heuristic.
-			_detector.ExpectCommand(light, command);
-			_actuator.Apply(light, command);
-		}
+		SendUnrecorded(command);
 
 		// The standing command, so a republish keeps the levels that are actually holding instead of blanking them.
 		_lastCommand = command;
 		_lastCommandAt = _scheduler.Now;
+	}
+
+	/// <summary>Puts <paramref name="command"/> on every light, recording nothing about the area.</summary>
+	// Always declared before sending: a command reaching HA before the expectation that explains it defeats the
+	// detector's primary heuristic, and the area reads its own work as a hand at the switch.
+	private void SendUnrecorded(LightCommand command)
+	{
+		foreach (string light in _area.Lights)
+		{
+			_detector.ExpectCommand(light, command);
+			_actuator.Apply(light, command);
+		}
+	}
+
+	/// <summary>Why a level test cannot run here, or <c>null</c> when one can.</summary>
+	// The single place a test's gates are written, so the reason a button carries and the refusal a press would
+	// actually get are one answer. A second copy in the web project would drift, as AutoOnBlockNow's would.
+	private string? RefuseLevelTest()
+	{
+		if (_disposed)
+			return "This room is being rebuilt on the settings that were just saved. Try again in a moment.";
+
+		if (_house.KillSwitchActive)
+			return "The master switch is on, so nothing may command a light.";
+
+		if (!_area.Settings.Enabled)
+			return "Automatic lighting is switched off for this room, so its lights are not the engine's to move.";
+
+		// Both hold levels the engine did not choose and cannot reproduce, so there would be no way back from a
+		// test. Refusing is the only reading of "leave the room as it would have been".
+		if (_state is AreaState.OverriddenOn)
+			return "Somebody set these lights by hand. A test would replace their levels with no way to put them back.";
+
+		if (_state is AreaState.SceneHold)
+			return $"A scene ({_house.ActiveScene}) is holding this room.";
+
+		return null;
+	}
+
+	private void OnLevelTestElapsed()
+	{
+		lock (_gate)
+		{
+			if (_disposed)
+				return;
+
+			EndLevelTest();
+		}
+	}
+
+	/// <summary>Ends a running level test by putting the room back where the engine wants it now.</summary>
+	private void EndLevelTest()
+	{
+		_levelTest.Disposable = Disposable.Empty;
+
+		if (!_levelTesting)
+			return;
+
+		_levelTesting = false;
+		ReassertLights();
+	}
+
+	/// <summary>Re-sends what the engine wants this room to be right now, changing no state and arming no timer.</summary>
+	// Resolved at this instant and never captured before the test: ten seconds is long enough for movement, a
+	// boundary or a hand at a switch to have moved the answer, and the room has to end where it would have been
+	// had nobody pressed anything. Nothing is published, because none of it is news: the area decided nothing.
+	private void ReassertLights()
+	{
+		RefreshDarkness();
+
+		// Standing scene first: the room's look is that scene, and no level command describes it.
+		if (_standingScene is { Length: > 0 } scene)
+		{
+			foreach (string light in _area.Lights)
+				_detector.ExpectScene(light, TransitionSeconds());
+
+			_actuator.ActivateScene(scene);
+			_lastCommandAt = _scheduler.Now;
+			return;
+		}
+
+		// The two lit states. PreOff is holding the same target at its warning dim.
+		if ((_state is AreaState.AutoActive or AreaState.PreOff) && ResolveTarget() is { } target)
+		{
+			_lastTarget = target;
+			Send(TargetCommand(target, _state is AreaState.PreOff ? _area.Settings.PreOffBrightnessFactor : 1.0));
+			return;
+		}
+
+		Send(LightCommand.TurnOff(TransitionSeconds()));
 	}
 
 	// The fade length, picked by darkness and never by the period name: what matters is whether the eyes receiving
@@ -1097,6 +1249,11 @@ public sealed class AreaController : IDisposable
 			if (_disposed)
 				return;
 
+			// Before the flag, because the return runs through the ordinary command path. A save rebuilds every
+			// controller, and a test left running would hold the room until the replacement's next tick, which is
+			// CircadianTickSeconds away.
+			EndLevelTest();
+
 			_disposed = true;
 		}
 
@@ -1108,5 +1265,6 @@ public sealed class AreaController : IDisposable
 		_preOffTimer.Dispose();
 		_overrideTimer.Dispose();
 		_suppressionTimer.Dispose();
+		_levelTest.Dispose();
 	}
 }

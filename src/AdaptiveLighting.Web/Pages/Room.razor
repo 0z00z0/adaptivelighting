@@ -199,6 +199,11 @@ else
 					  Defaults="@_document.Defaults"
 					  Resolved="@_preview.Resolved"
 					  ActivePeriod="@ActivePeriodId"
+					  TestRefusal="@_testRefusal"
+					  TestingPeriodId="@TestingPeriod"
+					  TestSecondsLeft="@TestSecondsLeft"
+					  TestSeconds="@TestSeconds"
+					  Test="@TestPeriod"
 					  Changed="@MarkDirty" />
 
 		@* Only where a period asked for it. With none the chart has nothing to describe, and its handles would
@@ -746,6 +751,12 @@ else
 	private SwitchOnNote? _switchOnNote;
 	private bool _switchOnDismissed;
 
+	// The level test running on the real lights. The engine owns the return, so these three only draw it; a
+	// reload loses the drawing and never the return.
+	private string? _testingPeriodId;
+	private DateTimeOffset? _testEndsAt;
+	private string? _testRefusal;
+
 	private bool _showAll;
 	private bool _identityOpen;
 	private bool _pickersOpen;
@@ -1000,6 +1011,43 @@ else
 			Schedule.HeldBackRule(Engine)).Period;
 
 		_daylightLux = Catalog.LuxOf(DaylightSensorId);
+
+		// Asked of the engine on the ticker rather than composed here, so a room that falls under somebody's hand
+		// while the page sits open has its Test buttons closed within the second.
+		_testRefusal = Engine.LevelTestRefusal(room.AreaId);
+	}
+
+	/// <summary>The period whose test is still holding the lights, or <c>null</c> when none is.</summary>
+	/// <remarks>
+	///     The page's own drawing of a test the engine owns. Reloading loses it and never the return: the engine
+	///     scheduled that on its own scheduler, so a closed browser changes nothing.
+	/// </remarks>
+	private string? TestingPeriod => _testEndsAt is { } ends && ends > _now ? _testingPeriodId : null;
+
+	private int TestSecondsLeft =>
+		_testEndsAt is { } ends ? Math.Max(0, (int)Math.Ceiling((ends - _now).TotalSeconds)) : 0;
+
+	private static int TestSeconds => (int)AreaController.LevelTestSeconds;
+
+	/// <summary>Asks the engine to put one period on this room's real lights for a few seconds.</summary>
+	/// <remarks>
+	///     A press while one is already running moves the test to the new row: the engine drops the pending
+	///     return and schedules one return from the newest press, so the room is never owed two.
+	/// </remarks>
+	private void TestPeriod(string periodId)
+	{
+		_testRefusal = Engine.TestPeriod(_room?.AreaId, periodId);
+
+		if (_testRefusal is { Length: > 0 })
+		{
+			_testingPeriodId = null;
+			_testEndsAt = null;
+			return;
+		}
+
+		_now = DateTimeOffset.Now;
+		_testingPeriodId = periodId;
+		_testEndsAt = _now.AddSeconds(AreaController.LevelTestSeconds);
 	}
 
 	/// <summary>The line under the card's head: how much of the schedule this room has taken over, in words.</summary>

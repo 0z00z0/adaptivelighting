@@ -165,6 +165,41 @@ public sealed class LightingEngineHost : IDisposable
 	/// </remarks>
 	public MotionPeriodLatch? MotionPeriods => _orchestrator?.MotionPeriods;
 
+	/// <summary>Why a level test cannot run in <paramref name="areaId"/> right now, or <c>null</c> when one can.</summary>
+	/// <remarks>Asked before a press so the button can carry its own reason; the press asks again, under the lock.</remarks>
+	public string? LevelTestRefusal(string? areaId)
+	{
+		lock (_gate)
+			return RunningArea(areaId) is { } area ? area.LevelTestRefusal() : NotRunningRefusal();
+	}
+
+	/// <summary>
+	///     Puts the period <paramref name="periodKey"/> names on one room's real lights for
+	///     <see cref="AreaController.LevelTestSeconds"/> seconds, then hands the room back to the engine.
+	/// </summary>
+	/// <returns><c>null</c> once the test is running, or the sentence saying why it is not.</returns>
+	/// <remarks>
+	///     The engine owns the return, not the caller: it is scheduled on the same scheduler every other deadline
+	///     runs on, so closing the page or the browser cannot leave a room stranded on test levels.
+	/// </remarks>
+	public string? TestPeriod(string? areaId, string periodKey)
+	{
+		lock (_gate)
+			return RunningArea(areaId) is { } area ? area.TestPeriod(periodKey) : NotRunningRefusal();
+	}
+
+	private AreaController? RunningArea(string? areaId) =>
+		areaId is { Length: > 0 } wanted && _orchestrator is { } running
+			? running.Areas.FirstOrDefault(area => string.Equals(area.AreaId, wanted, StringComparison.OrdinalIgnoreCase))
+			: null;
+
+	// Two different facts, and a household can act on only one of them: the whole engine is down, or it is up and
+	// this one room resolved to nothing.
+	private string NotRunningRefusal() =>
+		_orchestrator is null
+			? "Nothing is running, so no light can be commanded."
+			: "This room is not running: no lights resolved for it, so there is nothing to test.";
+
 	public ValidationResult? LastValidation { get; private set; }
 
 	public string? Fault { get; private set; }
