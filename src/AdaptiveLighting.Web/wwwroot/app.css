@@ -4998,6 +4998,10 @@ button.mode-pill:disabled {
 .srow-control:has(.list-picker) {
 	flex: 1 1 100%;
 	min-width: 0;
+	/* Stacked, or the polarity checkbox beside it takes a third of the row and the chips wrap to one id per
+	   line. .gate-invert is written to sit under the list; a flex row is what put it alongside. */
+	flex-direction: column;
+	align-items: stretch;
 }
 
 .seg button {
