@@ -567,6 +567,38 @@ Two consequences that follow:
 null while it stands, because the engine commanded no levels and must not invent them. It is not the house's
 Guest scene, which `AreaState.SceneHold` reports.
 
+### Testing a period's levels holds the room for ten seconds and changes nothing else
+
+`AreaController.TestPeriod` puts one period's levels on a room's real fixtures and hands the room back after
+`LevelTestSeconds`, which is **ten seconds** — long enough to judge a level standing in the room, short enough
+that nobody waits for it. Testing is a command surface, never a state of the machine: `_levelTesting` is a flag
+beside it, and every timer, hold and gate carries on around a test untouched.
+
+The test resolves the **period**, not a pair of numbers. It takes a period key, asks
+`CircadianCalculator.GetPeriodTarget` for it and sends the answer through the same `TargetCommand` ordinary
+running uses, so the room's own level overrides and the daylight curve reach the fixtures exactly as the engine
+would send them. A caller passing brightness and kelvin instead would be a second reading of the settings, free
+to drift from the engine's.
+
+The return is scheduled on the engine's own scheduler, so it happens whether or not whoever pressed is still
+watching: a closed page cannot strand a room on test levels. `ReassertLights` **re-resolves at the instant it
+fires** and never replays an answer captured before the test, because ten seconds is long enough for movement,
+a boundary or a hand at a switch to have moved it, and the room has to end where it would have been had nobody
+pressed. `Dispose` runs the return immediately rather than leaving it pending: a save rebuilds every
+controller, and the replacement's first tick is `CircadianTickSeconds` away.
+
+Both directions go out through `SendUnrecorded`, which **declares the expectation to `OverrideDetector` for
+every light before the command reaches Home Assistant**. Without it the room reads its own work as a hand at
+the switch and falls into `OverriddenOn` — and the trap is that this is the very setting the page exists to
+configure, so the failure lands precisely where it is least welcome. `ReassertLights` declares `ExpectScene`
+for a room sitting on a standing scene, for the same reason and with the same ordering.
+
+`RefuseLevelTest` is the single place a test's gates are written, so the reason a button carries and the
+refusal a press would get are one answer; a second copy in the web project would drift, as `AutoOnBlockNow`'s
+would. Besides the kill switch, a room switched off and a controller mid-rebuild, it refuses under
+`OverriddenOn` and `SceneHold`: both hold levels the engine did not choose and cannot reproduce, so there would
+be no way back from a test.
+
 ### Staleness culling is illuminance only, and generalising it would break the house
 
 `LuxSensorStaleAfterMinutes` exists because a room averages its illuminance sensors, and one dead sensor stuck

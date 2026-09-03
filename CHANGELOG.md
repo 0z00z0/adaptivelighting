@@ -19,6 +19,12 @@ against each other.
   room on the ordinary manual hold, and the lights go off when that hold runs out. A room with no lights at
   all is still reported as a room that could not be set up.
 
+- **A Test button on every period row of a room page.** It puts that period's brightness and warmth on the
+  room's real lights for ten seconds and then hands the room back to the engine, so a setting can be judged in
+  the room rather than read off a slider. Nothing about the room's state changes: no manual hold is started,
+  none is cleared, and no countdown is disturbed. A test is refused while somebody's own levels are standing in
+  the room, since the engine cannot reproduce what a person dialled in.
+
 ### Changed
 
 - **The room's brightness and warmth are stepped sliders, laid out as a table**, with *Period*, *Brightness*

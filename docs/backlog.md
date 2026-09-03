@@ -34,6 +34,11 @@ rewritten to suit one.
 
 - **Not every filter button in the Activity log works.** Unchecking one leaves its events in the list.
 
+- **A room page's Test countdown is drawn locally, so it does not survive leaving the page.** Navigating away
+  and back within the ten seconds shows plain Test buttons while the engine's return is still pending. The
+  return happens correctly — it is scheduled on the engine's scheduler, not the page's — and only the drawing
+  is lost. `AreaController.IsTestingLevels` already exists if it is ever worth surfacing through a snapshot.
+
 - **The "Don't switch on while" help text renders `&amp;quot;` literally** instead of the quotation marks it
   stands for, so a reader sees the HTML escape. The neighbouring "Don't switch off while" row carries the same
   text. Pre-existing and unrelated to the settings rows around it.
