@@ -120,7 +120,7 @@
 						   Draft="_draft"
 						   Global="_config.Global"
 						   NoSensor="@_noSensor"
-						   NearMiss="@_nearMiss"
+						   SwitchDriven="@_switchDriven"
 						   Changed="Recount" />
 
 	<div class="commit-copy">
@@ -199,7 +199,7 @@
 	private IReadOnlyList<ModeLine> _modes = [];
 	private string? _houseModeName;
 	private string? _houseModeEntity;
-	private string? _nearMiss;
+	private string? _switchDriven;
 	private string? _noSensor;
 	private int _lights;
 	private int _motion;
@@ -251,6 +251,7 @@
 		_motion = 0;
 		_lightLevel = 0;
 		int noSensor = 0;
+		int switchDriven = 0;
 
 		foreach (AreaConfig area in _config.Areas)
 		{
@@ -267,8 +268,11 @@
 
 			// Skipped for a room with no lights: one cause, a room whose entities stopped resolving, would
 			// otherwise be counted twice, and the no-sensor line would describe a room that cannot light at all.
-			if (lights > 0 && CommissioningVerdicts.CountsAsDarkForWantOfASensor(area, _config.Defaults, lux))
+			if (lights > 0 && CommissioningVerdicts.CountsAsDarkForWantOfASensor(area, _config.Defaults, lux, motion))
 				noSensor++;
+
+			if (lights > 0 && motion == 0)
+				switchDriven++;
 
 			rows.Add(new CommissioningRow(
 				CommissioningDraft.RoomKey(area),
@@ -277,7 +281,7 @@
 				lights,
 				motion,
 				// suspectCount stays 0 until the impostor sheet ships.
-				CommissioningVerdicts.For(area, _config.Defaults, lux, suspectCount: 0, lights),
+				CommissioningVerdicts.For(area, _config.Defaults, lux, suspectCount: 0, lights, motion),
 				AreaSentences.ForArea(area, _config.Defaults),
 				resolved));
 		}
@@ -295,24 +299,7 @@
 			: null;
 
 		_noSensor = CommissioningVerdicts.NoSensorLine(noSensor);
-		_nearMiss = CommissioningVerdicts.NearMiss(NearMissRooms());
-	}
-
-	/// <summary>The rooms discovery left out: they have lights, but nothing that senses movement.</summary>
-	// Narrowed to areas the document does not list, so a room in the table cannot also appear beneath it.
-	private IReadOnlyList<string> NearMissRooms()
-	{
-		HashSet<string> listed = new(
-			_config.Areas.Select(area => area.AreaId).OfType<string>(),
-			StringComparer.Ordinal);
-
-		return
-		[
-			.. Catalog.Areas(_config.Global)
-				.Where(area => !listed.Contains(area.Id))
-				.Where(area => area.HasLights && area.MotionCount == 0)
-				.Select(area => area.Name)
-		];
+		_switchDriven = CommissioningVerdicts.SwitchDrivenLine(switchDriven);
 	}
 
 	private void Open(Sheet sheet) => _sheet = _sheet == sheet ? Sheet.None : sheet;
@@ -420,9 +407,10 @@
 			await Committed.InvokeAsync();
 	}
 
+	// "with lights" is the whole membership rule now that a room needs no motion sensor to be proposed.
 	private string Lead => _rows.Count == 1
-		? "Found one room, its lights and sensors already matched up. Nothing in the house changes until the "
+		? "Found one room with lights, its sensors already matched up. Nothing in the house changes until the "
 			+ "one button at the bottom."
-		: $"Found {_rows.Count} rooms, their lights and sensors already matched up. Nothing in the house changes "
+		: $"Found {_rows.Count} rooms with lights, their sensors already matched up. Nothing in the house changes "
 			+ "until the one button at the bottom — start with a hallway, it's the easiest room to trust.";
 }

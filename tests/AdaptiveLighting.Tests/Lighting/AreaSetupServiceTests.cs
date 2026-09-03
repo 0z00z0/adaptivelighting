@@ -409,13 +409,28 @@ public sealed class AreaSetupServiceTests
 	}
 
 	[TestMethod]
+	public void A_First_Run_Also_Proposes_A_Room_With_Lights_And_No_Motion_Sensor()
+	{
+		House house = Build("stue");
+		house.Ha.SetState("light.spisestue_tak", "off");
+		house.Registry.Areas["spisestue"] = ["light.spisestue_tak"];
+
+		SetupPlan plan = Plan(Document(), house);
+
+		CollectionAssert.AreEquivalent(
+			new[] { "stue", "spisestue" }, plan.NewAreas.Select(area => area.AreaId).ToArray(),
+			"the room runs from its switch, so setting up rooms has to offer it");
+	}
+
+	[TestMethod]
 	public void A_Room_That_No_Longer_Qualifies_Is_Reported_And_Never_Removed()
 	{
 		House house = Build("stue");
 
-		// Still an area in HA, but its motion sensor is gone, so discovery would not propose it today.
-		house.Ha.SetState("light.bod_tak", "off");
-		house.Registry.Areas["bod"] = ["light.bod_tak"];
+		// Still an area in HA, but its lights are gone, so discovery would not propose it today. A missing motion
+		// sensor is no longer a disqualification: such a room is proposed and runs from its switch.
+		house.Ha.SetState("binary_sensor.bod_motion", "off", new() { ["device_class"] = "motion" });
+		house.Registry.Areas["bod"] = ["binary_sensor.bod_motion"];
 
 		AdaptiveLightingConfig config = Document(
 			new AreaConfig { AreaId = "stue" },
