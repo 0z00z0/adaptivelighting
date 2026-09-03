@@ -167,7 +167,7 @@ public sealed class LevelsEditorTests
 		StringAssert.Contains(html, "psl-custom");
 	}
 
-	/// <summary>Three headings for the whole table, however many periods the schedule has.</summary>
+	/// <summary>Four headings for the whole table, however many periods the schedule has.</summary>
 	[TestMethod]
 	public async Task The_Headings_Are_Written_Once_For_The_Table_And_Not_Once_Per_Period()
 	{
@@ -177,7 +177,55 @@ public sealed class LevelsEditorTests
 
 		Assert.AreEqual(4, config.Periods.Count, "the fixture is what makes one heading row worth counting");
 		Assert.AreEqual(1, Count(html, "lvl-head "));
-		Assert.AreEqual(3, Count(html, "lvl-head-cell"));
+		Assert.AreEqual(4, Count(html, "lvl-head-cell"));
+	}
+
+	/// <summary>One Test button per period row, and the schedule here has four.</summary>
+	[TestMethod]
+	public async Task Every_Period_Row_Carries_Its_Own_Test_Button()
+	{
+		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+
+		string html = await RenderAsync(config, new AreaConfig { AreaId = "stue", Name = "Stue" });
+
+		Assert.AreEqual(4, Count(html, "class=\"lvl-test\""));
+		Assert.IsFalse(html.Contains("disabled", StringComparison.Ordinal), "nothing is refusing, so nothing is dimmed");
+	}
+
+	/// <summary>A dimmed row of buttons explains nothing on its own, and a phone has no hover to find a reason with.</summary>
+	[TestMethod]
+	public async Task A_Room_That_Cannot_Be_Commanded_Says_So_In_Words_And_Closes_Every_Button()
+	{
+		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+
+		string html = await RenderAsync(config, new AreaConfig { AreaId = "stue", Name = "Stue" },
+			extra: new() { ["TestRefusal"] = "The master switch is on, so nothing may command a light." });
+
+		StringAssert.Contains(html, "lvl-test-off");
+		StringAssert.Contains(html, "The master switch is on");
+		Assert.AreEqual(4, Count(html, "disabled"), "one per row, and no way to press past the reason");
+	}
+
+	/// <summary>Real lights are changing in a real room, so the page has to say so and say it ends on its own.</summary>
+	[TestMethod]
+	public async Task A_Running_Test_Names_Itself_And_Counts_Its_Own_Seconds_Down()
+	{
+		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+
+		string html = await RenderAsync(config, new AreaConfig { AreaId = "stue", Name = "Stue" },
+			extra: new()
+			{
+				["TestingPeriodId"] = config.Periods[1].Key,
+				["TestSecondsLeft"] = 7
+			});
+
+		StringAssert.Contains(html, "lvl-test-live");
+		StringAssert.Contains(html, "go back to normal on their own");
+		Assert.AreEqual(1, Count(html, "lvl-test-on"), "one row is running, and only that row says so");
+		StringAssert.Contains(html, ">7 s<");
+
+		// The other three stay live: pressing one moves the test rather than queuing a second.
+		Assert.AreEqual(1, Count(html, "disabled"));
 	}
 
 	/// <summary>The revert button is gone: the leftmost stop is the way back, and two ways would be one too many.</summary>
@@ -205,7 +253,10 @@ public sealed class LevelsEditorTests
 		return count;
 	}
 
-	private static async Task<string> RenderAsync(AdaptiveLightingConfig config, AreaConfig room)
+	private static async Task<string> RenderAsync(
+		AdaptiveLightingConfig config,
+		AreaConfig room,
+		Dictionary<string, object?>? extra = null)
 	{
 		ServiceCollection services = new();
 
@@ -218,6 +269,9 @@ public sealed class LevelsEditorTests
 			["Room"] = room,
 			["Defaults"] = config.Defaults
 		};
+
+		foreach (KeyValuePair<string, object?> pair in extra ?? [])
+			parameters[pair.Key] = pair.Value;
 
 		return await renderer.Dispatcher.InvokeAsync(async () =>
 		{

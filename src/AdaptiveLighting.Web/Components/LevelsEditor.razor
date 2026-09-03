@@ -37,7 +37,22 @@
 			{
 				<span class="lvl-head-cell">Warmth</span>
 			}
+			<span class="lvl-head-cell">In the room</span>
 		</div>
+
+		@* Said once above the table, because the reason is the room's and not the row's. A disabled control with
+		   its reason only in a tooltip is a control nobody can find out about on a phone. *@
+		@if (TestRefusal is { Length: > 0 } refusal)
+		{
+			<p class="lvl-test-off">@refusal</p>
+		}
+		else if (TestingPeriodId is { Length: > 0 })
+		{
+			<p class="lvl-test-live" role="status">
+				These are the real lights in the room. They go back to normal on their own in
+				<strong>@TestSecondsLeft s</strong>.
+			</p>
+		}
 	}
 
 	@foreach (RoomLevelRow row in RoomLevels.Rows(Periods, Room))
@@ -112,6 +127,28 @@
 					</PresetSlider>
 				</div>
 			}
+
+			@* Puts this row on the room's real lights for a few seconds. The engine owns the return, so nothing
+			   here has to survive the page being closed. *@
+			<div class="lvl-cell lvl-act">
+				<span class="lvl-cell-label">In the room</span>
+				@if (IsTesting(current.PeriodId))
+				{
+					<button type="button" class="lvl-test lvl-test-on" disabled
+							aria-live="polite"
+							aria-label="@($"Testing {PeriodName(current.Name)}, {TestSecondsLeft} seconds left")">
+						<span class="lvl-test-word">Testing</span>
+						<span class="lvl-test-left">@TestSecondsLeft s</span>
+					</button>
+				}
+				else
+				{
+					<button type="button" class="lvl-test"
+							disabled="@Untestable"
+							title="@TestTitle(current.Name)"
+							@onclick="() => Test.InvokeAsync(current.PeriodId)">Test</button>
+				}
+			</div>
 		</div>
 	}
 
@@ -182,6 +219,35 @@
 	/// <summary>Raised after any change, so the page can re-validate and start its save timer.</summary>
 	[Parameter]
 	public EventCallback Changed { get; set; }
+
+	/// <summary>Why this room's lights cannot be commanded, or <c>null</c> when they can.</summary>
+	/// <remarks>The engine's own sentence, never composed here: a second reading of the gates would drift.</remarks>
+	[Parameter]
+	public string? TestRefusal { get; set; }
+
+	/// <summary>The period whose test is running on the real lights, or <c>null</c> when none is.</summary>
+	[Parameter]
+	public string? TestingPeriodId { get; set; }
+
+	/// <summary>Whole seconds left of the running test.</summary>
+	[Parameter]
+	public int TestSecondsLeft { get; set; }
+
+	/// <summary>How long a test holds the room, for the wording on the buttons that are not running one.</summary>
+	[Parameter]
+	public int TestSeconds { get; set; } = 10;
+
+	/// <summary>Raised with a period id when its Test button is pressed.</summary>
+	[Parameter]
+	public EventCallback<string> Test { get; set; }
+
+	private bool Untestable => TestRefusal is { Length: > 0 };
+
+	private bool IsTesting(string periodId) =>
+		TestingPeriodId is { Length: > 0 } running && string.Equals(running, periodId, StringComparison.OrdinalIgnoreCase);
+
+	private string TestTitle(string name) =>
+		Untestable ? TestRefusal! : $"Put {PeriodName(name)} on this room's lights for {TestSeconds} seconds.";
 
 	/// <summary>The same placeholder the schedule editor uses for an unnamed period.</summary>
 	private static string PeriodName(string name) => name is { Length: > 0 } ? name : "unnamed period";

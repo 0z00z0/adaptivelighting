@@ -5907,7 +5907,7 @@ h1[tabindex="-1"]:focus {
 @media (min-width: 780px) {
 	.lvl,
 	.lvl-head {
-		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr) minmax(11rem, 1fr);
+		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr) minmax(11rem, 1fr) auto;
 		align-items: start;
 	}
 
@@ -5918,6 +5918,7 @@ h1[tabindex="-1"]:focus {
 	/* The heading row is saying it now. Only the rail's own label and the curve cell's go: the orphan rows
 	   below are not table rows and keep theirs. */
 	.lvl .psl-label,
+	.lvl-act .lvl-cell-label,
 	.lvl-cell-curve .lvl-cell-label {
 		display: none;
 	}
@@ -5982,6 +5983,61 @@ h1[tabindex="-1"]:focus {
 	flex: 0 0 auto;
 	background: color-mix(in srgb, var(--lvl-kelvin, var(--machine)) var(--kelvin-weight), var(--kelvin-shade));
 	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 25%, transparent);
+}
+
+/* ---- putting a row on the real lights ----
+   The action column. Not stretched like the two rail cells: a full-width button under a pair of sliders reads
+   as the row's primary control, and this one is a side trip. */
+.lvl-act {
+	align-items: start;
+	justify-content: start;
+}
+
+/* One width for both states, or the column and the button both jump every second the countdown ticks. */
+.lvl-test {
+	min-width: 6.6rem;
+	display: inline-flex;
+	align-items: baseline;
+	justify-content: center;
+	gap: 0.4rem;
+	white-space: nowrap;
+}
+
+/* --now is the token for the live edge, the same one the now-line and the running badge take, so a test
+   holding the real lights reads as live rather than as another editable control. */
+.lvl-test-on {
+	border-color: var(--now);
+	color: var(--now);
+	background: color-mix(in srgb, var(--now) 14%, transparent);
+}
+
+/* Disabled because pressing it again would do nothing, never because it is unavailable. The dimming that says
+   unavailable has to come back off, or a running test reads as a dead button. */
+.lvl-test-on:disabled {
+	opacity: 1;
+	cursor: default;
+}
+
+.lvl-test-left {
+	font-variant-numeric: tabular-nums;
+	font-weight: 650;
+}
+
+/* Said once above the rows, in the flow rather than in a tooltip: on a phone there is no hover to find a
+   reason with, and a column of dimmed buttons explains nothing on its own. */
+.lvl-test-off,
+.lvl-test-live {
+	margin: 0;
+	padding: 0.15rem 1.15rem 0.55rem;
+	font-size: var(--text-sm);
+}
+
+.lvl-test-off {
+	color: var(--muted);
+}
+
+.lvl-test-live {
+	color: var(--now);
 }
 
 /* ---- a period that no longer exists ----
@@ -6906,7 +6962,7 @@ h1[tabindex="-1"]:focus {
    row with an empty half beside it, which reads as a control that failed to render. */
 @media (min-width: 780px) {
 	.lvl-nocolour {
-		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr);
+		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr) auto;
 	}
 }
 
