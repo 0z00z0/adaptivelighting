@@ -124,4 +124,16 @@ public sealed class ConfigStampTests
 	[TestMethod]
 	public void OfDocument_IsTheSameForTwoIdenticalDocuments() =>
 		Assert.AreEqual(ConfigStamp.OfDocument(TwoRooms()), ConfigStamp.OfDocument(TwoRooms()));
+
+	/// <summary>The token is the serialised text, so an empty room list and no room list are two different documents.</summary>
+	// This is why PeriodsEditor writes null when the last room comes off: an empty list would show the page as
+	// changed against a file that simply omits the key.
+	[TestMethod]
+	public void OfDocument_TellsAnEmptyRoomListApartFromNoRoomListAtAll()
+	{
+		AdaptiveLightingConfig emptied = TwoRooms();
+		emptied.Periods[0].StartsOnMotionAreas = [];
+
+		Assert.AreNotEqual(ConfigStamp.OfDocument(TwoRooms()), ConfigStamp.OfDocument(emptied));
+	}
 }

@@ -158,7 +158,7 @@ public sealed class ModeMonitor : IDisposable
 			if (!_motionPeriods.Holds(period.Key))
 				continue;
 
-			if (period.StartsOnMotionAreas.Count == 0)
+			if (period.StartsOnMotionAreas is not { Count: > 0 })
 			{
 				_motionStartPeriods[period.Key] = null;
 				continue;

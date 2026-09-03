@@ -351,7 +351,7 @@ public static class ConfigValidator
 
 		foreach (TimePeriodConfig period in placeable.Where(p => p.StartsOnMotion))
 		{
-			foreach (string areaId in period.StartsOnMotionAreas.Where(id => !string.IsNullOrWhiteSpace(id)))
+			foreach (string areaId in (period.StartsOnMotionAreas ?? []).Where(id => !string.IsNullOrWhiteSpace(id)))
 				if (!areaIds.Contains(areaId.Trim()))
 					result.AddWarning(
 						$"Period '{period.Name}' StartsOnMotionAreas names '{areaId.Trim()}', which matches no room in "

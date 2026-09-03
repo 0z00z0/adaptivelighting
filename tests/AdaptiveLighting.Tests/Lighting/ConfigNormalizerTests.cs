@@ -173,7 +173,7 @@ public sealed class ConfigNormalizerTests
 	}
 
 	[TestMethod]
-	public void Normalize_DropsTheRoomList_WhenTheMotionStartIsOff()
+	public void Normalize_DropsTheRoomListToNull_WhenTheMotionStartIsOff()
 	{
 		var config = new AdaptiveLightingConfig
 		{
@@ -182,8 +182,25 @@ public sealed class ConfigNormalizerTests
 
 		ConfigNormalizer.Normalize(config);
 
-		Assert.AreEqual(0, config.Periods[0].StartsOnMotionAreas.Count,
-			"nothing reads it while the feature is off, and a kept list rots into rooms that were renamed");
+		Assert.IsNull(config.Periods[0].StartsOnMotionAreas,
+			"nothing reads it while the feature is off, and only null keeps the key out of the saved document");
+	}
+
+	[TestMethod]
+	public void Normalize_DropsTheRoomListToNull_WhenTheMotionStartNamesNoRoom()
+	{
+		var config = new AdaptiveLightingConfig
+		{
+			Periods =
+			[
+				new() { Name = "morning", Start = "06:00", StartsOnMotion = true, StartsOnMotionAreas = [" ", ""] }
+			]
+		};
+
+		ConfigNormalizer.Normalize(config);
+
+		Assert.IsNull(config.Periods[0].StartsOnMotionAreas,
+			"a list of nothing but blanks means any room, which is what an absent key means");
 	}
 
 	/// <summary>Both zero values are the old behaviour, and OmitNull writes what a document says either way.</summary>
