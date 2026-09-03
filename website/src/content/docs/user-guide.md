@@ -147,9 +147,12 @@ The page has:
   walks in* row follows and says what. Then the lights and their levels, the last movement, the last
   change, and the time of day the room is following. If the master switch is off, that gets a row
   above everything else.
-- **Brightness & warmth** — what this room runs in each period, one row per period, with the one in
-  force now marked *now*. Every row follows the schedule until you change it; an amber dot marks
-  what you chose, and under it is the way back to the schedule's own value.
+- **Brightness & warmth** — a table of what this room runs in each period, one row per period, with
+  the one in force now marked *now*. Both are sliders with fixed steps. The leftmost step is not a
+  number: it means the room states nothing and follows the schedule, and it is drawn as a hatched
+  rail with a hollow handle so it can never be read as the dimmest setting. Slide off it to set the
+  room's own value, and an amber dot marks what you chose; slide back to it to hand the period back
+  to the schedule.
 
   Underneath it, **Brighten with daylight**, off until you switch it on. On, a bright day lifts this
   room above the schedule — a chart shows the shape, with the room's current reading marked on it.

@@ -29,16 +29,16 @@ public static class Presets
 	];
 
 	/// <summary>Colour-temperature stops, in kelvin, named as bulb boxes name them.</summary>
+	/// <remarks>Every stop carries a name. A step nobody can say out loud is granularity, and on a slider it is a
+	/// position a thumb has to cross to reach one that means something.</remarks>
 	public static readonly IReadOnlyList<PresetChoice> ColorTempKelvin =
 	[
 		new(2200, "2200 K — candlelight"),
-		new(2500, "2500 K"),
 		new(2700, "2700 K — warm white"),
 		new(3000, "3000 K — soft warm"),
 		new(3500, "3500 K — neutral"),
 		new(4000, "4000 K — cool white"),
 		new(4500, "4500 K — daylight"),
-		new(5000, "5000 K"),
 		new(6500, "6500 K — overcast sky")
 	];
 }
