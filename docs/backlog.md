@@ -23,22 +23,10 @@ An item with no number is one this file records before the tracker has minted on
 
 ## Next up
 
-- ~~#17 **The room page scrolls sideways at 390 px.**~~ Done in 2026.9.2.
-
-- ~~#18 **Every info text moves behind the ⓘ button, leaving the label alone.**~~ Done in 2026.9.2.
-
 - #19 **`Components/NullableNumber.razor` is referenced by nothing, and is now the only live consumer of
   `Components/PresetSelect.razor`.** Both were left in place, with their six tests, because removing them
   drops the test count — a decision to take deliberately rather than in passing. The wider sweep this
   belongs to is #38.
-
-- ~~#20 **Automatic room discovery still proposes only rooms that have both lights and a movement sensor.**~~
-  Done in 2026.9.2.
-
-- ~~#21 **Three group-recursion guards in the entity resolver fail on their own wall clock under load.**~~
-  Done in 2026.9.2.
-
-- ~~#22 **Not every filter button in the Activity log works.**~~ Done in 2026.9.2.
 
 - #23 **A room page's Test countdown is drawn locally, so it does not survive leaving the page.** Navigating
   away and back within the ten seconds shows plain Test buttons while the engine's return is still pending.
@@ -52,10 +40,6 @@ An item with no number is one this file records before the tracker has minted on
   says what the colour was. Such a room is whitened by any ordinary engine command anyway, so the test makes
   nothing worse, and the person pressing Test owns the colour. Closing it means giving `LightCommand` an
   optional channel vector and teaching `HaLightActuator` to send and compare it.
-
-- ~~#25 **The "Don't switch on while" help text renders the HTML escape literally.**~~ Done in 2026.9.2.
-
-- ~~#26 **The blend starts when the period actually begins.**~~ Done in 2026.9.2.
 
 - #27 **`PeriodsAcross` has no direct test.** `CircadianCalculator.PeriodsAcross` is exercised only through the
   web schedule and board views, never on its own. It is now the reference rule for two paths — the per-day
@@ -115,12 +99,4 @@ An item with no number is one this file records before the tracker has minted on
 
 ## Open questions
 
-- ~~#34 **A boundary into or out of a curve period is a step, not a blend.**~~ Done in 2026.9.2.
-
-- ~~#35 **The durable log's retention is a byte budget, not a time budget.**~~ Done in 2026.9.2.
-
-- ~~#36 **`StartsOnMotionAreas` is written into every period on save.**~~ Done in 2026.9.2.
-
-- ~~#37 **`CommissioningVerdicts.NearMiss` writes an unbounded room list.**~~ Struck without being built: the
-  near-miss line it asked about is gone, replaced by one sentence said once for a house that names no rooms at
-  all. There is no list to cap, so the question has no subject.
+None open.
