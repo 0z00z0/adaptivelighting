@@ -595,9 +595,15 @@ for a room sitting on a standing scene, for the same reason and with the same or
 
 `RefuseLevelTest` is the single place a test's gates are written, so the reason a button carries and the
 refusal a press would get are one answer; a second copy in the web project would drift, as `AutoOnBlockNow`'s
-would. Besides the kill switch, a room switched off and a controller mid-rebuild, it refuses under
-`OverriddenOn` and `SceneHold`: both hold levels the engine did not choose and cannot reproduce, so there would
-be no way back from a test.
+would. It refuses under the kill switch, a room switched off and a controller mid-rebuild.
+
+Those three are the only refusals. The rule is to give the levels back to whoever owns them: where the engine
+owns them, `ReassertLights` resolves its own answer afresh; where a person owns them, the fixtures are read
+before the test and put back after it, with the expectation declared per light on the way back as on the way
+in. A scene-held room takes the capture too rather than re-firing the house scene, which would reach every
+other room that scene names — and `EnterSceneHold` clears the room's own standing scene, so re-resolving would
+take a scene-held room dark. A hand at the switch during a test drops the return, because the person has just
+said what those levels are.
 
 ### Staleness culling is illuminance only, and generalising it would break the house
 

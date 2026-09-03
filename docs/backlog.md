@@ -48,6 +48,13 @@ rewritten to suit one.
   return happens correctly — it is scheduled on the engine's scheduler, not the page's — and only the drawing
   is lost. `AreaController.IsTestingLevels` already exists if it is ever worth surfacing through a snapshot.
 
+- **A `LightCommand` carries brightness and colour temperature but no colour channels.** In a room commanded
+  at equal channels — RGB-only fixtures with no colour temperature — a hand-set colour comes back as neutral
+  white after a period test, because `AreaController.CaptureLights` can read back nothing that says what the
+  colour was. Such a room is whitened by any ordinary engine command anyway, so the test makes nothing worse,
+  and the person pressing Test owns the colour. Closing it means giving `LightCommand` an optional channel
+  vector and teaching `HaLightActuator` to send and compare it.
+
 - **The "Don't switch on while" help text renders `&amp;quot;` literally** instead of the quotation marks it
   stands for, so a reader sees the HTML escape. The neighbouring "Don't switch off while" row carries the same
   text. Pre-existing and unrelated to the settings rows around it.

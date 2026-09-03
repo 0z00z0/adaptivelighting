@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.1] - 2026-09-02
+
 ### Added
 
 - **A room that has lights but no movement sensor is set up and runs**, where before it was refused and
@@ -22,8 +24,10 @@ against each other.
 - **A Test button on every period row of a room page.** It puts that period's brightness and warmth on the
   room's real lights for ten seconds and then hands the room back to the engine, so a setting can be judged in
   the room rather than read off a slider. Nothing about the room's state changes: no manual hold is started,
-  none is cleared, and no countdown is disturbed. A test is refused while somebody's own levels are standing in
-  the room, since the engine cannot reproduce what a person dialled in.
+  none is cleared, and no countdown is disturbed.
+
+- **A period test runs while somebody's own levels or a house scene are holding the room.** The room's levels
+  are read before the test and put back after it, and the manual hold expires exactly when it would have.
 
 ### Changed
 
