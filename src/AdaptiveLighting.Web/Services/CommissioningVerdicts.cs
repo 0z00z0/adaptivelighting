@@ -38,8 +38,8 @@ public sealed record CommissioningRow(
 	ResolvedArea? Resolved);
 
 /// <summary>
-///     What each proposed room has to say for itself before it is switched on, and what the table says underneath
-///     about the rooms that are not in it.
+///     What each proposed room has to say for itself before it is switched on, and the lines under the table
+///     that say once what a whole group of them has in common.
 /// </summary>
 /// <remarks>
 ///     Every note is read off the document, never re-derived. Nothing here decides whether a room would light;
@@ -50,16 +50,21 @@ public static class CommissioningVerdicts
 	/// <summary>The word a row with nothing to say carries.</summary>
 	public const string ReadyWord = "Ready";
 
+	/// <summary>The note a room with no motion sensor carries, which is how the table tells the two kinds apart.</summary>
+	public const string SwitchDrivenNote = "no motion sensor — it lights at the wall, never by itself";
+
 	/// <summary>The notes one proposed room earns, worst first.</summary>
 	/// <param name="area">The proposed room, whose <c>null</c> properties mean "inherit".</param>
 	/// <param name="suspectCount">How many of the room's commanded lights <c>LightAudit</c> flags.</param>
+	/// <param name="motionCount">How many motion sensors resolve; none makes the room switch-driven.</param>
 	/// <returns>The notes, worst first. Empty means the row says <see cref="ReadyWord"/>.</returns>
 	public static IReadOnlyList<Verdict> For(
 		AreaConfig area,
 		AreaSettings defaults,
 		int luxSensorCount,
 		int suspectCount,
-		int lightCount)
+		int lightCount,
+		int motionCount)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 		ArgumentNullException.ThrowIfNull(defaults);
@@ -75,6 +80,11 @@ public static class CommissioningVerdicts
 
 			return notes;
 		}
+
+		// Ahead of the suspects: this one is about the whole room rather than some of its lights, and a row that
+		// buried it among the info chips would read as an ordinary room.
+		if (motionCount == 0)
+			notes.Add(new Verdict(SwitchDrivenNote, VerdictTone.Warn));
 
 		if (suspectCount > 0 && lightCount > 0)
 		{
@@ -105,14 +115,23 @@ public static class CommissioningVerdicts
 	///     Whether a room judges darkness by a light-level sensor it does not have, which the engine reads as
 	///     "dark", so movement alone lights the room whatever the hour.
 	/// </summary>
-	public static bool CountsAsDarkForWantOfASensor(AreaConfig area, AreaSettings defaults, int luxSensorCount)
+	/// <param name="motionCount">
+	///     How many motion sensors resolve. None means nothing ever asks the darkness gate, so the room has no
+	///     consequence to warn about.
+	/// </param>
+	public static bool CountsAsDarkForWantOfASensor(
+		AreaConfig area,
+		AreaSettings defaults,
+		int luxSensorCount,
+		int motionCount)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 		ArgumentNullException.ThrowIfNull(defaults);
 
 		// Either is retired but still parses, and IlluminanceGate answers it as Lux in every arm, so any predicate
 		// over Darkness has to name it alongside Lux.
-		return luxSensorCount == 0
+		return motionCount > 0
+			&& luxSensorCount == 0
 			&& area.LuxSensor is not { Length: > 0 }
 			&& area.Effective(defaults).Darkness is DarknessSource.Lux or DarknessSource.Either;
 	}
@@ -128,21 +147,16 @@ public static class CommissioningVerdicts
 			+ "them. Give them one in Home Assistant, or set how they decide they are dark on their own pages."
 	};
 
-	/// <summary>The line under the table about rooms discovery looked at and left out.</summary>
-	/// <param name="names">The rooms that have lights but nothing that senses movement, in display order.</param>
-	public static string? NearMiss(IReadOnlyList<string> names)
+	/// <summary>The line under the table about the rooms with no motion sensor, said once for the house.</summary>
+	/// <param name="count">How many proposed rooms have lights but nothing that senses movement.</param>
+	public static string? SwitchDrivenLine(int count) => count switch
 	{
-		ArgumentNullException.ThrowIfNull(names);
-
-		if (names.Count == 0)
-			return null;
-
-		string subject = Join(names);
-		string verb = names.Count == 1 ? "has lights but nothing that senses movement, so it sits" : "have lights but nothing that senses movement, so they sit";
-		string them = names.Count == 1 ? "it" : "them";
-
-		return $"{subject} {verb} this out — give {them} a motion sensor in Home Assistant and press Set up rooms again.";
-	}
+		<= 0 => null,
+		1 => "One room has no motion sensor, so it never lights itself. Switching it on at the wall lights it, "
+			+ "and it goes off when that hold runs out.",
+		_ => $"{count} rooms have no motion sensor, so they never light themselves. Switching one on at the wall "
+			+ "lights it, and it goes off when that hold runs out."
+	};
 
 	/// <summary>What the commit button says, which is also the whole progress model.</summary>
 	public static string CommitLabel(int picked) => picked switch
@@ -164,12 +178,4 @@ public static class CommissioningVerdicts
 			_ => $"The other {rest} stay listed under House, each with its own switch."
 		};
 	}
-
-	/// <summary>"a", "a and b", "a, b and c".</summary>
-	private static string Join(IReadOnlyList<string> names) => names.Count switch
-	{
-		1 => names[0],
-		2 => $"{names[0]} and {names[1]}",
-		_ => $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}"
-	};
 }

@@ -22,7 +22,9 @@ public static class AreaAutoDiscovery
 			// The run-time resolver, so group members and excluded entities are already out of these counts.
 			AreaDiscovery found = resolver.DiscoverArea(areaId);
 
-			if (found.Lights.Count > 0 && found.MotionSensors.Count > 0)
+			// Lights alone qualify. A room with no motion sensor never lights itself, but it still runs: the wall
+			// switch drives it and the manual hold ends it. A room with no lights has nothing to command.
+			if (found.Lights.Count > 0)
 			{
 				// Explicit false on the area, never a flipped Defaults.Enabled: that would switch off every area
 				// in a document that never wrote the value.

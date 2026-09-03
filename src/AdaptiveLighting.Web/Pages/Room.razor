@@ -489,9 +489,17 @@ else
 					}
 				</div>
 
+				@if (resolved.MotionSensors.Count == 0)
+				{
+					<p class="room-card-foot">
+						Nothing here senses movement &mdash; the room never lights itself. Switching it on at the
+						wall lights it, and it goes off when that hold runs out.
+					</p>
+				}
+
 				@* The shared predicate and not the sensor count: a room judging by the sun, or with a hand-pinned
 				   sensor, is not counted as dark for want of one. The commissioning board reads the same rule. *@
-				@if (CommissioningVerdicts.CountsAsDarkForWantOfASensor(room, _document.Defaults, resolved.LuxSensors.Count))
+				@if (CommissioningVerdicts.CountsAsDarkForWantOfASensor(room, _document.Defaults, resolved.LuxSensors.Count, resolved.MotionSensors.Count))
 				{
 					<p class="room-card-foot">No light-level sensor here &mdash; the room counts as dark, so movement lights it.</p>
 				}

@@ -113,14 +113,15 @@
 	</div>
 }
 
+@* The switch-driven line first: it says what a room does, where the other says what it cannot judge. *@
+@if (SwitchDriven is { Length: > 0 } switchDriven)
+{
+	<p class="comm-nearmiss">@switchDriven</p>
+}
+
 @if (NoSensor is { Length: > 0 } noSensor)
 {
 	<p class="comm-nearmiss">@noSensor</p>
-}
-
-@if (NearMiss is { Length: > 0 } nearMiss)
-{
-	<p class="comm-nearmiss">@nearMiss</p>
 }
 
 <p class="comm-escape">Or <a href="config?section=areas">switch rooms on under Configuration</a>, the way this app has always done it.</p>
@@ -142,9 +143,9 @@
 	[Parameter]
 	public string? NoSensor { get; set; }
 
-	/// <summary>The line about the rooms discovery left out, or <c>null</c> when there are none.</summary>
+	/// <summary>The line about the rooms with no motion sensor, or <c>null</c> when every room has one.</summary>
 	[Parameter]
-	public string? NearMiss { get; set; }
+	public string? SwitchDriven { get; set; }
 
 	/// <summary>Raised whenever a switch moves, so the board can recount the commit button.</summary>
 	[Parameter]

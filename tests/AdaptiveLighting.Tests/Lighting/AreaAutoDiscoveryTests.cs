@@ -13,17 +13,17 @@ public sealed class AreaAutoDiscoveryTests
 		new(ha, registry, new GlobalConfig(), NullLogger.Instance);
 
 	[TestMethod]
-	public void Only_Areas_With_Both_A_Light_And_A_Motion_Sensor_Are_Proposed()
+	public void Any_Area_With_A_Light_Is_Proposed_And_One_Without_Is_Not()
 	{
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 
-		// Qualifies: a light and motion.
+		// Lights and motion: the room that runs itself.
 		ha.SetState("light.gang_tak", "off");
 		ha.SetState("binary_sensor.gang_motion", "off", new() { ["device_class"] = "motion" });
 		registry.Areas["gang"] = ["light.gang_tak", "binary_sensor.gang_motion"];
 
-		// Lights, but nothing to sense presence with - cannot do motion-driven lighting.
+		// Lights and nothing that senses movement: still a room, driven from its switch.
 		ha.SetState("light.spisestue_tak", "off");
 		registry.Areas["spisestue"] = ["light.spisestue_tak"];
 
@@ -38,9 +38,26 @@ public sealed class AreaAutoDiscoveryTests
 		var proposed = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry));
 
 		CollectionAssert.AreEquivalent(
-			new[] { "gang" },
+			new[] { "gang", "spisestue" },
 			proposed.Select(area => area.AreaId).ToArray(),
-			"only the room with both a light and a motion sensor is worth proposing");
+			"lights are the whole membership rule; a room with none has nothing to command");
+	}
+
+	// The room this change exists for: it never lights itself, but the switch drives it, so it is offered like
+	// any other and starts switched off.
+	[TestMethod]
+	public void A_Room_With_No_Motion_Sensor_Is_Proposed_Switched_Off()
+	{
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
+		ha.SetState("light.spisestue_tak", "off");
+		registry.Areas["spisestue"] = ["light.spisestue_tak"];
+
+		AreaConfig area = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry)).Single();
+
+		Assert.AreEqual("spisestue", area.AreaId);
+		Assert.IsFalse(area.Enabled, "a switch-driven room waits to be switched on like every other");
+		Assert.IsNull(area.MotionSensors, "and pins nothing, so a sensor added later is picked up at run time");
 	}
 
 	[TestMethod]
