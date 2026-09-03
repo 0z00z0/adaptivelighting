@@ -467,12 +467,16 @@ public sealed class ConfigValidatorTests
 		StringAssert.Contains(result.ToString(), "Gang", "the household needs to know which room to go and fix");
 	}
 
-	/// <summary>The curve reads the house's outdoor sensor, so a period claiming it with none named has nothing to read.</summary>
+	// The room-level opt-in this warning is now driven by; "day" is Minimal()'s first period, keyed by name
+	// since neither carries an Id.
+	private static RoomLevelOverride OnCurve() => new() { PeriodId = "day", FollowDaylightCurve = true };
+
+	/// <summary>The curve reads the house's outdoor sensor, so a room following it for a period with none named has nothing to read.</summary>
 	[TestMethod]
-	public void A_Period_On_The_Curve_With_No_Outdoor_Sensor_Only_Warns()
+	public void A_Room_On_The_Curve_With_No_Outdoor_Sensor_Only_Warns()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Periods[0].UseDaylightCurve = true;
+		config.Areas[0].Levels.Add(OnCurve());
 
 		ValidationResult result = ConfigValidator.Validate(config);
 
@@ -486,7 +490,7 @@ public sealed class ConfigValidatorTests
 	public void Naming_The_Houses_Outdoor_Sensor_Answers_That_Warning()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Periods[0].UseDaylightCurve = true;
+		config.Areas[0].Levels.Add(OnCurve());
 
 		Assert.IsTrue(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)));
 
@@ -500,16 +504,15 @@ public sealed class ConfigValidatorTests
 	public void A_Rooms_Own_Daylight_Sensor_Answers_It_Too()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Periods[0].UseDaylightCurve = true;
-		config.Areas = [new() { Name = "Stue", AreaId = "stue", DaylightSensor = "sensor.stue_lux" }];
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", DaylightSensor = "sensor.stue_lux", Levels = [OnCurve()] }];
 
 		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)),
 			"the only room in the house reads a sensor it named itself");
 
-		config.Areas.Add(new AreaConfig { Name = "Gang", AreaId = "gang" });
+		config.Areas.Add(new AreaConfig { Name = "Gang", AreaId = "gang", Levels = [OnCurve()] });
 
 		Assert.IsTrue(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)),
-			"and a second room that named none brings the warning back");
+			"and a second room, also on the curve and naming no sensor of its own, brings the warning back");
 	}
 
 	/// <summary>The darkness sensors are a separate question, and answering that one does not answer this one.</summary>
@@ -517,20 +520,19 @@ public sealed class ConfigValidatorTests
 	public void A_Rooms_Darkness_Sensor_Does_Not_Answer_The_Curves_Warning()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Periods[0].UseDaylightCurve = true;
-		config.Areas = [new() { Name = "Stue", AreaId = "stue", LuxSensor = "sensor.stue_lux", FollowOutdoorLux = true }];
+		config.Areas = [new() { Name = "Stue", AreaId = "stue", LuxSensor = "sensor.stue_lux", FollowOutdoorLux = true, Levels = [OnCurve()] }];
 
 		Assert.IsTrue(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)),
 			"an indoor sensor measures the room's own lamps, so the curve does not read it");
 	}
 
 	[TestMethod]
-	public void No_Period_On_The_Curve_Raises_Nothing()
+	public void A_Room_That_Never_Follows_The_Curve_Raises_Nothing()
 	{
 		AdaptiveLightingConfig config = Minimal();
 
 		Assert.IsFalse(ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("daylight curve", StringComparison.Ordinal)),
-			"nothing is waiting on a sensor while every period states its own brightness");
+			"nothing is waiting on a sensor while every room states its own brightness");
 	}
 
 	/// <summary>A brightness end outside 0-100 is refused at either end of the curve.</summary>

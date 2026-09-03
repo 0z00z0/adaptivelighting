@@ -319,11 +319,11 @@ public sealed class LuxBrightnessCurveTests
 		Assert.IsTrue(fresh.LuxBrightnessGamma > 0);
 	}
 
-	// A period that says nothing is a period that specifies its own brightness, which is what every
-	// pre-existing document means.
+	// A target built with no curve flag is a target that specifies its own brightness, which is what a room
+	// with no Levels row for a period means: TimePeriodConfig itself no longer carries the choice at all.
 	[TestMethod]
-	public void A_Period_That_States_Nothing_Specifies_Its_Own_Brightness()
+	public void A_Target_With_No_Curve_Flag_Specifies_Its_Own_Brightness()
 	{
-		Assert.IsFalse(new TimePeriodConfig().UseDaylightCurve);
+		Assert.IsFalse(Target(40, onTheCurve: false).UsesDaylightCurve);
 	}
 }

@@ -18,7 +18,16 @@ public class RoomLevelOverride
 
 	public int? ColorTempKelvin { get; set; }
 
+	/// <summary>Whether this room follows the daylight curve for this period instead of <see cref="BrightnessPct"/>.</summary>
+	/// <remarks>
+	///     Named apart from the retired period-level <c>UseDaylightCurve</c>: <see cref="LightingConfigDocument.RetiredKeys"/>
+	///     matches key names on the raw document with no type context, so reusing that name here would report every
+	///     legitimate opt-in as a stale key. <c>null</c> and <c>false</c> mean the same thing, matching
+	///     <see cref="AreaConfig.FollowOutdoorLux"/>'s nullable-bool-opt-in shape.
+	/// </remarks>
+	public bool? FollowDaylightCurve { get; set; }
+
 	/// <summary>Whether this row says anything, so <see cref="ConfigNormalizer"/> can drop it on save.</summary>
 	[YamlIgnore]
-	public bool IsEmpty => BrightnessPct is null && ColorTempKelvin is null;
+	public bool IsEmpty => BrightnessPct is null && ColorTempKelvin is null && FollowDaylightCurve is not true;
 }

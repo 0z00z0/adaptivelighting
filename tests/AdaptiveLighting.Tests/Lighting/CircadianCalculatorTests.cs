@@ -353,6 +353,39 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual(40d, Stepped(levels: levels).GetTarget(At(20))!.BrightnessPct);
 	}
 
+	// ===================== a room's own curve opt-in =====================
+
+	[TestMethod]
+	public void A_Room_With_No_Levels_Never_Follows_The_Curve()
+	{
+		Assert.IsFalse(Stepped(levels: []).GetTarget(At(20))!.UsesDaylightCurve);
+	}
+
+	[TestMethod]
+	public void A_Rooms_Own_Row_Puts_The_Target_On_The_Curve()
+	{
+		var levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", FollowDaylightCurve = true } };
+
+		Assert.IsTrue(Stepped(levels: levels).GetTarget(At(20))!.UsesDaylightCurve);
+	}
+
+	[TestMethod]
+	public void A_Rooms_Row_For_Another_Period_Does_Not_Put_This_One_On_The_Curve()
+	{
+		var levels = new List<RoomLevelOverride> { new() { PeriodId = "night", FollowDaylightCurve = true } };
+
+		Assert.IsFalse(Stepped(levels: levels).GetTarget(At(20))!.UsesDaylightCurve, "evening is in force, not night");
+	}
+
+	[TestMethod]
+	public void GetPeriodTarget_Reaches_The_Rooms_Curve_Opt_In_For_That_Period()
+	{
+		var levels = new List<RoomLevelOverride> { new() { PeriodId = "night", FollowDaylightCurve = true } };
+
+		Assert.IsTrue(Stepped(levels: levels).GetPeriodTarget("night")!.UsesDaylightCurve);
+		Assert.IsFalse(Stepped(levels: levels).GetPeriodTarget("day")!.UsesDaylightCurve);
+	}
+
 	// ===================== blending across a boundary a room owns one side of =====================
 
 	/// <summary>The room's own endpoints are interpolated; blending the house's and replacing afterwards puts a step where the blend removes one.</summary>

@@ -84,8 +84,18 @@ public sealed class LuxBrightnessControllerTests
 		List<TimePeriodConfig> table =
 		[
 			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700, UseDaylightCurve = eveningOnTheCurve },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200, UseDaylightCurve = nightOnTheCurve }
+			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
+		];
+
+		// The curve opt-in is this room's own, per period, through its Levels row — never the period itself.
+		List<RoomLevelOverride> levels =
+		[
+			.. new[]
+			{
+				eveningOnTheCurve ? new RoomLevelOverride { PeriodId = "evening", FollowDaylightCurve = true } : null,
+				nightOnTheCurve ? new RoomLevelOverride { PeriodId = "night", FollowDaylightCurve = true } : null
+			}.OfType<RoomLevelOverride>()
 		];
 
 		ResolvedArea area = new(
@@ -99,7 +109,7 @@ public sealed class LuxBrightnessControllerTests
 
 		AreaController controller = new(
 			ha, scheduler, area, global, table,
-			new CircadianCalculator(table, global, () => SunTimes.Unknown),
+			new CircadianCalculator(table, global, () => SunTimes.Unknown, levels),
 			actuator, new FakeStatePublisher(), house, NullLoggerFactory.Instance, areaId: "hallway");
 
 		controller.Start();
@@ -366,11 +376,17 @@ public sealed class LuxBrightnessControllerTests
 
 		List<TimePeriodConfig> table =
 		[
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500, UseDaylightCurve = true },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700, UseDaylightCurve = true }
+			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
+			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
 		];
 
-		CircadianCalculator circadian = new(table, global, () => SunTimes.Unknown, zone: TimeZoneInfo.Utc);
+		List<RoomLevelOverride> levels =
+		[
+			new() { PeriodId = "day", FollowDaylightCurve = true },
+			new() { PeriodId = "evening", FollowDaylightCurve = true }
+		];
+
+		CircadianCalculator circadian = new(table, global, () => SunTimes.Unknown, levels, zone: TimeZoneInfo.Utc);
 
 		ResolvedArea area = new("Hallway", settings, [Light], [Motion], [], []);
 		FakeLightActuator actuator = new();

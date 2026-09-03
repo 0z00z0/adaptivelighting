@@ -14,7 +14,8 @@ public enum RoomLevelSource
 
 /// <summary>The two ends of a blend in progress, before the daylight curve has had its say about either.</summary>
 // Carried so LuxBrightnessCurve can resolve each side against the light outside and interpolate afterwards.
-// The arriving side's own curve flag is LightTarget.UsesDaylightCurve, which the active period already sets.
+// The arriving side's own curve flag is LightTarget.UsesDaylightCurve, which the room's own level for the
+// active period already sets.
 public sealed record BlendEndpoints(
 	double LeavingBrightnessPct,
 	bool LeavingUsesDaylightCurve,
@@ -30,9 +31,9 @@ public sealed record LightTarget(
 	int ColorTempKelvin,
 	RoomLevelSource FromRoom = RoomLevelSource.None)
 {
-	/// <summary>Whether the period in force hands its brightness to the daylight curve.</summary>
-	// Carried from the active period alone, as FromRoom is, so a blend across a boundary cannot report one
-	// period's name beside the other's rule.
+	/// <summary>Whether this room follows the daylight curve for the period in force, instead of BrightnessPct.</summary>
+	// Carried from this room's own RoomLevelOverride for the active period, as FromRoom is, so a blend across a
+	// boundary cannot report one period's name beside another room's rule.
 	public bool UsesDaylightCurve { get; init; }
 
 	/// <summary>The blend this target sits inside, or <c>null</c> when no blend is running.</summary>
@@ -213,7 +214,7 @@ public sealed class CircadianCalculator
 		return target with
 		{
 			Blend = new BlendEndpoints(
-				leaving.BrightnessPct, previous.Period.UseDaylightCurve, arriving.BrightnessPct, blend)
+				leaving.BrightnessPct, leaving.UsesDaylightCurve, arriving.BrightnessPct, blend)
 		};
 	}
 
@@ -233,11 +234,12 @@ public sealed class CircadianCalculator
 
 	// The single place a room's effective level is decided; everything downstream reads LightTarget.FromRoom
 	// instead of the overrides. A replacement, never an offset: a room asking 8 % still asks 8 % after the house
-	// raises the period.
+	// raises the period. The curve opt-in is this room's own too: a period with no row for this room never
+	// follows the curve, whatever another room's row for the same period says.
 	private PeriodLevels LevelsOf(TimePeriodConfig period)
 	{
 		if (!_roomLevels.TryGetValue(period.Key, out RoomLevelOverride? level))
-			return new PeriodLevels(period.BrightnessPct, period.ColorTempKelvin, RoomLevelSource.None);
+			return new PeriodLevels(period.BrightnessPct, period.ColorTempKelvin, RoomLevelSource.None, false);
 
 		RoomLevelSource fromRoom =
 			(level.BrightnessPct is null ? RoomLevelSource.None : RoomLevelSource.Brightness)
@@ -246,17 +248,18 @@ public sealed class CircadianCalculator
 		return new PeriodLevels(
 			level.BrightnessPct ?? period.BrightnessPct,
 			level.ColorTempKelvin ?? period.ColorTempKelvin,
-			fromRoom);
+			fromRoom,
+			level.FollowDaylightCurve == true);
 	}
 
-	private readonly record struct PeriodLevels(double BrightnessPct, int ColorTempKelvin, RoomLevelSource FromRoom);
+	private readonly record struct PeriodLevels(double BrightnessPct, int ColorTempKelvin, RoomLevelSource FromRoom, bool UsesDaylightCurve);
 
 	// One path for both, so a room's own replacement is clamped the same way the schedule's value is.
 	private static LightTarget ToTarget(TimePeriodConfig period, PeriodLevels levels)
 	{
 		LightTarget target = new(period.Name, levels.BrightnessPct, levels.ColorTempKelvin, levels.FromRoom)
 		{
-			UsesDaylightCurve = period.UseDaylightCurve
+			UsesDaylightCurve = levels.UsesDaylightCurve
 		};
 
 		return target with { BrightnessPct = target.Clamp(levels.BrightnessPct) };

@@ -3,25 +3,25 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Web.Services;
 
 /// <summary>
-///     Moving one period between its own brightness and the daylight curve, and what that does to the curve's dark
-///     end.
+///     Moving one room's period between its own brightness and the daylight curve, and what that does to the
+///     room's dark end.
 /// </summary>
 /// <remarks>
-///     An editing rule and not an engine rule. The engine reads whatever <see cref="AreaSettings.LuxBrightnessMinPct"/>
-///     holds, so a hand-written document runs with nothing seeded; the schema default is only what such a document
-///     falls back to.
+///     An editing rule and not an engine rule. The engine reads whatever <see cref="AreaConfig.LuxBrightnessMinPct"/>
+///     resolves to, so a hand-written document runs with nothing seeded; the schema default is only what such a
+///     document falls back to.
 /// </remarks>
 public static class DaylightCurveMode
 {
 	private const double MinPct = 0;
 	private const double MaxPct = 100;
 
-	/// <summary>Whether any period hands its brightness to the curve.</summary>
-	public static bool InUse(IReadOnlyList<TimePeriodConfig> periods)
+	/// <summary>Whether this room already hands any period's brightness to the curve.</summary>
+	public static bool InUse(IReadOnlyList<RoomLevelOverride> levels)
 	{
-		ArgumentNullException.ThrowIfNull(periods);
+		ArgumentNullException.ThrowIfNull(levels);
 
-		return periods.Any(period => period.UseDaylightCurve);
+		return levels.Any(level => level.FollowDaylightCurve == true);
 	}
 
 	/// <summary>The dark end a level seeds: half of it, clamped to 0–100 % and rounded to one decimal.</summary>
@@ -29,35 +29,35 @@ public static class DaylightCurveMode
 		Math.Round(Math.Clamp(brightnessPct / 2, MinPct, MaxPct), 1, MidpointRounding.AwayFromZero);
 
 	/// <summary>
-	///     Puts one period on the curve or back on its own percentage, seeding the house's dark end as the curve
-	///     comes into use.
+	///     Puts one period on the curve or back on its own percentage, for this room, seeding the room's own dark
+	///     end as it takes up the curve for the first time.
 	/// </summary>
 	/// <returns>Whether the dark end was seeded.</returns>
 	/// <remarks>
-	///     Seeding is once per adoption: a second period joining a curve already in use leaves the dark end alone,
-	///     since by then it may have been dragged. Turning the curve off everywhere and on again adopts it afresh.
-	///     Only the house default is written, so a room stating its own dark end keeps it.
+	///     Seeding is once per room's adoption: a second period joining a curve this room already runs leaves the
+	///     dark end alone, since by then it may have been dragged. Turning the curve off on every period in this
+	///     room and on again adopts it afresh. Only this room's own dark end is written, never the house default,
+	///     and never while the room already states one of its own.
 	/// </remarks>
 	public static bool Set(
-		IReadOnlyList<TimePeriodConfig> periods,
-		AreaSettings defaults,
-		TimePeriodConfig period,
-		bool useDaylightCurve)
+		AreaConfig room,
+		RoomLevelOverride level,
+		double currentBrightnessPct,
+		bool followDaylightCurve)
 	{
-		ArgumentNullException.ThrowIfNull(periods);
-		ArgumentNullException.ThrowIfNull(defaults);
-		ArgumentNullException.ThrowIfNull(period);
+		ArgumentNullException.ThrowIfNull(room);
+		ArgumentNullException.ThrowIfNull(level);
 
-		// Asked before the flag moves, and of every period including this one: the curve is coming into use only
-		// while nothing at all is on it.
-		bool adopting = useDaylightCurve && !InUse(periods);
+		// Asked before the flag moves, and of every row including this one: the curve is coming into use in this
+		// room only while nothing of the room's is on it yet.
+		bool adopting = followDaylightCurve && !InUse(room.Levels) && room.LuxBrightnessMinPct is null;
 
-		period.UseDaylightCurve = useDaylightCurve;
+		level.FollowDaylightCurve = followDaylightCurve ? true : null;
 
 		if (!adopting)
 			return false;
 
-		defaults.LuxBrightnessMinPct = DarkEndFor(period.BrightnessPct);
+		room.LuxBrightnessMinPct = DarkEndFor(currentBrightnessPct);
 
 		return true;
 	}

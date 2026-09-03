@@ -163,10 +163,12 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     SunElevationThreshold: 3.0  # "Dark when the sun is below", in degrees
     SunEntity: sun.sun
 
-    # The daylight curve, which sets the brightness for the periods that carry
-    # UseDaylightCurve. It replaces the period's own level rather than adding to
-    # it, so both ends are free across 0-100 and nothing in the schedule bounds
-    # them. Setting the bright end under the dark end makes the curve fall.
+    # The daylight curve, which sets the brightness for whichever periods a room
+    # chooses to follow it for (Areas[].Levels[].FollowDaylightCurve, below — not
+    # a house-wide setting). It replaces the period's own level rather than
+    # adding to it, so both ends are free across 0-100 and nothing in the
+    # schedule bounds them. Setting the bright end under the dark end makes the
+    # curve fall.
     LuxBrightnessStartLux: 100      # the dark end, in lux: a dull room
     LuxBrightnessMinPct: 40         # how bright the room is at or under it
     LuxBrightnessFullLux: 10000     # the bright end: a bright overcast day
@@ -223,12 +225,8 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     - Id: day-1x8m
       Name: day
       Start: sunrise+00:45
-      ColorTempKelvin: 4500
-      # The light outside sets the brightness for this period, along the curve
-      # each room shapes under its LuxBrightness* settings. BrightnessPct is
-      # kept and does nothing while this is true, so turning it off restores 90.
-      UseDaylightCurve: true
       BrightnessPct: 90
+      ColorTempKelvin: 4500
 
     - Id: evening-4pb3
       Name: evening
@@ -241,8 +239,6 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       Start: "22:30"
       BrightnessPct: 15
       ColorTempKelvin: 2200
-      # No UseDaylightCurve here, so BrightnessPct is the whole answer for this
-      # period: 15 % is what a room runs at night. An absent key means the same.
       # SetsModeId switches the house to a mode option when the period starts.
       # It names the option's Id, not the text the dropdown shows.
       # SetsModeId: sover-b6t1
@@ -313,14 +309,22 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     #    on the sun, and shapes the daylight curve for itself rather than taking
     #    the house's. Naming Sun is the point of the entry — left at the default
     #    a room with no sensor is simply always dark. FollowOutdoorLux is
-    #    file-only. Whether the curve runs at all is a period's choice, not this
-    #    room's.
+    #    file-only. Whether the curve runs at all is this room's own choice, one
+    #    period at a time, through Levels below — never a period's own setting,
+    #    and never the whole house's.
     - AreaId: kjellergang
       Enabled: true
       Darkness: Sun
       FollowOutdoorLux: true
       LuxBrightnessMinPct: 25
       DaylightSensor: sensor.nord_illuminance
+      # This room runs "day" (id day-1x8m, above) off the curve instead of the
+      # schedule's stated 90 %; BrightnessPct is kept here and does nothing
+      # while FollowDaylightCurve is true, so turning it off restores 65.
+      Levels:
+        - PeriodId: day-1x8m
+          FollowDaylightCurve: true
+          BrightnessPct: 65
 
     # 6. Outdoors: opts out of the leaving sweep, gated on the sun, and fully
     #    explicit — no discovery is used for a slot you fill in. Found by set-up

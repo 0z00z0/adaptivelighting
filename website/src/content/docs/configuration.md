@@ -72,9 +72,10 @@ that.
 
 ### Daylight curve
 
-*The brightness given to the periods that follow the light outside.* A period is put on the curve in
-the schedule, not here — see [Brightness: a number, or the daylight curve](#brightness-a-number-or-the-daylight-curve).
-This section shapes the curve for this room.
+*The brightness this room takes for whichever of its periods follow the light outside.* Whether a
+period follows the curve is set on the room's own page, one period at a time — see
+[A room's own periods: a number, or the daylight curve](#a-rooms-own-periods-a-number-or-the-daylight-curve).
+This section shapes the curve itself, for this room.
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
@@ -87,12 +88,12 @@ This section shapes the curve for this room.
 Both ends go anywhere from 0 to 100 %. Nothing in the schedule limits them, and setting the bright
 end under the dark end makes the curve fall instead of rise.
 
-**The dark end starts at half the level of the period that claimed the curve**, since that is what the
-period gives when it is dark outside. Putting a 15 % night on the curve starts it at 7.5 %, a 90 % day
-at 45 %. Only the house's own value is set, so a room that has stated its own dark end keeps it. It is
-set once, when the curve goes from being used by no period to being used by one: a second period joining
-leaves the number where it is, and so does every later edit. Turn the curve off on every period and on
-again and it is set once more.
+**The dark end starts at half the level the room shows for the period that first claims the curve**,
+since that is what the period gives when it is dark outside. Putting a room's 15 % night on the curve
+starts its dark end at 7.5 %, a 90 % day at 45 %. It is this room's own dark end that is set — never the
+house's — and only once: while the room states no dark end of its own yet, and only as the curve goes
+from being used by none of this room's periods to being used by one. A second period in the same room
+joining leaves the number where it is, and so does every later edit, by hand or by seeding.
 
 **The reading comes from the house's outdoor sensor**, [*Outdoor light sensor*](#the-house). An
 indoor sensor measures the room's own lamps, so a room following one would chase itself. To read
@@ -178,7 +179,7 @@ A period runs from its start until the next period begins.
 | **Period name** | `morning`, `day`, `evening`, `night` — free-form, and what the board and the logs call it. Rename it whenever you like; nothing points at the name. | `Name` |
 | *(not on screen)* | The period's id, minted once when it is created. Everything that refers to a period refers to this. | `Id` |
 | **Starts** | A clock time (`22:30`) or a sun event with an optional offset (`sunrise`, `sunset-01:00`, `sunrise+00:45`). | `Start` |
-| **Brightness** | Either a number of your own, or the daylight curve. See below. | `UseDaylightCurve`, `BrightnessPct` |
+| **Brightness** | The level every room holds during this period, unless a room replaces it with the daylight curve for itself — see [A room's own periods](#a-rooms-own-periods-a-number-or-the-daylight-curve). | `BrightnessPct` |
 | **Colour temperature** | The target warmth, in kelvin. | `ColorTempKelvin` |
 | **Also switches house mode to** | When this period starts, switch the house to this mode option. | `SetsModeId` |
 | **Blend between periods** / **Blend over** | Lights drift to the next period's level instead of stepping at the boundary. | `SmoothTransitions`, `BlendMinutes` (default on, 30 min) |
@@ -189,19 +190,21 @@ Quote clock times in the file: bare `06:00` is not a string in YAML. Keep at lea
 boundary — far north a sun-anchored boundary can be unresolvable around midsummer and midwinter, and
 a period that cannot be placed is skipped.
 
-### Brightness: a number, or the daylight curve
+### A room's own periods: a number, or the daylight curve
 
-Every period carries one choice:
+The schedule above gives every period one house-wide brightness. Each room's own page carries the same
+table again, period by period, and there each period offers one choice for that room:
 
-- **Specify brightness** — the period's own percentage. This is the default, and what a file written
-  before the choice existed means.
-- **Use daylight curve** — the light outside sets the level instead, along
-  [the curve](#daylight-curve) each room shapes for itself.
+- **A number of its own**, or the schedule's, when it says nothing — the default, and what a file
+  written before the daylight curve existed means, for every room.
+- **Follow the daylight curve**, ticked on the room's own page — the light outside sets the level for
+  this room, this period, instead, along [the curve](#daylight-curve) the room shapes for itself.
 
-Several periods can use the curve, and one curve then covers them all. A period on the curve shows
-no percentage: the curve makes it irrelevant. The number stays in the file, so switching back
-restores what you typed. The curve diagram appears on a room's page only while some period is using
-it.
+The choice is the room's, never the period's: two rooms can run the same evening two different ways,
+one on the curve and one on its own number. A period a room follows the curve for shows no percentage
+on that room's page: the curve makes it irrelevant. The number stays in the file, so switching back
+restores what was typed. The curve diagram appears on a room's page only while that room follows it
+for some period.
 
 ### A period that waits for movement
 
@@ -257,7 +260,7 @@ hours → Away, someone moves → Normal.
 | **Only manage lights with (label)** | When set, only lights carrying this Home Assistant label are managed. Leave empty to manage every light that's found. Lights only — filtering sensors would make a half-labelled house deaf. | none | `IncludeLabel` |
 | **Never touch (label)** | Anything carrying this label is invisible to the app. Always wins over the include label. | `adaptive-exclude` | `ExcludeLabel` |
 | **Counts as motion (label)** | A sensor with this label is treated as a motion sensor whatever its type. | `adaptive-motion` | `MotionLabel` |
-| **Outdoor light sensor** | The house's outdoor sensor. The daylight curve reads it in every room; for darkness a room reads it only if it asks to. | none | `OutdoorLuxSensor` |
+| **Outdoor light sensor** | The house's outdoor sensor. The daylight curve reads it in any room that follows it, unless that room names its own Daylight sensor; for darkness a room reads it only if it asks to. | none | `OutdoorLuxSensor` |
 | **What counts as a motion sensor** | Device classes that qualify a `binary_sensor`. Listing any **replaces** the built-in set rather than adding to it. | motion, occupancy, presence | `MotionDeviceClasses` |
 | **What counts as a light-level sensor** | The device class that qualifies a `sensor`. | `illuminance` | `IlluminanceDeviceClass` |
 
@@ -308,9 +311,11 @@ id.
 Your own Home Assistant automations do not migrate: the published event is `adaptive_lighting_area`
 with an `area` field, and nothing publishes the old `laget_lighting_zone` any more.
 
-**`LuxBrightnessEnabled` does not migrate either, and nothing is lost by hand.** *Brighten with
-daylight* was switched on per room; the daylight curve is chosen per period, which covers the whole
-house, so there is no faithful translation between them. A file still carrying the key loads fine,
-the log says once what to set instead, and the next save drops it. Until a period is set to **Use
-daylight curve** no room follows the light outside. Everything that shapes the curve — the two ends,
-the two readings, the curve shape, and any per-room override of them — survives untouched.
+**Neither `LuxBrightnessEnabled` nor `UseDaylightCurve` migrates, and nothing is lost by hand.**
+*Brighten with daylight* was switched on per room; a later shape put the whole house's periods on the
+curve together; today's is per room, per period again, through that room's own row on its own
+schedule. No faithful translation exists between any of these, so a file still carrying either key
+loads fine, the log says once what to set instead, and the next save drops it. Until a room ticks
+**Follow the daylight curve** for one of its own periods, that room never follows the light outside.
+Everything that shapes the curve itself — the two ends, the two readings, the curve shape, and any
+per-room override of them — survives untouched.

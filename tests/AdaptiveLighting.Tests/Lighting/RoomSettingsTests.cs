@@ -408,7 +408,8 @@ public sealed class RoomSettingsTests
 			Assert.IsTrue(bool.TryParse(option.Value, out _), $"“{option.Text}” carries something the property cannot take");
 	}
 
-	// The curve is claimed per period, house-wide, so no room setting can know whether it is running.
+	// The curve is claimed per room, per period, so these settings cost nothing to keep offered here even for a
+	// room that has opted no period into the curve yet.
 	[TestMethod]
 	public void The_Curve_Settings_Are_Always_Offered()
 	{

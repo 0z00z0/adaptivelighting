@@ -61,15 +61,14 @@ public static class TokenFormat
 
 	/// <summary>A period's brightness and warmth on one line, as a collapsed row shows them.</summary>
 	// Through ConfigNormalizer.Whole, which is also what the editor shows and what the next save stores: three
-	// roundings of their own is how one setting came to read 62.5 in the control and 62 here.
+	// roundings of their own is how one setting came to read 62.5 in the control and 62 here. A room may still
+	// replace this with the daylight curve for itself; that is this room's own row, not the period's.
 	public static string PeriodLevel(TimePeriodConfig period)
 	{
 		ArgumentNullException.ThrowIfNull(period);
 
-		return period.UseDaylightCurve
-			? string.Create(CultureInfo.InvariantCulture, $"daylight · {period.ColorTempKelvin}K")
-			: string.Create(CultureInfo.InvariantCulture,
-				$"{ConfigNormalizer.Whole(period.BrightnessPct)}% · {period.ColorTempKelvin}K");
+		return string.Create(CultureInfo.InvariantCulture,
+			$"{ConfigNormalizer.Whole(period.BrightnessPct)}% · {period.ColorTempKelvin}K");
 	}
 }
 

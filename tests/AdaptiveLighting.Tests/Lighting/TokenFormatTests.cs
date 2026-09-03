@@ -143,8 +143,5 @@ public sealed class TokenFormatTests
 		TimePeriodConfig period = new() { BrightnessPct = 62.5, ColorTempKelvin = 2700 };
 
 		StringAssert.Contains(TokenFormat.PeriodLevel(period), "63%");
-
-		period.UseDaylightCurve = true;
-		StringAssert.Contains(TokenFormat.PeriodLevel(period), "daylight");
 	}
 }

@@ -160,32 +160,35 @@ public static class ConfigValidator
 					+ "has no lux reading and counts as dark. Name the house's outdoor sensor, or give the room a LuxSensor.");
 	}
 
-	/// <summary>A period runs the daylight curve, but the document names no sensor for it to read.</summary>
+	/// <summary>A room follows the daylight curve for one of its periods, but has nothing to read it from.</summary>
 	/// <remarks>
 	///     The curve reads <see cref="GlobalConfig.OutdoorLuxSensor"/> unless a room names its own
 	///     <see cref="AreaConfig.DaylightSensor"/>, so the house sensor is what covers the rooms that say nothing.
-	///     With no reading at all the curve sits at its dark end, which is a level nobody chose.
+	///     With no reading at all the curve sits at its dark end, which is a level nobody chose. Room-driven, not
+	///     period-driven: the opt-in is <see cref="RoomLevelOverride.FollowDaylightCurve"/> on that room's own
+	///     <see cref="AreaConfig.Levels"/> row, so a room that never claims the curve is never named here.
 	/// </remarks>
 	private static void ValidateLuxBrightnessSource(AdaptiveLightingConfig config, ValidationResult result)
 	{
-		if (!config.Periods.Any(period => period.UseDaylightCurve))
-			return;
-
 		if (config.Global.OutdoorLuxSensor is { Length: > 0 })
 			return;
 
-		// Named per room, this is only a gap for the rooms that did not name one.
 		IReadOnlyList<string> unsupplied =
-			[.. config.Areas.Where(area => area.DaylightSensor is not { Length: > 0 }).Select(area => area.DisplayName)];
+		[
+			.. config.Areas
+				.Where(area => area.DaylightSensor is not { Length: > 0 })
+				.Where(area => area.Levels.Any(level => level.FollowDaylightCurve == true))
+				.Select(area => area.DisplayName)
+		];
 
 		if (unsupplied.Count == 0)
 			return;
 
 		result.AddWarning(
-			$"At least one period follows the daylight curve, but Global.OutdoorLuxSensor names no sensor, so "
-			+ $"{unsupplied.Count} room(s) have nothing to read ({string.Join(", ", unsupplied)}). Name the house's "
-			+ "outdoor light-level sensor, or give each of those rooms a DaylightSensor of its own. Until then the "
-			+ "curve holds those rooms at LuxBrightnessMinPct.");
+			$"At least one room follows the daylight curve for one of its periods, but Global.OutdoorLuxSensor "
+			+ $"names no sensor, so {unsupplied.Count} room(s) have nothing to read ({string.Join(", ", unsupplied)}). "
+			+ "Name the house's outdoor light-level sensor, or give each of those rooms a DaylightSensor of its own. "
+			+ "Until then the curve holds those rooms at LuxBrightnessMinPct.");
 	}
 
 	/// <summary>Settings the document still carries that no longer do anything.</summary>

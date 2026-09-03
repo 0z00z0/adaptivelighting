@@ -56,19 +56,16 @@ public class TimePeriodConfig
 	/// </remarks>
 	public List<string>? StartsOnMotionAreas { get; set; }
 
-	/// <summary>The level this period holds, unless <see cref="UseDaylightCurve"/> hands that to the curve.</summary>
-	// Kept in the document while the curve runs, so switching back restores what was typed.
+	/// <summary>The level this period holds, house-wide.</summary>
+	// A room follows the daylight curve instead through its own Levels row for this period
+	// (RoomLevelOverride.FollowDaylightCurve); this period never hands that decision away.
 	public double BrightnessPct { get; set; } = 80;
-
-	/// <summary>Whether the daylight curve sets the brightness for this period instead of <see cref="BrightnessPct"/>.</summary>
-	// A bool and not an enum: an absent key binds to false, where an unknown enum name is a FormatException at
-	// start-up. False is "specify brightness", which is what a document written before the curve existed means.
-	public bool UseDaylightCurve { get; set; }
 
 	public int ColorTempKelvin { get; set; } = 3500;
 
-	// MinBrightnessPct and MaxBrightnessPct are gone. A stale one still parses, since both binders ignore what they
-	// do not know, but it no longer behaves: LightingConfigDocument.RetiredKeys logs it on load.
+	// MinBrightnessPct and MaxBrightnessPct are gone, and so is this period's own UseDaylightCurve. A stale one
+	// still parses, since both binders ignore what they do not know, but it no longer behaves:
+	// LightingConfigDocument.RetiredKeys logs it on load.
 }
 
 /// <summary>A sun event a period boundary can be anchored to.</summary>

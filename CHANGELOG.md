@@ -12,6 +12,21 @@ against each other.
 
 ## [Unreleased]
 
+### Changed
+
+- **The daylight curve moves from a house-wide, per-period choice to a per-room, per-period one.** A
+  room now follows the curve for one of its own periods through that period's own row on the room's
+  page (`RoomLevelOverride.FollowDaylightCurve`), never through anything on the period. A period keeps
+  exactly one house-wide `BrightnessPct` again, as it did before the curve existed, and two rooms can
+  now run the same period two different ways — one on the curve, one on its own number.
+  `TimePeriodConfig.UseDaylightCurve` is retired; a document still carrying it loads unchanged, with
+  the key reported and dropped on the next save.
+- **A room's own per-period brightness now reaches the lamp when that room has not put the period on
+  the curve.** Previously it was discarded whenever the period itself was on the curve, whatever a
+  room's own row asked for, because the choice lived on the period rather than the room.
+- **The "nothing to read" warning now names the rooms that actually follow the curve**, rather than
+  every room in the house whenever any period was on it.
+
 ## [2026.9.2] - 2026-09-03
 
 ### Added
