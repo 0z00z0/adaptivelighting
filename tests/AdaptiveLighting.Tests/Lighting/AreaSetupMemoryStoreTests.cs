@@ -38,8 +38,8 @@ public sealed class AreaSetupMemoryStoreTests
 	private static AreaSetupFault NoLights(string key = "stue") =>
 		new(key, "Stua", $"No lights discovered in area '{key}'. Assign lights to the area in HA, or list them explicitly.");
 
-	private static AreaSetupFault NoMotion(string key = "stue") =>
-		new(key, "Stua", $"No motion sensors discovered in area '{key}'. Assign one to the area, label it 'adaptive-motion', or list it explicitly.");
+	private static AreaSetupFault NoSuchArea(string key = "stue") =>
+		new(key, "Stua", $"Home Assistant has no area '{key}'. It must be the area's id, the slug, not its display name.");
 
 	// Named after the configuration document, so two houses in one directory cannot collide.
 	[TestMethod]
@@ -69,10 +69,10 @@ public sealed class AreaSetupMemoryStoreTests
 		using TempDirectory temp = new();
 		temp.Store().Record([NoLights()]);
 
-		IReadOnlyList<AreaSetupFault> again = temp.Store().Record([NoMotion()]);
+		IReadOnlyList<AreaSetupFault> again = temp.Store().Record([NoSuchArea()]);
 
-		Assert.AreEqual(1, again.Count, "the lights were found and the motion sensor is missing: a different problem");
-		Assert.AreEqual(0, temp.Store().Record([NoMotion()]).Count, "and the new problem is then remembered in its turn");
+		Assert.AreEqual(1, again.Count, "the area id turns out to be wrong too: a different problem");
+		Assert.AreEqual(0, temp.Store().Record([NoSuchArea()]).Count, "and the new problem is then remembered in its turn");
 	}
 
 	[TestMethod]
@@ -92,14 +92,14 @@ public sealed class AreaSetupMemoryStoreTests
 	public void Rooms_Are_Remembered_One_By_One()
 	{
 		using TempDirectory temp = new();
-		temp.Store().Record([NoLights("stue"), NoMotion("gang")]);
+		temp.Store().Record([NoLights("stue"), NoSuchArea("gang")]);
 
-		IReadOnlyList<AreaSetupFault> next = temp.Store().Record([NoMotion("gang"), NoLights("kjokken")]);
+		IReadOnlyList<AreaSetupFault> next = temp.Store().Record([NoSuchArea("gang"), NoLights("kjokken")]);
 
 		Assert.AreEqual(1, next.Count);
 		Assert.AreEqual("kjokken", next[0].Key, "only the room nobody has been told about yet");
 
-		Assert.AreEqual(1, temp.Store().Record([NoLights("stue"), NoMotion("gang"), NoLights("kjokken")]).Count,
+		Assert.AreEqual(1, temp.Store().Record([NoLights("stue"), NoSuchArea("gang"), NoLights("kjokken")]).Count,
 			"and the room that resolved in between is new again when it fails once more");
 	}
 
