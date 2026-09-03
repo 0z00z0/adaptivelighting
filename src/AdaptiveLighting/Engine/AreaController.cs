@@ -968,6 +968,8 @@ public sealed class AreaController : IDisposable
 
 	// A movement-led hold runs for exactly the vacancy timeout and motion restarts it, so IsOccupied is already
 	// false when it fires and OnOverrideExpired lands on the empty-room branch without knowing which mode ran.
+	// An area with no motion sensor restarts it never, so the hold runs once and the room settles empty. Anything
+	// that re-arms this while IsOccupied is false would hold such a room lit for ever.
 	private TimeSpan OverrideHold() =>
 		_area.Settings.OverrideUntilVacant
 			? TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds)

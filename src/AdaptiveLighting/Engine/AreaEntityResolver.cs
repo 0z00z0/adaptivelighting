@@ -5,7 +5,7 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Engine;
 
 /// <summary>An area with every entity reference turned into a concrete id, ready to build a controller from.</summary>
-// Lights and MotionSensors are never empty; LuxSensors may be. FollowOutdoorLux stays unresolved so a room that
+// Lights are never empty; MotionSensors and LuxSensors may be. FollowOutdoorLux stays unresolved so a room that
 // follows the house keeps following when the house changes its mind. LightsSupportColorTemp is read once here,
 // because the alternative is a state read per light per tick.
 public sealed record ResolvedArea(
@@ -165,17 +165,11 @@ public sealed class AreaEntityResolver
 			return false;
 		}
 
+		// No motion sensor is not a fault. Such a room never lights itself, and a hand at its switch drives it
+		// through the ordinary manual path: OverriddenOn, then off when that hold runs out.
 		List<string> motion = area.MotionSensors is { Count: > 0 } explicitMotion
 			? [.. explicitMotion]
 			: WithoutExcluded(DiscoverMotionSensors(areaId), area);
-
-		if (motion.Count == 0)
-		{
-			error = areaId is null
-				? "No motion sensors: the area has neither an AreaId to discover from nor an explicit MotionSensors list."
-				: $"No motion sensors discovered in area '{areaId}'. Assign one to the area, label it '{_global.MotionLabel}', or list it explicitly.";
-			return false;
-		}
 
 		// One sensor by construction, which is how a room opts out of an average it disagrees with.
 		List<string> lux = area.LuxSensor is { Length: > 0 } explicitLux
@@ -188,10 +182,17 @@ public sealed class AreaEntityResolver
 		// watching several. Naming the membership is what stops that line being read as one sensor.
 		_logger.LogInformation(
 			"Area {Area}: {LightCount} lights ({Lights}), {MotionCount} motion sensors ({Motion}), lux sensors {Lux}.",
-			name, lights.Count, string.Join(", ", lights.Select(Describe)), motion.Count, string.Join(", ", motion.Select(Describe)),
+			name, lights.Count, string.Join(", ", lights.Select(Describe)), motion.Count,
+			motion.Count > 0 ? string.Join(", ", motion.Select(Describe)) : "(none)",
 			lux.Count > 0
 				? string.Join(", ", lux)
 				: area.FollowOutdoorLux == true ? "(the house's outdoor sensor)" : "(none)");
+
+		if (motion.Count == 0)
+			_logger.LogInformation(
+				"Area {Area} has no motion sensor, so nothing there ever lights itself. Switching its lights on by "
+				+ "hand puts it on the manual hold, and it goes off when that hold runs out.",
+				name);
 
 		(bool? colorTemp, bool? anyColour) = ColourCapabilityOf(lights);
 

@@ -116,6 +116,47 @@ public sealed class AreaSetupNotificationTests
 			"and switching it back on reports it for the first time");
 	}
 
+	[TestMethod]
+	public void A_Room_With_Lights_And_No_Motion_Sensor_Is_Not_A_Fault()
+	{
+		using TempDirectory temp = new();
+
+		Assert.AreEqual(0,
+			Start(Config(new AreaConfig { Name = "Soverom", Lights = ["light.soverom"] }), temp.Memory()).Count,
+			"a room with lights and no motion sensor is set up and running, not a room that failed");
+	}
+
+	[TestMethod]
+	public void A_Room_With_No_Lights_At_All_Is_Still_A_Fault()
+	{
+		using TempDirectory temp = new();
+
+		List<(string Title, string Message)> raised = Start(
+			Config(new AreaConfig { Name = "Boden", MotionSensors = ["binary_sensor.bod"] }), temp.Memory());
+
+		Assert.AreEqual(1, raised.Count);
+		StringAssert.Contains(raised[0].Message, "Boden");
+		StringAssert.Contains(raised[0].Message, "No lights");
+	}
+
+	// The note holds only what is standing now, so a room that starts resolving is dropped from it and a later
+	// regression counts as new again.
+	[TestMethod]
+	public void A_Room_That_Starts_Resolving_Is_Forgotten_From_The_Note()
+	{
+		using TempDirectory temp = new();
+
+		Assert.AreEqual(1, Start(Config(new AreaConfig { Name = "Soverom" }), temp.Memory()).Count);
+
+		Assert.AreEqual(0,
+			Start(Config(new AreaConfig { Name = "Soverom", Lights = ["light.soverom"] }), temp.Memory()).Count,
+			"the room resolves now, so there is nothing to say");
+
+		Assert.AreEqual(1,
+			Start(Config(new AreaConfig { Name = "Soverom" }), temp.Memory()).Count,
+			"and a room that breaks again is reported again, which only a forgotten note allows");
+	}
+
 	// "areas disabled" read as "the rooms you switched off"; the rooms named are enabled ones that failed setup.
 	[TestMethod]
 	public void The_Title_Says_The_Rooms_Could_Not_Be_Set_Up()

@@ -1064,17 +1064,20 @@ public sealed class AreaEntityResolverTests
 	}
 
 	[TestMethod]
-	public void An_Area_With_No_Motion_Sensors_Is_An_Area_Error()
+	public void An_Area_With_No_Motion_Sensors_Still_Resolves_And_Runs()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new();
+		FakeAreaRegistry registry = new();
 		registry.Areas["stue"] = ["light.l"];
 		ha.SetState("light.l", "off");
 
-		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out _, out var error);
+		bool ok = Resolver(ha, registry)
+			.TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? resolved, out string? error);
 
-		Assert.IsFalse(ok);
-		StringAssert.Contains(error!, "No motion sensors");
+		Assert.IsTrue(ok, "a room with lights but no motion sensor must still be taken into service");
+		Assert.IsNull(error);
+		Assert.AreEqual(0, resolved!.MotionSensors.Count);
+		CollectionAssert.AreEqual(new[] { "light.l" }, resolved.Lights.ToArray());
 	}
 
 	[TestMethod]
