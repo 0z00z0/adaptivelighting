@@ -116,12 +116,12 @@
 @* The switch-driven line first: it says what a room does, where the other says what it cannot judge. *@
 @if (SwitchDriven is { Length: > 0 } switchDriven)
 {
-	<p class="comm-nearmiss">@switchDriven</p>
+	<p class="comm-caveat">@switchDriven</p>
 }
 
 @if (NoSensor is { Length: > 0 } noSensor)
 {
-	<p class="comm-nearmiss">@noSensor</p>
+	<p class="comm-caveat">@noSensor</p>
 }
 
 <p class="comm-escape">Or <a href="config?section=areas">switch rooms on under Configuration</a>, the way this app has always done it.</p>

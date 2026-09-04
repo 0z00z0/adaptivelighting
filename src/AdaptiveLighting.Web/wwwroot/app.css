@@ -6627,7 +6627,7 @@ h1[tabindex="-1"]:focus {
 	padding: 0.5rem 0 0.1rem;
 }
 
-.comm-nearmiss,
+.comm-caveat,
 .comm-escape {
 	margin: 10px 2px 0;
 	font-size: var(--text-sm);
