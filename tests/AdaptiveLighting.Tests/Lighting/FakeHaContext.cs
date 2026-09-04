@@ -17,6 +17,12 @@ public sealed class FakeHaContext : IHaContext
 	private readonly Subject<Event> _events = new();
 	private readonly Dictionary<string, EntityState> _states = new(StringComparer.Ordinal);
 
+	// Measured 2026-09: the busiest legitimate fixture use (ModeMonitor's virtual-time simulation, hundreds of
+	// scheduled ticks each polling state) tops out at 2821 reads; a group walk tops out at 46. 10000 carries
+	// over 3x the widest measured, in a fixture whose reads are dictionary lookups, so raising it costs nothing
+	// but headroom.
+	public const int DefaultStateReadBudget = 10_000;
+
 	public List<ServiceCall> Calls { get; } = [];
 
 	public List<(string Type, object? Data)> SentEvents { get; } = [];
@@ -26,9 +32,11 @@ public sealed class FakeHaContext : IHaContext
 	// over groups this count is the number of nodes it visited.
 	public int StateReads { get; private set; }
 
-	/// <summary>A ceiling on <see cref="StateReads"/>, past which <see cref="GetState"/> throws; <c>null</c> for none.</summary>
+	/// <summary>A ceiling on <see cref="StateReads"/>, past which <see cref="GetState"/> throws. Defaults to
+	/// <see cref="DefaultStateReadBudget"/>; set to a higher value for a test whose legitimate work exceeds it,
+	/// or to <c>null</c> to disable the guard entirely.</summary>
 	// Bounds a test by the work the code does instead of by the clock, so a loaded runner cannot turn it red.
-	public int? StateReadBudget { get; set; }
+	public int? StateReadBudget { get; set; } = DefaultStateReadBudget;
 
 	IObservable<Event> IHaContext.Events => _events;
 

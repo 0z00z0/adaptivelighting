@@ -13,7 +13,9 @@ public sealed class AreaEntityResolverTests
 	// What the self-referencing-group tests below are bounded by: the work the walk does, never the wall clock, so
 	// a busy runner cannot turn them red. On healthy code those three read 27, 46 and 28 states, so 200 carries
 	// four times the widest and is still passed in microseconds by a walk that revisits. Never a [Timeout] here:
-	// a group that contains itself is unbounded, not slow, and a clock cannot tell the two apart.
+	// a group that contains itself is unbounded, not slow, and a clock cannot tell the two apart. Tighter than
+	// FakeHaContext's own default budget on purpose: a regression in the visited set should trip in the low
+	// hundreds, not wait for the suite-wide ceiling.
 	private const int LoopBudget = 200;
 
 	private static AreaEntityResolver Resolver(
