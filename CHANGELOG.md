@@ -24,6 +24,12 @@ against each other.
   now caught in flight instead of hanging the suite. The default is measured against the widest
   legitimate use in the current suite — a virtual-time simulation polling state on every scheduled tick,
   2821 reads at its busiest — with over 3x headroom.
+- **A hand-set colour on a colour-channel fixture survives a period test.** `LightCommand` now
+  carries an optional colour-channel vector alongside brightness and colour temperature, and a
+  period test reads a fixture's current `rgb_color`/`rgbw_color`/`rgbww_color` back into it before
+  running, the same way it already reads brightness and colour temperature. Previously the vector
+  had nowhere to go, so a room with no colour temperature to fall back on came back from a test at
+  neutral white.
 
 ### Internal
 

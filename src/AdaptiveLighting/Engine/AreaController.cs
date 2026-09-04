@@ -1066,8 +1066,6 @@ public sealed class AreaController : IDisposable
 		_state is AreaState.OverriddenOn or AreaState.SceneHold;
 
 	/// <summary>Reads this room's fixtures as they stand, as commands that would put them back.</summary>
-	// Colour channels are outside what a LightCommand can say, so a hand-set colour in a room commanded at equal
-	// channels comes back as neutral white.
 	private IReadOnlyList<(string Light, LightCommand Command)> CaptureLights()
 	{
 		List<(string Light, LightCommand Command)> captured = [];
@@ -1091,10 +1089,24 @@ public sealed class AreaController : IDisposable
 				true,
 				raw is { } brightness ? brightness / LightAttributes.MaxRawBrightness * 100 : null,
 				kelvin is { } warmth ? (int)Math.Round(warmth) : null,
-				TransitionSeconds())));
+				TransitionSeconds(),
+				Channels: ReadChannels(state))));
 		}
 
 		return captured;
+	}
+
+	/// <summary>The colour channel vector a fixture currently reports, or <c>null</c> when it reports none.</summary>
+	private static IReadOnlyList<int>? ReadChannels(EntityState state)
+	{
+		foreach (string attribute in LightAttributes.ColourChannelAttributes)
+		{
+			IReadOnlyList<double> values = state.AttrDoubleList(attribute);
+			if (values.Count > 0)
+				return [.. values.Select(value => (int)Math.Round(value))];
+		}
+
+		return null;
 	}
 
 	/// <summary>Drops a running test's return, leaving the fixtures exactly where they are.</summary>

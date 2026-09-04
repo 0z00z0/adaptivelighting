@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
@@ -27,9 +26,9 @@ public sealed class HaLightActuator : ILightActuator
 	private const string BrightnessPctKey = "brightness_pct";
 	private const string ColorTempKelvinKey = "color_temp_kelvin";
 	private const string TransitionKey = "transition";
-	private const string RgbColorKey = "rgb_color";
-	private const string RgbwColorKey = "rgbw_color";
-	private const string RgbwwColorKey = "rgbww_color";
+	private const string RgbColorKey = LightAttributes.RgbColor;
+	private const string RgbwColorKey = LightAttributes.RgbwColor;
+	private const string RgbwwColorKey = LightAttributes.RgbwwColor;
 	private const string RgbwMode = "rgbw";
 	private const string RgbwwMode = "rgbww";
 
@@ -67,7 +66,10 @@ public sealed class HaLightActuator : ILightActuator
 		}
 
 		// The one place the channel key is chosen, off the state already read here. No extra round trip.
-		string? channelKey = command.EqualChannels ? ChannelKeyFor(state) : null;
+		// An explicit vector names its own key by its length; EqualChannels still asks the fixture.
+		string? channelKey = command.Channels is { Count: > 0 } explicitChannels
+			? ChannelKeyForCount(explicitChannels.Count)
+			: command.EqualChannels ? ChannelKeyFor(state) : null;
 
 		if (AlreadyMatches(state, command, channelKey))
 		{
@@ -115,6 +117,13 @@ public sealed class HaLightActuator : ILightActuator
 		_ => 3
 	};
 
+	private static string ChannelKeyForCount(int count) => count switch
+	{
+		5 => RgbwwColorKey,
+		4 => RgbwColorKey,
+		_ => RgbColorKey
+	};
+
 	private bool AlreadyMatches(EntityState? state, LightCommand command, string? channelKey)
 	{
 		if (state?.IsOn() != true)
@@ -141,11 +150,15 @@ public sealed class HaLightActuator : ILightActuator
 
 		if (channelKey is not null)
 		{
-			IReadOnlyList<double> channels = ChannelsOf(state, channelKey);
+			IReadOnlyList<double> channels = state.AttrDoubleList(channelKey);
 
 			if (channels.Count > 0)
 			{
-				if (channels.Any(channel => Math.Abs(channel - EqualChannelValue) > 0.5))
+				bool matches = command.Channels is { Count: > 0 } wantedChannels
+					? channels.Count == wantedChannels.Count && !channels.Where((channel, index) => Math.Abs(channel - wantedChannels[index]) > 0.5).Any()
+					: !channels.Any(channel => Math.Abs(channel - EqualChannelValue) > 0.5);
+
+				if (!matches)
 					return false;
 			}
 				// HA publishes rgbw_color / rgbww_color only while the fixture is in that colour mode, so one that offers
@@ -160,22 +173,6 @@ public sealed class HaLightActuator : ILightActuator
 		return true;
 	}
 
-	// Not AttrStringList: a colour arrives as a JSON array of numbers, which that helper drops on the floor.
-	private static IReadOnlyList<double> ChannelsOf(EntityState state, string attribute)
-	{
-		if (state.Attributes?.TryGetValue(attribute, out object? value) != true)
-			return [];
-
-		return value switch
-		{
-			JsonElement { ValueKind: JsonValueKind.Array } element =>
-				[.. element.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Number).Select(item => item.GetDouble())],
-			IEnumerable<int> numbers => [.. numbers.Select(number => (double)number)],
-			IEnumerable<double> numbers => [.. numbers],
-			_ => []
-		};
-	}
-
 	// A dictionary, not an anonymous type: an absent key stays absent, where a serialized null would be rejected.
 	private static Dictionary<string, object> BuildOnData(LightCommand command, string? channelKey)
 	{
@@ -188,7 +185,7 @@ public sealed class HaLightActuator : ILightActuator
 			data[ColorTempKelvinKey] = kelvin;
 
 		if (channelKey is not null)
-			data[channelKey] = EqualChannels(channelKey);
+			data[channelKey] = command.Channels is { Count: > 0 } channels ? channels.ToArray() : EqualChannels(channelKey);
 
 		if (command.TransitionSeconds is { } transition)
 			data[TransitionKey] = Math.Round(transition, 1);

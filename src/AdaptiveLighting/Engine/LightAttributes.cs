@@ -7,7 +7,14 @@ internal static class LightAttributes
 {
 	public const string Brightness = "brightness";
 	public const string ColorTempKelvin = "color_temp_kelvin";
+	public const string RgbColor = "rgb_color";
+	public const string RgbwColor = "rgbw_color";
+	public const string RgbwwColor = "rgbww_color";
 
 	/// <summary>Home Assistant reports brightness on 0-255 but accepts it as a percentage.</summary>
 	public const double MaxRawBrightness = 255.0;
+
+	// Widest first: HA publishes only the one matching the fixture's current colour mode, so a read
+	// checks all three and stops at whichever answers.
+	public static readonly string[] ColourChannelAttributes = [RgbwwColor, RgbwColor, RgbColor];
 }

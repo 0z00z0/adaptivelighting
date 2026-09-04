@@ -102,6 +102,51 @@ public sealed class ColorControlTests
 	}
 
 	[TestMethod]
+	public void An_Explicit_Channel_Vector_Is_Sent_As_Is_Not_As_Equal_White()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Light, "off", new() { [SupportedColorModes] = new[] { "rgb" } });
+
+		Actuator(ha).Apply(Light, new LightCommand(true, 70, null, 15, Channels: [255, 120, 40]));
+
+		Dictionary<string, object> data = DataOf(ha.Calls.Single());
+		CollectionAssert.AreEqual(new[] { 255, 120, 40 }, (int[])data["rgb_color"]);
+		Assert.IsFalse(data.ContainsKey("color_temp_kelvin"));
+	}
+
+	[TestMethod]
+	public void A_Light_Already_Showing_The_Explicit_Channels_Is_Left_Alone()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Light, "on", new()
+		{
+			["brightness"] = 178.5,
+			[SupportedColorModes] = new[] { "rgb" },
+			["rgb_color"] = new[] { 255, 120, 40 }
+		});
+
+		Actuator(ha).Apply(Light, new LightCommand(true, 70, null, 15, Channels: [255, 120, 40]));
+
+		Assert.AreEqual(0, ha.Calls.Count, "the fixture is already showing the hand-set colour");
+	}
+
+	[TestMethod]
+	public void A_Light_Showing_A_Different_Colour_Than_The_Explicit_Channels_Is_Commanded()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Light, "on", new()
+		{
+			["brightness"] = 178.5,
+			[SupportedColorModes] = new[] { "rgb" },
+			["rgb_color"] = new[] { 255, 255, 255 }
+		});
+
+		Actuator(ha).Apply(Light, new LightCommand(true, 70, null, 15, Channels: [255, 120, 40]));
+
+		CollectionAssert.AreEqual(new[] { 255, 120, 40 }, (int[])DataOf(ha.Calls.Single())["rgb_color"]);
+	}
+
+	[TestMethod]
 	public void A_Light_Already_On_Neutral_White_Is_Left_Alone()
 	{
 		FakeHaContext ha = new();
