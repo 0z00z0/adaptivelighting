@@ -34,14 +34,18 @@ public sealed record AreaSnapshot(
 	ForcedMode? Forced = null,
 	bool? IsHeldLit = null,
 	string? HeldLitBy = null,
-	string? SceneApplied = null)
+	string? SceneApplied = null,
+	string? TestingPeriodId = null,
+	DateTimeOffset? TestEndsAt = null)
 {
 	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
 	///     Not record equality: <c>==</c> compares the "as of" fields, every one of which moves on every tick, so
 	///     diffing on it would suppress nothing. Timestamps, <see cref="Reason"/>, <see cref="DarknessDetail"/>,
 	///     <see cref="AutoOnBlockedBy"/> and <see cref="HeldLitBy"/> date or describe the snapshot; they say nothing
-	///     about the area.
+	///     about the area. <see cref="TestingPeriodId"/> and <see cref="TestEndsAt"/> are compared, unlike those:
+	///     a level test starting or ending is real news, and it is the only news a snapshot carries while nothing
+	///     else about the area moves — a suppressed publish would leave a fresh page load with nothing to redraw.
 	/// </remarks>
 	public bool HasSameMeaningAs(AreaSnapshot? other) =>
 		other is not null &&
@@ -59,6 +63,8 @@ public sealed record AreaSnapshot(
 		Nullable.Equals(IsAnyoneHome, other.IsAnyoneHome) &&
 		Nullable.Equals(IsHeldLit, other.IsHeldLit) &&
 		string.Equals(SceneApplied, other.SceneApplied, StringComparison.Ordinal) &&
+		string.Equals(TestingPeriodId, other.TestingPeriodId, StringComparison.Ordinal) &&
+		Nullable.Equals(TestEndsAt, other.TestEndsAt) &&
 		Forced == other.Forced;
 }
 

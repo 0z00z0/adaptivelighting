@@ -31,7 +31,9 @@ public sealed class RoomFactsTests
 		ForcedMode? forced = null,
 		bool? isHeldLit = null,
 		string? heldLitBy = null,
-		string? sceneApplied = null) =>
+		string? sceneApplied = null,
+		string? testingPeriodId = null,
+		DateTimeOffset? testEndsAt = null) =>
 		new(
 			"Stue",
 			state,
@@ -57,7 +59,9 @@ public sealed class RoomFactsTests
 			forced,
 			isHeldLit,
 			heldLitBy,
-			sceneApplied);
+			sceneApplied,
+			testingPeriodId,
+			testEndsAt);
 
 	private static string ValueOf(IReadOnlyList<RoomFact> facts, string label) =>
 		facts.Single(fact => fact.Label == label).Value;
@@ -265,6 +269,42 @@ public sealed class RoomFactsTests
 
 		Assert.IsFalse(RoomFacts.IsOverdue(Report(nextChange: Now.AddSeconds(-30)), Now),
 			"a deadline a moment past is a report in flight, not a broken connection");
+	}
+
+	// ===================== a running level test, read off the report alone =====================
+	//
+	// The room page's own local click state is not exercised here: these two functions are what a freshly
+	// created component falls back to, carrying none of it — the equivalent of navigating away and back inside
+	// the ten seconds a test runs. Before AreaSnapshot carried TestingPeriodId and TestEndsAt, a fresh page had
+	// nothing to redraw the countdown from and showed plain Test buttons while the engine's return was still
+	// pending.
+
+	[TestMethod]
+	public void A_Running_Test_Is_Read_Off_The_Report_With_No_Local_State_At_All()
+	{
+		AreaSnapshot report = Report(testingPeriodId: "day", testEndsAt: Now.AddSeconds(4));
+
+		Assert.AreEqual("day", RoomFacts.TestingPeriod(report, Now),
+			"a fresh component has no click of its own to remember; the report is the only source left");
+		Assert.AreEqual(4, RoomFacts.TestSecondsLeft(report, Now));
+	}
+
+	[TestMethod]
+	public void A_Running_Tests_Countdown_Is_Absent_Once_Its_Own_Deadline_Has_Passed()
+	{
+		AreaSnapshot report = Report(testingPeriodId: "day", testEndsAt: Now.AddSeconds(-1));
+
+		Assert.IsNull(RoomFacts.TestingPeriod(report, Now), "the return already ran; nothing is left to count down");
+		Assert.AreEqual(0, RoomFacts.TestSecondsLeft(report, Now));
+	}
+
+	[TestMethod]
+	public void No_Running_Test_Reports_No_Period_And_No_Seconds()
+	{
+		AreaSnapshot report = Report();
+
+		Assert.IsNull(RoomFacts.TestingPeriod(report, Now));
+		Assert.AreEqual(0, RoomFacts.TestSecondsLeft(report, Now));
 	}
 
 	// ===================== the present tense =====================

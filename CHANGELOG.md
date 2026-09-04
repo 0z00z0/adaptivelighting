@@ -30,6 +30,11 @@ against each other.
   running, the same way it already reads brightness and colour temperature. Previously the vector
   had nowhere to go, so a room with no colour temperature to fall back on came back from a test at
   neutral white.
+- **A room's Test countdown survives leaving the page.** It used to be drawn from the page's own
+  component state alone, which Blazor drops the instant the component is destroyed — navigating away
+  and back within the ten seconds showed plain Test buttons while the engine's own return was still
+  pending. The engine now publishes which period is under test and when it ends, so a fresh page load
+  or a navigate-back redraws the same countdown a page that stayed open would show.
 
 ### Internal
 

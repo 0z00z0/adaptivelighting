@@ -191,6 +191,26 @@ public static class RoomFacts
 		return Math.Clamp((due - now).TotalSeconds / (due - from).TotalSeconds, 0, 1);
 	}
 
+	/// <summary>The period a running level test is showing, or <c>null</c> once its deadline has passed.</summary>
+	/// <remarks>
+	///     Read off the report alone, so a page that just loaded or navigated back — carrying no local memory of
+	///     which button was pressed — redraws the same countdown a page that has been open throughout would show.
+	/// </remarks>
+	public static string? TestingPeriod(AreaSnapshot snapshot, DateTimeOffset now)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		return snapshot.TestEndsAt is { } ends && ends > now ? snapshot.TestingPeriodId : null;
+	}
+
+	/// <summary>How many seconds a running level test has left, zero once its deadline has passed.</summary>
+	public static int TestSecondsLeft(AreaSnapshot snapshot, DateTimeOffset now)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		return snapshot.TestEndsAt is { } ends ? Math.Max(0, (int)Math.Ceiling((ends - now).TotalSeconds)) : 0;
+	}
+
 	/// <summary>Why movement would not switch these lights on right now, or <c>null</c> when there is nothing to say.</summary>
 	/// <remarks>
 	///     Read off the verdict the engine published, never re-derived here: only the engine knows which gates it

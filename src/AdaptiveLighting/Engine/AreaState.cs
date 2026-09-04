@@ -65,7 +65,10 @@ public enum TransitionReason
 	HouseModeChanged,
 
 	/// <summary>A Guest scene took the area into, or released it from, an indefinite hold.</summary>
-	SceneHold
+	SceneHold,
+
+	/// <summary>A level test started on the room's real lights. Nothing the area decides on moved.</summary>
+	LevelTestStarted
 }
 
 /// <summary>Which gate is refusing to switch an area's lights on for movement.</summary>

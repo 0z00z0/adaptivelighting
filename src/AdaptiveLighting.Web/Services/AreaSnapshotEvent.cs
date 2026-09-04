@@ -129,6 +129,14 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("mode_forced_by_state")]
 	public string? ModeForcedByState { get; init; }
 
+	/// <summary>The period a running level test is showing, or <c>null</c> when none is.</summary>
+	[JsonPropertyName("testing_period_id")]
+	public string? TestingPeriodId { get; init; }
+
+	/// <summary>When a running level test hands the room back, or <c>null</c> when none is running.</summary>
+	[JsonPropertyName("test_ends_at")]
+	public DateTimeOffset? TestEndsAt { get; init; }
+
 	/// <summary>
 	///     Rebuilds an <see cref="AreaSnapshot"/>, or <c>null</c> when the payload names no area. An unparseable
 	///     enum name degrades to its zero value; nothing throws.
@@ -167,6 +175,8 @@ public sealed record AreaSnapshotEvent
 				: null,
 			IsHeldLit: IsHeldLit,
 			HeldLitBy: HeldLitBy,
-			SceneApplied: SceneApplied);
+			SceneApplied: SceneApplied,
+			TestingPeriodId: TestingPeriodId,
+			TestEndsAt: TestEndsAt);
 	}
 }

@@ -77,6 +77,13 @@ public sealed class AreaController : IDisposable
 	// area decides on, so every timer, hold and gate carries on around it.
 	private bool _levelTesting;
 
+	// The period a running test is showing, and when the engine takes the room back. Set together with
+	// _levelTesting and cleared wherever it is, so the snapshot never reports one without the other. Read by
+	// Snapshot so a page that reloads or navigates back mid-test can redraw the countdown from the report
+	// instead of the drawing it lost.
+	private string? _testingPeriodId;
+	private DateTimeOffset? _testEndsAt;
+
 	// The fixtures as they stood before a test, for a room holding levels the engine did not choose. Null while
 	// the engine owns them, because ReassertLights resolves a fresher answer than any capture could. Read once
 	// per test and cleared as it is spent, so a second press cannot overwrite it with the first test's own levels
@@ -199,7 +206,9 @@ public sealed class AreaController : IDisposable
 	/// <remarks>
 	///     The room's own state machine is untouched: no hold is started or cleared, and no timer is armed,
 	///     cancelled or restarted. The return is scheduled on the engine's own scheduler, so it happens whether or
-	///     not whoever pressed is still watching.
+	///     not whoever pressed is still watching. A snapshot is published regardless, carrying <paramref
+	///     name="periodKey"/> and the deadline: the only way a page that reloads or navigates back mid-test can
+	///     redraw the countdown instead of a plain Test button.
 	/// </remarks>
 	public string? TestPeriod(string periodKey)
 	{
@@ -226,9 +235,13 @@ public sealed class AreaController : IDisposable
 			SendUnrecorded(TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0));
 
 			_levelTesting = true;
+			_testingPeriodId = periodKey;
+			_testEndsAt = _scheduler.Now + TimeSpan.FromSeconds(LevelTestSeconds);
 			_levelTest.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
 
 			_logger.LogInformation("{Area}: testing period '{Period}' for {Seconds}s.", Name, target.PeriodName, LevelTestSeconds);
+
+			Publish(TransitionReason.LevelTestStarted);
 			return null;
 		}
 	}
@@ -1117,6 +1130,8 @@ public sealed class AreaController : IDisposable
 		_levelTest.Disposable = Disposable.Empty;
 		_levelTesting = false;
 		_capturedLevels = null;
+		_testingPeriodId = null;
+		_testEndsAt = null;
 	}
 
 	private void OnLevelTestElapsed()
@@ -1139,6 +1154,8 @@ public sealed class AreaController : IDisposable
 			return;
 
 		_levelTesting = false;
+		_testingPeriodId = null;
+		_testEndsAt = null;
 
 		// Same rule, two owners: the engine resolves its own levels afresh, and a person's are the ones read
 		// before the test. Taken before it is used, so a second return cannot apply the same capture twice.
@@ -1314,7 +1331,9 @@ public sealed class AreaController : IDisposable
 			_house.Forced,
 			heldLitBy is not null,
 			heldLitBy,
-			_standingScene);
+			_standingScene,
+			_testingPeriodId,
+			_testEndsAt);
 	}
 
 	private void ResolvePeriodAt(DateTimeOffset now)

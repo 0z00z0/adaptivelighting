@@ -759,8 +759,8 @@ else
 	private SwitchOnNote? _switchOnNote;
 	private bool _switchOnDismissed;
 
-	// The level test running on the real lights. The engine owns the return, so these three only draw it; a
-	// reload loses the drawing and never the return.
+	// The level test running on the real lights, from this visit's own click. The engine owns the return, so
+	// these two only draw it, and only until the snapshot in _snapshot carries the same news — see TestingPeriod.
 	private string? _testingPeriodId;
 	private DateTimeOffset? _testEndsAt;
 	private string? _testRefusal;
@@ -1027,13 +1027,20 @@ else
 
 	/// <summary>The period whose test is still holding the lights, or <c>null</c> when none is.</summary>
 	/// <remarks>
-	///     The page's own drawing of a test the engine owns. Reloading loses it and never the return: the engine
-	///     scheduled that on its own scheduler, so a closed browser changes nothing.
+	///     Local state first, for the click that just armed it — the report has not had time to reach the cache
+	///     yet. A fresh component carries none, so it falls back to the last snapshot, which the engine publishes
+	///     the moment a test starts; that is what redraws the countdown after a reload or a navigate-back instead
+	///     of showing plain Test buttons while the engine's own return is still pending.
 	/// </remarks>
-	private string? TestingPeriod => _testEndsAt is { } ends && ends > _now ? _testingPeriodId : null;
+	private string? TestingPeriod =>
+		_testEndsAt is { } ends && ends > _now ? _testingPeriodId
+		: _snapshot is { } snapshot ? RoomFacts.TestingPeriod(snapshot, _now)
+		: null;
 
 	private int TestSecondsLeft =>
-		_testEndsAt is { } ends ? Math.Max(0, (int)Math.Ceiling((ends - _now).TotalSeconds)) : 0;
+		_testEndsAt is { } ends && ends > _now ? Math.Max(0, (int)Math.Ceiling((ends - _now).TotalSeconds))
+		: _snapshot is { } snapshot ? RoomFacts.TestSecondsLeft(snapshot, _now)
+		: 0;
 
 	private static int TestSeconds => (int)AreaController.LevelTestSeconds;
 
