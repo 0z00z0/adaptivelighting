@@ -23,11 +23,6 @@ An item with no number is one this file records before the tracker has minted on
 
 ## Next up
 
-- #19 **`Components/NullableNumber.razor` is referenced by nothing, and is now the only live consumer of
-  `Components/PresetSelect.razor`.** Both were left in place, with their six tests, because removing them
-  drops the test count — a decision to take deliberately rather than in passing. The wider sweep this
-  belongs to is #38.
-
 - #23 **A room page's Test countdown is drawn locally, so it does not survive leaving the page.** Navigating
   away and back within the ten seconds shows plain Test buttons while the engine's return is still pending.
   The return happens correctly — it is scheduled on the engine's scheduler, not the page's — and only the
@@ -58,19 +53,9 @@ An item with no number is one this file records before the tracker has minted on
   publishes. Driving it means hand-patching `tools/uihost/Program.cs` to call `Attach` and reverting
   afterwards. Same shape as #28, and the two are probably one job.
 
-- #40 **`ModePreview.PreviewBrightness` and `PreviewKelvin` are dead.** Both are populated from
-  an unresolved target and asserted in eight tests, and no page renders either. The house-mode preview has no
-  room, so there is no single daylight-curve answer to show even if a page wanted one — deleting them is the
-  likely answer, and the eight tests go with them. Belongs to the #38 sweep.
-
 - #42 **`comm-nearmiss` is a misnomer.** The commissioning board's two paragraphs still carry
   that class after the near-miss line was replaced (#37). Renaming touches `app.css` and the component
   together, and neither may move alone.
-
-- #38 **The web project carries dead code.** `Components/NullableNumber.razor` and the `Components/PresetSelect.razor`
-  it alone consumes are the first named instance (#19); the task is the sweep, not that one pair. Find what else
-  is unreferenced, decide the whole set deliberately, and record the test count before and after — a falling
-  count is only legitimate with a sentence saying why.
 
 ## Parked
 

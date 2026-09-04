@@ -18,8 +18,6 @@ public sealed record ModeToggle(
 /// <summary>What a mode would do to the lights right now, so a card can say what it means before anyone selects it.</summary>
 public sealed record ModePreview(
 	string? ActivePeriodName,
-	double? PreviewBrightness,
-	int? PreviewKelvin,
 	bool IsOffPreview,
 	string EffectSummary);
 
@@ -439,7 +437,7 @@ public sealed class ModeService
 	private static ModePreview BuildPreview(AdaptiveLightingConfig config, ModeKind kind, LightTarget? target)
 	{
 		if (kind == ModeKind.Away)
-			return new ModePreview(null, null, null, IsOffPreview: true, AwayEffect(config));
+			return new ModePreview(null, IsOffPreview: true, AwayEffect(config));
 
 		var effect = kind switch
 		{
@@ -448,12 +446,7 @@ public sealed class ModeService
 			_ => NormalEffect(target?.PeriodName)
 		};
 
-		return new ModePreview(
-			target?.PeriodName,
-			target?.BrightnessPct,
-			target?.ColorTempKelvin,
-			IsOffPreview: false,
-			effect);
+		return new ModePreview(target?.PeriodName, IsOffPreview: false, effect);
 	}
 
 	private static string GuestEffect(AdaptiveLightingConfig config)

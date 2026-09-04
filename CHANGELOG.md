@@ -36,6 +36,17 @@ against each other.
   pending. The engine now publishes which period is under test and when it ends, so a fresh page load
   or a navigate-back redraws the same countdown a page that stayed open would show.
 
+### Removed
+
+- **`NullableNumber.razor` and `PresetSelect.razor` are gone from the web project.** Neither component
+  was reachable from any page; `NullableNumber` was the only remaining consumer of `PresetSelect`, and
+  removing the pair takes their six dedicated tests with them.
+- **`ModePreview.PreviewBrightness` and `PreviewKelvin` are gone.** No page rendered either field, and
+  a house mode no longer has a single brightness/colour-temperature answer to show now that the
+  daylight curve is a per-room choice. `ActivePeriodName` and `IsOffPreview` stay: both are still
+  house-level, single-valued facts, and the tests exercising them cover the mode preview's actual
+  period-resolution logic rather than a display field nobody reads.
+
 ### Internal
 
 - **`CircadianCalculator.PeriodsAcross` has direct tests.** It was exercised only through the web
