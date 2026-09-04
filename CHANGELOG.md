@@ -20,6 +20,13 @@ against each other.
   `ToSnapshot()` silently dropped `AreaSnapshot.IsAnyoneHome` and `AreaSnapshot.Forced` on every
   rebuild — the away-mode and forced-mode UI reading live snapshots never saw either.
 
+### Internal
+
+- **`CircadianCalculator.PeriodsAcross` has direct tests.** It was exercised only through the web
+  schedule and board views. Eight tests now cover the schedule-order case, a stretch crossing
+  midnight, sun-anchored boundaries resolved against one day's sun times, an empty and a
+  single-period table, the override, and the per-day hold rule it shares with `NextBoundary`.
+
 ## [2026.9.4] - 2026-09-05
 
 ### Added

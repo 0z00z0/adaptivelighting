@@ -21,6 +21,9 @@ public sealed class CircadianCalculatorTests
 	// on CI. The conversion itself is asserted in TheScheduleIsAWallClock_NotUtc, which names a real offset.
 	private static DateTimeOffset At(int hour, int minute = 0) => new(2026, 1, 15, hour, minute, 0, TimeSpan.Zero);
 
+	// For the PeriodsAcross tests, which need instants outside the 15th to see a stretch cross a day boundary.
+	private static DateTimeOffset AtDay(int day, int hour, int minute = 0) => new(2026, 1, day, hour, minute, 0, TimeSpan.Zero);
+
 	private static CircadianCalculator Stepped(
 		IReadOnlyList<TimePeriodConfig>? periods = null,
 		SunTimes? sun = null,
@@ -944,6 +947,163 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual(
 			new DateTimeOffset(2026, 10, 25, 1, 30, 0, TimeSpan.Zero),
 			Zoned(EuropeanRule(), table).NextBoundary(new DateTimeOffset(2026, 10, 24, 22, 0, 0, TimeSpan.Zero)));
+	}
+
+	// ===================== the schedule as spans: PeriodsAcross =====================
+
+	[TestMethod]
+	public void PeriodsAcross_TheDaysPeriodsComeOutInScheduleOrder()
+	{
+		IReadOnlyList<PeriodSpan> spans = Stepped().PeriodsAcross(At(6), At(23));
+
+		Assert.AreEqual(4, spans.Count);
+
+		Assert.AreEqual("night", spans[0].Period.Name, "still last night's, wrapped in from before the first boundary");
+		Assert.AreEqual(At(6), spans[0].From);
+		Assert.AreEqual(At(7), spans[0].To);
+
+		Assert.AreEqual("day", spans[1].Period.Name);
+		Assert.AreEqual(At(7), spans[1].From);
+		Assert.AreEqual(At(18), spans[1].To);
+
+		Assert.AreEqual("evening", spans[2].Period.Name);
+		Assert.AreEqual(At(18), spans[2].From);
+		Assert.AreEqual(At(22, 30), spans[2].To);
+
+		Assert.AreEqual("night", spans[3].Period.Name);
+		Assert.AreEqual(At(22, 30), spans[3].From);
+		Assert.AreEqual(At(23), spans[3].To, "clipped to the end of the stretch, not the period's own next boundary");
+	}
+
+	/// <summary>A stretch that straddles midnight carries a wrapping period as one span, not two either side of it.</summary>
+	[TestMethod]
+	public void PeriodsAcross_AStretchThatCrossesMidnightCarriesThePeriodThroughItAsOneSpan()
+	{
+		IReadOnlyList<PeriodSpan> spans = Stepped().PeriodsAcross(At(20), AtDay(16, 8));
+
+		Assert.AreEqual(3, spans.Count);
+
+		Assert.AreEqual("evening", spans[0].Period.Name);
+		Assert.AreEqual(At(20), spans[0].From);
+		Assert.AreEqual(At(22, 30), spans[0].To);
+
+		Assert.AreEqual("night", spans[1].Period.Name);
+		Assert.AreEqual(At(22, 30), spans[1].From);
+		Assert.AreEqual(AtDay(16, 7), spans[1].To, "one span carries night from the 15th's 22:30 through to the 16th's 07:00");
+
+		Assert.AreEqual("day", spans[2].Period.Name);
+		Assert.AreEqual(AtDay(16, 7), spans[2].From);
+		Assert.AreEqual(AtDay(16, 8), spans[2].To);
+	}
+
+	/// <summary>Only one sun snapshot is asked for, so a stretch spanning two days resolves both against the same times.</summary>
+	[TestMethod]
+	public void PeriodsAcross_SunAnchoredBoundariesResolveAgainstTheSameDaysSunTimesOnEveryDay()
+	{
+		List<TimePeriodConfig> table =
+		[
+			new() { Name = "dawn", Start = "sunrise", BrightnessPct = 90 },
+			new() { Name = "dusk", Start = "sunset", BrightnessPct = 20 }
+		];
+		SunTimes sun = new(new TimeOnly(9, 15), new TimeOnly(15, 45));
+
+		IReadOnlyList<PeriodSpan> spans = Stepped(table, sun).PeriodsAcross(AtDay(15, 0), AtDay(17, 0));
+
+		Assert.AreEqual(5, spans.Count);
+
+		Assert.AreEqual("dusk", spans[0].Period.Name, "still the 14th's dusk, wrapped in from before the stretch");
+		Assert.AreEqual(AtDay(15, 0), spans[0].From);
+		Assert.AreEqual(AtDay(15, 9, 15), spans[0].To);
+
+		Assert.AreEqual("dawn", spans[1].Period.Name);
+		Assert.AreEqual(AtDay(15, 9, 15), spans[1].From);
+		Assert.AreEqual(AtDay(15, 15, 45), spans[1].To);
+
+		Assert.AreEqual("dusk", spans[2].Period.Name);
+		Assert.AreEqual(AtDay(15, 15, 45), spans[2].From);
+		Assert.AreEqual(AtDay(16, 9, 15), spans[2].To, "the 16th's sunrise, at the same 09:15 as the 15th's");
+
+		Assert.AreEqual("dawn", spans[3].Period.Name);
+		Assert.AreEqual(AtDay(16, 9, 15), spans[3].From);
+		Assert.AreEqual(AtDay(16, 15, 45), spans[3].To);
+
+		Assert.AreEqual("dusk", spans[4].Period.Name);
+		Assert.AreEqual(AtDay(16, 15, 45), spans[4].From);
+		Assert.AreEqual(AtDay(17, 0), spans[4].To);
+	}
+
+	[TestMethod]
+	public void PeriodsAcross_AnEmptyTableProducesNoSpans()
+	{
+		Assert.AreEqual(0, Stepped([]).PeriodsAcross(At(0), At(23)).Count);
+	}
+
+	[TestMethod]
+	public void PeriodsAcross_ADegenerateRangeProducesNoSpans()
+	{
+		CircadianCalculator calc = Stepped();
+
+		Assert.AreEqual(0, calc.PeriodsAcross(At(12), At(12)).Count, "an empty range, to == from");
+		Assert.AreEqual(0, calc.PeriodsAcross(At(12), At(6)).Count, "an inverted range, to < from");
+	}
+
+	/// <summary>A single period covers the whole stretch as one span, rather than one per day it happens to cross.</summary>
+	[TestMethod]
+	public void PeriodsAcross_ASinglePeriodScheduleCoversTheWholeStretchAsOneSpan()
+	{
+		List<TimePeriodConfig> table = [new() { Name = "always", Start = "00:00", BrightnessPct = 50 }];
+
+		IReadOnlyList<PeriodSpan> spans = Stepped(table).PeriodsAcross(At(10), At(14));
+
+		Assert.AreEqual(1, spans.Count);
+		Assert.AreEqual("always", spans[0].Period.Name);
+		Assert.AreEqual(At(10), spans[0].From);
+		Assert.AreEqual(At(14), spans[0].To);
+	}
+
+	/// <summary>Under an override there is no boundary at all: the named period holds the whole stretch, matching GetTarget.</summary>
+	[TestMethod]
+	public void PeriodsAcross_UnderAnOverrideTheNamedPeriodHoldsTheWholeStretch()
+	{
+		CircadianCalculator calc = Following(() => "night");
+
+		IReadOnlyList<PeriodSpan> spans = calc.PeriodsAcross(At(6), At(20));
+
+		Assert.AreEqual(1, spans.Count);
+		Assert.AreEqual("night", spans[0].Period.Name);
+		Assert.AreEqual(At(6), spans[0].From);
+		Assert.AreEqual(At(20), spans[0].To);
+	}
+
+	/// <summary>
+	///     The dependency NextBoundary's per-day table shares with this one: a period held back on the day it would
+	///     have started is left out of that day's boundaries alone, so the previous span runs through where its start
+	///     would have been. Only the 15th's "day" is held here; the 16th's is not.
+	/// </summary>
+	[TestMethod]
+	public void PeriodsAcross_AHeldPeriodIsAbsentFromTheDayItWouldHaveStarted_SoThePreviousSpanRunsThroughIt()
+	{
+		CircadianCalculator calc = Holding((period, day) => period == "day" && day == new DateOnly(2026, 1, 15));
+
+		IReadOnlyList<PeriodSpan> spans = calc.PeriodsAcross(At(6), AtDay(16, 8));
+
+		Assert.AreEqual(4, spans.Count);
+
+		Assert.AreEqual("night", spans[0].Period.Name, "day@07:00 never places on the 15th, so last night keeps running");
+		Assert.AreEqual(At(6), spans[0].From);
+		Assert.AreEqual(At(18), spans[0].To, "through the 15th's own 07:00 start and all the way to evening's 18:00");
+
+		Assert.AreEqual("evening", spans[1].Period.Name);
+		Assert.AreEqual(At(18), spans[1].From);
+		Assert.AreEqual(At(22, 30), spans[1].To);
+
+		Assert.AreEqual("night", spans[2].Period.Name);
+		Assert.AreEqual(At(22, 30), spans[2].From);
+		Assert.AreEqual(AtDay(16, 7), spans[2].To);
+
+		Assert.AreEqual("day", spans[3].Period.Name, "the 16th's day is not held, so it places on its own start as usual");
+		Assert.AreEqual(AtDay(16, 7), spans[3].From);
+		Assert.AreEqual(AtDay(16, 8), spans[3].To);
 	}
 
 	/// <summary>The drop record is the calculator's only mutable state, and callers reach it from more than one thread.</summary>
