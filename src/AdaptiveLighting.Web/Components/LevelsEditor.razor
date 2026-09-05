@@ -95,6 +95,7 @@
 								  Unit="%"
 								  Label="Brightness"
 								  AriaLabel="@($"Brightness during {PeriodName(current.Name)}")"
+								  FineAdjustable="true"
 								  ValueChanged="@(value => SetBrightness(current.PeriodId, value))">
 						<Mark>
 							@if (current.Brightness == LevelSource.Room)

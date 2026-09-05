@@ -12,6 +12,23 @@ against each other.
 
 ## [Unreleased]
 
+### Added
+
+- **The brightness rail carries a fine-adjust satellite handle.** Press and hold the primary
+  thumb, and a small handle appears beside it that moves the value in single 8-bit
+  raw-brightness steps (Home Assistant's own 0-255 scale), rather than jumping between the
+  sixteen named presets. Releasing it, or pressing elsewhere, dismisses it. Colour temperature
+  has no equivalent raw unit and does not get the handle.
+
+### Changed
+
+- **The house-default position on an inheritable preset rail now sits in its own recessed pocket
+  before the 0 % mark, instead of on the leftmost stop of the same 0-100 % rail.** It reads as
+  genuinely outside the real range rather than as the dimmest setting, while staying one
+  draggable control.
+- **The number beside a preset rail now tracks the thumb while it is being dragged**, rather than
+  sitting stale until the drag is released.
+
 ## [2026.9.3] - 2026-09-03
 
 ### Changed
