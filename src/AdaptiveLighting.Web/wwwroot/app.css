@@ -2574,6 +2574,16 @@ select.cell.wide {
 	color: var(--idle);
 }
 
+/* Wrappers around the two readout states so JS can toggle one hidden attribute each while a drag crosses the
+   pocket boundary, rather than rebuilding either subtree. */
+.psl-borrow-group,
+.psl-value-group {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	min-width: 0;
+}
+
 /* Drawn, not typed: an elbow arrow saying the number comes from somewhere else, with no font to depend on. */
 .psl-glyph {
 	width: 8px;
@@ -2585,11 +2595,14 @@ select.cell.wide {
 	border-bottom-left-radius: 2px;
 }
 
+/* position: relative so the satellite (an absolutely positioned sibling of the input) places itself against
+   this box rather than the page. */
 .psl-line {
 	display: flex;
 	align-items: center;
 	gap: 0.4rem;
 	min-width: 0;
+	position: relative;
 }
 
 /* The cap marks where the rail stops being numbers. Faint until the thumb is on it, then solid. */
@@ -2617,6 +2630,10 @@ select.cell.wide {
 	border: 0;
 	cursor: pointer;
 	touch-action: manipulation;
+	/* A press-and-hold on the thumb feeds the brightness satellite (preset-slider.js), not a callout or a text
+	   selection some mobile browsers offer on a long press. */
+	-webkit-touch-callout: none;
+	user-select: none;
 }
 
 .psl-range:focus-visible {
@@ -2662,23 +2679,39 @@ select.cell.wide {
 	box-shadow: 0 0 0 2px var(--panel);
 }
 
-/* Hatched, because a flat empty rail still reads as a value of zero. */
-.psl-default .psl-range::-webkit-slider-runnable-track {
+/* The house-default pocket: hatched and recessed, always at the left edge of an inheritable rail regardless of
+   the current position, so it reads as a zone outside the 0-100 range rather than the dimmest real setting. Its
+   width tracks --psl-pocket, the same fraction of the track that position 0 occupies, so the seam lines up with
+   where the thumb actually docks. The thin --panel band right after it is the visible step-down into the real
+   rail; drawn on top of the hatch, which is drawn on top of the ordinary fill/track gradient. */
+.psl-inheritable .psl-range::-webkit-slider-runnable-track {
 	background:
+		linear-gradient(to right,
+			transparent 0 calc(var(--psl-pocket, 0%) - 3px),
+			var(--panel) calc(var(--psl-pocket, 0%) - 3px) var(--psl-pocket, 0%),
+			transparent var(--psl-pocket, 0%) 100%),
 		repeating-linear-gradient(135deg,
 			color-mix(in srgb, var(--idle) 55%, transparent) 0 2px,
-			transparent 2px 6px),
-		var(--idle-bg);
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--idle) 55%, transparent);
+			transparent 2px 6px) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
+		var(--idle-bg) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
+		linear-gradient(to right,
+			var(--accent) 0 var(--psl-fill, 0%),
+			var(--glow-track) var(--psl-fill, 0%) 100%);
 }
 
-.psl-default .psl-range::-moz-range-track {
+.psl-inheritable .psl-range::-moz-range-track {
 	background:
+		linear-gradient(to right,
+			transparent 0 calc(var(--psl-pocket, 0%) - 3px),
+			var(--panel) calc(var(--psl-pocket, 0%) - 3px) var(--psl-pocket, 0%),
+			transparent var(--psl-pocket, 0%) 100%),
 		repeating-linear-gradient(135deg,
 			color-mix(in srgb, var(--idle) 55%, transparent) 0 2px,
-			transparent 2px 6px),
-		var(--idle-bg);
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--idle) 55%, transparent);
+			transparent 2px 6px) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
+		var(--idle-bg) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
+		linear-gradient(to right,
+			var(--accent) 0 var(--psl-fill, 0%),
+			var(--glow-track) var(--psl-fill, 0%) 100%);
 }
 
 .psl-default .psl-range::-webkit-slider-thumb {
@@ -2689,6 +2722,46 @@ select.cell.wide {
 .psl-default .psl-range::-moz-range-thumb {
 	background: var(--panel);
 	box-shadow: inset 0 0 0 var(--stroke-mark) var(--idle), 0 0 0 2px var(--panel);
+}
+
+/* Brightness-only fine-adjust handle, revealed by preset-slider.js on a press-and-hold of the primary thumb.
+   The tappable box is the standard ~44px touch target; the visible mark stays small so it still reads as a
+   satellite of the thumb rather than a second control. `left` is set inline by JS to the thumb's live position;
+   this rule only supplies the fixed vertical offset and the box itself. */
+.psl-satellite {
+	position: absolute;
+	top: 50%;
+	width: 44px;
+	height: 44px;
+	margin-left: -22px;
+	margin-top: -44px;
+	touch-action: none;
+	-webkit-touch-callout: none;
+	user-select: none;
+}
+
+.psl-satellite::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: 6px;
+	width: 12px;
+	height: 12px;
+	transform: translateX(-50%);
+	border-radius: 999px;
+	background: var(--panel);
+	box-shadow: 0 0 0 2px var(--accent), inset 0 0 0 var(--stroke-mark) var(--accent);
+}
+
+/* A short stem ties the mark visually to the thumb it sits above. */
+.psl-satellite::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: -6px;
+	width: 2px;
+	height: 10px;
+	background: var(--accent);
 }
 
 /* ---- the structured start control ---- */
