@@ -2487,6 +2487,39 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State, "and the hold itself is left standing");
 	}
 
+	// Issue #24: a colour-channel-only fixture (no colour temperature) has no kelvin for CaptureLights to read
+	// back, so its hand-set colour has to travel through LightCommand.Channels instead.
+	private static Dictionary<string, object> HandSetColour() =>
+		new() { ["brightness"] = 204.0, ["rgb_color"] = new[] { 255, 120, 40 } };
+
+	/// <summary>A room with no movement sensor, its one fixture RGB-only and lit by hand at a hand-set colour.</summary>
+	private static Fixture BuildHeldByHandWithColour()
+	{
+		Fixture t = Build(s => s.ColorControl = ColorControl.EqualChannels, withMotionSensor: false);
+		t.Ha.Trigger(Light, "on", HandSetColour(), PhysicalDevice());
+
+		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State, "the hold this test is about");
+		t.Actuator.Clear();
+
+		return t;
+	}
+
+	/// <summary>The colour-channel counterpart of the test above: a hand-set colour on an RGB-only fixture must
+	/// survive a period test too, rather than coming back as the period's neutral equal-channel white.</summary>
+	[TestMethod]
+	public void A_Test_During_A_Manual_Hold_Gives_The_Persons_Colour_Back_Too()
+	{
+		Fixture t = BuildHeldByHandWithColour();
+
+		Assert.IsNull(t.Area.TestPeriod("day"));
+		Assert.IsTrue(t.Actuator.Last is { EqualChannels: true }, "the test itself shows the period's own equal-channel white");
+
+		Advance(t, TestRun);
+
+		Assert.IsTrue(t.Actuator.Last is { On: true, Channels: [255, 120, 40] },
+			"read off the fixture before the test and put back after it, the same as brightness and kelvin");
+	}
+
 	/// <summary>The sharpest constraint: the person's hold expires when it would have had nobody pressed.</summary>
 	[TestMethod]
 	public void A_Test_Leaves_The_Manual_Holds_Own_Countdown_Exactly_Where_It_Was()

@@ -48,6 +48,22 @@ public static class EntityStateExtensions
 		};
 	}
 
+	/// <summary>Reads an attribute holding a list of numbers (a colour channel array), empty when absent or not a list.</summary>
+	public static IReadOnlyList<double> AttrDoubleList(this EntityState? state, string attribute)
+	{
+		if (!TryGetValue(state, attribute, out object? value))
+			return [];
+
+		return value switch
+		{
+			JsonElement { ValueKind: JsonValueKind.Array } element =>
+				[.. element.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Number).Select(item => item.GetDouble())],
+			IEnumerable<int> numbers => [.. numbers.Select(number => (double)number)],
+			IEnumerable<double> numbers => [.. numbers],
+			_ => []
+		};
+	}
+
 	/// <summary>Reads an attribute holding a list of strings, empty when absent or not a list.</summary>
 	public static IReadOnlyList<string> AttrStringList(this EntityState? state, string attribute)
 	{
