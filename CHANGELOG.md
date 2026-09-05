@@ -12,6 +12,12 @@ against each other.
 
 ## [Unreleased]
 
+### Added
+
+- **A feedback link in the top bar, on every page.** It opens a new GitHub issue on this repository,
+  in a new tab, prefilled with the running version — nothing is submitted from inside the app
+  itself. Below 560px it shows as its glyph alone, so the bar still fits a phone in two rows.
+
 ### Fixed
 
 - **A room's per-period level row is two lines on a phone instead of eight, and the house-default pocket can be dragged into again.** The period name, its start time and the curve question share one line and each rail carries its number beside it; ticking the curve drops the rail entirely rather than replacing it with a sentence, and the Test button stays. The readout printed the value twice ("the schedule's 100 % 100 %") because a class rule setting `display` beat the `hidden` attribute, and the unlit rail measured 1.32:1 against the card, so only the thumb was visible — it is 4.49:1 in dark, 3.11 in light and 4.43 in 0z0 now. A press-and-hold anywhere on a brightness rail armed the fine-adjust handle after 450 ms and handed it pointer capture, after which the coarse rail could not move for the rest of that gesture and its nudges clamp at 0 % and can never mean *borrow*; the hold now requires the press to land on the thumb, and is withheld entirely while the rail sits in the pocket.

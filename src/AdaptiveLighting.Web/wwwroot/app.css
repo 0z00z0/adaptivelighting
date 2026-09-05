@@ -483,6 +483,30 @@ body {
 	border-bottom-color: var(--accent);
 }
 
+/* Quiet by default and no new colour: the same tokens the nav links carry, so it reads as furniture on the bar
+   rather than a fourth destination. No margin-left of its own — .theme-picker's auto margin already pushes the
+   pair to the far end, and a second auto margin would split the gap and drag the picker back to the middle. */
+.feedback-link {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	color: var(--muted);
+	text-decoration: none;
+	padding: 0.35rem 0.6rem;
+	border-radius: var(--radius-control);
+	font-size: 0.92rem;
+}
+
+.feedback-link:hover {
+	background: var(--panel-2);
+	color: var(--text);
+}
+
+.feedback-link:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
 /*
    Phones. This page is read leaning on a doorframe as often as at a desk, so once the bar has to
    wrap, give the nav its own full-width row and make the three tabs equal thirds: a thumb finds a
@@ -507,6 +531,18 @@ body {
 
 	.content {
 		padding: 0.75rem 1rem 1rem;
+	}
+
+	/* Glyph only, so the first row keeps brand and theme picker without wrapping a third time. The anchor's
+	   aria-label carries the wording, and the padding keeps it a touch target. Ordered with the picker so the
+	   two sit together at the far end rather than the glyph drifting back to the brand mark. */
+	.feedback-link-text {
+		display: none;
+	}
+
+	.feedback-link {
+		order: 2;
+		padding: 0.5rem;
 	}
 }
 

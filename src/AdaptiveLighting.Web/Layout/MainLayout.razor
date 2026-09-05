@@ -16,6 +16,15 @@
 			<NavLink class="nav-link" href="config">Configuration</NavLink>
 		</nav>
 		<ThemePicker />
+		@* In the bar and not the footer: nothing here is sticky, so a footer link on the Configuration page
+		   is only reachable after a full scroll. The wording is hidden, not dropped, below 560px. *@
+		@* aria-label and not a labelled Icon: the wording is on screen at desktop width, so labelling both
+		   reads it twice, and the anchor still has a name once only the glyph is showing. *@
+		<a class="feedback-link" href="@FeedbackHref" target="_blank" rel="noopener"
+		   aria-label="Give feedback" title="Give feedback">
+			<Icon Name="@Glyph.Feedback" Class="ic-sm" />
+			<span class="feedback-link-text">Give feedback</span>
+		</a>
 	</header>
 
 	<main class="content">
@@ -28,3 +37,8 @@
 		</span>
 	</footer>
 </div>
+
+@code {
+	// Built once: the version cannot change while the process runs, and this renders on every page.
+	private static readonly string FeedbackHref = FeedbackUrl.Build(AppVersion.Text);
+}
