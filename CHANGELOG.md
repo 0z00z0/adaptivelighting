@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.4] - 2026-09-05
+
 ### Added
 
 - **The brightness rail carries a fine-adjust satellite handle.** Press and hold the primary
