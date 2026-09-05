@@ -11,16 +11,38 @@
    A stored value the ladder does not carry gets a position of its own, never the nearest stop. Opening the
    page has to leave a hand-edited document exactly as it was.
 
+   Rail and readout share one line, the number after the rail: a settings row on a phone is read left to right,
+   and a readout on a line of its own doubles the height of every row on the page.
+
    The readout tracks the thumb during a drag from plain JS (preset-slider.js), reading data-psl-readouts rather
    than waiting for the server round trip @onchange commits on release. Brightness alone also carries a
    press-and-hold satellite handle for single 8-bit raw-brightness steps; colour temperature has no raw unit
    worth exposing that way. *@
 
 <div class="psl @(OnDefault ? "psl-default" : null) @(Inheritable ? "psl-inheritable" : null)">
-	<div class="psl-head">
+	<div class="psl-line">
 		@if (Label is { Length: > 0 })
 		{
 			<span class="psl-label">@Label</span>
+		}
+
+		@if (Inheritable)
+		{
+			<span class="psl-home" title="@DefaultLabel" aria-hidden="true"></span>
+		}
+
+		<input class="psl-range" type="range" min="0" max="@Invariant(Max)" step="1" value="@Invariant(_position)"
+			   style="@Fill"
+			   aria-label="@AriaLabel"
+			   aria-valuetext="@SpokenValue"
+			   data-psl-readouts="@ReadoutsJson"
+			   data-psl-fine="@FineHandleOffered"
+			   @ref="_range"
+			   @onchange="OnMoved" />
+
+		@if (FineAdjustable)
+		{
+			<div class="psl-satellite" hidden aria-hidden="true" @ref="_satellite"></div>
 		}
 
 		<span class="psl-read">
@@ -53,26 +75,6 @@
 				}
 			}
 		</span>
-	</div>
-
-	<div class="psl-line">
-		@if (Inheritable)
-		{
-			<span class="psl-home" title="@DefaultLabel" aria-hidden="true"></span>
-		}
-
-		<input class="psl-range" type="range" min="0" max="@Invariant(Max)" step="1" value="@Invariant(_position)"
-			   style="@Fill"
-			   aria-label="@AriaLabel"
-			   aria-valuetext="@SpokenValue"
-			   data-psl-readouts="@ReadoutsJson"
-			   @ref="_range"
-			   @onchange="OnMoved" />
-
-		@if (FineAdjustable)
-		{
-			<div class="psl-satellite" hidden aria-hidden="true" @ref="_satellite"></div>
-		}
 	</div>
 </div>
 
@@ -186,6 +188,11 @@
 		exception is JSDisconnectedException or JSException or OperationCanceledException;
 
 	private bool OnDefault => Inheritable && AtDefault;
+
+	// Arming the fine handle hands pointer capture to the satellite, and the coarse rail stops moving for the rest
+	// of that gesture. A nudge clamps to a real byte and can never mean "borrow", so a rail docked in the pocket
+	// would have no way back out of it. preset-slider.js refuses to arm without this attribute.
+	private string? FineHandleOffered => FineAdjustable && !OnDefault ? "1" : null;
 
 	// A half percent can arrive from a hand-edited file. It is shown rounded and moving the rail stores the
 	// rounded number, so two surfaces never show one setting as two numbers. The file itself is left alone

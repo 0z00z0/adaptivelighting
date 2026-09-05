@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Web.Components;
@@ -208,6 +209,39 @@ public sealed class PresetSliderTests
 		Assert.IsFalse(html.Contains("psl-satellite", StringComparison.Ordinal), html);
 	}
 
+	/// <summary>
+	///     A press-and-hold on a rail sitting in the pocket must not arm the fine handle. Arming hands pointer
+	///     capture to the satellite, and from that moment the coarse rail cannot move at all — so a drag out of
+	///     the pocket, or back into it, is swallowed by a handle whose nudges clamp at 0 % and can never mean
+	///     "borrow".
+	/// </summary>
+	[TestMethod]
+	public async Task A_Rail_Docked_In_The_Pocket_Offers_No_Fine_Handle()
+	{
+		string borrowing = await RenderAsync(30, atDefault: true, inheritable: true, fineAdjustable: true);
+		string stated = await RenderAsync(30, atDefault: false, inheritable: true, fineAdjustable: true);
+
+		Assert.IsFalse(borrowing.Contains("data-psl-fine", StringComparison.Ordinal), borrowing);
+		StringAssert.Contains(stated, "data-psl-fine");
+	}
+
+	/// <summary>
+	///     The number follows the rail in the markup and shares its line, so a phone reads left to right across one
+	///     line instead of down four. Where a settings column is too narrow for both, the stylesheet reorders it
+	///     back above the rail; the markup order is what a screen reader gets either way.
+	/// </summary>
+	[TestMethod]
+	public async Task The_Readout_Follows_The_Rail_And_Has_No_Line_Of_Its_Own()
+	{
+		string html = await RenderAsync(30, atDefault: false, inheritable: true);
+
+		int rail = html.IndexOf("psl-range", StringComparison.Ordinal);
+		int read = html.IndexOf("psl-read", StringComparison.Ordinal);
+
+		Assert.IsTrue(rail >= 0 && read > rail, $"the readout is at {read} and the rail at {rail}");
+		Assert.IsFalse(html.Contains("psl-head", StringComparison.Ordinal), "the head line is gone: everything is one row");
+	}
+
 	private static JsonElement[] ReadoutsOf(string html)
 	{
 		const string marker = "data-psl-readouts=\"";
@@ -369,6 +403,65 @@ public sealed class LevelsEditorTests
 		// Eight rails, all of them borrowing: four periods, brightness and warmth each. The needle carries the
 		// wrapper's first class, or psl-default-text on the readout doubles every count.
 		Assert.AreEqual(8, Count(html, "psl psl-default"));
+	}
+
+	/// <summary>
+	///     A room borrowing the house value reads its number once. Both readout groups are always in the markup so
+	///     the drag can swap them without a round trip, and only the <c>hidden</c> attribute separates them — which
+	///     a class rule setting <c>display</c> silently beats, printing "the schedule's 100 % 100 %".
+	/// </summary>
+	[TestMethod]
+	public void The_Stylesheet_Lets_The_Hidden_Attribute_Win()
+	{
+		string css = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "AdaptiveLighting.Web", "wwwroot", "app.css"));
+
+		Assert.IsTrue(
+			Regex.IsMatch(css, @"\[hidden\][^{]*\{[^}]*display\s*:\s*none\s*!important", RegexOptions.None, TimeSpan.FromSeconds(5)),
+			"app.css has to neutralise a class rule that sets display on an element the components hide by attribute");
+	}
+
+	/// <summary>Ticking the curve leaves nothing to aim at, so the rail goes rather than being replaced by a sentence.</summary>
+	[TestMethod]
+	public async Task A_Period_On_The_Daylight_Curve_Collapses_Its_Rail_And_Keeps_Its_Test_Button()
+	{
+		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+		AreaConfig room = new() { AreaId = "stue", Name = "Stue" };
+		room.Levels.Add(new RoomLevelOverride { PeriodId = config.Periods[0].Key, FollowDaylightCurve = true });
+
+		string html = await RenderAsync(config, room);
+
+		// Four periods carry a brightness rail each; the one on the curve gives its up.
+		Assert.AreEqual(3, Count(html, "Brightness during"));
+		Assert.IsFalse(html.Contains("lvl-inherit", StringComparison.Ordinal), "no replacement sentence either");
+		Assert.AreEqual(4, Count(html, "class=\"lvl-test\""), "the Test button is not part of what collapses");
+	}
+
+	/// <summary>The name line carries the curve question, and the row says Brightness once rather than twice.</summary>
+	[TestMethod]
+	public async Task The_Period_Line_Carries_The_Curve_Toggle_And_The_Row_Names_Brightness_Once()
+	{
+		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+
+		string html = await RenderAsync(config, new AreaConfig { AreaId = "stue", Name = "Stue" });
+
+		int when = html.IndexOf("lvl-when", StringComparison.Ordinal);
+		int toggle = html.IndexOf("lvl-curve-toggle", StringComparison.Ordinal);
+		int cell = html.IndexOf("lvl-cell", StringComparison.Ordinal);
+
+		Assert.IsTrue(when >= 0 && toggle > when && toggle < cell, "the toggle belongs between the period name and the first cell");
+		Assert.AreEqual(0, Count(html, "lvl-cell-label\">Brightness"), "the heading row and the rail's own label already say it");
+	}
+
+	private static string RepositoryRoot()
+	{
+		DirectoryInfo? at = new(AppContext.BaseDirectory);
+
+		while (at is not null && !File.Exists(Path.Combine(at.FullName, "AdaptiveLighting.slnx")))
+			at = at.Parent;
+
+		Assert.IsNotNull(at, $"no AdaptiveLighting.slnx above {AppContext.BaseDirectory}");
+
+		return at.FullName;
 	}
 
 	private static int Count(string html, string needle)

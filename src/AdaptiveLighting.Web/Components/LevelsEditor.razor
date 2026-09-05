@@ -61,6 +61,8 @@
 		bool isNow = string.Equals(current.PeriodId, ActivePeriod, StringComparison.OrdinalIgnoreCase);
 
 		<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(current.IsOwn ? "lvl-own" : null) @(isNow ? "lvl-now" : null)" @key="current.PeriodId">
+			@* Name, start and the curve question on one line: the question is about this period, and a checkbox on
+			   a line of its own is a line every row on the page pays for. *@
 			<div class="lvl-when">
 				<span class="lvl-name">@PeriodName(current.Name)</span>
 				@if (isNow)
@@ -68,24 +70,19 @@
 					<span class="badge active-now" title="This period is in force right now.">now</span>
 				}
 				<span class="lvl-start">@StartOf(current.PeriodId)</span>
-			</div>
-
-			@* Dropped while this room follows the curve for this period. Anything the room pinned stays in the
-			   document and comes back with the control. *@
-			<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
-				<span class="lvl-cell-label">Brightness</span>
 
 				<label class="lvl-curve-toggle">
 					<input type="checkbox" checked="@current.FollowsDaylightCurve"
 						   @onchange="args => SetFollowsDaylightCurve(current.PeriodId, args.Value is true)" />
 					Follow the daylight curve
 				</label>
+			</div>
 
-				@if (current.FollowsDaylightCurve)
-				{
-					<span class="lvl-inherit">the daylight curve's</span>
-				}
-				else
+			@* Dropped, not replaced by a sentence, while this room follows the curve: the row shrinks to its one
+			   line. Anything the room pinned stays in the document and comes back with the control. The empty cell
+			   still holds its column where the table has columns. *@
+			<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
+				@if (!current.FollowsDaylightCurve)
 				{
 					<PresetSlider Value="@current.BrightnessPct"
 								  AtDefault="@(current.Brightness == LevelSource.Schedule)"
