@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.6] - 2026-09-05
+
 ### Added
 
 - **A feedback link in the top bar, on every page.** It opens a new GitHub issue on this repository,
