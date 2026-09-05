@@ -1,11 +1,22 @@
+@using System.Text.Json
+@inject IJSRuntime Js
+@inject ILogger<PresetSlider> Logger
+@implements IAsyncDisposable
+
 @* Fixed stops on a rail, so a value is dragged rather than hunted for in a list. The leftmost stop is not a
-   number: where Inheritable is set it means "state nothing here", and it is drawn as a hatched track and a
-   hollow thumb so it can never be read as the dimmest setting.
+   number: where Inheritable is set it means "state nothing here". It sits in a recessed pocket before the real
+   0-100 rail (psl-inheritable draws the seam), so it can never be read as the dimmest setting rather than as
+   something outside the range entirely. The hollow thumb marks the pocket is where the thumb currently sits.
 
    A stored value the ladder does not carry gets a position of its own, never the nearest stop. Opening the
-   page has to leave a hand-edited document exactly as it was. *@
+   page has to leave a hand-edited document exactly as it was.
 
-<div class="psl @(OnDefault ? "psl-default" : null)">
+   The readout tracks the thumb during a drag from plain JS (preset-slider.js), reading data-psl-readouts rather
+   than waiting for the server round trip @onchange commits on release. Brightness alone also carries a
+   press-and-hold satellite handle for single 8-bit raw-brightness steps; colour temperature has no raw unit
+   worth exposing that way. *@
+
+<div class="psl @(OnDefault ? "psl-default" : null) @(Inheritable ? "psl-inheritable" : null)">
 	<div class="psl-head">
 		@if (Label is { Length: > 0 })
 		{
@@ -18,11 +29,20 @@
 				@Mark
 			}
 
-			@if (OnDefault)
+			@if (Inheritable)
 			{
-				<span class="psl-glyph" aria-hidden="true"></span>
-				<span class="psl-default-text">@DefaultLabel</span>
-				<span class="psl-borrowed">@PlainText</span>
+				<span class="psl-borrow-group" hidden="@(!OnDefault)">
+					<span class="psl-glyph" aria-hidden="true"></span>
+					<span class="psl-default-text">@DefaultLabel</span>
+					<span class="psl-borrowed">@PlainText</span>
+				</span>
+				<span class="psl-value-group" hidden="@OnDefault">
+					<span class="psl-value">@StepText</span>
+					@if (_unlisted)
+					{
+						<span class="psl-custom">custom</span>
+					}
+				</span>
 			}
 			else
 			{
@@ -45,7 +65,14 @@
 			   style="@Fill"
 			   aria-label="@AriaLabel"
 			   aria-valuetext="@SpokenValue"
+			   data-psl-readouts="@ReadoutsJson"
+			   @ref="_range"
 			   @onchange="OnMoved" />
+
+		@if (FineAdjustable)
+		{
+			<div class="psl-satellite" hidden aria-hidden="true" @ref="_satellite"></div>
+		}
 	</div>
 </div>
 
@@ -91,6 +118,11 @@
 	[Parameter]
 	public RenderFragment? Mark { get; set; }
 
+	/// <summary>Brightness only: press-and-hold the thumb to reveal a satellite handle that nudges the value in
+	/// single 8-bit raw-brightness steps. Colour temperature has no raw unit this would mean anything against.</summary>
+	[Parameter]
+	public bool FineAdjustable { get; set; }
+
 	/// <summary><c>null</c> asks to go back to the default; a number states one here.</summary>
 	[Parameter]
 	public EventCallback<double?> ValueChanged { get; set; }
@@ -98,6 +130,13 @@
 	private List<double> _steps = [];
 	private int _position;
 	private bool _unlisted;
+	private List<Readout> _readouts = [];
+
+	private ElementReference _range;
+	private ElementReference _satellite;
+	private DotNetObjectReference<PresetSlider>? _self;
+	private bool _watchingFine;
+	private int _fineRaw;
 
 	// Worked out once per parameter change, not per read: Max, the fill fraction and the readout all want it,
 	// on a page that re-renders at 1 Hz.
@@ -118,7 +157,33 @@
 		}
 
 		_position = OnDefault ? 0 : Math.Max(found, 0) + Offset;
+
+		BuildReadouts();
 	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender || !FineAdjustable || _watchingFine)
+			return;
+
+		_self ??= DotNetObjectReference.Create(this);
+
+		try
+		{
+			await Js.InvokeVoidAsync("adaptiveLightingPresetSlider.watchFine", _range, _satellite, _self)
+				.ConfigureAwait(true);
+			_watchingFine = true;
+		}
+		catch (Exception exception) when (IsSurvivable(exception))
+		{
+			// An exception out of OnAfterRenderAsync tears the circuit down. A missing script costs only the fine
+			// handle; the coarse rail still works exactly as it did before this control existed.
+			Logger.LogDebug(exception, "The brightness satellite could not attach its pointer handler; it stays coarse-only.");
+		}
+	}
+
+	private static bool IsSurvivable(Exception exception) =>
+		exception is JSDisconnectedException or JSException or OperationCanceledException;
 
 	private bool OnDefault => Inheritable && AtDefault;
 
@@ -137,17 +202,55 @@
 			? named.Label
 			: PlainText;
 
-	private string PlainText => Unit is { Length: > 0 } unit ? $"{Invariant(Shown)} {unit}" : Invariant(Shown);
+	private string PlainText => Format(Shown);
 
 	private string SpokenValue => OnDefault ? $"{DefaultLabel}, {PlainText}" : StepText;
 
+	private string Format(double value) => Unit is { Length: > 0 } unit ? $"{Invariant(value)} {unit}" : Invariant(value);
+
+	private string Describe(double stepValue) =>
+		ShowStepWording && Options.FirstOrDefault(option => Matches(option.Value, stepValue)) is { } named
+			? named.Label
+			: Format(stepValue);
+
 	// A decimal comma in a style attribute is not a length, and the track would render unfilled under nb-NO.
-	private string Fill =>
-		$"--psl-fill: {Invariant(Max > 0 ? _position * 100.0 / Max : 0)}%";
+	private string Fill
+	{
+		get
+		{
+			string fill = $"--psl-fill: {Invariant(Max > 0 ? _position * 100.0 / Max : 0)}%";
+
+			// The pocket is drawn as the same fraction of the track that position 0 already occupies, so the
+			// seam lines up with where the thumb actually docks rather than an arbitrary pixel width.
+			return Inheritable && Max > 0
+				? $"{fill}; --psl-pocket: {Invariant(100.0 / Max)}%"
+				: fill;
+		}
+	}
 
 	private static string Invariant(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
 	private static bool Matches(double left, double right) => Math.Abs(left - right) < 0.001;
+
+	/// <summary>One entry per slider position, so the client can show the right words while dragging without
+	/// asking the server what a position means.</summary>
+	private readonly record struct Readout(string Text, bool IsDefault, bool Custom);
+
+	private void BuildReadouts()
+	{
+		List<Readout> readouts = new(Max + 1);
+
+		if (Inheritable)
+			readouts.Add(new Readout(PlainText, true, false));
+
+		for (int index = 0; index < _steps.Count; index++)
+			readouts.Add(new Readout(Describe(_steps[index]), false, _unlisted && index == _position - Offset));
+
+		_readouts = readouts;
+	}
+
+	private string ReadoutsJson => JsonSerializer.Serialize(
+		_readouts.Select(readout => new { t = readout.Text, d = readout.IsDefault, c = readout.Custom }));
 
 	private Task OnMoved(ChangeEventArgs args)
 	{
@@ -162,5 +265,40 @@
 		return index >= 0 && index < _steps.Count
 			? ValueChanged.InvokeAsync(_steps[index])
 			: Task.CompletedTask;
+	}
+
+	/// <summary>Snapshots the raw value the satellite starts nudging from, at the moment a hold is recognised.</summary>
+	[JSInvokable]
+	public void BeginFine() => _fineRaw = RawBrightnessStep.FromPercent(Shown);
+
+	/// <summary>Moves the satellite's raw value by whole 8-bit steps and commits at once, clamped to a real byte.</summary>
+	[JSInvokable]
+	public Task NudgeFine(int steps)
+	{
+		if (!FineAdjustable)
+			return Task.CompletedTask;
+
+		_fineRaw = RawBrightnessStep.Nudge(_fineRaw, steps);
+
+		return ValueChanged.InvokeAsync(RawBrightnessStep.ToPercent(_fineRaw));
+	}
+
+	// Order matters: the listener goes before the .NET reference it calls into, so a pointer already down when
+	// the page is left cannot invoke a disposed component.
+	public async ValueTask DisposeAsync()
+	{
+		if (_watchingFine)
+		{
+			try
+			{
+				await Js.InvokeVoidAsync("adaptiveLightingPresetSlider.releaseFine", _range).ConfigureAwait(false);
+			}
+			catch (Exception exception) when (IsSurvivable(exception))
+			{
+				Logger.LogDebug(exception, "The brightness satellite could not release its pointer handler.");
+			}
+		}
+
+		_self?.Dispose();
 	}
 }

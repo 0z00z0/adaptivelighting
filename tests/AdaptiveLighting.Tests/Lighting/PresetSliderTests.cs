@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Web.Components;
@@ -8,7 +9,9 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.Web.HtmlRendering;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.JSInterop;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -25,7 +28,9 @@ public sealed class PresetSliderTests
 		StringAssert.Contains(html, "psl psl-default");
 		StringAssert.Contains(html, "the schedule&#x27;s");
 		StringAssert.Contains(html, "value=\"0\"");
-		Assert.IsFalse(html.Contains("psl-value", StringComparison.Ordinal), "a borrowed level is words, never a set number");
+
+		// The value group still exists (a drag back out of the pocket needs it live), but it stays hidden.
+		StringAssert.Contains(html, "psl-value-group\" hidden");
 	}
 
 	/// <summary>The number the room states, on its own stop, with none of the borrowing marks.</summary>
@@ -36,7 +41,11 @@ public sealed class PresetSliderTests
 
 		StringAssert.Contains(html, "psl-value");
 		StringAssert.Contains(html, ">30 %");
-		Assert.IsFalse(html.Contains("psl-default", StringComparison.Ordinal), html);
+
+		// The wrapper carries no psl-default class; the hidden borrow group's own psl-default-text span is a
+		// different thing and stays out of view.
+		Assert.IsFalse(html.Contains("psl psl-default", StringComparison.Ordinal), html);
+		StringAssert.Contains(html, "psl-borrow-group\" hidden");
 
 		// 30 % is the ninth of sixteen stops, and the borrowing stop shifts every one of them along by one.
 		StringAssert.Contains(html, "value=\"9\"");
@@ -93,7 +102,12 @@ public sealed class PresetSliderTests
 			string html = await RenderAsync(62, atDefault: false, inheritable: true);
 
 			StringAssert.Contains(html, "--psl-fill:");
-			Assert.IsFalse(html.Contains(',', StringComparison.Ordinal), html);
+
+			// Scoped to the style attribute alone: data-psl-readouts is JSON, and a comma there is syntax, not a
+			// locale slip.
+			string style = StyleOf(html);
+			StringAssert.Contains(style, "--psl-pocket:");
+			Assert.IsFalse(style.Contains(',', StringComparison.Ordinal), style);
 		}
 		finally
 		{
@@ -111,9 +125,121 @@ public sealed class PresetSliderTests
 		Assert.IsFalse(Presets.ColorTempKelvin.Any(stop => stop.Value is 2500 or 5000));
 	}
 
-	private static async Task<string> RenderAsync(double value, bool atDefault, bool inheritable)
+	/// <summary>The house default has to read as outside the 0-100 rail, not as its dimmest stop, on an
+	/// inheritable slider: a fixed pocket zone and the seam that separates it from the real range.</summary>
+	[TestMethod]
+	public async Task An_Inheritable_Rail_Draws_A_Pocket_Separate_From_The_Real_Range()
+	{
+		string html = await RenderAsync(30, atDefault: false, inheritable: true);
+
+		StringAssert.Contains(html, "psl-inheritable");
+		StringAssert.Contains(html, "--psl-pocket:");
+	}
+
+	/// <summary>Nothing to borrow means nothing to separate from: no pocket is drawn at all.</summary>
+	[TestMethod]
+	public async Task A_Rail_With_Nothing_To_Borrow_Draws_No_Pocket()
+	{
+		string html = await RenderAsync(30, atDefault: false, inheritable: false);
+
+		Assert.IsFalse(html.Contains("psl-inheritable", StringComparison.Ordinal), html);
+		Assert.IsFalse(html.Contains("--psl-pocket:", StringComparison.Ordinal), html);
+	}
+
+	/// <summary>The pocket position (0) is marked as borrowed in the live-readout data, with the words the
+	/// borrowed-state markup shows, so JS can restore that exact text while dragging back into the pocket.</summary>
+	[TestMethod]
+	public async Task Live_Readout_Data_Marks_The_Pocket_Position_As_Borrowed()
+	{
+		string html = await RenderAsync(63, atDefault: true, inheritable: true);
+
+		JsonElement[] readouts = ReadoutsOf(html);
+
+		Assert.AreEqual(true, readouts[0].GetProperty("d").GetBoolean());
+		Assert.AreEqual("63 %", readouts[0].GetProperty("t").GetString());
+	}
+
+	/// <summary>Every real stop's live-readout entry carries the same words the static markup would show if that
+	/// position were the current one — the whole point of shipping the data client-side.</summary>
+	[TestMethod]
+	public async Task Live_Readout_Data_Covers_Every_Named_Stop_In_Order()
+	{
+		string html = await RenderAsync(30, atDefault: false, inheritable: true);
+
+		JsonElement[] readouts = ReadoutsOf(html);
+
+		// One pocket entry plus the sixteen named brightness stops.
+		Assert.AreEqual(17, readouts.Length);
+		Assert.AreEqual("0 %", readouts[1].GetProperty("t").GetString());
+		Assert.AreEqual("100 %", readouts[16].GetProperty("t").GetString());
+		Assert.IsTrue(readouts.Skip(1).All(readout => !readout.GetProperty("d").GetBoolean()));
+	}
+
+	/// <summary>An off-ladder value's own inserted stop is the one live-readout entry marked custom, and only
+	/// that one — dragging away from it always lands on a named stop.</summary>
+	[TestMethod]
+	public async Task Live_Readout_Data_Marks_Only_The_Off_Ladder_Position_As_Custom()
+	{
+		string html = await RenderAsync(62, atDefault: false, inheritable: true);
+
+		JsonElement[] readouts = ReadoutsOf(html);
+
+		Assert.AreEqual(1, readouts.Count(readout => readout.GetProperty("c").GetBoolean()));
+		Assert.AreEqual("62 %", readouts[13].GetProperty("t").GetString());
+		Assert.IsTrue(readouts[13].GetProperty("c").GetBoolean());
+	}
+
+	/// <summary>Brightness alone carries the fine-adjust satellite; it renders hidden until a hold reveals it.</summary>
+	[TestMethod]
+	public async Task FineAdjustable_Renders_A_Satellite_Handle_Hidden_By_Default()
+	{
+		string html = await RenderAsync(30, atDefault: false, inheritable: true, fineAdjustable: true);
+
+		StringAssert.Contains(html, "psl-satellite");
+		StringAssert.Contains(html, "hidden");
+	}
+
+	/// <summary>Colour temperature (and any other non-brightness rail) gets no satellite at all.</summary>
+	[TestMethod]
+	public async Task Without_FineAdjustable_No_Satellite_Handle_Is_Rendered()
+	{
+		string html = await RenderAsync(30, atDefault: false, inheritable: true, fineAdjustable: false);
+
+		Assert.IsFalse(html.Contains("psl-satellite", StringComparison.Ordinal), html);
+	}
+
+	private static JsonElement[] ReadoutsOf(string html)
+	{
+		const string marker = "data-psl-readouts=\"";
+		int start = html.IndexOf(marker, StringComparison.Ordinal);
+		Assert.IsTrue(start >= 0, "data-psl-readouts attribute not found: " + html);
+
+		start += marker.Length;
+		int end = html.IndexOf('"', start);
+		string encoded = html[start..end];
+		string json = System.Net.WebUtility.HtmlDecode(encoded);
+
+		return JsonDocument.Parse(json).RootElement.EnumerateArray().ToArray();
+	}
+
+	private static string StyleOf(string html)
+	{
+		const string marker = "style=\"";
+		int start = html.IndexOf(marker, StringComparison.Ordinal);
+		Assert.IsTrue(start >= 0, "style attribute not found: " + html);
+
+		start += marker.Length;
+		int end = html.IndexOf('"', start);
+
+		return html[start..end];
+	}
+
+	private static async Task<string> RenderAsync(
+		double value, bool atDefault, bool inheritable, bool fineAdjustable = false)
 	{
 		ServiceCollection services = new();
+		services.AddSingleton<IJSRuntime>(new FakeJsRuntime());
+		services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
 		await using ServiceProvider provider = services.BuildServiceProvider();
 		await using HtmlRenderer renderer = new(provider, NullLoggerFactory.Instance);
@@ -125,7 +251,8 @@ public sealed class PresetSliderTests
 			["Inheritable"] = inheritable,
 			["DefaultLabel"] = "the schedule's",
 			["Options"] = Presets.BrightnessPct,
-			["Unit"] = "%"
+			["Unit"] = "%",
+			["FineAdjustable"] = fineAdjustable
 		};
 
 		return await renderer.Dispatcher.InvokeAsync(async () =>
@@ -259,6 +386,8 @@ public sealed class LevelsEditorTests
 		Dictionary<string, object?>? extra = null)
 	{
 		ServiceCollection services = new();
+		services.AddSingleton<IJSRuntime>(new FakeJsRuntime());
+		services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
 		await using ServiceProvider provider = services.BuildServiceProvider();
 		await using HtmlRenderer renderer = new(provider, NullLoggerFactory.Instance);
