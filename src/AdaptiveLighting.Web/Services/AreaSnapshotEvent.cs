@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
 namespace AdaptiveLighting.Web.Services;
@@ -107,6 +108,27 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("scene_applied")]
 	public string? SceneApplied { get; init; }
 
+	/// <summary>Whether the house has anybody in it, or <c>null</c> from a build that never published it.</summary>
+	[JsonPropertyName("is_anyone_home")]
+	public bool? IsAnyoneHome { get; init; }
+
+	/// <summary>The <see cref="ForcedMode.Kind"/> name, or <c>null</c> when the select's value is the whole story.</summary>
+	[JsonPropertyName("mode_forced_kind")]
+	public string? ModeForcedKind { get; init; }
+
+	[JsonPropertyName("mode_forced_option")]
+	public string? ModeForcedOption { get; init; }
+
+	/// <summary>The <see cref="ModeForceSource"/> name.</summary>
+	[JsonPropertyName("mode_forced_source")]
+	public string? ModeForcedSource { get; init; }
+
+	[JsonPropertyName("mode_forced_by")]
+	public string? ModeForcedBy { get; init; }
+
+	[JsonPropertyName("mode_forced_by_state")]
+	public string? ModeForcedByState { get; init; }
+
 	/// <summary>
 	///     Rebuilds an <see cref="AreaSnapshot"/>, or <c>null</c> when the payload names no area. An unparseable
 	///     enum name degrades to its zero value; nothing throws.
@@ -138,6 +160,11 @@ public sealed record AreaSnapshotEvent
 			// that never carried the field did not say.
 			Enum.TryParse(AutoOnBlockedBy, out AutoOnBlock block) ? block : null,
 			AutoOnBlockingEntity,
+			IsAnyoneHome: IsAnyoneHome,
+			// Both the kind and the source have to parse: a Forced sentence half-recovered would misdescribe it.
+			Forced: Enum.TryParse(ModeForcedKind, out ModeKind kind) && Enum.TryParse(ModeForcedSource, out ModeForceSource source)
+				? new ForcedMode(kind, ModeForcedOption ?? "", source, ModeForcedBy, ModeForcedByState)
+				: null,
 			IsHeldLit: IsHeldLit,
 			HeldLitBy: HeldLitBy,
 			SceneApplied: SceneApplied);

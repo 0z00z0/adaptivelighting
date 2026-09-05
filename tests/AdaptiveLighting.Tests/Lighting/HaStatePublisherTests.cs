@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
 using AdaptiveLighting.Web.Services;
@@ -183,6 +184,61 @@ public sealed class HaStatePublisherTests
 
 		Assert.IsNotNull(rebuilt);
 		Assert.AreEqual("scene.stue_natt", rebuilt!.SceneApplied);
+	}
+
+	[TestMethod]
+	public void IsAnyoneHome_And_Forced_Survive_The_Serialize_Event_ToSnapshot_Round_Trip()
+	{
+		FakeHaContext ha = new();
+		HaStatePublisher publisher = new(ha, NullLogger.Instance);
+
+		AreaSnapshot snapshot = new(
+			"Stue", AreaState.SceneHold, TransitionReason.HouseModeChanged, HouseMode.Away,
+			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: null, ColorTempKelvin: null,
+			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
+			NextChangeFrom: null, AreaId: "stue", IsAnyoneHome: false,
+			Forced: new ForcedMode(ModeKind.Away, "Away", ModeForceSource.WhileEntityOn, "input_boolean.cabin", "on"));
+
+		publisher.Publish(snapshot);
+
+		string json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
+		AreaSnapshotEvent? wire = JsonSerializer.Deserialize<AreaSnapshotEvent>(json);
+		Assert.IsNotNull(wire);
+		Assert.AreEqual(false, wire!.IsAnyoneHome);
+		Assert.AreEqual("Away", wire.ModeForcedKind);
+		Assert.AreEqual("Away", wire.ModeForcedOption);
+		Assert.AreEqual("WhileEntityOn", wire.ModeForcedSource);
+		Assert.AreEqual("input_boolean.cabin", wire.ModeForcedBy);
+		Assert.AreEqual("on", wire.ModeForcedByState);
+
+		AreaSnapshot? rebuilt = wire.ToSnapshot();
+		Assert.IsNotNull(rebuilt);
+		Assert.AreEqual(false, rebuilt!.IsAnyoneHome);
+		Assert.AreEqual(new ForcedMode(ModeKind.Away, "Away", ModeForceSource.WhileEntityOn, "input_boolean.cabin", "on"), rebuilt.Forced);
+	}
+
+	// Neither field existed in an older build, so both have to come back null rather than a misleading default.
+	[TestMethod]
+	public void An_Event_From_A_Build_Without_Presence_Or_Forced_Mode_Rebuilds_With_Neither()
+	{
+		const string OldEvent =
+			"""
+			{
+			  "area": "Stue",
+			  "state": "AutoVacant",
+			  "reason": "CircadianTick",
+			  "mode": "Home",
+			  "kill_switch_active": false,
+			  "is_dark": true,
+			  "timestamp": "1970-01-01T00:00:00+00:00"
+			}
+			""";
+
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(OldEvent)!.ToSnapshot();
+
+		Assert.IsNotNull(rebuilt);
+		Assert.IsNull(rebuilt!.IsAnyoneHome);
+		Assert.IsNull(rebuilt.Forced);
 	}
 
 	[TestMethod]
