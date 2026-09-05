@@ -9,6 +9,27 @@ dotnet run --project tools/uihost
 # http://localhost:5199
 ```
 
+## Two at once
+
+Two worktrees previewing at the same time need two ports, so the port is a command-line value. Without one it
+is 5199, exactly as before.
+
+```bash
+dotnet run --project tools/uihost -- --port 5200   # a second worktree
+dotnet run --project tools/uihost -- --port 0      # any free port, printed on startup
+```
+
+The bound address is printed as `uihost listening on …` once the host is up, which is the line to read after
+`--port 0`.
+
+**A port that is already taken fails the start; it does not quietly move to a free one.** A host that lands
+somewhere unannounced is worse than one that refuses: the next verification run opens the port it expected and
+looks at the *other* worktree's UI while believing it is looking at its own. `--port 0` is how to ask for a
+free port on purpose.
+
+Note that `--port 0` binds `127.0.0.1` alone, where a fixed port binds the `localhost` name and so answers on
+both loopback families. Kestrel refuses a dynamic port on a host name.
+
 `local.yaml` beside this file is the document it edits. It is gitignored: copy a real one in to reproduce a
 house, or leave it absent and the engine writes a starting document. **Never commit a real one — this
 repository is public.**

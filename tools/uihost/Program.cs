@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Hosting;
 using AdaptiveLighting.Tests.Lighting;
@@ -9,9 +11,21 @@ using NetDaemon.HassModel;
 // A host for the Razor Class Library, so a UI change can be looked at before it reaches a house. The RCL ships
 // App.razor and Routes.razor over its own assembly, so there is nothing to add but services and a fake house.
 //
-// Run:  dotnet run --project scratchpad/uihost   ->  http://localhost:5199
+// Run:  dotnet run --project tools/uihost                 ->  http://localhost:5199
+//       dotnet run --project tools/uihost -- --port 5200  ->  http://localhost:5200
+//       dotnet run --project tools/uihost -- --port 0     ->  any free port, printed on startup
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+// --port so two worktrees can preview at once. A port that is taken fails on bind rather than moving to a free
+// one quietly: a host that lands somewhere unannounced points the next verification run at another worktree's
+// UI. --port 0 asks for that behaviour deliberately, and the bound port is printed either way.
+if (!TryResolvePort(builder.Configuration["port"], out int port))
+{
+	Console.Error.WriteLine("uihost: --port takes a number from 0 to 65535.");
+
+	return 1;
+}
 
 // Explicit, not left to the environment: static web assets are wired up automatically only in Development, and
 // without them the RCL's _content/** and _framework/blazor.web.js both 404 — the page server-renders and then
@@ -56,7 +70,44 @@ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 // configured to do. Absent a local.yaml the seed document holds no areas and this raises nothing.
 app.Lifetime.ApplicationStarted.Register(() => SeedSnapshots(ha, app.Services.GetRequiredService<LightingConfigStore>()));
 
-app.Run("http://localhost:5199");
+// Read after start, not from the port above: with --port 0 the requested port is 0 and only the server knows
+// which one it got.
+app.Lifetime.ApplicationStarted.Register(() => Console.WriteLine($"uihost listening on {string.Join(", ", app.Urls)}"));
+
+// 127.0.0.1 only for port 0: Kestrel refuses a dynamic port on the "localhost" name, which resolves to both
+// loopback families. A fixed port keeps the name, so the default still answers on ::1 as it always has.
+string address = port == 0
+	? "http://127.0.0.1:0"
+	: $"http://localhost:{port.ToString(CultureInfo.InvariantCulture)}";
+
+try
+{
+	app.Run(address);
+}
+catch (IOException error)
+{
+	Console.Error.WriteLine($"uihost: could not bind port {port.ToString(CultureInfo.InvariantCulture)} — {error.Message}");
+	Console.Error.WriteLine("uihost: pass --port <number> for another one, or --port 0 for any free port.");
+
+	return 1;
+}
+
+return 0;
+
+static bool TryResolvePort(string? requested, out int port)
+{
+	if (requested is not { Length: > 0 })
+	{
+		port = 5199;
+
+		return true;
+	}
+
+	// Invariant, not the current culture: this is a machine-readable argument, and nb-NO digit grouping would
+	// otherwise accept "5 199".
+	return int.TryParse(requested, NumberStyles.None, CultureInfo.InvariantCulture, out port)
+		&& port <= 65535;
+}
 
 static void Seed(FakeHaContext ha)
 {
