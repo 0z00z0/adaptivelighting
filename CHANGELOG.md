@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.5] - 2026-09-05
+
 ### Fixed
 
 - **A snapshot rebuilt from a live `adaptive_lighting_area` event carried away-mode and forced-mode as
