@@ -269,6 +269,10 @@ public static class ActivityView
 		if (snapshot.Reason is TransitionReason.Startup)
 			return ActivityCategory.Background;
 
+		// A test carries whatever the room's own gates read at that instant, same as CircadianTick: falls
+		// through to the state-driven branches below, so a room genuinely blocked from lighting is never hidden
+		// behind "housekeeping" merely because a test is what prompted this particular report.
+
 		// Every remaining motion report is worded "Movement…", so the movement chip has to take all of them or
 		// switching it off leaves rows that plainly are movement.
 		if (snapshot.Reason is TransitionReason.Motion)
@@ -686,6 +690,9 @@ public static class ActivityView
 		TransitionReason.SceneHold => snapshot.State == AreaState.SceneHold
 			? "A guest scene has this room"
 			: "The guest scene let this room go",
+		TransitionReason.LevelTestStarted => snapshot.TestingPeriodId is { Length: > 0 } tested
+			? $"Testing the '{tested}' period on the real lights"
+			: "Testing a period on the real lights",
 		_ => snapshot.Reason.ToString()
 	};
 

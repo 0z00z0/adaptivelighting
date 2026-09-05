@@ -679,6 +679,15 @@ other room that scene names — and `EnterSceneHold` clears the room's own stand
 take a scene-held room dark. A hand at the switch during a test drops the return, because the person has just
 said what those levels are.
 
+`TestPeriod` publishes a snapshot carrying the tested period and the deadline, even though a test is "no news
+about the room" in every other sense — `_state` never moves. Without it, the countdown a room page draws is
+local component state alone, and Blazor drops that the instant the component is destroyed: navigating away and
+back inside the ten seconds redraws plain Test buttons while the engine's own return is still pending, because
+nothing told the fresh component a test was running. The published pair is cleared wherever `_levelTesting`
+turns false — `AbandonLevelTest` and `EndLevelTest` both — so a stale report never claims a test that is not
+running; and even without that, `RoomFacts.TestingPeriod` treats a deadline once passed as no test; either one
+alone is enough for a fresh page load to draw the right thing.
+
 ### Staleness culling is illuminance only, and generalising it would break the house
 
 `LuxSensorStaleAfterMinutes` exists because a room averages its illuminance sensors, and one dead sensor stuck
@@ -704,7 +713,9 @@ The exclusions have honest costs:
   comparison by `AreaController.ReportDeclinedMotion`, bounded to one row per change of refusing gate.
 
 `LevelsFromRoom`, `IsAnyoneHome` and `Forced` **are** compared: none drifts, and each carries a case `Mode`
-cannot show.
+cannot show. `TestingPeriodId` and `TestEndsAt` are compared too, and for the same reason a test is published at
+all: a level test moves nothing else in the snapshot, so if the pair were excluded here the publish that carries
+them would be suppressed as "no news" and the countdown would never reach the cache.
 
 ### Discovery waits, and is armed rather than inline
 

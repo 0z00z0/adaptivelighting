@@ -186,6 +186,55 @@ public sealed class HaStatePublisherTests
 		Assert.AreEqual("scene.stue_natt", rebuilt!.SceneApplied);
 	}
 
+	// The pair a page reads to redraw the countdown after a reload or a navigate-back — see Room.razor's
+	// TestingPeriod. Without this round trip, only the page that clicked Test ever draws it.
+	[TestMethod]
+	public void The_Running_Test_Survives_The_Serialize_Event_ToSnapshot_Round_Trip()
+	{
+		FakeHaContext ha = new();
+		HaStatePublisher publisher = new(ha, NullLogger.Instance);
+		DateTimeOffset ends = DateTimeOffset.UnixEpoch.AddSeconds(10);
+
+		AreaSnapshot snapshot = new(
+			"Stue", AreaState.AutoVacant, TransitionReason.LevelTestStarted, HouseMode.Home,
+			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: null, ColorTempKelvin: null,
+			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
+			NextChangeFrom: null, AreaId: "stue", TestingPeriodId: "day", TestEndsAt: ends);
+
+		publisher.Publish(snapshot);
+
+		string json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(json)!.ToSnapshot();
+
+		Assert.IsNotNull(rebuilt);
+		Assert.AreEqual("day", rebuilt!.TestingPeriodId);
+		Assert.AreEqual(ends, rebuilt.TestEndsAt);
+	}
+
+	// The field is additive: an event from a build that predates it still has to rebuild, with no test reported.
+	[TestMethod]
+	public void An_Event_From_A_Build_Without_A_Running_Test_Rebuilds_With_None_Reported()
+	{
+		const string OldEvent =
+			"""
+			{
+			  "area": "Stue",
+			  "state": "AutoVacant",
+			  "reason": "CircadianTick",
+			  "mode": "Home",
+			  "kill_switch_active": false,
+			  "is_dark": true,
+			  "timestamp": "1970-01-01T00:00:00+00:00"
+			}
+			""";
+
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(OldEvent)!.ToSnapshot();
+
+		Assert.IsNotNull(rebuilt);
+		Assert.IsNull(rebuilt!.TestingPeriodId);
+		Assert.IsNull(rebuilt.TestEndsAt);
+	}
+
 	[TestMethod]
 	public void IsAnyoneHome_And_Forced_Survive_The_Serialize_Event_ToSnapshot_Round_Trip()
 	{

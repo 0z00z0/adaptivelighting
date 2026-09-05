@@ -54,6 +54,8 @@ public sealed class HaStatePublisher : IStatePublisher
 				is_held_lit = snapshot.IsHeldLit,
 				held_lit_by = snapshot.HeldLitBy,
 				scene_applied = snapshot.SceneApplied,
+				testing_period_id = snapshot.TestingPeriodId,
+				test_ends_at = snapshot.TestEndsAt,
 				levels_from_room = snapshot.LevelsFromRoom?.ToString(),
 				// Flat fields, so an automation trigger can read one without walking an object.
 				is_anyone_home = snapshot.IsAnyoneHome,

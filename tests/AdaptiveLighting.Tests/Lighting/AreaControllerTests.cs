@@ -2253,17 +2253,42 @@ public sealed class AreaControllerTests
 			"the engine resolves the period, so a test cannot show a level the room would not actually run");
 	}
 
+	// The contract changed from "a test is no news about the room" once the countdown had to reach a page that
+	// reloads or navigates back mid-test: State still holds, but the press is published so the deadline survives.
 	[TestMethod]
-	public void A_Test_Changes_Nothing_The_Area_Decides_On()
+	public void A_Test_Changes_No_State_But_Publishes_The_Countdown()
 	{
 		Fixture t = Build();
 		int published = t.Publisher.Snapshots.Count;
 
+		Assert.IsNull(t.Area.TestPeriod("day"));
+
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State, "a test moves no state the area itself owns");
+		Assert.IsTrue(t.Area.IsTestingLevels);
+		Assert.AreEqual(published + 1, t.Publisher.Snapshots.Count,
+			"pressing Test now has to be news, or a fresh page load finds nothing to redraw the countdown from");
+
+		AreaSnapshot report = t.Publisher.Snapshots[^1];
+		Assert.AreEqual("day", report.TestingPeriodId);
+		Assert.AreEqual(t.Scheduler.Now + TestRun, report.TestEndsAt);
+	}
+
+	[TestMethod]
+	public void Abandoning_A_Test_Publishes_That_None_Is_Running()
+	{
+		// The shipped echo window plus a night fade outlasts a whole test, so a hand can only be read as one here
+		// with both shortened — the same trap A_Hand_At_The_Switch_During_A_Test_... below works around.
+		Fixture t = Build(s => s.NightTransitionSeconds = 0, g => g.SelfEchoWindowSeconds = 0);
 		t.Area.TestPeriod("day");
 
-		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
-		Assert.IsTrue(t.Area.IsTestingLevels);
-		Assert.AreEqual(published, t.Publisher.Snapshots.Count, "a test is no news about the room");
+		// A moment past the (zeroed) echo window, or the trigger below lands at the same instant the expectation
+		// expires and still reads as the test's own command.
+		Advance(t, TimeSpan.FromSeconds(1));
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
+
+		AreaSnapshot report = t.Publisher.Snapshots[^1];
+		Assert.IsNull(report.TestingPeriodId, "the test that hand at the switch abandoned must not still be reported");
+		Assert.IsNull(report.TestEndsAt);
 	}
 
 	/// <summary>The trap: a command with no expectation declared ahead of it is read as a hand at the switch.</summary>
