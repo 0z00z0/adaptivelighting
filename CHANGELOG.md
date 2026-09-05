@@ -12,6 +12,14 @@ against each other.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A snapshot rebuilt from a live `adaptive_lighting_area` event carried away-mode and forced-mode as
+  `null`, even when the engine had just published them.** `HaStatePublisher` put `is_anyone_home` and
+  the five `mode_forced_*` fields on the wire, but `AreaSnapshotEvent` had no properties for them, so
+  `ToSnapshot()` silently dropped `AreaSnapshot.IsAnyoneHome` and `AreaSnapshot.Forced` on every
+  rebuild — the away-mode and forced-mode UI reading live snapshots never saw either.
+
 ## [2026.9.4] - 2026-09-05
 
 ### Added
