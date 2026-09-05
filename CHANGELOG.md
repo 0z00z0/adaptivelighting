@@ -19,6 +19,11 @@ against each other.
   the five `mode_forced_*` fields on the wire, but `AreaSnapshotEvent` had no properties for them, so
   `ToSnapshot()` silently dropped `AreaSnapshot.IsAnyoneHome` and `AreaSnapshot.Forced` on every
   rebuild — the away-mode and forced-mode UI reading live snapshots never saw either.
+- **`FakeHaContext`'s entity-state recursion budget is on by default**, at 10000, rather than opt-in per
+  test. A future test that builds a self-referencing group without setting `StateReadBudget` itself is
+  now caught in flight instead of hanging the suite. The default is measured against the widest
+  legitimate use in the current suite — a virtual-time simulation polling state on every scheduled tick,
+  2821 reads at its busiest — with over 3x headroom.
 
 ### Internal
 

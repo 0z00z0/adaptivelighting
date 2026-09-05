@@ -63,11 +63,6 @@ An item with no number is one this file records before the tracker has minted on
   room, so there is no single daylight-curve answer to show even if a page wanted one — deleting them is the
   likely answer, and the eight tests go with them. Belongs to the #38 sweep.
 
-- #41 **The group-recursion budget is opt-in per test.** `FakeHaContext.StateReadBudget` is
-  unset by default, so a future test that builds a self-referencing group hangs the suite exactly as before
-  unless it sets the budget itself. Making it default-on means every test paying for the counter and some
-  legitimate walk tripping it, which is the trade to weigh.
-
 - #42 **`comm-nearmiss` is a misnomer.** The commissioning board's two paragraphs still carry
   that class after the near-miss line was replaced (#37). Renaming touches `app.css` and the component
   together, and neither may move alone.

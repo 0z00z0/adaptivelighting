@@ -768,9 +768,13 @@ ordinally. The last two exist so **the answer never depends on registry enumerat
   - The guard against that is tested by **counting nodes visited, not seconds**. A group that contains itself
     makes the walk unbounded rather than slow, and a clock cannot tell those two apart — a loaded runner
     reads as a hang and a fast one reads as a pass. `FakeHaContext.StateReadBudget` counts every state read,
-    which over a walk across groups is the nodes visited, and the budget is **200** against a measured 27, 46
-    and 28 on healthy code. It throws in flight, because an unbounded walk never returns to be asserted on.
-    The budget is opt-in per test, so a test that builds a self-referencing group has to set it.
+    which over a walk across groups is the nodes visited, and throws in flight, because an unbounded walk
+    never returns to be asserted on. The self-referencing-group tests set it to **200** against a measured 27,
+    46 and 28 on healthy code, tighter than the fixture's own default so a regression there trips fast.
+  - The budget is **on by default** for every `FakeHaContext`, at **10000** — measured against the suite's
+    busiest legitimate use, a virtual-time simulation polling state on every scheduled tick, which tops out at
+    2821 reads. A test that needs more sets `StateReadBudget` explicitly; one that wants the guard off sets it
+    to `null`.
 - Promoted group members are re-filtered by domain. The actuator calls `light.turn_on` unconditionally, so a
   non-light that slipped through the promotion reaches a service call that cannot work.
 - Several entities on one Home Assistant **device** are one fixture — typically a combined entity beside its
@@ -1509,6 +1513,7 @@ document settles on what both surfaces already show.
 | 14 days | `DurableLogFile.RetainedFileTime` | how far back a reader can look in the ordinary case, which a byte budget alone cannot promise |
 | 60 MiB | durable log hard ceiling | 15 × 4 MiB. A fortnight at the measured rate is 37 MB, so the ceiling and the fortnight cannot both fit under the 20 MiB the previous scheme allowed |
 | 200 | `AreaEntityResolverTests.LoopBudget` | states read on a healthy resolve measure 27, 46 and 28, so the budget is wide enough not to fire on ordinary work and narrow enough to stop an unbounded walk in flight |
+| 10000 | `FakeHaContext.DefaultStateReadBudget` | the suite's busiest legitimate fixture use, a virtual-time simulation polling state every tick, tops out at 2821 reads; the default is on for every fixture and over 3x that widest measured use |
 | unpadded month | version format `YYYY.M.patch` | `2026.08.0` was the first calendar-versioned release, tagged with a zero-padded month for string sort order; the published NuGet packages came back as `2026.8.0` regardless, because NuGet strips a leading zero from each numeric segment on publish. From the next release on, the tag and the packages agree by not padding in the first place |
 
 ---
