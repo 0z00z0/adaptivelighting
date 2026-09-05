@@ -7,7 +7,10 @@
 	   server still gets the final value through the existing @onchange on release, unchanged.
 
 	2. The brightness satellite. Press-and-hold the thumb without moving it, and a small handle appears beside it
-	   that nudges the value in single 8-bit raw-brightness steps rather than jumping between named presets.
+	   that nudges the value in single 8-bit raw-brightness steps rather than jumping between named presets. Two
+	   things gate it, and both exist because arming takes the gesture away from the coarse rail for good: the
+	   press has to land on the thumb, and the rail has to carry data-psl-fine, which PresetSlider withholds while
+	   the thumb is docked in the house-default pocket.
 	   Deliberately not a rewrite of the rail itself: the native <input type=range> keeps working exactly as it
 	   does today for every other case, because pointerdown is never intercepted — only watched. Once the hold
 	   is recognised, capture is handed from the input to the satellite element (setPointerCapture works on any
@@ -206,6 +209,19 @@ window.adaptiveLightingPresetSlider = (function () {
 			}
 
 			if (armed || waiting) {
+				return;
+			}
+
+			// The server says whether a fine handle means anything here. It does not while the rail is docked in
+			// the house-default pocket: a nudge clamps to a real byte and can never mean "borrow".
+			if (!input.hasAttribute('data-psl-fine')) {
+				return;
+			}
+
+			// A hold only counts on the thumb, as this file's own header says. Without the test, a press anywhere
+			// on the rail hands capture to the satellite after 450 ms and the coarse value stops moving for the
+			// rest of the gesture — so a slow drag towards the leftmost stop never reaches it.
+			if (Math.abs(event.clientX - thumbCenterX(input)) > THUMB_WIDTH_PX / 2) {
 				return;
 			}
 

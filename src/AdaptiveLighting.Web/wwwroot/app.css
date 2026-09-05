@@ -391,6 +391,13 @@
 	box-sizing: border-box;
 }
 
+/* The user agent's own [hidden] rule is beaten by any class rule setting display, so a component that hides a
+   thing by attribute is silently overruled. Measured: the preset rail printed both readouts, "the schedule's
+   100 % 100 %". Anything hidden by attribute is hidden, whatever else it says. */
+[hidden] {
+	display: none !important;
+}
+
 html, body {
 	margin: 0;
 	padding: 0;
@@ -2518,42 +2525,59 @@ select.cell.wide {
    --idle is the token for watching without commanding, which is what inheriting is. It is defined in
    every theme block already, so no new colour can reach one theme and miss another. */
 
-/* align-self, because a settings field is a column flex box that would otherwise size the rail to the
-   width of its readout: measured 130px of track inside a 260px field on the schedule editor. */
-.psl {
-	display: flex;
-	flex-direction: column;
-	align-self: stretch;
-	gap: 0.15rem;
-	min-width: 0;
-}
+/* align-self, because a settings field is a column flex box that would otherwise size the rail to the width of
+   its readout: measured 130px of track inside a 260px field on the schedule editor.
 
-.psl-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.35rem 0.6rem;
-	min-height: 1.15rem;
+   --rail-unlit and --rail-edge are derived from --text rather than declared per theme: a surface colour lives in
+   three places in this file, and a rail that reads in one theme and vanishes in another is what that costs.
+   --glow-track measured 1.32:1 against the panel in dark, 1.27 in light and 1.16 in 0z0 — a rail nobody could
+   see the extent of. Half of --text is 4.49 / 3.11 / 4.43, so every theme clears the 3:1 a control's own
+   boundary needs. */
+.psl {
+	align-self: stretch;
+	min-width: 0;
+	--rail-unlit: color-mix(in srgb, var(--text) 50%, transparent);
+	--rail-edge: color-mix(in srgb, var(--text) 35%, transparent);
 }
 
 .psl-label {
+	flex: 0 0 auto;
 	font-size: var(--text-xs);
 	letter-spacing: var(--label-track);
 	text-transform: uppercase;
 	color: var(--muted);
 }
 
+/* The readout follows the rail in the markup and takes the line above it by default: inside a settings column
+   about 300px wide, sharing the line leaves a borrowing brightness rail 7.9px a stop against 17.2 with the line
+   to itself, and a 17-stop rail nobody can aim at is worse than a line. The room page's stacked rows are full
+   width and take it back beside the rail. */
 .psl-read {
 	display: inline-flex;
 	align-items: center;
+	order: -1;
+	flex: 0 1 100%;
 	gap: 0.35rem;
 	min-width: 0;
 	font-size: var(--text-sm);
 }
 
+.psl-value-group,
+.psl-borrow-group {
+	max-width: 100%;
+}
+
+/* A borrowed reading is a bare number and never wraps. A stated one may carry its stop's wording, which is
+   allowed to take a second line rather than run off the card. */
+.psl-borrowed {
+	white-space: nowrap;
+}
+
 .psl-value {
+	min-width: 0;
 	font-weight: 650;
 	color: var(--text);
+	overflow-wrap: anywhere;
 }
 
 /* A hand-edited number keeps its own stop rather than snapping to a neighbour, and says so. */
@@ -2600,7 +2624,8 @@ select.cell.wide {
 .psl-line {
 	display: flex;
 	align-items: center;
-	gap: 0.4rem;
+	flex-wrap: wrap;
+	gap: 0.15rem 0.4rem;
 	min-width: 0;
 	position: relative;
 }
@@ -2611,18 +2636,20 @@ select.cell.wide {
 	height: 14px;
 	flex: 0 0 auto;
 	border-radius: 2px;
-	background: var(--glow-track);
+	background: var(--rail-unlit);
 }
 
 .psl-default .psl-home {
 	background: var(--idle);
 }
 
+/* min-width, because the readout shares this line now: 17 stops need room for a thumb to land on one, and the
+   leftmost of them is the only way back to the house default. */
 .psl-range {
 	-webkit-appearance: none;
 	appearance: none;
 	flex: 1 1 auto;
-	min-width: 0;
+	min-width: 9rem;
 	height: 2.25rem;
 	margin: 0;
 	padding: 0;
@@ -2643,19 +2670,21 @@ select.cell.wide {
 }
 
 .psl-range::-webkit-slider-runnable-track {
-	height: 8px;
+	height: 10px;
 	border-radius: 999px;
+	box-shadow: inset 0 0 0 1px var(--rail-edge);
 	background: linear-gradient(to right,
 		var(--accent) 0 var(--psl-fill, 0%),
-		var(--glow-track) var(--psl-fill, 0%) 100%);
+		var(--rail-unlit) var(--psl-fill, 0%) 100%);
 }
 
 .psl-range::-moz-range-track {
-	height: 8px;
+	height: 10px;
 	border-radius: 999px;
+	box-shadow: inset 0 0 0 1px var(--rail-edge);
 	background: linear-gradient(to right,
 		var(--accent) 0 var(--psl-fill, 0%),
-		var(--glow-track) var(--psl-fill, 0%) 100%);
+		var(--rail-unlit) var(--psl-fill, 0%) 100%);
 }
 
 .psl-range::-webkit-slider-thumb {
@@ -2663,7 +2692,7 @@ select.cell.wide {
 	appearance: none;
 	width: 22px;
 	height: 22px;
-	margin-top: -7px;
+	margin-top: -6px;
 	border: 0;
 	border-radius: 999px;
 	background: var(--accent);
@@ -2696,7 +2725,7 @@ select.cell.wide {
 		var(--idle-bg) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
 		linear-gradient(to right,
 			var(--accent) 0 var(--psl-fill, 0%),
-			var(--glow-track) var(--psl-fill, 0%) 100%);
+			var(--rail-unlit) var(--psl-fill, 0%) 100%);
 }
 
 .psl-inheritable .psl-range::-moz-range-track {
@@ -2711,7 +2740,7 @@ select.cell.wide {
 		var(--idle-bg) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
 		linear-gradient(to right,
 			var(--accent) 0 var(--psl-fill, 0%),
-			var(--glow-track) var(--psl-fill, 0%) 100%);
+			var(--rail-unlit) var(--psl-fill, 0%) 100%);
 }
 
 .psl-default .psl-range::-webkit-slider-thumb {
@@ -5961,15 +5990,72 @@ h1[tabindex="-1"]:focus {
 
 /* ---- one period ----
    A grid and not a table element: three columns of sliders do not fit 390px, and a settings row whose last
-   control lives behind a horizontal scrollbar is one nobody finds. Stacked on a phone, three columns from
-   the width at which two rails and their readouts stop crowding each other. */
+   control lives behind a horizontal scrollbar is one nobody finds.
+
+   Below the three-column width the row is two lines, not five: the period, its start, the curve question and
+   the Test button share the first, and each rail carries its own number beside it underneath. */
 .lvl {
 	display: grid;
-	grid-template-columns: 1fr;
+	grid-template-columns: minmax(0, 1fr) auto;
 	gap: var(--space-2) var(--space-4);
 	padding: 0.7rem 1.15rem;
 	border-top: var(--rule-inner);
 	border-left: var(--stroke-mark) solid transparent;
+}
+
+.lvl-when {
+	grid-column: 1;
+}
+
+.lvl-act {
+	grid-column: 2;
+	grid-row: 1;
+}
+
+.lvl-cell:not(.lvl-act) {
+	grid-column: 1 / -1;
+}
+
+/* The rail is gone with the curve ticked, and with it the row's second line. The cell stays only where the
+   table has columns to hold. */
+.lvl-cell-curve {
+	display: none;
+}
+
+/* Test says what it does; a heading above one button is a line every row pays for. */
+.lvl-act .lvl-cell-label {
+	display: none;
+}
+
+/* Rail and readout share one line here, and a 17-stop rail needs the width more than a caption does: measured
+   at 390px, keeping both the label and the borrowed wording left 9.6px a stop, which no thumb lands on, against
+   13.7 without them. The number's own unit says which rail it is, the warmth swatch says it again, and
+   aria-label carries the name for a reader that cannot see either. Both come back at 780px. */
+.lvl .psl-label,
+.lvl .psl-default-text {
+	display: none;
+}
+
+.lvl .psl-read {
+	order: 0;
+	flex: 0 1 auto;
+	max-width: 48%;
+}
+
+/* Beside the period name, not under it. Baseline with the name, so the box lines up with the type. */
+.lvl-curve-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	font-size: var(--text-sm);
+	color: var(--muted);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.lvl-curve-toggle input {
+	margin: 0;
+	accent-color: var(--accent);
 }
 
 /* The headings, said once. Below the three-column width there is no table to head: the rows stack, each
@@ -5999,12 +6085,28 @@ h1[tabindex="-1"]:focus {
 		display: grid;
 	}
 
-	/* The heading row is saying it now. Only the rail's own label and the curve cell's go: the orphan rows
-	   below are not table rows and keep theirs. */
-	.lvl .psl-label,
-	.lvl-act .lvl-cell-label,
-	.lvl-cell-curve .lvl-cell-label {
-		display: none;
+	.lvl-when,
+	.lvl-cell:not(.lvl-act),
+	.lvl-act {
+		grid-column: auto;
+		grid-row: auto;
+	}
+
+	/* An empty cell still has to hold its column, or the warmth rail slides under the Period heading. */
+	.lvl-cell-curve {
+		display: block;
+	}
+
+	/* Room enough for the words again once the table has columns, and the readout goes back above the rail so a
+	   column about 300px wide still leaves a thumb something to land on. */
+	.lvl .psl-default-text {
+		display: inline;
+	}
+
+	.lvl .psl-read {
+		order: -1;
+		flex: 0 1 100%;
+		max-width: 100%;
 	}
 }
 
@@ -6045,11 +6147,6 @@ h1[tabindex="-1"]:focus {
 	font-size: var(--text-xs);
 	letter-spacing: var(--label-track);
 	text-transform: uppercase;
-	color: var(--muted);
-}
-
-.lvl-inherit {
-	font-size: var(--text-xs);
 	color: var(--muted);
 }
 
