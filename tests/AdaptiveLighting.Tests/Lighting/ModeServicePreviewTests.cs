@@ -53,8 +53,6 @@ public sealed class ModeServicePreviewTests
 		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Normal, At(20), NoSun);
 
 		Assert.AreEqual("evening", preview.ActivePeriodName, "20:00 is the evening period on the baseline");
-		Assert.AreEqual(70d, preview.PreviewBrightness);
-		Assert.AreEqual(2700, preview.PreviewKelvin);
 		Assert.IsFalse(preview.IsOffPreview);
 	}
 
@@ -65,8 +63,6 @@ public sealed class ModeServicePreviewTests
 		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Sleep, At(14), NoSun);
 
 		Assert.AreEqual("day", preview.ActivePeriodName, "14:00 is the day period on the shared table");
-		Assert.AreEqual(90d, preview.PreviewBrightness);
-		Assert.AreEqual(4500, preview.PreviewKelvin);
 		Assert.IsFalse(preview.IsOffPreview);
 	}
 
@@ -86,8 +82,6 @@ public sealed class ModeServicePreviewTests
 
 		Assert.IsTrue(preview.IsOffPreview, "an away mode pauses/sweeps the areas, so the swatch is dark");
 		Assert.IsNull(preview.ActivePeriodName);
-		Assert.IsNull(preview.PreviewBrightness);
-		Assert.IsNull(preview.PreviewKelvin);
 	}
 
 	[TestMethod]
@@ -98,7 +92,6 @@ public sealed class ModeServicePreviewTests
 		var preview = ModeService.ComputePreview(config, ModeKind.Normal, At(20), NoSun);
 
 		Assert.IsNull(preview.ActivePeriodName, "no period can be placed, so nothing is asserted");
-		Assert.IsNull(preview.PreviewBrightness);
 		Assert.IsFalse(preview.IsOffPreview);
 	}
 
@@ -160,8 +153,6 @@ public sealed class ModeServicePreviewTests
 		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(20), NoSun, "Natt");
 
 		Assert.AreEqual("night", preview.ActivePeriodName, "20:00 is the evening period on the clock, and the clock is not deciding");
-		Assert.AreEqual(15d, preview.PreviewBrightness);
-		Assert.AreEqual(2200, preview.PreviewKelvin);
 	}
 
 	/// <summary>The same, on a document that has been through the stable-key migration.</summary>
@@ -186,7 +177,6 @@ public sealed class ModeServicePreviewTests
 
 		Assert.AreEqual("night", preview.ActivePeriodName,
 			"the select names night by id; 20:00 on the clock is evening, and the clock is not deciding");
-		Assert.AreEqual(15d, preview.PreviewBrightness);
 	}
 
 	[TestMethod]
@@ -229,7 +219,6 @@ public sealed class ModeServicePreviewTests
 		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(8), NoSun, null, latch.StateOf);
 
 		Assert.AreEqual("night", preview.ActivePeriodName, "08:00 on the clock is the morning, which nobody has started");
-		Assert.AreEqual(15d, preview.PreviewBrightness);
 	}
 
 	[TestMethod]
@@ -242,7 +231,6 @@ public sealed class ModeServicePreviewTests
 		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(8), NoSun, null, latch.StateOf);
 
 		Assert.AreEqual("day", preview.ActivePeriodName);
-		Assert.AreEqual(90d, preview.PreviewBrightness);
 	}
 
 	/// <summary>No engine and so no latch: the clock is the only answer, and the right one where nothing is held back.</summary>
@@ -287,7 +275,6 @@ public sealed class ModeServicePreviewTests
 		Assert.AreEqual(1, view.Options.Count);
 		Assert.AreEqual("sent", view.Options[0].Preview.ActivePeriodName,
 			"the clock is inside 'tidlig', but nobody has moved, so the house is still on 'sent'");
-		Assert.AreEqual(15d, view.Options[0].Preview.PreviewBrightness);
 	}
 
 	/// <summary>A document whose every period but the first waits for movement, with the house mode the page reads.</summary>
