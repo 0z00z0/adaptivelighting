@@ -1078,21 +1078,8 @@ else
 	// SentenceView has no default for this: only the page knows whether a pick waits behind a save bar.
 	private const string TokenNote = "Applies when you save. Discard changes puts it back.";
 
-	// Package version, not the build's commit token (App.razor's Build) — this is what a house
-	// operator matches against a release, so the '+sha' suffix SourceLink appends is dropped.
-	private static readonly string Version = VersionText();
-
-	private static string VersionText()
-	{
-		string version = System.Reflection.CustomAttributeExtensions
-			.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(ConfigEditor).Assembly)
-			?.InformationalVersion
-			?? typeof(ConfigEditor).Assembly.GetName().Version?.ToString()
-			?? "unknown";
-
-		int plus = version.IndexOf('+');
-		return plus >= 0 ? version[..plus] : version;
-	}
+	// The same value the layout's feedback link reports, never a second derivation of it.
+	private static readonly string Version = AppVersion.Text;
 
 	private AdaptiveLightingConfig _config = new();
 	private ValidationResult? _liveValidation;

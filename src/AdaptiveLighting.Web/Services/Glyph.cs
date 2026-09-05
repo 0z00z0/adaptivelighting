@@ -37,4 +37,7 @@ public static class Glyph
 
 	/// <summary>A light with a quarter of its time left: the warning dim, counting down to dark.</summary>
 	public const string StateDimming = "i-dimming";
+
+	/// <summary>A speech bubble with the light point inside it. Saying something back about this app.</summary>
+	public const string Feedback = "i-feedback";
 }
