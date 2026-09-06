@@ -59,18 +59,38 @@ else
 					<span class="badge">no report yet</span>
 				}
 
-				@* Writes an explicit true or false, never an absent key, and saves like every other edit here. *@
-				<button type="button"
-						class="switch @(IsEnabled ? "on" : null)"
-						role="switch"
-						aria-checked="@(IsEnabled ? "true" : "false")"
-						aria-label="@($"Automatic lighting in {RoomName}")"
-						title="@SwitchTitle"
-						@onclick="ToggleEnabled">
-					<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-					<span class="switch-word">@(IsEnabled ? "on" : "off")</span>
-				</button>
+				@* Two different kinds of thing, so they are drawn as two different kinds of thing: an action that
+				   happens on the press, and a setting that says whether this app runs the room at all. *@
+				<div class="room-head-actions">
+					<button type="button"
+							class="room-lighton"
+							disabled="@(LightOnRefusal is { Length: > 0 })"
+							aria-label="@($"Switch the lights on in {RoomName}")"
+							title="@LightOnTitle"
+							@onclick="LightOn">Light on</button>
+
+					@* Writes an explicit true or false, never an absent key, and saves like every other edit here. *@
+					<button type="button"
+							class="room-enable @(IsEnabled ? "on" : null)"
+							role="switch"
+							aria-checked="@(IsEnabled ? "true" : "false")"
+							aria-label="@($"Enable adaptive lighting in {RoomName}")"
+							title="@SwitchTitle"
+							@onclick="ToggleEnabled">
+						<span class="room-enable-lamp" aria-hidden="true"></span>
+						<span class="room-enable-label">Enable room</span>
+						<span class="room-enable-word">@(IsEnabled ? "on" : "off")</span>
+					</button>
+				</div>
 			</header>
+
+			@* Raised by the press itself and cleared by the next one, so a refusal never outlives what caused it. *@
+			@if (_lightOnRefused is { Length: > 0 } refused)
+			{
+				<div class="notice warn room-lighton-refused">
+					<strong>Not switched on.</strong> @refused
+				</div>
+			}
 
 			@if (_snapshot is { } snapshot)
 			{
@@ -86,8 +106,8 @@ else
 			@if (!IsEnabled)
 			{
 				<div class="notice">
-					<strong>Switched off.</strong> Nothing below is commanded while the switch is off &mdash; the
-					settings are kept, and take effect the moment you switch the room on.
+					<strong>This room is not enabled.</strong> Nothing below is commanded and the lamps are left
+					exactly as they are &mdash; the settings are kept, and take effect the moment the room is enabled.
 				</div>
 			}
 
@@ -765,6 +785,12 @@ else
 	private DateTimeOffset? _testEndsAt;
 	private string? _testRefusal;
 
+	// Why the room cannot be lit by hand, read off the engine on the ticker, and what the last press was actually
+	// told. The second is not the first: a room can pass the button's own check and still be refused under the
+	// lock a moment later.
+	private string? _lightOnRefusal;
+	private string? _lightOnRefused;
+
 	private bool _showAll;
 	private bool _identityOpen;
 	private bool _pickersOpen;
@@ -1023,6 +1049,28 @@ else
 		// Asked of the engine on the ticker rather than composed here, so a room that falls under somebody's hand
 		// while the page sits open has its Test buttons closed within the second.
 		_testRefusal = Engine.LevelTestRefusal(room.AreaId);
+		_lightOnRefusal = Engine.LightNowRefusal(room.AreaId);
+	}
+
+	/// <summary>Why the Light on button is closed, or <c>null</c> when it can be pressed.</summary>
+	private string? LightOnRefusal => _lightOnRefusal;
+
+	/// <summary>What the button promises, with this room's own timeout in it rather than a vague "for a while".</summary>
+	private string LightOnTitle =>
+		LightOnRefusal is { Length: > 0 } refusal
+			? refusal
+			: $"Switches these lights on now, at the levels this room would use anyway, and off again after "
+				+ $"{TokenFormat.Duration(Effective.VacancyTimeoutSeconds)} without movement — the same as walking in.";
+
+	/// <summary>Asks the engine to light this room by hand.</summary>
+	/// <remarks>
+	///     The engine owns what happens next: the room lands in its ordinary active state on its ordinary vacancy
+	///     countdown, so nothing here has to be undone when the page is closed.
+	/// </remarks>
+	private void LightOn()
+	{
+		_lightOnRefused = Engine.LightNow(_room?.AreaId);
+		_lightOnRefusal = Engine.LightNowRefusal(_room?.AreaId);
 	}
 
 	/// <summary>The period whose test is still holding the lights, or <c>null</c> when none is.</summary>
@@ -1153,9 +1201,10 @@ else
 	/// <summary>The room's settings with its inheritance resolved.</summary>
 	private AreaSettings Effective => _room is { } room ? room.Effective(_document.Defaults) : _document.Defaults;
 
+	// Not a light switch, and the wording says so: switching it off changes nothing about the lamps right now.
 	private string SwitchTitle => IsEnabled
-		? "On — the lights in this room are managed. Switch off to leave them alone."
-		: "Off — this room is watched but its lights are never changed.";
+		? "On — this app runs the lighting in this room. Switching it off leaves the lamps exactly as they are."
+		: "Off — this room is watched, but its lamps are never changed. Its settings are kept and take effect the moment it is enabled again.";
 
 	private bool IsLit => _snapshot is { State: AreaState.AutoActive or AreaState.PreOff or AreaState.OverriddenOn, BrightnessPct: > 0 };
 
@@ -1385,6 +1434,9 @@ else
 		// An explicit true or false, never null; inheritance stays for documents that predate the switch.
 		bool switchingOn = !IsEnabled;
 		room.Enabled = switchingOn;
+
+		// A refusal that named the disabled room would outlive the thing it named.
+		_lightOnRefused = null;
 
 		// After MarkDirty, never before: MarkDirty re-runs discovery, so the note is built from the same preview the
 		// card below shows.

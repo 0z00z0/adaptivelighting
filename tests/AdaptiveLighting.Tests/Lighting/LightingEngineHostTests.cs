@@ -705,4 +705,15 @@ public sealed class LightingEngineHostTests
 		Assert.AreEqual(writtenAtUtc, File.GetLastWriteTimeUtc(_path), "no write means no new timestamp");
 		Assert.AreEqual(hadBackup, host.Store.HasBackup, "and nothing new lands in the backup slot");
 	}
+
+	/// <summary>The Light on button must be closed, with a reason, wherever there is no running room behind it.</summary>
+	[TestMethod]
+	public void Lighting_A_Room_By_Hand_Is_Refused_While_Nothing_Is_Running()
+	{
+		LightingEngineHost host = BuildHost();
+
+		Assert.IsNotNull(host.LightNowRefusal("stue"));
+		Assert.IsNotNull(host.LightNow("stue"));
+		Assert.IsNotNull(host.LightNowRefusal(null), "a room with no Home Assistant area cannot be lit either");
+	}
 }

@@ -188,6 +188,22 @@ public sealed class LightingEngineHost : IDisposable
 			return RunningArea(areaId) is { } area ? area.TestPeriod(periodKey) : NotRunningRefusal();
 	}
 
+	/// <summary>Why <paramref name="areaId"/> cannot be lit by hand right now, or <c>null</c> when it can.</summary>
+	/// <remarks>Asked before a press so the button can carry its own reason; the press asks again, under the lock.</remarks>
+	public string? LightNowRefusal(string? areaId)
+	{
+		lock (_gate)
+			return RunningArea(areaId) is { } area ? area.LightNowRefusal() : NotRunningRefusal();
+	}
+
+	/// <summary>Lights one room the way walking into it would, and starts the same vacancy countdown.</summary>
+	/// <returns><c>null</c> once the room is lit, or the sentence saying why it is not.</returns>
+	public string? LightNow(string? areaId)
+	{
+		lock (_gate)
+			return RunningArea(areaId) is { } area ? area.LightNow() : NotRunningRefusal();
+	}
+
 	private AreaController? RunningArea(string? areaId) =>
 		areaId is { Length: > 0 } wanted && _orchestrator is { } running
 			? running.Areas.FirstOrDefault(area => string.Equals(area.AreaId, wanted, StringComparison.OrdinalIgnoreCase))
@@ -198,7 +214,7 @@ public sealed class LightingEngineHost : IDisposable
 	private string NotRunningRefusal() =>
 		_orchestrator is null
 			? "Nothing is running, so no light can be commanded."
-			: "This room is not running: no lights resolved for it, so there is nothing to test.";
+			: "This room is not running: no lights resolved for it, so there is nothing to command.";
 
 	public ValidationResult? LastValidation { get; private set; }
 

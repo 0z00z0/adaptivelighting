@@ -690,6 +690,7 @@ public static class ActivityView
 		TransitionReason.SceneHold => snapshot.State == AreaState.SceneHold
 			? "A guest scene has this room"
 			: "The guest scene let this room go",
+		TransitionReason.ManualLightOn => Lit("Switched on from the app", snapshot),
 		TransitionReason.LevelTestStarted => snapshot.TestingPeriodId is { Length: > 0 } tested
 			? $"Testing the '{tested}' period on the real lights"
 			: "Testing a period on the real lights",
