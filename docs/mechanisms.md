@@ -112,6 +112,51 @@ through there. Predicates over `Darkness` name `Either` alongside `Lux` to match
 answers them identically in all three arms. That is defensive agreement with the gate, not a path a page can
 reach.
 
+### Brightness is stored as a byte and shown as a whole percent
+
+The document holds `Brightness`, the 0-255 value Home Assistant accepts and reports. The fine-adjust handle on a
+brightness rail moves in single raw steps, and a percentage cannot hold what it sets: a whole percent covers two
+or three raw steps, and a decimal percentage is the byte written again with a lossy conversion at each end.
+
+Everything a person reads at a glance is still a whole percent — the room's level row, the schedule, the
+sentences. The satellite handle is the one surface that names the byte, written `( 108 / 255 )`, and it takes
+that number from the stored value and never from the rounded readout. Deriving it from the readout is what made
+six steps up from 40 % re-arm at 107 instead of 108.
+
+The engine works in percent throughout. A blend between periods, the pre-off dim factor and the daylight curve
+are all ratios, and doing that arithmetic in 8-bit steps would change what a house does.
+
+#### The percentage is an input the deserialiser binds and a save never writes
+
+`BrightnessPct` is still a property on `TimePeriodConfig` and `RoomLevelOverride`, so a document written before
+brightness became raw binds exactly as it always did and commands the percentage it states, to the digit.
+`LightingConfigDocument.Serialize` suppresses it with a YamlDotNet attribute override — the deserialiser is
+built without that override, which is the whole asymmetry — so the byte grid is reached at the next ordinary
+save and never on load.
+
+Converting on load would have been the smaller change and is wrong. Percent and raw are not a lossless pair:
+74 of the 101 whole percents come back as a different number after a trip through a byte and back at one
+decimal, so a pre-pass conversion moves most houses the moment the new build starts, unattended, because
+`UsedLegacyKeys` sends `Reload` writing the file back.
+
+What the conversion does hold, over every whole percent, is the part that matters: the byte the lamp lands on,
+and the whole percent every readout shows. `RawBrightness.FromPercent` rounds away from zero because that is
+Home Assistant's own arithmetic on `brightness_pct`, so a document written in percent lands its lamps where it
+always landed them. `RawBrightnessStorageTests` asserts both over the full range.
+
+A hand-edited half percent is the one shape that reads differently afterwards: 62.5 % sits between two bytes,
+lands on 159, and reads as 62 rather than 63. That is 0.15 of a percentage point of light.
+
+Both keys in one mapping can only come from a hand edit. The pre-pass drops the percentage, warns, and marks
+the document for a migrating write, because otherwise the winner would be whichever line came first.
+
+An older build reading a newer document does not know `Brightness`, and an unmatched key is silence, so every
+period would fall back to its 80 % default. Restoring a house's configuration archive alongside the older
+binaries is the documented rollback and restores the percentage document with them.
+
+The daylight curve endpoints and the pre-off dim factor stay in percent. Neither is a level a lamp is commanded
+to directly, and neither is a value the fine handle reaches.
+
 ### The store normalises and validates, so every writer gets both
 
 `LightingConfigStore.Save` normalises the document, validates it, and only then writes. Three writers reach
@@ -1544,6 +1589,8 @@ document settles on what both surfaces already show.
 | 14 | `LuxCurve.GrabMargin` | `PlotTop`, the largest margin that cannot spill out of the drawing; it puts the drag surface's left edge 37.6 px clear of a handle sitting on 1 lx |
 | 22 | `LuxCurve.LuxLabelDrop` | the drop less one line of type is what a handle can cover: 22 − 10 = 12, against a reach of 9. At 16 the clearance is 6 |
 | away from zero | `ConfigNormalizer.Whole` | the control, the summary and the file must show one number, and 62.5 has to land somewhere; 63 is what reads as correct, and to-even would give 62 |
+| away from zero | `RawBrightness.FromPercent` | not a preference: it is Home Assistant's own arithmetic on `brightness_pct`, so a document written in percent lands its lamps on the byte it always landed on. To-even breaks that at 1 %, where floor sends 3 to 2 |
+| 255 | `RawBrightness.Max` | Home Assistant's own protocol, not something this codebase chooses |
 | 4 MiB | `DurableLogFile.MaxFileBytes` | a day's logging at the measured 111 kB/h is about 2.7 MB, so an ordinary day is one file and a hard-logging one rolls within itself rather than spilling the whole budget |
 | 15 | `DurableLogFile.RetainedFileCount` | one file per day for a fortnight, plus a file's worth of slack for the days that roll twice |
 | 14 days | `DurableLogFile.RetainedFileTime` | how far back a reader can look in the ordinary case, which a byte budget alone cannot promise |

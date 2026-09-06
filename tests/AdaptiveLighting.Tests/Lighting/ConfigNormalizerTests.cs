@@ -299,9 +299,9 @@ public sealed class ConfigNormalizerTests
 		Assert.IsNotNull(withRows.Global.PeriodSelect, "a mapping has been written — keep it");
 	}
 
-	/// <summary>A brightness is a whole percent from the save on, so no surface has to choose how to round one.</summary>
+	/// <summary>A brightness is a whole byte from the save on, so what the file holds is what a lamp is told.</summary>
 	[TestMethod]
-	public void Normalize_RoundsAHalfPercentBrightnessToAWholeOne()
+	public void Normalize_SnapsABrightnessOntoTheByteGrid()
 	{
 		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
 		config.Periods[0].BrightnessPct = 62.5;
@@ -316,14 +316,21 @@ public sealed class ConfigNormalizerTests
 
 		ConfigNormalizer.Normalize(config);
 
-		Assert.AreEqual(63, config.Periods[0].BrightnessPct);
-		Assert.AreEqual(63, config.Areas[0].Levels![0].BrightnessPct);
+		Assert.AreEqual(159, config.Periods[0].Brightness);
+		Assert.AreEqual(159, config.Areas[0].Levels![0].Brightness);
+		Assert.AreEqual(RawBrightness.ToPercent(159), config.Periods[0].BrightnessPct);
+
+		// 62.5 % is the one shape that can read as a different whole number after the snap: it sits between two
+		// bytes, and 159 is 62.35 %. Every whole percent keeps its reading, which is what a document can hold.
+		Assert.AreEqual(62, ConfigNormalizer.Whole(config.Periods[0].BrightnessPct));
 	}
 
 	[TestMethod]
-	public void Normalize_LeavesAWholePercentBrightnessAlone()
+	public void Normalize_LeavesABrightnessAlreadyOnTheByteGridAlone()
 	{
 		AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+
+		ConfigNormalizer.Normalize(config);
 		double[] before = [.. config.Periods.Select(period => period.BrightnessPct)];
 
 		ConfigNormalizer.Normalize(config);

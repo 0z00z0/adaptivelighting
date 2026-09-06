@@ -179,7 +179,7 @@ A period runs from its start until the next period begins.
 | **Period name** | `morning`, `day`, `evening`, `night` — free-form, and what the board and the logs call it. Rename it whenever you like; nothing points at the name. | `Name` |
 | *(not on screen)* | The period's id, minted once when it is created. Everything that refers to a period refers to this. | `Id` |
 | **Starts** | A clock time (`22:30`) or a sun event with an optional offset (`sunrise`, `sunset-01:00`, `sunrise+00:45`). | `Start` |
-| **Brightness** | The level every room holds during this period, unless a room replaces it with the daylight curve for itself — see [A room's own periods](#a-rooms-own-periods-a-number-or-the-daylight-curve). | `BrightnessPct` |
+| **Brightness** | The level every room holds during this period, unless a room replaces it with the daylight curve for itself — see [A room's own periods](#a-rooms-own-periods-a-number-or-the-daylight-curve). Shown as a percentage, written in the file as the 0-255 value Home Assistant accepts — see [How brightness is written](#how-brightness-is-written). | `Brightness` |
 | **Colour temperature** | The target warmth, in kelvin. | `ColorTempKelvin` |
 | **Also switches house mode to** | When this period starts, switch the house to this mode option. | `SetsModeId` |
 | **Blend between periods** / **Blend over** | Lights drift to the next period's level instead of stepping at the boundary. | `SmoothTransitions`, `BlendMinutes` (default on, 30 min) |
@@ -205,6 +205,22 @@ one on the curve and one on its own number. A period a room follows the curve fo
 on that room's page: the curve makes it irrelevant. The number stays in the file, so switching back
 restores what was typed. The curve diagram appears on a room's page only while that room follows it
 for some period.
+
+### How brightness is written
+
+On screen a brightness is always a whole percentage. In the file it is `Brightness`, a number from 0
+to 255 — the scale Home Assistant itself uses, and the one the fine-adjust handle steps along. Press
+and hold a brightness thumb and a small handle appears beside it that moves one step at a time and
+names the value it is on, written `( 108 / 255 )`. A whole percentage covers two or three of those
+steps, which is why the file holds the finer number.
+
+Both keys are read. A file written before this that says `BrightnessPct: 42` keeps meaning exactly
+42 %, and the next save from the browser writes it as `Brightness: 107` — the same light, on the
+scale the lamp actually receives. Write either by hand; writing both in one place is ambiguous, so
+`Brightness` wins and the percentage is dropped on the next save.
+
+The daylight curve's own ends, *Brightness at the dark end* and *at the bright end*, stay
+percentages: they shape a curve rather than name a level.
 
 ### A period that waits for movement
 

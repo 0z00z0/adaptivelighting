@@ -211,7 +211,7 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     - Id: morning-7k2q       # minted once when the period is created; never edit it
       Name: morning          # rename freely — nothing points at the name
       Start: "06:30"
-      BrightnessPct: 60
+      Brightness: 153        # 0-255, the scale HA uses; shown on screen as 60 %
       ColorTempKelvin: 3000
       # This period waits for somebody to get up rather than starting at 06:30.
       # Until then the night period keeps running. Never before 06:30, once per
@@ -225,19 +225,19 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     - Id: day-1x8m
       Name: day
       Start: sunrise+00:45
-      BrightnessPct: 90
+      Brightness: 230        # 90 %
       ColorTempKelvin: 4500
 
     - Id: evening-4pb3
       Name: evening
       Start: sunset-01:00
-      BrightnessPct: 70
+      Brightness: 179        # 70 %
       ColorTempKelvin: 2700
 
     - Id: night-3c9f
       Name: night
       Start: "22:30"
-      BrightnessPct: 15
+      Brightness: 38         # 15 %
       ColorTempKelvin: 2200
       # SetsModeId switches the house to a mode option when the period starts.
       # It names the option's Id, not the text the dropdown shows.
@@ -319,12 +319,12 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       LuxBrightnessMinPct: 25
       DaylightSensor: sensor.nord_illuminance
       # This room runs "day" (id day-1x8m, above) off the curve instead of the
-      # schedule's stated 90 %; BrightnessPct is kept here and does nothing
-      # while FollowDaylightCurve is true, so turning it off restores 65.
+      # schedule's stated 90 %; Brightness is kept here and does nothing while
+      # FollowDaylightCurve is true, so turning it off restores 65 %.
       Levels:
         - PeriodId: day-1x8m
           FollowDaylightCurve: true
-          BrightnessPct: 65
+          Brightness: 166      # 65 %
 
     # 6. Outdoors: opts out of the leaving sweep, gated on the sun, and fully
     #    explicit — no discovery is used for a slot you fill in. Found by set-up

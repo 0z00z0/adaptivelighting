@@ -201,9 +201,8 @@
 	// would have no way back out of it. preset-slider.js refuses to arm without this attribute.
 	private string? FineHandleOffered => FineAdjustable && !OnDefault ? "1" : null;
 
-	// A half percent can arrive from a hand-edited file. It is shown rounded and moving the rail stores the
-	// rounded number, so two surfaces never show one setting as two numbers. The file itself is left alone
-	// until a save, which is ConfigNormalizer's job.
+	// Brightness is stored as a byte, so most values sit between two whole percentages; the rail and every ordinary
+	// readout show the whole one, and the satellite handle above is where the byte itself is read and set.
 	private double Shown => ConfigNormalizer.Whole(Value);
 
 	private int Offset => Inheritable ? 1 : 0;
@@ -244,11 +243,13 @@
 	}
 
 	/// <summary>The raw value the satellite drives, written against its own scale.</summary>
-	/// <remarks>While a gesture is live this is the satellite's own count. Off a gesture it is what the shown
-	/// percentage rounds to: a whole percent covers two or three raw steps, so re-deriving it mid-drag would
-	/// stick and jump.</remarks>
-	private string RawText =>
-		RawBrightnessStep.Text(_fineLive ? _fineRaw : RawBrightnessStep.FromPercent(Shown));
+	/// <remarks>While a gesture is live this is the satellite's own count; re-deriving it mid-drag would stick and
+	/// jump. Off a gesture it comes from the value itself and never from the rounded readout, so a handle re-armed
+	/// after a save starts on the byte the document holds.</remarks>
+	private string RawText => RawBrightnessStep.Text(_fineLive ? _fineRaw : Raw);
+
+	/// <summary>The byte the value in force is stored as.</summary>
+	private int Raw => RawBrightnessStep.FromPercent(Value);
 
 	private static string Invariant(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
@@ -298,7 +299,7 @@
 	[JSInvokable]
 	public int BeginFine()
 	{
-		_fineRaw = RawBrightnessStep.FromPercent(Shown);
+		_fineRaw = Raw;
 		_fineLive = true;
 
 		return _fineRaw;
