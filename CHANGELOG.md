@@ -12,6 +12,10 @@ against each other.
 
 ## [Unreleased]
 
+### Added
+
+- **A room page can switch its own lights on, and its enable toggle no longer reads as the way to do it.** The toggle says **Enable room** and is drawn as a quiet outlined pill with a state lamp rather than a switch, so it cannot be mistaken for a lamp control; beside it sits a filled **Light on** button that lights the room exactly as walking into it would — the current period's levels through the daylight curve, or the room's motion scene where it names one — and leaves it on the room's own vacancy timeout, which the button's own help text states as a number. It goes out through the engine's ordinary lighting path, so the detector's expectation is declared per light and the room never reads its own command as a hand at the switch. A press defeats the conditions the engine judges — not dark enough, sleep mode, a blocking entity — and is refused, with the reason on screen, under the master switch, in a room that is not enabled, in an away house, and while a guest scene holds the room.
+
 ## [2026.9.6] - 2026-09-05
 
 ### Added

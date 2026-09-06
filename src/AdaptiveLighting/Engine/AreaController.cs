@@ -246,6 +246,47 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	/// <summary>Why this room cannot be lit by hand right now, or <c>null</c> when it can.</summary>
+	public string? LightNowRefusal()
+	{
+		lock (_gate)
+			return RefuseLightNow();
+	}
+
+	/// <summary>Lights this room the way walking into it would, and starts the same vacancy countdown.</summary>
+	/// <returns><c>null</c> once the room is lit, or the sentence saying why it is not.</returns>
+	/// <remarks>
+	///     Nothing here is new machinery: the room ends in <see cref="AreaState.AutoActive"/> holding the levels
+	///     the engine itself resolves for this moment, so it keeps following the time of day and it goes off on
+	///     the room's own vacancy timeout. Pressed from <see cref="AreaState.OverriddenOn"/> or
+	///     <see cref="AreaState.SuppressedOff"/> it is the room being handed back to the engine, which is why the
+	///     hold and the suppression both go.
+	/// </remarks>
+	public string? LightNow()
+	{
+		lock (_gate)
+		{
+			if (RefuseLightNow() is { } refusal)
+				return refusal;
+
+			// The newest word on these levels, so a running test's return is dropped instead of landing ten
+			// seconds later over the top of what was just asked for.
+			AbandonLevelTest();
+
+			CancelAllTimers();
+			ForgetDeclinedMotion();
+			Enter(AreaState.AutoActive, TransitionReason.ManualLightOn);
+			RestartVacancyTimer();
+
+			_logger.LogInformation("{Area}: lit by hand from the app; the vacancy timeout runs as usual.", Name);
+
+			// Through LightUp and nothing else: it declares the detector's expectation per light, so the area
+			// cannot read its own command back as a person at the switch.
+			LightUp(TransitionReason.ManualLightOn);
+			return null;
+		}
+	}
+
 	/// <summary>Subscribes and publishes the opening snapshot, leaving the lights as found.</summary>
 	// An area found lit adopts them; see AdoptIfLit.
 	public void Start()
@@ -1069,6 +1110,30 @@ public sealed class AreaController : IDisposable
 
 		if (!_area.Settings.Enabled)
 			return "Automatic lighting is switched off for this room, so its lights are not the engine's to move.";
+
+		return null;
+	}
+
+	/// <summary>Why <see cref="LightNow"/> would refuse, or <c>null</c> when it would light the room.</summary>
+	// The gates a press does not defeat: either the engine may command nothing here at all, or the house carries
+	// a standing instruction this room is not free to ignore. The conditions AutoOnBlockNow judges — darkness,
+	// sleep, a blocking entity — are deliberately absent, because overriding those is what the button is for.
+	private string? RefuseLightNow()
+	{
+		if (_disposed)
+			return "This room is being rebuilt on the settings that were just saved. Try again in a moment.";
+
+		if (_house.KillSwitchActive)
+			return "The master switch is on, so nothing may command a light.";
+
+		if (!_area.Settings.Enabled)
+			return "This room is not enabled, so its lights are not this app's to switch on.";
+
+		if (_house.Mode == HouseMode.Away)
+			return "The house is set to away, so nothing here is switched on.";
+
+		if (_house.Mode == HouseMode.Guest && _house.ActiveScene is { Length: > 0 } scene)
+			return $"A guest scene ({scene}) is holding this room.";
 
 		return null;
 	}

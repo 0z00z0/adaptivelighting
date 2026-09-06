@@ -68,7 +68,10 @@ public enum TransitionReason
 	SceneHold,
 
 	/// <summary>A level test started on the room's real lights. Nothing the area decides on moved.</summary>
-	LevelTestStarted
+	LevelTestStarted,
+
+	/// <summary>Somebody asked for this room's lights from the app, and the room lit as movement would light it.</summary>
+	ManualLightOn
 }
 
 /// <summary>Which gate is refusing to switch an area's lights on for movement.</summary>

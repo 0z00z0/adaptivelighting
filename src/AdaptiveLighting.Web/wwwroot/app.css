@@ -4562,10 +4562,103 @@ button.mode-pill:disabled {
 	font-family: var(--mono);
 }
 
-/* The room's switch sits at the end of the header row, pushed away from the name so a thumb aiming at it
-   cannot be aiming at anything else. */
-.room-head .switch {
+/* ---- the two header controls ----
+   They do two unrelated things, so they are drawn as two unrelated things and never as a pair of buttons.
+   Light on is a filled action with the page's ordinary button geometry: press it, the lamps change. Enable
+   room is a hairline pill with a state lamp and its own word — round rather than square, quiet rather than
+   filled, and carrying its own name — because it is a setting about whether this app runs the room at all,
+   and the previous drawing of it was being read as a light switch. Every colour here is borrowed from a
+   token, so no palette block can be left behind. */
+.room-head-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	flex-wrap: wrap;
 	margin-left: auto;
+}
+
+.room-lighton {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-ink);
+	font-weight: 650;
+	white-space: nowrap;
+}
+
+.room-lighton:hover:not(:disabled) {
+	filter: brightness(1.06);
+}
+
+.room-lighton:active:not(:disabled) {
+	filter: brightness(0.92);
+}
+
+.room-enable {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.16rem 0.6rem 0.16rem 0.45rem;
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	background: none;
+	color: var(--muted);
+	font-size: var(--text-sm);
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.room-enable-lamp {
+	width: 8px;
+	height: 8px;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: var(--muted);
+	opacity: 0.55;
+	transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+/* The state is spelled out beside the name, so nobody has to read the dot. */
+.room-enable-word {
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.room-enable.on {
+	border-color: color-mix(in srgb, var(--ok) 55%, var(--line));
+	color: var(--text);
+}
+
+.room-enable.on .room-enable-lamp {
+	background: var(--ok);
+	opacity: 1;
+	box-shadow: 0 0 6px 0 var(--ok);
+}
+
+.room-enable.on .room-enable-word {
+	color: var(--ok);
+}
+
+.room-enable:hover {
+	border-color: var(--accent);
+}
+
+.room-enable:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.room-lighton-refused {
+	margin-top: var(--space-3);
+}
+
+@media (max-width: 30rem) {
+	/* The controls take the width they need on their own line rather than squeezing the room's name. */
+	.room-head-actions {
+		width: 100%;
+		margin-left: 0;
+	}
 }
 
 /* ---- the lamp ----
