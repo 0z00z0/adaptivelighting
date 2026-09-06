@@ -282,6 +282,18 @@ public sealed class PresetSliderTests
 		StringAssert.Contains(html, "( 102 / 255 )");
 	}
 
+	/// <summary>The handle has to name the byte the document holds, not the byte the rounded readout would imply.
+	/// Deriving it from the readout is what made six raw steps up from 40 % re-arm at 107 instead of 108.</summary>
+	[TestMethod]
+	public async Task The_Fine_Handle_Names_The_Stored_Byte_And_The_Readout_Still_Says_A_Whole_Percent()
+	{
+		string html = await RenderAsync(
+			RawBrightnessStep.ToPercent(108), atDefault: false, inheritable: true, fineAdjustable: true);
+
+		StringAssert.Contains(html, "( 108 / 255 )");
+		StringAssert.Contains(html, ">42 %", "everything a person reads at a glance stays a whole percent");
+	}
+
 	/// <summary>No fine handle, no raw number: colour temperature has no raw unit this would mean anything against.</summary>
 	[TestMethod]
 	public async Task Without_A_Fine_Handle_No_Raw_Number_Is_Rendered()

@@ -142,8 +142,14 @@ public static class LightingConfigDocument
 
 		// OmitNull, not OmitDefaults. On an AreaConfig null means "inherit Defaults", but an area that sets
 		// Enabled: false or LuxThreshold: 0 has said something and OmitDefaults would delete it.
+		//
+		// The two BrightnessPct overrides make each an input the deserialiser still binds and the serialiser never
+		// writes, so a document written before brightness became raw keeps commanding its exact percentage until a
+		// save moves it onto the byte grid. Only Serialize carries the overrides; Deserialize must not.
 		ISerializer serializer = new SerializerBuilder()
 			.ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
+			.WithAttributeOverride(typeof(TimePeriodConfig), nameof(TimePeriodConfig.BrightnessPct), new YamlIgnoreAttribute())
+			.WithAttributeOverride(typeof(RoomLevelOverride), nameof(RoomLevelOverride.BrightnessPct), new YamlIgnoreAttribute())
 			.Build();
 
 		Dictionary<string, AdaptiveLightingConfig> document = new(StringComparer.Ordinal) { [RootKey] = config };
@@ -375,6 +381,21 @@ public static class LightingConfigDocument
 
 						logger?.LogWarning("{RetiredSetting}", sentence);
 						retired.TryAdd(name, sentence);
+					}
+
+					// One level written twice. The raw key is what a save writes and what the fine handle sets, so it
+					// wins; leaving both would make the winner depend on which line came first in the file.
+					if (string.Equals(name, nameof(TimePeriodConfig.BrightnessPct), StringComparison.OrdinalIgnoreCase)
+						&& HasKey(mapping, nameof(TimePeriodConfig.Brightness)))
+					{
+						logger?.LogWarning(
+							"A period or room level states both 'Brightness' and 'BrightnessPct'. The raw value is "
+							+ "used, the percentage is dropped, and the next save writes only the raw one.");
+
+						mapping.Children.Remove(child.Key);
+						used = true;
+
+						continue;
 					}
 
 					// Before the key rename below: a key about to be renamed still carries its value under the old

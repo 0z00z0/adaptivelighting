@@ -95,17 +95,17 @@ public static class ConfigNormalizer
 			area.Levels.RemoveAll(level => level.IsEmpty);
 
 			foreach (RoomLevelOverride level in area.Levels)
-				if (level.BrightnessPct is { } brightness)
-					level.BrightnessPct = Whole(brightness);
+				if (level.Brightness is { } brightness)
+					level.BrightnessPct = RawBrightness.ToPercent(brightness);
 		}
 
 		foreach (TimePeriodConfig period in config.Periods)
-			period.BrightnessPct = Whole(period.BrightnessPct);
+			period.BrightnessPct = RawBrightness.ToPercent(period.Brightness);
 
 		return config;
 	}
 
-	/// <summary>A stored brightness as the whole number a save keeps, which is what every surface shows.</summary>
+	/// <summary>A value as the whole number every ordinary readout shows.</summary>
 	// Away from zero, not to the even neighbour: the editor, the collapsed summary and the file have to agree,
 	// and 62.5 reading 62 in one place and 63 in another is the disagreement this exists to close.
 	public static double Whole(double value) =>

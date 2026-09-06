@@ -43,7 +43,7 @@
 	<rect x="600" y="40" width="380" height="96" rx="7" fill="var(--panel)" stroke="var(--line)" stroke-width="1"/>
 	<text x="616" y="60" class="hd">LEVELS — WHAT IT SETS WHILE A ROOM IS LIT</text>
 	<text x="616" y="80" class="ev">Brightness and colour follow the time of day.</text>
-	<text x="616" y="100" class="pa">Periods · BrightnessPct · ColorTempKelvin · BlendMinutes</text>
+	<text x="616" y="100" class="pa">Periods · Brightness · ColorTempKelvin · BlendMinutes</text>
 	<text x="616" y="115" class="pa">CircadianTickSeconds · Day/NightTransitionSeconds</text>
 	<text x="616" y="130" class="pa">StartsOnMotion — a period can wait for movement</text>
 
@@ -127,7 +127,7 @@
 	<text x="490" y="545" class="cap" text-anchor="middle">night caps, whatever the clock says</text>
 	<text x="340" y="576" class="pa">a Sleep-kind house mode · ClampPeriodId</text>
 	<text x="340" y="591" class="pa">RespectSleepMode (per area)</text>
-	<text x="340" y="606" class="pa">held to that period's own BrightnessPct</text>
+	<text x="340" y="606" class="pa">held to that period's own Brightness</text>
 
 	<rect x="680" y="508" width="300" height="46" rx="7" fill="var(--idle-bg)" stroke="var(--idle)" stroke-width="1.5" stroke-dasharray="4 3"/>
 	<text x="830" y="530" class="st" fill="var(--idle)" text-anchor="middle">Disabled</text>

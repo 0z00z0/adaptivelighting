@@ -7,6 +7,9 @@ namespace AdaptiveLighting.Configuration;
 /// <summary>One entry in the circadian table: the target the lights hold from <see cref="Start"/> until the next period.</summary>
 public class TimePeriodConfig
 {
+	/// <summary>What a period holds where nobody has said otherwise: 80 %.</summary>
+	private const int DefaultBrightness = 204;
+
 	/// <summary>What every reference to this period names. Minted once, never shown, never changed.</summary>
 	/// <remarks>Filled in on load by <see cref="StableKeyMigration"/>. Editing it by hand orphans every reference to the old value.</remarks>
 	public string? Id { get; set; }
@@ -56,10 +59,25 @@ public class TimePeriodConfig
 	/// </remarks>
 	public List<string>? StartsOnMotionAreas { get; set; }
 
-	/// <summary>The level this period holds, house-wide.</summary>
+	private double _brightnessPct = RawBrightness.ToPercent(DefaultBrightness);
+
+	/// <summary>The level this period holds, house-wide, as the 0-255 byte Home Assistant accepts.</summary>
 	// A room follows the daylight curve instead through its own Levels row for this period
 	// (RoomLevelOverride.FollowDaylightCurve); this period never hands that decision away.
-	public double BrightnessPct { get; set; } = 80;
+	public int Brightness
+	{
+		get => RawBrightness.FromPercent(_brightnessPct);
+		set => _brightnessPct = RawBrightness.ToPercent(value);
+	}
+
+	/// <summary>The same level in percent: what the engine works in, and what every ordinary readout rounds.</summary>
+	// Bound on load and never written back — LightingConfigDocument.Serialize suppresses it — so a document written
+	// before brightness became raw commands its exact percentage until a save moves it onto the byte grid.
+	public double BrightnessPct
+	{
+		get => _brightnessPct;
+		set => _brightnessPct = value;
+	}
 
 	public int ColorTempKelvin { get; set; } = 3500;
 

@@ -174,7 +174,7 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void Brightness_Outside_Zero_To_A_Hundred_Is_Rejected()
+	public void Brightness_Outside_The_Range_A_Byte_Can_Hold_Is_Rejected()
 	{
 		var config = Minimal();
 		config.Periods = [new() { Name = "d", Start = "07:00", BrightnessPct = 400 }];
@@ -737,7 +737,9 @@ public sealed class ConfigValidatorTests
 		var result = ConfigValidator.Validate(config);
 
 		Assert.IsFalse(result.IsValid, "checked exactly as the schedule's own levels are — same range, same severity");
-		Assert.IsTrue(result.Errors.Any(e => e.Contains("BrightnessPct 150", StringComparison.Ordinal)));
+		Assert.IsTrue(
+			result.Errors.Any(e => e.Contains("Brightness 383", StringComparison.Ordinal)),
+			"named as the key the document carries, so a person can find the line");
 	}
 
 	[TestMethod]

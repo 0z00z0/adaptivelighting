@@ -14,7 +14,23 @@ public class RoomLevelOverride
 	/// <remarks>An id matching no period is kept and reported, never dropped: it is almost always a deleted period.</remarks>
 	public string PeriodId { get; set; } = "";
 
-	public double? BrightnessPct { get; set; }
+	private double? _brightnessPct;
+
+	/// <summary>The level this room holds for the period, as the 0-255 byte Home Assistant accepts.</summary>
+	public int? Brightness
+	{
+		get => _brightnessPct is { } percent ? RawBrightness.FromPercent(percent) : null;
+		set => _brightnessPct = value is { } raw ? RawBrightness.ToPercent(raw) : null;
+	}
+
+	/// <summary>The same level in percent: what the engine works in, and what every ordinary readout rounds.</summary>
+	// Bound on load and never written back — LightingConfigDocument.Serialize suppresses it — so a document written
+	// before brightness became raw commands its exact percentage until a save moves it onto the byte grid.
+	public double? BrightnessPct
+	{
+		get => _brightnessPct;
+		set => _brightnessPct = value;
+	}
 
 	public int? ColorTempKelvin { get; set; }
 

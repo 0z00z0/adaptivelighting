@@ -12,6 +12,8 @@ public static class ConfigValidator
 {
 	private const double MinBrightnessPct = 0;
 	private const double MaxBrightnessPct = 100;
+	private const int MinBrightness = 0;
+	private const int MaxBrightness = RawBrightness.Max;
 	private const int MinColorTempKelvin = 1000;
 	private const int MaxColorTempKelvin = 10000;
 	private const double MinSunElevationDegrees = -90;
@@ -365,8 +367,10 @@ public static class ConfigValidator
 
 	private static void ValidatePeriodTargets(TimePeriodConfig period, ValidationResult result)
 	{
-		if (period.BrightnessPct is < MinBrightnessPct or > MaxBrightnessPct)
-			result.AddError($"Period '{period.Name}' has BrightnessPct {period.BrightnessPct}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
+		// The raw value, because that is the key the document carries and the number a person has to find in it.
+		// A file still written in percent reaches this through the same property, scaled.
+		if (period.Brightness is < MinBrightness or > MaxBrightness)
+			result.AddError($"Period '{period.Name}' has Brightness {period.Brightness}, outside {MinBrightness}–{MaxBrightness}.");
 
 		if (period.ColorTempKelvin is < MinColorTempKelvin or > MaxColorTempKelvin)
 			result.AddError($"Period '{period.Name}' has ColorTempKelvin {period.ColorTempKelvin}, outside {MinColorTempKelvin}–{MaxColorTempKelvin}.");
@@ -697,9 +701,9 @@ public static class ConfigValidator
 	{
 		string label = PeriodLabel(periods, level.PeriodId);
 
-		if (level.BrightnessPct is { } brightness && brightness is < MinBrightnessPct or > MaxBrightnessPct)
+		if (level.Brightness is { } brightness && brightness is < MinBrightness or > MaxBrightness)
 			result.AddError(
-				$"[{area.DisplayName}] levels for period '{label}' have BrightnessPct {brightness}, outside {MinBrightnessPct}–{MaxBrightnessPct}.");
+				$"[{area.DisplayName}] levels for period '{label}' have Brightness {brightness}, outside {MinBrightness}–{MaxBrightness}.");
 
 		if (level.ColorTempKelvin is { } kelvin && kelvin is < MinColorTempKelvin or > MaxColorTempKelvin)
 			result.AddError(

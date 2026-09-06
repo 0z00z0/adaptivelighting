@@ -340,7 +340,7 @@ public sealed class LightingConfigDocumentTests
 		{
 			Assert.AreEqual(original.Periods[index].Name, actual[index].Name);
 			Assert.AreEqual(original.Periods[index].Start, actual[index].Start);
-			Assert.AreEqual(original.Periods[index].BrightnessPct, actual[index].BrightnessPct);
+			Assert.AreEqual(original.Periods[index].Brightness, actual[index].Brightness);
 			Assert.AreEqual(original.Periods[index].ColorTempKelvin, actual[index].ColorTempKelvin);
 		}
 	}
@@ -534,14 +534,14 @@ public sealed class LightingConfigDocumentTests
 
 		Assert.AreEqual(4, reloaded.Levels.Count, "the list replaces, it does not append or shrink");
 
-		Assert.AreEqual(8d, reloaded.Levels[0].BrightnessPct);
+		Assert.AreEqual(RawBrightness.FromPercent(8), reloaded.Levels[0].Brightness);
 		Assert.AreEqual(2000, reloaded.Levels[0].ColorTempKelvin);
 
-		Assert.AreEqual(55d, reloaded.Levels[1].BrightnessPct);
+		Assert.AreEqual(RawBrightness.FromPercent(55), reloaded.Levels[1].Brightness);
 		Assert.IsNull(reloaded.Levels[1].ColorTempKelvin,
 			"a value the room never set must come back unset — writing it as 0 would pin a colour nobody chose");
 
-		Assert.IsNull(reloaded.Levels[2].BrightnessPct);
+		Assert.IsNull(reloaded.Levels[2].Brightness);
 		Assert.AreEqual(4000, reloaded.Levels[2].ColorTempKelvin);
 
 		Assert.AreEqual("kveld", reloaded.Levels[3].PeriodId, "a row naming no configured period survives the trip too");
@@ -870,12 +870,12 @@ public sealed class LightingConfigDocumentTests
 		// period and repoints every Levels row onto it, same as it would for a hand-edited document.
 		RoomLevelOverride day = levels.Single(level => level.PeriodId == back.Periods[0].Key);
 		Assert.IsTrue(day.FollowDaylightCurve == true);
-		Assert.AreEqual(55d, day.BrightnessPct,
-			"the curve hides the percentage on screen; the document keeps it, so switching back restores it");
+		Assert.AreEqual(RawBrightness.FromPercent(55), day.Brightness,
+			"the curve hides the level on screen; the document keeps it, so switching back restores it");
 
 		RoomLevelOverride night = levels.Single(level => level.PeriodId == back.Periods[1].Key);
 		Assert.IsFalse(night.FollowDaylightCurve == true);
-		Assert.AreEqual(10d, night.BrightnessPct);
+		Assert.AreEqual(RawBrightness.FromPercent(10), night.Brightness);
 	}
 
 	/// <summary>The old per-room switch is an unmatched key now, and an unmatched key is silence.</summary>
