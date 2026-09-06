@@ -1095,13 +1095,38 @@ counts a leftover row as an override.
 ### The borrowing stop on a preset slider
 
 The leftmost stop of `PresetSlider` states nothing and lets the surface above supply the number. Four signals
-say so at once — a hatched rail, a hollow thumb, a lit cap at the rail's end, and the readout in `--idle`
-naming the borrowed number in words — because any one of them alone reads as the dimmest setting rather than
-as borrowing.
+say so at once — a recessed hatched pocket at the left end of the rail, a hollow thumb, a graduation mark where
+the real scale starts, and the readout in `--idle` naming the borrowed number in words — because any one of
+them alone reads as the dimmest setting rather than as borrowing.
+
+The mark is the zero of the real scale, not a decoration beside the control: it sits exactly where the thumb
+docks on the first real stop, and the pocket runs from the rail's left end up to it. Dragging left from a
+stated percentage therefore crosses the mark and lands in the pocket.
+
+Placing it needs the thumb's own width. A native range thumb's centre travels inset by half of it, so a
+fraction of the ladder is not a fraction of the track: at sixteen stops, a 22 px thumb and a 243 px rail, a
+seam drawn at 6.25 % of the track sits 9.6 px left of where the thumb lands on 0 %. `--psl-fill` and
+`--psl-pocket` are therefore shipped as bare fractions and `app.css` applies the inset once, in `--psl-fill-x`
+and `--psl-zero-x`.
 
 `--idle` is reused instead of a colour being added. It is already the token for watching without commanding,
 which is what borrowing is, and it is defined in every theme block — which is what the
 colour-lives-in-several-places trap exists to prevent.
+
+Two things kept the rail off the screen entirely until they were measured, and both are silent:
+
+- **Only the last layer of a `background` may be a colour.** The pocket's recess was written as
+  `var(--idle-bg) 0 0 / <size> no-repeat` in a middle layer, which makes the whole shorthand invalid, so the
+  track fell back to transparent and neither the pocket nor the fill under it was ever drawn. It is a flat
+  two-stop gradient now.
+- **In `::-webkit-slider-runnable-track`, a percentage inside a `calc()` resolves against a zero-width box.**
+  A bare `62.5%` stop works there; `calc(11px + 0.625 * (100% - 22px))` comes out as `-2.75px`, clamped to
+  zero, so the accent fill disappeared. The geometry cannot avoid mixing a percentage with a pixel, so the
+  visible rail is painted by `.psl-rail::before`, an ordinary element, and the track pseudo-elements carry only
+  the height each engine needs to position its thumb against. One rule replaced four vendor-specific ones.
+
+Neither shows in a computed style: `getComputedStyle(input, '::-webkit-slider-runnable-track')` reports
+`background-image: none` whatever the rule says. Sampling pixels off a screenshot is what settles it.
 
 The heading row is shown from **780 px** upward, and each rail's own label is hidden there because the heading
 is saying it. Below that width the rows stack, and a heading row above stacked periods names nothing near the

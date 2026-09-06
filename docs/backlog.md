@@ -57,6 +57,14 @@ An item with no number is one this file records before the tracker has minted on
   that class after the near-miss line was replaced (#37). Renaming touches `app.css` and the component
   together, and neither may move alone.
 
+- **A fine-adjust step does not survive a save.** The satellite commits the raw value as a percentage and
+  `ConfigNormalizer` rounds every `BrightnessPct` to a whole number, so a step of 100/255 ≈ 0.39 percentage
+  points is discarded unless it happens to cross one. Measured on the room page: holding the brightness thumb
+  from 40 % and nudging six raw steps showed `( 108 / 255 )` and wrote 42 to the document, and re-arming the
+  handle then started from 107. The handle can therefore reach 256 values while the document keeps 101, which
+  is most of the reason the handle exists. Either the document keeps the fraction for a level a room states, or
+  the handle stops offering steps the file cannot hold.
+
 ## Parked
 
 - #30 **The daylight chart is only 101 px tall on a phone, which caps its labels.** The corner and the label spread
