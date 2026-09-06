@@ -12,6 +12,10 @@ against each other.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A room's period rows: the zero mark now sits on the rail at zero, the rail is painted at all, and the fine-adjust handle names the value it is moving.** The mark that names the house-default end was a separate element standing to the left of the whole control while the pocket it named was drawn inside the rail; it is now a graduation on the rail itself, at the point the thumb docks on 0 %, with the pocket continuing left past it. Getting it there needed the thumb's own half-width inset, which the old arithmetic ignored — measured at 390px, the pocket seam sat 9.6px left of where the thumb actually lands. Two things had also meant that none of this reached the screen: only the last layer of a `background` may be a colour and the pocket's recess was one in a middle layer, which took the whole shorthand down, and in `::-webkit-slider-runnable-track` a percentage inside a `calc()` resolves against a zero-width box, so the accent fill collapsed to nothing. The rail is drawn on an ordinary element now, and one rule replaces four vendor-specific ones. The period name and the curve question no longer sit against each other, the number has air before it, and the handle that steps single 8-bit values shows the raw one it is on, as `( 108 / 255 )`, live while it is dragged and gone when the gesture ends. No row is taller: at 390px the row in force stays 156px and the row carrying an off-ladder number came down from 179 to 156.
+
 ## [2026.9.6] - 2026-09-05
 
 ### Added

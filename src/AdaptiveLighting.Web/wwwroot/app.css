@@ -2574,6 +2574,50 @@ select.cell.wide {
 	min-width: 0;
 	--rail-unlit: color-mix(in srgb, var(--text) 50%, transparent);
 	--rail-edge: color-mix(in srgb, var(--text) 35%, transparent);
+	/* Must match THUMB_WIDTH_PX in preset-slider.js: a native range thumb's screen position cannot be read back
+	   from the DOM, so the script works it out from this number and the two have to agree by hand. */
+	--psl-thumb: 22px;
+	/* A native thumb's centre travels inset by half its own width, so a fraction of the ladder is not a fraction
+	   of the track. --psl-fill and --psl-pocket arrive as bare fractions and this is the one place the inset is
+	   applied: the accent fill ends under the thumb, and --psl-zero-x is where the thumb docks on the first real
+	   stop — which is where the zero mark sits and where the house-default pocket stops. */
+	--psl-fill-x: calc(var(--psl-thumb) / 2 + var(--psl-fill, 0) * (100% - var(--psl-thumb)));
+	--psl-zero-x: calc(var(--psl-thumb) / 2 + var(--psl-pocket, 0) * (100% - var(--psl-thumb)));
+}
+
+/* The box the zero mark places itself against. Sized by the rail alone, so a percentage means the same thing
+   here as it does inside the track's own background.
+
+   min-width, because the readout shares this line: 17 stops need room for a thumb to land on one, and the
+   leftmost of them is the only way back to the house default. It sits here rather than on the input, or the
+   wrapper shrinks past it and the rail overflows its own mark. */
+.psl-rail {
+	position: relative;
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 9rem;
+}
+
+/* The rail itself is painted here and not in the range's own track pseudo-element, because the geometry has to
+   mix a percentage with a pixel: a native thumb's centre travels inset by half its width. Measured in Chromium,
+   a percentage inside a calc() resolves against a zero-width box in ::-webkit-slider-runnable-track, so the
+   accent stop at calc(11px + 0.625 * (100% - 22px)) came out as 0 and the fill disappeared entirely while a
+   bare 62.5% stop had always worked. On an ordinary element it resolves normally, and one rule replaces the
+   four vendor-specific ones this used to need. */
+.psl-rail::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 50%;
+	height: 10px;
+	transform: translateY(-50%);
+	border-radius: 999px;
+	box-shadow: inset 0 0 0 1px var(--rail-edge);
+	background: linear-gradient(to right,
+		var(--accent) 0 var(--psl-fill-x),
+		var(--rail-unlit) var(--psl-fill-x) 100%);
+	pointer-events: none;
 }
 
 .psl-label {
@@ -2666,26 +2710,34 @@ select.cell.wide {
 	position: relative;
 }
 
-/* The cap marks where the rail stops being numbers. Faint until the thumb is on it, then solid. */
+/* The zero mark: a graduation across the rail where the real scale starts, with the house-default pocket
+   continuing left past it. Taller than the track and shorter than the thumb, so it reads as a mark on the rail
+   and the thumb covers it when the value really is 0. pointer-events, or a tap on 0 % would never reach the
+   input underneath. Faint until the thumb is in the pocket, then solid. */
 .psl-home {
-	width: 5px;
-	height: 14px;
-	flex: 0 0 auto;
-	border-radius: 2px;
+	position: absolute;
+	top: 50%;
+	left: var(--psl-zero-x);
+	width: 2px;
+	height: 18px;
+	transform: translate(-50%, -50%);
+	border-radius: 1px;
 	background: var(--rail-unlit);
+	pointer-events: none;
 }
 
 .psl-default .psl-home {
 	background: var(--idle);
 }
 
-/* min-width, because the readout shares this line now: 17 stops need room for a thumb to land on one, and the
-   leftmost of them is the only way back to the house default. */
+/* position and z-index, so the thumb paints over the rail its wrapper draws underneath. */
 .psl-range {
 	-webkit-appearance: none;
 	appearance: none;
+	position: relative;
+	z-index: 1;
 	flex: 1 1 auto;
-	min-width: 9rem;
+	min-width: 0;
 	height: 2.25rem;
 	margin: 0;
 	padding: 0;
@@ -2705,29 +2757,23 @@ select.cell.wide {
 	border-radius: var(--radius-chip);
 }
 
+/* Height only. The visible rail is .psl-rail::before; these boxes exist so each engine has something to
+   position its thumb against. */
 .psl-range::-webkit-slider-runnable-track {
 	height: 10px;
-	border-radius: 999px;
-	box-shadow: inset 0 0 0 1px var(--rail-edge);
-	background: linear-gradient(to right,
-		var(--accent) 0 var(--psl-fill, 0%),
-		var(--rail-unlit) var(--psl-fill, 0%) 100%);
+	background: none;
 }
 
 .psl-range::-moz-range-track {
 	height: 10px;
-	border-radius: 999px;
-	box-shadow: inset 0 0 0 1px var(--rail-edge);
-	background: linear-gradient(to right,
-		var(--accent) 0 var(--psl-fill, 0%),
-		var(--rail-unlit) var(--psl-fill, 0%) 100%);
+	background: none;
 }
 
 .psl-range::-webkit-slider-thumb {
 	-webkit-appearance: none;
 	appearance: none;
-	width: 22px;
-	height: 22px;
+	width: var(--psl-thumb);
+	height: var(--psl-thumb);
 	margin-top: -6px;
 	border: 0;
 	border-radius: 999px;
@@ -2736,47 +2782,31 @@ select.cell.wide {
 }
 
 .psl-range::-moz-range-thumb {
-	width: 22px;
-	height: 22px;
+	width: var(--psl-thumb);
+	height: var(--psl-thumb);
 	border: 0;
 	border-radius: 999px;
 	background: var(--accent);
 	box-shadow: 0 0 0 2px var(--panel);
 }
 
-/* The house-default pocket: hatched and recessed, always at the left edge of an inheritable rail regardless of
-   the current position, so it reads as a zone outside the 0-100 range rather than the dimmest real setting. Its
-   width tracks --psl-pocket, the same fraction of the track that position 0 occupies, so the seam lines up with
-   where the thumb actually docks. The thin --panel band right after it is the visible step-down into the real
-   rail; drawn on top of the hatch, which is drawn on top of the ordinary fill/track gradient. */
-.psl-inheritable .psl-range::-webkit-slider-runnable-track {
-	background:
-		linear-gradient(to right,
-			transparent 0 calc(var(--psl-pocket, 0%) - 3px),
-			var(--panel) calc(var(--psl-pocket, 0%) - 3px) var(--psl-pocket, 0%),
-			transparent var(--psl-pocket, 0%) 100%),
-		repeating-linear-gradient(135deg,
-			color-mix(in srgb, var(--idle) 55%, transparent) 0 2px,
-			transparent 2px 6px) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
-		var(--idle-bg) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
-		linear-gradient(to right,
-			var(--accent) 0 var(--psl-fill, 0%),
-			var(--rail-unlit) var(--psl-fill, 0%) 100%);
-}
+/* The house-default pocket: hatched and recessed, running from the left end of an inheritable rail up to
+   --psl-zero-x, which is where the thumb docks on the first real stop and where .psl-home draws the zero mark.
+   The rail therefore continues past that mark to the left, into a zone outside the 0-100 range rather than the
+   dimmest real setting. The hatch is drawn on top of the ordinary fill/track gradient.
 
-.psl-inheritable .psl-range::-moz-range-track {
+   The recess is a flat gradient and not the bare colour it looks like: only the last layer of a background may
+   be a colour, and one in a middle layer takes the whole shorthand down with it — which is why nothing of this
+   pocket used to reach the screen. */
+.psl-inheritable .psl-rail::before {
 	background:
-		linear-gradient(to right,
-			transparent 0 calc(var(--psl-pocket, 0%) - 3px),
-			var(--panel) calc(var(--psl-pocket, 0%) - 3px) var(--psl-pocket, 0%),
-			transparent var(--psl-pocket, 0%) 100%),
 		repeating-linear-gradient(135deg,
 			color-mix(in srgb, var(--idle) 55%, transparent) 0 2px,
-			transparent 2px 6px) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
-		var(--idle-bg) 0 0 / var(--psl-pocket, 0%) 100% no-repeat,
+			transparent 2px 6px) 0 0 / var(--psl-zero-x) 100% no-repeat,
+		linear-gradient(var(--idle-bg), var(--idle-bg)) 0 0 / var(--psl-zero-x) 100% no-repeat,
 		linear-gradient(to right,
-			var(--accent) 0 var(--psl-fill, 0%),
-			var(--rail-unlit) var(--psl-fill, 0%) 100%);
+			var(--accent) 0 var(--psl-fill-x),
+			var(--rail-unlit) var(--psl-fill-x) 100%);
 }
 
 .psl-default .psl-range::-webkit-slider-thumb {
@@ -2796,6 +2826,7 @@ select.cell.wide {
 .psl-satellite {
 	position: absolute;
 	top: 50%;
+	z-index: 2;
 	width: 44px;
 	height: 44px;
 	margin-left: -22px;
@@ -2816,6 +2847,26 @@ select.cell.wide {
 	border-radius: 999px;
 	background: var(--panel);
 	box-shadow: 0 0 0 2px var(--accent), inset 0 0 0 var(--stroke-mark) var(--accent);
+}
+
+/* The raw 0-255 value the handle is on, which is the scale it actually steps: a whole percent covers two or
+   three raw steps, so a percentage here could not show what one step did. Written by preset-slider.js while the
+   handle is dragged, and rendered by PresetSlider so it is right the instant the handle appears. */
+.psl-raw {
+	position: absolute;
+	left: 50%;
+	bottom: 22px;
+	transform: translateX(-50%);
+	padding: 0.05rem 0.35rem;
+	border-radius: var(--radius-chip);
+	background: var(--chip);
+	box-shadow: 0 0 0 1px var(--rail-edge);
+	font-family: var(--mono);
+	font-size: var(--text-xs);
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+	white-space: nowrap;
+	pointer-events: none;
 }
 
 /* A short stem ties the mark visually to the thumb it sits above. */
@@ -6072,17 +6123,25 @@ h1[tabindex="-1"]:focus {
 	display: none;
 }
 
+/* The number sits after the rail with air before it: against the rail's end it reads as part of the control
+   rather than as what the control currently says. margin, not the line's gap, which also separates the label
+   from the rail once the table has columns. */
 .lvl .psl-read {
 	order: 0;
 	flex: 0 1 auto;
+	margin-left: var(--space-3);
 	max-width: 48%;
 }
 
-/* Beside the period name, not under it. Baseline with the name, so the box lines up with the type. */
+/* Beside the period name, not under it, and at the far end of the line rather than against the name: the two
+   are different questions and read as one run of text when they touch. margin-inline-start, so the line still
+   reads left to right under a right-to-left locale. Where the line is too narrow to hold both, the toggle wraps
+   as it always did and auto resolves to nothing. Baseline with the name, so the box lines up with the type. */
 .lvl-curve-toggle {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.3rem;
+	margin-inline-start: auto;
 	font-size: var(--text-sm);
 	color: var(--muted);
 	white-space: nowrap;
@@ -6139,9 +6198,11 @@ h1[tabindex="-1"]:focus {
 		display: inline;
 	}
 
+	/* Back above the rail, so the air that separated it from the rail's end would only indent a line. */
 	.lvl .psl-read {
 		order: -1;
 		flex: 0 1 100%;
+		margin-left: 0;
 		max-width: 100%;
 	}
 }

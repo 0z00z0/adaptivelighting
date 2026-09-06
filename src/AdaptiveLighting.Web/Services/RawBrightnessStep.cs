@@ -8,7 +8,13 @@ namespace AdaptiveLighting.Web.Services;
 // is Home Assistant's own protocol, not something this codebase chooses.
 public static class RawBrightnessStep
 {
-	private const int MaxRaw = 255;
+	/// <summary>The ceiling Home Assistant accepts, and the denominator the satellite's readout names.</summary>
+	public const int MaxRaw = 255;
+
+	/// <summary>How a raw value is written beside the satellite handle, against the scale it is a step of.</summary>
+	// Invariant: a raw byte is Home Assistant's own number, not a quantity to group or localise.
+	public static string Text(int raw) =>
+		$"( {Math.Clamp(raw, 0, MaxRaw).ToString(CultureInfo.InvariantCulture)} / {MaxRaw.ToString(CultureInfo.InvariantCulture)} )";
 
 	/// <summary>The nearest raw value a shown percentage rounds to.</summary>
 	public static int FromPercent(double percent) =>
