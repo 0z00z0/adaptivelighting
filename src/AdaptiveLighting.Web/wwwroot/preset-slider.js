@@ -7,8 +7,10 @@
 	   server still gets the final value through the existing @onchange on release, unchanged.
 
 	2. The brightness satellite. Press-and-hold the thumb without moving it, and a small handle appears beside it
-	   that nudges the value in single 8-bit raw-brightness steps rather than jumping between named presets. Two
-	   things gate it, and both exist because arming takes the gesture away from the coarse rail for good: the
+	   that nudges the value in single 8-bit raw-brightness steps rather than jumping between named presets, and
+	   names the raw value it is on. That number is written here for the same reason the readout above is: a raw
+	   step is the smallest move this handle makes, and one shown a round trip late cannot say which one it was.
+	   Two things gate arming, and both exist because it takes the gesture away from the coarse rail for good: the
 	   press has to land on the thumb, and the rail has to carry data-psl-fine, which PresetSlider withholds while
 	   the thumb is docked in the house-default pocket.
 	   Deliberately not a rewrite of the rail itself: the native <input type=range> keeps working exactly as it
@@ -100,8 +102,8 @@ window.adaptiveLightingPresetSlider = (function () {
 	var MOVE_TOLERANCE_PX = 6;
 
 	// Every 3px of satellite drag is one raw step; a chosen feel rather than a derived number, adjustable here
-	// alone. Thumb width must match .psl-range::-webkit-slider-thumb / -moz-range-thumb in app.css, since a
-	// native range thumb's screen position cannot otherwise be read back from the DOM.
+	// alone. Thumb width must match --psl-thumb in app.css, since a native range thumb's screen position cannot
+	// otherwise be read back from the DOM.
 	var PX_PER_STEP = 3;
 	var THUMB_WIDTH_PX = 22;
 
@@ -118,12 +120,17 @@ window.adaptiveLightingPresetSlider = (function () {
 		return rect.left + (THUMB_WIDTH_PX / 2) + (fraction * usable);
 	}
 
+	// The scale the satellite drives. PresetSlider renders the same ceiling into the handle's own text, so this
+	// only has to agree with it while a gesture is live; RawBrightnessStep.MaxRaw is where the number is decided.
+	var MAX_RAW = 255;
+
 	function watchFine(input, satellite, owner) {
 		if (!input || !satellite || !owner || watched.has(input)) {
 			return;
 		}
 
 		var line = input.closest('.psl-line');
+		var readout = satellite.querySelector('.psl-raw');
 		var holdTimer = null;
 		var waiting = false;
 		var armed = false;
@@ -131,6 +138,7 @@ window.adaptiveLightingPresetSlider = (function () {
 		var downX = 0;
 		var downY = 0;
 		var lastSteps = 0;
+		var startRaw = null;
 		var inFlight = false;
 		var pendingSteps = 0;
 
@@ -171,9 +179,18 @@ window.adaptiveLightingPresetSlider = (function () {
 			satellite.style.left = x + 'px';
 		}
 
+		// Written here rather than waited for from the server: a raw step is the smallest thing this handle can
+		// do, and a number that arrives a round trip after the finger moved cannot show which one it did.
+		function showRaw(raw) {
+			if (readout) {
+				readout.textContent = '( ' + raw + ' / ' + MAX_RAW + ' )';
+			}
+		}
+
 		function reveal() {
 			armed = true;
 			lastSteps = 0;
+			startRaw = null;
 
 			positionSatellite(thumbCenterX(input));
 			satellite.hidden = false;
@@ -184,14 +201,26 @@ window.adaptiveLightingPresetSlider = (function () {
 				// No capture available: the satellite still tracks the pointer while it stays over the rail.
 			}
 
-			owner.invokeMethodAsync('BeginFine').catch(function () { });
+			owner.invokeMethodAsync('BeginFine')
+				.then(function (raw) {
+					// Not while a later gesture is running: a slow answer to a hold already released would
+					// otherwise relabel the next one.
+					if (armed && typeof raw === 'number') {
+						startRaw = raw;
+						showRaw(Math.min(MAX_RAW, Math.max(0, raw + lastSteps)));
+					}
+				})
+				.catch(function () { });
 		}
 
 		function dismiss(id) {
 			armed = false;
 			waiting = false;
+			startRaw = null;
 
 			satellite.hidden = true;
+
+			owner.invokeMethodAsync('EndFine').catch(function () { });
 
 			try {
 				satellite.releasePointerCapture(id);
@@ -278,6 +307,11 @@ window.adaptiveLightingPresetSlider = (function () {
 			if (steps !== lastSteps) {
 				pendingSteps += steps - lastSteps;
 				lastSteps = steps;
+
+				if (startRaw !== null) {
+					showRaw(Math.min(MAX_RAW, Math.max(0, startRaw + steps)));
+				}
+
 				flushNudge();
 			}
 

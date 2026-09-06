@@ -4,9 +4,9 @@
 @implements IAsyncDisposable
 
 @* Fixed stops on a rail, so a value is dragged rather than hunted for in a list. The leftmost stop is not a
-   number: where Inheritable is set it means "state nothing here". It sits in a recessed pocket before the real
-   0-100 rail (psl-inheritable draws the seam), so it can never be read as the dimmest setting rather than as
-   something outside the range entirely. The hollow thumb marks the pocket is where the thumb currently sits.
+   number: where Inheritable is set it means "state nothing here". It sits in a recessed pocket at the left end
+   of the rail, and psl-home is the graduation mark on the rail where the real scale starts — drag left past the
+   mark and the thumb lands in the pocket. The hollow thumb marks the pocket is where the thumb currently sits.
 
    A stored value the ladder does not carry gets a position of its own, never the nearest stop. Opening the
    page has to leave a hand-edited document exactly as it was.
@@ -16,33 +16,39 @@
 
    The readout tracks the thumb during a drag from plain JS (preset-slider.js), reading data-psl-readouts rather
    than waiting for the server round trip @onchange commits on release. Brightness alone also carries a
-   press-and-hold satellite handle for single 8-bit raw-brightness steps; colour temperature has no raw unit
-   worth exposing that way. *@
+   press-and-hold satellite handle for single 8-bit raw-brightness steps, naming the raw value it is on;
+   colour temperature has no raw unit worth exposing that way. *@
 
-<div class="psl @(OnDefault ? "psl-default" : null) @(Inheritable ? "psl-inheritable" : null)">
+@* The fill and the pocket are declared here, not on the input: the zero mark is a sibling of the input and
+   inherits nothing from it. *@
+<div class="psl @(OnDefault ? "psl-default" : null) @(Inheritable ? "psl-inheritable" : null)" style="@Fill">
 	<div class="psl-line">
 		@if (Label is { Length: > 0 })
 		{
 			<span class="psl-label">@Label</span>
 		}
 
-		@if (Inheritable)
-		{
-			<span class="psl-home" title="@DefaultLabel" aria-hidden="true"></span>
-		}
+		@* The mark rides on the rail, so it needs a box the rail's own width to place itself against. *@
+		<span class="psl-rail">
+			<input class="psl-range" type="range" min="0" max="@Invariant(Max)" step="1" value="@Invariant(_position)"
+				   aria-label="@AriaLabel"
+				   aria-valuetext="@SpokenValue"
+				   data-psl-readouts="@ReadoutsJson"
+				   data-psl-fine="@FineHandleOffered"
+				   @ref="_range"
+				   @onchange="OnMoved" />
 
-		<input class="psl-range" type="range" min="0" max="@Invariant(Max)" step="1" value="@Invariant(_position)"
-			   style="@Fill"
-			   aria-label="@AriaLabel"
-			   aria-valuetext="@SpokenValue"
-			   data-psl-readouts="@ReadoutsJson"
-			   data-psl-fine="@FineHandleOffered"
-			   @ref="_range"
-			   @onchange="OnMoved" />
+			@if (Inheritable)
+			{
+				<span class="psl-home" title="0, and the pocket left of it is @DefaultLabel" aria-hidden="true"></span>
+			}
+		</span>
 
 		@if (FineAdjustable)
 		{
-			<div class="psl-satellite" hidden aria-hidden="true" @ref="_satellite"></div>
+			<div class="psl-satellite" hidden aria-hidden="true" @ref="_satellite">
+				<span class="psl-raw">@RawText</span>
+			</div>
 		}
 
 		<span class="psl-read">
@@ -138,6 +144,7 @@
 	private ElementReference _satellite;
 	private DotNetObjectReference<PresetSlider>? _self;
 	private bool _watchingFine;
+	private bool _fineLive;
 	private int _fineRaw;
 
 	// Worked out once per parameter change, not per read: Max, the fill fraction and the readout all want it,
@@ -220,22 +227,34 @@
 			? named.Label
 			: Format(stepValue);
 
-	// A decimal comma in a style attribute is not a length, and the track would render unfilled under nb-NO.
+	// Bare fractions of the ladder, not lengths: a native thumb's centre travels inset by half its own width, so
+	// app.css converts both through that inset once. Shipping percentages here put the pocket seam about 10px
+	// left of where the thumb docks on the first real stop, which no zero mark can sit on top of.
+	// A decimal comma in a style attribute would not parse at all, so both go out invariant.
 	private string Fill
 	{
 		get
 		{
-			string fill = $"--psl-fill: {Invariant(Max > 0 ? _position * 100.0 / Max : 0)}%";
+			string fill = $"--psl-fill: {Fraction(Max > 0 ? _position / (double)Max : 0)}";
 
-			// The pocket is drawn as the same fraction of the track that position 0 already occupies, so the
-			// seam lines up with where the thumb actually docks rather than an arbitrary pixel width.
 			return Inheritable && Max > 0
-				? $"{fill}; --psl-pocket: {Invariant(100.0 / Max)}%"
+				? $"{fill}; --psl-pocket: {Fraction(Offset / (double)Max)}"
 				: fill;
 		}
 	}
 
+	/// <summary>The raw value the satellite drives, written against its own scale.</summary>
+	/// <remarks>While a gesture is live this is the satellite's own count. Off a gesture it is what the shown
+	/// percentage rounds to: a whole percent covers two or three raw steps, so re-deriving it mid-drag would
+	/// stick and jump.</remarks>
+	private string RawText =>
+		RawBrightnessStep.Text(_fineLive ? _fineRaw : RawBrightnessStep.FromPercent(Shown));
+
 	private static string Invariant(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+	// Five decimals, not two: at seventeen stops a fraction rounded to 0.06 moves the zero mark a pixel off the
+	// seam on a wide rail, which is the one thing this number exists to get right.
+	private static string Fraction(double value) => value.ToString("0.#####", CultureInfo.InvariantCulture);
 
 	private static bool Matches(double left, double right) => Math.Abs(left - right) < 0.001;
 
@@ -274,9 +293,16 @@
 			: Task.CompletedTask;
 	}
 
-	/// <summary>Snapshots the raw value the satellite starts nudging from, at the moment a hold is recognised.</summary>
+	/// <summary>Snapshots the raw value the satellite starts nudging from, and hands it back so the handle can
+	/// name every step of the gesture without a round trip for each one.</summary>
 	[JSInvokable]
-	public void BeginFine() => _fineRaw = RawBrightnessStep.FromPercent(Shown);
+	public int BeginFine()
+	{
+		_fineRaw = RawBrightnessStep.FromPercent(Shown);
+		_fineLive = true;
+
+		return _fineRaw;
+	}
 
 	/// <summary>Moves the satellite's raw value by whole 8-bit steps and commits at once, clamped to a real byte.</summary>
 	[JSInvokable]
@@ -289,6 +315,10 @@
 
 		return ValueChanged.InvokeAsync(RawBrightnessStep.ToPercent(_fineRaw));
 	}
+
+	/// <summary>The gesture is over, so the handle's number goes back to what the shown percentage rounds to.</summary>
+	[JSInvokable]
+	public void EndFine() => _fineLive = false;
 
 	// Order matters: the listener goes before the .NET reference it calls into, so a pointer already down when
 	// the page is left cannot invoke a disposed component.

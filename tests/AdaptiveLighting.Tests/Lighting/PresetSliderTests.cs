@@ -242,6 +242,63 @@ public sealed class PresetSliderTests
 		Assert.IsFalse(html.Contains("psl-head", StringComparison.Ordinal), "the head line is gone: everything is one row");
 	}
 
+	/// <summary>The mark that names the house-default end belongs on the rail, at the rail's own zero point, with
+	/// the pocket continuing left past it. As a sibling standing before the whole control it named nothing.</summary>
+	[TestMethod]
+	public async Task The_Zero_Mark_Rides_On_The_Rail_And_Not_Beside_It()
+	{
+		string html = await RenderAsync(30, atDefault: false, inheritable: true);
+
+		int wrapper = html.IndexOf("psl-rail", StringComparison.Ordinal);
+		int range = html.IndexOf("psl-range", StringComparison.Ordinal);
+		int home = html.IndexOf("psl-home", StringComparison.Ordinal);
+
+		Assert.IsTrue(wrapper >= 0, "the rail needs a positioned box to place the mark inside: " + html);
+		Assert.IsTrue(wrapper < range && range < home, $"wrapper {wrapper}, rail {range}, mark {home}");
+	}
+
+	/// <summary>
+	///     A native range thumb travels inset by half its own width, so a fraction of the track is not where the
+	///     thumb lands. Both the fill and the pocket edge ship as bare fractions and the stylesheet applies that
+	///     inset once, or the zero mark cannot sit where the thumb docks on 0 %.
+	/// </summary>
+	[TestMethod]
+	public async Task The_Fill_And_The_Pocket_Ship_As_Fractions_For_The_Stylesheet_To_Inset()
+	{
+		string style = StyleOf(await RenderAsync(30, atDefault: false, inheritable: true));
+
+		Assert.IsFalse(style.Contains('%', StringComparison.Ordinal), style);
+		StringAssert.Contains(style, "--psl-pocket: 0.0625");
+	}
+
+	/// <summary>The satellite drives whole 8-bit steps, so the number beside it is the raw value, in the form the
+	/// scale itself is written in. A percentage covers two to three raw steps and cannot show what one did.</summary>
+	[TestMethod]
+	public async Task The_Fine_Handle_Names_The_Raw_Value_Out_Of_255()
+	{
+		string html = await RenderAsync(40, atDefault: false, inheritable: true, fineAdjustable: true);
+
+		StringAssert.Contains(html, "psl-raw");
+		StringAssert.Contains(html, "( 102 / 255 )");
+	}
+
+	/// <summary>No fine handle, no raw number: colour temperature has no raw unit this would mean anything against.</summary>
+	[TestMethod]
+	public async Task Without_A_Fine_Handle_No_Raw_Number_Is_Rendered()
+	{
+		string html = await RenderAsync(40, atDefault: false, inheritable: true, fineAdjustable: false);
+
+		Assert.IsFalse(html.Contains("psl-raw", StringComparison.Ordinal), html);
+	}
+
+	/// <summary>The 255 on screen is Home Assistant's own ceiling, read from the engine rather than typed twice.</summary>
+	[TestMethod]
+	public void The_Raw_Ceiling_On_Screen_Is_The_One_The_Engine_Commands_Against()
+	{
+		Assert.AreEqual(Engine.LightAttributes.MaxRawBrightness, (double)RawBrightnessStep.MaxRaw);
+		Assert.AreEqual("( 8 / 255 )", RawBrightnessStep.Text(8));
+	}
+
 	private static JsonElement[] ReadoutsOf(string html)
 	{
 		const string marker = "data-psl-readouts=\"";
@@ -413,11 +470,38 @@ public sealed class LevelsEditorTests
 	[TestMethod]
 	public void The_Stylesheet_Lets_The_Hidden_Attribute_Win()
 	{
-		string css = File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "AdaptiveLighting.Web", "wwwroot", "app.css"));
+		string css = Stylesheet();
 
 		Assert.IsTrue(
 			Regex.IsMatch(css, @"\[hidden\][^{]*\{[^}]*display\s*:\s*none\s*!important", RegexOptions.None, TimeSpan.FromSeconds(5)),
 			"app.css has to neutralise a class rule that sets display on an element the components hide by attribute");
+	}
+
+	/// <summary>
+	///     The zero mark and the end of the house-default pocket are the same point on the rail, so they are placed
+	///     from one expression. Written twice they drift apart the next time either is touched, and the mark stops
+	///     naming the zero it is there to name.
+	/// </summary>
+	[TestMethod]
+	public void The_Stylesheet_Places_The_Zero_Mark_And_The_Pocket_Edge_From_One_Value()
+	{
+		string css = Stylesheet();
+
+		Assert.AreEqual(1, Count(css, "--psl-zero-x:"), "the thumb-inset arithmetic is written once");
+		StringAssert.Contains(css, "left: var(--psl-zero-x)");
+		Assert.AreEqual(2, Count(css, "var(--psl-zero-x) 100% no-repeat"),
+			"the hatch and the recess both stop where the mark sits");
+	}
+
+	/// <summary>The curve question is a separate question from the period's name, and reads as one where the two
+	/// sit against each other. It takes the far end of the line wherever the line is wide enough to give it one.</summary>
+	[TestMethod]
+	public void The_Curve_Question_Takes_The_Far_End_Of_The_Period_Line()
+	{
+		Assert.IsTrue(
+			Regex.IsMatch(Stylesheet(), @"\.lvl-curve-toggle\s*\{[^}]*margin-inline-start:\s*auto",
+				RegexOptions.None, TimeSpan.FromSeconds(5)),
+			"the curve toggle has to push away from the period name rather than sit against it");
 	}
 
 	/// <summary>Ticking the curve leaves nothing to aim at, so the rail goes rather than being replaced by a sentence.</summary>
@@ -451,6 +535,9 @@ public sealed class LevelsEditorTests
 		Assert.IsTrue(when >= 0 && toggle > when && toggle < cell, "the toggle belongs between the period name and the first cell");
 		Assert.AreEqual(0, Count(html, "lvl-cell-label\">Brightness"), "the heading row and the rail's own label already say it");
 	}
+
+	private static string Stylesheet() =>
+		File.ReadAllText(Path.Combine(RepositoryRoot(), "src", "AdaptiveLighting.Web", "wwwroot", "app.css"));
 
 	private static string RepositoryRoot()
 	{
