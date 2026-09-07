@@ -59,6 +59,17 @@ public sealed record ResolvedArea(
 
 	/// <summary>Whether the schedule's colour temperature reaches this area's lights.</summary>
 	public bool CommandsKelvin => CommandsColour && EffectiveColorControl is ColorControl.Kelvin;
+
+	/// <summary>Every entry in <see cref="Lights"/> mapped to the leaf lights beneath it.</summary>
+	// Read once here for the same reason the colour capability is: the alternative is walking group membership on
+	// every command. Empty means the fan-out has nothing to explode and every entry is commanded as it always was.
+	public IReadOnlyDictionary<string, IReadOnlySet<string>> LeavesOfEntry { get; init; } =
+		new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
+
+	/// <summary>Every leaf light that states levels of its own, mapped to the rows it states.</summary>
+	// Keyed on the leaf and never on a group, so a bulb reached through two groups holds one answer.
+	public IReadOnlyDictionary<string, IReadOnlyList<RoomLevelOverride>> LightLevels { get; init; } =
+		new Dictionary<string, IReadOnlyList<RoomLevelOverride>>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>What discovery finds in one area, before that area's explicit lists have had their say.</summary>
@@ -207,9 +218,15 @@ public sealed class AreaEntityResolver
 				+ "and the schedule's kelvin figure does not reach it. Set ColorControl to Kelvin to overrule that.",
 				name, ColorTempMode);
 
+		Dictionary<string, IReadOnlySet<string>> leaves = new(StringComparer.Ordinal);
+		foreach (string entry in lights)
+			leaves[entry] = LeavesOf(entry);
+
 		resolved = new ResolvedArea(
 			name, settings, lights, motion, lux, [.. area.IgnoreWhenOn ?? []], area.FollowOutdoorLux == true, colorTemp)
 		{
+			LeavesOfEntry = leaves,
+			LightLevels = SettleLightLevels(name, area, leaves),
 			LightsSupportAnyColour = anyColour,
 			KeepLitWhenOn = [.. area.KeepLitWhenOn ?? []],
 			IgnoreWhenOnInverted = area.IgnoreWhenOnInverted == true,
@@ -220,6 +237,48 @@ public sealed class AreaEntityResolver
 		};
 
 		return true;
+	}
+
+	/// <summary>Which of the area's stated light levels reach a light this room actually commands.</summary>
+	// Membership is the only thing that can answer this, so the check lives here and not in the validator. A row
+	// naming a light the room does not reach is left in the document and named once; the room page lists it as an
+	// orphan with a way to drop it.
+	private Dictionary<string, IReadOnlyList<RoomLevelOverride>> SettleLightLevels(
+		string name,
+		AreaConfig area,
+		Dictionary<string, IReadOnlySet<string>> leaves)
+	{
+		Dictionary<string, IReadOnlyList<RoomLevelOverride>> stated = new(StringComparer.OrdinalIgnoreCase);
+
+		if (area.LightLevels is not { Count: > 0 } lightLevels)
+			return stated;
+
+		HashSet<string> commanded = new(StringComparer.OrdinalIgnoreCase);
+		foreach (IReadOnlySet<string> beneath in leaves.Values)
+			commanded.UnionWith(beneath);
+
+		foreach (LightLevelOverride light in lightLevels)
+		{
+			if (light.EntityId?.Trim() is not { Length: > 0 } entityId || light.IsEmpty)
+				continue;
+
+			if (!commanded.Contains(entityId))
+			{
+				_logger.LogWarning(
+					"Area {Area} states levels for '{Light}', which is not one of the lights it commands — most often a "
+					+ "bulb moved to another room or dropped from a group. The levels are kept in the document and reach "
+					+ "nothing until it is back in the room.",
+					name, entityId);
+				continue;
+			}
+
+			// First wins, matching what the validator reports.
+			if (!stated.TryAdd(entityId, light.Levels))
+				_logger.LogWarning(
+					"Area {Area} states levels for '{Light}' more than once; the first entry wins.", name, entityId);
+		}
+
+		return stated;
 	}
 
 	// A blank scene id would reach scene.turn_on, which throws on one, from inside an area's lock.

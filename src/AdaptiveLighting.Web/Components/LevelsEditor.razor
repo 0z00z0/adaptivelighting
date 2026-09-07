@@ -195,6 +195,15 @@
 			</div>
 		</div>
 	}
+
+	@* At the foot of the table, and only for a room holding more than one light once its groups are followed
+	   to the bottom. Closed, it costs one line. *@
+	<LightLevelsEditor Periods="@Periods"
+					   Room="@Room"
+					   Resolved="@Resolved"
+					   NoColourTemperature="@NoColourTemperature"
+					   NameOf="@NameOf"
+					   Changed="@Changed" />
 </div>
 
 @code {
@@ -218,6 +227,10 @@
 	/// <summary>The id of the period in force right now, or <c>null</c> when none is.</summary>
 	[Parameter]
 	public string? ActivePeriod { get; set; }
+
+	/// <summary>Home Assistant's own name for an entity, for the light list beneath the table.</summary>
+	[Parameter]
+	public Func<string, string>? NameOf { get; set; }
 
 	/// <summary>Raised after any change, so the page can re-validate and start its save timer.</summary>
 	[Parameter]

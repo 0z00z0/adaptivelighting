@@ -565,6 +565,65 @@ The lux sensor is therefore read twice in a sleeping room: once for the target a
 reading that moves between the two shifts the cap by a hair, which is invisible, and the result stays monotone
 under the minimum because both readings run through the same curve.
 
+### A level belongs to one light, never to a group
+
+`AreaConfig.LightLevels` keys a light's own period rows on the leaf entity id. A group is only a way of
+reaching lights, so nothing is ever stored against one: a bulb reached through two groups has one value and
+shows it under both, and a group of groups is the lights at the bottom of it. The alternative — a level on the
+group — reintroduces the conflict of two groups disagreeing about one bulb, which is what this shape removes
+rather than rules on.
+
+The cost is that a bulb newly added to a Home Assistant group takes the room's level and not its siblings'.
+The group's line on the page says *4 of 5 set differently*, which is the signal.
+
+#### The merge is a pure function and the calculator is untouched
+
+`LightLevelMerge.MergeOnto` folds one light's rows onto its room's into a plain `RoomLevelOverride` list, and
+`LightingOrchestrator` builds one ordinary `CircadianCalculator` per light on that list. `CircadianCalculator`
+knows nothing about a light: its blend already interpolates through whatever rows it is handed, so a light
+blends between its own two levels for free.
+
+Brightness and the daylight-curve flag travel together as a pair; warmth travels alone. A light row that
+speaks to brightness at all — a number, the curve flag, or both — owns the curve flag for that period, so a
+lamp pinned to 30 % under a room following the curve is not silently overruled by the curve. A row that
+speaks to neither takes both from the room. Either half counts as speaking, because `DaylightCurveMode.Set`
+writes the flag without seeding a brightness beside it, and reading such a row as saying nothing would make
+ticking the curve box on a light do nothing at all.
+
+#### The fan-out declares an expectation on the entry it does not command
+
+`AreaController.SendUnrecorded` follows one rule per entry in the resolved `Lights` list:
+
+- No light beneath it has a target of its own: declare the expectation on the entry and command the entry.
+  One service call, exactly as before.
+- Some light beneath it does: **declare the room's expectation on the entry anyway, command nothing to it**,
+  then command each light under it individually — its own command where it has one and the room's where it
+  has not — declaring each light's expectation before its command.
+
+The expectation on the entry is load-bearing and is the trap this codebase has been bitten by before. The room
+subscribes to its entries and not to the leaves, and a group entity re-publishes a member's change under the
+group's own id. Without an expectation there the echo falls through to the context heuristic, and with no
+`NetDaemonUserId` set it classifies as a person at a switch — the room drops into `OverriddenOn` the moment it
+lights itself. `OverrideDetector` matches polarity only, so the room's command is the right thing to declare
+on the entry: the group is on when its lights are.
+
+A light is commanded at most once per send, so an explicit `Lights` list holding a group beside one of its own
+members does not command that member twice.
+
+**The safety property, and how it is held.** With no light stating anything, the fan-out takes a branch that
+does not consult membership at all and produces the identical call sequence, entry for entry.
+`PerLightLevelsTests.A_Room_With_No_Light_Rows_Commands_Exactly_What_It_Commanded_Before` pins a sequence
+recorded off the build before the feature existed, through motion, a boundary, the warning dim and the off.
+Removing that branch is not what turns it red — the two paths agree when nothing states a level, which is
+itself the point; forcing every entry to explode into its leaves is.
+
+#### Nothing goes out as a turn-on at nothing
+
+A light row at brightness 0 means that light is off for the period. It is sent as an off command with an off
+expectation, because Home Assistant carries out a turn-on at 0 % as a turn-off and an on-expectation would go
+unmatched — the engine would read its own work as a hand at the switch. This closes the trap for light rows
+only; the room's own 0 is unchanged and belongs in the backlog on its own.
+
 ### A restart across a boundary is not a period entry
 
 `ModeMonitor` keeps two paths. `OnPeriodEntered` is edge-triggered on the tick that first sees a new period

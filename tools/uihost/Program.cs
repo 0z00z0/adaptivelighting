@@ -4,6 +4,7 @@ using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Hosting;
 using AdaptiveLighting.Tests.Lighting;
 using AdaptiveLighting.Web;
+using AdaptiveLighting.Web.Services;
 
 using NetDaemon.AppModel;
 using NetDaemon.HassModel;
@@ -54,6 +55,10 @@ builder.Services.AddSingleton<IHaRegistry>(registry);
 builder.Services.AddSingleton<IAppConfig<AdaptiveLightingConfig>>(new SeedConfig());
 
 builder.Services.AddLightingWeb();
+
+// This host's own preview pages join the RCL's. A house registers nothing here and routes exactly what it did.
+builder.Services.AddSingleton(new AdditionalRoutes([typeof(Program).Assembly]));
+
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 WebApplication app = builder.Build();
@@ -63,7 +68,11 @@ app.UseAntiforgery();
 // This alone serves the RCL's _content/** and _framework/blazor.web.js. No UseStaticFiles: measured without
 // it, both come back 200 with real bodies and the circuit opens.
 app.MapStaticAssets();
-app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+// AddAdditionalAssemblies as well as the AdditionalRoutes service: the first registers this host's preview
+// pages as endpoints, the second is what the Router resolves once a circuit is navigating on its own.
+app.MapRazorComponents<App>()
+	.AddAdditionalAssemblies(typeof(Program).Assembly)
+	.AddInteractiveServerRenderMode();
 
 // Nothing starts the engine here, so the dashboard and every room page would sit on "hasn't reported yet".
 // After the cache has subscribed, one snapshot per area in the document, shaped by what that area is
@@ -128,6 +137,47 @@ static void Seed(FakeHaContext ha)
 
 	ha.SetState("zone.home", "0", new() { ["latitude"] = 59.9, ["longitude"] = 10.75 });
 	ha.SetState("sun.sun", "above_horizon", new() { ["elevation"] = 12.0 });
+
+	SeedLights(ha);
+}
+
+// Lights for a local.yaml to name. FakeHaRegistry answers nothing, because HassModel's Area and
+// EntityRegistration have no public constructor, so discovery finds no room here and a document has to list its
+// lights explicitly. Group membership does work: the resolver reads it off the entity_id attribute, which is
+// what puts a real group fold on the room page.
+static void SeedLights(FakeHaContext ha)
+{
+	string[] ceiling = ["light.stue_tak_1", "light.stue_tak_2", "light.stue_tak_3"];
+
+	Lamp(ha, "light.stue_taklys", "Stue taklys", ceiling);
+
+	foreach (string bulb in ceiling)
+		Lamp(ha, bulb, $"Taklys {bulb[^1]}");
+
+	Lamp(ha, "light.stue_leselampe", "Leselampe");
+	Lamp(ha, "light.stue_gulvlampe", "Gulvlampe");
+
+	// Named by a document and commanded by no room: the orphan the light list exists to surface.
+	Lamp(ha, "light.stue_gammel_lampe", "Gammel lampe");
+
+	Lamp(ha, "light.bad_tak", "Bad tak");
+	ha.SetState("binary_sensor.stue_bevegelse", "off", new() { ["device_class"] = "motion", ["friendly_name"] = "Stue bevegelse" });
+	ha.SetState("sensor.stue_lux", "18", new() { ["device_class"] = "illuminance", ["friendly_name"] = "Stue lysnivå" });
+}
+
+static void Lamp(FakeHaContext ha, string entityId, string name, IReadOnlyList<string>? members = null)
+{
+	Dictionary<string, object> attributes = new(StringComparer.Ordinal)
+	{
+		["friendly_name"] = name,
+		["supported_color_modes"] = new List<string> { "color_temp" },
+		["brightness"] = 178.0
+	};
+
+	if (members is { Count: > 0 })
+		attributes["entity_id"] = members.ToList();
+
+	ha.SetState(entityId, "on", attributes);
 }
 
 static void SeedSnapshots(FakeHaContext ha, LightingConfigStore store)

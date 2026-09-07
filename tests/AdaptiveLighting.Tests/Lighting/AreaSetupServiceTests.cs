@@ -323,7 +323,8 @@ public sealed class AreaSetupServiceTests
 			.GetProperties(BindingFlags.Public | BindingFlags.Instance)
 			.Where(property => property.CanWrite)
 			.Where(property => property.Name is not
-				(nameof(AreaConfig.AreaId) or nameof(AreaConfig.Enabled) or nameof(AreaConfig.Levels)))];
+				(nameof(AreaConfig.AreaId) or nameof(AreaConfig.Enabled) or nameof(AreaConfig.Levels)
+					or nameof(AreaConfig.LightLevels)))];
 
 		AreaConfig before = new() { AreaId = "stue" };
 
@@ -607,7 +608,10 @@ public sealed class AreaSetupServiceTests
 
 		// Levels has no twin in AreaSettings, so counting it would let a room report overriding more settings
 		// than the denominator has. It survives the rebuild too, so it is not a loss either.
-		nameof(AreaConfig.Levels)
+		nameof(AreaConfig.Levels),
+
+		// And what single lights inside the room state, for both of those reasons.
+		nameof(AreaConfig.LightLevels)
 	};
 
 	/// <summary>The per-room settings, read off the model.</summary>

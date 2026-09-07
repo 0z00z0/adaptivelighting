@@ -97,12 +97,39 @@ public static class ConfigNormalizer
 			foreach (RoomLevelOverride level in area.Levels)
 				if (level.Brightness is { } brightness)
 					level.BrightnessPct = RawBrightness.ToPercent(brightness);
+
+			NormalizeLightLevels(area);
 		}
 
 		foreach (TimePeriodConfig period in config.Periods)
 			period.BrightnessPct = RawBrightness.ToPercent(period.Brightness);
 
 		return config;
+	}
+
+	/// <summary>Drops empty rows, then lights with nothing left, then the list itself once it holds nothing.</summary>
+	// Null and not an empty list: both read as "no light states anything", and only null is omitted by the
+	// serialiser, so an empty one would put the key into every room of every document.
+	private static void NormalizeLightLevels(AreaConfig area)
+	{
+		if (area.LightLevels is not { } lights)
+			return;
+
+		foreach (LightLevelOverride light in lights)
+		{
+			light.Levels ??= [];
+			light.Levels.RemoveAll(level => level.IsEmpty);
+
+			foreach (RoomLevelOverride level in light.Levels)
+				if (level.Brightness is { } brightness)
+					level.BrightnessPct = RawBrightness.ToPercent(brightness);
+
+			light.EntityId = light.EntityId?.Trim() ?? "";
+		}
+
+		lights.RemoveAll(light => light.Levels.Count == 0);
+
+		area.LightLevels = lights.Count > 0 ? lights : null;
 	}
 
 	/// <summary>A value as the whole number every ordinary readout shows.</summary>
