@@ -7458,3 +7458,132 @@ h1[tabindex="-1"]:focus {
 }
 
 /* ===== end the settings-row text ladder ===== */
+
+/* ==============================================================================================
+   PER-LIGHT LEVELS
+   One line at the foot of the room's period table, and the light list it opens. Closed, the whole
+   feature costs a room one line; open, one line per thing the engine commands.
+   ============================================================================================== */
+
+.llv {
+	border-top: var(--rule-inner);
+	padding: 0.6rem 1.15rem 0.75rem;
+}
+
+/* Reads as a question about the table above it, so it sits on the table's own left edge and carries no box of
+   its own. The label is the whole control: a checkbox with its wording elsewhere is a smaller target. */
+.llv-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: var(--text-sm);
+	color: var(--muted);
+	cursor: pointer;
+}
+
+.llv-toggle input {
+	margin: 0;
+	accent-color: var(--accent);
+}
+
+.llv-list {
+	margin-top: 0.6rem;
+}
+
+.llv-entry {
+	border: 1px solid var(--line);
+	border-radius: var(--radius-control);
+	margin-bottom: 0.4rem;
+	background: var(--panel);
+}
+
+/* Name, summary and chevron on one line. min-width: 0 on the name, or a long friendly name pushes the
+   summary off the row instead of ellipsing. */
+.llv-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	padding: 0.5rem 0.75rem;
+	cursor: pointer;
+	list-style: none;
+}
+
+.llv-head::-webkit-details-marker {
+	display: none;
+}
+
+.llv-entry[open] > .llv-head {
+	border-bottom: 1px solid var(--line);
+	background: var(--panel-2);
+}
+
+.llv-name {
+	font-weight: 600;
+	font-size: var(--text-md);
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.llv-says {
+	flex: 1 1 8rem;
+	min-width: 0;
+	color: var(--muted);
+	font-size: var(--text-sm);
+}
+
+.llv-head .area-chevron {
+	align-self: center;
+	margin-left: auto;
+}
+
+.llv-entry[open] > .llv-head .area-chevron {
+	transform: rotate(45deg);
+}
+
+/* Flush: the period rows inside carry their own padding, and a second inset would step every light in from
+   its own name. */
+.llv-body {
+	padding: 0;
+}
+
+/* A light inside a group. Indented once and once only — nested groups are flattened into this same flat
+   list, so there is never a second level to pay for. */
+.llv-leaf {
+	border: 0;
+	border-top: var(--rule-inner);
+	border-radius: 0;
+	margin: 0;
+	background: none;
+}
+
+.llv-leaf[open] > .llv-head {
+	background: none;
+}
+
+/* The first row already draws a rule under the fold's own head. */
+.llv-table > .lvl:first-child {
+	border-top: 0;
+}
+
+/* No longer commanded here: kept because a bulb out of a group is nearly always a change in progress, and
+   shown because kept silently it springs back the day the bulb returns. */
+.llv-orphan {
+	background: var(--warn-bg);
+	border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+}
+
+.llv-orphan .llv-head {
+	cursor: default;
+}
+
+.llv-orphan .llv-says {
+	color: var(--warn);
+}
+
+.llv-orphan .lvl-drop {
+	margin-left: auto;
+}
+
+/* ===== end per-light levels ===== */

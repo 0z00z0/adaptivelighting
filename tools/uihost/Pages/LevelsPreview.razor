@@ -1,0 +1,195 @@
+@page "/preview/levels"
+
+@using AdaptiveLighting.Configuration
+@using AdaptiveLighting.Engine
+@using AdaptiveLighting.Web.Components
+@using Microsoft.AspNetCore.Components.Web
+
+@* The room page needs a Home Assistant area registry to resolve a room, and the fake one cannot answer: HassModel's
+   Area has no public constructor. This renders the real levels card against a ResolvedArea built by hand, so a
+   change to it can be looked at, clicked and screenshotted without a house. *@
+
+<PageTitle>Levels preview</PageTitle>
+
+@* ?theme= and ?open= exist so a screenshot run is a URL rather than a sequence of clicks: the theme picker
+   writes to localStorage, which a headless browser has no way to seed before the first paint. *@
+<script suppress-error="BL9992">
+	(function () {
+		var query = new URLSearchParams(window.location.search);
+		var theme = query.get('theme');
+
+		if (theme === 'dark' || theme === 'light')
+			document.documentElement.setAttribute('data-theme', theme);
+
+		if (query.get('open') !== '1')
+			return;
+
+		// An observer and not a timer: the folds appear when the circuit renders them, which is a websocket round
+		// trip away and not a number of milliseconds. A headless run fast-forwards its clock, so every timer
+		// would fire before the first render and the capture would find nothing to open.
+		function open() {
+			var list = document.querySelector('.llv-list');
+
+			if (!list)
+				return;
+
+			// The room's own entries, then the first light under the first group. Opening every light would make
+			// a page too tall to read anything from.
+			var entries = list.querySelectorAll(':scope > details.llv-entry');
+
+			for (var i = 0; i < entries.length; i++)
+				entries[i].open = true;
+
+			var leaf = list.querySelector('details.llv-leaf');
+
+			if (leaf)
+				leaf.open = true;
+		}
+
+		new MutationObserver(open).observe(document.documentElement, { childList: true, subtree: true });
+	})();
+</script>
+
+<h1 class="page-title">Levels preview</h1>
+
+@foreach (Case shown in _cases)
+{
+	Case current = shown;
+
+	<section class="panel room-card room-levels-card">
+		<div class="room-card-head">
+			<span class="room-card-title">@current.Title</span>
+		</div>
+
+		<p class="room-card-foot lvl-lede">@current.Note</p>
+
+		<LevelsEditor Periods="@_periods"
+					  Room="@current.Room"
+					  Defaults="@_defaults"
+					  Resolved="@current.Resolved"
+					  ActivePeriod="evening"
+					  NameOf="@Friendly"
+					  TestSeconds="10"
+					  Changed="@(() => InvokeAsync(StateHasChanged))" />
+	</section>
+}
+
+@code {
+	private sealed record Case(string Title, string Note, AreaConfig Room, ResolvedArea Resolved);
+
+	private const string Group = "light.stue_taklys";
+	private const string First = "light.stue_tak_1";
+	private const string Second = "light.stue_tak_2";
+	private const string Third = "light.stue_tak_3";
+	private const string Lamp = "light.stue_leselampe";
+	private const string Floor = "light.stue_gulvlampe";
+	private const string Gone = "light.stue_gammel_lampe";
+	private const string Only = "light.bad_tak";
+
+	private readonly List<TimePeriodConfig> _periods =
+	[
+		new() { Id = "morning", Name = "Morgen", Start = "07:00", Brightness = 230, ColorTempKelvin = 4500 },
+		new() { Id = "evening", Name = "Kveld", Start = "18:00", Brightness = 179, ColorTempKelvin = 2700 },
+		new() { Id = "night", Name = "Natt", Start = "22:30", Brightness = 38, ColorTempKelvin = 2200 }
+	];
+
+	private readonly AreaSettings _defaults = new();
+
+	private List<Case> _cases = [];
+
+	protected override void OnInitialized() =>
+		_cases =
+		[
+			new Case(
+				"One lamp — the question is never asked",
+				"A room the engine reaches through a single light has nothing to tell apart, so the line at the foot of the table does not appear.",
+				new AreaConfig { Name = "Bad" },
+				Resolved("Bad", [Only], new() { [Only] = [Only] })),
+
+			new Case(
+				"A group and two lamps — three lights set differently",
+				"The list is the engine's own settled entries: a group is one line holding the lights beneath it, a stand-alone lamp is one line, and the light inside the group is not listed at room level.",
+				Stated(),
+				Resolved("Stue", [Group, Lamp, Floor], new()
+				{
+					[Group] = [First, Second, Third],
+					[Lamp] = [Lamp],
+					[Floor] = [Floor]
+				})),
+
+			new Case(
+				"A light this room no longer commands",
+				"A bulb moved to another room, or dropped from its group, keeps what it pinned until somebody says otherwise.",
+				Orphaned(),
+				Resolved("Stue", [Group, Lamp], new()
+				{
+					[Group] = [First, Second, Third],
+					[Lamp] = [Lamp]
+				}))
+		];
+
+	private static ResolvedArea Resolved(string name, string[] lights, Dictionary<string, string[]> leaves)
+	{
+		Dictionary<string, IReadOnlySet<string>> beneath = new(StringComparer.Ordinal);
+
+		foreach ((string entry, string[] under) in leaves)
+			beneath[entry] = new HashSet<string>(under, StringComparer.Ordinal);
+
+		return new ResolvedArea(name, new AreaSettings(), lights, [], [], [], LightsSupportColorTemp: true)
+		{
+			LeavesOfEntry = beneath
+		};
+	}
+
+	private static AreaConfig Stated() => new()
+	{
+		Name = "Stue",
+		Levels = [new RoomLevelOverride { PeriodId = "evening", Brightness = 179 }],
+		LightLevels =
+		[
+			new LightLevelOverride
+			{
+				EntityId = First,
+				Levels =
+				[
+					new RoomLevelOverride { PeriodId = "evening", Brightness = 77 },
+					new RoomLevelOverride { PeriodId = "night", Brightness = 0 }
+				]
+			},
+			new LightLevelOverride
+			{
+				EntityId = Lamp,
+				Levels = [new RoomLevelOverride { PeriodId = "evening", Brightness = 128, ColorTempKelvin = 2200 }]
+			},
+			new LightLevelOverride
+			{
+				EntityId = Floor,
+				Levels = [new RoomLevelOverride { PeriodId = "morning", FollowDaylightCurve = true }]
+			}
+		]
+	};
+
+	private static AreaConfig Orphaned() => new()
+	{
+		Name = "Stue",
+		LightLevels =
+		[
+			new LightLevelOverride
+			{
+				EntityId = Gone,
+				Levels =
+				[
+					new RoomLevelOverride { PeriodId = "evening", Brightness = 26 },
+					new RoomLevelOverride { PeriodId = "night", Brightness = 13 }
+				]
+			}
+		]
+	};
+
+	private static string Friendly(string entityId)
+	{
+		string tail = entityId[(entityId.IndexOf('.', StringComparison.Ordinal) + 1)..].Replace('_', ' ');
+
+		return tail.Length == 0 ? entityId : string.Concat(char.ToUpperInvariant(tail[0]), tail[1..]);
+	}
+}

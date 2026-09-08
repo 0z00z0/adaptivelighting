@@ -279,7 +279,34 @@ public sealed class LightingOrchestrator : IDisposable
 		return new AreaController(
 			_ha, _scheduler, resolved, _config.Global, _config.Periods, circadian,
 			_actuator, _publisher, _house, _loggerFactory, config.AreaId, _lastSeen,
-			SunMoved(resolved.Settings.SunEntity));
+			SunMoved(resolved.Settings.SunEntity),
+			LightCalculators(resolved, config));
+	}
+
+	/// <summary>One calculator per light that states levels of its own, on that light's rows merged onto the room's.</summary>
+	// The calculator is untouched: its blend already interpolates through whatever rows it is handed, so a light
+	// blends between its own two levels. Drops are not reported again — the room's calculator reads the same table.
+	private IReadOnlyDictionary<string, CircadianCalculator>? LightCalculators(ResolvedArea resolved, AreaConfig config)
+	{
+		if (resolved.LightLevels.Count == 0)
+			return null;
+
+		Dictionary<string, CircadianCalculator> calculators = new(StringComparer.OrdinalIgnoreCase);
+
+		foreach ((string light, IReadOnlyList<RoomLevelOverride> rows) in resolved.LightLevels)
+			calculators[light] = new CircadianCalculator(
+				_config.Periods,
+				_config.Global,
+				() => ReadSunTimes(resolved.Settings.SunEntity),
+				LightLevelMerge.MergeOnto(config.Levels, rows),
+				_periodSelect?.ReadPeriod,
+				_motionPeriods!.StateOf);
+
+		_logger.LogInformation(
+			"Area {Area}: {Count} lights state levels of their own ({Lights}); the room commands the rest as it does now.",
+			resolved.Name, calculators.Count, string.Join(", ", calculators.Keys.Order(StringComparer.Ordinal)));
+
+		return calculators;
 	}
 
 	private void LogDroppedPeriod(string areaName, DroppedPeriod drop)

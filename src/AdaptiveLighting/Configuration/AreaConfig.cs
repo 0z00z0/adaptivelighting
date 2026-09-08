@@ -91,6 +91,13 @@ public class AreaConfig
 	/// <summary>What this room does instead of the schedule, period by period; a period it omits still follows the schedule.</summary>
 	public List<RoomLevelOverride> Levels { get; set; } = [];
 
+	/// <summary>What single lights in this room do instead of the room; <c>null</c> while none does.</summary>
+	/// <remarks>
+	///     Keyed on the leaf light, never on a group. <c>null</c> and an empty list mean the same thing, and only
+	///     <c>null</c> is omitted by the serialiser, so the normaliser writes <c>null</c> when the list empties.
+	/// </remarks>
+	public List<LightLevelOverride>? LightLevels { get; set; }
+
 	/// <inheritdoc cref="AreaSettings.LuxThreshold"/>
 	public double? LuxThreshold { get; set; }
 

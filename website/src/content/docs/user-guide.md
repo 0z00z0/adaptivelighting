@@ -155,6 +155,18 @@ The page has:
   room's own value, and an amber dot marks what you chose; slide back to it to hand the period back
   to the schedule.
 
+  At the foot of that table, **Adjust lights individually**, for a room holding more than one light.
+  Ticking it opens a list of what the engine actually commands here: a lamp on its own is one line,
+  and a group is one line saying how many lights are under it and how many of them are set
+  differently. Open a light and you get the same period table for that light alone, where the
+  leftmost step now means *the room's* rather than the schedule's — so a reading lamp can sit at
+  30 % while the rest of the room runs at 70 %, and a ceiling light can be off at night while
+  everything else stays on. A light you have not touched follows the room exactly as it does today,
+  and unticking the box says how many lights it would forget before it does so.
+
+  A light this room no longer reaches — moved to another room, or dropped from its group — keeps
+  what it was set to and appears at the end of the list with a *Remove it* button.
+
   Underneath it, **Brighten with daylight**, off until you switch it on. On, a bright day lifts this
   room above the schedule — a chart shows the shape, with the room's current reading marked on it.
   It only ever adds light.

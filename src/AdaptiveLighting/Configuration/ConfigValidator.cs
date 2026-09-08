@@ -644,6 +644,42 @@ public static class ConfigValidator
 			ValidateSettings(area.DisplayName, area.Effective(config.Defaults), result);
 			ValidateAreaReferences(area, knownEntityIds, knownAreaIds, result);
 			ValidateRoomLevels(config.Periods, area, result);
+			ValidateLightLevels(config.Periods, area, result);
+		}
+	}
+
+	/// <summary>What single lights in a room run instead of the room (<see cref="AreaConfig.LightLevels"/>).</summary>
+	/// <remarks>
+	///     Whether the room actually commands the light named here needs group membership, which this class is not
+	///     given; <see cref="Engine.AreaEntityResolver"/> warns about that and the room page shows the orphan. An
+	///     unknown entity id reaches the ordinary area error through <see cref="EnumerateAreaEntities"/>.
+	/// </remarks>
+	private static void ValidateLightLevels(List<TimePeriodConfig> periods, AreaConfig area, ValidationResult result)
+	{
+		HashSet<string> lights = new(StringComparer.OrdinalIgnoreCase);
+
+		foreach (LightLevelOverride light in area.LightLevels ?? [])
+		{
+			string entityId = light.EntityId?.Trim() ?? "";
+
+			if (entityId.Length == 0)
+			{
+				result.AddWarning(
+					$"[{area.DisplayName}] has a light-levels entry naming no light, so it reaches nothing. Name the "
+					+ "light it was written for, or remove the entry.");
+				continue;
+			}
+
+			// First wins, matching how the engine builds one calculator per light.
+			if (!lights.Add(entityId))
+			{
+				result.AddWarning(
+					$"[{area.DisplayName}] states levels for '{entityId}' more than once; the first entry wins and the "
+					+ "rest are ignored. Merge them into one.");
+				continue;
+			}
+
+			ValidateLevelRows(periods, $"[{area.DisplayName}] {entityId}", light.Levels, result);
 		}
 	}
 
@@ -652,18 +688,28 @@ public static class ConfigValidator
 	///     A dangling period id warns and the row survives: it is nearly always a period deleted by hand, and the levels
 	///     are worth more than the tidiness. A value outside the physical range is an error, as the schedule's own is.
 	/// </remarks>
-	private static void ValidateRoomLevels(List<TimePeriodConfig> periods, AreaConfig area, ValidationResult result)
+	private static void ValidateRoomLevels(List<TimePeriodConfig> periods, AreaConfig area, ValidationResult result) =>
+		ValidateLevelRows(periods, $"[{area.DisplayName}]", area.Levels, result);
+
+	/// <summary>The rows one owner states, whether that owner is a room or a single light inside one.</summary>
+	// scope carries its own brackets and reads as the sentence's subject, so a light's warning names the light
+	// and a room's reads exactly as it always did.
+	private static void ValidateLevelRows(
+		List<TimePeriodConfig> periods,
+		string scope,
+		IReadOnlyList<RoomLevelOverride>? levels,
+		ValidationResult result)
 	{
 		HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
-		foreach (RoomLevelOverride level in area.Levels ?? [])
+		foreach (RoomLevelOverride level in levels ?? [])
 		{
-			ValidateRoomLevelRange(periods, area, level, result);
+			ValidateRoomLevelRange(periods, scope, level, result);
 
 			if (level.PeriodId is not { Length: > 0 } key || string.IsNullOrWhiteSpace(key))
 			{
 				result.AddWarning(
-					$"[{area.DisplayName}] has a levels row naming no period, so it replaces nothing. Name the period "
+					$"{scope} has a levels row naming no period, so it replaces nothing. Name the period "
 					+ "it was written for, or remove the row.");
 				continue;
 			}
@@ -677,7 +723,7 @@ public static class ConfigValidator
 			if (!seen.Add(key.Trim()))
 			{
 				result.AddWarning(
-					$"[{area.DisplayName}] has more than one levels row for period '{PeriodLabel(periods, key)}'; the "
+					$"{scope} has more than one levels row for period '{PeriodLabel(periods, key)}'; the "
 					+ "first one wins and the rest are ignored. Merge them into one row.");
 				continue;
 			}
@@ -685,7 +731,7 @@ public static class ConfigValidator
 			if (PeriodWithKey(periods, key) is null)
 			{
 				result.AddWarning(
-					$"[{area.DisplayName}] has levels for period '{key.Trim()}', which matches no configured period — "
+					$"{scope} has levels for period '{key.Trim()}', which matches no configured period — "
 					+ "almost always a period that has been deleted. The row is kept so the levels are not lost, but it "
 					+ "does nothing until it names a period that exists.");
 			}
@@ -695,7 +741,7 @@ public static class ConfigValidator
 	/// <summary>The physical ranges, checked whether or not the row's period resolves.</summary>
 	private static void ValidateRoomLevelRange(
 		List<TimePeriodConfig> periods,
-		AreaConfig area,
+		string scope,
 		RoomLevelOverride level,
 		ValidationResult result)
 	{
@@ -703,11 +749,11 @@ public static class ConfigValidator
 
 		if (level.Brightness is { } brightness && brightness is < MinBrightness or > MaxBrightness)
 			result.AddError(
-				$"[{area.DisplayName}] levels for period '{label}' have Brightness {brightness}, outside {MinBrightness}–{MaxBrightness}.");
+				$"{scope} levels for period '{label}' have Brightness {brightness}, outside {MinBrightness}–{MaxBrightness}.");
 
 		if (level.ColorTempKelvin is { } kelvin && kelvin is < MinColorTempKelvin or > MaxColorTempKelvin)
 			result.AddError(
-				$"[{area.DisplayName}] levels for period '{label}' have ColorTempKelvin {kelvin}, outside {MinColorTempKelvin}–{MaxColorTempKelvin}.");
+				$"{scope} levels for period '{label}' have ColorTempKelvin {kelvin}, outside {MinColorTempKelvin}–{MaxColorTempKelvin}.");
 	}
 
 
@@ -777,6 +823,10 @@ public static class ConfigValidator
 
 		if (area.LuxSensor is { Length: > 0 } lux)
 			yield return lux;
+
+		foreach (LightLevelOverride light in area.LightLevels ?? [])
+			if (light.EntityId is { Length: > 0 } stated && stated.Trim() is { Length: > 0 } trimmed)
+				yield return trimmed;
 	}
 
 	private static void ValidateSettings(string scope, AreaSettings settings, ValidationResult result)

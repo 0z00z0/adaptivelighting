@@ -69,8 +69,8 @@ public static class AreaSetupService
 	}
 
 	/// <summary>Carries <paramref name="plan"/> out on <paramref name="config"/>, in memory.</summary>
-	// A rebuilt area is replaced by a fresh proposal. AreaId, Enabled and Levels survive because discovery does
-	// not produce them. Areas outside the plan keep their exact instance, so a document with no rebuilds
+	// A rebuilt area is replaced by a fresh proposal. AreaId, Enabled, Levels and LightLevels survive because
+	// discovery does not produce them. Areas outside the plan keep their exact instance, so a document with no rebuilds
 	// serialises byte for byte as it was. A plan is held across edits, so the document in hand may be a later one
 	// than Plan read; the duplicate check is repeated here, which also makes applying a plan twice idempotent.
 	public static void Apply(AdaptiveLightingConfig config, SetupPlan plan)
@@ -88,8 +88,14 @@ public static class AreaSetupService
 			if (existing.AreaId is not { Length: > 0 } areaId || !rebuilding.Contains(areaId))
 				continue;
 
-			// Enabled and Levels survive, which is why neither PinnedEntityCount nor OverrideCount counts them.
-			AreaConfig fresh = new() { AreaId = areaId, Enabled = existing.Enabled, Levels = existing.Levels };
+			// Enabled, Levels and LightLevels survive, which is why none of them is counted as a loss.
+			AreaConfig fresh = new()
+			{
+				AreaId = areaId,
+				Enabled = existing.Enabled,
+				Levels = existing.Levels,
+				LightLevels = existing.LightLevels
+			};
 			AreaAutoDiscovery.ApplyRole(fresh);
 
 			config.Areas[index] = fresh;

@@ -1,5 +1,10 @@
-@* Every page ships in the RCL, so a host contributes no routable components of its own. *@
-<Router AppAssembly="@typeof(Routes).Assembly">
+@using System.Reflection
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+
+@* Every page a house sees ships in the RCL. AdditionalRoutes is registered by the developer host alone, and
+   without it the router resolves exactly the pages it always did. *@
+<Router AppAssembly="@typeof(Routes).Assembly" AdditionalAssemblies="@Extra">
 	<Found Context="routeData">
 		<RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
 		<FocusOnNavigate RouteData="@routeData" Selector="h1" />
@@ -11,3 +16,8 @@
 		</LayoutView>
 	</NotFound>
 </Router>
+
+@code {
+	private IEnumerable<Assembly> Extra =>
+		Services.GetService<AdditionalRoutes>()?.Assemblies ?? [];
+}
