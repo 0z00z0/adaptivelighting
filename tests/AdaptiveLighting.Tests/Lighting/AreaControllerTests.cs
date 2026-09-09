@@ -1887,6 +1887,113 @@ public sealed class AreaControllerTests
 			"the clamp period's level is this room's 4, so 4 is the ceiling — the house's 15 never applies here");
 	}
 
+	// ===================== coming back from away =====================
+
+	[TestMethod]
+	public void Returning_From_Away_Adopts_Lights_The_Sweep_Left_On()
+	{
+		// The room opted out of the leaving sweep, so it is still lit when the house comes back.
+		var t = Build(s => s.SkipAwaySweep = true, seed: ha =>
+		{
+			ha.SetState(Light, "on", new() { ["brightness"] = 178.5 });
+			ha.SetState(Lux, "5");
+		});
+
+		t.House.OnNext(AwayHouse());
+		Assert.AreEqual(AreaState.Away, t.Area.State);
+		t.Actuator.Clear();
+
+		t.House.OnNext(House());
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State,
+			"a room that is still lit is taken charge of, so something is armed to switch it off");
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "adoption observes; it commands nothing");
+
+		Advance(t, TimeSpan.FromSeconds(600 + 30 + 1));
+
+		Assert.IsTrue(t.Actuator.Last is { On: false }, "and the vacancy timeout ends it, as it would in any other room");
+	}
+
+	[TestMethod]
+	public void Leaving_A_Guest_Scene_Adopts_Lights_The_Scene_Left_On()
+	{
+		var t = Build(seed: ha =>
+		{
+			ha.SetState(Light, "on", new() { ["brightness"] = 178.5 });
+			ha.SetState(Lux, "5");
+		});
+
+		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
+		Assert.AreEqual(AreaState.SceneHold, t.Area.State);
+		t.Actuator.Clear();
+
+		t.House.OnNext(House());
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State,
+			"the scene left the room lit, and nothing else would ever switch it off");
+		Assert.AreEqual(0, t.Actuator.Applied.Count);
+	}
+
+	// ===================== a level test and the house =====================
+
+	[TestMethod]
+	public void A_Level_Test_Is_Refused_While_The_House_Is_Away()
+	{
+		var t = Build();
+		t.House.OnNext(AwayHouse());
+
+		Assert.IsNotNull(t.Area.LevelTestRefusal(), "the button carries its own reason");
+		Assert.IsNotNull(t.Area.TestPeriod("night"), "and the press is refused for the same one");
+		Assert.IsFalse(t.Area.IsTestingLevels);
+	}
+
+	[TestMethod]
+	public void A_Running_Level_Test_Is_Dropped_When_A_Guest_Scene_Takes_The_Room()
+	{
+		var t = Build();
+		Assert.IsNull(t.Area.TestPeriod("night"));
+
+		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
+		t.Actuator.Clear();
+
+		Advance(t, TimeSpan.FromSeconds(AreaController.LevelTestSeconds + 1));
+
+		Assert.IsFalse(t.Area.IsTestingLevels);
+		Assert.AreEqual(0, t.Actuator.Applied.Count,
+			"the house scene is the newest word on these lights, and the return had nothing of the scene's to give back");
+	}
+
+	[TestMethod]
+	public void A_Running_Level_Test_Is_Dropped_When_The_House_Goes_Away()
+	{
+		var t = Build();
+		Assert.IsNull(t.Area.TestPeriod("night"), "the control: an ordinary house lets the test run");
+
+		t.House.OnNext(AwayHouse());
+		t.Actuator.Clear();
+
+		Advance(t, TimeSpan.FromSeconds(AreaController.LevelTestSeconds + 1));
+
+		Assert.IsFalse(t.Area.IsTestingLevels);
+		Assert.AreEqual(0, t.Actuator.Applied.Count,
+			"the return would sweep the room dark, over a standing away scene, ten seconds after the house left");
+	}
+
+	[TestMethod]
+	public void A_Running_Level_Test_Is_Dropped_When_The_Master_Switch_Goes_On()
+	{
+		var t = Build();
+		Assert.IsNull(t.Area.TestPeriod("night"));
+
+		t.House.OnNext(House(killed: true));
+		t.Actuator.Clear();
+
+		Advance(t, TimeSpan.FromSeconds(AreaController.LevelTestSeconds + 1));
+
+		Assert.IsFalse(t.Area.IsTestingLevels);
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "nothing may command a light while the app says it is paused");
+	}
+
 	// ===================== away-kind mode =====================
 
 	[TestMethod]

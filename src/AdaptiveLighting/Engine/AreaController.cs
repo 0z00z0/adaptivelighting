@@ -499,6 +499,11 @@ public sealed class AreaController : IDisposable
 
 			if (!IsEngineAllowed())
 			{
+				// Its return runs through the ordinary command path, so it would command a light the master
+				// switch has just forbidden. The fixtures stay where the test left them, which is the muzzle's
+				// promise: nothing is commanded either way.
+				AbandonLevelTest();
+
 				if (_state != AreaState.Disabled)
 				{
 					CancelAllTimers();
@@ -548,6 +553,10 @@ public sealed class AreaController : IDisposable
 			{
 				// The Guest scene ended. Exit to the resting state and let the normal machinery re-evaluate.
 				Enter(AreaState.AutoVacant, TransitionReason.SceneHold);
+
+				// The scene left these lights on, and AutoVacant arms nothing that would ever end them.
+				AdoptIfLit(TransitionReason.SceneHold);
+
 				Publish(TransitionReason.SceneHold);
 				return;
 			}
@@ -564,6 +573,9 @@ public sealed class AreaController : IDisposable
 
 	private void EnterSceneHold()
 	{
+		// The house's scene is the newest word on these lights, for the same reason it is in GoAway.
+		AbandonLevelTest();
+
 		CancelAllTimers();
 
 		// The house's scene is the look now, so the room's own no longer describes these lights.
@@ -737,6 +749,10 @@ public sealed class AreaController : IDisposable
 	{
 		TransitionReason reason = ModeReason(opening);
 
+		// The leaving sweep, or the away scene, is the newest word on these lights. A test's return landing ten
+		// seconds later would sweep the room dark over the top of a standing away scene.
+		AbandonLevelTest();
+
 		CancelAllTimers();
 		Enter(AreaState.Away, reason);
 
@@ -778,6 +794,10 @@ public sealed class AreaController : IDisposable
 
 		if (!_area.Settings.WelcomeHome || !CanAutoOn(out _))
 		{
+			// A room the leaving sweep deliberately left on — SkipAwaySweep, or a hold that refused the off — is
+			// still lit, and AutoVacant arms no vacancy timeout, so without this it burns with nothing to end it.
+			AdoptIfLit(reason);
+
 			Publish(reason);
 			return;
 		}
@@ -1237,6 +1257,12 @@ public sealed class AreaController : IDisposable
 
 		if (!_area.Settings.Enabled)
 			return "Automatic lighting is switched off for this room, so its lights are not the engine's to move.";
+
+		// A test here has nothing to give the room back: an away room's levels are the sweep's or the away
+		// scene's, and neither is captured, so the return would hand it back by sweeping it dark. A guest scene
+		// is deliberately not refused — those levels are read off the fixtures and put back.
+		if (_house.Mode == HouseMode.Away)
+			return "The house is set to away, so its lights are not being moved for a test.";
 
 		return null;
 	}
