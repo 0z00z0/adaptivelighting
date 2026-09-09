@@ -292,6 +292,7 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 |---|---|---|---|
 | **Who lives here** | Whose presence decides Home and Away. Empty means everyone Home Assistant knows, including people added later. | empty | `Persons` |
 | **Count the house as empty after** | How long everyone must be gone before rooms react to an empty house. | 5 min | `AwayDebounceMinutes` |
+| Movement counts as somebody being home for | Movement in any room the app manages counts as somebody being home, exactly as a phone does, for this long after the last movement. Every further movement starts it again; once it runs out with no phone home, the house goes away through the setting above. Zero watches phones only. **File only for now — there is no page for it.** | 30 min | `MotionPresenceMinutes` |
 | **Master switch** | The entity that pauses everything. Left at the default, the app's own enable switch in Home Assistant is used — turning that one off pauses the app, this page included. | the app's own switch | `KillSwitchEntity` |
 | Which way round it reads | Offered only once you pick your own entity: *read as an enabled flag — off kills the engine*, or *read as a kill switch — on kills the engine*. | enabled flag | `KillSwitchActiveWhenOff` |
 | **House name** | A label for logs and notifications, so two houses can be told apart. | "Adaptive lighting" | `ConfigName` |

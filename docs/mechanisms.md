@@ -463,6 +463,62 @@ mode overwritten on no evidence, on a path a corrupt file could trigger at every
 After a Home Assistant restart an `input_select` reads `unavailable` for a while. Anything reading one has to
 survive that without acting on it.
 
+### Movement counts as somebody being home
+
+**The rule, in full.** Movement in a room the engine manages counts as somebody being home for the next
+`Global.MotionPresenceMinutes`, and every further movement starts that window again. When the window runs out
+with no tracked phone home, the house leaves the same way it does when the last phone goes: the departure
+debounce runs, and only then is the house away.
+
+Zero or less switches the rule off and watches trackers only.
+
+**The trade-off, chosen and not derived.** A cat, a robot vacuum or a curtain moving in a draught can now
+bring a house back to normal and light a room. That is accepted. Presence used to be decided by phones alone,
+and the composed mode read that verdict ahead of everything else, so a house whose trackers saw nobody stayed
+locked dark however much somebody moved about inside it — movement refused, the manual light button refused,
+and no way out from inside the building. Lighting a room for a cat is the smaller failure.
+
+**Why the machinery that existed could not already do it.** An option carrying `ResetOnPresence` writes the
+selector back to the Normal option on movement, and the inactivity latch clears on movement too. Both only
+move the selector, and `HouseState.Mode` reads `!IsAnyoneHome || ActiveKind == Away` — so the selector
+returned to Normal and the presence verdict said away in the same instant. Composing movement into the
+presence verdict is what makes that machinery reach anything.
+
+**What movement does not overrule.** An away-kind option somebody stands the dial on is a standing
+instruction, not a failure to observe anybody, and it still wins: `HouseState.Mode` ORs it with presence. A
+room's own gates are untouched — darkness, sleep, a blocking entity, the master switch, a disabled room all
+refuse exactly as before. Movement decides whether the house is occupied, never whether a room lights.
+
+**The two sides, because they differ.** Arrival is not debounced: movement makes the house occupied at once,
+as a tracked phone arriving does. Departure is, and movement-derived presence expiring is a departure like any
+other, so it goes through the same `AwayDebounceMinutes`. The full quiet time before an away sweep is
+therefore the window plus the debounce, and there is exactly one place that announces an empty house.
+
+**The away sweep is neither undone nor re-run.** It fires on the departure. Movement afterwards raises
+`FirstPersonArrived`, each room runs its ordinary `ComeHome`, and the lights stay off until a room's own gates
+say otherwise. `EveryoneLeft` cannot fire again until a fresh full departure.
+
+**Start order is load-bearing.** `LightingOrchestrator.Start` starts the house monitors before the areas, so
+the presence monitor is subscribed to each motion sensor ahead of the room that owns it. One movement then
+flips presence, republishes the house and reaches the room while it is already out of Away — a person waves
+once. Started the other way round the room sees the movement while still Away, declines it, and needs a second
+wave. A test asserts the order rather than the code claiming it.
+
+**A house with no person entities stays permanently occupied whatever moves.** With nothing to compose
+against, a quiet house would begin sweeping itself; never sweeping remains safer than sweeping wrongly.
+
+**A house that starts empty announces its first arrival.** The opening publication tells every area the house
+is away, so that counts as the departure having been announced. Left otherwise, the first arrival is swallowed
+as a return inside a debounce that never ran, and an engine started in an empty house never comes home at all —
+for a tracked phone as much as for movement.
+
+### Values chosen for movement-as-presence
+
+| Value | Setting | Why this number |
+|---|---|---|
+| 30 minutes | `Global.MotionPresenceMinutes` | Has to be comfortably longer than the longest room's `VacancyTimeoutSeconds`, which defaults to 600 s, or the house sweeps itself away while a room is still lit on somebody sitting in it. Three times the default vacancy timeout. |
+| 5 minutes | `Global.AwayDebounceMinutes`, reused | Already the departure debounce; expiry is a departure, so it takes the same path. Noise against 30. |
+
 ### The daylight curve is a per-room, per-period opt-in
 
 A period itself carries no curve choice: it has one `BrightnessPct`, house-wide, exactly as it did before the

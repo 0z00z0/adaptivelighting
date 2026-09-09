@@ -120,6 +120,13 @@ public class GlobalConfig
 
 	public int AwayDebounceMinutes { get; set; } = 5;
 
+	/// <summary>How long movement in a managed room counts as somebody being home. Zero or less watches trackers only.</summary>
+	/// <remarks>
+	///     Must stay comfortably longer than the longest room's <see cref="AreaSettings.VacancyTimeoutSeconds"/>, or
+	///     the house sweeps itself away while a room is still lit on somebody sitting in it.
+	/// </remarks>
+	public int MotionPresenceMinutes { get; set; } = 30;
+
 	/// <summary>How often an area re-evaluates darkness, period and house mode. A tick that finds nothing changed publishes nothing.</summary>
 	public int CircadianTickSeconds { get; set; } = 60;
 
