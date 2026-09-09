@@ -609,7 +609,10 @@ public sealed class LightingEngineHost : IDisposable
 				_loggerFactory,
 				_lastSeen,
 				_lastPeriod,
-				_setupMemory);
+				_setupMemory,
+				// A save is not a boundary that went by while the engine was down; the note on disk cannot tell
+				// the two apart on its own.
+				afterSave: notice is EngineNoticeKind.SettingsSaved);
 
 			orchestrator.Start();
 

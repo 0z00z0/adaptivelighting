@@ -44,6 +44,10 @@ public sealed class LightingOrchestrator : IDisposable
 
 	// Keeps the setup notification to once per problem. Null notifies on every start, as it did before there was one.
 	private readonly IAreaSetupMemory? _setupMemory;
+
+	// This engine replaced a running one on settings somebody just saved. The mode brain treats that differently
+	// from a start from nothing.
+	private readonly bool _afterSave;
 	private readonly ILogger _logger;
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
@@ -82,8 +86,10 @@ public sealed class LightingOrchestrator : IDisposable
 		ILoggerFactory loggerFactory,
 		IEntityLastSeen? lastSeen = null,
 		ILastPeriodStore? lastPeriod = null,
-		IAreaSetupMemory? setupMemory = null)
+		IAreaSetupMemory? setupMemory = null,
+		bool afterSave = false)
 	{
+		_afterSave = afterSave;
 		_lastSeen = lastSeen;
 		_lastPeriod = lastPeriod;
 		_setupMemory = setupMemory;
@@ -342,7 +348,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_motionSensorsByArea,
 			// The same latch, for the same reason.
 			_motionPeriods,
-			sunMoved: SunMoved(_config.Defaults.SunEntity));
+			sunMoved: SunMoved(_config.Defaults.SunEntity),
+			afterSave: _afterSave);
 
 		_subscriptions.Add(_presence.Events.SubscribeSafe((PresenceEvent _) => PublishHouseState(), _logger));
 		_subscriptions.Add(_modes.Changed.SubscribeSafe((Unit _) => PublishHouseState(), _logger));

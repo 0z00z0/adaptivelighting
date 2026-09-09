@@ -193,6 +193,88 @@ public sealed class LightingEngineHostTests
 		Assert.IsNull(host.MotionPeriods);
 	}
 
+	// ---- a save is not a boundary that went by ---------------------------------------------------
+
+	private const string ModeSelect = "input_select.husmodus";
+
+	/// <summary>A roomless document whose "night" period sets the house asleep, with the two Starts a test picks.</summary>
+	private static AdaptiveLightingConfig ScheduleSettingSleep(string eveningStart, string nightStart)
+	{
+		AdaptiveLightingConfig config = Roomless();
+
+		config.Global.CircadianTickSeconds = 60;
+		config.Global.HouseMode = new HouseModeConfig
+		{
+			Entity = ModeSelect,
+			Options =
+			[
+				new() { Id = "hjemme", Value = "Hjemme", Kind = ModeKind.Normal },
+				new() { Id = "sover", Value = "Sover", Kind = ModeKind.Sleep }
+			]
+		};
+
+		config.Periods =
+		[
+			new TimePeriodConfig { Id = "evening", Name = "evening", Start = eveningStart, BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new TimePeriodConfig { Id = "night", Name = "night", Start = nightStart, BrightnessPct = 15, ColorTempKelvin = 2200, SetsModeId = "sover" }
+		];
+
+		return config;
+	}
+
+	private static int SleepWrites(FakeHaContext ha) =>
+		ha.Calls.Count(call => call.Domain == "input_select" && call.Service == "select_option");
+
+	[TestMethod]
+	public void ASave_DoesNotApplyAPeriodsMode_AsIfABoundaryHadGoneBy()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(ModeSelect, "Hjemme");
+
+		LightingEngineHost host = BuildHost();
+		TestScheduler scheduler = Clocked();
+		host.Attach(ha, new FakeHaRegistry(), scheduler);
+
+		// 20:00 is inside "evening", so that is what the note beside the document ends up naming.
+		host.Save(ScheduleSettingSleep(eveningStart: "18:00", nightStart: "23:00"));
+		scheduler.AdvanceBy(TimeSpan.FromMinutes(5).Ticks);
+		Assert.AreEqual(0, SleepWrites(ha), "nothing has changed the mode yet");
+
+		// Somebody edits the schedule so 20:00 now falls inside "night". The note still names "evening", which
+		// reads exactly like a boundary crossed while the engine was down.
+		host.Save(ScheduleSettingSleep(eveningStart: "10:00", nightStart: "19:00"));
+		scheduler.AdvanceBy(TimeSpan.FromMinutes(5).Ticks);
+
+		Assert.AreEqual(0, SleepWrites(ha),
+			"the engine was running the whole time; editing a schedule does not put the house to bed");
+
+		host.Dispose();
+	}
+
+	// The control for the test above: the same note against the same document, coming up from nothing.
+	[TestMethod]
+	public void AStartFromNothing_StillAppliesAPeriodsMode_WhenTheNoteNamesAnEarlierPeriod()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(ModeSelect, "Hjemme");
+
+		LightingEngineHost host = BuildHost();
+		TestScheduler scheduler = Clocked();
+		host.Attach(ha, new FakeHaRegistry(), scheduler);
+
+		host.Save(ScheduleSettingSleep(eveningStart: "18:00", nightStart: "23:00"));
+		scheduler.AdvanceBy(TimeSpan.FromMinutes(5).Ticks);
+
+		// Written, but with no tick behind it, so the note still names "evening".
+		host.Save(ScheduleSettingSleep(eveningStart: "10:00", nightStart: "19:00"));
+		host.Reload();
+		scheduler.AdvanceBy(TimeSpan.FromMinutes(5).Ticks);
+
+		Assert.AreEqual(1, SleepWrites(ha), "night began while this engine was not running, so night's mode applies");
+
+		host.Dispose();
+	}
+
 	[TestMethod]
 	public void EachRebuild_RaisesOneNotice_SayingWhichKindItWas()
 	{

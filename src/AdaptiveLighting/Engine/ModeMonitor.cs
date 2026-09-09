@@ -51,6 +51,10 @@ public sealed class ModeMonitor : IDisposable
 	// Null when no period select is configured. Which direction it grants is its own to say.
 	private readonly PeriodSelectReader? _periodSelect;
 
+	// This engine replaced a running one on settings somebody just saved, rather than coming up from nothing. The
+	// note on disk cannot tell the two apart, and a save is not a boundary that went by.
+	private readonly bool _afterSave;
+
 	// Wakes this monitor at the boundary itself, so a period's SetsModeId and the period mirror do not wait out a
 	// whole CircadianTickSeconds. The tick below is the safety net and still runs.
 	private readonly BoundaryTimer _boundary;
@@ -128,8 +132,10 @@ public sealed class ModeMonitor : IDisposable
 		IReadOnlyDictionary<string, IReadOnlyList<string>>? motionSensorsByArea = null,
 		MotionPeriodLatch? motionPeriods = null,
 		TimeZoneInfo? zone = null,
-		IObservable<Unit>? sunMoved = null)
+		IObservable<Unit>? sunMoved = null,
+		bool afterSave = false)
 	{
+		_afterSave = afterSave;
 		_zone = zone ?? TimeZoneInfo.Local;
 		_sunMoved = sunMoved;
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
@@ -410,7 +416,11 @@ public sealed class ModeMonitor : IDisposable
 			// reason below: nothing else is running yet.
 			_activatedAt = ModeSetAt(_scheduler.Now);
 			_lastMotionAt = LastMotionAt(_scheduler.Now);
-			_startPeriodModePending = true;
+
+			// A save rebuilds this monitor, and an edit to the schedule can put a different period in force than
+			// the note names. That reads as a boundary the engine slept through, which it is not: the engine was
+			// running the whole time. Only a start from nothing may spend the note.
+			_startPeriodModePending = !_afterSave;
 
 			// Read once: the answer is about the run that ended, and a later read finds what this run wrote over
 			// it. A file read under _gate is safe only here, before the subscriptions and the tick exist.

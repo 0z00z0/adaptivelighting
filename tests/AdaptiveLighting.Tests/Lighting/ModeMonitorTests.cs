@@ -94,7 +94,8 @@ public sealed class ModeMonitorTests
 		Action<FakeHaContext>? seed = null,
 		ILastPeriodStore? lastPeriod = null,
 		MovableSun? sun = null,
-		bool watchSun = true)
+		bool watchSun = true,
+		bool afterSave = false)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo((startAt ?? Evening).Ticks);
@@ -111,7 +112,7 @@ public sealed class ModeMonitorTests
 			ha, global, NullLogger.Instance, scheduler,
 			periods ?? Periods(), () => sun?.Times ?? SunTimes.Unknown, motion ?? [], lastPeriod ?? note,
 			PeriodSelectReader.For(ha, global, NullLogger.Instance), zone: TimeZoneInfo.Utc,
-			sunMoved: watchSun ? sun?.Moved : null);
+			sunMoved: watchSun ? sun?.Moved : null, afterSave: afterSave);
 
 		return new Rig(ha, scheduler, monitor, note);
 	}
@@ -125,13 +126,14 @@ public sealed class ModeMonitorTests
 		Action<FakeHaContext>? seed = null,
 		ILastPeriodStore? lastPeriod = null,
 		MovableSun? sun = null,
-		bool watchSun = true)
+		bool watchSun = true,
+		bool afterSave = false)
 	{
 		var rig = Build(global, periods, motion, startAt, ha =>
 		{
 			ha.SetState(Select, initialSelect);
 			seed?.Invoke(ha);
-		}, lastPeriod, sun, watchSun);
+		}, lastPeriod, sun, watchSun, afterSave);
 		rig.Monitor.Start();
 		return rig;
 	}
@@ -426,6 +428,20 @@ public sealed class ModeMonitorTests
 		Advance(rig, TimeSpan.FromMinutes(5));
 
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "night began; night's mode wins over the standing option");
+	}
+
+	// A save rebuilds the engine, and an edit to the schedule can put a different period in force than the note
+	// names. That looks exactly like a boundary crossed during an outage, and it is not one.
+	[TestMethod]
+	public void ASettingsSave_DoesNotApplyAPeriodsMode_AsIfABoundaryHadGoneBy()
+	{
+		var rig = Started(startAt: HalfPastNight, initialSelect: "Hjemme", lastPeriod: EndedIn("evening"),
+			afterSave: true);
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"),
+			"the engine was running the whole time; saving a schedule is not a boundary it slept through");
 	}
 
 	// The case a deploy produces most of the time.
