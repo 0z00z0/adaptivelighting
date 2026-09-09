@@ -13,10 +13,12 @@ public sealed class LightingOrchestratorTests
 {
 	private const string Person = "person.a";
 	private const string Select = "input_select.husmodus";
+	private const string Master = "input_boolean.styring";
 
 	private sealed record Fixture(TestScheduler Scheduler, FakeHaContext Ha, FakeLightActuator Actuator, LightingOrchestrator Orchestrator);
 
-	private static Fixture Build(HouseModeConfig houseMode, string selectState)
+	// paused wires the master switch as an enabled flag: off is the app muzzled.
+	private static Fixture Build(HouseModeConfig houseMode, string selectState, bool paused = false)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -24,10 +26,17 @@ public sealed class LightingOrchestratorTests
 		var ha = new FakeHaContext();
 		ha.SetState(Person, "home");
 		ha.SetState(Select, selectState);
+		ha.SetState(Master, paused ? "off" : "on");
 
 		var config = new AdaptiveLightingConfig
 		{
-			Global = new GlobalConfig { Persons = [Person], AwayDebounceMinutes = 5, HouseMode = houseMode },
+			Global = new GlobalConfig
+			{
+				Persons = [Person],
+				AwayDebounceMinutes = 5,
+				HouseMode = houseMode,
+				KillSwitchEntity = Master
+			},
 			// A baseline period so the document is otherwise ordinary; no areas, so the registry is never touched.
 			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }]
 		};
@@ -91,6 +100,289 @@ public sealed class LightingOrchestratorTests
 
 		Assert.AreEqual(1, t.Actuator.Scenes.Count, "leaving the scene mode for Normal applies nothing new");
 		CollectionAssert.DoesNotContain(t.Actuator.Scenes, "scene.normal");
+	}
+
+	[TestMethod]
+	public void The_Master_Switch_Stops_The_Away_And_Guest_Scenes()
+	{
+		var running = Build(WithScenes(), selectState: "Normal");
+		running.Ha.Trigger(Select, "Borte");
+		CollectionAssert.AreEqual(new[] { "scene.borte" }, running.Actuator.Scenes,
+			"the control: with the switch on, entering away applies the away scene");
+
+		var paused = Build(WithScenes(), selectState: "Normal", paused: true);
+		paused.Ha.Trigger(Select, "Borte");
+		paused.Ha.Trigger(Select, "Gjester");
+
+		Assert.AreEqual(0, paused.Actuator.Scenes.Count,
+			"the app says it is paused, so no scene may change a light");
+	}
+
+	[TestMethod]
+	public void A_Scene_The_Master_Switch_Refused_Is_Not_Replayed_When_It_Lifts()
+	{
+		var t = Build(WithScenes(), selectState: "Normal", paused: true);
+
+		t.Ha.Trigger(Select, "Borte");
+		Assert.AreEqual(0, t.Actuator.Scenes.Count);
+
+		t.Ha.Trigger(Master, "on");
+
+		Assert.AreEqual(0, t.Actuator.Scenes.Count,
+			"nothing queues a command the muzzle refused; the away mode still stands and the rooms take it from there");
+	}
+
+	// ===================== composing house state =====================
+
+	/// <summary>Holds every thread that reaches a named log line, so a test can see how many got there at once.</summary>
+	private sealed class HoldingLoggerFactory(string atMessage) : ILoggerFactory
+	{
+		private readonly ManualResetEventSlim _release = new(initialState: false);
+		private int _inside;
+		private int _armed;
+
+		/// <summary>Signalled each time a thread reaches the line.</summary>
+		public SemaphoreSlim Arrived { get; } = new(0);
+
+		/// <summary>How many threads are inside the held region right now.</summary>
+		public int Inside => Volatile.Read(ref _inside);
+
+		/// <summary>Starts holding. Nothing before this blocks, so the engine can come up.</summary>
+		public void Arm() => Volatile.Write(ref _armed, 1);
+
+		public void Release() => _release.Set();
+
+		public ILogger CreateLogger(string categoryName) => new Holder(this);
+
+		public void AddProvider(ILoggerProvider provider) { }
+
+		public void Dispose()
+		{
+			_release.Dispose();
+			Arrived.Dispose();
+		}
+
+		private sealed class Holder(HoldingLoggerFactory owner) : ILogger
+		{
+			public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+			public bool IsEnabled(LogLevel logLevel) => true;
+
+			public void Log<TState>(
+				LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+			{
+				ArgumentNullException.ThrowIfNull(formatter);
+
+				if (Volatile.Read(ref owner._armed) == 0
+					|| !formatter(state, exception).StartsWith(owner._atMessage, StringComparison.Ordinal))
+					return;
+
+				Interlocked.Increment(ref owner._inside);
+				owner.Arrived.Release();
+				owner._release.Wait(TimeSpan.FromSeconds(20));
+				Interlocked.Decrement(ref owner._inside);
+			}
+		}
+
+		private readonly string _atMessage = atMessage;
+	}
+
+	// Composing the state, comparing it with the standing one and publishing it has to be one step. Two threads
+	// interleaved through it leave the house on the older answer, and the equality guard then suppresses the
+	// recompute that would put it right, so the divergence is permanent rather than a flicker.
+	[TestMethod]
+	[Timeout(30_000)]
+	public void House_State_Is_Composed_And_Published_By_One_Thread_At_A_Time()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Person, "home");
+		ha.SetState(Select, "Normal");
+		ha.SetState(Master, "on");
+
+		AdaptiveLightingConfig config = new()
+		{
+			Global = new GlobalConfig
+			{
+				Persons = [Person],
+				AwayDebounceMinutes = 5,
+				HouseMode = WithScenes(),
+				KillSwitchEntity = Master
+			},
+			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }]
+		};
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		using HoldingLoggerFactory logs = new("House is now");
+		LightingOrchestrator engine = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			new FakeLightActuator(), new FakeStatePublisher(), new FakeNotifier(), logs);
+
+		engine.Start();
+		logs.Arm();
+
+		Task first = Task.Run(() => ha.Trigger(Select, "Borte"));
+		Assert.IsTrue(logs.Arrived.Wait(TimeSpan.FromSeconds(10)), "the first publication reached the point of publishing");
+
+		// A second change, while the first has composed but not yet published.
+		Task second = Task.Run(() => ha.Trigger(Select, "Gjester"));
+		bool secondGotIn = logs.Arrived.Wait(TimeSpan.FromSeconds(3));
+
+		logs.Release();
+		Assert.IsTrue(Task.WaitAll([first, second], TimeSpan.FromSeconds(10)), "both publications finished");
+
+		Assert.IsFalse(secondGotIn,
+			"two threads were composing and publishing the house state at once, so one can publish over the other");
+
+		engine.Dispose();
+	}
+
+	// ===================== the opening house state =====================
+
+	/// <summary>One lit room, with the select and the master switch wherever a test puts them.</summary>
+	private static (LightingOrchestrator Engine, FakeStatePublisher Publisher) LitRoomAtStartUp(
+		string selectState, bool paused)
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Person, "home");
+		ha.SetState(Select, selectState);
+		ha.SetState(Master, paused ? "off" : "on");
+		ha.SetState(Stue, "on");
+		ha.SetState(StueMotion, "off");
+
+		AdaptiveLightingConfig config = new()
+		{
+			Global = new GlobalConfig
+			{
+				Persons = [Person],
+				HouseMode = new HouseModeConfig
+				{
+					Entity = Select,
+					Options =
+					[
+						new() { Value = "Normal", Kind = ModeKind.Normal },
+						new() { Value = "Borte", Kind = ModeKind.Away }
+					]
+				},
+				KillSwitchEntity = Master,
+				CircadianTickSeconds = 600
+			},
+			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+		};
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		FakeStatePublisher publisher = new();
+		LightingOrchestrator engine = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			new FakeLightActuator(), publisher, new FakeNotifier(), NullLoggerFactory.Instance);
+
+		engine.Start();
+		return (engine, publisher);
+	}
+
+	[TestMethod]
+	public void A_Paused_House_Does_Not_Take_Charge_Of_Lit_Rooms_At_Start_Up()
+	{
+		(LightingOrchestrator engine, FakeStatePublisher publisher) = LitRoomAtStartUp("Normal", paused: true);
+
+		Assert.AreEqual(AreaState.Disabled, engine.Areas[0].State);
+		Assert.IsFalse(publisher.Snapshots.Any(snapshot => snapshot.State == AreaState.AutoActive),
+			"a paused room must not take charge of lights, nor arm a countdown that ends in a command");
+		Assert.IsFalse(publisher.Snapshots.Any(snapshot => !snapshot.KillSwitchActive),
+			"and no snapshot may reach Home Assistant claiming the app is running");
+
+		engine.Dispose();
+	}
+
+	[TestMethod]
+	public void An_Away_House_Does_Not_Take_Charge_Of_Lit_Rooms_At_Start_Up()
+	{
+		(LightingOrchestrator engine, FakeStatePublisher publisher) = LitRoomAtStartUp("Borte", paused: false);
+
+		Assert.AreEqual(AreaState.Away, engine.Areas[0].State);
+		Assert.IsFalse(publisher.Snapshots.Any(snapshot => snapshot.State == AreaState.AutoActive),
+			"the house was away before the first room started, so no room ever adopted");
+		Assert.IsFalse(publisher.Snapshots.Any(snapshot => snapshot.Mode != HouseMode.Away),
+			"and no snapshot says the house is home");
+
+		engine.Dispose();
+	}
+
+	// The control for the two above: an ordinary running house still adopts what it finds lit.
+	[TestMethod]
+	public void An_Ordinary_House_Still_Takes_Charge_Of_Lit_Rooms_At_Start_Up()
+	{
+		(LightingOrchestrator engine, FakeStatePublisher publisher) = LitRoomAtStartUp("Normal", paused: false);
+
+		Assert.AreEqual(AreaState.AutoActive, engine.Areas[0].State);
+		Assert.IsTrue(publisher.Snapshots.Any(snapshot => snapshot.Reason == TransitionReason.AdoptedAtStartup));
+
+		engine.Dispose();
+	}
+
+	// ===================== arriving home =====================
+
+	private const string Stue = "light.stue";
+	private const string StueMotion = "binary_sensor.stue_m";
+
+	/// <summary>A house away, with one room, whose away option resets on any movement with no grace.</summary>
+	private static (LightingOrchestrator Engine, FakeHaContext Ha, FakeStatePublisher Publisher) AwayHouseWithOneRoom()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Person, "home");
+		ha.SetState(Select, "Borte");
+		ha.SetState(Stue, "off");
+		ha.SetState(StueMotion, "off");
+
+		HouseModeConfig mode = new()
+		{
+			Entity = Select,
+			Options =
+			[
+				new() { Value = "Normal", Kind = ModeKind.Normal },
+				new() { Value = "Borte", Kind = ModeKind.Away, ResetOnPresence = true, ResetPresenceGraceMinutes = 0 }
+			]
+		};
+
+		AdaptiveLightingConfig config = new()
+		{
+			Global = new GlobalConfig { Persons = [Person], HouseMode = mode, CircadianTickSeconds = 60 },
+			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+		};
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		FakeStatePublisher publisher = new();
+		LightingOrchestrator engine = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			new FakeLightActuator(), publisher, new FakeNotifier(), NullLoggerFactory.Instance);
+
+		engine.Start();
+		return (engine, ha, publisher);
+	}
+
+	[TestMethod]
+	public void Arriving_Home_Takes_One_Movement_And_The_Echo_Adds_Nothing()
+	{
+		(LightingOrchestrator engine, FakeHaContext ha, FakeStatePublisher publisher) = AwayHouseWithOneRoom();
+		Assert.AreEqual(AreaState.Away, engine.Areas[0].State, "the house started away");
+
+		ha.Trigger(StueMotion, "on");
+
+		Assert.AreNotEqual(AreaState.Away, engine.Areas[0].State,
+			"the first movement resets the mode and the room leaves away with it");
+
+		int published = publisher.Snapshots.Count;
+		ha.Trigger(Select, "Normal");   // Home Assistant reporting the engine's own write back
+
+		Assert.AreEqual(published, publisher.Snapshots.Count,
+			"the echo carries nothing the house has not already acted on, so no room is told twice");
 	}
 
 	// Decided at start-up, once per light per run: the registry cannot move underneath.

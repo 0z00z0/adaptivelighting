@@ -44,6 +44,10 @@ public sealed class LightingOrchestrator : IDisposable
 
 	// Keeps the setup notification to once per problem. Null notifies on every start, as it did before there was one.
 	private readonly IAreaSetupMemory? _setupMemory;
+
+	// This engine replaced a running one on settings somebody just saved. The mode brain treats that differently
+	// from a start from nothing.
+	private readonly bool _afterSave;
 	private readonly ILogger _logger;
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
@@ -56,6 +60,9 @@ public sealed class LightingOrchestrator : IDisposable
 	private readonly Dictionary<string, IReadOnlyList<string>> _motionSensorsByArea = new(StringComparer.OrdinalIgnoreCase);
 
 	private readonly CompositeDisposable _subscriptions = [];
+
+	// Serialises PublishHouseState. Nothing an area does reaches back here, so this is the only lock in the chain.
+	private readonly object _publishGate = new();
 
 	private PresenceMonitor? _presence;
 	private ModeMonitor? _modes;
@@ -82,8 +89,10 @@ public sealed class LightingOrchestrator : IDisposable
 		ILoggerFactory loggerFactory,
 		IEntityLastSeen? lastSeen = null,
 		ILastPeriodStore? lastPeriod = null,
-		IAreaSetupMemory? setupMemory = null)
+		IAreaSetupMemory? setupMemory = null,
+		bool afterSave = false)
 	{
+		_afterSave = afterSave;
 		_lastSeen = lastSeen;
 		_lastPeriod = lastPeriod;
 		_setupMemory = setupMemory;
@@ -197,10 +206,14 @@ public sealed class LightingOrchestrator : IDisposable
 		ReportSharedLights(running, resolver, registry);
 		StartHouseMonitors();
 
+		// Before the rooms, never after. A room reads this stream the moment it subscribes, and starting first
+		// meant it adopted lights, armed a countdown and published a snapshot against a placeholder that says
+		// nobody is away and nothing is paused.
+		PublishHouseState(opening: true);
+
 		foreach (AreaController area in _areas)
 			area.Start();
 
-		PublishHouseState(opening: true);
 		ReportFailures(failures);
 	}
 
@@ -342,7 +355,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_motionSensorsByArea,
 			// The same latch, for the same reason.
 			_motionPeriods,
-			sunMoved: SunMoved(_config.Defaults.SunEntity));
+			sunMoved: SunMoved(_config.Defaults.SunEntity),
+			afterSave: _afterSave);
 
 		_subscriptions.Add(_presence.Events.SubscribeSafe((PresenceEvent _) => PublishHouseState(), _logger));
 		_subscriptions.Add(_modes.Changed.SubscribeSafe((Unit _) => PublishHouseState(), _logger));
@@ -355,6 +369,15 @@ public sealed class LightingOrchestrator : IDisposable
 	// The opening publication goes out even when it matches the seed the stream was created on: each area waits
 	// for it to know which mode it found at start-up as opposed to saw change.
 	private void PublishHouseState(bool opening = false)
+	{
+		// Composing, comparing and publishing is one step. Presence and the mode brain arrive on different threads,
+		// and interleaved they leave the house on the older answer; the equality guard then suppresses the
+		// recompute that would put it right, so the divergence lasts until the next unrelated event.
+		lock (_publishGate)
+			PublishHouseStateCore(opening);
+	}
+
+	private void PublishHouseStateCore(bool opening)
 	{
 		HouseState previous = _house.Value;
 		HouseState state = new(
@@ -370,10 +393,17 @@ public sealed class LightingOrchestrator : IDisposable
 		if (state == previous && !opening)
 			return;
 
-		// Applied once on entry, never re-asserted. The areas pause themselves; this only fires the scene.
+		// Applied once on entry, never re-asserted. The areas pause themselves; this only fires the scene. A scene
+		// is a light command like any other, so the master switch stops it; nothing replays one it skipped.
 		if (!string.Equals(previous.ActiveScene, state.ActiveScene, StringComparison.Ordinal)
 			&& state.ActiveScene is { Length: > 0 } scene)
-			_actuator.ActivateScene(scene);
+		{
+			if (state.KillSwitchActive)
+				_logger.LogInformation(
+					"The master switch is on, so the {Mode} scene {Scene} is not applied.", state.Mode, scene);
+			else
+				_actuator.ActivateScene(scene);
+		}
 
 		// The forcing clause repeats ModeMonitor's, because this is the line that says the house went Away.
 		if (state.Forced is { } forced)

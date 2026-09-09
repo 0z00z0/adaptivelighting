@@ -115,7 +115,7 @@ public sealed class AreaControllerTests
 		Action<FakeHaContext>? seed = null,
 		IReadOnlyList<TimePeriodConfig>? periods = null,
 		IReadOnlyList<RoomLevelOverride>? levels = null,
-		bool openHouse = true,
+		HouseState? openingHouse = null,
 		MovableSun? sun = null,
 		bool watchSun = true,
 		Func<IScheduler, IScheduler>? wrapScheduler = null,
@@ -173,11 +173,11 @@ public sealed class AreaControllerTests
 			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area",
 			sunMoved: watchSun ? sun?.Moved : null);
 
-		controller.Start();
+		// The orchestrator composes and publishes the opening house state before it starts any room, so that is
+		// what the controller reads off the stream the moment it subscribes.
+		house.OnNext(openingHouse ?? House());
 
-		// The orchestrator publishes the opening house state straight after starting the areas, so the first push is a change.
-		if (openHouse)
-			house.OnNext(House());
+		controller.Start();
 
 		return new Fixture(scheduler, ha, actuator, publisher, house, controller);
 	}
@@ -1801,6 +1801,68 @@ public sealed class AreaControllerTests
 			"with no clamp period resolving, the respecting area is left on the plain evening target");
 	}
 
+	/// <summary>Sover clamps to "dim" (5 %) while the "night" fallback any other option lands on says 15 %.</summary>
+	// The two chains have to give different answers, or a clamp resolved from the wrong option passes by luck.
+	private static (HouseModeConfig Mode, List<TimePeriodConfig> Periods) SleepChainsThatDiffer()
+	{
+		HouseModeConfig mode = SoverMode();
+		mode.OptionFor("Sover")!.ClampPeriodId = "dim";
+
+		return (mode,
+		[
+			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Name = "dim", Start = "22:00", BrightnessPct = 5, ColorTempKelvin = 2000 },
+			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
+		]);
+	}
+
+	private static ForcedMode ForcedSleep() =>
+		new(ModeKind.Sleep, "Sover", ModeForceSource.WhileEntityOn, "input_boolean.sover", "on");
+
+	[TestMethod]
+	public void Sleep_ForcedByAnEntity_ClampsThroughTheOptionInForce_NotTheSelectsValue()
+	{
+		(HouseModeConfig mode, List<TimePeriodConfig> periods) = SleepChainsThatDiffer();
+		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+
+		// The overlay entity holds sleep. Nothing wrote the select, so it still reads Normal.
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Normal", forced: ForcedSleep()));
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
+			"Sover is the mode in force, so its own 'dim' ceiling applies — not the 'night' fallback Normal lands on");
+	}
+
+	[TestMethod]
+	public void Sleep_ForcedWhileTheSelectIsUnreadable_StillClamps()
+	{
+		(HouseModeConfig mode, List<TimePeriodConfig> periods) = SleepChainsThatDiffer();
+		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+
+		// The select is unavailable, so it names no option at all; the overlay is the whole answer.
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: null, forced: ForcedSleep()));
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
+			"a bedroom must not run at the evening's 70 % at three in the morning because a helper went unavailable");
+	}
+
+	[TestMethod]
+	public void Sleep_WithNothingForcing_StillClampsThroughTheSelectsOwnValue()
+	{
+		(HouseModeConfig mode, List<TimePeriodConfig> periods) = SleepChainsThatDiffer();
+		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
+			"the control: with no overlay the select's own value is still what resolves the ceiling");
+	}
+
 	// The sleep clamp reads this room's night level, not the house's. It is the one place a room's level is a
 	// ceiling instead of a target.
 	[TestMethod]
@@ -1823,6 +1885,113 @@ public sealed class AreaControllerTests
 
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 4 },
 			"the clamp period's level is this room's 4, so 4 is the ceiling — the house's 15 never applies here");
+	}
+
+	// ===================== coming back from away =====================
+
+	[TestMethod]
+	public void Returning_From_Away_Adopts_Lights_The_Sweep_Left_On()
+	{
+		// The room opted out of the leaving sweep, so it is still lit when the house comes back.
+		var t = Build(s => s.SkipAwaySweep = true, seed: ha =>
+		{
+			ha.SetState(Light, "on", new() { ["brightness"] = 178.5 });
+			ha.SetState(Lux, "5");
+		});
+
+		t.House.OnNext(AwayHouse());
+		Assert.AreEqual(AreaState.Away, t.Area.State);
+		t.Actuator.Clear();
+
+		t.House.OnNext(House());
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State,
+			"a room that is still lit is taken charge of, so something is armed to switch it off");
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "adoption observes; it commands nothing");
+
+		Advance(t, TimeSpan.FromSeconds(600 + 30 + 1));
+
+		Assert.IsTrue(t.Actuator.Last is { On: false }, "and the vacancy timeout ends it, as it would in any other room");
+	}
+
+	[TestMethod]
+	public void Leaving_A_Guest_Scene_Adopts_Lights_The_Scene_Left_On()
+	{
+		var t = Build(seed: ha =>
+		{
+			ha.SetState(Light, "on", new() { ["brightness"] = 178.5 });
+			ha.SetState(Lux, "5");
+		});
+
+		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
+		Assert.AreEqual(AreaState.SceneHold, t.Area.State);
+		t.Actuator.Clear();
+
+		t.House.OnNext(House());
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State,
+			"the scene left the room lit, and nothing else would ever switch it off");
+		Assert.AreEqual(0, t.Actuator.Applied.Count);
+	}
+
+	// ===================== a level test and the house =====================
+
+	[TestMethod]
+	public void A_Level_Test_Is_Refused_While_The_House_Is_Away()
+	{
+		var t = Build();
+		t.House.OnNext(AwayHouse());
+
+		Assert.IsNotNull(t.Area.LevelTestRefusal(), "the button carries its own reason");
+		Assert.IsNotNull(t.Area.TestPeriod("night"), "and the press is refused for the same one");
+		Assert.IsFalse(t.Area.IsTestingLevels);
+	}
+
+	[TestMethod]
+	public void A_Running_Level_Test_Is_Dropped_When_A_Guest_Scene_Takes_The_Room()
+	{
+		var t = Build();
+		Assert.IsNull(t.Area.TestPeriod("night"));
+
+		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
+		t.Actuator.Clear();
+
+		Advance(t, TimeSpan.FromSeconds(AreaController.LevelTestSeconds + 1));
+
+		Assert.IsFalse(t.Area.IsTestingLevels);
+		Assert.AreEqual(0, t.Actuator.Applied.Count,
+			"the house scene is the newest word on these lights, and the return had nothing of the scene's to give back");
+	}
+
+	[TestMethod]
+	public void A_Running_Level_Test_Is_Dropped_When_The_House_Goes_Away()
+	{
+		var t = Build();
+		Assert.IsNull(t.Area.TestPeriod("night"), "the control: an ordinary house lets the test run");
+
+		t.House.OnNext(AwayHouse());
+		t.Actuator.Clear();
+
+		Advance(t, TimeSpan.FromSeconds(AreaController.LevelTestSeconds + 1));
+
+		Assert.IsFalse(t.Area.IsTestingLevels);
+		Assert.AreEqual(0, t.Actuator.Applied.Count,
+			"the return would sweep the room dark, over a standing away scene, ten seconds after the house left");
+	}
+
+	[TestMethod]
+	public void A_Running_Level_Test_Is_Dropped_When_The_Master_Switch_Goes_On()
+	{
+		var t = Build();
+		Assert.IsNull(t.Area.TestPeriod("night"));
+
+		t.House.OnNext(House(killed: true));
+		t.Actuator.Clear();
+
+		Advance(t, TimeSpan.FromSeconds(AreaController.LevelTestSeconds + 1));
+
+		Assert.IsFalse(t.Area.IsTestingLevels);
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "nothing may command a light while the app says it is paused");
 	}
 
 	// ===================== away-kind mode =====================
@@ -1932,29 +2101,26 @@ public sealed class AreaControllerTests
 
 	// ---- the mode an area found when it started is not a mode change ---------------------------
 
-	/// <summary>A lit room, so the area adopts and is in the one state the opening mode retargets.</summary>
-	private static Fixture BuildLitAndUnopened() =>
+	/// <summary>A lit room that comes up with <paramref name="opening"/> as the house it finds.</summary>
+	private static Fixture BuildLitInto(HouseState opening) =>
 		Build(
 			tweakGlobal: g => g.HouseMode = SoverMode(),
 			seed: ha => ha.SetState(Light, "on", new() { ["brightness"] = 178.5 }),
-			openHouse: false);
+			openingHouse: opening);
 
 	[TestMethod]
-	public void TheModeFoundAtStartUp_IsReportedAsStartUp_NotAsAModeChange()
+	public void TheModeFoundAtStartUp_IsNotReportedAsAModeChange()
 	{
-		Fixture t = BuildLitAndUnopened();
+		Fixture t = BuildLitInto(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
-		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
-
-		Assert.AreEqual(TransitionReason.Startup, LastReport(t).Reason,
+		Assert.AreEqual(TransitionReason.AdoptedAtStartup, LastReport(t).Reason,
 			"the select never moved; the engine started and read it");
 	}
 
 	[TestMethod]
 	public void AModeChangeAfterStartUp_IsStillAModeChange()
 	{
-		Fixture t = BuildLitAndUnopened();
-		t.House.OnNext(House(modeValue: "Normal"));
+		Fixture t = BuildLitInto(House(modeValue: "Normal"));
 
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
@@ -1964,9 +2130,9 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void AnAwayModeFoundAtStartUp_StillSweepsTheRoom_AndStillNamesWhatIsForcingIt()
 	{
-		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode(), openHouse: false);
-
-		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
+		Fixture t = Build(
+			tweakGlobal: g => g.HouseMode = SoverMode(),
+			openingHouse: House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
 
 		AreaSnapshot report = LastReport(t);
 

@@ -1167,6 +1167,20 @@ public sealed class ActivityLogTests
 			Assert.AreEqual(chip.Category != ActivityCategory.Background, chip.IsOn, $"{chip.Label} opens wrong");
 	}
 
+	// The lane holds people arriving and leaving, which is not the same thing as the house going away, and the
+	// chip's own words are where a reader learns the difference.
+	[TestMethod]
+	public void The_House_Chip_Does_Not_Say_That_People_Decide_Away()
+	{
+		ActivityFilterChip house = ActivityView
+			.Chips([], ActivityView.AllCategories)
+			.Single(chip => chip.Category == ActivityCategory.House);
+
+		Assert.IsFalse(house.Title.Contains("emptying", StringComparison.OrdinalIgnoreCase),
+			"an emptying house is a fact about phones, not the reason a room stops being lit");
+		StringAssert.Contains(house.Title, "mode", "and the chip has to say what does decide");
+	}
+
 	[TestMethod]
 	public void The_Category_Filter_Keeps_Only_What_Is_Chosen_In_Order()
 	{

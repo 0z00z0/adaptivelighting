@@ -94,7 +94,8 @@ public sealed class ModeMonitorTests
 		Action<FakeHaContext>? seed = null,
 		ILastPeriodStore? lastPeriod = null,
 		MovableSun? sun = null,
-		bool watchSun = true)
+		bool watchSun = true,
+		bool afterSave = false)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo((startAt ?? Evening).Ticks);
@@ -111,7 +112,7 @@ public sealed class ModeMonitorTests
 			ha, global, NullLogger.Instance, scheduler,
 			periods ?? Periods(), () => sun?.Times ?? SunTimes.Unknown, motion ?? [], lastPeriod ?? note,
 			PeriodSelectReader.For(ha, global, NullLogger.Instance), zone: TimeZoneInfo.Utc,
-			sunMoved: watchSun ? sun?.Moved : null);
+			sunMoved: watchSun ? sun?.Moved : null, afterSave: afterSave);
 
 		return new Rig(ha, scheduler, monitor, note);
 	}
@@ -125,13 +126,14 @@ public sealed class ModeMonitorTests
 		Action<FakeHaContext>? seed = null,
 		ILastPeriodStore? lastPeriod = null,
 		MovableSun? sun = null,
-		bool watchSun = true)
+		bool watchSun = true,
+		bool afterSave = false)
 	{
 		var rig = Build(global, periods, motion, startAt, ha =>
 		{
 			ha.SetState(Select, initialSelect);
 			seed?.Invoke(ha);
-		}, lastPeriod, sun, watchSun);
+		}, lastPeriod, sun, watchSun, afterSave);
 		rig.Monitor.Start();
 		return rig;
 	}
@@ -182,7 +184,7 @@ public sealed class ModeMonitorTests
 	}
 
 	[TestMethod]
-	public void CurrentModeValue_NullOnUnavailableUnknownUnconfigured()
+	public void CurrentModeValue_IsNullUntilTheSelectHasEverAnswered()
 	{
 		var ha = new FakeHaContext();
 
@@ -198,6 +200,80 @@ public sealed class ModeMonitorTests
 
 		rig.Ha.SetState(Select, "Sover");
 		Assert.AreEqual("Sover", rig.Monitor.CurrentModeValue);
+	}
+
+	[TestMethod]
+	public void AnUnreadableSelect_HoldsTheModeItLastRead()
+	{
+		var rig = Build();
+
+		rig.Ha.SetState(Select, "Borte");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind);
+
+		rig.Ha.SetState(Select, "unavailable");
+		Assert.AreEqual("Borte", rig.Monitor.CurrentModeValue, "a blind read is not the select answering Normal");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind, "an unreadable helper must not take the house out of away");
+
+		rig.Ha.SetState(Select, "unknown");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind, "unknown reads the same way as unavailable");
+
+		rig.Ha.SetState(Select, "Hjemme");
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind, "the select answering again is what decides");
+	}
+
+	[TestMethod]
+	public void AnUnreadableSelect_WarnsOncePerBlindSpell()
+	{
+		var ha = new FakeHaContext();
+		var logger = new CountingLogger();
+		using var monitor = new ModeMonitor(ha, new GlobalConfig { HouseMode = Mode() }, logger,
+			new TestScheduler(), Periods(), () => SunTimes.Unknown, []);
+
+		ha.SetState(Select, "Borte");
+		_ = monitor.ActiveKind;
+
+		ha.SetState(Select, "unavailable");
+		_ = monitor.ActiveKind;
+		_ = monitor.ActiveKind;
+		_ = monitor.CurrentModeValue;
+
+		Assert.AreEqual(1, logger.Warnings, "one warning for the spell, not one per read");
+
+		ha.SetState(Select, "Hjemme");
+		_ = monitor.ActiveKind;
+		ha.SetState(Select, "unavailable");
+		_ = monitor.ActiveKind;
+
+		Assert.AreEqual(2, logger.Warnings, "a second spell is a second thing to say");
+	}
+
+	/// <summary>Starts a monitor on <paramref name="mode"/> and answers how many warnings the start-up wrote.</summary>
+	private static int WarningsOnStart(HouseModeConfig mode)
+	{
+		var scheduler = new TestScheduler();
+		scheduler.AdvanceTo(Evening.Ticks);
+
+		var ha = new FakeHaContext();
+		ha.SetState(Select, "Hjemme");
+
+		var logger = new CountingLogger();
+		using var monitor = new ModeMonitor(ha, new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode },
+			logger, scheduler, Periods(), () => SunTimes.Unknown, [], zone: TimeZoneInfo.Utc);
+
+		monitor.Start();
+		return logger.Warnings;
+	}
+
+	[TestMethod]
+	public void AHouseWithNoAwayOption_SaysSoAtStartUp()
+	{
+		var mode = Mode();
+		mode.OptionFor("Borte")!.Kind = ModeKind.Guest;   // nothing left is Away
+
+		Assert.AreEqual(1, WarningsOnStart(mode),
+			"the leaving sweep and the away scene can never run, and the start-up log is where a household would look");
+
+		Assert.AreEqual(0, WarningsOnStart(Mode()), "the control: an ordinary house has nothing to say here");
 	}
 
 	[TestMethod]
@@ -383,6 +459,20 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Sover"), "night began; night's mode wins over the standing option");
 	}
 
+	// A save rebuilds the engine, and an edit to the schedule can put a different period in force than the note
+	// names. That looks exactly like a boundary crossed during an outage, and it is not one.
+	[TestMethod]
+	public void ASettingsSave_DoesNotApplyAPeriodsMode_AsIfABoundaryHadGoneBy()
+	{
+		var rig = Started(startAt: HalfPastNight, initialSelect: "Hjemme", lastPeriod: EndedIn("evening"),
+			afterSave: true);
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"),
+			"the engine was running the whole time; saving a schedule is not a boundary it slept through");
+	}
+
 	// The case a deploy produces most of the time.
 	[TestMethod]
 	public void StartInsideTheSamePeriod_LeavesAHandSetModeAlone()
@@ -521,6 +611,27 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "the waking period ends the night");
 	}
 
+	[TestMethod]
+	public void PeriodEntry_IssuesOneInstructionToTheSelect_NotTwo()
+	{
+		// The boundary both sets a mode of its own and is the reset trigger of the mode standing when it arrives.
+		var mode = Mode();
+		mode.OptionFor("Sover")!.ResetOnPeriodStartId = "morning";
+
+		var periods = Periods();
+		periods.Single(period => period.Name == "morning").SetsModeId = "Gjester";
+
+		var rig = Started(new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode }, periods,
+			startAt: new DateTimeOffset(2026, 1, 16, 6, 0, 0, TimeSpan.Zero), initialSelect: "Sover");
+
+		Advance(rig, TimeSpan.FromMinutes(40));   // past morning@06:30
+
+		Assert.AreEqual(1, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"),
+			"two writes to one select in one call means the later one silently wins while both claim success");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Gjester"),
+			"the period's own mode switch is what that boundary says, so the reset does not run over it");
+	}
+
 	// ---- Presence reset -----------------------------------------------------------------------
 
 	private static GlobalConfig AwayResetsOnPresence(IReadOnlyList<string> sensors)
@@ -591,6 +702,77 @@ public sealed class ModeMonitorTests
 			"a device_tracker transitioning to home is an arrival, not an on/off edge");
 	}
 
+	// ---- arriving home: a reset counts as done the moment it is written -------------------------
+
+	[TestMethod]
+	public void PresenceReset_LeavesAwayOnTheWriteItself_NotOnTheEcho()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind);
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Gang, "on");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "the arrival wrote the select");
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind,
+			"the house is home on the first movement; nothing waits for Home Assistant to report the select back");
+	}
+
+	[TestMethod]
+	public void AnAssumedResetIsDropped_WhenTheSelectNeverTakesIt()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Gang, "on");
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind);
+
+		// The select never moves: the write was lost. One tick later its own value is the answer again.
+		Advance(rig, TimeSpan.FromMinutes(2));
+
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind,
+			"the select remains the source of truth, so a reading that disagrees wins over the assumption");
+	}
+
+	[TestMethod]
+	public void AnAssumedReset_IsBeatenByThePersonMovingTheDialToSomethingElse()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Gang, "on");
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind);
+
+		Activate(rig, "Sover");
+
+		Assert.AreEqual(ModeKind.Sleep, rig.Monitor.ActiveKind,
+			"the select moved to a third value, which is newer than anything the engine assumed");
+	}
+
+	// A control: it holds with or without the assumption, and is here so the pair either side of it mean something.
+	[TestMethod]
+	public void TheEchoOfAnAssumedReset_WritesTheSelectNoSecondTime()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Gang, "on");
+
+		Activate(rig, "Hjemme");   // Home Assistant reporting the engine's own write back
+		Advance(rig, TimeSpan.FromMinutes(2));
+
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind, "the echo settles what was already true");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "and it does not write the select a second time");
+	}
+
 	// ---- auto-away by inactivity ---------------------------------------------------------------
 
 	private static GlobalConfig AwayActivatesOnNoMotion(int minutes)
@@ -646,6 +828,17 @@ public sealed class ModeMonitorTests
 	}
 
 	[TestMethod]
+	public void NoMotionActivation_DoesNothingWhenNoMotionSensorsResolve()
+	{
+		var rig = Started(AwayActivatesOnNoMotion(30), periods: FlatPeriod(), startAt: Evening, initialSelect: "Hjemme");
+
+		Advance(rig, TimeSpan.FromHours(7));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"),
+			"with nothing watching for movement there is no quiet to measure, which is what the start-up warning says");
+	}
+
+	[TestMethod]
 	public void PresenceReset_ToggleOff_DoesNotSubscribe_EvenWithSensorsListed()
 	{
 		var mode = Mode();
@@ -675,6 +868,38 @@ public sealed class ModeMonitorTests
 		rig.Ha.Trigger(Kjokken, "on");
 
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an empty sensor list resets on any area motion sensor");
+	}
+
+	// ---- what a restart is not ------------------------------------------------------------------
+
+	[TestMethod]
+	public void Start_ReadsWhenTheModeWasSet_RatherThanStampingTheRestart()
+	{
+		// The mode was chosen forty minutes ago and the engine has only just been rebuilt by a save.
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha =>
+			{
+				ha.SetState(Gang, "off");
+				ha.SetStateReportedAt(Select, "Borte", Evening - TimeSpan.FromMinutes(40));
+			});
+
+		rig.Ha.Trigger(Gang, "on");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"),
+			"the fifteen-minute grace ran out long before the rebuild, so an arrival now resets");
+	}
+
+	[TestMethod]
+	public void Start_ReadsWhenAnythingLastMoved_RatherThanStampingTheRestart()
+	{
+		var rig = Started(AwayActivatesOnNoMotion(30), periods: FlatPeriod(), motion: [Gang],
+			startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetStateReportedAt(Gang, "off", Evening - TimeSpan.FromHours(2)));
+
+		Advance(rig, TimeSpan.FromMinutes(2));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"),
+			"the house has been quiet for two hours, whatever time the engine happened to start");
 	}
 
 	// ---- ActivateWhileOn overlay --------------------------------------------------------------
@@ -1327,6 +1552,100 @@ public sealed class ModeMonitorTests
 
 		Assert.AreEqual(0, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"),
 			"no Normal option resolves, so the reset is a no-op — no select_option is dispatched");
+	}
+
+	// ---- the master switch ---------------------------------------------------------------------
+
+	private const string Master = "input_boolean.styring";
+
+	// Wired as the built-in enabled flag is: off is the app muzzled.
+	private static GlobalConfig Muzzled(HouseModeConfig mode) =>
+		new() { CircadianTickSeconds = 60, HouseMode = mode, KillSwitchEntity = Master };
+
+	[TestMethod]
+	public void MasterSwitch_StopsAPresenceReset_AndTheResetRunsOnceItLifts()
+	{
+		var mode = Mode();
+		var borte = mode.OptionFor("Borte")!;
+		borte.ResetOnPresence = true;
+		borte.ResetPresenceSensors = [Gang];
+		borte.ResetPresenceGraceMinutes = 0;
+
+		var rig = Started(Muzzled(mode), startAt: Evening, initialSelect: "Borte",
+			seed: ha =>
+			{
+				ha.SetState(Gang, "off");
+				ha.SetState(Master, "off");
+			});
+
+		rig.Ha.Trigger(Gang, "on");
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "the app says it is paused, so it does not move the house mode");
+
+		rig.Ha.Trigger(Master, "on");
+		rig.Ha.Trigger(Gang, "off");
+		rig.Ha.Trigger(Gang, "on");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "the control: the same arrival resets once the switch is back on");
+	}
+
+	[TestMethod]
+	public void MasterSwitch_StopsAPeriodSettingTheMode()
+	{
+		var rig = Started(Muzzled(Mode()), startAt: new DateTimeOffset(2026, 1, 15, 22, 30, 0, TimeSpan.Zero),
+			initialSelect: "Hjemme", seed: ha => ha.SetState(Master, "off"));
+
+		Advance(rig, TimeSpan.FromMinutes(45));   // past night@23:00, whose SetsModeId is Sover
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "a period's mode switch is a write, so the muzzle stops it too");
+	}
+
+	[TestMethod]
+	public void MasterSwitch_StopsTheQuietTimeRule_AndItFiresOnceTheSwitchLifts()
+	{
+		var mode = Mode();
+		mode.OptionFor("Borte")!.ActivateAfterNoMotionMinutes = 30;
+
+		var rig = Started(Muzzled(mode), motion: [Gang], startAt: Evening, initialSelect: "Hjemme",
+			seed: ha =>
+			{
+				ha.SetState(Gang, "off");
+				ha.SetState(Master, "off");
+			});
+
+		Advance(rig, TimeSpan.FromMinutes(45));
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"), "muzzled, so the quiet house does not write the select");
+
+		rig.Ha.Trigger(Master, "on");
+		Advance(rig, TimeSpan.FromMinutes(2));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"),
+			"a write that never went out latches nothing, so the next tick asks again and it lands");
+	}
+
+	[TestMethod]
+	public void QuietTimeRule_DoesNotSwallowMovementThatArrivedWhileTheWriteWasOut()
+	{
+		var rig = Started(AwayActivatesOnNoMotion(30), motion: [Gang], startAt: Evening,
+			initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+
+		// Home Assistant's own thread, delivering movement while the select write is in flight.
+		rig.Ha.WhenCalled = _ =>
+		{
+			rig.Ha.WhenCalled = null;
+			rig.Ha.Trigger(Gang, "on");
+			rig.Ha.Trigger(Gang, "off");
+		};
+
+		Advance(rig, TimeSpan.FromMinutes(35));
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"), "the house had been quiet long enough, so the write goes out");
+
+		// Somebody moved, so the quiet spell is over and the next one has to be counted afresh. A latch set over
+		// the top of that movement would refuse for ever.
+		Activate(rig, "Hjemme");
+		Advance(rig, TimeSpan.FromMinutes(35));
+
+		Assert.AreEqual(2, SelectCalls(rig.Ha, "Borte"),
+			"the movement ended the spell; a fresh quiet half-hour is a fresh reason to set the mode");
 	}
 
 	/// <summary>An <see cref="ILogger"/> that counts warnings.</summary>

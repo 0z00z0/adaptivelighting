@@ -459,7 +459,8 @@ public sealed class LightingEngineHost : IDisposable
 
 			if (seeded.Count > 0)
 				_logger.LogInformation(
-					"Home and Away will follow {Count} people ({Persons}). Change who under Configuration → House.",
+					"The dashboard will show who is home from {Count} people ({Persons}); the house-mode dropdown is what "
+					+ "decides whether the house is away. Change who under Configuration → House.",
 					seeded.Count, string.Join(", ", seeded));
 
 			ReportForcedWrite(write.Validation,
@@ -609,7 +610,10 @@ public sealed class LightingEngineHost : IDisposable
 				_loggerFactory,
 				_lastSeen,
 				_lastPeriod,
-				_setupMemory);
+				_setupMemory,
+				// A save is not a boundary that went by while the engine was down; the note on disk cannot tell
+				// the two apart on its own.
+				afterSave: notice is EngineNoticeKind.SettingsSaved);
 
 			orchestrator.Start();
 

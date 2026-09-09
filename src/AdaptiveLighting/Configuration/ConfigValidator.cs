@@ -427,6 +427,7 @@ public static class ConfigValidator
 			result.AddError($"Duplicate HouseMode option value '{value}'.");
 
 		ValidateNormalCount(houseMode, result);
+		ValidateAwayReachable(houseMode, result);
 
 		foreach (HouseModeOptionConfig? option in houseMode.Options.Where(o => !string.IsNullOrWhiteSpace(o.Value)))
 			ValidateOption(config, option, knownEntityIds, result);
@@ -504,6 +505,20 @@ public static class ConfigValidator
 			result.AddWarning($"No option is marked Normal — '{configured[0].Value}' is being treated as Normal (the reset target). Pick one explicitly.");
 		else if (normals > 1)
 			result.AddWarning("More than one option is marked Normal; the first wins as the reset target.");
+	}
+
+	/// <summary>Warns when nothing is marked Away, which makes every away behaviour unreachable.</summary>
+	// A warning, never an error: such a house runs perfectly well, it simply never goes away. Two paths produce
+	// one unaided — the select auto-detection and the first-run room setup — so nothing else would ever say it.
+	private static void ValidateAwayReachable(HouseModeConfig houseMode, ValidationResult result)
+	{
+		if (houseMode.Options.All(o => string.IsNullOrWhiteSpace(o.Value)) || houseMode.HasAwayOption)
+			return;
+
+		result.AddWarning(
+			"No option is marked Away, so this house can never be away: the leaving sweep never runs, an away "
+			+ "scene never fires, and every room's 'stays on when the house goes away' and 'lights up when the "
+			+ "house leaves away mode' setting is inert. Mark the option the household uses for leaving as Away.");
 	}
 
 	/// <summary>Per-option rules: scene domain/known, reset triggers, and reset/scene fields set on a Normal option.</summary>

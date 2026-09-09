@@ -102,9 +102,15 @@ This can be turned off.
 ## The house
 
 **People.** Presence comes from the `person` and `device_tracker` entities you name, or from
-everyone Home Assistant knows if you name nobody. When the last one leaves and stays gone for the
-debounce, the house counts as empty: the lights sweep off, except in rooms set to stay on. The first
-person back lights the rooms set to *light up when the first person comes home*, if it is dark.
+everyone Home Assistant knows if you name nobody. It is shown and never acted on: the dashboard says
+who is home, and the debounce is how long everyone must be gone before it says the house is empty.
+No light changes on the strength of it.
+
+**What decides away is the house mode**, and nothing else. Moving the dropdown to an option marked
+Away is what sweeps the lights off, skipping rooms set to *stay on when the house goes away*; the
+dropdown leaving that option is what lights the rooms set to *light up when the house leaves away
+mode*, if they are dark. A phone left on a worktop can no more hold the house away than a phone in a
+pocket can bring it home.
 
 **House modes.** The house mode is a Home Assistant dropdown helper (`input_select`). Each of its
 options is tagged with one behaviour:

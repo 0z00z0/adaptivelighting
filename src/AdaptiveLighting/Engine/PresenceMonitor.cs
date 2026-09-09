@@ -35,6 +35,7 @@ public sealed class PresenceMonitor : IDisposable
 
 	private bool _isAnyoneHome = true;
 	private bool _awayAnnounced;
+	private bool _disposed;
 
 	public PresenceMonitor(IHaContext ha, IScheduler scheduler, GlobalConfig global, ILogger logger)
 	{
@@ -131,23 +132,36 @@ public sealed class PresenceMonitor : IDisposable
 		_events.OnNext(PresenceEvent.FirstPersonArrived);
 	}
 
+	// A settings save disposes the running engine, and this can already be on its way on a scheduler thread when
+	// it does. Nothing out there catches a throw, and an unobserved one ends the host.
 	private void ConfirmAway()
 	{
 		lock (_gate)
 		{
-			if (_isAnyoneHome || _awayAnnounced)
+			if (_disposed || _isAnyoneHome || _awayAnnounced)
 				return;
 
 			_awayAnnounced = true;
 		}
 
 		_logger.LogInformation("Everyone left.");
-		_events.OnNext(PresenceEvent.EveryoneLeft);
+
+		try
+		{
+			_events.OnNext(PresenceEvent.EveryoneLeft);
+		}
+		catch (ObjectDisposedException)
+		{
+			// Disposed between the check above and this line. Whatever was listening has gone with it.
+		}
 	}
 
 	/// <inheritdoc/>
 	public void Dispose()
 	{
+		lock (_gate)
+			_disposed = true;
+
 		_subscriptions.Dispose();
 		_awayTimer.Dispose();
 		_events.Dispose();

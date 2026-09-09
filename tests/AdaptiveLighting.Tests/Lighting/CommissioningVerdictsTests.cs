@@ -146,6 +146,23 @@ public sealed class CommissioningVerdictsTests
 		CollectionAssert.Contains((System.Collections.ICollection)Words(CommissioningVerdicts.For(terrace, Defaults, 0, 0, 2, 1)), "stays on when the house goes away");
 	}
 
+	// Two of a room's settings only ever do anything when the house can be away, and a document with no option
+	// marked Away can never get there. Silence would leave the sheet promising behaviour that never runs.
+	[TestMethod]
+	public void The_Two_Away_Settings_Say_So_When_The_House_Can_Never_Be_Away()
+	{
+		AreaConfig hall = new() { AreaId = "gang", WelcomeHome = true, SkipAwaySweep = true };
+
+		IReadOnlyList<Verdict> notes =
+			CommissioningVerdicts.For(hall, Defaults, 1, 0, 1, 1, awayIsReachable: false);
+
+		Assert.AreEqual(2, notes.Count(note => note.Tone == VerdictTone.Warn),
+			"both settings are unreachable, and each is its own thing to fix");
+
+		foreach (Verdict note in notes)
+			StringAssert.Contains(note.Text, "no house-mode option is marked Away");
+	}
+
 	[TestMethod]
 	public void An_Inherited_Flag_Still_Earns_Its_Note()
 	{

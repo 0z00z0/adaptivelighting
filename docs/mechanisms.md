@@ -490,15 +490,97 @@ every away transition `HouseModeChanged`, or `Startup` for the mode it found whe
 `TransitionReason.EveryoneLeft` and `FirstPersonArrived` are kept only so an activity row written before this
 rule still reads as what it was.
 
-**An unreadable select reads as Normal, so the house reads as home.** `ModeMonitor.CurrentModeValue` answers
-null for a select that is missing, `unknown` or `unavailable`; `ActiveKind` then falls back to
-`ModeKind.Normal` and the rooms keep being managed. There is no fallback to the trackers, deliberately: the
-one signal that used to fill that gap is the one this rule removes. `ActivateWhileOn` still reaches Away,
-because it never reads the select.
+**An unreadable select holds the mode it last reported.** `unknown` and `unavailable` are the helper failing
+to answer, which is not the same as it answering Normal, and falling through to Normal moves in the one
+direction that unpauses a house: the away sweep is undone, every room's auto-on gate opens, and no later event
+puts it back because the select never moved. `ModeMonitor.CurrentModeValue` answers the last value the select
+actually reported; before its first answer there is nothing to hold and the value stays null, which reads as
+Normal exactly as it always did. Each blind spell warns once and the recovery gets its own line. There is no
+fallback to the trackers, deliberately: the one signal that used to fill that gap is the one this rule
+removes. `ActivateWhileOn` still reaches Away, because it never reads the select.
+
+**A house with no away option is warned about three times over** — by the validator on every save, by
+`ModeMonitor` once at start-up, and by the commissioning sheet, which turns its two away room settings amber
+instead of promising them. `HouseModeConfig.HasAwayOption` is the one question all three ask. The behaviour is
+unchanged: such a house runs and simply never leaves home.
 
 **What does not move.** The grace keeps its meaning — walking out past the hall sensor inside
 `ResetPresenceGraceMinutes` still cannot cancel the mode just set. No room gate moves: darkness, sleep, a
 blocking entity, the master switch and a disabled room refuse exactly as before.
+
+### A reset counts as done the moment it is written; every other write waits
+
+`ModeMonitor.WriteMode` is the one place the house-mode select is written, and it takes `actAtOnce`. Only
+`Reset` passes it.
+
+A reset is the arrival direction: somebody has walked in, or the waking period has come round. Waiting for
+Home Assistant to report the select back meant the movement that caused the reset was itself refused, and only
+the next one lit the room. With the flag the engine records `_assumedMode`, republishes the house state at
+once, and the room lights on the first movement.
+
+**The select stays the source of truth.** Any movement of the select clears the assumption, so the echo
+settles it and a person choosing a third option beats it outright; and the first tick that finds the select
+still not showing the value drops it, which is how a write that never landed is undone. The echo republishes
+an identical `HouseState`, which the equality guard in `PublishHouseState` drops, so there is no second
+transition and no second line.
+
+**Nothing else assumes.** A departure the select never took is better not happening than happening and then
+coming undone, so the quiet-time rule, a period's `SetsModeId` and the across-restart catch-up all wait for
+the echo as they always have.
+
+### The master switch stops the select as well as the lights
+
+`WriteMode` refuses while `KillSwitchActive`, and `LightingOrchestrator.PublishHouseState` does not fire an
+away or guest scene either. The mode is the one input every room's behaviour is derived from — the leaving
+sweep, the away scene, the sleep ceiling and the auto-on gates all follow from it — so an engine that keeps
+moving the select while muzzled is still driving the house, one step removed.
+
+**Nothing is queued.** Every rule that writes the select is asked again on its own schedule: the quiet-time
+rule on the next tick, a reset on its next trigger, a period's mode switch at its next boundary. The gate
+therefore costs a delay and never a lost instruction, which is what the inactivity latch had to be corrected
+for — it now latches only on a write that actually went out.
+
+**The period select is deliberately not gated.** It is a read-out of the time of day rather than an
+instruction, and freezing it would leave a dashboard stating the wrong period for as long as the house is
+paused.
+
+### One boundary is one instruction to the select
+
+A period can both carry a `SetsModeId` and be the `ResetOnPeriodStartId` of the option standing when it
+arrives. Both used to write the same select in one call; the later write won silently while both log lines
+claimed to have set the mode. The period's own mode switch is what that boundary means, so the reset is
+skipped and says so.
+
+### A settings save is not a boundary that went by
+
+`ApplyPeriodModeOnStart` reads a note on disk to detect a boundary crossed while the engine was down. A save
+rebuilds the engine, and an edit to the schedule can put a different period in force than the note names,
+which is indistinguishable from that crossing. `LightingEngineHost` already knows which kind of rebuild it is
+running and passes it through as `afterSave`; only a start from nothing may spend the note.
+
+**Two clocks follow the same rule.** `ModeMonitor.Start` used to stamp the presence grace and the quiet-time
+window with the start instant, so every save restarted both. Both are now seeded from Home Assistant's own
+`last_changed` — on the select for when the mode was set, and the newest across the watched motion sensors for
+when anything last moved — falling back to the start instant where there is nothing to read.
+
+### House state is composed, compared and published as one step
+
+`PublishHouseState` holds `_publishGate` across all three. Presence and the mode brain arrive on different
+threads, and interleaved they can leave the subject holding the older answer — after which the equality guard
+suppresses the recompute that would put it right, so the divergence lasts until the next unrelated event
+rather than a moment. Nothing an area does reaches back here, so this is the only lock in the chain.
+
+`PresenceMonitor` carries the matching hazard at the other end: its departure debounce can still be running on
+a scheduler thread when a save disposes the engine it belongs to, and an unobserved throw out there ends the
+host. It checks a disposed flag under its own gate and catches `ObjectDisposedException` around the publish,
+which covers the window between the two.
+
+### A room still lit when the house comes back is taken charge of
+
+`ComeHome` and the scene-hold exit both call `AdoptIfLit`, as the master switch releasing already did. A room
+that opted out of the leaving sweep, or one a `KeepLitWhenOn` hold kept lit, comes back to `AutoVacant`, which
+arms no vacancy timeout — so without this it burns with nothing to end it. Adoption observes and commands
+nothing; it seeds the target from the period so the first tick does not correct levels nobody asked it to.
 
 ### A house that starts empty announces its first arrival
 
@@ -608,6 +690,14 @@ capped by the light outside, and a room that does not is capped by its own state
 The lux sensor is therefore read twice in a sleeping room: once for the target and once for the ceiling. A
 reading that moves between the two shifts the cap by a hair, which is invisible, and the result stays monotone
 under the minimum because both readings run through the same curve.
+
+#### The clamp resolves from the mode in force, not from the select's value
+
+`ClampToSleepCaps` reads `HouseState.Forced?.OptionValue` where there is one, and `HouseState.ModeValue`
+otherwise. An `ActivateWhileOn` overlay sets sleep without the select moving at all, so reading the select's
+own value there resolved a different option's clamp chain — and resolved nothing when the select was
+unavailable, which left a bedroom on the evening's level all night. The forced report already carries the
+option's own value, so both paths ask the same chain.
 
 ### A level belongs to one light, never to a group
 
@@ -817,9 +907,19 @@ for a room sitting on a standing scene, for the same reason and with the same or
 
 `RefuseLevelTest` is the single place a test's gates are written, so the reason a button carries and the
 refusal a press would get are one answer; a second copy in the web project would drift, as `AutoOnBlockNow`'s
-would. It refuses under the kill switch, a room switched off and a controller mid-rebuild.
+would. It refuses under the kill switch, a room switched off, a controller mid-rebuild, and an away house.
 
-Those three are the only refusals. The rule is to give the levels back to whoever owns them: where the engine
+Away is refused because a test there has nothing to give the room back: an away room's levels are the sweep's
+or the away scene's, and neither is captured, so the return would hand it back by sweeping it dark. **A guest
+scene is deliberately not refused** — those levels are read off the fixtures and put back.
+
+**A test the house overtakes is dropped.** `GoAway`, `EnterSceneHold` and the muzzled branch of
+`OnHouseChanged` all call `AbandonLevelTest`, because each of them is the house becoming the newest word on
+those lights: the return would otherwise land ten seconds later, sweeping the room dark over a standing away
+scene or commanding while the app said it was paused. Dropping it leaves the fixtures where they are, which
+under the muzzle is the promise being kept.
+
+Those are the only refusals. The rule is to give the levels back to whoever owns them: where the engine
 owns them, `ReassertLights` resolves its own answer afresh; where a person owns them, the fixtures are read
 before the test and put back after it, with the expectation declared per light on the way back as on the way
 in. A scene-held room takes the capture too rather than re-firing the house scene, which would reach every
@@ -1080,22 +1180,25 @@ mark, rather than spending a row of its budget saying in words what is drawn imm
 
 ### The mode an area found when it started is not a mode change
 
-The house stream is seeded with a fabricated `HouseState.Initial` and the observed state is published after every
-area has started, so the first genuine publication always looks like a transition. Read as `HouseModeChanged` it
-puts a **"Mode changed to Sover"** row in the record per rebuild, from a select that has not moved since the
-previous evening — and `LightingEngineHost.Save` rebuilds every controller, so two saves two minutes apart
-produce two of them, and a restart one per room whose lights it adopted.
+The house stream is seeded with a fabricated `HouseState.Initial`, so the first genuine publication always
+looks like a transition. Read as `HouseModeChanged` it puts a **"Mode changed to Sover"** row in the record per
+rebuild, from a select that has not moved since the previous evening — and `LightingEngineHost.Save` rebuilds
+every controller, so two saves two minutes apart produce two of them, and a restart one per room whose lights
+it adopted.
 
 The opening publication therefore carries `TransitionReason.Startup`. The engine forgets nothing: the room is
 still swept for an away-kind mode, an adopted room is still retargeted, and `ModeMonitor.AnnounceForcedMode` is
 untouched. Only the label differs, and `IsWorthShowing` then drops the rows that have nothing under them.
 
-Two consequences:
+**The opening state is composed and published before the first room starts**, and `_openingHouseState` is
+armed from construction, so a room's first read off the stream is that state. Started the other way round, a
+room read the placeholder — which says nobody is away and nothing is paused — and acted on it: a muzzled room
+took charge of lights it found on and armed a countdown that ends in a command, an away house did the same,
+and a snapshot saying so reached Home Assistant before the correction. `AdoptIfLit` refuses from any state but
+`AutoVacant` for the same reason, since the house may already have put the room somewhere.
 
-- the orchestrator publishes the opening state **even when it matches the seed**, because each area is waiting on
-  that one publication to know which mode it merely found;
-- `Startup` in `AreaState.Away` is the one start-up state where the engine acted, and it gets its own headline;
-  "took the room as it was" would deny the sweep.
+One consequence worth naming: `Startup` in `AreaState.Away` is the one start-up state where the engine acted,
+and it gets its own headline; "took the room as it was" would deny the sweep.
 
 An away-at-start-up row lands under Background alone rather than under Mode. That is the cost of not claiming a
 mode change: the record says the house was already away, not that it just became so.
