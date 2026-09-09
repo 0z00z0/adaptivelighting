@@ -91,4 +91,14 @@ An item with no number is one this file records before the tracker has minted on
 
 ## Open questions
 
-None open.
+- #67 **Presence today is one boolean, trusted completely: whatever `person`/`device_tracker`
+  entities last reported.** `PresenceMonitor` folds every watched entity into a single
+  `IsAnyoneHome`, and `HouseState` turns that straight into `HouseMode.Away` with nothing else
+  consulted. A stale tracker, a location update Home Assistant never receives, or a phone left
+  behind all read as "nobody home," and today that verdict refuses a room's own manual **Light
+  on** button as well as motion-triggered auto-on, with no way out from inside the building.
+  Separate work makes movement count as presence and removes that specific lock-out; what remains
+  is which signals should decide presence at all — how reliable phone tracking really is, whether
+  Bermuda BLE room-level presence belongs in the mix, how sources should combine when they
+  disagree, and whether any one of them should be able to declare the house empty alone. No
+  implementation is proposed; the question needs answering first.
