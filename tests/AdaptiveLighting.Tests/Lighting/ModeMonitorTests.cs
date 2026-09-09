@@ -566,6 +566,27 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "the waking period ends the night");
 	}
 
+	[TestMethod]
+	public void PeriodEntry_IssuesOneInstructionToTheSelect_NotTwo()
+	{
+		// The boundary both sets a mode of its own and is the reset trigger of the mode standing when it arrives.
+		var mode = Mode();
+		mode.OptionFor("Sover")!.ResetOnPeriodStartId = "morning";
+
+		var periods = Periods();
+		periods.Single(period => period.Name == "morning").SetsModeId = "Gjester";
+
+		var rig = Started(new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode }, periods,
+			startAt: new DateTimeOffset(2026, 1, 16, 6, 0, 0, TimeSpan.Zero), initialSelect: "Sover");
+
+		Advance(rig, TimeSpan.FromMinutes(40));   // past morning@06:30
+
+		Assert.AreEqual(1, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"),
+			"two writes to one select in one call means the later one silently wins while both claim success");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Gjester"),
+			"the period's own mode switch is what that boundary says, so the reset does not run over it");
+	}
+
 	// ---- Presence reset -----------------------------------------------------------------------
 
 	private static GlobalConfig AwayResetsOnPresence(IReadOnlyList<string> sensors)
@@ -759,6 +780,17 @@ public sealed class ModeMonitorTests
 
 		Advance(rig, TimeSpan.FromHours(7));
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"), "already standing on Borte — no redundant switch");
+	}
+
+	[TestMethod]
+	public void NoMotionActivation_DoesNothingWhenNoMotionSensorsResolve()
+	{
+		var rig = Started(AwayActivatesOnNoMotion(30), periods: FlatPeriod(), startAt: Evening, initialSelect: "Hjemme");
+
+		Advance(rig, TimeSpan.FromHours(7));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"),
+			"with nothing watching for movement there is no quiet to measure, which is what the start-up warning says");
 	}
 
 	[TestMethod]

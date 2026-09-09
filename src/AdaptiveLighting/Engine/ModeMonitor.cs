@@ -791,6 +791,11 @@ public sealed class ModeMonitor : IDisposable
 		if (HouseModeIsHomeAssistants || _global.HouseMode is not { Entity: { Length: > 0 } select } houseMode)
 			return;
 
+		// With nothing watching for movement there is no quiet spell to measure, only a clock nothing ever
+		// restarts, which reads as quiet from the first tick. SubscribeMotion warns that the rule can never fire.
+		if (_areaMotionSensors.Count == 0)
+			return;
+
 		// Motion in progress keeps the clock at now and re-arms, so "no motion for X" counts only quiet time.
 		if (AnyMotionOn())
 		{
@@ -1004,15 +1009,28 @@ public sealed class ModeMonitor : IDisposable
 	{
 		TimePeriodConfig? period = PeriodWithKey(periodKey);
 
+		bool resets = activeOption is { Kind: not ModeKind.Normal, ResetOnPeriodStartId: { Length: > 0 } resetPeriod }
+			&& resetPeriod.SameName(periodKey);
+
 		// Once, at entry, so a human override mid-period stands. A boundary the engine was not running for never
 		// reaches here; ApplyPeriodModeOnStart handles that from the note on disk.
 		if (period?.SetsModeId is { Length: > 0 } setsMode
 			&& _global.HouseMode?.OptionValueFor(setsMode) is { Length: > 0 } wanted)
+		{
 			WriteMode(wanted, entity => _logger.LogInformation(
 				"Period '{Period}' started; setting {Select} to '{Mode}'.", DisplayName(periodKey), entity, wanted));
 
-		if (activeOption is { Kind: not ModeKind.Normal, ResetOnPeriodStartId: { Length: > 0 } resetPeriod }
-			&& resetPeriod.SameName(periodKey))
+			// One boundary is one instruction. A reset landing after this writes the same select a second time,
+			// the later write wins, and both log lines claim to have set the mode.
+			if (resets)
+				_logger.LogInformation(
+					"'{Option}' also resets when period '{Period}' starts, but that period sets the mode itself, so the reset is skipped.",
+					activeOption!.Value, DisplayName(periodKey));
+
+			return;
+		}
+
+		if (resets)
 			Reset($"period '{DisplayName(periodKey)}' started");
 	}
 
