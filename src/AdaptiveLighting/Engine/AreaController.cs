@@ -107,9 +107,10 @@ public sealed class AreaController : IDisposable
 	// engine aiming the room itself, which the scene no longer describes.
 	private string? _standingScene;
 
-	// Armed by Start, because the orchestrator publishes the opening house state straight afterwards. The mode it
-	// carries was read, not changed, and every rebuild would otherwise report a mode change nobody made.
-	private bool _openingHouseState;
+	// The orchestrator composes and publishes the opening house state before any room starts, so the first thing
+	// this controller reads off that stream is it. The mode it carries was read, not changed, and every rebuild
+	// would otherwise report a mode change nobody made.
+	private bool _openingHouseState = true;
 
 	private bool _disposed;
 
@@ -332,9 +333,6 @@ public sealed class AreaController : IDisposable
 			RefreshDarkness();
 			Publish(AdoptIfLit() ? TransitionReason.AdoptedAtStartup : TransitionReason.Startup);
 
-			// After the subscription above, so the seed the stream is created on cannot spend it.
-			_openingHouseState = true;
-
 			// Same gate as every other reach into the calculator: the tick above is already subscribed.
 			_boundary.Arm();
 		}
@@ -350,6 +348,11 @@ public sealed class AreaController : IDisposable
 	private bool AdoptIfLit(TransitionReason reason = TransitionReason.AdoptedAtStartup)
 	{
 		if (!IsEngineAllowed())
+			return false;
+
+		// Only from the resting state. The house may already have put this room in Away, SceneHold or Disabled,
+		// and adopting out of one of those would undo a standing instruction the room was just given.
+		if (_state != AreaState.AutoVacant)
 			return false;
 
 		if (!_area.Lights.Any(_ha.IsOn))

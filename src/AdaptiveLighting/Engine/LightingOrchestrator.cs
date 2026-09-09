@@ -206,10 +206,14 @@ public sealed class LightingOrchestrator : IDisposable
 		ReportSharedLights(running, resolver, registry);
 		StartHouseMonitors();
 
+		// Before the rooms, never after. A room reads this stream the moment it subscribes, and starting first
+		// meant it adopted lights, armed a countdown and published a snapshot against a placeholder that says
+		// nobody is away and nothing is paused.
+		PublishHouseState(opening: true);
+
 		foreach (AreaController area in _areas)
 			area.Start();
 
-		PublishHouseState(opening: true);
 		ReportFailures(failures);
 	}
 

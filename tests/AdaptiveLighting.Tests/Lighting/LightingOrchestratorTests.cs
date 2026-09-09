@@ -238,6 +238,92 @@ public sealed class LightingOrchestratorTests
 		engine.Dispose();
 	}
 
+	// ===================== the opening house state =====================
+
+	/// <summary>One lit room, with the select and the master switch wherever a test puts them.</summary>
+	private static (LightingOrchestrator Engine, FakeStatePublisher Publisher) LitRoomAtStartUp(
+		string selectState, bool paused)
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Person, "home");
+		ha.SetState(Select, selectState);
+		ha.SetState(Master, paused ? "off" : "on");
+		ha.SetState(Stue, "on");
+		ha.SetState(StueMotion, "off");
+
+		AdaptiveLightingConfig config = new()
+		{
+			Global = new GlobalConfig
+			{
+				Persons = [Person],
+				HouseMode = new HouseModeConfig
+				{
+					Entity = Select,
+					Options =
+					[
+						new() { Value = "Normal", Kind = ModeKind.Normal },
+						new() { Value = "Borte", Kind = ModeKind.Away }
+					]
+				},
+				KillSwitchEntity = Master,
+				CircadianTickSeconds = 600
+			},
+			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+		};
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		FakeStatePublisher publisher = new();
+		LightingOrchestrator engine = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			new FakeLightActuator(), publisher, new FakeNotifier(), NullLoggerFactory.Instance);
+
+		engine.Start();
+		return (engine, publisher);
+	}
+
+	[TestMethod]
+	public void A_Paused_House_Does_Not_Take_Charge_Of_Lit_Rooms_At_Start_Up()
+	{
+		(LightingOrchestrator engine, FakeStatePublisher publisher) = LitRoomAtStartUp("Normal", paused: true);
+
+		Assert.AreEqual(AreaState.Disabled, engine.Areas[0].State);
+		Assert.IsFalse(publisher.Snapshots.Any(snapshot => snapshot.State == AreaState.AutoActive),
+			"a paused room must not take charge of lights, nor arm a countdown that ends in a command");
+		Assert.IsFalse(publisher.Snapshots.Any(snapshot => !snapshot.KillSwitchActive),
+			"and no snapshot may reach Home Assistant claiming the app is running");
+
+		engine.Dispose();
+	}
+
+	[TestMethod]
+	public void An_Away_House_Does_Not_Take_Charge_Of_Lit_Rooms_At_Start_Up()
+	{
+		(LightingOrchestrator engine, FakeStatePublisher publisher) = LitRoomAtStartUp("Borte", paused: false);
+
+		Assert.AreEqual(AreaState.Away, engine.Areas[0].State);
+		Assert.IsFalse(publisher.Snapshots.Any(snapshot => snapshot.State == AreaState.AutoActive),
+			"the house was away before the first room started, so no room ever adopted");
+		Assert.IsFalse(publisher.Snapshots.Any(snapshot => snapshot.Mode != HouseMode.Away),
+			"and no snapshot says the house is home");
+
+		engine.Dispose();
+	}
+
+	// The control for the two above: an ordinary running house still adopts what it finds lit.
+	[TestMethod]
+	public void An_Ordinary_House_Still_Takes_Charge_Of_Lit_Rooms_At_Start_Up()
+	{
+		(LightingOrchestrator engine, FakeStatePublisher publisher) = LitRoomAtStartUp("Normal", paused: false);
+
+		Assert.AreEqual(AreaState.AutoActive, engine.Areas[0].State);
+		Assert.IsTrue(publisher.Snapshots.Any(snapshot => snapshot.Reason == TransitionReason.AdoptedAtStartup));
+
+		engine.Dispose();
+	}
+
 	// ===================== arriving home =====================
 
 	private const string Stue = "light.stue";

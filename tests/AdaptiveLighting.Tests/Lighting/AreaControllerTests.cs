@@ -115,7 +115,7 @@ public sealed class AreaControllerTests
 		Action<FakeHaContext>? seed = null,
 		IReadOnlyList<TimePeriodConfig>? periods = null,
 		IReadOnlyList<RoomLevelOverride>? levels = null,
-		bool openHouse = true,
+		HouseState? openingHouse = null,
 		MovableSun? sun = null,
 		bool watchSun = true,
 		Func<IScheduler, IScheduler>? wrapScheduler = null,
@@ -173,11 +173,11 @@ public sealed class AreaControllerTests
 			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area",
 			sunMoved: watchSun ? sun?.Moved : null);
 
-		controller.Start();
+		// The orchestrator composes and publishes the opening house state before it starts any room, so that is
+		// what the controller reads off the stream the moment it subscribes.
+		house.OnNext(openingHouse ?? House());
 
-		// The orchestrator publishes the opening house state straight after starting the areas, so the first push is a change.
-		if (openHouse)
-			house.OnNext(House());
+		controller.Start();
 
 		return new Fixture(scheduler, ha, actuator, publisher, house, controller);
 	}
@@ -2101,29 +2101,26 @@ public sealed class AreaControllerTests
 
 	// ---- the mode an area found when it started is not a mode change ---------------------------
 
-	/// <summary>A lit room, so the area adopts and is in the one state the opening mode retargets.</summary>
-	private static Fixture BuildLitAndUnopened() =>
+	/// <summary>A lit room that comes up with <paramref name="opening"/> as the house it finds.</summary>
+	private static Fixture BuildLitInto(HouseState opening) =>
 		Build(
 			tweakGlobal: g => g.HouseMode = SoverMode(),
 			seed: ha => ha.SetState(Light, "on", new() { ["brightness"] = 178.5 }),
-			openHouse: false);
+			openingHouse: opening);
 
 	[TestMethod]
-	public void TheModeFoundAtStartUp_IsReportedAsStartUp_NotAsAModeChange()
+	public void TheModeFoundAtStartUp_IsNotReportedAsAModeChange()
 	{
-		Fixture t = BuildLitAndUnopened();
+		Fixture t = BuildLitInto(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
-		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
-
-		Assert.AreEqual(TransitionReason.Startup, LastReport(t).Reason,
+		Assert.AreEqual(TransitionReason.AdoptedAtStartup, LastReport(t).Reason,
 			"the select never moved; the engine started and read it");
 	}
 
 	[TestMethod]
 	public void AModeChangeAfterStartUp_IsStillAModeChange()
 	{
-		Fixture t = BuildLitAndUnopened();
-		t.House.OnNext(House(modeValue: "Normal"));
+		Fixture t = BuildLitInto(House(modeValue: "Normal"));
 
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
@@ -2133,9 +2130,9 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void AnAwayModeFoundAtStartUp_StillSweepsTheRoom_AndStillNamesWhatIsForcingIt()
 	{
-		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode(), openHouse: false);
-
-		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
+		Fixture t = Build(
+			tweakGlobal: g => g.HouseMode = SoverMode(),
+			openingHouse: House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
 
 		AreaSnapshot report = LastReport(t);
 
