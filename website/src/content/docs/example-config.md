@@ -47,6 +47,11 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     # How long everyone must be gone before rooms react to an empty house.
     AwayDebounceMinutes: 5
 
+    # Movement in any managed room counts as somebody being home for this long
+    # after the last movement, exactly as a tracked phone does. Every further
+    # movement starts it again. Zero watches phones only.
+    MotionPresenceMinutes: 30
+
     # How often each room re-checks the time of day and the light outside.
     CircadianTickSeconds: 60
 

@@ -12,6 +12,20 @@ against each other.
 
 ## [Unreleased]
 
+### Changed
+
+- **Movement in a room the engine manages now counts as somebody being home, on equal footing with a tracked phone.** Presence used to be decided by phones and device trackers alone, and that verdict was read ahead of everything else, so a house whose trackers saw nobody stayed locked dark however much somebody moved about inside it: movement refused, the manual light button refused, and no way to light a room from inside the building. Walking past a sensor now brings the house out of away mode and it behaves normally again — one movement, not two. The option that resets the house mode on presence finally reaches anywhere, because the presence verdict no longer says away in the same instant the selector returns to normal.
+
+  **The trade-off is real and is accepted: a cat, a robot vacuum or a curtain moving in a draught can now bring a house back to normal and light a room.** Lighting a room for a cat is the smaller failure of the two.
+
+  **The house can still become away.** Movement counts as somebody being home for the next 30 minutes, and every further movement starts that window again; when it runs out with no phone home, the house leaves the way it does when the last phone goes, through the usual departure debounce. Set `Global.MotionPresenceMinutes` to change the window, or to zero to watch trackers only and keep the old behaviour.
+
+  **A room's own gates are untouched.** Making the house present defeats nothing: darkness, sleep mode, a blocking entity, the master switch and a disabled room all refuse exactly as before, and an away mode somebody chose on the dial still wins over movement. Nothing changes about how a light is commanded, and the away sweep still runs once per departure — coming back neither undoes it nor runs it again.
+
+### Fixed
+
+- **An engine started while the house was empty never came home.** The first arrival was swallowed as a return inside a departure that had never been announced, so the rooms stayed away until somebody left and came back again. It affected tracked phones as much as movement.
+
 ## [2026.9.8] - 2026-09-08
 
 ### Added

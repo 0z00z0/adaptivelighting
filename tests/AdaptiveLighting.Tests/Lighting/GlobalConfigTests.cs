@@ -6,6 +6,35 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class GlobalConfigTests
 {
+	// A household that wants the old tracker-only behaviour writes zero by hand, and every ordinary save from the
+	// app must leave it standing. Nothing in the UI edits this yet, so the round trip is the whole guarantee.
+	[TestMethod]
+	public void MotionPresenceMinutes_Survives_A_Save_And_A_Reload()
+	{
+		AdaptiveLightingConfig config = new()
+		{
+			Global = new GlobalConfig { MotionPresenceMinutes = 0 },
+			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }]
+		};
+
+		AdaptiveLightingConfig reloaded = LightingConfigDocument
+			.Deserialize(LightingConfigDocument.Serialize(config))
+			.Config;
+
+		Assert.AreEqual(0, reloaded.Global.MotionPresenceMinutes);
+	}
+
+	[TestMethod]
+	public void A_Document_That_Never_Heard_Of_MotionPresenceMinutes_Gets_The_Default()
+	{
+		AdaptiveLightingConfig reloaded = LightingConfigDocument
+			.Deserialize("AdaptiveLighting.Configuration.AdaptiveLightingConfig:\n  Global:\n    AwayDebounceMinutes: 5\n")
+			.Config;
+
+		Assert.AreEqual(30, reloaded.Global.MotionPresenceMinutes,
+			"the setting is additive: an older file is silence, and silence is the default");
+	}
+
 	[TestMethod]
 	public void EffectiveKillSwitchEntity_PrefersExplicit_ElseDefault_ElseNull()
 	{
