@@ -370,10 +370,17 @@ public sealed class LightingOrchestrator : IDisposable
 		if (state == previous && !opening)
 			return;
 
-		// Applied once on entry, never re-asserted. The areas pause themselves; this only fires the scene.
+		// Applied once on entry, never re-asserted. The areas pause themselves; this only fires the scene. A scene
+		// is a light command like any other, so the master switch stops it; nothing replays one it skipped.
 		if (!string.Equals(previous.ActiveScene, state.ActiveScene, StringComparison.Ordinal)
 			&& state.ActiveScene is { Length: > 0 } scene)
-			_actuator.ActivateScene(scene);
+		{
+			if (state.KillSwitchActive)
+				_logger.LogInformation(
+					"The master switch is on, so the {Mode} scene {Scene} is not applied.", state.Mode, scene);
+			else
+				_actuator.ActivateScene(scene);
+		}
 
 		// The forcing clause repeats ModeMonitor's, because this is the line that says the house went Away.
 		if (state.Forced is { } forced)

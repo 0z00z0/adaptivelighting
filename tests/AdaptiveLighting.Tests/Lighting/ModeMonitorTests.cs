@@ -1329,6 +1329,69 @@ public sealed class ModeMonitorTests
 			"no Normal option resolves, so the reset is a no-op — no select_option is dispatched");
 	}
 
+	// ---- the master switch ---------------------------------------------------------------------
+
+	private const string Master = "input_boolean.styring";
+
+	// Wired as the built-in enabled flag is: off is the app muzzled.
+	private static GlobalConfig Muzzled(HouseModeConfig mode) =>
+		new() { CircadianTickSeconds = 60, HouseMode = mode, KillSwitchEntity = Master };
+
+	[TestMethod]
+	public void MasterSwitch_StopsAPresenceReset_AndTheResetRunsOnceItLifts()
+	{
+		var mode = Mode();
+		var borte = mode.OptionFor("Borte")!;
+		borte.ResetOnPresence = true;
+		borte.ResetPresenceSensors = [Gang];
+		borte.ResetPresenceGraceMinutes = 0;
+
+		var rig = Started(Muzzled(mode), startAt: Evening, initialSelect: "Borte",
+			seed: ha =>
+			{
+				ha.SetState(Gang, "off");
+				ha.SetState(Master, "off");
+			});
+
+		rig.Ha.Trigger(Gang, "on");
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "the app says it is paused, so it does not move the house mode");
+
+		rig.Ha.Trigger(Master, "on");
+		rig.Ha.Trigger(Gang, "off");
+		rig.Ha.Trigger(Gang, "on");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "the control: the same arrival resets once the switch is back on");
+	}
+
+	[TestMethod]
+	public void MasterSwitch_StopsAPeriodSettingTheMode()
+	{
+		var rig = Started(Muzzled(Mode()), startAt: new DateTimeOffset(2026, 1, 15, 22, 30, 0, TimeSpan.Zero),
+			initialSelect: "Hjemme", seed: ha => ha.SetState(Master, "off"));
+
+		Advance(rig, TimeSpan.FromMinutes(45));   // past night@23:00, whose SetsModeId is Sover
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "a period's mode switch is a write, so the muzzle stops it too");
+	}
+
+	[TestMethod]
+	public void MasterSwitch_StopsTheQuietTimeRule()
+	{
+		var mode = Mode();
+		mode.OptionFor("Borte")!.ActivateAfterNoMotionMinutes = 30;
+
+		var rig = Started(Muzzled(mode), motion: [Gang], startAt: Evening, initialSelect: "Hjemme",
+			seed: ha =>
+			{
+				ha.SetState(Gang, "off");
+				ha.SetState(Master, "off");
+			});
+
+		Advance(rig, TimeSpan.FromMinutes(45));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"), "muzzled, so the quiet house does not write the select");
+	}
+
 	/// <summary>An <see cref="ILogger"/> that counts warnings.</summary>
 	private sealed class CountingLogger : ILogger
 	{

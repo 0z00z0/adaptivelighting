@@ -13,10 +13,12 @@ public sealed class LightingOrchestratorTests
 {
 	private const string Person = "person.a";
 	private const string Select = "input_select.husmodus";
+	private const string Master = "input_boolean.styring";
 
 	private sealed record Fixture(TestScheduler Scheduler, FakeHaContext Ha, FakeLightActuator Actuator, LightingOrchestrator Orchestrator);
 
-	private static Fixture Build(HouseModeConfig houseMode, string selectState)
+	// paused wires the master switch as an enabled flag: off is the app muzzled.
+	private static Fixture Build(HouseModeConfig houseMode, string selectState, bool paused = false)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -24,10 +26,17 @@ public sealed class LightingOrchestratorTests
 		var ha = new FakeHaContext();
 		ha.SetState(Person, "home");
 		ha.SetState(Select, selectState);
+		ha.SetState(Master, paused ? "off" : "on");
 
 		var config = new AdaptiveLightingConfig
 		{
-			Global = new GlobalConfig { Persons = [Person], AwayDebounceMinutes = 5, HouseMode = houseMode },
+			Global = new GlobalConfig
+			{
+				Persons = [Person],
+				AwayDebounceMinutes = 5,
+				HouseMode = houseMode,
+				KillSwitchEntity = Master
+			},
 			// A baseline period so the document is otherwise ordinary; no areas, so the registry is never touched.
 			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }]
 		};
@@ -91,6 +100,36 @@ public sealed class LightingOrchestratorTests
 
 		Assert.AreEqual(1, t.Actuator.Scenes.Count, "leaving the scene mode for Normal applies nothing new");
 		CollectionAssert.DoesNotContain(t.Actuator.Scenes, "scene.normal");
+	}
+
+	[TestMethod]
+	public void The_Master_Switch_Stops_The_Away_And_Guest_Scenes()
+	{
+		var running = Build(WithScenes(), selectState: "Normal");
+		running.Ha.Trigger(Select, "Borte");
+		CollectionAssert.AreEqual(new[] { "scene.borte" }, running.Actuator.Scenes,
+			"the control: with the switch on, entering away applies the away scene");
+
+		var paused = Build(WithScenes(), selectState: "Normal", paused: true);
+		paused.Ha.Trigger(Select, "Borte");
+		paused.Ha.Trigger(Select, "Gjester");
+
+		Assert.AreEqual(0, paused.Actuator.Scenes.Count,
+			"the app says it is paused, so no scene may change a light");
+	}
+
+	[TestMethod]
+	public void A_Scene_The_Master_Switch_Refused_Is_Not_Replayed_When_It_Lifts()
+	{
+		var t = Build(WithScenes(), selectState: "Normal", paused: true);
+
+		t.Ha.Trigger(Select, "Borte");
+		Assert.AreEqual(0, t.Actuator.Scenes.Count);
+
+		t.Ha.Trigger(Master, "on");
+
+		Assert.AreEqual(0, t.Actuator.Scenes.Count,
+			"nothing queues a command the muzzle refused; the away mode still stands and the rooms take it from there");
 	}
 
 	// Decided at start-up, once per light per run: the registry cannot move underneath.

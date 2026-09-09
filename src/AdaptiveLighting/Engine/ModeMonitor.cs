@@ -760,7 +760,7 @@ public sealed class ModeMonitor : IDisposable
 			if (now - lastMotionAt < TimeSpan.FromMinutes(option.ActivateAfterNoMotionMinutes!.Value))
 				continue;
 
-			_modeSelect.Ensure(option.Value, entity => _logger.LogInformation(
+			WriteMode(option.Value, entity => _logger.LogInformation(
 				"No motion for {Minutes} min; setting {Select} to '{Mode}'.",
 				option.ActivateAfterNoMotionMinutes, entity, option.Value));
 
@@ -775,6 +775,22 @@ public sealed class ModeMonitor : IDisposable
 
 			return;
 		}
+	}
+
+	/// <summary>The one place the house-mode select is written, so no rule can forget the master switch.</summary>
+	// The muzzle covers this as much as it covers a light: the mode decides the leaving sweep, the away scene and
+	// the sleep ceiling, so an engine writing it while paused is still driving the house. Nothing is queued, and
+	// every rule that reaches here is asked again — the inactivity rule on its next tick, a reset on its next
+	// trigger, a period's mode switch at its next boundary.
+	private bool WriteMode(string wanted, Action<string> announce)
+	{
+		if (KillSwitchActive)
+		{
+			_logger.LogDebug("The master switch is on, so {Select} is left where it stands.", _modeSelect.Entity);
+			return false;
+		}
+
+		return _modeSelect.Ensure(wanted, announce);
 	}
 
 	private static bool IsArrival(StateChange change) =>
@@ -883,7 +899,7 @@ public sealed class ModeMonitor : IDisposable
 		// reaches here; ApplyPeriodModeOnStart handles that from the note on disk.
 		if (period?.SetsModeId is { Length: > 0 } setsMode
 			&& _global.HouseMode?.OptionValueFor(setsMode) is { Length: > 0 } wanted)
-			_modeSelect.Ensure(wanted, entity => _logger.LogInformation(
+			WriteMode(wanted, entity => _logger.LogInformation(
 				"Period '{Period}' started; setting {Select} to '{Mode}'.", DisplayName(periodKey), entity, wanted));
 
 		if (activeOption is { Kind: not ModeKind.Normal, ResetOnPeriodStartId: { Length: > 0 } resetPeriod }
@@ -924,7 +940,7 @@ public sealed class ModeMonitor : IDisposable
 			|| _global.HouseMode?.OptionValueFor(setsMode) is not { Length: > 0 } wanted)
 			return;
 
-		_modeSelect.Ensure(wanted, entity => _logger.LogInformation(
+		WriteMode(wanted, entity => _logger.LogInformation(
 			"Period '{Period}' began while the engine was stopped (it was last running in '{Previous}'); setting {Select} to '{Mode}'.",
 			DisplayName(periodKey), DisplayName(previousRun), entity, wanted));
 	}
@@ -1032,7 +1048,7 @@ public sealed class ModeMonitor : IDisposable
 			return;
 		}
 
-		_modeSelect.Ensure(normal, entity =>
+		WriteMode(normal, entity =>
 			_logger.LogInformation("Resetting {Select} to '{Normal}' ({Trigger}).", entity, normal, trigger));
 	}
 
