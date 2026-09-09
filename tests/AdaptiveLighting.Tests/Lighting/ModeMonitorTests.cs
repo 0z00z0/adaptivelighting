@@ -825,6 +825,38 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "an empty sensor list resets on any area motion sensor");
 	}
 
+	// ---- what a restart is not ------------------------------------------------------------------
+
+	[TestMethod]
+	public void Start_ReadsWhenTheModeWasSet_RatherThanStampingTheRestart()
+	{
+		// The mode was chosen forty minutes ago and the engine has only just been rebuilt by a save.
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha =>
+			{
+				ha.SetState(Gang, "off");
+				ha.SetStateReportedAt(Select, "Borte", Evening - TimeSpan.FromMinutes(40));
+			});
+
+		rig.Ha.Trigger(Gang, "on");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"),
+			"the fifteen-minute grace ran out long before the rebuild, so an arrival now resets");
+	}
+
+	[TestMethod]
+	public void Start_ReadsWhenAnythingLastMoved_RatherThanStampingTheRestart()
+	{
+		var rig = Started(AwayActivatesOnNoMotion(30), periods: FlatPeriod(), motion: [Gang],
+			startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetStateReportedAt(Gang, "off", Evening - TimeSpan.FromHours(2)));
+
+		Advance(rig, TimeSpan.FromMinutes(2));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"),
+			"the house has been quiet for two hours, whatever time the engine happened to start");
+	}
+
 	// ---- ActivateWhileOn overlay --------------------------------------------------------------
 
 	private static GlobalConfig WithActivation(string optionValue, params string[] entities)

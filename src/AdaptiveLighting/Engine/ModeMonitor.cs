@@ -184,6 +184,43 @@ public sealed class ModeMonitor : IDisposable
 		}
 	}
 
+	/// <summary>When the select last moved, which is when the mode standing now was chosen.</summary>
+	// Falls back to the start instant, which is what this used to be unconditionally.
+	private DateTimeOffset ModeSetAt(DateTimeOffset now) =>
+		_global.HouseMode?.Entity is { Length: > 0 } entityId
+			? ChangedAt(_ha.GetState(entityId), now) ?? now
+			: now;
+
+	/// <summary>The newest edge any watched motion sensor reports, or the start instant when none does.</summary>
+	private DateTimeOffset LastMotionAt(DateTimeOffset now)
+	{
+		DateTimeOffset? newest = null;
+
+		foreach (string sensor in _areaMotionSensors)
+			if (ChangedAt(_ha.GetState(sensor), now) is { } stamp && (newest is null || stamp > newest))
+				newest = stamp;
+
+		return newest ?? now;
+	}
+
+	/// <summary>An entity's <c>last_changed</c> as an instant, never later than <paramref name="now"/>.</summary>
+	// Home Assistant publishes UTC; a kindless value lost its label in the JSON reader and is never local time.
+	// The clamp covers a Home Assistant host whose clock runs ahead of this one.
+	private static DateTimeOffset? ChangedAt(EntityState? state, DateTimeOffset now)
+	{
+		if (state?.LastChanged is not { } raw)
+			return null;
+
+		DateTimeOffset stamp = raw.Kind switch
+		{
+			DateTimeKind.Utc => new DateTimeOffset(raw, TimeSpan.Zero),
+			DateTimeKind.Local => new DateTimeOffset(raw).ToUniversalTime(),
+			_ => new DateTimeOffset(DateTime.SpecifyKind(raw, DateTimeKind.Utc), TimeSpan.Zero)
+		};
+
+		return stamp > now ? now : stamp;
+	}
+
 	/// <summary>Fires whenever the kill switch or the house-mode select changes state.</summary>
 	public IObservable<Unit> Changed => _changed;
 
@@ -366,8 +403,13 @@ public sealed class ModeMonitor : IDisposable
 				return;
 
 			_started = true;
-			_activatedAt = _scheduler.Now;
-			_lastMotionAt = _scheduler.Now;
+
+			// A restart is neither a mode being set nor somebody moving. Stamping both with now restarts the
+			// presence grace over a mode chosen hours ago and hands the quiet-time rule a fresh window every time
+			// a save rebuilds the engine. Home Assistant's own timestamps outlive both. Reads under _gate for the
+			// reason below: nothing else is running yet.
+			_activatedAt = ModeSetAt(_scheduler.Now);
+			_lastMotionAt = LastMotionAt(_scheduler.Now);
 			_startPeriodModePending = true;
 
 			// Read once: the answer is about the run that ended, and a later read finds what this run wrote over
