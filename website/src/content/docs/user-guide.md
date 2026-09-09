@@ -266,11 +266,10 @@ sensors"]
   a room page uses, with the same *All settings* reveal underneath. A room's own settings win.
 - **Finding lights & sensors** — the three labels (only-manage / never-touch / counts-as-motion),
   the house's outdoor light sensor, and the device classes behind a fold.
-- **People** — who is watched for presence, and how long everyone must be gone before rooms react to
-  an empty house. Leave the list empty and it means everyone Home Assistant knows, including people
-  added later. **Movement counts too**: walking past a sensor in any managed room counts as somebody
-  being home for half an hour, exactly as a phone does, so a house is never locked dark on somebody
-  standing in it without their phone.
+- **People** — whose phones are watched, so the dashboard can show who is home, and how long everyone
+  must be gone before it calls the house empty. Shown, never acted on: the house mode dropdown is what
+  decides whether the house is away. Leave the list empty and it means everyone Home Assistant knows,
+  including people added later.
 - **Master switch** — the one switch that pauses everything.
 - **House name**, and a **Fine tuning** fold for the things you set once.
 - **This installation** — whether the engine is running, whether Home Assistant is answering, and
@@ -294,7 +293,7 @@ dark* to **Sun** or **Always dark**.
 
 **The room has no light-level sensor and still would not light.** On *Sensor*, the default, a room
 with nothing to read counts as dark, so that is not the reason. Look for another in the same rows:
-the master switch, the room's own switch, an empty house, a guest scene, a sleeping house, or an
+the master switch, the room's own switch, an away house, a guest scene, a sleeping house, or an
 entity named under *Don't switch on while*.
 
 **A room will not switch itself off.** Something is named under *Don't switch off while* and is on —

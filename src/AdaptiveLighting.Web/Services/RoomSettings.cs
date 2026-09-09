@@ -274,13 +274,13 @@ public static class RoomSettings
 					Folds: [SleepSteps.BlockKey]),
 				new RoomSetting(
 					nameof(AreaSettings.SkipAwaySweep),
-					"Stays on when everyone leaves",
-					"The lights-off sweep skips this room when the house empties. For porch and security lights, which are wanted when nobody is home.",
+					"Stays on when the house goes away",
+					"The lights-off sweep skips this room when the house mode goes to away. For porch and security lights, which are wanted with the house empty.",
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.WelcomeHome),
-					"Lights up when the first person comes home",
-					"If the house is dark when somebody arrives, this room comes on to meet them instead of waiting for a motion sensor to catch them.",
+					"Lights up when the house leaves away mode",
+					"If this room is dark when the house comes out of away mode, it comes on to meet whoever is arriving instead of waiting for a motion sensor to catch them.",
 					RoomControl.Flag)
 			]),
 

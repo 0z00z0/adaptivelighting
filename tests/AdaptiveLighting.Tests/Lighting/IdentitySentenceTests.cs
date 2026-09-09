@@ -57,21 +57,21 @@ public sealed class IdentitySentenceTests
 	public void Reads_As_One_Sentence()
 	{
 		Assert.AreEqual(
-			"This house is called B1. Espen, Nora and Bilen decide Home and Away; the house counts as empty 5 min after the last person leaves.",
+			"This house is called B1. Espen, Nora and Bilen — shown as home or away, never acted on; the house reads as empty 5 min after the last person leaves.",
 			IdentitySentence.PlainText("B1", ["Espen", "Nora", "Bilen"], 5));
 	}
 
 	[TestMethod]
 	public void Two_People_Are_Joined_With_And()
 	{
-		StringAssert.Contains(IdentitySentence.PlainText("B1", ["Espen", "Nora"], 5), "Espen and Nora decide Home and Away");
+		StringAssert.Contains(IdentitySentence.PlainText("B1", ["Espen", "Nora"], 5), "Espen and Nora — shown as home or away");
 	}
 
-	// A house watching nobody never becomes empty. Real state, so the sentence names it.
+	// A house watching nobody never reads as empty. Real state, so the sentence names it.
 	[TestMethod]
 	public void Nobody_Counted_Still_Reads_As_A_Sentence()
 	{
-		StringAssert.Contains(IdentitySentence.PlainText(null, [], 5), "Nobody decide Home and Away");
+		StringAssert.Contains(IdentitySentence.PlainText(null, [], 5), "Nobody — shown as home or away");
 	}
 
 	// ===================== the checklist status line =====================

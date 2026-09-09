@@ -162,10 +162,10 @@ public sealed class RoomFactsTests
 		StringAssert.StartsWith(RoomFacts.AutoOnNote(unnamed)!, "Something here is on");
 	}
 
-	// ===================== away, and the two things it can mean =====================
+	// ===================== away =====================
 
 	[TestMethod]
-	public void An_Away_Mode_Over_An_Occupied_House_Names_What_Is_Forcing_It()
+	public void An_Away_Mode_Names_What_Is_Forcing_It()
 	{
 		ForcedMode forced = new(
 			ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, "input_boolean.occupancy", "on");
@@ -177,7 +177,7 @@ public sealed class RoomFactsTests
 		Assert.AreEqual(forced.Describe(), RoomFacts.AutoOnNote(held));
 		Assert.AreEqual(forced.Describe(), ValueOf(RoomFacts.For(held, Now), "If someone walks in"));
 
-		Assert.AreEqual("The house is in away mode, though somebody is home.", RoomFacts.Headline(held));
+		Assert.AreEqual("The house is in away mode.", RoomFacts.Headline(held));
 		Assert.AreEqual("Wakes when the house leaves away mode.", RoomFacts.NextLine(held, Now));
 	}
 
@@ -187,37 +187,30 @@ public sealed class RoomFactsTests
 		AreaSnapshot chosen = Report(
 			state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: true, houseModeValue: "Borte");
 
-		Assert.AreEqual("Somebody is home, but the house mode is set to Borte.", RoomFacts.AutoOnNote(chosen));
+		Assert.AreEqual("The house mode is set to Borte.", RoomFacts.AutoOnNote(chosen));
 
 		AreaSnapshot nameless = Report(state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: true);
 
-		Assert.AreEqual("Somebody is home, but the house is in away mode.", RoomFacts.AutoOnNote(nameless));
+		Assert.AreEqual("The house is in away mode.", RoomFacts.AutoOnNote(nameless));
 	}
 
+	/// <summary>The house mode is the whole answer, so the words do not move with the trackers.</summary>
+	// A null IsAnyoneHome is a report from a build that predates the field, and reads the same as the other two.
 	[TestMethod]
-	public void An_Empty_House_Still_Says_Nobody_Home()
+	public void The_Away_Words_Do_Not_Depend_On_Who_Is_Home()
 	{
-		AreaSnapshot empty = Report(state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: false);
+		foreach (bool? whoIsHome in new bool?[] { true, false, null })
+		{
+			AreaSnapshot away = Report(state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: whoIsHome);
 
-		Assert.AreEqual("Nobody home.", RoomFacts.Headline(empty));
-		Assert.AreEqual("Wakes when the first person comes home.", RoomFacts.NextLine(empty, Now));
+			Assert.AreEqual("The house is in away mode.", RoomFacts.Headline(away));
+			Assert.AreEqual("Wakes when the house leaves away mode.", RoomFacts.NextLine(away, Now));
+			Assert.AreEqual("The house is in away mode.", RoomFacts.AutoOnNote(away));
 
-		Assert.IsNull(RoomFacts.AutoOnNote(empty));
-
-		Assert.AreEqual(
-			"Nobody home. This room keeps its lights on.",
-			RoomFacts.Headline(Report(state: AreaState.Away, isAnyoneHome: false, brightness: 20)));
-	}
-
-	/// <summary>A null <c>IsAnyoneHome</c> is a report from a build that predates the field.</summary>
-	[TestMethod]
-	public void A_Report_That_Cannot_Say_Who_Is_Home_Keeps_The_Old_Words()
-	{
-		AreaSnapshot older = Report(state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: null);
-
-		Assert.AreEqual("Nobody home.", RoomFacts.Headline(older));
-		Assert.AreEqual("Wakes when the first person comes home.", RoomFacts.NextLine(older, Now));
-		Assert.IsNull(RoomFacts.AutoOnNote(older));
+			Assert.AreEqual(
+				"The house is in away mode. This room keeps its lights on.",
+				RoomFacts.Headline(Report(state: AreaState.Away, isAnyoneHome: whoIsHome, brightness: 20)));
+		}
 	}
 
 	/// <summary>A null <c>BlockedBy</c> is a report from a build that predates the verdict.</summary>
@@ -231,11 +224,10 @@ public sealed class RoomFactsTests
 		Assert.AreEqual("Awaiting movement.", RoomFacts.NextLine(older, Now));
 	}
 
-	/// <summary>Away is in this list because none of these reports says who is home.</summary>
 	[TestMethod]
 	public void The_Gates_That_Are_Already_Visible_Are_Not_Repeated()
 	{
-		foreach (AutoOnBlock quiet in new[] { AutoOnBlock.None, AutoOnBlock.NotDark, AutoOnBlock.Disabled, AutoOnBlock.KillSwitch, AutoOnBlock.Away })
+		foreach (AutoOnBlock quiet in new[] { AutoOnBlock.None, AutoOnBlock.NotDark, AutoOnBlock.Disabled, AutoOnBlock.KillSwitch })
 		{
 			Assert.IsNull(RoomFacts.AutoOnNote(Report(blockedBy: quiet)), $"{quiet} is already stated elsewhere on the page");
 		}

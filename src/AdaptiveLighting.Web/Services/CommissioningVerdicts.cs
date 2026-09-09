@@ -103,10 +103,10 @@ public static class CommissioningVerdicts
 			notes.Add(new Verdict("quiet while the house sleeps", VerdictTone.Info));
 
 		if (effective.WelcomeHome)
-			notes.Add(new Verdict("welcomes you home", VerdictTone.Info));
+			notes.Add(new Verdict("lights up when away mode ends", VerdictTone.Info));
 
 		if (effective.SkipAwaySweep)
-			notes.Add(new Verdict("stays on when everyone leaves", VerdictTone.Info));
+			notes.Add(new Verdict("stays on when the house goes away", VerdictTone.Info));
 
 		return notes;
 	}

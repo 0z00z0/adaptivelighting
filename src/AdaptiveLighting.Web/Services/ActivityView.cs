@@ -705,9 +705,7 @@ public static class ActivityView
 	{
 		AreaState.Disabled => "Automatic lighting is off here.",
 
-		// "Waiting for the first arrival" is a promise about people who are already in the room.
-		AreaState.Away when snapshot.IsAnyoneHome is true => AwayHold(snapshot),
-		AreaState.Away => "Nobody home — waiting for the first arrival.",
+		AreaState.Away => AwayHold(snapshot),
 
 		// Through DarkEnough, never worded again, so this row and the dusk row above it say one thing.
 		AreaState.AutoVacant when BoardView.IsBlockedFromLighting(snapshot) => $"{DarkEnough(snapshot)}.",
@@ -745,10 +743,7 @@ public static class ActivityView
 		AutoOnBlock.KillSwitch => "Movement, but the master switch is off",
 		AutoOnBlock.Disabled => "Movement, but automatic lighting is off here",
 
-		// The one gate with two causes. "Nobody is home yet" is only ever true of an empty house.
-		AutoOnBlock.Away => snapshot.IsAnyoneHome is true
-			? "Movement, but the house is in away mode"
-			: "Movement, but nobody is home yet",
+		AutoOnBlock.Away => "Movement, but the house is in away mode",
 		AutoOnBlock.SceneHold => "Movement, but a guest scene has this room",
 		AutoOnBlock.Sleep => "Movement, but the house is asleep and this room stays dark",
 		AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
@@ -774,7 +769,7 @@ public static class ActivityView
 		{
 			AutoOnBlock.KillSwitch => "the master switch is off",
 			AutoOnBlock.Disabled => "automatic lighting is off here",
-			AutoOnBlock.Away => snapshot.IsAnyoneHome is true ? "the house is in away mode" : "nobody home yet",
+			AutoOnBlock.Away => "the house is in away mode",
 			AutoOnBlock.SceneHold => "a guest scene has this room",
 			AutoOnBlock.Sleep => "the house is asleep",
 			AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
@@ -790,14 +785,14 @@ public static class ActivityView
 	private static string? RefusalDetail(AreaSnapshot snapshot) => snapshot.AutoOnBlockedBy switch
 	{
 		AutoOnBlock.NotDark => Reading(snapshot),
-		AutoOnBlock.Away when snapshot.IsAnyoneHome is true => AwayHold(snapshot),
+		AutoOnBlock.Away => AwayHold(snapshot),
 		_ => null
 	};
 
-	/// <summary>Why an away-kind mode is holding a room shut while somebody is home.</summary>
+	/// <summary>Why an away-kind mode is holding a room shut.</summary>
 	/// <remarks>
 	///     Internal because <see cref="RoomFacts"/> says it too, in one wording. <see cref="ForcedMode.Describe"/>
-	///     is called, never re-worded. Only reached where <see cref="AreaSnapshot.IsAnyoneHome"/> is <c>true</c>.
+	///     is called, never re-worded.
 	/// </remarks>
 	internal static string AwayHold(AreaSnapshot snapshot)
 	{
@@ -807,8 +802,8 @@ public static class ActivityView
 			return forced.Describe();
 
 		return snapshot.HouseModeValue is { Length: > 0 } mode
-			? $"Somebody is home, but the house mode is set to {mode}."
-			: "Somebody is home, but the house is in away mode.";
+			? $"The house mode is set to {mode}."
+			: "The house is in away mode.";
 	}
 
 	/// <summary>The option a forced mode put the house on, falling back to its kind when the option is nameless.</summary>

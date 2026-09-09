@@ -15,7 +15,7 @@ public static class IdentitySentence
 	public static IdentityParts Parts { get; } = new(
 		"This house is called ",
 		". ",
-		" decide Home and Away; the house counts as empty ",
+		" — shown as home or away, never acted on; the house reads as empty ",
 		" after the last person leaves.");
 
 	public static string Display(string? configName) =>

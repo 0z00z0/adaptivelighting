@@ -166,7 +166,7 @@ public sealed class HoldLitTests
 	{
 		Fixture t = Lit([Holder], seed: ha => ha.SetState(Holder, "on"));
 
-		t.House.OnNext(new HouseState(false, ModeKind.Normal, false));
+		t.House.OnNext(new HouseState(true, ModeKind.Away, false));
 
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "the sweep must not switch off what is being held on");
@@ -174,7 +174,7 @@ public sealed class HoldLitTests
 		t.Ha.SetState(Holder, "off");
 		Advance(t, OneTick);
 
-		Assert.IsTrue(t.Actuator.Last is { On: false }, "an empty house does not keep a room lit once the hold lets go");
+		Assert.IsTrue(t.Actuator.Last is { On: false }, "an away house does not keep a room lit once the hold lets go");
 	}
 
 	// The sweep the hold refused belongs to a house that has since come back. WelcomeHome is off by default, so
@@ -184,7 +184,7 @@ public sealed class HoldLitTests
 	{
 		Fixture t = Lit([Holder], seed: ha => ha.SetState(Holder, "on"));
 
-		t.House.OnNext(new HouseState(false, ModeKind.Normal, false));
+		t.House.OnNext(new HouseState(true, ModeKind.Away, false));
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "the hold refused the leaving sweep");
 

@@ -66,9 +66,10 @@ public sealed record HouseState(
 	public static readonly HouseState Initial = new(true, ModeKind.Normal, false);
 
 	/// <summary>The mode, in precedence order: Away, then Sleep, then Guest.</summary>
-	// An away-kind option ORs with presence, so a house full of people can still be told to be Away.
+	// The house-mode select is the whole answer. IsAnyoneHome is published so a person can see the trackers
+	// working and is never composed in, so a phone left on a worktop cannot hold a house away.
 	public HouseMode Mode =>
-		!IsAnyoneHome || ActiveKind == ModeKind.Away ? HouseMode.Away
+		ActiveKind == ModeKind.Away ? HouseMode.Away
 		: ActiveKind == ModeKind.Sleep ? HouseMode.Sleep
 		: ActiveKind == ModeKind.Guest ? HouseMode.Guest
 		: HouseMode.Home;

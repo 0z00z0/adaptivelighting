@@ -183,8 +183,8 @@ public sealed class LightingOrchestrator : IDisposable
 				continue;
 			}
 
-			// An option resetting on presence with no explicit sensor list resets on any of these, and movement on
-			// any of them counts as somebody being home. Must be complete before StartHouseMonitors builds either.
+			// An option resetting on presence with no explicit sensor list resets on any of these. Must be complete
+			// before StartHouseMonitors builds the mode monitor.
 			_motionSensorUnion.UnionWith(resolved!.MotionSensors);
 
 			if (areaConfig.AreaId is { Length: > 0 } areaId && areaId.Trim() is { Length: > 0 } trimmed)
@@ -195,10 +195,6 @@ public sealed class LightingOrchestrator : IDisposable
 		}
 
 		ReportSharedLights(running, resolver, registry);
-
-		// Before the areas, and load-bearing since movement counts as presence: the presence monitor must reach a
-		// motion event first, so the house is already out of Away when that same event reaches the room. Started
-		// the other way round, walking into an empty house takes two movements to light it.
 		StartHouseMonitors();
 
 		foreach (AreaController area in _areas)
@@ -331,10 +327,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 	private void StartHouseMonitors()
 	{
-		// Handed the same union the mode brain gets, so movement counts as somebody being home in exactly the
-		// rooms the engine manages.
-		_presence = new PresenceMonitor(
-			_ha, _scheduler, _config.Global, _loggerFactory.CreateLogger<PresenceMonitor>(), _motionSensorUnion);
+		_presence = new PresenceMonitor(_ha, _scheduler, _config.Global, _loggerFactory.CreateLogger<PresenceMonitor>());
 		_modes = new ModeMonitor(
 			_ha,
 			_config.Global,

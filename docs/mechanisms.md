@@ -463,61 +463,49 @@ mode overwritten on no evidence, on a path a corrupt file could trigger at every
 After a Home Assistant restart an `input_select` reads `unavailable` for a while. Anything reading one has to
 survive that without acting on it.
 
-### Movement counts as somebody being home
+### The house-mode select is the only thing that decides away
 
-**The rule, in full.** Movement in a room the engine manages counts as somebody being home for the next
-`Global.MotionPresenceMinutes`, and every further movement starts that window again. When the window runs out
-with no tracked phone home, the house leaves the same way it does when the last phone goes: the departure
-debounce runs, and only then is the house away.
+**The rule.** `HouseState.Mode` is Away when, and only when, `ActiveKind` is `ModeKind.Away`. Phone and
+device-tracker presence is watched, published as `HouseState.IsAnyoneHome` and shown on the dashboard, so a
+household can see it working; it is never composed into the mode. There is one term left in that expression,
+and it is the select.
 
-Zero or less switches the rule off and watches trackers only.
+Four things move the select, all unchanged: an away option's own `ActivateAfterNoMotionMinutes` after a quiet
+spell, a hand on the dropdown, a period's `SetsModeId`, and the `ActivateWhileOn` overlay, which is read live
+and overrides whatever the select says.
 
-**The trade-off, chosen and not derived.** A cat, a robot vacuum or a curtain moving in a draught can now
-bring a house back to normal and light a room. That is accepted. Presence used to be decided by phones alone,
-and the composed mode read that verdict ahead of everything else, so a house whose trackers saw nobody stayed
-locked dark however much somebody moved about inside it — movement refused, the manual light button refused,
-and no way out from inside the building. Lighting a room for a cat is the smaller failure.
+**Why the trackers step aside rather than being weighed against the select.** Letting them keep a say means
+answering "for how long does a sensor that has just seen somebody outrank a phone that says otherwise", and
+that is a number the document already carries once, as the quiet time. A house that has said "away after an
+hour of no movement, back when a sensor sees somebody" has described both directions; a phone left on a
+worktop describes nothing further, and a phone that stopped reporting describes something false.
 
-**Why the machinery that existed could not already do it.** An option carrying `ResetOnPresence` writes the
-selector back to the Normal option on movement, and the inactivity latch clears on movement too. Both only
-move the selector, and `HouseState.Mode` reads `!IsAnyoneHome || ActiveKind == Away` — so the selector
-returned to Normal and the presence verdict said away in the same instant. Composing movement into the
-presence verdict is what makes that machinery reach anything.
+**A house with no away option never becomes away**, and neither does one whose select Home Assistant owns and
+which nobody moves to an away option. That is the rule, not a defect: nothing else is permitted to answer the
+question, so a household that wants a departure sweep configures an away option to get one.
 
-**What movement does not overrule.** An away-kind option somebody stands the dial on is a standing
-instruction, not a failure to observe anybody, and it still wins: `HouseState.Mode` ORs it with presence. A
-room's own gates are untouched — darkness, sleep, a blocking entity, the master switch, a disabled room all
-refuse exactly as before. Movement decides whether the house is occupied, never whether a room lights.
+**The departure sweep runs when the select goes to away**, which for a house with a quiet time on its away
+option is once that time has passed rather than at the moment the last phone leaves. `AreaController` names
+every away transition `HouseModeChanged`, or `Startup` for the mode it found when it started;
+`TransitionReason.EveryoneLeft` and `FirstPersonArrived` are kept only so an activity row written before this
+rule still reads as what it was.
 
-**The two sides, because they differ.** Arrival is not debounced: movement makes the house occupied at once,
-as a tracked phone arriving does. Departure is, and movement-derived presence expiring is a departure like any
-other, so it goes through the same `AwayDebounceMinutes`. The full quiet time before an away sweep is
-therefore the window plus the debounce, and there is exactly one place that announces an empty house.
+**An unreadable select reads as Normal, so the house reads as home.** `ModeMonitor.CurrentModeValue` answers
+null for a select that is missing, `unknown` or `unavailable`; `ActiveKind` then falls back to
+`ModeKind.Normal` and the rooms keep being managed. There is no fallback to the trackers, deliberately: the
+one signal that used to fill that gap is the one this rule removes. `ActivateWhileOn` still reaches Away,
+because it never reads the select.
 
-**The away sweep is neither undone nor re-run.** It fires on the departure. Movement afterwards raises
-`FirstPersonArrived`, each room runs its ordinary `ComeHome`, and the lights stay off until a room's own gates
-say otherwise. `EveryoneLeft` cannot fire again until a fresh full departure.
+**What does not move.** The grace keeps its meaning — walking out past the hall sensor inside
+`ResetPresenceGraceMinutes` still cannot cancel the mode just set. No room gate moves: darkness, sleep, a
+blocking entity, the master switch and a disabled room refuse exactly as before.
 
-**Start order is load-bearing.** `LightingOrchestrator.Start` starts the house monitors before the areas, so
-the presence monitor is subscribed to each motion sensor ahead of the room that owns it. One movement then
-flips presence, republishes the house and reaches the room while it is already out of Away — a person waves
-once. Started the other way round the room sees the movement while still Away, declines it, and needs a second
-wave. A test asserts the order rather than the code claiming it.
+### A house that starts empty announces its first arrival
 
-**A house with no person entities stays permanently occupied whatever moves.** With nothing to compose
-against, a quiet house would begin sweeping itself; never sweeping remains safer than sweeping wrongly.
-
-**A house that starts empty announces its first arrival.** The opening publication tells every area the house
-is away, so that counts as the departure having been announced. Left otherwise, the first arrival is swallowed
-as a return inside a debounce that never ran, and an engine started in an empty house never comes home at all —
-for a tracked phone as much as for movement.
-
-### Values chosen for movement-as-presence
-
-| Value | Setting | Why this number |
-|---|---|---|
-| 30 minutes | `Global.MotionPresenceMinutes` | Has to be comfortably longer than the longest room's `VacancyTimeoutSeconds`, which defaults to 600 s, or the house sweeps itself away while a room is still lit on somebody sitting in it. Three times the default vacancy timeout. |
-| 5 minutes | `Global.AwayDebounceMinutes`, reused | Already the departure debounce; expiry is a departure, so it takes the same path. Noise against 30. |
+The opening publication counts as the departure having been announced. Left otherwise, the first arrival is
+swallowed as a return inside a debounce that never ran, and an engine started in an empty house never reports
+anybody arriving. The arrival no longer moves the house mode; it republishes the house state, which is what
+carries `IsAnyoneHome` to the dashboard.
 
 ### The daylight curve is a per-room, per-period opt-in
 

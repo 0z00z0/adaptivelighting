@@ -60,7 +60,7 @@ public sealed class HouseSentencesTests
 	{
 		Sentence sentence = HouseSentences.AwayDebounce(new GlobalConfig { AwayDebounceMinutes = 5 });
 
-		StringAssert.StartsWith(Text(sentence), "Count the house as empty 5 min after the last person leaves");
+		StringAssert.StartsWith(Text(sentence), "Show the house as empty 5 min after the last person leaves");
 
 		SentenceToken token = Tokens(sentence).Single();
 

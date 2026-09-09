@@ -413,7 +413,7 @@ else
 									</SettingRow>
 
 									<SettingRow Label="Run a scene instead, on movement"
-												Help="When movement would light this room, it runs this scene instead of setting its own brightness and warmth, and leaves it alone afterwards. Everything that can refuse to light the room still refuses — the master switch, this room's switch, an empty house, sleep, too much daylight, a blocker above. A scene is what happens instead of switching on, never a reason to.">
+												Help="When movement would light this room, it runs this scene instead of setting its own brightness and warmth, and leaves it alone afterwards. Everything that can refuse to light the room still refuses — the master switch, this room's switch, an away house, sleep, too much daylight, a blocker above. A scene is what happens instead of switching on, never a reason to.">
 										<EntityPicker Value="@room.SceneOnMotion"
 													  ValueChanged="@(value => Set(() => room.SceneOnMotion = value))"
 													  Options="@_scenes"

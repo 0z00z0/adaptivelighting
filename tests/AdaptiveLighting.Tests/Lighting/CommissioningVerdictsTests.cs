@@ -142,8 +142,8 @@ public sealed class CommissioningVerdictsTests
 		AreaConfig hall = new() { AreaId = "gang", WelcomeHome = true };
 		AreaConfig terrace = new() { AreaId = "uteplass", SkipAwaySweep = true, Darkness = DarknessSource.Sun };
 
-		CollectionAssert.Contains((System.Collections.ICollection)Words(CommissioningVerdicts.For(hall, Defaults, 1, 0, 1, 1)), "welcomes you home");
-		CollectionAssert.Contains((System.Collections.ICollection)Words(CommissioningVerdicts.For(terrace, Defaults, 0, 0, 2, 1)), "stays on when everyone leaves");
+		CollectionAssert.Contains((System.Collections.ICollection)Words(CommissioningVerdicts.For(hall, Defaults, 1, 0, 1, 1)), "lights up when away mode ends");
+		CollectionAssert.Contains((System.Collections.ICollection)Words(CommissioningVerdicts.For(terrace, Defaults, 0, 0, 2, 1)), "stays on when the house goes away");
 	}
 
 	[TestMethod]
@@ -152,7 +152,7 @@ public sealed class CommissioningVerdictsTests
 		AreaConfig room = new() { AreaId = "stue" };
 		AreaSettings defaults = new() { WelcomeHome = true };
 
-		CollectionAssert.Contains((System.Collections.ICollection)Words(CommissioningVerdicts.For(room, defaults, 1, 0, 1, 1)), "welcomes you home");
+		CollectionAssert.Contains((System.Collections.ICollection)Words(CommissioningVerdicts.For(room, defaults, 1, 0, 1, 1)), "lights up when away mode ends");
 	}
 
 	// ===================== the suspects =====================

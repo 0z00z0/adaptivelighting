@@ -32,8 +32,9 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
   # --------------------------------------------------------------------------
   Global:
 
-    # Whose presence decides Home and Away. An EMPTY list means everyone Home
-    # Assistant knows, including people added later.
+    # Whose phones are watched, so the dashboard can show who is home. Shown,
+    # never acted on: the house mode dropdown decides Home and Away. An EMPTY
+    # list means everyone Home Assistant knows, including people added later.
     Persons:
       - person.resident
 
@@ -44,13 +45,8 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     KillSwitchEntity: input_boolean.adaptive_lighting_enabled
     KillSwitchActiveWhenOff: true
 
-    # How long everyone must be gone before rooms react to an empty house.
+    # How long everyone must be gone before the dashboard calls the house empty.
     AwayDebounceMinutes: 5
-
-    # Movement in any managed room counts as somebody being home for this long
-    # after the last movement, exactly as a tracked phone does. Every further
-    # movement starts it again. Zero watches phones only.
-    MotionPresenceMinutes: 30
 
     # How often each room re-checks the time of day and the light outside.
     CircadianTickSeconds: 60

@@ -6,7 +6,7 @@ public enum AreaState
 	/// <summary>Kill switch on, or the area configured off: the engine observes and publishes but commands nothing.</summary>
 	Disabled,
 
-	/// <summary>Nobody home, so motion does nothing.</summary>
+	/// <summary>The house is set to away, so motion does nothing.</summary>
 	Away,
 
 	/// <summary>Under automatic control with no recent motion; the engine's resting state.</summary>
@@ -50,7 +50,8 @@ public enum TransitionReason
 	/// <summary>The area stayed vacant long enough to lift a manual turn-off.</summary>
 	SuppressionLifted,
 
-	/// <summary>Presence reported the house empty; an area going Away because the mode says so reports <see cref="HouseModeChanged"/>.</summary>
+	// Kept so an activity row written before the house mode became the only thing that decides still reads as
+	// what it was. Nothing produces either any more.
 	EveryoneLeft,
 
 	FirstPersonArrived,
@@ -61,7 +62,7 @@ public enum TransitionReason
 	/// <summary>The circadian target moved.</summary>
 	CircadianTick,
 
-	/// <summary><see cref="AreaState.Away"/> under this reason is the mode holding the room shut, never an empty house.</summary>
+	/// <summary>The house-mode select moved, which is the only thing that takes a room into or out of <see cref="AreaState.Away"/>.</summary>
 	HouseModeChanged,
 
 	/// <summary>A Guest scene took the area into, or released it from, an indefinite hold.</summary>
@@ -88,7 +89,7 @@ public enum AutoOnBlock
 	/// <summary>The master switch is on, so the engine commands nothing anywhere.</summary>
 	KillSwitch,
 
-	/// <summary>The house is away, or nobody is home; <see cref="AdaptiveLighting.Abstractions.AreaSnapshot.IsAnyoneHome"/> says which.</summary>
+	/// <summary>The house-mode select stands on an away option.</summary>
 	Away,
 
 	/// <summary>A Guest-kind mode with a scene holds the area; movement records occupancy and commands nothing.</summary>
