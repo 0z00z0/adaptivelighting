@@ -477,6 +477,8 @@ public sealed class ActivityLogTests
 				mode: HouseMode.Sleep,
 				houseModeValue: "Sover")).What);
 
+		// Nothing writes EveryoneLeft any more; a row from before the house mode became the only thing that
+		// decides still has to read as what it was.
 		ActivityLine empty = ActivityView.Describe(Report(
 			"Stue",
 			AreaState.Away,
@@ -484,7 +486,7 @@ public sealed class ActivityLogTests
 			mode: HouseMode.Away));
 
 		Assert.AreEqual("Everyone left the house", empty.What);
-		Assert.AreEqual("Nobody home — waiting for the first arrival.", empty.Why);
+		Assert.AreEqual("The house is in away mode.", empty.Why);
 	}
 
 	[TestMethod]
@@ -531,16 +533,16 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Movement, but automatic lighting is off here",
 			Declined(AutoOnBlock.Disabled, state: AreaState.Disabled).What);
 
-		Assert.AreEqual("Movement, but nobody is home yet",
+		Assert.AreEqual("Movement, but the house is in away mode",
 			Declined(AutoOnBlock.Away, state: AreaState.Away).What);
 
 		Assert.AreEqual("Movement, but a guest scene has this room",
 			Declined(AutoOnBlock.SceneHold, state: AreaState.SceneHold).What);
 	}
 
-	/// <remarks>Presence and a forced mode are different causes, and the row has to tell them apart.</remarks>
+	/// <remarks>A forced mode and a chosen one are different causes, and the row has to tell them apart.</remarks>
 	[TestMethod]
-	public void A_Movement_Refused_By_An_Away_Mode_Over_An_Occupied_House_Says_So()
+	public void A_Movement_Refused_By_An_Away_Mode_Says_What_Put_The_House_There()
 	{
 		ForcedMode forced = new(
 			ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, "input_boolean.occupancy", "on");
@@ -554,25 +556,24 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Away mode is forced while input_boolean.occupancy is on.", held.Why);
 		Assert.AreEqual(forced.Describe(), held.Why);
 
-		// Nothing forcing it means somebody chose the option, and the row names that, not presence.
+		// Nothing forcing it means somebody chose the option, and the row names that.
 		ActivityLine chosen = Declined(
 			AutoOnBlock.Away, state: AreaState.Away, isAnyoneHome: true, houseModeValue: "Borte");
 
-		Assert.AreEqual("Somebody is home, but the house mode is set to Borte.", chosen.Why);
+		Assert.AreEqual("The house mode is set to Borte.", chosen.Why);
 	}
 
+	/// <summary>The house mode is the whole answer, so the row does not move with the trackers.</summary>
 	[TestMethod]
-	public void An_Away_Refusal_Keeps_Its_Old_Words_Where_Nothing_Contradicts_Them()
+	public void An_Away_Refusal_Reads_The_Same_Whoever_Is_Home()
 	{
-		ActivityLine empty = Declined(AutoOnBlock.Away, state: AreaState.Away, isAnyoneHome: false);
+		foreach (bool? whoIsHome in new bool?[] { true, false, null })
+		{
+			ActivityLine line = Declined(AutoOnBlock.Away, state: AreaState.Away, isAnyoneHome: whoIsHome);
 
-		Assert.AreEqual("Movement, but nobody is home yet", empty.What);
-		Assert.IsNull(empty.Why);
-
-		ActivityLine older = Declined(AutoOnBlock.Away, state: AreaState.Away, isAnyoneHome: null);
-
-		Assert.AreEqual("Movement, but nobody is home yet", older.What);
-		Assert.IsNull(older.Why);
+			Assert.AreEqual("Movement, but the house is in away mode", line.What);
+			Assert.AreEqual("The house is in away mode.", line.Why);
+		}
 	}
 
 	/// <summary>A forced mode never moves the select, so the select's value is stale for the length of the force.</summary>

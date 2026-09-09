@@ -830,7 +830,11 @@ else
 				</GroupFold>
 
 				<GroupFold Title="People"
-						   Description="Whose presence decides Home and Away, and how long before the house counts as empty.">
+						   Description="Whose phones are shown as home or away, and how long before the house reads as empty.">
+					<p class="group-note">
+						Who is home is shown, never acted on. The house mode is what decides whether the house is away
+						&mdash; a phone that never comes back does not switch a single light.
+					</p>
 					<SentenceView Sentences="@_awaySentence"
 								  Edited="@OnGlobalEdited"
 								  Note="@TokenNote"
@@ -840,9 +844,10 @@ else
 						<div class="field-head">
 							<label class="field-label">Who lives here
 								<InfoPopover Label="Who lives here">
-									Whose presence decides Home and Away. Empty means everyone Home Assistant knows, including
-									people added later &mdash; usually right. Name people only to leave someone out: a car
-									tracker or a guest phone that would otherwise keep the house from ever counting as empty.
+									Whose phones are watched, so the dashboard can show who is home. Empty means everyone
+									Home Assistant knows, including people added later &mdash; usually right. Name people
+									only to leave someone out: a car tracker or a guest phone whose comings and goings are
+									not worth showing.
 								</InfoPopover>
 							</label>
 						</div>

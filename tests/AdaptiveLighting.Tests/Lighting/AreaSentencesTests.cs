@@ -315,7 +315,7 @@ public sealed class AreaSentencesTests
 
 		Assert.AreEqual(3, sentences.Count);
 		Assert.AreEqual(
-			"This room dims while the house sleeps, and welcomes the first person home.",
+			"This room dims while the house sleeps, and lights up when the house leaves away mode.",
 			sentences[2].PlainText);
 	}
 

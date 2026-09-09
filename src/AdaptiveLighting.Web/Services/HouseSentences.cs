@@ -57,13 +57,13 @@ public static class HouseSentences
 	{
 		ArgumentNullException.ThrowIfNull(global);
 
-		return SentenceBuilder.Start("Count the house as empty ")
+		return SentenceBuilder.Start("Show the house as empty ")
 			.Duration(
 				nameof(GlobalConfig.AwayDebounceMinutes),
-				"Count the house as empty after",
+				"Show the house as empty after",
 				global.AwayDebounceMinutes * 60,
 				AwayDebounceChoices)
-			.Text(" after the last person leaves — a trip to the bin should not sweep the lights off.")
+			.Text(" after the last person leaves — a trip to the bin should not read as an empty house.")
 			.Build();
 	}
 
@@ -138,7 +138,7 @@ public static class HouseSentences
 				Arms(builder, option, index);
 				builder.Text(option.Scene is { Length: > 0 } scene
 					? $"runs the {scene} scene and pauses automatic lighting"
-					: "sweeps the lights off and pauses automatic lighting — rooms set to stay on when everyone leaves are left alone");
+					: "sweeps the lights off and pauses automatic lighting — rooms set to stay on when the house goes away are left alone");
 				break;
 
 			default:

@@ -269,10 +269,10 @@ public static class AreaSentences
 			clauses.Add(night);
 
 		if (effective.SkipAwaySweep)
-			clauses.Add("stays on when everyone leaves");
+			clauses.Add("stays on when the house goes away");
 
 		if (effective.WelcomeHome)
-			clauses.Add("welcomes the first person home");
+			clauses.Add("lights up when the house leaves away mode");
 
 		// Both gates read their polarity, or the sentence says the opposite of what the room does.
 		if (area?.IgnoreWhenOn is { Count: > 0 })

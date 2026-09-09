@@ -463,42 +463,49 @@ mode overwritten on no evidence, on a path a corrupt file could trigger at every
 After a Home Assistant restart an `input_select` reads `unavailable` for a while. Anything reading one has to
 survive that without acting on it.
 
-### A house that configures its own away mode decides its own away
+### The house-mode select is the only thing that decides away
 
-**The rule.** Where the house-mode select carries an away option that both switches on after a set quiet time
-and resets when a sensor sees somebody, that option alone says whether the house is away: movement reaching
-the reset brings it home, and the option's own `ActivateAfterNoMotionMinutes` puts it away again. The phone
-and device-tracker verdict does not add to it.
+**The rule.** `HouseState.Mode` is Away when, and only when, `ActiveKind` is `ModeKind.Away`. Phone and
+device-tracker presence is watched, published as `HouseState.IsAnyoneHome` and shown on the dashboard, so a
+household can see it working; it is never composed into the mode. There is one term left in that expression,
+and it is the select.
 
-Both halves are required, and so is a motion sensor in a managed room. An option carrying the reset alone
-describes only the way back, so a house switched off the trackers there could never sweep; without a sensor
-neither half can fire and the reset has nothing to default its list to. Under
-`HouseModeAuthority.HomeAssistant` both halves are dormant, so the configuration is inert and the trackers
-still decide. `HouseModeConfig.ConfiguredAwayDecides` is where all four conditions are written down.
+Four things move the select, all unchanged: an away option's own `ActivateAfterNoMotionMinutes` after a quiet
+spell, a hand on the dropdown, a period's `SetsModeId`, and the `ActivateWhileOn` overlay, which is read live
+and overrides whatever the select says.
 
-**Why the trackers must step aside rather than be weighed against.** The reset already worked: it writes the
-select back to the Normal option. What defeated it was `HouseState.Mode` reading
-`!IsAnyoneHome || ActiveKind == Away`, so the select returned to Normal and the verdict said away in the same
-instant. Letting the trackers keep a say means answering "for how long does a sensor that has just seen
-somebody outrank a phone that says otherwise", and that is a number the document already carries once, as the
-quiet time. A house that has said "away after an hour of no movement, back when a sensor sees somebody" has
-described both directions; a phone left on a worktop describes nothing further.
+**Why the trackers step aside rather than being weighed against the select.** Letting them keep a say means
+answering "for how long does a sensor that has just seen somebody outrank a phone that says otherwise", and
+that is a number the document already carries once, as the quiet time. A house that has said "away after an
+hour of no movement, back when a sensor sees somebody" has described both directions; a phone left on a
+worktop describes nothing further, and a phone that stopped reporting describes something false.
 
-**What does not move.** The presence verdict is unchanged and still published: `HouseState.IsAnyoneHome`, the
-presence events and the activity record all read as they did. Only the composed mode stops reading it.
-`ActiveKind == Away` still forces the mode, so an away option somebody stands the dial on wins as before. The
-grace keeps its meaning — walking out past the hall sensor inside `ResetPresenceGraceMinutes` still cannot
-cancel the mode just set. No room gate moves: darkness, sleep, a blocking entity, the master switch and a
-disabled room refuse exactly as before.
+**A house with no away option never becomes away**, and neither does one whose select Home Assistant owns and
+which nobody moves to an away option. That is the rule, not a defect: nothing else is permitted to answer the
+question, so a household that wants a departure sweep configures an away option to get one.
 
-**A house that has not described that intent is untouched**, which is the whole reason the gate is narrow.
-With no away option, or with only one half of one, the tracker verdict is still what puts the house away.
+**The departure sweep runs when the select goes to away**, which for a house with a quiet time on its away
+option is once that time has passed rather than at the moment the last phone leaves. `AreaController` names
+every away transition `HouseModeChanged`, or `Startup` for the mode it found when it started;
+`TransitionReason.EveryoneLeft` and `FirstPersonArrived` are kept only so an activity row written before this
+rule still reads as what it was.
+
+**An unreadable select reads as Normal, so the house reads as home.** `ModeMonitor.CurrentModeValue` answers
+null for a select that is missing, `unknown` or `unavailable`; `ActiveKind` then falls back to
+`ModeKind.Normal` and the rooms keep being managed. There is no fallback to the trackers, deliberately: the
+one signal that used to fill that gap is the one this rule removes. `ActivateWhileOn` still reaches Away,
+because it never reads the select.
+
+**What does not move.** The grace keeps its meaning — walking out past the hall sensor inside
+`ResetPresenceGraceMinutes` still cannot cancel the mode just set. No room gate moves: darkness, sleep, a
+blocking entity, the master switch and a disabled room refuse exactly as before.
 
 ### A house that starts empty announces its first arrival
 
-The opening publication tells every area the house is away, so that counts as the departure having been
-announced. Left otherwise, the first arrival is swallowed as a return inside a debounce that never ran, and an
-engine started in an empty house never comes home at all.
+The opening publication counts as the departure having been announced. Left otherwise, the first arrival is
+swallowed as a return inside a debounce that never ran, and an engine started in an empty house never reports
+anybody arriving. The arrival no longer moves the house mode; it republishes the house state, which is what
+carries `IsAnyoneHome` to the dashboard.
 
 ### The daylight curve is a per-room, per-period opt-in
 

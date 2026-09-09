@@ -207,7 +207,7 @@ public sealed class RoomSceneTests
 	[
 		["too bright"],
 		["the master switch"],
-		["an empty house"],
+		["an away house"],
 		["a blocker"]
 	];
 
@@ -223,8 +223,8 @@ public sealed class RoomSceneTests
 				t.House.OnNext(new HouseState(true, ModeKind.Normal, true));
 				return;
 
-			case "an empty house":
-				t.House.OnNext(new HouseState(false, ModeKind.Normal, false));
+			case "an away house":
+				t.House.OnNext(new HouseState(true, ModeKind.Away, false));
 				return;
 
 			default:
@@ -354,7 +354,7 @@ public sealed class RoomSceneTests
 	{
 		Fixture t = Lit(sceneWhenEmpty: WhenEmpty);
 
-		t.House.OnNext(new HouseState(false, ModeKind.Normal, false));
+		t.House.OnNext(new HouseState(true, ModeKind.Away, false));
 
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: false }, "an atmospheric scene must not keep a room lit in an empty house");
@@ -368,7 +368,7 @@ public sealed class RoomSceneTests
 		Advance(t, TimeSpan.FromSeconds(VacancySeconds));
 		t.Actuator.Clear();
 
-		t.House.OnNext(new HouseState(false, ModeKind.Normal, false));
+		t.House.OnNext(new HouseState(true, ModeKind.Away, false));
 
 		Assert.IsTrue(t.Actuator.Last is { On: false });
 	}
@@ -458,7 +458,7 @@ public sealed class RoomSceneTests
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
-		t.House.OnNext(new HouseState(false, ModeKind.Normal, false));
+		t.House.OnNext(new HouseState(true, ModeKind.Away, false));
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 

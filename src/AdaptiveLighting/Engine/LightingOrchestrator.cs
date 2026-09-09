@@ -364,8 +364,7 @@ public sealed class LightingOrchestrator : IDisposable
 		{
 			ModeValue = _modes?.CurrentModeValue,
 			ActiveScene = _modes?.ActiveScene,
-			Forced = _modes?.Forced,
-			ConfiguredAwayDecides = _modes?.ConfiguredAwayDecides ?? false
+			Forced = _modes?.Forced
 		};
 
 		if (state == previous && !opening)

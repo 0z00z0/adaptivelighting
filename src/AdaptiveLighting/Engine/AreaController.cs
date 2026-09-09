@@ -520,7 +520,6 @@ public sealed class AreaController : IDisposable
 				Publish(TransitionReason.EnablementChanged);
 			}
 
-			// Keyed off the composed mode, not raw presence: an away-kind option sweeps a full house too.
 			if (house.Mode == HouseMode.Away)
 			{
 				if (_state != AreaState.Away)
@@ -541,11 +540,7 @@ public sealed class AreaController : IDisposable
 
 			if (_state == AreaState.Away)
 			{
-				// Read from what the house was: what it is no longer says Away either way.
-				ComeHome(previous.ActiveKind == ModeKind.Away
-					? TransitionReason.HouseModeChanged
-					: TransitionReason.FirstPersonArrived);
-
+				ComeHome(TransitionReason.HouseModeChanged);
 				return;
 			}
 
@@ -734,19 +729,13 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
-	/// <summary>Why this area is going Away: presence says the house is empty, or the mode says Away whatever presence reads.</summary>
-	// HouseState.Mode is Away when presence is empty or the standing option is away-kind, so the mode is checked
-	// first: it holds the house dark after somebody walks back in, and that is the state a reader has to see.
-	private TransitionReason AwayReason(bool opening) =>
-		_house.ActiveKind == ModeKind.Away ? ModeReason(opening) : TransitionReason.EveryoneLeft;
-
 	// A change, unless this is the mode the area found when it started.
 	private static TransitionReason ModeReason(bool opening) =>
 		opening ? TransitionReason.Startup : TransitionReason.HouseModeChanged;
 
 	private void GoAway(bool opening)
 	{
-		TransitionReason reason = AwayReason(opening);
+		TransitionReason reason = ModeReason(opening);
 
 		CancelAllTimers();
 		Enter(AreaState.Away, reason);
@@ -778,7 +767,6 @@ public sealed class AreaController : IDisposable
 	}
 
 	/// <summary>Leaves the Away state.</summary>
-	// reason mirrors AwayReason: an away-kind mode letting go is a mode change, never somebody walking in.
 	private void ComeHome(TransitionReason reason)
 	{
 		// The sweep a hold refused was the leaving sweep, and the house is no longer leaving. Without this the
@@ -811,11 +799,9 @@ public sealed class AreaController : IDisposable
 			AutoOnBlock.None => "",
 			AutoOnBlock.KillSwitch => "kill switch is active",
 			AutoOnBlock.Disabled => "area is disabled",
-			// Away has three tellings and only one is a departure. The forced one is checked first: nothing else
-			// in the log would ever have named it.
+			// The forced telling is checked first: nothing else in the log would ever have named it.
 			AutoOnBlock.Away => _house.Forced is { Kind: ModeKind.Away } forced ? forced.Describe()
-				: _house.IsAnyoneHome || _house.ConfiguredAwayDecides ? "the house is set to away"
-				: "nobody is home",
+				: "the house is set to away",
 			AutoOnBlock.SceneHold => $"a guest scene ({_house.ActiveScene}) is holding this area",
 			AutoOnBlock.Sleep => "sleep mode blocks auto-on for this area",
 			AutoOnBlock.EntityOn => $"{blocker} is on",
@@ -933,7 +919,7 @@ public sealed class AreaController : IDisposable
 
 			case AreaState.Away:
 				// From the tick, so never the opening state however long the hold has been refusing the off.
-				TurnOff(AwayReason(opening: false));
+				TurnOff(ModeReason(opening: false));
 				return true;
 
 			case AreaState.AutoVacant:

@@ -6,10 +6,9 @@ using Microsoft.Reactive.Testing;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
-/// <summary>A house that configures its own away mode: quiet puts it there, a sensor seeing somebody brings it back.</summary>
-// Driven through the whole engine rather than through a hand-made HouseState, because the defect was the
-// composition: the tracker verdict was read ahead of the selector, so the configured reset returned the selector
-// to Normal and the house was pulled back to away in the same instant.
+/// <summary>The house-mode selector is the only thing that decides away: quiet puts it there, a sensor seeing somebody brings it back.</summary>
+// Driven through the whole engine rather than through a hand-made HouseState, because what these cover is the
+// composition: phone and device-tracker presence is published for a person to look at and never composed in.
 [TestClass]
 public sealed class ConfiguredAwayTests
 {
@@ -34,13 +33,10 @@ public sealed class ConfiguredAwayTests
 	}
 
 	/// <summary>The away option the report describes: an hour of quiet puts the house there, a sensor brings it back.</summary>
-	private static HouseModeConfig ConfiguredAway(
-		bool quiet = true,
-		bool reset = true,
-		HouseModeAuthority authority = HouseModeAuthority.AdaptiveLighting) => new()
+	private static HouseModeConfig ConfiguredAway() => new()
 	{
 		Entity = Select,
-		Authority = authority,
+		Authority = HouseModeAuthority.AdaptiveLighting,
 		Options =
 		[
 			new() { Value = NormalOption, Kind = ModeKind.Normal },
@@ -48,8 +44,8 @@ public sealed class ConfiguredAwayTests
 			{
 				Value = AwayOption,
 				Kind = ModeKind.Away,
-				ActivateAfterNoMotionMinutes = quiet ? (int)Quiet.TotalMinutes : null,
-				ResetOnPresence = reset,
+				ActivateAfterNoMotionMinutes = (int)Quiet.TotalMinutes,
+				ResetOnPresence = true,
 				ResetPresenceGraceMinutes = (int)Grace.TotalMinutes
 			}
 		]
@@ -217,67 +213,52 @@ public sealed class ConfiguredAwayTests
 		Assert.AreEqual(AreaState.Away, t.Room.State);
 	}
 
-	// ---- what the rule does not reach ----------------------------------------------------------
+	// ---- the trackers decide nothing -----------------------------------------------------------
 
+	// The whole rule. A house that configures no away option therefore never becomes away, which is the rule
+	// working: nothing else may answer the question.
 	[TestMethod]
-	public void A_House_With_No_Away_Option_Is_Left_To_Its_Trackers()
+	public void Trackers_Reading_Not_Home_Do_Not_Put_The_House_Into_Away()
 	{
 		Fixture t = Build(tweakGlobal: global => global.HouseMode = null);
 
 		t.Ha.Trigger(Person, "not_home");
 		Advance(t, TimeSpan.FromMinutes(6));
 
-		Assert.AreEqual(AreaState.Away, t.Room.State, "nothing else answers the question, so the trackers still do");
+		Assert.AreNotEqual(AreaState.Away, t.Room.State,
+			"the selector is the only thing that decides, and this house has none set to away");
 	}
 
-	// The reset alone describes only the way back. Switching the trackers off there would leave a house that can
-	// never sweep at all.
+	// The other side of the same rule: quiet is what makes a house away, with every tracker reading home
+	// throughout, so no departure could be mistaken for the cause.
 	[TestMethod]
-	public void An_Option_That_Resets_But_Never_Activates_Is_Left_To_Its_Trackers()
+	public void The_Quiet_Time_Still_Puts_The_House_Away_While_Every_Tracker_Reads_Home()
 	{
-		Fixture t = Build(tweakGlobal: global => global.HouseMode = ConfiguredAway(quiet: false));
+		Fixture t = Build();
 
-		t.Ha.Trigger(Person, "not_home");
-		Advance(t, TimeSpan.FromMinutes(6));
+		Advance(t, Quiet + TimeSpan.FromMinutes(1));
+
+		Assert.AreEqual(1, SelectCalls(t, AwayOption), "the quiet rule wrote the selector");
+
+		t.Ha.Trigger(Select, AwayOption);
 
 		Assert.AreEqual(AreaState.Away, t.Room.State);
 	}
 
+	// There is no fallback left, so an unreadable selector classifies as Normal and the house keeps managing its
+	// rooms. Pinned rather than reasoned about: this is the whole behaviour of a house whose helper has vanished.
 	[TestMethod]
-	public void An_Option_That_Activates_But_Never_Resets_Is_Left_To_Its_Trackers()
+	public void An_Unreadable_Selector_Leaves_The_House_Home()
 	{
-		Fixture t = Build(tweakGlobal: global => global.HouseMode = ConfiguredAway(reset: false));
+		Fixture t = Build(personState: "not_home");
 
-		t.Ha.Trigger(Person, "not_home");
-		Advance(t, TimeSpan.FromMinutes(6));
+		t.Ha.Trigger(Select, "unavailable");
 
-		Assert.AreEqual(AreaState.Away, t.Room.State);
-	}
+		Assert.AreNotEqual(AreaState.Away, t.Room.State);
 
-	// Both halves are dormant while Home Assistant owns the selector, so the configuration is inert and the
-	// trackers are all the house has left.
-	[TestMethod]
-	public void A_House_Whose_Selector_Home_Assistant_Owns_Is_Left_To_Its_Trackers()
-	{
-		Fixture t = Build(tweakGlobal: global =>
-			global.HouseMode = ConfiguredAway(authority: HouseModeAuthority.HomeAssistant));
+		Move(t);
 
-		t.Ha.Trigger(Person, "not_home");
-		Advance(t, TimeSpan.FromMinutes(6));
-
-		Assert.AreEqual(AreaState.Away, t.Room.State);
-	}
-
-	// Neither half can fire without one, and the reset would have nothing to default its sensor list to.
-	[TestMethod]
-	public void A_House_With_No_Motion_Sensor_Anywhere_Is_Left_To_Its_Trackers()
-	{
-		Fixture t = Build(tweakArea: area => area.MotionSensors = []);
-
-		t.Ha.Trigger(Person, "not_home");
-		Advance(t, TimeSpan.FromMinutes(6));
-
-		Assert.AreEqual(AreaState.Away, t.Room.State);
+		Assert.AreEqual(AreaState.AutoActive, t.Room.State, "movement still lights the room");
 	}
 
 	// ---- the room's own gates still apply ------------------------------------------------------

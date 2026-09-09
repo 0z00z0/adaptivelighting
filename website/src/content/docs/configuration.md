@@ -154,7 +154,7 @@ than a "do not disturb" switch you turn on. In the file that is `IgnoreWhenOnInv
 
 **A scene replaces one transition and nothing else.**
 
-- Every gate still applies — the master switch, the room's own switch, an empty house, sleep, too
+- Every gate still applies — the master switch, the room's own switch, an away house, sleep, too
   much daylight, *Don't switch on while*. A scene is what happens *instead of* a command the engine
   had already decided to make, never a reason to make one.
 - Leaving the house still switches the room off; a room that should stay lit wants *Stays on when
@@ -265,10 +265,14 @@ to switch back by hand.
 Pairing *Activate when no movement for* with *Reset on presence* gives the usual loop: empty for six
 hours → Away, someone moves → Normal.
 
-Set both on an Away option and that loop becomes the whole answer to whether the house is away: **the
-people and device trackers under *Who lives here* stop deciding it.** A phone left on a worktop, or one
-that stopped reporting, can no longer hold the house dark on somebody standing in it. Set only one of
-the two, or let Home Assistant own the dropdown, and the trackers decide as they always have.
+**This dropdown is the only thing that decides whether the house is away.** The people and device
+trackers under *Who lives here* are watched and shown, never acted on, so a phone left on a worktop
+cannot hold the house dark on somebody standing in it. The consequence is worth stating plainly: a
+house with no Away option never becomes away, and never runs the lights-off sweep. Set one up — with
+*Activate when no movement for* on it — to get that sweep.
+
+If the dropdown cannot be read at all, because the helper is missing or unavailable, the house reads
+as Normal and keeps managing its rooms. There is no fallback to the trackers.
 
 ---
 
@@ -295,8 +299,8 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
-| **Who lives here** | Whose presence decides Home and Away. Empty means everyone Home Assistant knows, including people added later. | empty | `Persons` |
-| **Count the house as empty after** | How long everyone must be gone before rooms react to an empty house. | 5 min | `AwayDebounceMinutes` |
+| **Who lives here** | Whose phones are watched, so the dashboard can show who is home. Shown, never acted on — the house mode dropdown decides Home and Away. Empty means everyone Home Assistant knows, including people added later. | empty | `Persons` |
+| **Show the house as empty after** | How long everyone must be gone before the dashboard calls the house empty. Nothing is switched on the strength of it. | 5 min | `AwayDebounceMinutes` |
 | **Master switch** | The entity that pauses everything. Left at the default, the app's own enable switch in Home Assistant is used — turning that one off pauses the app, this page included. | the app's own switch | `KillSwitchEntity` |
 | Which way round it reads | Offered only once you pick your own entity: *read as an enabled flag — off kills the engine*, or *read as a kill switch — on kills the engine*. | enabled flag | `KillSwitchActiveWhenOff` |
 | **House name** | A label for logs and notifications, so two houses can be told apart. | "Adaptive lighting" | `ConfigName` |

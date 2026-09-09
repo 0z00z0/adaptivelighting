@@ -122,12 +122,9 @@ public static class RoomFacts
 			{ State: AreaState.SuppressedOff } => "Someone switched these lights off. Movement is ignored for now.",
 			{ State: AreaState.SceneHold } => "A scene is holding this room. The engine stands back until the scene lets go.",
 
-			// Must stay ahead of the two below, which say "Nobody home" while IsAnyoneHome is true.
-			{ State: AreaState.Away, IsAnyoneHome: true, BrightnessPct: not null } =>
+			{ State: AreaState.Away, BrightnessPct: not null } =>
 				"The house is in away mode. This room keeps its lights on.",
-			{ State: AreaState.Away, IsAnyoneHome: true } => "The house is in away mode, though somebody is home.",
-			{ State: AreaState.Away, BrightnessPct: not null } => "Nobody home. This room keeps its lights on.",
-			{ State: AreaState.Away } => "Nobody home.",
+			{ State: AreaState.Away } => "The house is in away mode.",
 			{ State: AreaState.Disabled } => "This room never changes by itself.",
 			{ State: AreaState.AutoVacant, IsDark: false } => "Off, watching. Too bright to switch on right now.",
 			_ => "Off, watching for movement."
@@ -168,8 +165,7 @@ public static class RoomFacts
 			AreaState.AutoVacant when snapshot.IsDark is false => "Movement will light it once it's dark.",
 			AreaState.AutoVacant => "Awaiting movement.",
 
-			AreaState.Away when snapshot.IsAnyoneHome is true => "Wakes when the house leaves away mode.",
-			AreaState.Away => "Wakes when the first person comes home.",
+			AreaState.Away => "Wakes when the house leaves away mode.",
 			AreaState.Disabled => "Nothing will be commanded until it is switched back on.",
 			_ => null
 		};
@@ -214,8 +210,7 @@ public static class RoomFacts
 	/// <summary>Why movement would not switch these lights on right now, or <c>null</c> when there is nothing to say.</summary>
 	/// <remarks>
 	///     Read off the verdict the engine published, never re-derived here: only the engine knows which gates it
-	///     consulted. Both nullable fields are tested for <c>true</c>, since a report that predates them carries
-	///     <c>null</c>, which supports no claim in either direction.
+	///     consulted.
 	/// </remarks>
 	public static string? AutoOnNote(AreaSnapshot snapshot)
 	{
@@ -227,7 +222,7 @@ public static class RoomFacts
 			AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
 				? $"{blocker} is on — movement won't light the room."
 				: "Something here is on — movement won't light the room.",
-			AutoOnBlock.Away when snapshot.IsAnyoneHome is true => ActivityView.AwayHold(snapshot),
+			AutoOnBlock.Away => ActivityView.AwayHold(snapshot),
 			_ => null
 		};
 	}

@@ -88,6 +88,9 @@ public sealed class AreaControllerTests
 		ForcedMode? forced = null) =>
 		new(home, kind, killed) { ModeValue = modeValue, ActiveScene = scene, Forced = forced };
 
+	/// <summary>The house set to away, with the trackers still reading home: the selector is the only cause.</summary>
+	private static HouseState AwayHouse() => House(kind: ModeKind.Away, modeValue: "Borte");
+
 	/// <summary>An <c>input_boolean</c> left on, pinning the Away option over the select.</summary>
 	private static ForcedMode ForcedAway(string entityId = "input_boolean.occupancy") =>
 		new(ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, entityId, "on");
@@ -834,27 +837,42 @@ public sealed class AreaControllerTests
 	}
 
 	[TestMethod]
-	public void Re_Enabling_Into_An_Empty_House_Lands_In_Away_Not_AutoVacant()
+	public void Re_Enabling_While_The_House_Is_Away_Lands_In_Away_Not_AutoVacant()
 	{
 		var t = Build();
 		t.House.OnNext(House(killed: true));
 		Assert.AreEqual(AreaState.Disabled, t.Area.State);
 
-		t.House.OnNext(House(home: false));
+		t.House.OnNext(AwayHouse());
 
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 	}
 
 	// ===================== away =====================
 
+	// The trackers are published for a person to look at and decide nothing, so an empty house on its own is
+	// still a house the engine manages.
 	[TestMethod]
-	public void Everyone_Leaving_Sweeps_The_Area_Off_And_Motion_Then_Does_Nothing()
+	public void A_House_The_Trackers_Call_Empty_Is_Not_Away()
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
 		t.House.OnNext(House(home: false));
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "nothing was swept, because nothing said the house was away");
+	}
+
+	[TestMethod]
+	public void The_House_Going_Away_Sweeps_The_Area_Off_And_Motion_Then_Does_Nothing()
+	{
+		var t = Build();
+		t.Ha.Trigger(Motion, "on");
+		t.Actuator.Clear();
+
+		t.House.OnNext(AwayHouse());
 
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: false });
@@ -871,7 +889,7 @@ public sealed class AreaControllerTests
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
-		t.House.OnNext(House(home: false));
+		t.House.OnNext(AwayHouse());
 
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "outdoor and security lights opt out of the sweep");
@@ -887,10 +905,10 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 		t.Actuator.Clear();
 
-		t.House.OnNext(House(home: false));
+		t.House.OnNext(AwayHouse());
 
 		Assert.AreEqual(AreaState.Away, t.Area.State);
-		Assert.IsTrue(t.Actuator.Last is { On: false }, "nobody is in the house to enjoy those levels");
+		Assert.IsTrue(t.Actuator.Last is { On: false }, "the house is set to away, so those levels are nobody's");
 	}
 
 	[TestMethod]
@@ -900,7 +918,7 @@ public sealed class AreaControllerTests
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Light, "off", null, PhysicalDevice());
 
-		t.House.OnNext(House(home: false));
+		t.House.OnNext(AwayHouse());
 
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 	}
@@ -908,10 +926,10 @@ public sealed class AreaControllerTests
 	// ===================== welcome home =====================
 
 	[TestMethod]
-	public void First_Arrival_Lights_A_WelcomeHome_Area_When_It_Is_Dark()
+	public void Leaving_Away_Lights_A_WelcomeHome_Area_When_It_Is_Dark()
 	{
 		var t = Build(s => s.WelcomeHome = true);
-		t.House.OnNext(House(home: false));
+		t.House.OnNext(AwayHouse());
 		t.Actuator.Clear();
 
 		t.House.OnNext(House());
@@ -921,10 +939,10 @@ public sealed class AreaControllerTests
 	}
 
 	[TestMethod]
-	public void First_Arrival_Leaves_An_Ordinary_Area_Dark()
+	public void Leaving_Away_Leaves_An_Ordinary_Area_Dark()
 	{
 		var t = Build();
-		t.House.OnNext(House(home: false));
+		t.House.OnNext(AwayHouse());
 		t.Actuator.Clear();
 
 		t.House.OnNext(House());
@@ -938,7 +956,7 @@ public sealed class AreaControllerTests
 	{
 		var t = Build(s => s.WelcomeHome = true);
 		t.Ha.SetState(Lux, "5000");
-		t.House.OnNext(House(home: false));
+		t.House.OnNext(AwayHouse());
 		t.Actuator.Clear();
 
 		t.House.OnNext(House());
@@ -1860,20 +1878,6 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "an away scene is the look; the area publishes but sweeps nothing");
 	}
 
-	[TestMethod]
-	public void PresenceAway_UnaffectedByModeModel()
-	{
-		// No HouseMode configured, so raw presence drives Away.
-		var t = Build();
-		t.Ha.Trigger(Motion, "on");
-		t.Actuator.Clear();
-
-		t.House.OnNext(House(home: false));
-
-		Assert.AreEqual(AreaState.Away, t.Area.State);
-		Assert.IsTrue(t.Actuator.Last is { On: false });
-	}
-
 	// ---- a forced mode is never a presence departure -------------------------------------------
 
 	private static AreaSnapshot LastReport(Fixture fixture) => fixture.Publisher.Snapshots[^1];
@@ -1907,22 +1911,6 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(ModeForceSource.WhileEntityOn, report.Forced!.Source);
 		Assert.AreEqual("input_boolean.occupancy", report.Forced.EntityId);
 		Assert.AreEqual("Away mode is forced while input_boolean.occupancy is on.", report.Forced.Describe());
-	}
-
-	[TestMethod]
-	public void PresenceDeparture_StillReportsEveryoneLeft()
-	{
-		Fixture t = Build();
-		t.Ha.Trigger(Motion, "on");
-
-		t.House.OnNext(House(home: false));
-
-		AreaSnapshot report = LastReport(t);
-
-		Assert.AreEqual(TransitionReason.EveryoneLeft, report.Reason,
-			"an empty house is still an empty house — only the mode's route was ever mislabelled");
-		Assert.AreEqual(false, report.IsAnyoneHome);
-		Assert.IsNull(report.Forced, "presence leaving is nobody forcing anything");
 	}
 
 	[TestMethod]
@@ -1986,19 +1974,6 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(TransitionReason.Startup, report.Reason);
 		Assert.AreEqual("input_boolean.occupancy", report.Forced?.EntityId,
 			"a mode forced at start-up must still be able to say what is holding it");
-	}
-
-	[TestMethod]
-	public void FirstArrival_AfterAPresenceDeparture_StillReportsAnArrival()
-	{
-		Fixture t = Build();
-		t.House.OnNext(House(home: false));
-		Assert.AreEqual(AreaState.Away, t.Area.State);
-
-		t.House.OnNext(House(home: true));
-
-		Assert.AreEqual(TransitionReason.FirstPersonArrived, LastReport(t).Reason,
-			"somebody genuinely walked in, and that is what an arrival is");
 	}
 
 	// Asserted on the tick, not on the house change: an area already Away short-circuits out of OnHouseChanged
@@ -2076,8 +2051,7 @@ public sealed class AreaControllerTests
 	{
 		var t = Build(tweak: s => s.WelcomeHome = true, tweakGlobal: g => g.HouseMode = GuestSceneMode());
 
-		// Everyone leaves: the area goes Away.
-		t.House.OnNext(House(home: false));
+		t.House.OnNext(AwayHouse());
 		Assert.AreEqual(AreaState.Away, t.Area.State);
 		t.Actuator.Clear();
 
@@ -2200,7 +2174,7 @@ public sealed class AreaControllerTests
 
 		Assert.AreEqual(AutoOnBlock.KillSwitch, FirstDeclined(Build(), t => t.House.OnNext(House(killed: true))));
 
-		Assert.AreEqual(AutoOnBlock.Away, FirstDeclined(Build(), t => t.House.OnNext(House(home: false))));
+		Assert.AreEqual(AutoOnBlock.Away, FirstDeclined(Build(), t => t.House.OnNext(AwayHouse())));
 
 		Assert.AreEqual(AutoOnBlock.Sleep,
 			FirstDeclined(Build(s => s.SleepBlocksAutoOn = true), t => t.House.OnNext(House(kind: ModeKind.Sleep))));
@@ -2787,7 +2761,7 @@ public sealed class AreaControllerTests
 	public void Lighting_By_Hand_Is_Refused_While_The_House_Is_Away()
 	{
 		Fixture t = Build();
-		t.House.OnNext(House(home: false));
+		t.House.OnNext(AwayHouse());
 		t.Actuator.Clear();
 
 		Assert.IsNotNull(t.Area.LightNowRefusal(), "an away house is a standing instruction, not a condition");

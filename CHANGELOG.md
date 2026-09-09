@@ -14,9 +14,15 @@ against each other.
 
 ### Changed
 
-- **A house that sets its own away mode after a quiet spell, and brings itself back when a sensor sees somebody, now decides that for itself.** Those two settings on the away mode option are the whole answer, in both directions: walking past a sensor brings the house back to normal, and the option's own *switch to this mode after no movement for* is what puts it away again. Phones and device trackers no longer add to it, so a phone left on a worktop, or one that stopped reporting, cannot hold a house dark on somebody standing in it. Until now the phones were consulted first, so the reset returned the dial to normal and the house was pulled straight back to away — the mechanism could never win, and there was no way to light a room from inside the building.
+- **The house mode dropdown is now the only thing that decides whether the house is away.** Four things move it, and they work exactly as they always have: an away mode that switches itself on after a set quiet spell, a hand on the dropdown, a time of day set to change the mode, and a helper that pins a mode while it is on. Phones and device trackers are still watched and still shown on the dashboard, so it is plain who is home and plain that the tracking works — they simply no longer switch anything. A phone left on a worktop, or one that stopped reporting, cannot hold a house dark on somebody standing in it, and there is no longer a way for the trackers to say away in the same instant a sensor sees somebody.
 
-  **A house that has not set both of those keeps behaving exactly as it does today**, and so does one whose mode dropdown Home Assistant owns: the phones are still what put it away. Nothing else moves — the away mode somebody chooses by hand still wins, the few minutes in which presence is ignored after the mode is set still protect it from somebody walking out, and every room gate (darkness, sleep, a blocking entity, the master switch, a switched-off room) refuses exactly as before.
+  **A house that has not set up an away mode never becomes away.** That is the rule working, not a fault: nothing else is allowed to answer the question. Set an away mode with a quiet time on it to get the departure sweep back.
+
+  **The lights-off sweep now runs when the dropdown goes to away**, which for a house with a quiet time on its away mode is once that time has passed rather than the moment the last phone leaves.
+
+  **If the dropdown cannot be read** — missing, unavailable, or renamed in Home Assistant — the house reads as home and keeps managing its rooms. There is no fallback to the phones. A helper pinning a mode still works, since it is read on its own.
+
+  **Nothing else moves.** Every room gate refuses exactly as before: darkness, sleep, a blocking entity, the master switch and a switched-off room. So does the few minutes in which presence is ignored after a mode is set, which is what stops somebody's own exit cancelling the mode they just chose.
 
 ## [2026.9.9] - 2026-09-09
 
