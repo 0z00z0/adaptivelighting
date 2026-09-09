@@ -1420,7 +1420,7 @@ public sealed class ModeMonitorTests
 	}
 
 	[TestMethod]
-	public void MasterSwitch_StopsTheQuietTimeRule()
+	public void MasterSwitch_StopsTheQuietTimeRule_AndItFiresOnceTheSwitchLifts()
 	{
 		var mode = Mode();
 		mode.OptionFor("Borte")!.ActivateAfterNoMotionMinutes = 30;
@@ -1433,8 +1433,39 @@ public sealed class ModeMonitorTests
 			});
 
 		Advance(rig, TimeSpan.FromMinutes(45));
-
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Borte"), "muzzled, so the quiet house does not write the select");
+
+		rig.Ha.Trigger(Master, "on");
+		Advance(rig, TimeSpan.FromMinutes(2));
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"),
+			"a write that never went out latches nothing, so the next tick asks again and it lands");
+	}
+
+	[TestMethod]
+	public void QuietTimeRule_DoesNotSwallowMovementThatArrivedWhileTheWriteWasOut()
+	{
+		var rig = Started(AwayActivatesOnNoMotion(30), motion: [Gang], startAt: Evening,
+			initialSelect: "Hjemme", seed: ha => ha.SetState(Gang, "off"));
+
+		// Home Assistant's own thread, delivering movement while the select write is in flight.
+		rig.Ha.WhenCalled = _ =>
+		{
+			rig.Ha.WhenCalled = null;
+			rig.Ha.Trigger(Gang, "on");
+			rig.Ha.Trigger(Gang, "off");
+		};
+
+		Advance(rig, TimeSpan.FromMinutes(35));
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Borte"), "the house had been quiet long enough, so the write goes out");
+
+		// Somebody moved, so the quiet spell is over and the next one has to be counted afresh. A latch set over
+		// the top of that movement would refuse for ever.
+		Activate(rig, "Hjemme");
+		Advance(rig, TimeSpan.FromMinutes(35));
+
+		Assert.AreEqual(2, SelectCalls(rig.Ha, "Borte"),
+			"the movement ended the spell; a fresh quiet half-hour is a fresh reason to set the mode");
 	}
 
 	/// <summary>An <see cref="ILogger"/> that counts warnings.</summary>

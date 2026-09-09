@@ -809,17 +809,22 @@ public sealed class ModeMonitor : IDisposable
 			if (now - lastMotionAt < TimeSpan.FromMinutes(option.ActivateAfterNoMotionMinutes!.Value))
 				continue;
 
-			WriteMode(option.Value, entity => _logger.LogInformation(
+			// A write that never went out sets nothing, so nothing is claimed and the next tick asks again.
+			if (!WriteMode(option.Value, entity => _logger.LogInformation(
 				"No motion for {Minutes} min; setting {Select} to '{Mode}'.",
-				option.ActivateAfterNoMotionMinutes, entity, option.Value));
+				option.ActivateAfterNoMotionMinutes, entity, option.Value)))
+				return;
 
 			lock (_gate)
 			{
-				_inactivityLatched = true;
-
 				// So this mode reports as the engine's doing and never as a presence departure. Survives only as
 				// long as the select keeps reading it; see OnSelectChanged.
 				_inactivityActivated = option.Value.Trim();
+
+				// Movement arriving while the write was out ends the quiet spell that triggered it, and MarkMotion
+				// has already cleared the latch. Setting it here would discard that movement and refuse for ever.
+				if (_lastMotionAt == lastMotionAt)
+					_inactivityLatched = true;
 			}
 
 			return;

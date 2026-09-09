@@ -95,8 +95,16 @@ public sealed class FakeHaContext : IHaContext
 
 	public IReadOnlyList<Entity> GetAllEntities() => [.. _states.Keys.Select(id => new Entity(this, id))];
 
-	public void CallService(string domain, string service, ServiceTarget? target = null, object? data = null) =>
-		Calls.Add(new ServiceCall(domain, service, target, data));
+	/// <summary>Runs once a call has been recorded, so a test can do what Home Assistant's own thread might do next.</summary>
+	// For the races that only exist between a call going out and its echo coming back.
+	public Action<ServiceCall>? WhenCalled { get; set; }
+
+	public void CallService(string domain, string service, ServiceTarget? target = null, object? data = null)
+	{
+		ServiceCall call = new(domain, service, target, data);
+		Calls.Add(call);
+		WhenCalled?.Invoke(call);
+	}
 
 	public Task<JsonElement?> CallServiceWithResponseAsync(string domain, string service, ServiceTarget? target = null, object? data = null) =>
 		Task.FromResult<JsonElement?>(null);
