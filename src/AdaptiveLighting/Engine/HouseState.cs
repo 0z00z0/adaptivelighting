@@ -57,6 +57,10 @@ public sealed record HouseState(
 	/// <summary>The active option's <c>scene.*</c> when its kind is Away or Guest and it names one.</summary>
 	public string? ActiveScene { get; init; }
 
+	/// <summary>Whether the house-mode option answers the away question on its own, so <see cref="IsAnyoneHome"/> may not force Away.</summary>
+	/// <remarks>Derived from the document by <see cref="HouseModeConfig.ConfiguredAwayDecides"/>, so it moves only on a config change.</remarks>
+	public bool ConfiguredAwayDecides { get; init; }
+
 	/// <summary>What is forcing <see cref="ActiveKind"/>, or <c>null</c> when the select's own value is the answer.</summary>
 	// Part of the record equality, so the orchestrator republishes when a forcing entity flips even though
 	// ActiveKind and ModeValue have not moved.
@@ -66,9 +70,11 @@ public sealed record HouseState(
 	public static readonly HouseState Initial = new(true, ModeKind.Normal, false);
 
 	/// <summary>The mode, in precedence order: Away, then Sleep, then Guest.</summary>
-	// An away-kind option ORs with presence, so a house full of people can still be told to be Away.
+	// An away-kind option ORs with presence, so a house full of people can still be told to be Away. Under
+	// ConfiguredAwayDecides the presence side drops out of that OR: the option is the whole answer, and a phone
+	// left on a worktop must not overrule the sensor that has just seen somebody.
 	public HouseMode Mode =>
-		!IsAnyoneHome || ActiveKind == ModeKind.Away ? HouseMode.Away
+		ActiveKind == ModeKind.Away || (!IsAnyoneHome && !ConfiguredAwayDecides) ? HouseMode.Away
 		: ActiveKind == ModeKind.Sleep ? HouseMode.Sleep
 		: ActiveKind == ModeKind.Guest ? HouseMode.Guest
 		: HouseMode.Home;

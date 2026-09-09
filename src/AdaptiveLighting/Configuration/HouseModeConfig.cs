@@ -89,6 +89,25 @@ public class HouseModeConfig
 		Options.FirstOrDefault(o => o.Kind == ModeKind.Normal);
 
 	/// <summary>
+	///     Whether an away option answers "is the house away" on its own: it switches on quiet and comes back when a
+	///     sensor sees somebody, so the presence verdict may not force Away on top of it.
+	/// </summary>
+	/// <remarks>
+	///     Both halves are required. An option resetting on presence with nothing to put the house away would leave a
+	///     house that can never sweep, and without a motion sensor in a managed room neither half can fire at all.
+	///     Answers false under <see cref="HouseModeAuthority.HomeAssistant"/>, where both halves are dormant and the
+	///     configuration is inert.
+	/// </remarks>
+	public bool ConfiguredAwayDecides(bool houseHasMotionSensors) =>
+		!HomeAssistantDecides
+		&& EntityId is not null
+		&& houseHasMotionSensors
+		&& Options.Any(option =>
+			option.Kind == ModeKind.Away
+			&& option.ActivateAfterNoMotionMinutes is > 0
+			&& option.ResetOnPresence);
+
+	/// <summary>
 	///     The period a sleep option clamps to, by the one chain the engine and the UI both use: the option's
 	///     <see cref="HouseModeOptionConfig.ClampPeriodId"/>, else the first period whose
 	///     <see cref="TimePeriodConfig.SetsModeId"/> sets this option, else a period named <c>night</c>, else <c>null</c>.

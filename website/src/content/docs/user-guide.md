@@ -268,9 +268,7 @@ sensors"]
   the house's outdoor light sensor, and the device classes behind a fold.
 - **People** — who is watched for presence, and how long everyone must be gone before rooms react to
   an empty house. Leave the list empty and it means everyone Home Assistant knows, including people
-  added later. **Movement counts too**: walking past a sensor in any managed room counts as somebody
-  being home for half an hour, exactly as a phone does, so a house is never locked dark on somebody
-  standing in it without their phone.
+  added later.
 - **Master switch** — the one switch that pauses everything.
 - **House name**, and a **Fine tuning** fold for the things you set once.
 - **This installation** — whether the engine is running, whether Home Assistant is answering, and

@@ -1831,11 +1831,8 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(0, optedOut.Actuator.Applied.Count, "a SkipAwaySweep area is left alone");
 	}
 
-	// Renamed from AwayKind_MotionIgnored, which claimed more than it tested. Movement now counts as somebody
-	// being home, so motion is no longer ignored while the house is away in general — only while an away-kind
-	// option is standing, which is a choice somebody made and not a failure to observe anyone.
 	[TestMethod]
-	public void AwayKindMode_IgnoresMotion_BecauseSomebodyChoseIt()
+	public void AwayKind_MotionIgnored()
 	{
 		var t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
 		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte"));
@@ -1845,7 +1842,7 @@ public sealed class AreaControllerTests
 		t.Ha.Trigger(Motion, "on");
 
 		Assert.AreEqual(AreaState.Away, t.Area.State);
-		Assert.AreEqual(0, t.Actuator.Applied.Count, "an away mode somebody set is not undone by walking past a sensor");
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "motion is ignored while the house is away");
 	}
 
 	[TestMethod]
@@ -1866,8 +1863,7 @@ public sealed class AreaControllerTests
 	[TestMethod]
 	public void PresenceAway_UnaffectedByModeModel()
 	{
-		// No HouseMode configured, so the presence verdict alone drives Away. What that verdict is composed from —
-		// trackers, and movement inside its window — is PresenceMonitor's question, not this room's.
+		// No HouseMode configured, so raw presence drives Away.
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();

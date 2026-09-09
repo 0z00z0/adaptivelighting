@@ -95,6 +95,63 @@ public sealed class HouseModeConfigTests
 		Assert.IsTrue(toggleOn.HasResetTrigger, "the toggle alone arms the presence reset");
 	}
 
+	// ===================== ConfiguredAwayDecides =====================
+
+	private static HouseModeConfig AwayOption(
+		int? quietMinutes = 60,
+		bool reset = true,
+		HouseModeAuthority authority = HouseModeAuthority.AdaptiveLighting) => new()
+	{
+		Entity = "input_select.husmodus",
+		Authority = authority,
+		Options =
+		[
+			new() { Value = "Normal", Kind = ModeKind.Normal },
+			new()
+			{
+				Value = "Borte",
+				Kind = ModeKind.Away,
+				ActivateAfterNoMotionMinutes = quietMinutes,
+				ResetOnPresence = reset
+			}
+		]
+	};
+
+	[TestMethod]
+	public void ConfiguredAwayDecides_Wants_Both_Halves_And_A_Sensor()
+	{
+		Assert.IsTrue(AwayOption().ConfiguredAwayDecides(houseHasMotionSensors: true),
+			"quiet puts the house away and a sensor brings it back: the whole intent, in the document");
+
+		Assert.IsFalse(AwayOption(reset: false).ConfiguredAwayDecides(houseHasMotionSensors: true),
+			"nothing describes the way back, so the trackers are still needed");
+
+		Assert.IsFalse(AwayOption(quietMinutes: null).ConfiguredAwayDecides(houseHasMotionSensors: true),
+			"nothing puts the house away, so switching the trackers off would leave one that never sweeps");
+
+		Assert.IsFalse(AwayOption().ConfiguredAwayDecides(houseHasMotionSensors: false),
+			"neither half can fire without a sensor in a managed room");
+	}
+
+	[TestMethod]
+	public void ConfiguredAwayDecides_Is_False_While_Home_Assistant_Owns_The_Select()
+	{
+		HouseModeConfig config = AwayOption(authority: HouseModeAuthority.HomeAssistant);
+
+		Assert.IsFalse(config.ConfiguredAwayDecides(houseHasMotionSensors: true),
+			"both halves stand down under that authority, so the configuration is inert and the trackers are all there is");
+	}
+
+	[TestMethod]
+	public void ConfiguredAwayDecides_Ignores_A_Sleep_Or_Guest_Option_Carrying_The_Same_Settings()
+	{
+		HouseModeConfig config = AwayOption();
+		config.Options[1].Kind = ModeKind.Sleep;
+
+		Assert.IsFalse(config.ConfiguredAwayDecides(houseHasMotionSensors: true),
+			"the question is what makes the house away; a sleep option answers a different one");
+	}
+
 	// ===================== SleepClampPeriodFor =====================
 
 	[TestMethod]

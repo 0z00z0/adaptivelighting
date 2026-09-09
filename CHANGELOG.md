@@ -12,6 +12,14 @@ against each other.
 
 ## [Unreleased]
 
+### Changed
+
+- **A house that sets its own away mode after a quiet spell, and brings itself back when a sensor sees somebody, now decides that for itself.** Those two settings on the away mode option are the whole answer, in both directions: walking past a sensor brings the house back to normal, and the option's own *switch to this mode after no movement for* is what puts it away again. Phones and device trackers no longer add to it, so a phone left on a worktop, or one that stopped reporting, cannot hold a house dark on somebody standing in it. Until now the phones were consulted first, so the reset returned the dial to normal and the house was pulled straight back to away — the mechanism could never win, and there was no way to light a room from inside the building.
+
+  **A house that has not set both of those keeps behaving exactly as it does today**, and so does one whose mode dropdown Home Assistant owns: the phones are still what put it away. Nothing else moves — the away mode somebody chooses by hand still wins, the few minutes in which presence is ignored after the mode is set still protect it from somebody walking out, and every room gate (darkness, sleep, a blocking entity, the master switch, a switched-off room) refuses exactly as before.
+
+- **`Global.MotionPresenceMinutes`, added in 2026.9.9, is gone, and no setting replaces it.** It was a second half-hour window governing what the two settings above already govern, and it counted movement as somebody being home for every house whether or not it had asked. A file that still carries the key says so once on load and on the settings page, and the next save from the browser drops it — nothing needs editing by hand.
+
 ## [2026.9.9] - 2026-09-09
 
 ### Changed

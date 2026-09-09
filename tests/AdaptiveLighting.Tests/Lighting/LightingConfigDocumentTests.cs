@@ -1364,6 +1364,29 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(0, read.Config.RetiredKeysInDocument.Count);
 	}
 
+	// The one house-wide retired key, so the scan has to find it under Global and not only on a period or a room.
+	[TestMethod]
+	public void MotionPresenceMinutes_Is_Reported_Under_Global_And_Dropped_By_The_Next_Save()
+	{
+		DocumentReadResult read = LightingConfigDocument.Deserialize(
+			$"""
+			{LightingConfigDocument.RootKey}:
+			  Global:
+			    AwayDebounceMinutes: 5
+			    MotionPresenceMinutes: 30
+			  Periods:
+			    - Name: day
+			      Start: "09:00"
+			""");
+
+		StringAssert.Contains(read.Config.RetiredKeysInDocument.Single(), "MotionPresenceMinutes");
+		Assert.AreEqual(5, read.Config.Global.AwayDebounceMinutes, "the rest of the section binds as it always did");
+
+		string saved = LightingConfigDocument.Serialize(read.Config);
+
+		Assert.IsFalse(saved.Contains("MotionPresenceMinutes", StringComparison.Ordinal));
+	}
+
 	/// <summary>What the sentence promises: saving once from the browser drops the key, and the sentence with it.</summary>
 	[TestMethod]
 	public void Saving_The_Document_Drops_The_Retired_Key_And_Its_Sentence()

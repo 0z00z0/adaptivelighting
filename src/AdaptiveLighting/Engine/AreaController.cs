@@ -814,7 +814,7 @@ public sealed class AreaController : IDisposable
 			// Away has three tellings and only one is a departure. The forced one is checked first: nothing else
 			// in the log would ever have named it.
 			AutoOnBlock.Away => _house.Forced is { Kind: ModeKind.Away } forced ? forced.Describe()
-				: _house.IsAnyoneHome ? "the house is set to away"
+				: _house.IsAnyoneHome || _house.ConfiguredAwayDecides ? "the house is set to away"
 				: "nobody is home",
 			AutoOnBlock.SceneHold => $"a guest scene ({_house.ActiveScene}) is holding this area",
 			AutoOnBlock.Sleep => "sleep mode blocks auto-on for this area",

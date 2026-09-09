@@ -199,6 +199,12 @@ public sealed class ModeMonitor : IDisposable
 		}
 	}
 
+	/// <summary>Whether the configured away option decides on its own, so the presence verdict may not force Away.</summary>
+	// Read from the document and the resolved motion union, both settled before Start, so this cannot move under a
+	// running engine; a config save rebuilds the whole thing.
+	public bool ConfiguredAwayDecides =>
+		_global.HouseMode?.ConfiguredAwayDecides(_areaMotionSensors.Count > 0) ?? false;
+
 	/// <summary>The raw house-mode option string, or <c>null</c> when the select is unconfigured, unknown or unavailable.</summary>
 	// Warns once per distinct value no option classifies, which is the tripwire for a rename in Home Assistant.
 	public string? CurrentModeValue
