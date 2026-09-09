@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.10] - 2026-09-09
+
 ### Changed
 
 - **The house mode dropdown is now the only thing that decides whether the house is away.** Four things move it, and they work exactly as they always have: an away mode that switches itself on after a set quiet spell, a hand on the dropdown, a time of day set to change the mode, and a helper that pins a mode while it is on. Phones and device trackers are still watched and still shown on the dashboard, so it is plain who is home and plain that the tracking works — they simply no longer switch anything. A phone left on a worktop, or one that stopped reporting, cannot hold a house dark on somebody standing in it, and there is no longer a way for the trackers to say away in the same instant a sensor sees somebody.
