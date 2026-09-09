@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.9] - 2026-09-09
+
 ### Changed
 
 - **Movement in a room the engine manages now counts as somebody being home, on equal footing with a tracked phone.** Presence used to be decided by phones and device trackers alone, and that verdict was read ahead of everything else, so a house whose trackers saw nobody stayed locked dark however much somebody moved about inside it: movement refused, the manual light button refused, and no way to light a room from inside the building. Walking past a sensor now brings the house out of away mode and it behaves normally again — one movement, not two. The option that resets the house mode on presence finally reaches anywhere, because the presence verdict no longer says away in the same instant the selector returns to normal.
