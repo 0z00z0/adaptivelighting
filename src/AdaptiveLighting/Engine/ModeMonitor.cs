@@ -76,6 +76,10 @@ public sealed class ModeMonitor : IDisposable
 	private string? _lastKnownMode;
 	private bool _selectIsBlind;
 
+	// What a reset has just written and the house is already acting on, before Home Assistant echoes it. Cleared
+	// by the select moving at all, and by the first tick that finds the select has not taken it.
+	private string? _assumedMode;
+
 	private DateTimeOffset _activatedAt;
 	private DateTimeOffset _lastMotionAt;
 	private bool _inactivityLatched;
@@ -213,6 +217,12 @@ public sealed class ModeMonitor : IDisposable
 		{
 			if (_global.HouseMode?.Entity is not { Length: > 0 } entityId)
 				return null;
+
+			// A reset the engine has just written counts as done. The select has not moved since, so nothing it
+			// reads is newer than this.
+			lock (_gate)
+				if (_assumedMode is { Length: > 0 } assumed)
+					return assumed;
 
 			if (_ha.GetState(entityId).AsUsableState() is not { } value)
 				return HoldLastKnownMode(entityId);
@@ -441,6 +451,11 @@ public sealed class ModeMonitor : IDisposable
 		lock (_gate)
 		{
 			_activatedAt = _scheduler.Now;
+
+			// The select has moved, so whatever it now reads is newer than anything the engine assumed about it.
+			// This is also where the echo of the engine's own write lands, and clearing it there costs nothing:
+			// the value is the same one, so the republish below says nothing new.
+			_assumedMode = null;
 
 			// Anything that moves the select away takes ownership back from the no-motion rule, so a later move
 			// onto the same option is somebody else's doing.
@@ -836,7 +851,7 @@ public sealed class ModeMonitor : IDisposable
 	// the sleep ceiling, so an engine writing it while paused is still driving the house. Nothing is queued, and
 	// every rule that reaches here is asked again — the inactivity rule on its next tick, a reset on its next
 	// trigger, a period's mode switch at its next boundary.
-	private bool WriteMode(string wanted, Action<string> announce)
+	private bool WriteMode(string wanted, Action<string> announce, bool actAtOnce = false)
 	{
 		if (KillSwitchActive)
 		{
@@ -844,7 +859,44 @@ public sealed class ModeMonitor : IDisposable
 			return false;
 		}
 
-		return _modeSelect.Ensure(wanted, announce);
+		if (!_modeSelect.Ensure(wanted, announce))
+			return false;
+
+		if (!actAtOnce)
+			return true;
+
+		lock (_gate)
+		{
+			_assumedMode = wanted.Trim();
+			_lastKnownMode = _assumedMode;
+		}
+
+		AnnounceForcedMode();
+		_changed.OnNext(Unit.Default);
+		return true;
+	}
+
+	/// <summary>Drops an assumed mode the select has not taken, so its own value decides again.</summary>
+	// From the tick, which is the first moment a lost write can be told from an echo still on its way. Home
+	// Assistant's echo does not reach here: the select moving raises a state change, and OnSelectChanged clears it.
+	private void ExpireAssumedMode()
+	{
+		string? assumed;
+		lock (_gate)
+			assumed = _assumedMode;
+
+		if (assumed is null || _modeSelect.AlreadyShows(assumed))
+			return;
+
+		lock (_gate)
+			_assumedMode = null;
+
+		_logger.LogInformation(
+			"{Select} did not take '{Mode}'; the house goes back to the mode the select itself reads.",
+			_modeSelect.Entity, assumed);
+
+		AnnounceForcedMode();
+		_changed.OnNext(Unit.Default);
 	}
 
 	private static bool IsArrival(StateChange change) =>
@@ -881,6 +933,9 @@ public sealed class ModeMonitor : IDisposable
 	private void OnTick()
 	{
 		DateTimeOffset now = _scheduler.Now;
+
+		// First, so everything below reads a mode the select has either taken or been shown not to have taken.
+		ExpireAssumedMode();
 
 		// Before the lock: these consult Home Assistant, and _gate is for this object's own fields.
 		HouseModeOptionConfig? activeOption = CurrentOption;
@@ -1102,8 +1157,14 @@ public sealed class ModeMonitor : IDisposable
 			return;
 		}
 
-		WriteMode(normal, entity =>
-			_logger.LogInformation("Resetting {Select} to '{Normal}' ({Trigger}).", entity, normal, trigger));
+		// The one write the house acts on before Home Assistant echoes it. A reset is the arrival direction —
+		// somebody has walked in, or the waking period has come round — and waiting for the echo means the first
+		// movement is refused and only the second lights the room. Every other write still waits, so a departure
+		// the select never took simply does not happen, rather than happening and then coming undone.
+		WriteMode(
+			normal,
+			entity => _logger.LogInformation("Resetting {Select} to '{Normal}' ({Trigger}).", entity, normal, trigger),
+			actAtOnce: true);
 	}
 
 	/// <inheritdoc/>

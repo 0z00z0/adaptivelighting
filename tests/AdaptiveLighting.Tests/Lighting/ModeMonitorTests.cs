@@ -636,6 +636,77 @@ public sealed class ModeMonitorTests
 			"a device_tracker transitioning to home is an arrival, not an on/off edge");
 	}
 
+	// ---- arriving home: a reset counts as done the moment it is written -------------------------
+
+	[TestMethod]
+	public void PresenceReset_LeavesAwayOnTheWriteItself_NotOnTheEcho()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind);
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Gang, "on");
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "the arrival wrote the select");
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind,
+			"the house is home on the first movement; nothing waits for Home Assistant to report the select back");
+	}
+
+	[TestMethod]
+	public void AnAssumedResetIsDropped_WhenTheSelectNeverTakesIt()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Gang, "on");
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind);
+
+		// The select never moves: the write was lost. One tick later its own value is the answer again.
+		Advance(rig, TimeSpan.FromMinutes(2));
+
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind,
+			"the select remains the source of truth, so a reading that disagrees wins over the assumption");
+	}
+
+	[TestMethod]
+	public void AnAssumedReset_IsBeatenByThePersonMovingTheDialToSomethingElse()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Gang, "on");
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind);
+
+		Activate(rig, "Sover");
+
+		Assert.AreEqual(ModeKind.Sleep, rig.Monitor.ActiveKind,
+			"the select moved to a third value, which is newer than anything the engine assumed");
+	}
+
+	// A control: it holds with or without the assumption, and is here so the pair either side of it mean something.
+	[TestMethod]
+	public void TheEchoOfAnAssumedReset_WritesTheSelectNoSecondTime()
+	{
+		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(20));
+		rig.Ha.Trigger(Gang, "on");
+
+		Activate(rig, "Hjemme");   // Home Assistant reporting the engine's own write back
+		Advance(rig, TimeSpan.FromMinutes(2));
+
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind, "the echo settles what was already true");
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "and it does not write the select a second time");
+	}
+
 	// ---- auto-away by inactivity ---------------------------------------------------------------
 
 	private static GlobalConfig AwayActivatesOnNoMotion(int minutes)

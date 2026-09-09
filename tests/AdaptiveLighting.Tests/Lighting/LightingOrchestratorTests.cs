@@ -132,6 +132,67 @@ public sealed class LightingOrchestratorTests
 			"nothing queues a command the muzzle refused; the away mode still stands and the rooms take it from there");
 	}
 
+	// ===================== arriving home =====================
+
+	private const string Stue = "light.stue";
+	private const string StueMotion = "binary_sensor.stue_m";
+
+	/// <summary>A house away, with one room, whose away option resets on any movement with no grace.</summary>
+	private static (LightingOrchestrator Engine, FakeHaContext Ha, FakeStatePublisher Publisher) AwayHouseWithOneRoom()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Person, "home");
+		ha.SetState(Select, "Borte");
+		ha.SetState(Stue, "off");
+		ha.SetState(StueMotion, "off");
+
+		HouseModeConfig mode = new()
+		{
+			Entity = Select,
+			Options =
+			[
+				new() { Value = "Normal", Kind = ModeKind.Normal },
+				new() { Value = "Borte", Kind = ModeKind.Away, ResetOnPresence = true, ResetPresenceGraceMinutes = 0 }
+			]
+		};
+
+		AdaptiveLightingConfig config = new()
+		{
+			Global = new GlobalConfig { Persons = [Person], HouseMode = mode, CircadianTickSeconds = 60 },
+			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+		};
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		FakeStatePublisher publisher = new();
+		LightingOrchestrator engine = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			new FakeLightActuator(), publisher, new FakeNotifier(), NullLoggerFactory.Instance);
+
+		engine.Start();
+		return (engine, ha, publisher);
+	}
+
+	[TestMethod]
+	public void Arriving_Home_Takes_One_Movement_And_The_Echo_Adds_Nothing()
+	{
+		(LightingOrchestrator engine, FakeHaContext ha, FakeStatePublisher publisher) = AwayHouseWithOneRoom();
+		Assert.AreEqual(AreaState.Away, engine.Areas[0].State, "the house started away");
+
+		ha.Trigger(StueMotion, "on");
+
+		Assert.AreNotEqual(AreaState.Away, engine.Areas[0].State,
+			"the first movement resets the mode and the room leaves away with it");
+
+		int published = publisher.Snapshots.Count;
+		ha.Trigger(Select, "Normal");   // Home Assistant reporting the engine's own write back
+
+		Assert.AreEqual(published, publisher.Snapshots.Count,
+			"the echo carries nothing the house has not already acted on, so no room is told twice");
+	}
+
 	// Decided at start-up, once per light per run: the registry cannot move underneath.
 	[TestMethod]
 	public void Two_Rooms_Commanding_One_Light_Are_Reported_Once_At_Start_Up()
