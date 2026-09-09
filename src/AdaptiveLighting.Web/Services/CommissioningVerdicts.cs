@@ -57,6 +57,7 @@ public static class CommissioningVerdicts
 	/// <param name="area">The proposed room, whose <c>null</c> properties mean "inherit".</param>
 	/// <param name="suspectCount">How many of the room's commanded lights <c>LightAudit</c> flags.</param>
 	/// <param name="motionCount">How many motion sensors resolve; none makes the room switch-driven.</param>
+	/// <param name="awayIsReachable">Whether any house-mode option is marked Away; with none, two of a room's settings can never run.</param>
 	/// <returns>The notes, worst first. Empty means the row says <see cref="ReadyWord"/>.</returns>
 	public static IReadOnlyList<Verdict> For(
 		AreaConfig area,
@@ -64,7 +65,8 @@ public static class CommissioningVerdicts
 		int luxSensorCount,
 		int suspectCount,
 		int lightCount,
-		int motionCount)
+		int motionCount,
+		bool awayIsReachable = true)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 		ArgumentNullException.ThrowIfNull(defaults);
@@ -102,11 +104,17 @@ public static class CommissioningVerdicts
 		if (SleepSteps.Of(effective) is not SleepStep.Normal)
 			notes.Add(new Verdict("quiet while the house sleeps", VerdictTone.Info));
 
+		// Both of these are away behaviours. A document with no option marked Away can never reach either, and a
+		// sheet that still promised them would be the last place anybody looked for the reason.
 		if (effective.WelcomeHome)
-			notes.Add(new Verdict("lights up when away mode ends", VerdictTone.Info));
+			notes.Add(awayIsReachable
+				? new Verdict("lights up when away mode ends", VerdictTone.Info)
+				: new Verdict("set to light up when away mode ends, but no house-mode option is marked Away", VerdictTone.Warn));
 
 		if (effective.SkipAwaySweep)
-			notes.Add(new Verdict("stays on when the house goes away", VerdictTone.Info));
+			notes.Add(awayIsReachable
+				? new Verdict("stays on when the house goes away", VerdictTone.Info)
+				: new Verdict("set to stay on when the house goes away, but no house-mode option is marked Away", VerdictTone.Warn));
 
 		return notes;
 	}

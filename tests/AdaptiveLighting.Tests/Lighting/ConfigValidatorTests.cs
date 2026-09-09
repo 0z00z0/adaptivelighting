@@ -943,6 +943,23 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
+	public void AHouseMode_WithNoAwayOption_Warns_ThatTheHouseCanNeverBeAway()
+	{
+		var config = WithHouseMode();
+		config.Global.HouseMode!.OptionFor("Borte")!.Kind = ModeKind.Guest;   // nothing left is Away
+
+		var result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, "such a document runs; what it cannot do is ever be away");
+		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("never be away", StringComparison.Ordinal)),
+			"the leaving sweep, the away scene and two room settings are all unreachable, and nothing else says so");
+
+		Assert.IsFalse(
+			ConfigValidator.Validate(WithHouseMode()).Warnings.Any(warning => warning.Contains("never be away", StringComparison.Ordinal)),
+			"the control: a document that does mark an option Away says nothing");
+	}
+
+	[TestMethod]
 	public void APresenceSensor_OfAWrongDomain_Warns()
 	{
 		var config = WithHouseMode();

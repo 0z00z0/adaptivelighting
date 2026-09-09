@@ -88,6 +88,14 @@ public class HouseModeConfig
 	public HouseModeOptionConfig? NormalOption =>
 		Options.FirstOrDefault(o => o.Kind == ModeKind.Normal);
 
+	/// <summary>Whether any option would put the house in away.</summary>
+	/// <remarks>
+	///     With none, the leaving sweep, the away scene and the per-room <c>SkipAwaySweep</c> and
+	///     <c>WelcomeHome</c> settings are all unreachable. That is allowed; it is warned about.
+	/// </remarks>
+	[YamlIgnore]
+	public bool HasAwayOption => Options.Any(o => o.Kind == ModeKind.Away);
+
 	/// <summary>
 	///     The period a sleep option clamps to, by the one chain the engine and the UI both use: the option's
 	///     <see cref="HouseModeOptionConfig.ClampPeriodId"/>, else the first period whose

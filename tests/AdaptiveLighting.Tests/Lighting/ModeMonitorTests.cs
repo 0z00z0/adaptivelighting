@@ -247,6 +247,35 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(2, logger.Warnings, "a second spell is a second thing to say");
 	}
 
+	/// <summary>Starts a monitor on <paramref name="mode"/> and answers how many warnings the start-up wrote.</summary>
+	private static int WarningsOnStart(HouseModeConfig mode)
+	{
+		var scheduler = new TestScheduler();
+		scheduler.AdvanceTo(Evening.Ticks);
+
+		var ha = new FakeHaContext();
+		ha.SetState(Select, "Hjemme");
+
+		var logger = new CountingLogger();
+		using var monitor = new ModeMonitor(ha, new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode },
+			logger, scheduler, Periods(), () => SunTimes.Unknown, [], zone: TimeZoneInfo.Utc);
+
+		monitor.Start();
+		return logger.Warnings;
+	}
+
+	[TestMethod]
+	public void AHouseWithNoAwayOption_SaysSoAtStartUp()
+	{
+		var mode = Mode();
+		mode.OptionFor("Borte")!.Kind = ModeKind.Guest;   // nothing left is Away
+
+		Assert.AreEqual(1, WarningsOnStart(mode),
+			"the leaving sweep and the away scene can never run, and the start-up log is where a household would look");
+
+		Assert.AreEqual(0, WarningsOnStart(Mode()), "the control: an ordinary house has nothing to say here");
+	}
+
 	[TestMethod]
 	public void UnrecognisedValue_WarnsOncePerValue()
 	{

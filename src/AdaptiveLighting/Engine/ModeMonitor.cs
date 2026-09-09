@@ -470,6 +470,7 @@ public sealed class ModeMonitor : IDisposable
 				.SubscribeSafe(_ => OnPeriodSelectChanged(), _logger));
 		}
 
+		AnnounceUnreachableAway();
 		AnnounceDormantModeRules();
 		AnnounceHeldPeriods();
 		SubscribePresenceResets();
@@ -528,6 +529,20 @@ public sealed class ModeMonitor : IDisposable
 	{
 		OnTick();
 		_changed.OnNext(Unit.Default);
+	}
+
+	/// <summary>Says so, once at start-up, when the document leaves every away behaviour out of reach.</summary>
+	// The commissioning sheet still offers the two room settings, and the validator warns on a save; a household
+	// that never opens either would otherwise have no way to find out why leaving does nothing.
+	private void AnnounceUnreachableAway()
+	{
+		if (_global.HouseMode is not { Options.Count: > 0 } houseMode || houseMode.HasAwayOption)
+			return;
+
+		_logger.LogWarning(
+			"No house-mode option is marked Away, so this house can never be away: the leaving sweep never runs, "
+			+ "an away scene never fires, and every room's 'stays on when the house goes away' and 'lights up when "
+			+ "the house leaves away mode' setting is inert.");
 	}
 
 	/// <summary>Names, once at start-up, every mode rule Home Assistant's authority has stood down.</summary>

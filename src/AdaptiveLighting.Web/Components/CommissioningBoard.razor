@@ -282,7 +282,8 @@
 				lights,
 				motion,
 				// suspectCount stays 0 until the impostor sheet ships.
-				CommissioningVerdicts.For(area, _config.Defaults, lux, suspectCount: 0, lights, motion),
+				CommissioningVerdicts.For(area, _config.Defaults, lux, suspectCount: 0, lights, motion,
+					awayIsReachable: _config.Global.HouseMode?.HasAwayOption ?? false),
 				AreaSentences.ForArea(area, _config.Defaults),
 				resolved));
 		}
