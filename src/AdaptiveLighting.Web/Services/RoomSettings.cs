@@ -275,7 +275,7 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.SkipAwaySweep),
 					"Stays on when the house goes away",
-					"The lights-off sweep skips this room when the house mode goes to away. For porch and security lights, which are wanted with the house empty.",
+					"The lights-off sweep skips this room when the house mode goes to away. For porch and security lights, which are wanted while the house is away.",
 					RoomControl.Flag),
 				new RoomSetting(
 					nameof(AreaSettings.WelcomeHome),

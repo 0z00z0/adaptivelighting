@@ -21,6 +21,18 @@ public sealed class StateGlyphTests
 		}
 	}
 
+	// Presence has not decided away since the house mode took it over. A chip that still says the house is empty
+	// sends somebody to look at a phone tracker over a dropdown.
+	[TestMethod]
+	public void The_Away_Chip_Names_The_Mode_Rather_Than_Who_Is_Home()
+	{
+		string word = StateGlyph.For(AreaState.Away).Word;
+
+		StringAssert.Contains(word, "away", "the room is away because the house mode says so");
+		Assert.IsFalse(word.Contains("empty", StringComparison.OrdinalIgnoreCase),
+			"whether the house is empty is a separate fact the engine does not act on");
+	}
+
 	// The two hand states may share a shape and a colour, so shape, colour and word are checked together.
 	[TestMethod]
 	public void No_Two_States_Are_Drawn_The_Same_Way()

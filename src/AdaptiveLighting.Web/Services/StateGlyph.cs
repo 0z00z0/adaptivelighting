@@ -27,7 +27,7 @@ public static class StateGlyph
 
 		// No shape: the engine is watching and commanding nothing.
 		AreaState.AutoVacant => new StateMark(null, "state-idle", "watching", false),
-		AreaState.Away => new StateMark(null, "state-idle", "house empty", false),
+		AreaState.Away => new StateMark(null, "state-idle", "house away", false),
 		_ => new StateMark(null, "state-idle", state.ToString(), false)
 	};
 

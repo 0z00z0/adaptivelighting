@@ -103,14 +103,14 @@ the Configuration page says so.
 
 ### Room behaviour
 
-*What this room does when the house sleeps, empties or fills again.*
+*What this room does when the house mode goes to sleep or away, and when it comes back.*
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
 | **How warmth reaches these lights** | Most lights take a colour temperature in kelvin. Plain dimmers and colour strips do not, and those are driven with every channel at one value, which is neutral white. Left to **Detect from the lights** it reads the room's own fixtures. | Detect from the lights | `ColorControl` |
 | **While the house sleeps** | Three steps. **Normal** treats the small hours like any other. **Dims** holds the room to the night period's limits, so a 03:00 glass of water gets a dim light. **Dims and stays off** also leaves movement unanswered — for the bedroom itself. The wall switch works at every step. | Normal | `RespectSleepMode` and `SleepBlocksAutoOn` |
-| **Stays on when everyone leaves** | For porch and security lights. | off | `SkipAwaySweep` |
-| **Lights up when the first person comes home** | Comes on to meet them if the house is dark, instead of waiting for a motion sensor. | off | `WelcomeHome` |
+| **Stays on when the house goes away** | The leaving sweep skips this room. For porch and security lights. | off | `SkipAwaySweep` |
+| **Lights up when the house leaves away mode** | Comes on to meet whoever is arriving if the room is dark, instead of waiting for a motion sensor. | off | `WelcomeHome` |
 
 *While the house sleeps* is one control over two fields: **Normal** is `false`/`false`, **Dims** is
 `true`/`false`, and **Dims and stays off** is `true`/`true`. A hand-written file may set
@@ -157,8 +157,8 @@ than a "do not disturb" switch you turn on. In the file that is `IgnoreWhenOnInv
 - Every gate still applies — the master switch, the room's own switch, an away house, sleep, too
   much daylight, *Don't switch on while*. A scene is what happens *instead of* a command the engine
   had already decided to make, never a reason to make one.
-- Leaving the house still switches the room off; a room that should stay lit wants *Stays on when
-  everyone leaves*.
+- The leaving sweep still switches the room off; a room that should stay lit wants *Stays on when
+  the house goes away*.
 - While a room sits on one of its scenes the engine leaves it there: neither circadian drift nor a
   house-mode change re-aims it. A hand at the switch still wins.
 - *Don't switch off while* blocks the empty scene exactly as it blocks a plain switch-off. When the

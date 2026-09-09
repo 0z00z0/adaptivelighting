@@ -459,7 +459,8 @@ public sealed class LightingEngineHost : IDisposable
 
 			if (seeded.Count > 0)
 				_logger.LogInformation(
-					"Home and Away will follow {Count} people ({Persons}). Change who under Configuration → House.",
+					"The dashboard will show who is home from {Count} people ({Persons}); the house-mode dropdown is what "
+					+ "decides whether the house is away. Change who under Configuration → House.",
 					seeded.Count, string.Join(", ", seeded));
 
 			ReportForcedWrite(write.Validation,

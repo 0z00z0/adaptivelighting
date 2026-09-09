@@ -117,10 +117,10 @@
 
 	<rect x="0" y="508" width="300" height="46" rx="7" fill="var(--idle-bg)" stroke="var(--idle)" stroke-width="1.5" stroke-dasharray="4 3"/>
 	<text x="150" y="530" class="st" fill="var(--idle)" text-anchor="middle">Away</text>
-	<text x="150" y="545" class="cap" text-anchor="middle">everyone left — lights swept off</text>
-	<text x="0" y="576" class="pa">Persons · AwayDebounceMinutes</text>
+	<text x="150" y="545" class="cap" text-anchor="middle">an Away house mode — lights swept off</text>
+	<text x="0" y="576" class="pa">an Away-kind house-mode option · its Scene</text>
 	<text x="0" y="591" class="pa">SkipAwaySweep — outdoor lights opt out</text>
-	<text x="0" y="606" class="pa">first arrival + dark → WelcomeHome</text>
+	<text x="0" y="606" class="pa">leaving Away + dark → WelcomeHome</text>
 
 	<rect x="340" y="508" width="300" height="46" rx="7" fill="var(--idle-bg)" stroke="var(--idle)" stroke-width="1.5" stroke-dasharray="4 3"/>
 	<text x="490" y="530" class="st" fill="var(--idle)" text-anchor="middle">Sleep clamp</text>

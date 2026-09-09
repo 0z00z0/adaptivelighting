@@ -326,7 +326,7 @@
 		[.. People.Where(person => _draft.Counts(person.EntityId)).Select(person => person.Name)];
 
 	private static string PersonTitle(PersonView person, bool counted) => counted
-		? $"{person.EntityId} — counts for Home and Away. Tap to leave them out."
+		? $"{person.EntityId} — shown on the dashboard. Tap to leave them out."
 		: $"{person.EntityId} — left out. Tap to count them again.";
 
 	/// <summary>Where a person is, or that Home Assistant cannot say; "unknown" is not "away".</summary>

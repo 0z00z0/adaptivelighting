@@ -60,7 +60,7 @@ public enum ActivityCategory
 	/// <summary>The engine considered lighting the room and did not, and the row says why.</summary>
 	Declined = 16,
 
-	/// <summary>The house emptying or filling, or the master switch.</summary>
+	/// <summary>People coming and going, a guest scene, or the master switch. Going away is a mode change.</summary>
 	House = 32,
 
 	/// <summary>Housekeeping: rechecks, start-up, and a room switched on or off for automatic lighting.</summary>
@@ -128,7 +128,7 @@ public static class ActivityView
 			"The engine could have lit the room and did not — with the reason."),
 		new(ActivityCategory.Mode, "Mode changes", "The house moved to a different mode."),
 		new(ActivityCategory.House, "House",
-			"The house emptying and filling, a guest scene, and the master switch."),
+			"People coming and going, a guest scene, and the master switch. Going away is a mode change."),
 		new(ActivityCategory.Background, "Background tasks",
 			"Rechecks, start-up, and rooms switched on or off. Starts hidden — the highest volume, the lowest signal.")
 	];

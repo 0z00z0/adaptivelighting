@@ -189,7 +189,7 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     SleepBlocksAutoOn: false   # stepped control: false/false is Normal,
                                # true/false is Dims, true/true is Dims and stays
                                # off.
-    SkipAwaySweep: false       # "Stays on when everyone leaves"
+    SkipAwaySweep: false       # "Stays on when the house goes away"
     WelcomeHome: false         # lights on first arrival, when it's dark
 
     # A switched-off room is still watched and published, never commanded. The
