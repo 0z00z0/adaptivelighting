@@ -18,8 +18,6 @@ against each other.
 
   **A house that has not set both of those keeps behaving exactly as it does today**, and so does one whose mode dropdown Home Assistant owns: the phones are still what put it away. Nothing else moves — the away mode somebody chooses by hand still wins, the few minutes in which presence is ignored after the mode is set still protect it from somebody walking out, and every room gate (darkness, sleep, a blocking entity, the master switch, a switched-off room) refuses exactly as before.
 
-- **`Global.MotionPresenceMinutes`, added in 2026.9.9, is gone, and no setting replaces it.** It was a second half-hour window governing what the two settings above already govern, and it counted movement as somebody being home for every house whether or not it had asked. A file that still carries the key says so once on load and on the settings page, and the next save from the browser drops it — nothing needs editing by hand.
-
 ## [2026.9.9] - 2026-09-09
 
 ### Changed

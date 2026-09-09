@@ -101,9 +101,6 @@ public static class LightingConfigDocument
 		["LuxBrightnessEnabled"] =
 			"the daylight curve is chosen per room, per period now, through that room's own Levels row for the "
 			+ "period. Turn it on from the room's page; the other lux brightness settings still shape the curve.",
-		["MotionPresenceMinutes"] =
-			"movement no longer counts as somebody being home on its own. Whether the house is away is answered by "
-			+ "the away mode option: the quiet time that switches it on, and the presence reset that brings it back.",
 		["UseDaylightCurve"] =
 			"a period can no longer hand its whole brightness to the curve. Each room decides for itself, per "
 			+ "period, through that room's own Levels row — the FollowDaylightCurve field there does what this used to."
