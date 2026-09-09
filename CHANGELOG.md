@@ -12,6 +12,42 @@ against each other.
 
 ## [Unreleased]
 
+### Changed
+
+- **Arriving home takes one movement, not two.** Walking in used to set the house mode back to normal and then wait for Home Assistant to report the dropdown back, so the movement that caused it was still refused and only the next one lit the room. The house now leaves away the instant it writes the dropdown. The dropdown is still what decides: moving it by hand beats the assumption outright, and if the write never lands the house goes back to whatever the dropdown itself reads within a minute or so.
+
+- **The master switch now stops everything it says it stops.** An away or guest scene fired while the app said it was paused, so lights changed with the switch off. So did every write of the house-mode dropdown — the quiet-time rule, a time of day set to change the mode, and every reset. All of them wait. Nothing is queued: each is asked again on its own schedule the moment the switch comes back on.
+
+- **Rooms the leaving sweep deliberately left on are taken charge of when the house comes back.** A room set to stay on when the house goes away, or one a hold kept lit, came back to a state that arms no timeout, so it burned until somebody noticed. Leaving a guest scene left the same lights the same way. Both now get the ordinary vacancy countdown.
+
+### Fixed
+
+- **A bedroom could run at full daylight brightness at three in the morning.** Where sleep was held by a helper entity rather than by the dropdown itself, the night ceiling was looked up from the dropdown's own value, which still read normal — so the room was capped by the wrong option's rule, or by nothing at all when the dropdown was unavailable. The ceiling now comes from the mode actually in force.
+
+- **A house-mode dropdown that stopped answering took the house out of away.** Unavailable and unknown both read as normal, with no warning, so an away house resumed lighting itself and nothing put it back. A dropdown that cannot be read now holds the mode it last reported, and says so once.
+
+- **A ten-second period test outlived the house going away or the master switch being thrown**, and handed the room back by sweeping it dark — over a standing away scene, or while the app said it was paused. The test is dropped when the house takes the room, and refused outright while the house is away.
+
+- **Saving settings could put the house to bed.** The note that records which time of day the engine was last running in cannot tell a fresh start from a rebuild, so editing the schedule looked like a boundary the engine had slept through and the new period's mode switch fired. Only a start from nothing acts on that note now.
+
+- **Saving settings also restarted two clocks it had no business touching**: the few minutes in which presence is ignored after a mode is set, and how long the house had been quiet. Both are now read from Home Assistant's own timestamps, which outlive a restart.
+
+- **A quiet house with no motion sensors set itself to away** and had no way back, while the start-up log said the rule could never fire. The behaviour now matches the log.
+
+- **An auto-away that never reached Home Assistant was never tried again**, and movement arriving while it was in flight was discarded along with the quiet spell it ended.
+
+- **A time of day that both sets a mode and ends the mode already standing wrote the dropdown twice**, in one go, and the second silently won while both log lines claimed to have set it. The time of day's own mode switch is what that boundary means; the reset is skipped, with a line saying so.
+
+- **Rooms started up against a placeholder house.** A room under an active master switch took charge of lights it found on and armed a countdown; an away house did the same; and a snapshot saying the house was home and running reached Home Assistant before the correction. The house is now settled before the first room starts.
+
+- **A house-wide state could be left on the older answer permanently**, where presence and the mode brain published at the same instant from different threads.
+
+- **The departure debounce could bring the whole app down** if it landed just after a settings save had rebuilt the engine.
+
+- **A house with no away option now says so** — in the settings check, in the start-up log, and on the commissioning sheet, which went on offering two room settings that can never run. Such a house works; it simply never leaves home, and until now nothing said which.
+
+- **Ten places still explained away as something phones decide.** The room chip, the timeline lane title, the activity page's house filter, the first-run log line, the commissioning person tooltip, the published overview page, the state diagram and the configuration reference's two room-setting labels all now describe the house mode, which is what actually decides.
+
 ## [2026.9.10] - 2026-09-09
 
 ### Changed
