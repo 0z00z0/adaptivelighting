@@ -132,6 +132,112 @@ public sealed class LightingOrchestratorTests
 			"nothing queues a command the muzzle refused; the away mode still stands and the rooms take it from there");
 	}
 
+	// ===================== composing house state =====================
+
+	/// <summary>Holds every thread that reaches a named log line, so a test can see how many got there at once.</summary>
+	private sealed class HoldingLoggerFactory(string atMessage) : ILoggerFactory
+	{
+		private readonly ManualResetEventSlim _release = new(initialState: false);
+		private int _inside;
+		private int _armed;
+
+		/// <summary>Signalled each time a thread reaches the line.</summary>
+		public SemaphoreSlim Arrived { get; } = new(0);
+
+		/// <summary>How many threads are inside the held region right now.</summary>
+		public int Inside => Volatile.Read(ref _inside);
+
+		/// <summary>Starts holding. Nothing before this blocks, so the engine can come up.</summary>
+		public void Arm() => Volatile.Write(ref _armed, 1);
+
+		public void Release() => _release.Set();
+
+		public ILogger CreateLogger(string categoryName) => new Holder(this);
+
+		public void AddProvider(ILoggerProvider provider) { }
+
+		public void Dispose()
+		{
+			_release.Dispose();
+			Arrived.Dispose();
+		}
+
+		private sealed class Holder(HoldingLoggerFactory owner) : ILogger
+		{
+			public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+			public bool IsEnabled(LogLevel logLevel) => true;
+
+			public void Log<TState>(
+				LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+			{
+				ArgumentNullException.ThrowIfNull(formatter);
+
+				if (Volatile.Read(ref owner._armed) == 0
+					|| !formatter(state, exception).StartsWith(owner._atMessage, StringComparison.Ordinal))
+					return;
+
+				Interlocked.Increment(ref owner._inside);
+				owner.Arrived.Release();
+				owner._release.Wait(TimeSpan.FromSeconds(20));
+				Interlocked.Decrement(ref owner._inside);
+			}
+		}
+
+		private readonly string _atMessage = atMessage;
+	}
+
+	// Composing the state, comparing it with the standing one and publishing it has to be one step. Two threads
+	// interleaved through it leave the house on the older answer, and the equality guard then suppresses the
+	// recompute that would put it right, so the divergence is permanent rather than a flicker.
+	[TestMethod]
+	[Timeout(30_000)]
+	public void House_State_Is_Composed_And_Published_By_One_Thread_At_A_Time()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Person, "home");
+		ha.SetState(Select, "Normal");
+		ha.SetState(Master, "on");
+
+		AdaptiveLightingConfig config = new()
+		{
+			Global = new GlobalConfig
+			{
+				Persons = [Person],
+				AwayDebounceMinutes = 5,
+				HouseMode = WithScenes(),
+				KillSwitchEntity = Master
+			},
+			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }]
+		};
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		using HoldingLoggerFactory logs = new("House is now");
+		LightingOrchestrator engine = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			new FakeLightActuator(), new FakeStatePublisher(), new FakeNotifier(), logs);
+
+		engine.Start();
+		logs.Arm();
+
+		Task first = Task.Run(() => ha.Trigger(Select, "Borte"));
+		Assert.IsTrue(logs.Arrived.Wait(TimeSpan.FromSeconds(10)), "the first publication reached the point of publishing");
+
+		// A second change, while the first has composed but not yet published.
+		Task second = Task.Run(() => ha.Trigger(Select, "Gjester"));
+		bool secondGotIn = logs.Arrived.Wait(TimeSpan.FromSeconds(3));
+
+		logs.Release();
+		Assert.IsTrue(Task.WaitAll([first, second], TimeSpan.FromSeconds(10)), "both publications finished");
+
+		Assert.IsFalse(secondGotIn,
+			"two threads were composing and publishing the house state at once, so one can publish over the other");
+
+		engine.Dispose();
+	}
+
 	// ===================== arriving home =====================
 
 	private const string Stue = "light.stue";

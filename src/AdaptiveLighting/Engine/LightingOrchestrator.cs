@@ -61,6 +61,9 @@ public sealed class LightingOrchestrator : IDisposable
 
 	private readonly CompositeDisposable _subscriptions = [];
 
+	// Serialises PublishHouseState. Nothing an area does reaches back here, so this is the only lock in the chain.
+	private readonly object _publishGate = new();
+
 	private PresenceMonitor? _presence;
 	private ModeMonitor? _modes;
 
@@ -362,6 +365,15 @@ public sealed class LightingOrchestrator : IDisposable
 	// The opening publication goes out even when it matches the seed the stream was created on: each area waits
 	// for it to know which mode it found at start-up as opposed to saw change.
 	private void PublishHouseState(bool opening = false)
+	{
+		// Composing, comparing and publishing is one step. Presence and the mode brain arrive on different threads,
+		// and interleaved they leave the house on the older answer; the equality guard then suppresses the
+		// recompute that would put it right, so the divergence lasts until the next unrelated event.
+		lock (_publishGate)
+			PublishHouseStateCore(opening);
+	}
+
+	private void PublishHouseStateCore(bool opening)
 	{
 		HouseState previous = _house.Value;
 		HouseState state = new(

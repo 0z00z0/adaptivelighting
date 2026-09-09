@@ -1,3 +1,5 @@
+using System.Reactive.Concurrency;
+
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
@@ -41,6 +43,51 @@ public sealed class PresenceMonitorTests
 
 		scheduler.AdvanceBy(TimeSpan.FromMinutes(1).Ticks);
 		CollectionAssert.AreEqual(new[] { PresenceEvent.EveryoneLeft }, events);
+	}
+
+	/// <summary>Hands the test the debounce callback, so it can be run by hand as a scheduler thread would.</summary>
+	private sealed class DebounceCapturingScheduler(IScheduler inner) : IScheduler
+	{
+		public DateTimeOffset Now => inner.Now;
+
+		public Action? Debounce { get; private set; }
+
+		public IDisposable Schedule<TState>(TState state, Func<IScheduler, TState, IDisposable> action) =>
+			inner.Schedule(state, action);
+
+		public IDisposable Schedule<TState>(TState state, TimeSpan dueTime, Func<IScheduler, TState, IDisposable> action)
+		{
+			Debounce = () => action(this, state);
+
+			return inner.Schedule(state, dueTime, action);
+		}
+
+		public IDisposable Schedule<TState>(TState state, DateTimeOffset dueTime, Func<IScheduler, TState, IDisposable> action) =>
+			inner.Schedule(state, dueTime, action);
+	}
+
+	// A save disposes the running engine, and the debounce can already be running on a scheduler thread when it
+	// does. Nothing catches a throw out there, and this codebase records that one ends the whole host.
+	[TestMethod]
+	public void The_Debounce_Landing_After_Disposal_Does_Not_Throw()
+	{
+		var (scheduler, ha) = Fixture();
+		ha.SetState("person.a", "home");
+
+		DebounceCapturingScheduler capturing = new(scheduler);
+
+		var monitor = new PresenceMonitor(
+			ha, capturing,
+			new GlobalConfig { Persons = ["person.a"], AwayDebounceMinutes = 5 },
+			NullLogger.Instance);
+
+		monitor.Start();
+		ha.Trigger("person.a", "not_home");
+
+		Assert.IsNotNull(capturing.Debounce, "leaving armed the debounce");
+
+		monitor.Dispose();
+		capturing.Debounce!();
 	}
 
 	[TestMethod]
