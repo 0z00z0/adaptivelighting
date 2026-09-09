@@ -182,7 +182,7 @@ public sealed class ModeMonitorTests
 	}
 
 	[TestMethod]
-	public void CurrentModeValue_NullOnUnavailableUnknownUnconfigured()
+	public void CurrentModeValue_IsNullUntilTheSelectHasEverAnswered()
 	{
 		var ha = new FakeHaContext();
 
@@ -198,6 +198,51 @@ public sealed class ModeMonitorTests
 
 		rig.Ha.SetState(Select, "Sover");
 		Assert.AreEqual("Sover", rig.Monitor.CurrentModeValue);
+	}
+
+	[TestMethod]
+	public void AnUnreadableSelect_HoldsTheModeItLastRead()
+	{
+		var rig = Build();
+
+		rig.Ha.SetState(Select, "Borte");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind);
+
+		rig.Ha.SetState(Select, "unavailable");
+		Assert.AreEqual("Borte", rig.Monitor.CurrentModeValue, "a blind read is not the select answering Normal");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind, "an unreadable helper must not take the house out of away");
+
+		rig.Ha.SetState(Select, "unknown");
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind, "unknown reads the same way as unavailable");
+
+		rig.Ha.SetState(Select, "Hjemme");
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind, "the select answering again is what decides");
+	}
+
+	[TestMethod]
+	public void AnUnreadableSelect_WarnsOncePerBlindSpell()
+	{
+		var ha = new FakeHaContext();
+		var logger = new CountingLogger();
+		using var monitor = new ModeMonitor(ha, new GlobalConfig { HouseMode = Mode() }, logger,
+			new TestScheduler(), Periods(), () => SunTimes.Unknown, []);
+
+		ha.SetState(Select, "Borte");
+		_ = monitor.ActiveKind;
+
+		ha.SetState(Select, "unavailable");
+		_ = monitor.ActiveKind;
+		_ = monitor.ActiveKind;
+		_ = monitor.CurrentModeValue;
+
+		Assert.AreEqual(1, logger.Warnings, "one warning for the spell, not one per read");
+
+		ha.SetState(Select, "Hjemme");
+		_ = monitor.ActiveKind;
+		ha.SetState(Select, "unavailable");
+		_ = monitor.ActiveKind;
+
+		Assert.AreEqual(2, logger.Warnings, "a second spell is a second thing to say");
 	}
 
 	[TestMethod]

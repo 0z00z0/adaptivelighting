@@ -71,6 +71,11 @@ public sealed class ModeMonitor : IDisposable
 	// Reset fires from several subscriptions; the "no Normal target" warning must not spam the log every tick.
 	private int _warnedNoNormal;
 
+	// The last value the select actually reported, and whether it has stopped answering. A blind read holds the
+	// former rather than asserting Normal.
+	private string? _lastKnownMode;
+	private bool _selectIsBlind;
+
 	private DateTimeOffset _activatedAt;
 	private DateTimeOffset _lastMotionAt;
 	private bool _inactivityLatched;
@@ -199,8 +204,9 @@ public sealed class ModeMonitor : IDisposable
 		}
 	}
 
-	/// <summary>The raw house-mode option string, or <c>null</c> when the select is unconfigured, unknown or unavailable.</summary>
+	/// <summary>The house-mode option string, or <c>null</c> when the select is unconfigured or has never answered.</summary>
 	// Warns once per distinct value no option classifies, which is the tripwire for a rename in Home Assistant.
+	// An unreadable select holds the mode it last reported; see HoldLastKnownMode.
 	public string? CurrentModeValue
 	{
 		get
@@ -209,15 +215,58 @@ public sealed class ModeMonitor : IDisposable
 				return null;
 
 			if (_ha.GetState(entityId).AsUsableState() is not { } value)
-				return null;
+				return HoldLastKnownMode(entityId);
 
 			if (_global.HouseMode.OptionFor(value) is null && _warnedValues.TryAdd(value, 0))
 				_logger.LogWarning(
 					"House-mode select {Entity} reports '{Value}', which no option classifies; treating it as Normal.",
 					entityId, value);
 
-			return value;
+			return RememberMode(entityId, value);
 		}
+	}
+
+	/// <summary>Records the value the select reported, and says so when it had stopped answering.</summary>
+	private string RememberMode(string entityId, string value)
+	{
+		bool wasBlind;
+
+		lock (_gate)
+		{
+			wasBlind = _selectIsBlind;
+			_selectIsBlind = false;
+			_lastKnownMode = value;
+		}
+
+		if (wasBlind)
+			_logger.LogInformation(
+				"House-mode select {Entity} is readable again and reports '{Value}'.", entityId, value);
+
+		return value;
+	}
+
+	/// <summary>What a blind read answers: the mode the select last reported, or <c>null</c> when it never has.</summary>
+	// Unavailable and unknown are the select not answering, which is not the same as it answering Normal. Falling
+	// through to Normal takes a house out of away for as long as the helper is missing, and nothing puts it back.
+	// The period select has carried this guard since it was written; this is the same one.
+	private string? HoldLastKnownMode(string entityId)
+	{
+		string? held;
+		bool firstOfTheSpell;
+
+		lock (_gate)
+		{
+			held = _lastKnownMode;
+			firstOfTheSpell = !_selectIsBlind;
+			_selectIsBlind = true;
+		}
+
+		if (firstOfTheSpell)
+			_logger.LogWarning(
+				"House-mode select {Entity} is not answering. The house holds the mode it last read ({Mode}) until it does.",
+				entityId, held ?? "none yet");
+
+		return held;
 	}
 
 	// What the select's current value classifies to. The set, retain and reset lifecycle acts on this option,
