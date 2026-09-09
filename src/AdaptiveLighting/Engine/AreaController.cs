@@ -1003,7 +1003,12 @@ public sealed class AreaController : IDisposable
 	// over to morning.
 	private LightTarget ClampToSleepCaps(LightTarget target)
 	{
-		HouseModeOptionConfig? option = _global.HouseMode?.OptionFor(_house.ModeValue);
+		// The option actually in force, which an overlay entity can set without the select moving at all. Reading
+		// the select's own value instead resolves a different option's clamp chain, and resolves nothing when the
+		// select is unavailable, which leaves a bedroom on the evening's level all night.
+		string? inForce = _house.Forced?.OptionValue is { Length: > 0 } forced ? forced : _house.ModeValue;
+
+		HouseModeOptionConfig? option = _global.HouseMode?.OptionFor(inForce);
 		TimePeriodConfig? clampPeriod = option is not null ? HouseModeConfig.SleepClampPeriodFor(option, _periods) : null;
 		LightTarget? sleepPeriod = clampPeriod is not null ? _circadian.GetPeriodTarget(clampPeriod.Key) : null;
 		if (sleepPeriod is null)

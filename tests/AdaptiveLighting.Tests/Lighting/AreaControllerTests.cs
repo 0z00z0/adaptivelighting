@@ -1801,6 +1801,68 @@ public sealed class AreaControllerTests
 			"with no clamp period resolving, the respecting area is left on the plain evening target");
 	}
 
+	/// <summary>Sover clamps to "dim" (5 %) while the "night" fallback any other option lands on says 15 %.</summary>
+	// The two chains have to give different answers, or a clamp resolved from the wrong option passes by luck.
+	private static (HouseModeConfig Mode, List<TimePeriodConfig> Periods) SleepChainsThatDiffer()
+	{
+		HouseModeConfig mode = SoverMode();
+		mode.OptionFor("Sover")!.ClampPeriodId = "dim";
+
+		return (mode,
+		[
+			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Name = "dim", Start = "22:00", BrightnessPct = 5, ColorTempKelvin = 2000 },
+			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
+		]);
+	}
+
+	private static ForcedMode ForcedSleep() =>
+		new(ModeKind.Sleep, "Sover", ModeForceSource.WhileEntityOn, "input_boolean.sover", "on");
+
+	[TestMethod]
+	public void Sleep_ForcedByAnEntity_ClampsThroughTheOptionInForce_NotTheSelectsValue()
+	{
+		(HouseModeConfig mode, List<TimePeriodConfig> periods) = SleepChainsThatDiffer();
+		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+
+		// The overlay entity holds sleep. Nothing wrote the select, so it still reads Normal.
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Normal", forced: ForcedSleep()));
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
+			"Sover is the mode in force, so its own 'dim' ceiling applies — not the 'night' fallback Normal lands on");
+	}
+
+	[TestMethod]
+	public void Sleep_ForcedWhileTheSelectIsUnreadable_StillClamps()
+	{
+		(HouseModeConfig mode, List<TimePeriodConfig> periods) = SleepChainsThatDiffer();
+		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+
+		// The select is unavailable, so it names no option at all; the overlay is the whole answer.
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: null, forced: ForcedSleep()));
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
+			"a bedroom must not run at the evening's 70 % at three in the morning because a helper went unavailable");
+	}
+
+	[TestMethod]
+	public void Sleep_WithNothingForcing_StillClampsThroughTheSelectsOwnValue()
+	{
+		(HouseModeConfig mode, List<TimePeriodConfig> periods) = SleepChainsThatDiffer();
+		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
+			"the control: with no overlay the select's own value is still what resolves the ceiling");
+	}
+
 	// The sleep clamp reads this room's night level, not the house's. It is the one place a room's level is a
 	// ceiling instead of a target.
 	[TestMethod]
