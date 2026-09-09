@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.11] - 2026-09-09
+
 ### Changed
 
 - **Arriving home takes one movement, not two.** Walking in used to set the house mode back to normal and then wait for Home Assistant to report the dropdown back, so the movement that caused it was still refused and only the next one lit the room. The house now leaves away the instant it writes the dropdown. The dropdown is still what decides: moving it by hand beats the assumption outright, and if the write never lands the house goes back to whatever the dropdown itself reads within a minute or so.
