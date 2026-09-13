@@ -35,39 +35,39 @@ An item with no number is one this file records before the tracker has minted on
   the board, and the activity log naming a light when only that light moved. Both are specified in
   `docs/design/per-light-settings.md`.
 
-- #23 **A room page's Test countdown is drawn locally, so it does not survive leaving the page.** Navigating
-  away and back within the ten seconds shows plain Test buttons while the engine's return is still pending.
-  The return happens correctly — it is scheduled on the engine's scheduler, not the page's — and only the
-  drawing is lost. `AreaController.IsTestingLevels` already exists if it is ever worth surfacing through a
-  snapshot.
-
-- #24 **A `LightCommand` carries brightness and colour temperature but no colour channels.** In a room
-  commanded at equal channels — RGB-only fixtures with no colour temperature — a hand-set colour comes back
-  as neutral white after a period test, because `AreaController.CaptureLights` can read back nothing that
-  says what the colour was. Such a room is whitened by any ordinary engine command anyway, so the test makes
-  nothing worse, and the person pressing Test owns the colour. Closing it means giving `LightCommand` an
-  optional channel vector and teaching `HaLightActuator` to send and compare it.
-
-- #27 **`PeriodsAcross` has no direct test.** `CircadianCalculator.PeriodsAcross` is exercised only through the
-  web schedule and board views, never on its own. It is now the reference rule for two paths — the per-day
-  table behind `NextBoundary` was brought onto it — so a change to it can break boundary resolution with
-  nothing failing that names it.
-
 - #28 **The UI host seeds no activity, so the Activity page cannot be looked at.** Driving it means hand-editing
   `tools/uihost/Program.cs` to seed reports and reverting afterwards. A dozen seeded reports spread across the
   categories would make the page drivable as shipped.
-
-- #29 **`tools/uihost` hard-codes port 5199, so two worktrees cannot run it at once.** Parallel efforts collide on
-  it; reading a port from the command line would let each look at its own.
 
 - #39 **The UI host never attaches the engine, so the commissioning board cannot be looked at
   as shipped.** `tools/uihost` raises area events but starts no engine, and the board reads what the engine
   publishes. Driving it means hand-patching `tools/uihost/Program.cs` to call `Attach` and reverting
   afterwards. Same shape as #28, and the two are probably one job.
 
-- #42 **`comm-nearmiss` is a misnomer.** The commissioning board's two paragraphs still carry
-  that class after the near-miss line was replaced (#37). Renaming touches `app.css` and the component
-  together, and neither may move alone.
+- #75 **The activity log's "newest first" heading is ambiguous.** "First" names no position; the heading
+  should read "newest at top".
+
+- #76 **Motion went unrecorded at Petterhaugen for a twenty-minute window.** Movement in Tilbygg between
+  07:16 and 07:36 did not register, against both a person's own account and the Home Assistant history log
+  for the same window.
+
+- #77 **An away-mode reason names the wrong cause.** House mode was forced to `Borte` (away) because the
+  house went quiet, and the shown reason says so — but nobody had left, so the text describes a
+  quiet-house heuristic as if it were a departure.
+
+- #78 **Area settings render with text pre-selected in blue.** The screen reads as broken rather than as a
+  settings page.
+
+- #79 **Room settings mislabel what the toggle controls, throughout the application.** The control reads
+  "Enable Room" where it is adaptive lighting being enabled *for* the room, not the room itself; the on/off
+  label beside it is also misaligned and reads as more technical than the setting needs.
+
+- #80 **NetDaemon 26.36.0 introduces `ICurrentApp`; evaluate whether it is useful here.** No adoption is
+  proposed yet — the item is to read the release and decide whether it replaces anything in the current
+  app model.
+
+- #81 **Some rooms disappear from the board with no explanation.** A room that is not shown should either
+  show, or carry a stated reason it is unavailable, rather than vanishing silently.
 
 ## Parked
 
@@ -79,8 +79,6 @@ An item with no number is one this file records before the tracker has minted on
   defect.
 
 - #31 **The user guide has no screenshots.** Every `📷 [screenshot: …]` slot is still a placeholder.
-
-- #32 **The first-run wizard is undocumented.** The user guide covers every other screen; the wizard ships without a section.
 
 - #33 **The four packages are private, and only an organisation owner can change that.** The organisation blocks
   public package creation, so every publish lands private. No token or script reaches it: the package API
