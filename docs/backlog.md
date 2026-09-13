@@ -23,6 +23,13 @@ An item with no number is one this file records before the tracker has minted on
 
 ## Next up
 
+- **A room switched off by a level of 0 % reads "Lit at — level unknown." on its page.** Such a room stays
+  automatic and publishes no standing brightness, so `RoomFacts.Headline` takes the AutoActive arm and
+  `RoomFacts.Levels` renders the missing level as unknown. Nothing is unknown: the engine switched the room
+  off on purpose, and the panel beside the headline already reads "off". Measured on 2026-09-13 against the
+  UI host, room page and dashboard, 1280x900 and 390x844, both themes; the layout holds and only the wording
+  is wrong. The badge beside the room name reads "lit · auto" for the same reason.
+
 - #28 **The UI host seeds no activity, so the Activity page cannot be looked at.** Driving it means hand-editing
   `tools/uihost/Program.cs` to seed reports and reverting afterwards. A dozen seeded reports spread across the
   categories would make the page drivable as shipped.
