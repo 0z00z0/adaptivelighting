@@ -448,6 +448,24 @@ public sealed class AreaSetupServiceTests
 			"reported, not removed");
 	}
 
+	// #81: an area Home Assistant reports used to vanish with no word said. A wrong or missing reason here is
+	// exactly what reaches a person looking at "Set up rooms again" for the room they expected.
+	[TestMethod]
+	public void An_Area_With_No_Light_Is_Named_With_That_Reason_Even_Though_Never_Configured()
+	{
+		House house = Build("stue");
+		house.Ha.SetState("binary_sensor.bod_motion", "off", new() { ["device_class"] = "motion" });
+		house.Registry.Areas["bod"] = ["binary_sensor.bod_motion"];
+
+		SetupPlan plan = Plan(Document(), house);
+
+		SkippedArea skipped = plan.NotQualifying.Single();
+		Assert.AreEqual("bod", skipped.AreaId);
+		StringAssert.Contains(skipped.Reason, "no light");
+		Assert.IsFalse(plan.NewAreas.Any(area => area.AreaId == "bod"), "no lights means it is not proposed either");
+		Assert.IsFalse(plan.NotQualifying.Any(area => area.AreaId == "stue"), "a qualifying area is never listed as skipped");
+	}
+
 	// The plan describes this run, not the house.
 	[TestMethod]
 	public void A_Room_Outside_The_Run_Is_Neither_Rebuilt_Nor_Reported()

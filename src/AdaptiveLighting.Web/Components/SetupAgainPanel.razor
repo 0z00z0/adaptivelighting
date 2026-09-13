@@ -51,6 +51,19 @@
 			<p class="hint">@newRooms</p>
 		}
 
+		@if (_plan is { NotQualifying.Count: > 0 } withGaps)
+		{
+			<GroupFold Title="@NotQualifyingTitle(withGaps)"
+					   Description="This only offers areas that already have a light to run; here is why the rest do not.">
+				<ul class="setup-not-qualifying">
+					@foreach (SkippedArea skipped in withGaps.NotQualifying)
+					{
+						<li><strong>@(NameOf?.Invoke(skipped.AreaId) ?? skipped.AreaId)</strong> — @skipped.Reason</li>
+					}
+				</ul>
+			</GroupFold>
+		}
+
 		<div class="panel-actions">
 			<button type="button" class="primary" @onclick="Preview" disabled="@Nothing">Continue</button>
 			<button type="button" @onclick="Cancel">Cancel</button>
@@ -156,6 +169,11 @@
 	private bool Nothing => _ticked.Count == 0 && (_plan?.NewAreas.Count ?? 0) == 0;
 
 	private string? NewRoomsNote => _plan is null ? null : SetupWarning.NewRooms(_plan, NameOf);
+
+	private static string NotQualifyingTitle(SetupPlan plan) =>
+		plan.NotQualifying.Count == 1
+			? "1 other area Home Assistant has"
+			: $"{plan.NotQualifying.Count} other areas Home Assistant has";
 
 	/// <inheritdoc/>
 	protected override void OnInitialized()

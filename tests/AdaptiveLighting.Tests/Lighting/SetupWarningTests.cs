@@ -108,7 +108,7 @@ public sealed class SetupWarningTests
 
 		StringAssert.Contains(bod.Consequence, "loses its custom name");
 		Assert.IsNotNull(bod.Note, "the room is rebuilt anyway, so the dialog has to say the house changed under it");
-		StringAssert.Contains(bod.Note, "no longer shows both a light and a motion sensor");
+		StringAssert.Contains(bod.Note, "no longer exists in Home Assistant");
 	}
 
 	// Plan emits one rebuild per row, so resolving a line by first match on the area id quotes the wrong row's name.

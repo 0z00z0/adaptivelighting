@@ -20,6 +20,8 @@ against each other.
 
 - **A house that went away on its own could refuse to come back while somebody stayed put.** An away mode that returns the house to normal when somebody is detected ignores anything detected in its first few minutes, so that walking out of the door cannot cancel the mode it just triggered. A sensor that came on inside those minutes and then stayed on was reported only that once, so the reset was dropped and nothing looked again — the person sitting in the room stayed shut in an away house, with rooms refusing to light and the light button refused too. The sensors are now looked at once more the moment those minutes are up, and a room still reporting somebody in it brings the house home. Phones and other trackers are unchanged: only an arrival counts, so one that was at home all along still cannot cancel an away mode.
 
+- **A Home Assistant area with no qualifying room said nothing about why.** "Set up rooms again" only ever listed rooms already set up and areas that already qualify, so one with no light, one carrying the exclude label, or one whose only lights were unavailable simply never appeared, anywhere. It now names each such area and the reason, folded shut by default so an ordinary run stays uncluttered. The same fix corrects a stale note on a room that drops out of a rebuild: it used to blame a missing motion sensor, a rule that stopped applying in 2026.9.3.
+
 ## [2026.9.11] - 2026-09-09
 
 ### Changed

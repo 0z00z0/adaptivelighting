@@ -1957,6 +1957,16 @@ select.cell.wide {
 	display: block;
 }
 
+/* The areas Home Assistant has that never qualify, one line each, folded shut by default. */
+.setup-not-qualifying {
+	margin: 0.4rem 0 0;
+	padding-left: 1.2rem;
+}
+
+.setup-not-qualifying li {
+	margin-bottom: 0.3rem;
+}
+
 /* ---- discovery preview ----
    Bordered and coloured rather than plain, because it is the answer to the
    question the area picker asks, and it has to be findable at a glance. */

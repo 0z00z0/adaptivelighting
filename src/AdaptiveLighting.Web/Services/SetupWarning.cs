@@ -32,7 +32,6 @@ public static class SetupWarning
 		ArgumentNullException.ThrowIfNull(plan);
 		ArgumentNullException.ThrowIfNull(config);
 
-		HashSet<string> stopped = new(plan.NoLongerQualifying, StringComparer.Ordinal);
 		List<SetupWarningLine> lines = [];
 
 		// A document can carry two rows for one area id, and Plan emits one rebuild per row. Rows are taken by
@@ -54,9 +53,7 @@ public static class SetupWarning
 			lines.Add(new SetupWarningLine(
 				area?.DisplayName ?? rebuild.AreaId,
 				Consequence(rebuild, area?.Name),
-				stopped.Contains(rebuild.AreaId)
-					? "Home Assistant no longer shows both a light and a motion sensor here."
-					: null));
+				rebuild.SkipReason is { Length: > 0 } reason ? $"It {reason}" : null));
 		}
 
 		return lines;
