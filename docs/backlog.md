@@ -23,12 +23,6 @@ An item with no number is one this file records before the tracker has minted on
 
 ## Next up
 
-- **Per-light levels, stages 2 and 3.** Stage 2: sliders on a group's own line, showing a value where every
-  light under it agrees and *mixed* otherwise, writing to every light beneath; and a per-light *Test* that
-  puts one light's period level on that light alone. Stage 3: a per-light standing level in the snapshot for
-  the board, and the activity log naming a light when only that light moved. Both are specified in
-  `docs/design/per-light-settings.md`.
-
 - #28 **The UI host seeds no activity, so the Activity page cannot be looked at.** Driving it means hand-editing
   `tools/uihost/Program.cs` to seed reports and reverting afterwards. A dozen seeded reports spread across the
   categories would make the page drivable as shipped.

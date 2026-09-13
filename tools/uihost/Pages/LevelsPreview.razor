@@ -3,6 +3,7 @@
 @using AdaptiveLighting.Configuration
 @using AdaptiveLighting.Engine
 @using AdaptiveLighting.Web.Components
+@using AdaptiveLighting.Web.Services
 @using Microsoft.AspNetCore.Components.Web
 
 @* The room page needs a Home Assistant area registry to resolve a room, and the fake one cannot answer: HassModel's
@@ -70,6 +71,10 @@
 					  ActivePeriod="evening"
 					  NameOf="@Friendly"
 					  TestSeconds="10"
+					  TestingPeriodId="@(ReferenceEquals(_testedRoom, current.Room) ? _testingPeriod : null)"
+					  TestingLightId="@(ReferenceEquals(_testedRoom, current.Room) ? _testingLight : null)"
+					  TestSecondsLeft="7"
+					  TestLight="@(test => PretendTest(current.Room, test))"
 					  Changed="@(() => InvokeAsync(StateHasChanged))" />
 	</section>
 }
@@ -97,7 +102,31 @@
 
 	private List<Case> _cases = [];
 
-	protected override void OnInitialized() =>
+	// No engine here, so a light's Test press only draws the countdown on that light's row. ?testing=1 draws it on
+	// the first bulb under the group at load, for a screenshot run that cannot click.
+	private AreaConfig? _testedRoom;
+	private string? _testingLight;
+	private string? _testingPeriod;
+
+	[Inject]
+	private NavigationManager Navigation { get; set; } = default!;
+
+	private void PretendTest(AreaConfig room, LightTest test)
+	{
+		_testedRoom = room;
+		_testingLight = test.EntityId;
+		_testingPeriod = test.PeriodId;
+	}
+
+	protected override void OnInitialized()
+	{
+		BuildCases();
+
+		if (Navigation.Uri.Contains("testing=1", StringComparison.Ordinal))
+			PretendTest(_cases[1].Room, new LightTest(First, "evening"));
+	}
+
+	private void BuildCases() =>
 		_cases =
 		[
 			new Case(

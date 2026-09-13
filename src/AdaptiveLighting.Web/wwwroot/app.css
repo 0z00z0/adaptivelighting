@@ -7596,4 +7596,34 @@ h1[tabindex="-1"]:focus {
 	margin-left: auto;
 }
 
+/* The control on a group's own line, above the lights it writes to. */
+.llv-group-lede {
+	margin: 0;
+	padding: 0.5rem 1.15rem 0;
+	font-size: var(--text-sm);
+	color: var(--muted);
+}
+
+.llv-group-table {
+	border-bottom: var(--rule-inner);
+}
+
+/* The lights disagree, so the readout says so instead of showing the first light's number as the group's. */
+.psl-mixed {
+	color: var(--muted);
+	font-style: italic;
+}
+
+/* Holds the Test column in a group's rows so the rails line up with the lights' below; gone where rows stack. */
+.lvl-act-none {
+	display: none;
+}
+
+@media (min-width: 780px) {
+	.lvl-act-none {
+		display: block;
+		min-width: 6.6rem;
+	}
+}
+
 /* ===== end per-light levels ===== */

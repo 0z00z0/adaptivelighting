@@ -671,7 +671,9 @@ public static class ActivityView
 			? "Automatic lighting switched off here"
 			: "Automatic lighting switched on here",
 		TransitionReason.CircadianTick => snapshot.State == AreaState.AutoActive
-			? Lit("Retuned to the time of day", snapshot)
+			? snapshot.LightsMoved is { Count: > 0 } moved
+				? LightsRetuned(moved, snapshot)
+				: Lit("Retuned to the time of day", snapshot)
 			: "Rechecked the room",
 		// On a forced change the select never moves, so HouseModeValue still reads whatever a person last chose.
 		// The option the engine actually put the house on comes off the force. Only an entity override is
@@ -811,6 +813,20 @@ public static class ActivityView
 	// source is in use.
 	private static string? Reading(AreaSnapshot snapshot) =>
 		snapshot.DarknessDetail is { Length: > 0 } detail ? detail : null;
+
+	// The room's own level stood still, so repeating it would read as the whole room retuning. Named by entity id,
+	// as a blocking entity is above.
+	private static string LightsRetuned(IReadOnlyList<string> moved, AreaSnapshot snapshot)
+	{
+		string[] named =
+		[
+			.. moved.Select(light => snapshot.LightLevels?.FirstOrDefault(standing => standing.EntityId == light) is { } standing
+				? LightReadout.Describe(standing)
+				: light)
+		];
+
+		return $"Retuned to the time of day: {string.Join(" · ", named)}";
+	}
 
 	// Lights adopted at start-up have no command behind them, so the headline stands alone.
 	private static string Lit(string headline, AreaSnapshot snapshot)

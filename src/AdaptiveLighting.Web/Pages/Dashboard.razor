@@ -561,7 +561,11 @@ else
 	private static string? RoomHref(string? areaId) =>
 		areaId is { Length: > 0 } id ? $"room/{Uri.EscapeDataString(id)}" : null;
 
-	private static string LaneTitle(BoardLane lane) => $"{lane.Name} — {StateGlyph.For(lane.Latest.State).Word}";
+	// Lights on levels of their own are named after the room's state, and only where one differs from the room.
+	private string LaneTitle(BoardLane lane) =>
+		LightReadout.Line(lane.Latest, entityId => Catalog.FriendlyNameOf(entityId) ?? entityId) is { } lights
+			? $"{lane.Name} — {StateGlyph.For(lane.Latest.State).Word} — {lights}"
+			: $"{lane.Name} — {StateGlyph.For(lane.Latest.State).Word}";
 
 	/// <summary>Which edge a tray chip carries: the warning dim is about to act, the other three are standing.</summary>
 	private static string TrayEdge(AreaState state) => state == AreaState.PreOff ? "tray-warn" : "tray-human";

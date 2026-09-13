@@ -49,7 +49,14 @@
 		else if (TestingPeriodId is { Length: > 0 })
 		{
 			<p class="lvl-test-live" role="status">
-				These are the real lights in the room. They go back to normal on their own in
+				@if (TestingLightId is { Length: > 0 } light)
+				{
+					@:@(NameOf?.Invoke(light) ?? light) is showing a period on the real light. It goes back to normal on its own in
+				}
+				else
+				{
+					@:These are the real lights in the room. They go back to normal on their own in
+				}
 				<strong>@TestSecondsLeft s</strong>.
 			</p>
 		}
@@ -203,6 +210,12 @@
 					   Resolved="@Resolved"
 					   NoColourTemperature="@NoColourTemperature"
 					   NameOf="@NameOf"
+					   TestRefusal="@TestRefusal"
+					   TestingLightId="@TestingLightId"
+					   TestingPeriodId="@TestingPeriodId"
+					   TestSecondsLeft="@TestSecondsLeft"
+					   TestSeconds="@TestSeconds"
+					   Test="@TestLight"
 					   Changed="@Changed" />
 </div>
 
@@ -257,10 +270,21 @@
 	[Parameter]
 	public EventCallback<string> Test { get; set; }
 
+	/// <summary>The one light a running test is showing, or <c>null</c> when the test is the room's.</summary>
+	[Parameter]
+	public string? TestingLightId { get; set; }
+
+	/// <summary>Raised when one light's Test button is pressed in the light list.</summary>
+	[Parameter]
+	public EventCallback<LightTest> TestLight { get; set; }
+
 	private bool Untestable => TestRefusal is { Length: > 0 };
 
+	// A light's test is drawn on that light's row, never on the room's row for the same period.
 	private bool IsTesting(string periodId) =>
-		TestingPeriodId is { Length: > 0 } running && string.Equals(running, periodId, StringComparison.OrdinalIgnoreCase);
+		TestingLightId is null
+		&& TestingPeriodId is { Length: > 0 } running
+		&& string.Equals(running, periodId, StringComparison.OrdinalIgnoreCase);
 
 	private string TestTitle(string name) =>
 		Untestable ? TestRefusal! : $"Put {PeriodName(name)} on this room's lights for {TestSeconds} seconds.";

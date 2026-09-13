@@ -41,8 +41,28 @@ public sealed record LightLevelRow(
 	public bool IsOwn => BrightnessIsOwn || ColourIsOwn || CurveIsOwn;
 }
 
+/// <summary>One period as every light under a group runs it, for the control on the group's own line.</summary>
+/// <param name="BrightnessPct">The lights' shared brightness, or the first light's where they disagree.</param>
+/// <param name="BrightnessIsOwn">Whether any light under the group states its own brightness for the period.</param>
+/// <param name="FollowsDaylightCurve">Whether every light under the group follows the curve for the period.</param>
+/// <param name="CurveMixed">Whether some lights follow the curve and some do not.</param>
+public sealed record GroupLevelRow(
+	string PeriodId,
+	string Name,
+	double BrightnessPct,
+	bool BrightnessMixed,
+	bool BrightnessIsOwn,
+	int ColorTempKelvin,
+	bool ColourMixed,
+	bool ColourIsOwn,
+	bool FollowsDaylightCurve,
+	bool CurveMixed);
+
 /// <summary>A light this room states levels for and no longer commands.</summary>
 public sealed record LightLevelOrphan(string EntityId, int PeriodCount);
+
+/// <summary>A press of one light's Test button: which light, and which period to put on it.</summary>
+public sealed record LightTest(string EntityId, string PeriodId);
 
 /// <summary>What single lights inside a room run instead of the room, projected for the page that shows and edits it.</summary>
 /// <remarks>
@@ -141,6 +161,89 @@ public static class LightLevels
 		}
 
 		return rows;
+	}
+
+	/// <summary>One row per period for the lights under a group, derived from each light's own rows.</summary>
+	// Read off Rows per light and never off anything keyed on the group, so a light reached through two groups
+	// shows its one value under both.
+	public static IReadOnlyList<GroupLevelRow> GroupRows(
+		IReadOnlyList<TimePeriodConfig> periods,
+		AreaConfig? room,
+		IReadOnlyList<string> leaves)
+	{
+		ArgumentNullException.ThrowIfNull(periods);
+		ArgumentNullException.ThrowIfNull(leaves);
+
+		List<IReadOnlyList<LightLevelRow>> perLight = [.. leaves.Select(leaf => Rows(periods, room, leaf))];
+
+		if (perLight.Count == 0)
+			return [];
+
+		List<GroupLevelRow> rows = [];
+
+		for (int index = 0; index < perLight[0].Count; index++)
+		{
+			LightLevelRow[] period = [.. perLight.Select(light => light[index])];
+
+			// A light on the curve has no number of its own to disagree about.
+			LightLevelRow[] pinned = [.. period.Where(row => !row.FollowsDaylightCurve)];
+			LightLevelRow first = pinned.Length > 0 ? pinned[0] : period[0];
+			int following = period.Count(row => row.FollowsDaylightCurve);
+
+			rows.Add(new GroupLevelRow(
+				first.PeriodId,
+				first.Name,
+				first.BrightnessPct,
+				pinned.Any(row => Math.Abs(row.BrightnessPct - first.BrightnessPct) > 0.001),
+				period.Any(row => row.BrightnessIsOwn),
+				period[0].ColorTempKelvin,
+				period.Any(row => row.ColorTempKelvin != period[0].ColorTempKelvin),
+				period.Any(row => row.ColourIsOwn),
+				following == period.Length,
+				following > 0 && following < period.Length));
+		}
+
+		return rows;
+	}
+
+	/// <summary>Sets one brightness on every light under a group, or sends each back to the room with <c>null</c>.</summary>
+	public static void SetGroupBrightness(AreaConfig room, IReadOnlyList<string> leaves, string periodId, double? brightnessPct)
+	{
+		ArgumentNullException.ThrowIfNull(leaves);
+
+		foreach (string leaf in leaves)
+			SetBrightness(room, leaf, periodId, brightnessPct);
+	}
+
+	/// <summary>Sets one warmth on every light under a group, or sends each back to the room with <c>null</c>.</summary>
+	public static void SetGroupColorTemp(AreaConfig room, IReadOnlyList<string> leaves, string periodId, int? kelvin)
+	{
+		ArgumentNullException.ThrowIfNull(leaves);
+
+		foreach (string leaf in leaves)
+			SetColorTemp(room, leaf, periodId, kelvin);
+	}
+
+	/// <summary>Puts every light under a group on the daylight curve for a period, or takes every one off it.</summary>
+	// Each light's number is read before any is written, so coming off the room's curve pins each light to what it
+	// showed and not to its neighbour's.
+	public static void SetGroupFollowsDaylightCurve(
+		IReadOnlyList<TimePeriodConfig> periods,
+		AreaConfig room,
+		IReadOnlyList<string> leaves,
+		string periodId,
+		bool roomFollowsCurve,
+		bool follow)
+	{
+		ArgumentNullException.ThrowIfNull(leaves);
+
+		List<(string Leaf, double Shown)> shown =
+		[
+			.. leaves.Select(leaf => (leaf, Rows(periods, room, leaf).Single(row => row.PeriodId.SameName(periodId)).BrightnessPct))
+		];
+
+		foreach ((string leaf, double current) in shown)
+			SetFollowsDaylightCurve(room, leaf, periodId, current, roomFollowsCurve, follow);
 	}
 
 	/// <summary>The lights this room states levels for and no longer commands.</summary>
