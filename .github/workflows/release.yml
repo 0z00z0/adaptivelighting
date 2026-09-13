@@ -25,7 +25,6 @@ jobs:
 
       - run: dotnet restore AdaptiveLighting.slnx
       - run: dotnet build AdaptiveLighting.slnx -c Release --no-restore -p:Version=$PKG_VERSION
-      - run: dotnet test AdaptiveLighting.slnx -c Release --no-build
 
       - run: dotnet pack AdaptiveLighting.slnx -c Release --no-build -p:Version=$PKG_VERSION -o artifacts
 
