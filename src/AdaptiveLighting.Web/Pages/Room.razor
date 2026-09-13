@@ -225,6 +225,8 @@ else
 					  TestSecondsLeft="@TestSecondsLeft"
 					  TestSeconds="@TestSeconds"
 					  Test="@TestPeriod"
+					  TestingLightId="@TestingLight"
+					  TestLight="@TestLight"
 					  Changed="@MarkDirty" />
 
 		@* Only where this room asked for it, for at least one period. With none the chart has nothing to
@@ -783,6 +785,7 @@ else
 	// The level test running on the real lights, from this visit's own click. The engine owns the return, so
 	// these two only draw it, and only until the snapshot in _snapshot carries the same news — see TestingPeriod.
 	private string? _testingPeriodId;
+	private string? _testingLightId;
 	private DateTimeOffset? _testEndsAt;
 	private string? _testRefusal;
 
@@ -1111,6 +1114,32 @@ else
 
 		_now = DateTimeOffset.Now;
 		_testingPeriodId = periodId;
+		_testingLightId = null;
+		_testEndsAt = _now.AddSeconds(AreaController.LevelTestSeconds);
+	}
+
+	/// <summary>The light a running test is showing alone, read the same way as <see cref="TestingPeriod"/>.</summary>
+	private string? TestingLight =>
+		_testEndsAt is { } ends && ends > _now ? _testingLightId
+		: _snapshot is { } snapshot && RoomFacts.TestingPeriod(snapshot, _now) is not null ? snapshot.TestingLightId
+		: null;
+
+	/// <summary>Asks the engine to put one period on one light of this room for a few seconds.</summary>
+	private void TestLight(LightTest test)
+	{
+		_testRefusal = Engine.TestLight(_room?.AreaId, test.EntityId, test.PeriodId);
+
+		if (_testRefusal is { Length: > 0 })
+		{
+			_testingPeriodId = null;
+			_testingLightId = null;
+			_testEndsAt = null;
+			return;
+		}
+
+		_now = DateTimeOffset.Now;
+		_testingPeriodId = test.PeriodId;
+		_testingLightId = test.EntityId;
 		_testEndsAt = _now.AddSeconds(AreaController.LevelTestSeconds);
 	}
 

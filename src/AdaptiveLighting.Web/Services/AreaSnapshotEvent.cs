@@ -137,6 +137,18 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("test_ends_at")]
 	public DateTimeOffset? TestEndsAt { get; init; }
 
+	/// <summary>The one light a running test is showing, or <c>null</c> when the test is the whole room's.</summary>
+	[JsonPropertyName("testing_light_id")]
+	public string? TestingLightId { get; init; }
+
+	/// <summary>What each light holding levels of its own was last commanded, or <c>null</c> for a room with none.</summary>
+	[JsonPropertyName("light_levels")]
+	public List<LightStandingEvent>? LightLevels { get; init; }
+
+	/// <summary>The lights that moved on a publish where the room's own level did not.</summary>
+	[JsonPropertyName("lights_moved")]
+	public List<string>? LightsMoved { get; init; }
+
 	/// <summary>
 	///     Rebuilds an <see cref="AreaSnapshot"/>, or <c>null</c> when the payload names no area. An unparseable
 	///     enum name degrades to its zero value; nothing throws.
@@ -177,6 +189,24 @@ public sealed record AreaSnapshotEvent
 			HeldLitBy: HeldLitBy,
 			SceneApplied: SceneApplied,
 			TestingPeriodId: TestingPeriodId,
-			TestEndsAt: TestEndsAt);
+			TestEndsAt: TestEndsAt,
+			LightLevels: LightLevels is { Count: > 0 } lights
+				? [.. lights.Where(light => light.EntityId is { Length: > 0 }).Select(light => new LightStanding(light.EntityId!, light.BrightnessPct, light.ColorTempKelvin))]
+				: null,
+			TestingLightId: TestingLightId,
+			LightsMoved: LightsMoved is { Count: > 0 } moved ? moved : null);
 	}
+}
+
+/// <summary>One entry of <see cref="AreaSnapshotEvent.LightLevels"/>, in the publisher's own names.</summary>
+public sealed record LightStandingEvent
+{
+	[JsonPropertyName("entity_id")]
+	public string? EntityId { get; init; }
+
+	[JsonPropertyName("brightness_pct")]
+	public double? BrightnessPct { get; init; }
+
+	[JsonPropertyName("color_temp_kelvin")]
+	public int? ColorTempKelvin { get; init; }
 }

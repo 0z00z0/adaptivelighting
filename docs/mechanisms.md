@@ -800,6 +800,44 @@ commanded itself, and the expectation declared on it follows the polarity of tho
 under it is being switched on, off when every one of them is going out. Declaring the room's own polarity there
 leaves a group whose every lamp resolves to nothing expecting an on, and the group's echo reads as a person.
 
+#### A group's control writes each light, never the group
+
+The control inside an opened group is derived from the lights under it, through the same rows each light's own
+table shows, and a change is written to each of those lights' own rows. `LightLevels.GroupRows` reads *mixed*
+where the lights resolve to different numbers; a light on the daylight curve has no number and is left out of the
+brightness comparison. The leftmost stop clears the field on every light, so a group sent back to the room leaves
+no key behind. Two groups reaching one bulb show that bulb's one value under both, because neither reads anything
+keyed on itself.
+
+The traffic cost lands at run time, not at the write. Once every bulb under a group carries a row, the fan-out
+above commands that group bulb by bulb: one service call per bulb in place of one for the group, on every send
+that changes a level, even where all the bulbs agree. The actuator's match check keeps an unchanged bulb silent.
+
+#### A light tested alone is returned alone, and its groups are still covered
+
+`AreaController.TestLight` commands one light and schedules the same ten-second return as the room's test, under
+the same ownership rule: the engine re-resolves its own levels, and a person's are read off the fixture before the
+test. The return covers only the lights tested. `SendToLight` declares an expectation on the light and on every
+entry whose leaves hold it, on polarity alone: the group is expected on while any light under it will be.
+
+Without the group's expectation, the group re-publishing its member's change classifies as a person at the
+switch, which in a room held by hand abandons the pending return and leaves the bulb on the test level.
+`PerLightLevelsTests.A_Light_Test_In_A_Room_Set_By_Hand_Returns_Each_Light_To_What_It_Showed` goes red when that
+expectation is removed.
+
+Overlapping presses: a light test during a room test keeps the room-wide return; a second light test adds its
+light to the return; a room test during a light test settles the light's return first and then starts afresh, so
+the tested bulb is commanded twice in that instant.
+
+#### Per-light readouts ride the snapshot
+
+`AreaSnapshot.LightLevels` carries what each light holding its own levels was last commanded, `TestingLightId` the
+light a running test shows, and `LightsMoved` the lights that moved on a tick where the room's own target did
+not. The first two count in `HasSameMeaningAs`, so a tick that retunes one lamp is published rather than
+suppressed as a repeat; `LightsMoved` describes the publish, like `Reason`, and does not. Pages name only lights
+whose level differs from the room's in whole percentages. The activity log names a light by entity id, as it
+names a blocking entity. For a room with no light rows all three are null and every comparison is the one it was.
+
 ### A restart across a boundary is not a period entry
 
 `ModeMonitor` keeps two paths. `OnPeriodEntered` is edge-triggered on the tick that first sees a new period

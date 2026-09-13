@@ -56,6 +56,14 @@ public sealed class HaStatePublisher : IStatePublisher
 				scene_applied = snapshot.SceneApplied,
 				testing_period_id = snapshot.TestingPeriodId,
 				test_ends_at = snapshot.TestEndsAt,
+				testing_light_id = snapshot.TestingLightId,
+				light_levels = snapshot.LightLevels?.Select(light => new
+				{
+					entity_id = light.EntityId,
+					brightness_pct = light.BrightnessPct,
+					color_temp_kelvin = light.ColorTempKelvin
+				}).ToArray(),
+				lights_moved = snapshot.LightsMoved,
 				levels_from_room = snapshot.LevelsFromRoom?.ToString(),
 				// Flat fields, so an automation trigger can read one without walking an object.
 				is_anyone_home = snapshot.IsAnyoneHome,

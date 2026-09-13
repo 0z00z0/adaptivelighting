@@ -1,10 +1,22 @@
 # Per-light levels inside a room
 
-Status: stage 1 built, 2026-09-07. Stages 2 and 3 are open and sit in `docs/backlog.md`.
+Status: stages 1, 2 and 3 built, 2026-09-13.
 
 The rules and the reasoning below are the record of what the design decided; how the built code holds them is
-in `docs/mechanisms.md` under *A level belongs to one light, never to a group*. Two points where building it
-settled the document differently:
+in `docs/mechanisms.md` under *A level belongs to one light, never to a group*. Where stages 2 and 3 settled the
+document differently:
+
+- **The group control sits inside the opened group, not on its closed line.** Three periods of brightness and
+  warmth do not fit a summary line; the closed line keeps its summary, and the first thing the fold shows is the
+  group's period table.
+- **The per-light Test needed a return narrower than the room's.** *Level test* below says the capture-and-return
+  path is untouched; a lamp tested alone is captured and returned alone, with the group expectation declared on
+  the way back as well as the way in.
+- **"No Test column inside a light" and "No per-light live readout"** are superseded by stages 2 and 3.
+- **A tick that moved only one light was never published** under stage 1, because the snapshot's comparison saw
+  the room unchanged. Stage 3 compares the per-light levels, which is what lets the log name the light.
+
+Two points where building stage 1 settled the document differently:
 
 - **A light row that speaks to brightness at all owns the curve flag**, where the prose below says only a row
   stating a brightness does. Either half counts, because the page writes the curve flag without seeding a

@@ -65,8 +65,8 @@
 					<span class="psl-borrowed">@PlainText</span>
 				</span>
 				<span class="psl-value-group" hidden="@OnDefault">
-					<span class="psl-value">@StepText</span>
-					@if (_unlisted)
+					<span class="psl-value @(Mixed is not null ? "psl-mixed" : null)">@(Mixed ?? StepText)</span>
+					@if (_unlisted && Mixed is null)
 					{
 						<span class="psl-custom">custom</span>
 					}
@@ -74,8 +74,8 @@
 			}
 			else
 			{
-				<span class="psl-value">@StepText</span>
-				@if (_unlisted)
+				<span class="psl-value @(Mixed is not null ? "psl-mixed" : null)">@(Mixed ?? StepText)</span>
+				@if (_unlisted && Mixed is null)
 				{
 					<span class="psl-custom">custom</span>
 				}
@@ -130,6 +130,10 @@
 	/// single 8-bit raw-brightness steps. Colour temperature has no raw unit this would mean anything against.</summary>
 	[Parameter]
 	public bool FineAdjustable { get; set; }
+
+	/// <summary>Shown in place of the number where the surface holds several values, e.g. <c>mixed</c>.</summary>
+	[Parameter]
+	public string? Mixed { get; set; }
 
 	/// <summary><c>null</c> asks to go back to the default; a number states one here.</summary>
 	[Parameter]
@@ -217,7 +221,7 @@
 
 	private string PlainText => Format(Shown);
 
-	private string SpokenValue => OnDefault ? $"{DefaultLabel}, {PlainText}" : StepText;
+	private string SpokenValue => Mixed ?? (OnDefault ? $"{DefaultLabel}, {PlainText}" : StepText);
 
 	private string Format(double value) => Unit is { Length: > 0 } unit ? $"{Invariant(value)} {unit}" : Invariant(value);
 

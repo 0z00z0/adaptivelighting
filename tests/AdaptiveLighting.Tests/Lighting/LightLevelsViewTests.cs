@@ -271,6 +271,39 @@ public sealed class LightLevelsViewTests
 			LightLevels.StatingCount(With(Pins(First, "evening", brightness: 77), Pins(Lamp, "night", brightness: 26))));
 	}
 
+	// ===================== the group's own line =====================
+
+	[TestMethod]
+	public void The_Group_Control_Writes_Every_Light_Under_It_And_Stores_Nothing_Against_The_Group()
+	{
+		AreaConfig room = With(Pins(First, "evening", brightness: 77));
+		IReadOnlyList<string> leaves = LightLevels.Entries(Periods(), Room(), room)[0].Leaves;
+
+		Assert.IsTrue(
+			LightLevels.GroupRows(Periods(), room, leaves).Single(row => row.PeriodId == "evening").BrightnessMixed,
+			"one bulb pinned and its sibling on the room's level: the group line reads mixed, not the first bulb's number");
+
+		LightLevels.SetGroupBrightness(room, leaves, "evening", 30);
+
+		CollectionAssert.AreEquivalent(new[] { First, Second }, room.LightLevels!.Select(light => light.EntityId).ToArray());
+
+		foreach (string leaf in new[] { First, Second })
+			Assert.AreEqual(30d, LightLevels.Rows(Periods(), room, leaf).Single(row => row.PeriodId == "evening").BrightnessPct, leaf);
+
+		Assert.IsFalse(
+			room.LightLevels!.Any(light => light.EntityId.Equals(Group, StringComparison.OrdinalIgnoreCase)),
+			"a level belongs to one light; a group is only a way of reaching lights");
+
+		GroupLevelRow evening = LightLevels.GroupRows(Periods(), room, leaves).Single(row => row.PeriodId == "evening");
+
+		Assert.IsFalse(evening.BrightnessMixed);
+		Assert.AreEqual(30d, evening.BrightnessPct);
+
+		LightLevels.SetGroupBrightness(room, leaves, "evening", null);
+
+		Assert.IsNull(room.LightLevels, "the leftmost stop on the group sends every light under it back to the room");
+	}
+
 	// ===================== orphans =====================
 
 	[TestMethod]

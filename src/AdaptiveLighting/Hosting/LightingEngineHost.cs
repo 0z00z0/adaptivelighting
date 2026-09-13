@@ -188,6 +188,17 @@ public sealed class LightingEngineHost : IDisposable
 			return RunningArea(areaId) is { } area ? area.TestPeriod(periodKey) : NotRunningRefusal();
 	}
 
+	/// <summary>
+	///     Puts the period <paramref name="periodKey"/> names on one light of one room for
+	///     <see cref="AreaController.LevelTestSeconds"/> seconds, then gives that light back.
+	/// </summary>
+	/// <returns><c>null</c> once the test is running, or the sentence saying why it is not.</returns>
+	public string? TestLight(string? areaId, string lightEntityId, string periodKey)
+	{
+		lock (_gate)
+			return RunningArea(areaId) is { } area ? area.TestLight(lightEntityId, periodKey) : NotRunningRefusal();
+	}
+
 	/// <summary>Why <paramref name="areaId"/> cannot be lit by hand right now, or <c>null</c> when it can.</summary>
 	/// <remarks>Asked before a press so the button can carry its own reason; the press asks again, under the lock.</remarks>
 	public string? LightNowRefusal(string? areaId)

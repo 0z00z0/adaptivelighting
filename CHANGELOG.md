@@ -12,6 +12,10 @@ against each other.
 
 ## [Unreleased]
 
+### Added
+
+- **A group of lamps can be set in one go, and one lamp can be tried out on its own.** With *Adjust lights individually* ticked on a room's page, opening a group now shows its periods first: a brightness, a warmth and the daylight-curve box that apply to every lamp in the group at once, reading *mixed* where the lamps disagree. Each lamp below it has its own *Test* button, which shows that period on that one lamp for ten seconds and then puts it back as it was. The room page's *Lights* line and the dashboard's room tooltip name any lamp running a level of its own, and the activity log names the lamp when it is the only thing that changed.
+
 ### Changed
 
 - **Built against NetDaemon 26.36.0.** A house that raises only these packages still builds and loads on NetDaemon.Runtime 26.21.0: the app model underneath moves up to 26.36.0 on its own. A house that names NetDaemon.AppModel, NetDaemon.HassModel or NetDaemon.Client directly at an older version, or YamlDotNet below 18.1.0, stops at restore until those references are raised too. NetDaemon's fix for the app on/off switch being written the wrong way round lives in NetDaemon.Runtime, so a house gets it only by raising its own runtime to 26.36.0. The master switch reads and turns that helper itself and never went through the faulty write. The app on/off switch can now be named from the app NetDaemon is creating: take `ICurrentApp` in the app's constructor and pass it to `NetDaemonAppSwitch.EntityIdFor`. The overload that takes the app's type still works.

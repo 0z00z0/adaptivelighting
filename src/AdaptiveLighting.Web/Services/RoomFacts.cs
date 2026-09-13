@@ -46,7 +46,7 @@ public static class RoomFacts
 				IsProse: true));
 		}
 
-		facts.Add(new RoomFact("Lights", Reading(snapshot), LightsTitle(snapshot)));
+		facts.Add(new RoomFact("Lights", Reading(snapshot), LightsTitle(snapshot), LightReadout.Line(snapshot, nameOf)));
 
 		if (snapshot.SceneApplied is { Length: > 0 } scene)
 		{

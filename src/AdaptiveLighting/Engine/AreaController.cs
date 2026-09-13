@@ -69,6 +69,13 @@ public sealed class AreaController : IDisposable
 	private string? _resolvedPeriodName;
 	private RoomLevelSource _resolvedLevelsFromRoom;
 	private LightCommand? _lastCommand;
+
+	// Beside _lastCommand: what each light on levels of its own was last told. Null for a room with no such light.
+	private IReadOnlyDictionary<string, LightCommand>? _lastLightCommands;
+
+	// Set for the one publish where a light moved and the room's own target did not.
+	private IReadOnlyList<string>? _lightsMoved;
+
 	private DateTimeOffset? _lastCommandAt;
 	private DateTimeOffset? _lastMotionAt;
 	private DateTimeOffset? _nextChangeAt;
@@ -92,6 +99,11 @@ public sealed class AreaController : IDisposable
 	// instead of the drawing it lost.
 	private string? _testingPeriodId;
 	private DateTimeOffset? _testEndsAt;
+
+	// The lights a running test shows on their own, or null while the test is the whole room's. The return covers
+	// exactly these, so a lamp tested alone does not re-command the rest of the room.
+	private HashSet<string>? _testedLights;
+	private string? _testingLightId;
 
 	// The fixtures as they stood before a test, for a room holding levels the engine did not choose. Null while
 	// the engine owns them, because ReassertLights resolves a fresher answer than any capture could. Read once
@@ -237,13 +249,18 @@ public sealed class AreaController : IDisposable
 			if (_circadian.GetPeriodTarget(periodKey) is not { } target)
 				return "That period is no longer in the schedule.";
 
+			// A lamp tested alone is owed a narrower return than a room test gives, so it is settled first and this
+			// test starts from the room as it stood.
+			if (_levelTesting && _testedLights is not null)
+				EndLevelTest();
+
 			RefreshDarkness();
 
 			// Give the levels back to whoever owns them: the engine is asked for its own when the test ends, and a
 			// person's cannot be derived, so they are read now. Not on a second press, which would read the first
 			// test's levels as if they were somebody's.
 			if (!_levelTesting)
-				_capturedLevels = LevelsAreSomebodyElses() ? CaptureLights() : null;
+				_capturedLevels = LevelsAreSomebodyElses() ? CaptureLights(_area.Lights) : null;
 
 			// The engine's own answer for that period, curve included, so the room shows what it would really do
 			// and no second reading of the settings can drift from this one. Resolved per light too, or a test
@@ -254,10 +271,69 @@ public sealed class AreaController : IDisposable
 
 			_levelTesting = true;
 			_testingPeriodId = periodKey;
+			_testingLightId = null;
 			_testEndsAt = _scheduler.Now + TimeSpan.FromSeconds(LevelTestSeconds);
 			_levelTest.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
 
 			_logger.LogInformation("{Area}: testing period '{Period}' for {Seconds}s.", Name, target.PeriodName, LevelTestSeconds);
+
+			Publish(TransitionReason.LevelTestStarted);
+			return null;
+		}
+	}
+
+	/// <summary>
+	///     Puts the period <paramref name="periodKey"/> names on one light alone for <see cref="LevelTestSeconds"/>
+	///     seconds, then gives that light back.
+	/// </summary>
+	/// <returns><c>null</c> once the test is running, or the sentence saying why it is not.</returns>
+	/// <remarks>
+	///     The same gates, return and capture rule as <see cref="TestPeriod"/>, narrowed to the lights tested. A room
+	///     test already running keeps its room-wide return, which covers this light too.
+	/// </remarks>
+	public string? TestLight(string lightEntityId, string periodKey)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(lightEntityId);
+		ArgumentException.ThrowIfNullOrWhiteSpace(periodKey);
+
+		lock (_gate)
+		{
+			if (RefuseLevelTest() is { } refusal)
+				return refusal;
+
+			if (!AllLeaves().Contains(lightEntityId))
+				return "This room does not command that light.";
+
+			CircadianCalculator calculator = _lightCalculators.TryGetValue(lightEntityId, out CircadianCalculator? own)
+				? own
+				: _circadian;
+
+			if (calculator.GetPeriodTarget(periodKey) is not { } target)
+				return "That period is no longer in the schedule.";
+
+			RefreshDarkness();
+
+			if (!_levelTesting)
+			{
+				_testedLights = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { lightEntityId };
+				_capturedLevels = LevelsAreSomebodyElses() ? CaptureLights([lightEntityId]) : null;
+			}
+			else if (_testedLights is not null && _testedLights.Add(lightEntityId) && _capturedLevels is not null)
+			{
+				// Read before this light is moved, so its return is what it showed and not the test's level.
+				_capturedLevels = [.. _capturedLevels, .. CaptureLights([lightEntityId])];
+			}
+
+			SendToLight(lightEntityId, TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0));
+
+			_levelTesting = true;
+			_testingPeriodId = periodKey;
+			_testingLightId = lightEntityId;
+			_testEndsAt = _scheduler.Now + TimeSpan.FromSeconds(LevelTestSeconds);
+			_levelTest.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
+
+			_logger.LogInformation("{Area}: testing period '{Period}' on {Light} for {Seconds}s.",
+				Name, target.PeriodName, lightEntityId, LevelTestSeconds);
 
 			Publish(TransitionReason.LevelTestStarted);
 			return null;
@@ -1068,13 +1144,34 @@ public sealed class AreaController : IDisposable
 		if (targets is null)
 			return;
 
+		AreaTargets? previous = _lastTargets;
 		_lastTargets = targets;
 
 		// Before every command: it picks the fade length and it is what the snapshot reports.
 		RefreshDarkness();
 
 		Send(TargetCommand(targets.Room, brightnessFactor), LightCommands(targets, brightnessFactor));
+
+		_lightsMoved = reason is TransitionReason.CircadianTick ? LightsMovedAlone(targets, previous) : null;
 		Publish(reason);
+		_lightsMoved = null;
+	}
+
+	/// <summary>The lights whose own target moved while the room's did not, or <c>null</c>.</summary>
+	private static IReadOnlyList<string>? LightsMovedAlone(AreaTargets now, AreaTargets? before)
+	{
+		if (before is null || now.Lights.Count == 0 || !TargetsMatch(now.Room, before.Room))
+			return null;
+
+		List<string> moved =
+		[
+			.. now.Lights
+				.Where(own => !before.Lights.TryGetValue(own.Key, out LightTarget? was) || !TargetsMatch(own.Value, was))
+				.Select(own => own.Key)
+				.Order(StringComparer.Ordinal)
+		];
+
+		return moved.Count > 0 ? moved : null;
 	}
 
 	/// <summary>What each light that states its own levels is told to be, or <c>null</c> when none does.</summary>
@@ -1175,6 +1272,7 @@ public sealed class AreaController : IDisposable
 		_standingScene = sceneId;
 		_lastTargets = null;
 		_lastCommand = null;
+		_lastLightCommands = null;
 		_lastCommandAt = _scheduler.Now;
 
 		Publish(reason);
@@ -1196,6 +1294,7 @@ public sealed class AreaController : IDisposable
 
 		// The standing command, so a republish keeps the levels that are actually holding instead of blanking them.
 		_lastCommand = command;
+		_lastLightCommands = lightCommands;
 		_lastCommandAt = _scheduler.Now;
 	}
 
@@ -1269,6 +1368,43 @@ public sealed class AreaController : IDisposable
 			? leaves
 			: new HashSet<string>(StringComparer.Ordinal) { entry };
 
+	/// <summary>Every light the room commands, groups followed to the bottom.</summary>
+	private HashSet<string> AllLeaves()
+	{
+		HashSet<string> leaves = new(StringComparer.OrdinalIgnoreCase);
+
+		foreach (string entry in _area.Lights)
+			leaves.UnionWith(LeavesOf(entry));
+
+		return leaves;
+	}
+
+	/// <summary>Commands one light alone, declaring an expectation on it and on every entry that reaches it.</summary>
+	// A group re-publishes a member's change under its own id and the room subscribes to the group, so without the
+	// entry's expectation the echo reads as a hand at the switch. Polarity only: the group stays on while any light
+	// under it is on.
+	private void SendToLight(string light, LightCommand command)
+	{
+		foreach (string entry in _area.Lights)
+		{
+			if (string.Equals(entry, light, StringComparison.OrdinalIgnoreCase))
+				continue;
+
+			IReadOnlySet<string> leaves = LeavesOf(entry);
+
+			if (!leaves.Contains(light))
+				continue;
+
+			bool groupOn = command.On
+				|| leaves.Any(other => !string.Equals(other, light, StringComparison.OrdinalIgnoreCase) && _ha.IsOn(other));
+
+			_detector.ExpectCommand(entry, groupOn == command.On ? command : command with { On = groupOn });
+		}
+
+		_detector.ExpectCommand(light, command);
+		_actuator.Apply(light, command);
+	}
+
 	/// <summary>Why a level test cannot run here, or <c>null</c> when one can.</summary>
 	// The single place a test's gates are written, so the reason a button carries and the refusal a press would
 	// actually get are one answer. A second copy in the web project would drift, as AutoOnBlockNow's would.
@@ -1322,11 +1458,11 @@ public sealed class AreaController : IDisposable
 		_state is AreaState.OverriddenOn or AreaState.SceneHold;
 
 	/// <summary>Reads this room's fixtures as they stand, as commands that would put them back.</summary>
-	private IReadOnlyList<(string Light, LightCommand Command)> CaptureLights()
+	private IReadOnlyList<(string Light, LightCommand Command)> CaptureLights(IEnumerable<string> lights)
 	{
 		List<(string Light, LightCommand Command)> captured = [];
 
-		foreach (string light in _area.Lights)
+		foreach (string light in lights)
 		{
 			EntityState? state = _ha.GetState(light);
 			if (state is null)
@@ -1375,6 +1511,8 @@ public sealed class AreaController : IDisposable
 		_capturedLevels = null;
 		_testingPeriodId = null;
 		_testEndsAt = null;
+		_testedLights = null;
+		_testingLightId = null;
 	}
 
 	private void OnLevelTestElapsed()
@@ -1400,6 +1538,10 @@ public sealed class AreaController : IDisposable
 		_testingPeriodId = null;
 		_testEndsAt = null;
 
+		HashSet<string>? tested = _testedLights;
+		_testedLights = null;
+		_testingLightId = null;
+
 		// Same rule, two owners: the engine resolves its own levels afresh, and a person's are the ones read
 		// before the test. Taken before it is used, so a second return cannot apply the same capture twice.
 		IReadOnlyList<(string Light, LightCommand Command)>? captured = _capturedLevels;
@@ -1407,7 +1549,11 @@ public sealed class AreaController : IDisposable
 
 		if (captured is null)
 		{
-			ReassertLights();
+			if (tested is null)
+				ReassertLights();
+			else
+				ReassertLights(tested);
+
 			return;
 		}
 
@@ -1415,6 +1561,12 @@ public sealed class AreaController : IDisposable
 		// and falls into a fresh hold on top of the one it is already keeping.
 		foreach ((string light, LightCommand command) in captured)
 		{
+			if (tested is not null)
+			{
+				SendToLight(light, command);
+				continue;
+			}
+
 			_detector.ExpectCommand(light, command);
 			_actuator.Apply(light, command);
 		}
@@ -1450,6 +1602,36 @@ public sealed class AreaController : IDisposable
 		}
 
 		Send(LightCommand.TurnOff(TransitionSeconds()));
+	}
+
+	/// <summary>Re-sends what the engine wants for <paramref name="lights"/> alone: the return a light test owes.</summary>
+	// Nothing about the room is recorded. A boundary crossed during the test leaves _lastTargets behind, and the next
+	// tick re-applies the room.
+	private void ReassertLights(IReadOnlyCollection<string> lights)
+	{
+		if (_standingScene is { Length: > 0 })
+		{
+			ReassertLights();
+			return;
+		}
+
+		RefreshDarkness();
+
+		IOrderedEnumerable<string> ordered = lights.Order(StringComparer.Ordinal);
+
+		if ((_state is AreaState.AutoActive or AreaState.PreOff) && ResolveTargets() is { } targets)
+		{
+			double factor = _state is AreaState.PreOff ? _area.Settings.PreOffBrightnessFactor : 1.0;
+			LightCommand room = TargetCommand(targets.Room, factor);
+
+			foreach (string light in ordered)
+				SendToLight(light, targets.Lights.TryGetValue(light, out LightTarget? own) ? TargetCommand(own, factor) : room);
+
+			return;
+		}
+
+		foreach (string light in ordered)
+			SendToLight(light, LightCommand.TurnOff(TransitionSeconds()));
 	}
 
 	// The fade length, picked by darkness and never by the period name: what matters is whether the eyes receiving
@@ -1588,8 +1770,25 @@ public sealed class AreaController : IDisposable
 			heldLitBy,
 			_standingScene,
 			_testingPeriodId,
-			_testEndsAt);
+			_testEndsAt,
+			standing is not null ? LightStandings() : null,
+			_testingLightId,
+			_lightsMoved);
 	}
+
+	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>
+	private IReadOnlyList<LightStanding>? LightStandings() =>
+		_lastLightCommands is { Count: > 0 } commands
+			?
+			[
+				.. commands
+					.OrderBy(pair => pair.Key, StringComparer.Ordinal)
+					.Select(pair => new LightStanding(
+						pair.Key,
+						pair.Value.On ? pair.Value.BrightnessPct : null,
+						pair.Value.On ? pair.Value.ColorTempKelvin : null))
+			]
+			: null;
 
 	private void ResolvePeriodAt(DateTimeOffset now)
 	{

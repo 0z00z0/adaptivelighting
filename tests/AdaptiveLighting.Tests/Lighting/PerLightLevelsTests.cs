@@ -398,6 +398,65 @@ public sealed class PerLightLevelsTests
 			"the ten-second test shows the room as it will really be lit, not every lamp at the room's level");
 	}
 
+	// ===================== one light's own test =====================
+
+	[TestMethod]
+	public void A_Light_Test_Moves_That_Light_Alone_And_Gives_It_Back_To_The_Room()
+	{
+		Fixture room = Build(lightLevels: [Pins(First, "night", brightness: 26)]);
+
+		room.Ha.Trigger(Motion, "on");
+		room.Actuator.Clear();
+
+		Assert.IsNull(room.Area.TestLight(First, "night"));
+		Advance(room, TimeSpan.FromSeconds(AreaController.LevelTestSeconds));
+
+		CollectionAssert.AreEqual(
+			new[] { "light.stue_tak_1 on 10.2% 2200K", "light.stue_tak_1 on 70% 2700K" },
+			Recorded(room.Actuator).ToArray(),
+			"the tested bulb alone takes its own night level, and goes back to the evening level the room holds it at; "
+			+ "its sibling, its group and the lamp are never commanded");
+
+		Assert.AreEqual(AreaState.AutoActive, room.Area.State);
+	}
+
+	[TestMethod]
+	public void A_Light_Test_In_A_Room_Set_By_Hand_Returns_Each_Light_To_What_It_Showed()
+	{
+		Fixture room = Build();
+
+		room.Ha.Trigger(Motion, "on");
+		Advance(room, PastTheEcho);
+		room.Ha.Trigger(Group, "on", context: PhysicalDevice());
+		Assert.AreEqual(AreaState.OverriddenOn, room.Area.State);
+
+		room.Ha.SetState(First, "on", new Dictionary<string, object> { ["brightness"] = 51.0, ["color_temp_kelvin"] = 3000.0 });
+		room.Ha.SetState(Second, "on", new Dictionary<string, object> { ["brightness"] = 204.0, ["color_temp_kelvin"] = 3000.0 });
+		room.Actuator.Clear();
+
+		Assert.IsNull(room.Area.TestLight(First, "night"));
+
+		// Home Assistant re-publishes the bulb's change under the group's id, with neither a user nor a parent. Read
+		// as a hand at the switch, it would drop the pending return and the first bulb would stay on the test level.
+		room.Ha.Trigger(Group, "on", context: PhysicalDevice());
+
+		Assert.IsNull(room.Area.TestLight(Second, "night"));
+		Advance(room, TimeSpan.FromSeconds(AreaController.LevelTestSeconds));
+
+		CollectionAssert.AreEqual(
+			new[]
+			{
+				"light.stue_tak_1 on 15% 2200K",
+				"light.stue_tak_2 on 15% 2200K",
+				"light.stue_tak_1 on 20% 3000K",
+				"light.stue_tak_2 on 80% 3000K"
+			},
+			Recorded(room.Actuator).ToArray(),
+			"each bulb tested goes back to the level a person left it at, and nothing else in the room is commanded");
+
+		Assert.AreEqual(AreaState.OverriddenOn, room.Area.State);
+	}
+
 	// ===================== the merge rule =====================
 
 	[TestMethod]

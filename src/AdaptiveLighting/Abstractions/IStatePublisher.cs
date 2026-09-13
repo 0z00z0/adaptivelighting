@@ -36,7 +36,10 @@ public sealed record AreaSnapshot(
 	string? HeldLitBy = null,
 	string? SceneApplied = null,
 	string? TestingPeriodId = null,
-	DateTimeOffset? TestEndsAt = null)
+	DateTimeOffset? TestEndsAt = null,
+	IReadOnlyList<LightStanding>? LightLevels = null,
+	string? TestingLightId = null,
+	IReadOnlyList<string>? LightsMoved = null)
 {
 	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
@@ -65,8 +68,19 @@ public sealed record AreaSnapshot(
 		string.Equals(SceneApplied, other.SceneApplied, StringComparison.Ordinal) &&
 		string.Equals(TestingPeriodId, other.TestingPeriodId, StringComparison.Ordinal) &&
 		Nullable.Equals(TestEndsAt, other.TestEndsAt) &&
+		string.Equals(TestingLightId, other.TestingLightId, StringComparison.Ordinal) &&
+		SameLights(LightLevels, other.LightLevels) &&
 		Forced == other.Forced;
+
+	// LightsMoved is left out: it says what this publish was about, like Reason. A light moving on its own is still
+	// news through LightLevels, or the tick that retunes one lamp would be suppressed as a repeat.
+	private static bool SameLights(IReadOnlyList<LightStanding>? left, IReadOnlyList<LightStanding>? right) =>
+		left is null || right is null ? left is null && right is null : left.SequenceEqual(right);
 }
+
+/// <summary>One light holding a level of its own: what the engine last commanded it.</summary>
+/// <remarks>A <c>null</c> brightness is a light commanded off.</remarks>
+public sealed record LightStanding(string EntityId, double? BrightnessPct, int? ColorTempKelvin);
 
 public interface IStatePublisher
 {
