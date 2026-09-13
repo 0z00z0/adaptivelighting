@@ -21,10 +21,10 @@
       is here only for AppConfigurationLocationSetting, which Persistence/StateRepository binds.
       NO reference to any host project and NO HomeAssistantGenerated types: helpers needing
       generated entities stay in the host that generated them.
-      Same 26.21.0 as the rest of the graph — bump together or not at all (NU1605).
+      Same 26.36.0 as the rest of the graph — bump together or not at all (NU1605).
     -->
-    <PackageReference Include="NetDaemon.AppModel" Version="26.21.0" />
-    <PackageReference Include="NetDaemon.HassModel" Version="26.21.0" />
+    <PackageReference Include="NetDaemon.AppModel" Version="26.36.0" />
+    <PackageReference Include="NetDaemon.HassModel" Version="26.36.0" />
   </ItemGroup>
 
 </Project>

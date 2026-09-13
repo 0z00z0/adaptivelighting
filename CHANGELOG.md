@@ -12,6 +12,10 @@ against each other.
 
 ## [Unreleased]
 
+### Changed
+
+- **Built against NetDaemon 26.36.0.** A house that raises only these packages still builds and loads on NetDaemon.Runtime 26.21.0: the app model underneath moves up to 26.36.0 on its own. A house that names NetDaemon.AppModel, NetDaemon.HassModel or NetDaemon.Client directly at an older version, or YamlDotNet below 18.1.0, stops at restore until those references are raised too. NetDaemon's fix for the app on/off switch being written the wrong way round lives in NetDaemon.Runtime, so a house gets it only by raising its own runtime to 26.36.0. The master switch reads and turns that helper itself and never went through the faulty write. The app on/off switch can now be named from the app NetDaemon is creating: take `ICurrentApp` in the app's constructor and pass it to `NetDaemonAppSwitch.EntityIdFor`. The overload that takes the app's type still works.
+
 ## [2026.9.11] - 2026-09-09
 
 ### Changed

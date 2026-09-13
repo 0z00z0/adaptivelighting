@@ -1,6 +1,8 @@
 using System.Linq;
 using System.Text;
 
+using NetDaemon.AppModel;
+
 namespace AdaptiveLighting.Hosting;
 
 /// <summary>Derives the entity id of the enable helper NetDaemon's state manager publishes for an app.</summary>
@@ -14,7 +16,16 @@ public static class NetDaemonAppSwitch
 {
 	private const string Prefix = "input_boolean.netdaemon_";
 
-	/// <summary>The enable-switch entity id for <paramref name="appType"/>.</summary>
+	/// <summary>The enable-switch entity id for the app that owns the current NetDaemon scope.</summary>
+	// ICurrentApp.Id is the id the state manager names the switch from, pinned Id included.
+	public static string EntityIdFor(ICurrentApp currentApp)
+	{
+		ArgumentNullException.ThrowIfNull(currentApp);
+		ArgumentException.ThrowIfNullOrWhiteSpace(currentApp.Id);
+		return Prefix + Slug(currentApp.Id);
+	}
+
+	/// <summary>The enable-switch entity id for <paramref name="appType"/>, for a caller with no app scope to inject <see cref="ICurrentApp"/> from.</summary>
 	public static string EntityIdFor(Type appType)
 	{
 		ArgumentNullException.ThrowIfNull(appType);

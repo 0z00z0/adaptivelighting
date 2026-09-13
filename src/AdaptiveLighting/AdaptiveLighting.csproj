@@ -14,16 +14,16 @@
       the host-oriented NetDaemon.Extensions.{Logging,Scheduling,Mqtt} packages were removed in Phase C: none
       was bound against by any file here, and both hosts reference the ones they need directly.
     -->
-    <PackageReference Include="NetDaemon.AppModel" Version="26.21.0" />
-    <PackageReference Include="NetDaemon.HassModel" Version="26.21.0" />
+    <PackageReference Include="NetDaemon.AppModel" Version="26.36.0" />
+    <PackageReference Include="NetDaemon.HassModel" Version="26.36.0" />
     <!--
       Explicit rather than transitive. YamlDotNet was already in the graph via NetDaemon.AppModel, and
       AdaptiveLighting.Configuration.LightingConfigDocument compiles against it directly — a
       compile-time dependency has no business being an accident of somebody else's package graph.
-      17.1.0 is exactly the version NetDaemon.AppModel 26.21.0 resolves, so this pins what the process
-      already loads rather than introducing a second opinion.
+      18.1.0 is the floor NetDaemon.AppModel 26.36.0 declares, so this pins what the process
+      already loads rather than introducing a second opinion. Below it, restore fails with NU1605.
     -->
-    <PackageReference Include="YamlDotNet" Version="17.1.0" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
   <ItemGroup>

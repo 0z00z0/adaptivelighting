@@ -47,6 +47,25 @@ public sealed class NetDaemonAppSwitchTests
 	private sealed class PinnedIdApp;
 
 	[TestMethod]
+	public void EntityIdFor_CurrentApp_NamesTheSameSwitch_AsTheAttributeRoute()
+	{
+		// Every house pinning this Id has its master switch at this entity; a different string points it at nothing.
+		Assert.AreEqual(
+			"input_boolean.netdaemon_adaptive_lighting",
+			NetDaemonAppSwitch.EntityIdFor(new FixedCurrentApp("adaptive_lighting")));
+
+		string typeName = typeof(NetDaemonAppSwitchTests).FullName!;
+		Assert.AreEqual(
+			NetDaemonAppSwitch.EntityIdFor(typeof(NetDaemonAppSwitchTests)),
+			NetDaemonAppSwitch.EntityIdFor(new FixedCurrentApp(typeName)));
+	}
+
+	private sealed class FixedCurrentApp(string id) : ICurrentApp
+	{
+		public string Id { get; } = id;
+	}
+
+	[TestMethod]
 	public void EffectiveKillSwitch_PrefersExplicit_ElseDefault()
 	{
 		var global = new GlobalConfig();
