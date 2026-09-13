@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+	The core test set: about a tenth of the suite, chosen by hand.
+	A test is here when its failure would reach a person in a house, or when it guards a stored value that must
+	never change. Wording, layout and cosmetic tests are left to the full suite.
+	Rule, commands and upkeep: docs/mechanisms.md, "Running the tests".
+	A whole class is named with ~ and a trailing dot, so its new and renamed tests stay in.
+	Everything else is named exactly with =, and a renamed test silently leaves the set until its line is updated.
+-->
+<RunSettings>
+	<RunConfiguration>
+		<TestCaseFilter>
+			<!-- Override detection, away decided by the house mode, stored raw brightness: whole classes. -->
+			FullyQualifiedName~AdaptiveLighting.Tests.Lighting.OverrideDetectorTests.
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.ConfiguredAwayTests.
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.RawBrightnessStorageTests.
+
+			<!-- A room: auto-on gates, vacancy and pre-off, manual override, away sweep, sleep, adoption. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Motion_When_Dark_Turns_The_Area_On_At_The_Periods_Levels
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Motion_When_Not_Dark_Is_Logged_But_Not_Acted_On
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Auto_On_Is_Blocked_While_An_IgnoreWhenOn_Entity_Is_On
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Vacancy_Dims_To_PreOff_And_Then_Turns_Off
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Motion_During_The_PreOff_Grace_Restores_The_Area
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Manual_On_Overrides_And_The_Engine_Backs_Off_Until_Expiry
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Override_Expiring_While_Vacant_Turns_The_Area_Off
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Override_Expiring_While_Occupied_Resumes_Control_Instead
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Manual_Off_Suppresses_The_Area_And_Motion_Respects_It
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Our_Own_Echo_Is_Not_Read_As_A_Human
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Light_Dropping_Off_The_Network_Is_Not_A_Human_Switching_It_Off
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Real_Off_Is_Still_Read_As_A_Human
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.The_Kill_Switch_Muzzles_The_Engine_And_Releases_Cleanly
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Disabled_Area_Never_Commands_Anything
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_House_The_Trackers_Call_Empty_Is_Not_Away
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.The_House_Going_Away_Sweeps_The_Area_Off_And_Motion_Then_Does_Nothing
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Leaving_Away_Lights_A_WelcomeHome_Area_When_It_Is_Dark
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.SleepBlocksAutoOn_Stops_The_Area_Lighting_At_All
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.RespectSleepMode_Holds_The_Evening_Target_To_The_Night_Level
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.What_The_Snapshot_Reports_Is_What_Motion_Actually_Does
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Motion_Lights_The_Area_At_The_Rooms_Own_Level_Where_It_Has_One
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.The_Period_Arrives_At_The_Boundary_Not_At_The_Next_Tick
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Tick_That_Changes_Nothing_Sends_Nothing
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.The_Tick_Never_Retargets_An_Overridden_Area
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.An_Area_Found_Lit_Is_Adopted_And_Eventually_Turned_Off
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Adoption_Commands_Absolutely_Nothing
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Sleep_RespectingArea_ClampsViaAnExplicitClampPeriod
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Sleep_ForcedByAnEntity_ClampsThroughTheOptionInForce_NotTheSelectsValue
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HoldLitTests.Vacancy_Neither_Dims_Nor_Switches_Off_While_A_KeepLitWhenOn_Entity_Is_On
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HoldLitTests.A_Hold_Arriving_During_The_PreOff_Dim_Stops_The_Off_And_Settles_When_It_Releases
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HoldLitTests.The_Leaving_Sweep_Leaves_A_Held_Area_Lit_And_Sweeps_It_When_The_Hold_Releases
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HoldLitTests.A_Hold_Never_Switches_A_Dark_Room_On_By_Itself
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HoldLitTests.A_Hand_Switching_The_Lights_Off_Is_Still_Obeyed_While_Held
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HoldLitTests.KeepLitWhenOnInverted_Holds_The_Lights_While_The_Entity_Reads_Off
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HoldLitTests.An_Unreadable_KeepLitWhenOn_Entity_Holds_Nothing
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HoldLitTests.An_Unreadable_IgnoreWhenOn_Entity_Blocks_Nothing
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.IlluminanceGateTests.A_Room_That_Configures_Nothing_Gates_On_Lux_Alone
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.IlluminanceGateTests.Lux_Below_The_Threshold_Is_Dark
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.IlluminanceGateTests.Lux_Above_The_Threshold_Is_Not_Dark
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.IlluminanceGateTests.Hysteresis_Holds_The_Verdict_Across_The_Threshold
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.IlluminanceGateTests.A_Decimal_Reading_Parses_Regardless_Of_The_Hosts_Culture
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.IlluminanceGateTests.An_Unparseable_Reading_Is_Dark_Whatever_The_Sun_Says
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.IlluminanceGateTests.No_Lux_Sensor_At_All_Is_Simply_Dark
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.IlluminanceGateTests.The_Retired_Either_Decides_As_Lux_And_Never_Asks_The_Sun
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.IlluminanceGateTests.A_Stale_Sensor_Is_Dropped_And_The_Fresh_One_Decides
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomSceneTests.Movement_Runs_The_Scene_Instead_Of_Commanding_Brightness_And_Kelvin
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomSceneTests.A_Gate_That_Refuses_Auto_On_Refuses_The_Movement_Scene_Too
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomSceneTests.The_Vacancy_Timeout_Runs_The_Empty_Scene_Instead_Of_Switching_Off
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomSceneTests.The_Scenes_Own_Light_Change_Is_Not_Read_As_A_Hand_At_The_Switch
+
+			<!-- The house: house mode, who decides it, the master switch, presence, periods and the clock. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.AnUnreadableSelect_HoldsTheModeItLastRead
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.PeriodEntry_SetsMode_FiresOnceAtEntry
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.PeriodEntry_SetsMode_HumanOverrideMidPeriodStands
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.StartAfterABoundaryWentBy_AppliesSetsMode_OnlyOnce
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.ASettingsSave_DoesNotApplyAPeriodsMode_AsIfABoundaryHadGoneBy
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.PeriodReset_EnteringNamedPeriod_ResetsToNormal
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.PresenceReset_WithinGrace_Ignored_ThenAfterGrace_Resets
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.NoMotionActivation_AfterIdleWindow_SwitchesToTheMode_Once
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.NoMotionActivation_MotionRestartsTheClock
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.ActivateWhileOn_EntityOn_OverridesSelect
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.HomeAssistantAuthority_NoMotionAutoAway_IsDormant
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.KillSwitch_EnabledFlagPolarity_ByDefault
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.KillSwitch_Unavailable_FailsOpen
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.MasterSwitch_StopsAPeriodSettingTheMode
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HouseModeAuthorityTests.Home_Assistants_Authority_With_An_Entity_Owns_The_Mode
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HouseModeAuthorityTests.An_Authority_Without_An_Entity_Decides_Nothing
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HouseModeConfigTests.SleepClampPeriodFor_PrefersAnExplicitClampPeriod
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HouseModeConfigTests.NormalOption_IsNull_WhenNoOptionIsNormal_NeverATaggedOption
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PresenceMonitorTests.Leaving_Is_Announced_Only_After_The_Debounce
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingOrchestratorTests.The_Master_Switch_Stops_The_Away_And_Guest_Scenes
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingOrchestratorTests.An_Away_House_Does_Not_Take_Charge_Of_Lit_Rooms_At_Start_Up
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingOrchestratorTests.SceneMode_AppliesTheSceneOnceOnEntry_AndDoesNotReassert
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ScheduleTests.Under_Home_Assistant_Authority_The_Select_Decides_And_The_Clock_Does_Not
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ScheduleTests.An_Unreadable_Or_Unmapped_Select_Falls_Back_To_The_Clock
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PeriodSelectReaderTests.TheTwoDirectionsAreNeverBothLive
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.MotionPeriodTests.TheClock_DoesNotStartAPeriodThatWaitsForMotion
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.MotionPeriodTests.Motion_AfterTheStartHasPassed_StartsThePeriod_AndTheLevelsChange
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.MotionPeriodTests.TheNextPeriodsStart_OvertakesAPeriodThatNeverBegan
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.CircadianCalculatorTests.The_Active_Period_Is_The_Last_Boundary_At_Or_Before_Now
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.CircadianCalculatorTests.The_Schedule_Is_A_Wall_Clock_Not_UTC
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.CircadianCalculatorTests.Before_The_First_Boundary_The_Table_Wraps_To_Yesterdays_Last_Period
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.CircadianCalculatorTests.Halfway_Through_The_Blend_The_Target_Is_Halfway_Between_The_Periods
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.CircadianCalculatorTests.NextBoundary_OnTheDayTheClocksGoForward_ArrivesWhenTheGapEnds
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.CircadianCalculatorTests.NextBoundary_OnTheDayTheClocksGoBack_TakesTheStandardTimeReading
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LuxBrightnessControllerTests.An_Unavailable_Sensor_Holds_The_Curves_Dark_End
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LuxBrightnessControllerTests.The_Sleep_Clamp_Beats_A_Bright_Reading
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LuxBrightnessCurveTests.A_NaN_Or_Infinite_Reading_Never_Reaches_A_Light
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LuxBrightnessCurveTests.The_Result_Stays_Inside_The_Physical_Range
+
+			<!-- What reaches the lights: payloads, colour, per-light fan-out, which lights a room commands. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HaAdapterTests.Turn_On_Carries_HAs_Own_Key_Names_And_Nothing_Else
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HaAdapterTests.A_Command_That_Sets_Nothing_Sends_An_Empty_Payload_Rather_Than_Nulls
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HaAdapterTests.A_Light_Already_At_The_Target_Is_Left_Alone
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HaAdapterTests.A_Light_That_Is_Off_Is_Always_Commanded_On
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HaAdapterTests.Turn_Off_Carries_Only_The_Transition
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ColorControlTests.Kelvin_Sends_A_Colour_Temperature_And_No_Colour_Channels
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ColorControlTests.Equal_Channels_Sends_One_Value_On_Every_Channel_And_No_Colour_Temperature
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ColorControlTests.A_Brightness_Only_Room_Commands_No_Colour_At_All
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ColorControlTests.Auto_Over_A_Colour_Channel_Fixture_Commands_Channels_And_No_Kelvin
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PerLightLevelsTests.A_Room_With_No_Light_Rows_Commands_Exactly_What_It_Commanded_Before
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PerLightLevelsTests.One_Light_Under_A_Group_Given_Its_Own_Level_Explodes_Only_That_Group
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PerLightLevelsTests.The_Group_Entity_Still_Gets_An_Expectation_So_Its_Echo_Is_Not_Read_As_A_Person
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PerLightLevelsTests.A_Light_Pinned_To_Nothing_Is_Switched_Off_Inside_An_Otherwise_On_Send
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PerLightLevelsTests.A_Bulb_Reached_Through_Both_Its_Group_And_Its_Own_Entry_Is_Commanded_Once
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaEntityResolverTests.A_Light_Group_Wins_Over_Its_Members
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaEntityResolverTests.Overlapping_Sibling_Groups_Command_No_Bulb_Twice_And_Lose_None
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaEntityResolverTests.An_Include_Label_Filters_Discovery_To_The_Lights_That_Carry_It
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaEntityResolverTests.An_Explicit_Lights_List_Bypasses_Both_Labels
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaEntityResolverTests.An_Area_With_No_Motion_Sensors_Still_Resolves_And_Runs
+
+			<!-- The configuration document: load, round-trip, retired keys, validation, normalisation, the write path. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.RoundTrip_PreservesGlobal
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.RoundTrip_PreservesFullyOverriddenArea
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.RoundTrip_LeavesInheritedAreaSettingsNull
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.Serialize_IsStableAcrossRepeatedRoundTrips
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.Serialize_KeepsTheRootKeyTheAppModelBindsOn
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.RoundTrip_WithHouseMode_RoundTripsLosslessly
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.Deserialize_ReadsTheShippedExampleShape
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.A_Room_Still_Set_To_The_Retired_Either_Loads_As_Sensor
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.A_Document_Written_With_The_Pre_2_0_Keys_Loads_With_Its_Areas_And_Says_So
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.A_Legacy_Document_Read_Written_And_Read_Again_Lands_On_The_Current_Schema
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.Period_Authority_Ordinals_Are_Fixed
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.Saving_The_Document_Drops_The_Retired_Key_And_Its_Sentence
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.A_Reasonable_Config_Passes
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.Brightness_Outside_The_Range_A_Byte_Can_Hold_Is_Rejected
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.A_PreOff_Longer_Than_The_Vacancy_Timeout_Is_Rejected
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.An_Unknown_Entity_Costs_The_Area_And_Not_The_House
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.Levels_Naming_A_Missing_Period_Warn_And_Are_Never_Refused
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.SleepClamp_MustResolveWhenLoadBearing
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.Warnings_NeverRefuse
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.Migration_LiveCabinConfig_ValidatesCleanly
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.A_Retired_Key_Never_Refuses_The_Document
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigNormalizerTests.Normalize_SnapsABrightnessOntoTheByteGrid
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigNormalizerTests.Normalize_LeavesABrightnessAlreadyOnTheByteGridAlone
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigNormalizerTests.A_Half_Rounds_Up_And_Not_To_The_Even_Neighbour
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigNormalizerTests.Normalize_LeavesADocumentWithoutAPeriodSelect_ByteIdentical
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigNormalizerTests.Normalize_KeepsAHalfFilledRow_SoTheValidatorCanNameIt
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.StableKeyMigrationTests.Every_Name_Reference_Becomes_The_Id_It_Resolved_To
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.StableKeyMigrationTests.The_Option_Value_Stays_Home_Assistants_Match_Key
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.StableKeyMigrationTests.A_Migrated_Document_Reloads_Without_Being_Rewritten
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.StableKeyMigrationTests.Apply_IsIdempotent_OnADocumentItHasAlreadySeen
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.StableKeyMigrationTests.Renaming_A_Period_Keeps_Every_Reference_Pointing_At_It
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.StableKeyMigrationTests.Slug_TransliteratesTheLettersAHouseholdActuallyTypes
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.StableKeyMigrationTests.Create_NeverHandsOutAnIdAlreadyTaken
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.SleepStepsTests.Each_Step_Stores_The_Pair_Of_Flags_It_Always_Meant
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.SleepStepsTests.A_Saved_Step_Reads_Back_As_The_Same_Step
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.SleepStepsTests.Both_Keys_Survive_A_Save_And_A_Load
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.SleepStepsTests.No_Step_Blocks_Auto_On_Without_The_Clamp
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.SleepStepsTests.The_Block_Without_The_Clamp_Still_Loads_And_Reads_As_The_Top_Step
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PerLightConfigTests.A_Document_With_No_Light_Levels_Serialises_Exactly_As_It_Did_Before
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PerLightConfigTests.A_Light_Row_Survives_A_Save_And_A_Load
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PerLightConfigTests.An_Older_Build_Reading_The_New_Key_Keeps_The_Rooms_Rows_And_Ignores_The_Lights
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingEngineHostTests.Save_WithNoPeriods_IsRefusedAndNothingIsWritten
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingEngineHostTests.Save_WhenRefused_LeavesTheExistingDocumentExactlyAsItWas
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingEngineHostTests.Save_OfAValidDocument_WritesItAndItLoadsBack
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingEngineHostTests.Save_OverAnExistingDocument_KeepsOneBackup
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingEngineHostTests.Reload_OfALegacyDocument_RewritesItOnceAndLeavesThePreviousFileAtTheBackupPath
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingEngineHostTests.TheStore_NormalisesAndValidatesWhoeverWrites
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingEngineHostTests.Reload_OfADocumentWithoutIds_MintsThemOnce_AndKeepsTheRoomsOwnLevel
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingEngineHostTests.Reload_OfACurrentSchemaDocument_WritesNothing
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomWriteTests.Save_WhileAnotherWriterChangedADifferentRoom_KeepsThatWritersChange
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomWriteTests.Save_WhenThisRoomChangedUnderneath_IsRefused
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomWriteTests.Save_WithADocumentTheEngineCannotRun_IsRejectedAndWritesNothing
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaSetupServiceTests.A_Run_With_Nothing_Ticked_Leaves_The_Document_Byte_Identical
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.GlobalConfigTests.EffectiveKillSwitchEntity_PrefersExplicit_ElseDefault_ElseNull
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.NetDaemonAppSwitchTests.EntityIdForTypeName_MatchesNetDaemonStateManagerSlug
+
+			<!-- Pages that write a stored value back: it must come out as it went in, whatever the locale. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LevelsEditorTests.Rendering_A_Room_Leaves_An_Off_Ladder_Level_Exactly_As_It_Was
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PeriodStartEditorTests.A_Start_Neither_Shape_Can_Express_Survives_A_Render_Untouched
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PeriodStartTextTests.Every_Offset_The_Picker_Can_Produce_Round_Trips_Exactly
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomSettingsTests.The_Conversions_Survive_A_Comma_Decimal_Culture
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomLevelsTests.Reading_The_Table_Writes_Nothing
+
+			<!-- The host: key ring beside the document, the port, no token in the log file. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.The_Key_Ring_Lands_Beside_The_Document
+			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.The_Port_Comes_From_Configuration_And_Defaults_To_10000
+			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.DurableLogFormatterTests.A_Token_Logged_Through_ILogger_Never_Reaches_The_File
+			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.LoggedValueTests.A_Home_Assistant_Long_Lived_Token_Is_Replaced_Wherever_It_Sits
+		</TestCaseFilter>
+	</RunConfiguration>
+</RunSettings>

@@ -1503,6 +1503,41 @@ not name a zone proves nothing.
 
 ---
 
+## Running the tests
+
+**The build server runs no tests.** After a change, run the tests covering it, or the core set. Run the full
+suite on request, or when something is wrong.
+
+| Set | Command |
+|---|---|
+| Core | `dotnet test AdaptiveLighting.slnx --settings tests/core.runsettings` |
+| Full | `dotnet test AdaptiveLighting.slnx` |
+
+### The core set is chosen by hand
+
+About a tenth of the suite: **202 test methods, 209 cases, of 2020** (2026-09-13). A test earns a place when its
+failure would reach a person in a house, or when it guards a stored value that must never change: the auto-on
+gates, away and the house mode, vacancy and the warning dim, override detection, the sleep clamp, loading,
+validating and round-tripping the document (raw brightness bytes, retired keys, stable ids), and what a
+configuration sends to the lights. Tests of wording, layout or appearance stay in the full suite only.
+
+The filter lives in `tests/core.runsettings`, never in attributes on the tests, so changing the set touches no
+test file.
+
+### Keeping the list true
+
+A whole class is named with `~` and a trailing dot, so a test added to it or renamed inside it stays in. Every
+other entry is an exact name, and **a filter never fails on a name that matches nothing**: a renamed or moved
+test silently leaves the core set. An entry names the class the method is declared in, which is not always the
+file's name; `LevelsEditorTests` is declared in `PresetSliderTests.cs`.
+
+After renaming a test, list what the set selects and check each entry still appears. A data-driven test lists
+once per case.
+
+`dotnet test AdaptiveLighting.slnx --settings tests/core.runsettings --list-tests`
+
+---
+
 ## Last-seen tracking
 
 ### Detecting a Home Assistant restart from the shape of the population
