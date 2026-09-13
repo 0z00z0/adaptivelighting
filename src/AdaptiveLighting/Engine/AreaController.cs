@@ -1086,7 +1086,7 @@ public sealed class AreaController : IDisposable
 		Dictionary<string, LightCommand> commands = new(StringComparer.OrdinalIgnoreCase);
 
 		foreach ((string light, LightTarget target) in targets.Lights)
-			commands[light] = LightCommandFor(target, brightnessFactor);
+			commands[light] = TargetCommand(target, brightnessFactor);
 
 		return commands;
 	}
@@ -1103,32 +1103,32 @@ public sealed class AreaController : IDisposable
 
 		foreach ((string light, CircadianCalculator calculator) in _lightCalculators)
 			if (calculator.GetPeriodTarget(periodKey) is { } target)
-				commands[light] = LightCommandFor(_luxBrightness.Apply(target), brightnessFactor: 1.0);
+				commands[light] = TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0);
 
 		return commands.Count > 0 ? commands : null;
 	}
 
-	/// <summary>One light's command, with a level of nothing sent as an off rather than a turn-on at nothing.</summary>
-	// Home Assistant carries out a turn-on at 0 % as a turn-off, so an on-expectation would go unmatched and the
-	// area would read its own work as a hand at the switch. Light rows only; the room's own 0 is left as it was.
-	private LightCommand LightCommandFor(LightTarget target, double brightnessFactor)
-	{
-		LightCommand command = TargetCommand(target, brightnessFactor);
-
-		return command.BrightnessPct is <= 0 ? LightCommand.TurnOff(TransitionSeconds()) : command;
-	}
-
-	/// <summary>What this area's fixtures are told to be for <paramref name="target"/>.</summary>
+	/// <summary>What this area's fixtures are told to be for <paramref name="target"/>, an off where it is nothing.</summary>
 	// Composed here, not per service call: the fixtures were read once when the area resolved. A room whose
 	// lights offer no colour at all takes neither field, so it is commanded on brightness alone. Reads the
-	// darkness verdict through TransitionSeconds, so the caller refreshes it first.
+	// darkness verdict through TransitionSeconds, so the caller refreshes it first. The single place a level is
+	// turned into a command, room and light alike, and the last one: the curve, the warning dim and the sleep cap
+	// have all had their say by the time it runs.
 	private LightCommand TargetCommand(LightTarget target, double brightnessFactor)
 	{
+		double brightness = target.Clamp(target.BrightnessPct * brightnessFactor);
+
+		// A level landing on raw 0 goes out as an off. Home Assistant carries out a turn-on at nothing as a
+		// turn-off, so an on-expectation would go unmatched and the area would read its own work as a hand at
+		// the switch.
+		if (RawBrightness.FromPercent(brightness) <= 0)
+			return LightCommand.TurnOff(TransitionSeconds());
+
 		bool equalChannels = _area.CommandsColour && _area.EffectiveColorControl is ColorControl.EqualChannels;
 
 		return new(
 			true,
-			target.Clamp(target.BrightnessPct * brightnessFactor),
+			brightness,
 			_area.CommandsKelvin ? target.ColorTempKelvin : null,
 			TransitionSeconds(),
 			equalChannels);
@@ -1238,21 +1238,30 @@ public sealed class AreaController : IDisposable
 
 			// The entry itself is not commanded, and the expectation on it is still load-bearing: a group entity
 			// re-publishes a member's change under the group's id, and an echo nothing explains classifies as a
-			// hand at the switch. The detector matches polarity only, so the room's command is the right thing to
-			// declare here: the group is on when its leaves are.
-			_detector.ExpectCommand(entry, command);
+			// hand at the switch. The detector matches polarity only, so the entry is expected on while anything
+			// beneath it is being switched on, and off when every light under it is going out.
+			bool anyLeafOn = leaves.Any(leaf => CommandForLeaf(leaf, stated, command).On);
+
+			_detector.ExpectCommand(entry, anyLeafOn == command.On ? command : command with { On = anyLeafOn });
 
 			foreach (string leaf in leaves.Order(StringComparer.Ordinal))
 			{
 				if (!sent.Add(leaf))
 					continue;
 
-				LightCommand own = stated.TryGetValue(leaf, out LightCommand? theirs) ? theirs : command;
+				LightCommand own = CommandForLeaf(leaf, stated, command);
 				_detector.ExpectCommand(leaf, own);
 				_actuator.Apply(leaf, own);
 			}
 		}
 	}
+
+	/// <summary>What one light under an entry is told to be: its own command where it has one, the room's where not.</summary>
+	private static LightCommand CommandForLeaf(
+		string leaf,
+		IReadOnlyDictionary<string, LightCommand> stated,
+		LightCommand room) =>
+		stated.TryGetValue(leaf, out LightCommand? own) ? own : room;
 
 	/// <summary>The lights beneath one of the area's entries; the entry itself when it groups nothing.</summary>
 	private IReadOnlySet<string> LeavesOf(string entry) =>

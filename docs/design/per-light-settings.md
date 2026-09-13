@@ -203,10 +203,6 @@ actually changes.
   them, and a fold per nesting level on a phone is a page nobody can read.
 - **A group that contains itself.** The resolver's visited set already stops the walk; such a group
   stands for itself and everything it reaches, and this design adds no handling for it.
-- **The room-level brightness 0 row.** The validator accepts 0 on a room row today, and it is sent as
-  a turn-on at 0 %, which Home Assistant carries out as a turn-off against an on-expectation. This
-  design closes the trap for light rows and leaves the room row as it is; it belongs in the backlog on
-  its own.
 
 ## Stages
 

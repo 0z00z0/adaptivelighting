@@ -778,10 +778,27 @@ itself the point; forcing every entry to explode into its leaves is.
 
 #### Nothing goes out as a turn-on at nothing
 
-A light row at brightness 0 means that light is off for the period. It is sent as an off command with an off
-expectation, because Home Assistant carries out a turn-on at 0 % as a turn-off and an on-expectation would go
-unmatched — the engine would read its own work as a hand at the switch. This closes the trap for light rows
-only; the room's own 0 is unchanged and belongs in the backlog on its own.
+A level that works out to nothing is sent as an off command with an off expectation, wherever the nothing comes
+from: a room's own row, one light's row, a period, the warning dim, the daylight curve's dark end — which is
+also what a missing light reading resolves to — or a sleep ceiling. Home Assistant carries out a turn-on at 0 %
+as a turn-off, so an on-expectation goes unmatched, the room reads its own work as a hand at the switch and
+drops into its manual-off state. Movement there only restarts the reset clock, so the next period's level does
+not land until the room has been quiet for `VacancyResetMinutes`.
+
+`AreaController.TargetCommand` is the one place a target becomes a command, room and light alike, and it runs
+after the curve, the dim factor and the sleep clamp have all had their say, so it judges the number actually
+sent.
+
+**Off is raw 0, not percent 0.** A document stores brightness as the 0-255 byte and Home Assistant converts a
+percentage back to that byte, so anything below half a step — under 0.196 % — reaches a lamp as raw 0 and is
+carried out as a turn-off. The rule asks `RawBrightness.FromPercent`, which is that same arithmetic, instead of
+comparing the percentage against zero: a warning-dim factor of 0.01 on a 15 % night resolves to 0.15 %, and a
+percent-zero test sends it as a turn-on that the lamp obeys by going dark.
+
+**A group is expected to be what its lamps are told.** An entry whose lamps are commanded one by one is not
+commanded itself, and the expectation declared on it follows the polarity of those commands: on while any lamp
+under it is being switched on, off when every one of them is going out. Declaring the room's own polarity there
+leaves a group whose every lamp resolves to nothing expecting an on, and the group's echo reads as a person.
 
 ### A restart across a boundary is not a period entry
 
