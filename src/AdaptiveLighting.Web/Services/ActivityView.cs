@@ -674,9 +674,13 @@ public static class ActivityView
 			? Lit("Retuned to the time of day", snapshot)
 			: "Rechecked the room",
 		// On a forced change the select never moves, so HouseModeValue still reads whatever a person last chose.
-		// The option the engine actually put the house on comes off the force.
+		// The option the engine actually put the house on comes off the force. Only an entity override is
+		// "forced" in a reader's sense; a no-motion timeout is a quiet-time rule the owner set up, not a fight
+		// against a departure that never happened.
 		TransitionReason.HouseModeChanged => snapshot.Forced is { } forced
-			? $"Mode forced to {ForcedOption(forced)}"
+			? forced.Source == ModeForceSource.WhileEntityOn
+				? $"Mode forced to {ForcedOption(forced)}"
+				: $"Mode set to {ForcedOption(forced)}"
 			: snapshot.HouseModeValue is { Length: > 0 } value
 				? $"Mode changed to {value}"
 				: "The house changed mode",

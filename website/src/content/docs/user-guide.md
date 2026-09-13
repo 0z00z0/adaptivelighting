@@ -122,7 +122,7 @@ Top to bottom:
 - **The lanes** — one line per room on a shared time axis, grouped under floor headings, showing the
   **last four hours** behind the now-line and the **next two** after it. A room behaving normally
   has an empty track, and past six rooms the quiet ones drop to chips.
-- **What's worth knowing** — the exceptions, newest first, each line naming the room, what it did
+- **What's worth knowing** — the exceptions, newest at top, each line naming the room, what it did
   and why. Room names link through to their pages. It carries only what the lanes cannot draw:
   somebody overriding the engine by hand, a room the engine could have lit and did not, a change of
   house mode, and the house emptying, filling or being switched off. Movement that was turned down
@@ -203,7 +203,7 @@ switched-off room's page is short, and offers to turn the room on.
 
 ## 6. Find out why a light did not come on
 
-The **Activity** page is the whole house's decisions, newest first.
+The **Activity** page is the whole house's decisions, newest at top.
 
 📷 [screenshot: Activity — the room filter, the category chips with their counts, and a
 "Nothing happened" row carrying its lux reading]

@@ -36,11 +36,11 @@ public sealed record ForcedMode(
 	string? EntityId = null,
 	string? EntityState = null)
 {
-	/// <summary>One sentence naming what is forcing the mode, shared by the log and the UI.</summary>
+	/// <summary>One sentence naming what put the house on this mode, shared by the log and the UI.</summary>
 	public string Describe() =>
 		Source is ModeForceSource.WhileEntityOn && EntityId is { Length: > 0 }
 			? $"{Kind} mode is forced while {EntityId} is {EntityState ?? "on"}."
-			: $"{Kind} mode was set because the whole house went quiet, not because anyone left.";
+			: $"{OptionValue} was set after the configured time without movement.";
 }
 
 /// <summary>An immutable snapshot of everything house-wide an area needs.</summary>
