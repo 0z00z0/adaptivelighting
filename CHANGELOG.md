@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.12] - 2026-09-13
+
 ### Added
 
 - **A group of lamps can be set in one go, and one lamp can be tried out on its own.** With *Adjust lights individually* ticked on a room's page, opening a group now shows its periods first: a brightness, a warmth and the daylight-curve box that apply to every lamp in the group at once, reading *mixed* where the lamps disagree. Each lamp below it has its own *Test* button, which shows that period on that one lamp for ten seconds and then puts it back as it was. The room page's *Lights* line and the dashboard's room tooltip name any lamp running a level of its own, and the activity log names the lamp when it is the only thing that changed.
