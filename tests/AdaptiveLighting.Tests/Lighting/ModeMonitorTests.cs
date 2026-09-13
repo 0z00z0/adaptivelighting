@@ -655,24 +655,69 @@ public sealed class ModeMonitorTests
 		rig.Ha.Trigger(Gang, "on");
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "presence inside the grace is ignored");
 
-		Advance(rig, TimeSpan.FromMinutes(11));    // now 16 min after activation
+		// Quiet again before the grace runs out, so nothing is being held when it does.
 		rig.Ha.Trigger(Gang, "off");
+
+		Advance(rig, TimeSpan.FromMinutes(11));    // now 16 min after activation
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "the grace ran out with nothing reading presence");
+
 		rig.Ha.Trigger(Gang, "on");                // a fresh turn-on after the grace
 		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "a fresh arrival after the grace resets");
 	}
 
 	[TestMethod]
-	public void PresenceReset_AlreadyOnAtGraceExpiry_DoesNotReset()
+	public void PresenceReset_SensorStillOnWhenTheGraceEnds_ResetsOnce()
 	{
-		var rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+		// The one report Home Assistant makes about a sensor that comes on and stays on lands inside the grace. With
+		// nothing looking again, the occupant who triggered the away mode is shut in it for the whole of their stay.
+		Rig rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
 			seed: ha => ha.SetState(Gang, "off"));
 		Activate(rig, "Borte");
 
 		Advance(rig, TimeSpan.FromMinutes(5));
-		rig.Ha.Trigger(Gang, "on");                // turns on inside the grace
-		Advance(rig, TimeSpan.FromMinutes(30));    // grace expires with the sensor already on — no new edge
+		rig.Ha.Trigger(Gang, "on");                // turns on inside the grace, and stays on
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "presence inside the grace is still ignored");
 
-		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"), "edge-triggered: an already-on sensor does not reset");
+		Advance(rig, TimeSpan.FromMinutes(11));    // now 16 min after activation
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "a sensor still reading presence when the grace ends resets");
+
+		Activate(rig, "Hjemme");                   // Home Assistant reporting the engine's own write back
+		Assert.AreEqual(ModeKind.Normal, rig.Monitor.ActiveKind, "the house is home again");
+
+		Advance(rig, TimeSpan.FromHours(2));       // the sensor is on the whole time
+
+		Assert.AreEqual(1, SelectCalls(rig.Ha, "Hjemme"), "one look, not a poll: the reset does not repeat");
+	}
+
+	[TestMethod]
+	public void PresenceReset_UnavailableSensorWhenTheGraceEnds_HoldsNothing()
+	{
+		Rig rig = Started(AwayResetsOnPresence([Gang]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Gang, "off"));
+		Activate(rig, "Borte");
+
+		rig.Ha.Trigger(Gang, "unavailable");
+		Advance(rig, TimeSpan.FromMinutes(20));
+
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"),
+			"a sensor that has stopped answering reports no presence, so it holds nothing");
+	}
+
+	[TestMethod]
+	public void PresenceReset_TrackerAlreadyHomeWhenTheGraceEnds_DoesNotReset()
+	{
+		// A phone that never left sits at "home" for ever. Reading that as presence held would cancel every away
+		// mode the moment its grace ran out, and the house could never be away at all.
+		Rig rig = Started(AwayResetsOnPresence([Tracker]), startAt: Evening, initialSelect: "Hjemme",
+			seed: ha => ha.SetState(Tracker, "home"));
+		Activate(rig, "Borte");
+
+		Advance(rig, TimeSpan.FromMinutes(30));
+
+		Assert.AreEqual(ModeKind.Away, rig.Monitor.ActiveKind, "the house stays away");
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Hjemme"),
+			"a tracker already at home is not an arrival, so the grace running out changes nothing");
 	}
 
 	[TestMethod]

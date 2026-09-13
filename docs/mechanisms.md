@@ -506,6 +506,33 @@ unchanged: such a house runs and simply never leaves home.
 `ResetPresenceGraceMinutes` still cannot cancel the mode just set. No room gate moves: darkness, sleep, a
 blocking entity, the master switch and a disabled room refuse exactly as before.
 
+### The presence reset looks once more when the grace runs out
+
+A state-change stream reports an entity only when its state string changes, so a motion sensor that comes on
+and stays on is reported exactly once. When that one report lands inside `ResetPresenceGraceMinutes`,
+`OnPresenceReset` drops it, and the edge that would have reset the mode has been spent: nothing arrives again
+until the sensor clears and trips afresh. An occupant whose own quiet spell triggered the auto-away is then
+shut in an away house for the whole of their stay, because the room they are sitting in never reports a second
+time. Same shape as the held-motion defect in `AreaController`, one level up.
+
+`ModeMonitor.ArmGraceExpiryCheck` schedules one look at the instant the grace runs out, measured from
+`_activatedAt` — the moment the mode was set, not the moment an event was dropped. `OnGraceExpired` resets when
+a reset source is still reading on. It is a `SerialDisposable`, armed at start, on every select movement and
+when the master switch lifts, so a mode change cancels the check belonging to the mode that has gone.
+
+**Only the on/off sources are read.** `person.*` and `device_tracker.*` answer where somebody is, not whether a
+room is occupied, and a phone that never left sits at `home` for ever; counting that as presence held would
+cancel every away mode as soon as its grace ran out, and the house could never be away at all. Those two
+domains keep the arrival edge they have always had. `IsOn` answers false for `unavailable` and `unknown`, so a
+sensor that has stopped answering holds nothing.
+
+**It cannot repeat.** A landed reset puts the select on the Normal option, which carries no presence rule, so
+the next arming cancels itself. A reset the master switch refused writes nothing and is armed again when the
+switch comes back.
+
+**The grace itself is unchanged**, and so is everything that enters an away mode. What changes is only what
+happens at the far end of a grace that swallowed the one report there was.
+
 ### A reset counts as done the moment it is written; every other write waits
 
 `ModeMonitor.WriteMode` is the one place the house-mode select is written, and it takes `actAtOnce`. Only
