@@ -129,6 +129,51 @@ public sealed class AreaEntityResolver
 			DiscoverLuxSensors(areaId));
 	}
 
+	/// <summary>Why <paramref name="areaId"/> is not offered as a room, in the order <see cref="DiscoverArea"/> applies
+	/// its own gates, so the answer can never disagree with what discovery actually decided.</summary>
+	// Read for the "set up rooms again" dialog, which otherwise drops a non-qualifying area with no word said.
+	public string ExplainWhyNotARoom(string areaId)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(areaId);
+
+		if (!_registry.AreaExists(areaId))
+			return "no longer exists in Home Assistant.";
+
+		if (IsExcludedArea(areaId))
+			return $"carries the label '{_global.ExcludeLabel}' in Home Assistant, so the engine treats it as not there.";
+
+		List<string> lightsHere = [.. _registry.EntitiesInArea(areaId).Where(id => id.HasDomain(LightDomain))];
+
+		if (lightsHere.Count == 0)
+			return "has no light in Home Assistant, and a room with no light has nothing to command.";
+
+		List<string> notExcluded = [.. lightsHere.Where(id => !IsExcluded(id))];
+
+		if (notExcluded.Count == 0)
+			return $"has {Plural(lightsHere.Count, "light")} here, all carrying the label '{_global.ExcludeLabel}'.";
+
+		if (_global.IncludeLabel is { Length: > 0 } include)
+		{
+			List<string> included = [.. notExcluded.Where(IsIncluded)];
+
+			if (included.Count == 0)
+				return $"has {Plural(notExcluded.Count, "light")} here, but none carries the label '{include}' that Home Assistant is set to require.";
+
+			notExcluded = included;
+		}
+
+		if (notExcluded.Where(IsLive).ToList() is { Count: 0 })
+			return notExcluded.Count == 1
+				? "has one light here, but it is unavailable in Home Assistant right now."
+				: $"has {notExcluded.Count} lights here, but they are all unavailable in Home Assistant right now.";
+
+		// The group and per-device passes only ever narrow a non-empty candidate list or fall back to it, never
+		// empty it, so this is unreached in practice. Kept as the honest answer if that ever stops holding.
+		return "has lights that discovery still did not turn into a room.";
+	}
+
+	private static string Plural(int count, string noun) => $"{count} {(count == 1 ? noun : noun + "s")}";
+
 	/// <summary>Resolves <paramref name="area"/>, or explains why it cannot be.</summary>
 	/// <returns><c>false</c> when the area must be skipped. A skipped area is never a reason to fail the house.</returns>
 	public bool TryResolve(AreaConfig area, AreaSettings defaults, out ResolvedArea? resolved, out string? error)

@@ -1603,7 +1603,7 @@ else
 	/// scope. The extras are dropped here and not at apply time, so the panel's warning stays true to what
 	/// confirming does.</remarks>
 	private SetupPlan PlanSetup(IReadOnlyCollection<string> scope) =>
-		Catalog.PlanSetup(_document, scope) with { NewAreas = [] };
+		Catalog.PlanSetup(_document, scope) with { NewAreas = [], NotQualifying = [] };
 
 	/// <summary>Carries out a confirmed rebuild, saved at once instead of after the usual pause.</summary>
 	/// <remarks><see cref="AreaSetupService.Apply"/> replaces the room object, so the page has to find it again.</remarks>

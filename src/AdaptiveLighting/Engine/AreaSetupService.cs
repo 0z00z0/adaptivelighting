@@ -8,10 +8,22 @@ namespace AdaptiveLighting.Engine;
 public sealed record SetupPlan(
 	IReadOnlyList<AreaConfig> NewAreas,
 	IReadOnlyList<AreaRebuildPlan> Rebuilds,
-	IReadOnlyList<string> NoLongerQualifying);
+	IReadOnlyList<string> NoLongerQualifying)
+{
+	/// <summary>Areas Home Assistant reports that no room here names, each with why discovery leaves it out.</summary>
+	// Never removed from Home Assistant's own answer, unlike NewAreas: an area with no light still exists there.
+	public IReadOnlyList<SkippedArea> NotQualifying { get; init; } = [];
+}
+
+/// <summary>One area a "set up rooms again" run will not add, and why.</summary>
+public sealed record SkippedArea(string AreaId, string Reason);
 
 /// <summary>One existing area's rebuild; the three counts are what a rebuild destroys.</summary>
-public sealed record AreaRebuildPlan(string AreaId, int PinnedEntityCount, int OverrideCount, bool HasCustomName);
+public sealed record AreaRebuildPlan(string AreaId, int PinnedEntityCount, int OverrideCount, bool HasCustomName)
+{
+	/// <summary>Why discovery no longer proposes this area, set only when a rebuild would drop it.</summary>
+	public string? SkipReason { get; init; }
+}
 
 /// <summary>Sets areas up from what Home Assistant knows, on a first start and again whenever the owner asks.</summary>
 // One behaviour, no merge parameter and no preserve-list, so the warning dialog is always true. Plan is pure:
@@ -54,18 +66,31 @@ public static class AreaSetupService
 			if (area.AreaId is not { Length: > 0 } areaId || !ticked.Contains(areaId))
 				continue;
 
+			// Ticked and no longer qualifying is still a rebuild. "Ticked means rebuilt" has no exceptions.
+			string? skipReason = qualifying.Contains(areaId) ? null : resolver.ExplainWhyNotARoom(areaId);
+
 			rebuilds.Add(new AreaRebuildPlan(
 				areaId,
 				PinnedEntityCount(area),
 				OverrideCount(area),
-				area.Name is { Length: > 0 }));
+				area.Name is { Length: > 0 })
+			{
+				SkipReason = skipReason
+			});
 
-			// Ticked and no longer qualifying is still a rebuild. "Ticked means rebuilt" has no exceptions.
-			if (!qualifying.Contains(areaId))
+			if (skipReason is not null)
 				noLongerQualifying.Add(areaId);
 		}
 
-		return new SetupPlan(newAreas, rebuilds, noLongerQualifying);
+		// Every area Home Assistant reports that is neither already a room here nor about to become one — the
+		// silent drop "set up rooms again" used to make. Named alphabetically, so a long house reads in a fixed order.
+		List<SkippedArea> notQualifying = [.. registry.AreaIds
+			.Where(id => !string.IsNullOrWhiteSpace(id))
+			.Where(id => !alreadyConfigured.Contains(id) && !qualifying.Contains(id))
+			.Order(StringComparer.Ordinal)
+			.Select(id => new SkippedArea(id, resolver.ExplainWhyNotARoom(id)))];
+
+		return new SetupPlan(newAreas, rebuilds, noLongerQualifying) { NotQualifying = notQualifying };
 	}
 
 	/// <summary>Carries <paramref name="plan"/> out on <paramref name="config"/>, in memory.</summary>
