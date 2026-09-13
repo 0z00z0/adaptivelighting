@@ -65,6 +65,10 @@ public sealed class ModeMonitor : IDisposable
 	private readonly Subject<Unit> _changed = new();
 	private readonly CompositeDisposable _subscriptions = [];
 
+	// The one-shot that looks again when a presence grace runs out. Serial, so re-arming on a mode change cancels the
+	// check belonging to the mode that has gone.
+	private readonly SerialDisposable _graceEnds = new();
+
 	// Guards every mutable field below except _warnedValues and _warnedNoNormal, which carry their own atomics.
 	// Nothing that calls Home Assistant runs under it.
 	private readonly object _gate = new();
@@ -444,7 +448,12 @@ public sealed class ModeMonitor : IDisposable
 						// Coming back from the master switch crosses no boundary, so nothing else re-asserts the
 						// helper and it would read the period paused in until the next tick.
 						if (!KillSwitchActive)
+						{
 							MirrorPeriodSelect(_circadian.ActivePeriodId(_scheduler.Now));
+
+							// A grace that ran out while the engine was muzzled wrote nothing and left nothing armed.
+							ArmGraceExpiryCheck();
+						}
 
 						_changed.OnNext(Unit.Default);
 					},
@@ -474,6 +483,7 @@ public sealed class ModeMonitor : IDisposable
 		AnnounceDormantModeRules();
 		AnnounceHeldPeriods();
 		SubscribePresenceResets();
+		ArmGraceExpiryCheck();
 		SubscribeActivationSensors();
 		SubscribeMotion();
 
@@ -516,6 +526,9 @@ public sealed class ModeMonitor : IDisposable
 				&& !(change.New?.State).SameName(claimed))
 				_inactivityActivated = null;
 		}
+
+		// After the stamp above, so the new mode's grace is measured from when it was set.
+		ArmGraceExpiryCheck();
 
 		AnnounceForcedMode();
 		_changed.OnNext(Unit.Default);
@@ -606,9 +619,7 @@ public sealed class ModeMonitor : IDisposable
 
 		foreach (HouseModeOptionConfig? option in houseMode.Options.Where(o => o.Kind != ModeKind.Normal && o.ResetOnPresence))
 		{
-			List<string> sensors = option.ResetPresenceSensors.Count > 0
-				? option.ResetPresenceSensors
-				: [.. _areaMotionSensors];
+			List<string> sensors = PresenceSensorsFor(option);
 
 			if (sensors.Count == 0)
 			{
@@ -624,7 +635,7 @@ public sealed class ModeMonitor : IDisposable
 
 				// person.* and device_tracker.* report presence as their state going to "home", never as an on/off
 				// edge, so they cannot take the turn-on branch. A binary_sensor arms on its turn-on.
-				if (sensor.HasDomain(PersonDomain) || sensor.HasDomain(DeviceTrackerDomain))
+				if (IsPresenceTracker(sensor))
 					_subscriptions.Add(_ha.Entity(sensor)
 						.StateChanges()
 						.Where(IsArrival)
@@ -635,6 +646,17 @@ public sealed class ModeMonitor : IDisposable
 			}
 		}
 	}
+
+	/// <summary>The sensors whose presence resets this option: the ones it lists, or the whole area motion union.</summary>
+	// One definition, because the subscriptions and the grace-expiry check must watch the same set.
+	private List<string> PresenceSensorsFor(HouseModeOptionConfig option) =>
+		option.ResetPresenceSensors.Count > 0 ? option.ResetPresenceSensors : [.. _areaMotionSensors];
+
+	// person.* and device_tracker.* say where somebody is, not whether a room is occupied, so only their arrival
+	// counts. A tracker sitting at "home" is the resting state of a phone that never left, and holding the reset
+	// open on it would stop the house ever staying away.
+	private static bool IsPresenceTracker(string sensor) =>
+		sensor.HasDomain(PersonDomain) || sensor.HasDomain(DeviceTrackerDomain);
 
 	// The ActivateWhileOn overlay. The select is never written; EffectiveOption reads these live, so this only
 	// republishes house state.
@@ -997,6 +1019,48 @@ public sealed class ModeMonitor : IDisposable
 		Reset($"presence on {sensor}");
 	}
 
+	/// <summary>Schedules the one look at the reset sensors that a grace running out is owed.</summary>
+	// A state-change stream reports a sensor once, when it changes. A sensor that comes on inside the grace and stays
+	// on is therefore never reported again, and without this the mode it should have cancelled is held for the whole
+	// of the occupant's stay. Armed from the instant the mode was set, so it is one look per mode and not per event.
+	private void ArmGraceExpiryCheck()
+	{
+		_graceEnds.Disposable = Disposable.Empty;
+
+		if (HouseModeIsHomeAssistants || KillSwitchActive)
+			return;
+
+		if (CurrentOption is not { Kind: not ModeKind.Normal, ResetOnPresence: true } option)
+			return;
+
+		DateTimeOffset activatedAt;
+		lock (_gate)
+			activatedAt = _activatedAt;
+
+		TimeSpan grace = TimeSpan.FromMinutes(Math.Max(0, option.ResetPresenceGraceMinutes));
+		TimeSpan wait = activatedAt + grace - _scheduler.Now;
+
+		_graceEnds.Disposable = _scheduler.Schedule(
+			wait > TimeSpan.Zero ? wait : TimeSpan.Zero,
+			() => OnGraceExpired(option));
+	}
+
+	/// <summary>Resets when a reset sensor is still reading on at the moment the grace runs out.</summary>
+	// Only the on/off sources are read: IsOn answers false for unavailable and unknown, so a sensor that has stopped
+	// answering holds nothing. Once the reset lands the select stands on Normal, which is not an option carrying this
+	// rule, so the next arming cancels itself and nothing repeats.
+	private void OnGraceExpired(HouseModeOptionConfig option)
+	{
+		if (!ReferenceEquals(CurrentOption, option))
+			return;
+
+		if (PresenceSensorsFor(option).FirstOrDefault(sensor => !IsPresenceTracker(sensor) && IsOn(sensor))
+			is not { Length: > 0 } held)
+			return;
+
+		Reset($"{held} still reading presence as the grace ran out");
+	}
+
 	/// <summary>One evaluation of the clock's news: period entry, the across-restart catch-up, the mirror and the auto-away timer.</summary>
 	// Under _gate, because reading the period and claiming the transition must be one step: a period-select flip
 	// runs this from Home Assistant's thread, and a transition read but not claimed is acted on twice. The read
@@ -1255,6 +1319,7 @@ public sealed class ModeMonitor : IDisposable
 	/// <inheritdoc/>
 	public void Dispose()
 	{
+		_graceEnds.Dispose();
 		_boundary.Dispose();
 		_subscriptions.Dispose();
 		_changed.Dispose();
