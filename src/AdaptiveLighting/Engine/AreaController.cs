@@ -648,6 +648,16 @@ public sealed class AreaController : IDisposable
 		if (_state != AreaState.AutoActive)
 			return;
 
+		// A sensor held on sends no second edge, so the countdown its first one started runs out with somebody
+		// still there. Checked before the dim, and on IsOn so an unreadable sensor holds nothing.
+		if (MotionStillOn() is { } moving)
+		{
+			_logger.LogDebug("{Area}: {Sensor} still reads on, so the vacancy countdown starts again.", Name, moving);
+			RestartVacancyTimer();
+			Publish(TransitionReason.Motion);
+			return;
+		}
+
 		// The warning dim is a step towards off, so a held area does not take it either.
 		if (HoldingLit() is { } holder)
 		{
@@ -967,8 +977,11 @@ public sealed class AreaController : IDisposable
 	// For the two questions the vacancy timer cannot answer: where an expiring override lands, and whether a
 	// suppression may lift.
 	private bool IsOccupied() =>
-		_lastMotionAt is { } lastMotion &&
-		_scheduler.Now - lastMotion < TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds);
+		MotionStillOn() is not null ||
+		(_lastMotionAt is { } lastMotion &&
+			_scheduler.Now - lastMotion < TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds));
+
+	private string? MotionStillOn() => FirstThatApplies(_area.MotionSensors, inverted: false);
 
 	/// <summary>The area's target now: the shared table, the daylight curve, then the sleep clamp where it applies.</summary>
 	// The daylight curve lives here so OnTick sees it; inside ApplyTarget alone it would set the level on the
@@ -1448,8 +1461,9 @@ public sealed class AreaController : IDisposable
 	private void RestartOverrideTimer() =>
 		ArmCountdown(_overrideTimer, OverrideHold(), OnOverrideExpired);
 
-	// A movement-led hold runs for exactly the vacancy timeout and motion restarts it, so IsOccupied is already
-	// false when it fires and OnOverrideExpired lands on the empty-room branch without knowing which mode ran.
+	// A movement-led hold runs for exactly the vacancy timeout and motion restarts it, so IsOccupied is false when
+	// it fires unless a sensor still reads on, and OnOverrideExpired lands on the empty-room branch without knowing
+	// which mode ran.
 	// An area with no motion sensor restarts it never, so the hold runs once and the room settles empty. Anything
 	// that re-arms this while IsOccupied is false would hold such a room lit for ever.
 	private TimeSpan OverrideHold() =>

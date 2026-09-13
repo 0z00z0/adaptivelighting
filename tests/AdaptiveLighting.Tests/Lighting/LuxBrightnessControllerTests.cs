@@ -116,10 +116,11 @@ public sealed class LuxBrightnessControllerTests
 		return new Fixture(scheduler, ha, actuator, house, controller);
 	}
 
-	/// <summary>Turns the area on and hands back the brightness it was commanded to.</summary>
+	/// <summary>Turns the area on through motion that then clears, and hands back the brightness it was commanded to.</summary>
 	private static double CommandedOnMotion(Fixture fixture)
 	{
 		fixture.Ha.Trigger(Motion, "on");
+		fixture.Ha.Trigger(Motion, "off");
 		Assert.AreEqual(AreaState.AutoActive, fixture.Area.State);
 		Assert.IsNotNull(fixture.Actuator.Last);
 		return fixture.Actuator.Last!.BrightnessPct!.Value;

@@ -31,6 +31,8 @@ against each other.
 
 - **A Home Assistant area with no qualifying room said nothing about why.** "Set up rooms again" only ever listed rooms already set up and areas that already qualify, so one with no light, one carrying the exclude label, or one whose only lights were unavailable simply never appeared, anywhere. It now names each such area and the reason, folded shut by default so an ordinary run stays uncluttered. The same fix corrects a stale note on a room that drops out of a rebuild: it used to blame a missing motion sensor, a rule that stopped applying in 2026.9.3.
 
+- **A room no longer goes dark while its motion sensor still sees somebody.** The countdown to switching off started when the sensor first reported movement, and ran out on time even if the sensor had reported movement the whole while — so the room dimmed and went off with people in it, and only lit again when the sensor cleared and tripped anew. While any of the room's motion sensors reads movement, the room now neither dims as a warning nor switches off, and a manual change that expires in that time hands back to automatic lighting instead of switching off. The countdown starts again each time it runs out with a sensor still on. A sensor that has dropped off the network holds nothing, so it cannot keep a room lit for ever.
+
 ## [2026.9.11] - 2026-09-09
 
 ### Changed
