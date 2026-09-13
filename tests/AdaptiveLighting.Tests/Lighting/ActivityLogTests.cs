@@ -476,17 +476,6 @@ public sealed class ActivityLogTests
 				isDark: true,
 				mode: HouseMode.Sleep,
 				houseModeValue: "Sover")).What);
-
-		// Nothing writes EveryoneLeft any more; a row from before the house mode became the only thing that
-		// decides still has to read as what it was.
-		ActivityLine empty = ActivityView.Describe(Report(
-			"Stue",
-			AreaState.Away,
-			TransitionReason.EveryoneLeft,
-			mode: HouseMode.Away));
-
-		Assert.AreEqual("Everyone left the house", empty.What);
-		Assert.AreEqual("The house is in away mode.", empty.Why);
 	}
 
 	[TestMethod]
@@ -1093,8 +1082,6 @@ public sealed class ActivityLogTests
 	[TestMethod]
 	public void House_Events_And_The_Master_Switch_Share_One_Chip()
 	{
-		Assert.IsTrue(Has(ActivityCategory.House, Report("Stue", AreaState.Away, TransitionReason.EveryoneLeft)));
-		Assert.IsTrue(Has(ActivityCategory.House, Report("Stue", AreaState.AutoVacant, TransitionReason.FirstPersonArrived)));
 		Assert.IsTrue(Has(ActivityCategory.House, Report("Stue", AreaState.SceneHold, TransitionReason.SceneHold)));
 
 		AreaSnapshot paused = Report(
@@ -1364,9 +1351,6 @@ public sealed class ActivityLogTests
 	public void Only_The_Sentences_That_Speak_For_The_House_Are_Unattributed()
 	{
 		Assert.IsTrue(ActivityView.IsAboutTheHouse(Mode("Stue", "Home", Noon)));
-		Assert.IsTrue(ActivityView.IsAboutTheHouse(Report("Stue", AreaState.Away, TransitionReason.EveryoneLeft)));
-		Assert.IsTrue(ActivityView.IsAboutTheHouse(
-			Report("Stue", AreaState.AutoVacant, TransitionReason.FirstPersonArrived)));
 		Assert.IsTrue(
 			ActivityView.IsAboutTheHouse(
 				Report("Stue", AreaState.Disabled, TransitionReason.EnablementChanged, killSwitch: true)),

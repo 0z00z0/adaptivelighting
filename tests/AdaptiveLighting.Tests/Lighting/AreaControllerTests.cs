@@ -2052,7 +2052,7 @@ public sealed class AreaControllerTests
 	private static AreaSnapshot LastReport(Fixture fixture) => fixture.Publisher.Snapshots[^1];
 
 	[TestMethod]
-	public void ForcedAwayMode_IsNotReportedAsAPresenceDeparture()
+	public void ForcedAwayMode_IsReportedAsAHouseModeChange()
 	{
 		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
 		t.Ha.Trigger(Motion, "on");
@@ -2062,8 +2062,6 @@ public sealed class AreaControllerTests
 		AreaSnapshot report = LastReport(t);
 
 		Assert.AreEqual(AreaState.Away, report.State, "the mode still sweeps the room — that part was never wrong");
-		Assert.AreNotEqual(TransitionReason.EveryoneLeft, report.Reason,
-			"nobody left; the mode did this, and saying otherwise cost an hour hunting a presence fault");
 		Assert.AreEqual(TransitionReason.HouseModeChanged, report.Reason);
 	}
 
@@ -2083,7 +2081,7 @@ public sealed class AreaControllerTests
 	}
 
 	[TestMethod]
-	public void AwayModeReleasing_IsAModeChange_NotAnArrival()
+	public void AwayModeReleasing_IsAModeChange()
 	{
 		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
 		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte", forced: ForcedAway()));
@@ -2094,8 +2092,6 @@ public sealed class AreaControllerTests
 
 		AreaSnapshot report = LastReport(t);
 
-		Assert.AreNotEqual(TransitionReason.FirstPersonArrived, report.Reason,
-			"claiming an arrival nobody made is the same invented cause in the other direction");
 		Assert.AreEqual(TransitionReason.HouseModeChanged, report.Reason);
 	}
 
