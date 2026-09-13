@@ -20,9 +20,9 @@
 	-->
 	<ItemGroup>
 		<PackageReference Include="AdaptiveLighting.NetDaemon" Version="2026.9.11" />
-		<PackageReference Include="NetDaemon.Runtime" Version="26.21.0" />
-		<PackageReference Include="NetDaemon.Extensions.Logging" Version="26.21.0" />
-		<PackageReference Include="NetDaemon.Extensions.Scheduling" Version="26.21.0" />
+		<PackageReference Include="NetDaemon.Runtime" Version="26.36.0" />
+		<PackageReference Include="NetDaemon.Extensions.Logging" Version="26.36.0" />
+		<PackageReference Include="NetDaemon.Extensions.Scheduling" Version="26.36.0" />
 	</ItemGroup>
 
 </Project>

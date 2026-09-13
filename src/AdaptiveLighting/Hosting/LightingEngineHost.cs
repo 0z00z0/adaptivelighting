@@ -227,7 +227,7 @@ public sealed class LightingEngineHost : IDisposable
 	///     <c>[NetDaemonApp]</c> bootstrap, which is the only thing the app model gives a live scope to.
 	/// </summary>
 	/// <remarks>
-	///     <c>defaultKillSwitchEntity</c> comes from <see cref="NetDaemonAppSwitch.EntityIdFor"/> and is held in
+	///     <c>defaultKillSwitchEntity</c> comes from <see cref="NetDaemonAppSwitch.EntityIdFor(NetDaemon.AppModel.ICurrentApp)"/> and is held in
 	///     memory only, never written to YAML.
 	/// </remarks>
 	public void Attach(IHaContext ha, IHaRegistry registry, IScheduler scheduler, string? defaultKillSwitchEntity = null)
