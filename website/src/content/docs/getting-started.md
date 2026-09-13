@@ -88,10 +88,10 @@ internal sealed class AdaptiveLightingApp : IAsyncDisposable
 {
 	private readonly LightingEngineHost _engine;
 
-	public AdaptiveLightingApp(LightingEngineHost engine, IHaContext ha, IHaRegistry registry, IScheduler scheduler, ICurrentApp currentApp)
+	public AdaptiveLightingApp(LightingEngineHost engine, IHaContext ha, IHaRegistry registry, IScheduler scheduler)
 	{
 		_engine = engine;
-		_engine.Attach(ha, registry, scheduler, NetDaemonAppSwitch.EntityIdFor(currentApp));
+		_engine.Attach(ha, registry, scheduler, NetDaemonAppSwitch.EntityIdFor(GetType()));
 		_engine.Reload();
 	}
 
