@@ -60,7 +60,7 @@ public enum ActivityCategory
 	/// <summary>The engine considered lighting the room and did not, and the row says why.</summary>
 	Declined = 16,
 
-	/// <summary>People coming and going, a guest scene, or the master switch. Going away is a mode change.</summary>
+	/// <summary>A guest scene, or the master switch. Going away is a mode change.</summary>
 	House = 32,
 
 	/// <summary>Housekeeping: rechecks, start-up, and a room switched on or off for automatic lighting.</summary>
@@ -128,7 +128,7 @@ public static class ActivityView
 			"The engine could have lit the room and did not — with the reason."),
 		new(ActivityCategory.Mode, "Mode changes", "The house moved to a different mode."),
 		new(ActivityCategory.House, "House",
-			"People coming and going, a guest scene, and the master switch. Going away is a mode change."),
+			"A guest scene, and the master switch. Going away is a mode change."),
 		new(ActivityCategory.Background, "Background tasks",
 			"Rechecks, start-up, and rooms switched on or off. Starts hidden — the highest volume, the lowest signal.")
 	];
@@ -281,9 +281,7 @@ public static class ActivityView
 		if (snapshot.Reason is TransitionReason.HouseModeChanged)
 			return ActivityCategory.Mode;
 
-		if (snapshot.Reason is TransitionReason.EveryoneLeft
-			or TransitionReason.FirstPersonArrived
-			or TransitionReason.SceneHold)
+		if (snapshot.Reason is TransitionReason.SceneHold)
 			return ActivityCategory.House;
 
 		if (snapshot.Reason is TransitionReason.ManualOn
@@ -397,8 +395,7 @@ public static class ActivityView
 			or TransitionReason.ManualOn
 			or TransitionReason.ManualOff
 			or TransitionReason.SuppressionLifted
-			or TransitionReason.EnablementChanged
-			or TransitionReason.EveryoneLeft => false,
+			or TransitionReason.EnablementChanged => false,
 
 		// What is left commands where it left the room lit and aimed. That is what AutoActive means.
 		_ => snapshot.State is AreaState.AutoActive
@@ -439,9 +436,7 @@ public static class ActivityView
 		if (snapshot.KillSwitchActive && !IsDeclinedMotion(snapshot))
 			return true;
 
-		return snapshot.Reason is TransitionReason.HouseModeChanged
-			or TransitionReason.EveryoneLeft
-			or TransitionReason.FirstPersonArrived;
+		return snapshot.Reason is TransitionReason.HouseModeChanged;
 	}
 
 	/// <summary>Whether an entry's words are about the whole house. Always true of a notice.</summary>
@@ -672,8 +667,6 @@ public static class ActivityView
 		TransitionReason.ManualOff => "Lights switched off manually",
 		TransitionReason.OverrideExpired => "The manual change ran its course",
 		TransitionReason.SuppressionLifted => "Quiet long enough — back on automatic",
-		TransitionReason.EveryoneLeft => "Everyone left the house",
-		TransitionReason.FirstPersonArrived => "First person home",
 		TransitionReason.EnablementChanged => snapshot.State == AreaState.Disabled
 			? "Automatic lighting switched off here"
 			: "Automatic lighting switched on here",

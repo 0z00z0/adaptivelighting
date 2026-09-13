@@ -486,9 +486,7 @@ question, so a household that wants a departure sweep configures an away option 
 
 **The departure sweep runs when the select goes to away**, which for a house with a quiet time on its away
 option is once that time has passed rather than at the moment the last phone leaves. `AreaController` names
-every away transition `HouseModeChanged`, or `Startup` for the mode it found when it started;
-`TransitionReason.EveryoneLeft` and `FirstPersonArrived` are kept only so an activity row written before this
-rule still reads as what it was.
+every away transition `HouseModeChanged`, or `Startup` for the mode it found when it started.
 
 **An unreadable select holds the mode it last reported.** `unknown` and `unavailable` are the helper failing
 to answer, which is not the same as it answering Normal, and falling through to Normal moves in the one

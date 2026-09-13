@@ -50,12 +50,6 @@ public enum TransitionReason
 	/// <summary>The area stayed vacant long enough to lift a manual turn-off.</summary>
 	SuppressionLifted,
 
-	// Kept so an activity row written before the house mode became the only thing that decides still reads as
-	// what it was. Nothing produces either any more.
-	EveryoneLeft,
-
-	FirstPersonArrived,
-
 	/// <summary>The kill switch, or the area's Enabled flag, changed.</summary>
 	EnablementChanged,
 
