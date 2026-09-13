@@ -16,6 +16,15 @@ against each other.
 
 - **Built against NetDaemon 26.36.0.** A house that raises only these packages still builds and loads on NetDaemon.Runtime 26.21.0: the app model underneath moves up to 26.36.0 on its own. A house that names NetDaemon.AppModel, NetDaemon.HassModel or NetDaemon.Client directly at an older version, or YamlDotNet below 18.1.0, stops at restore until those references are raised too. NetDaemon's fix for the app on/off switch being written the wrong way round lives in NetDaemon.Runtime, so a house gets it only by raising its own runtime to 26.36.0. The master switch reads and turns that helper itself and never went through the faulty write. The app on/off switch can now be named from the app NetDaemon is creating: take `ICurrentApp` in the app's constructor and pass it to `NetDaemonAppSwitch.EntityIdFor`. The overload that takes the app's type still works.
 
+- **Four wording fixes from the in-app feedback button.** "Newest first" reads "newest at top"
+  everywhere it appeared. The explanation shown after the house is set to its away option by a
+  quiet-time rule now says so plainly, in the option's own name, rather than arguing against a
+  departure nobody claimed happened; an entity actually holding the house on a mode still reads as
+  forced. A room's settings note reads "N of 23 are set for this room; the rest follow the house
+  default settings" in place of "baseline under House". The room-page switch reads "Adaptive
+  lighting" with an "On"/"Off" state word, in place of "Enable room", matching what the
+  screen-reader label already said.
+
 ### Fixed
 
 - **A house that went away on its own could refuse to come back while somebody stayed put.** An away mode that returns the house to normal when somebody is detected ignores anything detected in its first few minutes, so that walking out of the door cannot cancel the mode it just triggered. A sensor that came on inside those minutes and then stayed on was reported only that once, so the reset was dropped and nothing looked again — the person sitting in the room stayed shut in an away house, with rooms refusing to light and the light button refused too. The sensors are now looked at once more the moment those minutes are up, and a room still reporting somebody in it brings the house home. Phones and other trackers are unchanged: only an arrival counts, so one that was at home all along still cannot cancel an away mode.

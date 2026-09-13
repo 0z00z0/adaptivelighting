@@ -78,8 +78,8 @@ else
 							title="@SwitchTitle"
 							@onclick="ToggleEnabled">
 						<span class="room-enable-lamp" aria-hidden="true"></span>
-						<span class="room-enable-label">Enable room</span>
-						<span class="room-enable-word">@(IsEnabled ? "on" : "off")</span>
+						<span class="room-enable-label">Adaptive lighting</span>
+						<span class="room-enable-word">@(IsEnabled ? "On" : "Off")</span>
 					</button>
 				</div>
 			</header>
@@ -257,8 +257,8 @@ else
 			</button>
 			@* Kept short: at 390px this bar has 340px, and a longer sentence wraps to three lines. *@
 			<span class="room-more-note">
-				@OwnLine &mdash;
-				<a href="config?section=house">baseline under House</a>
+				@OwnLine
+				<a href="config?section=house">house default settings</a>.
 			</span>
 		</div>
 
@@ -698,7 +698,7 @@ else
 		<section class="panel room-card">
 			<div class="room-card-head">
 				<span class="room-card-title">What happened here</span>
-				<span class="room-card-note">newest first</span>
+				<span class="room-card-note">newest at top</span>
 			</div>
 
 			@if (RoomLog is { Count: > 0 } rows)
@@ -1261,8 +1261,8 @@ else
 
 			// Short: see the note's markup for the 390px measurement that set the length.
 			return own == 0
-				? $"all {AreaView.OverridableSettingCount} follow the house"
-				: $"{own} of {AreaView.OverridableSettingCount} are this room's own";
+				? $"All {AreaView.OverridableSettingCount} follow the"
+				: $"{own} of {AreaView.OverridableSettingCount} are set for this room; the rest follow the";
 		}
 	}
 
@@ -1276,7 +1276,7 @@ else
 	}
 
 	/// <summary>How many of a section's settings this room states for itself, for the badge on a folded section.</summary>
-	// Counts keys, not rows, so the badge and the "n of 22" line above it are the same number counted twice. A
+	// Counts keys, not rows, so the badge and the "n of 23" line above it are the same number counted twice. A
 	// stepped row folds two keys and would otherwise report one while the denominator reports two.
 	private int OwnCountIn(RoomSettingGroup group) =>
 		_room is { } room

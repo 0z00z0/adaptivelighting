@@ -1101,7 +1101,7 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(ModeKind.Away, forced.Kind);
 		Assert.IsNull(forced.EntityId, "no entity is holding it — the house simply went quiet");
 		Assert.AreEqual(
-			"Away mode was set because the whole house went quiet, not because anyone left.",
+			"Borte was set after the configured time without movement.",
 			forced.Describe());
 	}
 
