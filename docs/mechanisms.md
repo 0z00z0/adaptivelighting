@@ -1476,11 +1476,11 @@ inherits size, weight and colour from the `.housemode-field-label` span it sits 
   by the strict CSP with no console message, and an `<img src>` would isolate the glyph from the cascade so
   `currentColor` and `var(--icon-accent)` both stop working.
 
-### Locale and CI
+### Locale and time zone
 
-CI runs on Ubuntu in UTC; the development box is Europe/Oslo. Anything rendering a wall clock goes through
-`ToLocalTime()`, so a test asserting a literal clock string passes locally and fails on the agent. Assert
-shape, or compare against the same projection.
+A test runs in the time zone and locale of whichever machine runs it, UTC on one and Europe/Oslo on another.
+Anything rendering a wall clock goes through `ToLocalTime()`, so a test asserting a literal clock string passes
+on one machine and fails on the next. Assert shape, or compare against the same projection.
 
 ### A Start is a wall clock; `IScheduler.Now` is not
 
@@ -1496,10 +1496,45 @@ same zone**, or a period's mode switch is filed against a different day from the
 The web layer converts: `ActivityView` and `BoardView` go through `ToLocalTime()`. That asymmetry is why the
 pages can look right while the lights do not.
 
-**Tests must name the zone.** A test whose instants are built at `+00:00` passes on CI whatever the engine
+**Tests must name the zone.** A test whose instants are built at `+00:00` passes on a UTC machine whatever the engine
 does unless it passes `TimeZoneInfo.Utc` explicitly. The conversion itself is asserted against a fixed
 `+02:00` custom zone, so it means the same thing on a box with no tz database. A regression test here that does
 not name a zone proves nothing.
+
+---
+
+## Running the tests
+
+**The build server runs no tests.** After a change, run the tests covering it, or the core set. Run the full
+suite on request, or when something is wrong.
+
+| Set | Command |
+|---|---|
+| Core | `dotnet test AdaptiveLighting.slnx --settings tests/core.runsettings` |
+| Full | `dotnet test AdaptiveLighting.slnx` |
+
+### The core set is chosen by hand
+
+About a tenth of the suite: **202 test methods, 209 cases, of 2020** (2026-09-13). A test earns a place when its
+failure would reach a person in a house, or when it guards a stored value that must never change: the auto-on
+gates, away and the house mode, vacancy and the warning dim, override detection, the sleep clamp, loading,
+validating and round-tripping the document (raw brightness bytes, retired keys, stable ids), and what a
+configuration sends to the lights. Tests of wording, layout or appearance stay in the full suite only.
+
+The filter lives in `tests/core.runsettings`, never in attributes on the tests, so changing the set touches no
+test file.
+
+### Keeping the list true
+
+A whole class is named with `~` and a trailing dot, so a test added to it or renamed inside it stays in. Every
+other entry is an exact name, and **a filter never fails on a name that matches nothing**: a renamed or moved
+test silently leaves the core set. An entry names the class the method is declared in, which is not always the
+file's name; `LevelsEditorTests` is declared in `PresetSliderTests.cs`.
+
+After renaming a test, list what the set selects and check each entry still appears. A data-driven test lists
+once per case.
+
+`dotnet test AdaptiveLighting.slnx --settings tests/core.runsettings --list-tests`
 
 ---
 
@@ -1634,8 +1669,8 @@ decimal comma or a local date order never reaches the file either.
 ### Timestamps carry the date, and so do the tests
 
 `2026-08-05 00:03:12.000+02:00`, invariant, the event's own offset, one physical line per event with control
-characters flattened to spaces. A value carrying a newline therefore cannot forge a second entry. CI runs in
-UTC and the development box does not, so the tests assert the *shape* of the timestamp, or compare against the
+characters flattened to spaces. A value carrying a newline therefore cannot forge a second entry. The machine
+running a test can be in any time zone, so the tests assert the *shape* of the timestamp, or compare against the
 same projection of a fixed `DateTimeOffset` — never a wall clock.
 
 ---
