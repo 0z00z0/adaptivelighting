@@ -23,12 +23,6 @@ An item with no number is one this file records before the tracker has minted on
 
 ## Next up
 
-- **A room's own levels row still accepts brightness 0, and it is sent as a turn-on at nothing.** Home
-  Assistant carries that out as a turn-off against an on-expectation, so the room reads its own command as a
-  hand at the switch. Per-light rows close the trap for themselves — a light at 0 goes out as an off — and the
-  room row is deliberately left as it was, because changing it changes what an existing document does. The
-  reasoning is under *Deliberately not solved* in `docs/design/per-light-settings.md`.
-
 - **Per-light levels, stages 2 and 3.** Stage 2: sliders on a group's own line, showing a value where every
   light under it agrees and *mixed* otherwise, writing to every light beneath; and a per-light *Test* that
   puts one light's period level on that light alone. Stage 3: a per-light standing level in the snapshot for
