@@ -833,10 +833,10 @@ outlasts them while they are in the room and is handed back once they leave. `Ov
 ignored, and stays in the document so switching back restores what was typed. Clear, the countdown is that
 number of minutes and motion restarts nothing.
 
-The firing of a movement-led countdown is itself the proof the room is vacant, which is why one branch serves
-both: the countdown is exactly the vacancy timeout and motion restarts it, so `IsOccupied` is already false
-when it fires and the expiry lands on the empty-room branch without knowing which clock ran. `SuppressedOff`
-is the same shape one state over.
+The firing of a movement-led countdown is the proof the room is vacant, which is why one branch serves both:
+the countdown is exactly the vacancy timeout and motion restarts it, so `IsOccupied` is false when it fires
+unless a motion sensor still reads on, and the expiry lands on the empty-room branch without knowing which
+clock ran. `SuppressedOff` is the same shape one state over.
 
 It is a boolean beside the number rather than an enum over both. An absent key leaves the initialiser
 standing, where an unknown enum name is a `FormatException` at start-up and `LightingEngineHost.Reload` is
@@ -851,6 +851,23 @@ empty. That is the whole mechanism, and it is why a room without a sensor needs 
 
 The constraint that follows: anything re-arming the hold while the room reads as vacant would hold such a room
 lit for ever, there being no second event to end it.
+
+### A motion sensor held on
+
+Motion arrives as a turn-on edge and nothing else, so a sensor reading on for longer than
+`VacancyTimeoutSeconds` sends one edge and then silence. Two places read the sensors' present state as well:
+`VacancyTimedOut` restarts the countdown instead of dimming while any of the room's motion sensors reads on,
+and `IsOccupied` counts a sensor reading on as occupied, so an expiring manual hold hands back to `AutoActive`
+instead of switching off. The check comes before the warning dim, so neither the dim nor the off runs.
+
+- It reads `on` and nothing else. `unavailable` and `unknown` are not on, so a sensor that drops off the network
+  holds nothing, and the countdown already running ends the room at most one timeout later.
+- Nothing listens for a sensor turning off. Once the last sensor clears, the dim comes when the countdown then
+  running runs out: anywhere from at once to one full `VacancyTimeoutSeconds` later.
+- `PreOffElapsed` does not check. `PreOff` is entered only with no sensor on, and any turn-on during it,
+  `unavailable` to `on` included, rescues the room through `OnMotion`.
+- Test fixtures model a person leaving as a sensor turning on and then off. A fixture that leaves a sensor on
+  describes somebody still in the room.
 
 ### Auto-on gates
 

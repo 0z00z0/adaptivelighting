@@ -95,7 +95,7 @@ public sealed class HoldLitTests
 	/// <summary>A change with no user and no parent: a wall switch acting on the light itself.</summary>
 	private static Context PhysicalDevice() => new() { Id = "physical" };
 
-	/// <summary>Lights the area through motion and forgets the command that did it.</summary>
+	/// <summary>Lights the area through motion that then clears, and forgets the command that did it.</summary>
 	private static Fixture Lit(
 		IReadOnlyList<string>? keepLitWhenOn = null,
 		bool keepLitInverted = false,
@@ -103,6 +103,7 @@ public sealed class HoldLitTests
 	{
 		Fixture t = Build(keepLitWhenOn, keepLitInverted, seed: seed);
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		t.Actuator.Clear();
 		return t;
@@ -272,6 +273,44 @@ public sealed class HoldLitTests
 
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "the fresh countdown supersedes the one the hold refused");
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
+	}
+
+	// ===================== a motion sensor held on is somebody still in the room =====================
+
+	[TestMethod]
+	public void A_Motion_Sensor_Held_On_Through_The_Timeout_Keeps_The_Room_Lit()
+	{
+		Fixture t = Build();
+		t.Ha.Trigger(Motion, "on");
+		t.Actuator.Clear();
+
+		// One edge and no other: the sensor reads on through two whole vacancy timeouts.
+		Advance(t, TimeSpan.FromSeconds((2 * VacancySeconds) + PreOffSeconds + 60));
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "a sensor still reading on is somebody still in the room");
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "neither the warning dim nor the off");
+
+		t.Ha.Trigger(Motion, "off");
+		Advance(t, TimeSpan.FromSeconds(VacancySeconds + PreOffSeconds));
+
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State, "the room still empties once the sensor clears");
+		Assert.IsTrue(t.Actuator.Last is { On: false });
+	}
+
+	[TestMethod]
+	[DataRow("unavailable")]
+	[DataRow("unknown")]
+	public void A_Motion_Sensor_That_Cannot_Be_Read_Holds_Nothing(string state)
+	{
+		Fixture t = Build();
+		t.Ha.Trigger(Motion, "on");
+
+		// Dropping off the network mid-motion is no turn-on, and a sensor nobody can read reports nobody.
+		t.Ha.Trigger(Motion, state);
+		Advance(t, TimeSpan.FromSeconds(VacancySeconds + PreOffSeconds));
+
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State, $"'{state}' is not 'on', so it must not pin the room lit");
+		Assert.IsTrue(t.Actuator.Last is { On: false });
 	}
 
 	// ===================== inverted polarity =====================

@@ -245,6 +245,7 @@ public sealed class AreaControllerTests
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		t.Actuator.Clear();
 
 		Advance(t, TimeSpan.FromMinutes(9));
@@ -265,6 +266,7 @@ public sealed class AreaControllerTests
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromMinutes(10));
 		t.Actuator.Clear();
 
@@ -287,6 +289,7 @@ public sealed class AreaControllerTests
 
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromMinutes(9));
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 
@@ -316,6 +319,7 @@ public sealed class AreaControllerTests
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromSeconds(30));
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
 		t.Actuator.Clear();
@@ -381,6 +385,7 @@ public sealed class AreaControllerTests
 		Advance(t, TimeSpan.FromMinutes(4));
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Assert.AreEqual(0, t.Actuator.Applied.Count, "motion must not push the manual levels around");
 
 		Advance(t, TimeSpan.FromMinutes(4));
@@ -405,6 +410,7 @@ public sealed class AreaControllerTests
 		});
 
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromSeconds(30));
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
 
@@ -555,6 +561,7 @@ public sealed class AreaControllerTests
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromMinutes(10));
 		Assert.AreEqual(AreaState.PreOff, t.Area.State);
 
@@ -776,6 +783,7 @@ public sealed class AreaControllerTests
 
 		var preOff = Build();
 		preOff.Ha.Trigger(Motion, "on");
+		preOff.Ha.Trigger(Motion, "off");
 		Advance(preOff, TimeSpan.FromMinutes(10));
 		Assert.AreEqual(AreaState.PreOff, preOff.Area.State);
 		preOff.Actuator.Clear();
@@ -803,6 +811,7 @@ public sealed class AreaControllerTests
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		t.Ha.SetState(Light, "on", new() { ["brightness"] = 178 });
 
 		t.House.OnNext(House(killed: true));
@@ -1277,6 +1286,7 @@ public sealed class AreaControllerTests
 	{
 		var t = Build();
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromMinutes(10));
 		Advance(t, TimeSpan.FromSeconds(30));
 
@@ -1400,6 +1410,7 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(start + TimeSpan.FromSeconds(600), t.Publisher.Snapshots[^1].NextChangeAt,
 			"an active area knows when it will start dimming");
 
+		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromMinutes(10));
 		var preOff = t.Publisher.Snapshots[^1];
 		Assert.AreEqual(AreaState.PreOff, preOff.State);
@@ -1499,6 +1510,7 @@ public sealed class AreaControllerTests
 		Advance(t, TimeSpan.FromMinutes(5));
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		var rearmed = t.Publisher.Snapshots[^1];
 		Assert.AreEqual(start + TimeSpan.FromMinutes(5), rearmed.NextChangeFrom);
 		Assert.AreEqual(start + TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(600), rearmed.NextChangeAt);
@@ -1520,6 +1532,7 @@ public sealed class AreaControllerTests
 			"a dark, unlit area starts with nothing armed, so there is no span to claim");
 
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromSeconds(600 + 30));
 
 		var vacant = t.Publisher.Snapshots[^1];
@@ -2499,6 +2512,7 @@ public sealed class AreaControllerTests
 	{
 		Fixture t = Build();
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 
 		Advance(t, TimeSpan.FromMinutes(5));
 		t.Area.TestPeriod("night");

@@ -103,11 +103,12 @@ public sealed class RoomSceneTests
 	/// <summary>A change with no user and no parent: a wall switch acting on the light itself.</summary>
 	private static Context PhysicalDevice() => new() { Id = "physical" };
 
-	/// <summary>Lights the area through motion and forgets what did it.</summary>
+	/// <summary>Lights the area through motion that then clears, and forgets what did it.</summary>
 	private static Fixture Lit(string? sceneOnMotion = null, string? sceneWhenEmpty = null, IReadOnlyList<string>? keepLitWhenOn = null)
 	{
 		Fixture t = Build(sceneOnMotion, sceneWhenEmpty, keepLitWhenOn);
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		t.Actuator.Clear();
 		return t;
@@ -438,6 +439,7 @@ public sealed class RoomSceneTests
 	{
 		Fixture t = Build(sceneWhenEmpty: WhenEmpty, keepLitWhenOn: [Holder], seed: ha => ha.SetState(Holder, "on"));
 		t.Ha.Trigger(Motion, "on");
+		t.Ha.Trigger(Motion, "off");
 		t.Actuator.Clear();
 
 		Advance(t, TimeSpan.FromSeconds(VacancySeconds + 60));
@@ -480,6 +482,7 @@ public sealed class RoomSceneTests
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70, ColorTempKelvin: 2700 });
 
+		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromSeconds(VacancySeconds));
 		Assert.AreEqual(AreaState.PreOff, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 35 });

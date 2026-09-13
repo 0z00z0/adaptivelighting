@@ -153,6 +153,7 @@ public sealed class PerLightLevelsTests
 	private static IReadOnlyList<string> WholeCycle(Fixture fixture)
 	{
 		fixture.Ha.Trigger(Motion, "on");
+		fixture.Ha.Trigger(Motion, "off");
 
 		// Past 22:30, so the tick re-aims the room at "night" while it is still lit.
 		Advance(fixture, TimeSpan.FromHours(2) + TimeSpan.FromMinutes(31));
@@ -356,6 +357,7 @@ public sealed class PerLightLevelsTests
 		Fixture room = Build(lightLevels: [Pins(First, "evening", brightness: 128)]);
 
 		room.Ha.Trigger(Motion, "on");
+		room.Ha.Trigger(Motion, "off");
 		Advance(room, TimeSpan.FromHours(3));
 
 		Assert.AreEqual(AreaState.PreOff, room.Area.State);
@@ -372,6 +374,7 @@ public sealed class PerLightLevelsTests
 		Fixture room = Build(lightLevels: [Pins(First, "evening", brightness: 128)]);
 
 		room.Ha.Trigger(Motion, "on");
+		room.Ha.Trigger(Motion, "off");
 		Advance(room, TimeSpan.FromHours(3) + TimeSpan.FromSeconds(30));
 
 		Assert.AreEqual(AreaState.AutoVacant, room.Area.State);
