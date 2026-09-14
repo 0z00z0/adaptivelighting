@@ -65,7 +65,7 @@ public static class LightingConfigDocument
 		["ResetOnPeriodStart"] = nameof(HouseModeOptionConfig.ResetOnPeriodStartId)
 	};
 
-	/// <summary>Values a retired setting used to take, and what each becomes.</summary>
+	/// <summary>Retired values a document may still carry, and what each becomes.</summary>
 	/// <remarks>
 	///     An unknown key is silence, but an unknown enum value is a parse failure, so a retired value has to be
 	///     translated, not ignored.
@@ -115,22 +115,17 @@ public static class LightingConfigDocument
 	private const string Header =
 		"""
 		# ============================================================================
-		#  Adaptive lighting — managed by the lighting web UI.
+		#  Adaptive lighting settings.
 		# ============================================================================
 		#
-		#  This file is written by the Configuration page of the lighting web UI. It
-		#  is still a perfectly ordinary YAML file and hand-editing it works — but the
-		#  next save from the browser rewrites it from scratch, and any comments you
-		#  add here are lost at that moment. YamlDotNet cannot round-trip comments.
+		#  This file may be edited by hand. Saving from the lighting web UI rewrites
+		#  it, and any comments added here are lost at that save.
 		#
-		#  What every setting means, and a worked example, are documented at:
+		#  What every setting means, with a worked example:
 		#
 		#      https://adaptivelighting.netlify.app
 		#
-		#  Everything here is also editable in the browser — this file is written
-		#  by the app, so a hand edit is overwritten on the next save.
-		#
-		#  The top-level key MUST stay the fully qualified config class name.
+		#  The top-level key must stay the fully qualified config class name.
 		# ============================================================================
 
 		""";
@@ -190,7 +185,7 @@ public static class LightingConfigDocument
 		if (document is null || document.Count == 0)
 			throw new LightingConfigException("The configuration file is empty.");
 
-		// Case-insensitive, because the binder that used to own this file is. The fallback matches any key naming
+		// Case-insensitive, matching the .NET configuration binder. The fallback matches any key naming
 		// AdaptiveLightingConfig whatever namespace produced it, so renaming the namespace does not orphan every
 		// file on disk. Reading is forgiving, writing is not: Serialize always emits RootKey.
 		string? match =
@@ -209,8 +204,7 @@ public static class LightingConfigDocument
 
 		RepairStructuralNulls(config, logger);
 
-		// After the repair, so the migration walks lists it can rely on. Without it every reference that used to resolve
-		// by name resolves to nothing, silently.
+		// After the repair, so the migration walks lists it can rely on. Without it every name reference resolves to nothing, silently.
 		bool mintedStableKeys = StableKeyMigration.Apply(config);
 
 		if (mintedStableKeys)
@@ -277,6 +271,7 @@ public static class LightingConfigDocument
 		{
 			repaired |= DropBlanks(area.Lights);
 			repaired |= DropBlanks(area.MotionSensors);
+			repaired |= DropBlanks(area.LeadInSensors);
 			repaired |= DropBlanks(area.IgnoreWhenOn);
 			repaired |= DropBlanks(area.KeepLitWhenOn);
 			repaired |= DropBlanks(area.ExcludeEntities);

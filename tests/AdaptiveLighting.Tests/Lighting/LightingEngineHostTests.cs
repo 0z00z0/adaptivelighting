@@ -133,6 +133,46 @@ public sealed class LightingEngineHostTests
 		Assert.AreEqual(0, host.RunningAreaCount);
 	}
 
+	/// <summary>A file that does not parse back after the write reaches the page as a failed save, never as an exception.</summary>
+	[TestMethod]
+	public void Save_WhenTheWrittenFileDoesNotReadBack_FailsWithoutThrowing()
+	{
+		LightingEngineHost host = new(
+			new LightingConfigStore(_path, new CorruptsAfterWrite(_path)), NullLoggerFactory.Instance);
+
+		SaveResult result = host.Save(Valid());
+
+		Assert.AreEqual(SaveStatus.Failed, result.Status);
+		Assert.IsFalse(result.Written);
+		Assert.IsFalse(string.IsNullOrWhiteSpace(result.Message));
+		Assert.IsNotNull(host.Fault, "the page shows why nothing is running");
+		Assert.IsFalse(host.IsRunning);
+	}
+
+	// Overwrites the document the moment the store reports its write, before the host re-reads it.
+	private sealed class CorruptsAfterWrite(string path) : Microsoft.Extensions.Logging.ILogger<LightingConfigStore>
+	{
+		private bool _done;
+
+		public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+		public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+		public void Log<TState>(
+			Microsoft.Extensions.Logging.LogLevel logLevel,
+			Microsoft.Extensions.Logging.EventId eventId,
+			TState state,
+			Exception? exception,
+			Func<TState, Exception?, string> formatter)
+		{
+			if (_done || !formatter(state, exception).StartsWith("Wrote lighting configuration", StringComparison.Ordinal))
+				return;
+
+			_done = true;
+			File.WriteAllText(path, "not: [valid");
+		}
+	}
+
 	// ---- the record's only sight of a rebuild ---------------------------------------------------
 	// One notice per rebuild is what puts the cause in the timeline; the activity log is fed from per-area events.
 

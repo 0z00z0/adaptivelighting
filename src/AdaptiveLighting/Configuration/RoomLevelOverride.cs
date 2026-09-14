@@ -24,8 +24,8 @@ public class RoomLevelOverride
 	}
 
 	/// <summary>The same level in percent: what the engine works in, and what every ordinary readout rounds.</summary>
-	// Bound on load and never written back — LightingConfigDocument.Serialize suppresses it — so a document written
-	// before brightness became raw commands its exact percentage until a save moves it onto the byte grid.
+	// Bound on load, never written back (LightingConfigDocument.Serialize suppresses it). A percent document keeps
+	// its percentage until a save moves it onto the byte grid.
 	public double? BrightnessPct
 	{
 		get => _brightnessPct;

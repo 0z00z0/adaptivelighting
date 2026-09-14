@@ -293,7 +293,7 @@
 	private static string PeriodName(string name) => name is { Length: > 0 } ? name : "unnamed period";
 
 	// The select below stays on the stated answer: snapping it to the detected one would read as the pick
-	// being refused. The engine owns whether the kelvin reaches the fixtures, so it is asked rather than
+	// being refused. The engine owns whether the kelvin reaches the fixtures, so it is asked, not
 	// re-derived here.
 	private bool NoColourTemperature =>
 		Resolved is { } resolved

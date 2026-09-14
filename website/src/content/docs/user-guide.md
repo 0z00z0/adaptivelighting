@@ -188,6 +188,18 @@ The page has:
   while one of those is on, the room will not turn itself off. Either list can be turned round with
   *while these are off instead*, for a switch you turn **off** to mean the same thing.
 
+  *Light dimly when these see movement* names sensors outside the room, such as the front steps.
+  When one of them sees movement while the room is dark and empty, the room lights at *Dim light
+  level* for *Dim light lasts*: someone coming in brings the lights up to the room's usual level, and
+  if nobody does they go off again. The same two settings set the dim light a room shows shortly
+  before it switches off, so changing one changes both.
+
+  *Other automations count as manual changes* answers, for this room alone, whether a change another
+  Home Assistant automation makes to its lights holds like a hand at the switch. A bathroom whose
+  automation turns the light up for the hair dryer wants **Yes**; a hall whose automation sets a
+  level the room should replace wants **No**. Left alone, the room follows the house's answer under
+  *Fine tuning* and the row says *house setting*.
+
   The two scene rows swap one moment for a scene of yours. *Run a scene instead, on movement*
   replaces switching on; *Run a scene instead, when empty* replaces switching off. Set one, both or
   neither. Everything that could refuse to light the room still refuses; a scene changes *what*
@@ -216,6 +228,11 @@ how many lines switching it off takes away, and the eight add up to what the pag
 *Nothing happened* carries the reason the engine declined, with the evidence:
 
 > Too bright to switch on · lux 86, dark below 40
+
+A manual change says who made it, the way Home Assistant's own logbook does: *By automation: Evening
+lights*, *By Alex* for somebody using Home Assistant, or *At the device or wall switch*. A change an
+automation made that the room leaves alone gets a row of its own, so a light that did not stay where
+an automation put it can be traced. Where no name can be found, the row simply says what happened.
 
 New entries are counted as they arrive but are not inserted under you; a button adds them when you
 are ready.

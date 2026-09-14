@@ -11,7 +11,7 @@ namespace AdaptiveLighting.Configuration;
 ///     A reference resolving to nothing is left as it is, keeping the validator's severities: a dangling levels row
 ///     warns, a dangling select mapping errors.
 /// </remarks>
-public static class StableKeyMigration
+internal static class StableKeyMigration
 {
 	private const StringComparison ByKey = StringComparison.OrdinalIgnoreCase;
 

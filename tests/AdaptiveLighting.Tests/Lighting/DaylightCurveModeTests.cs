@@ -92,7 +92,7 @@ public sealed class DaylightCurveModeTests
 		Assert.AreEqual(7.5d, silent.LuxBrightnessMinPct);
 	}
 
-	/// <summary>The seed is a value the room now states for itself, same as a hand edit — leaving the curve does not withdraw it, and readopting does not overwrite it again.</summary>
+	/// <summary>The seed is a value the room now states for itself, same as a hand edit: leaving the curve does not withdraw it, and readopting does not overwrite it again.</summary>
 	[TestMethod]
 	public void LeavingTheCurveEverywhereInTheRoomDoesNotClearTheSeededDarkEnd()
 	{

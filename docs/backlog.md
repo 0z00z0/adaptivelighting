@@ -23,6 +23,19 @@ An item with no number is one this file records before the tracker has minted on
 
 ## Next up
 
+- **Naming who changed a light is unmeasured on a real house.** `ChangeOriginNames` names people from the
+  `person` entities' `user_id` attribute and automations from `automation_triggered` events. Neither was observed
+  on the wire: whether the add-on's Supervisor token receives `automation_triggered`, reads `user_id` on a person
+  entity, and sees a light's report keep its parent context rests on Home Assistant's source and documentation.
+  The check: in a room nobody is using, run an automation that sets a light and read the activity row, then tap
+  the same light from a dashboard and read it again. A light driven through Z-Wave JS is expected to read "At the
+  device or wall switch" for the automation, for the reason in `docs/mechanisms.md`.
+
+- **A room set to ignore automations keeps a light an automation switched on while the room was empty.** An
+  ignored change in `AutoVacant` arms no countdown, so the light burns until movement or a hand ends it. A lead-in
+  replaces the automation that causes this for a hall; a house giving a room *No* under *Other automations count
+  as manual changes* should switch off any automation that only lights that room.
+
 - **A room switched off by a level of 0 % reads "Lit at — level unknown." on its page.** Such a room stays
   automatic and publishes no standing brightness, so `RoomFacts.Headline` takes the AutoActive arm and
   `RoomFacts.Levels` renders the missing level as unknown. Nothing is unknown: the engine switched the room

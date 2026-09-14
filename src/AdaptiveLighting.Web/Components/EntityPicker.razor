@@ -5,6 +5,7 @@
 	@if (_manual || !HasOptions)
 	{
 		<input type="text"
+			   id="@Id"
 			   class="picker-text"
 			   placeholder="@Placeholder"
 			   value="@Value"
@@ -12,7 +13,7 @@
 	}
 	else
 	{
-		<select class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
+		<select id="@Id" class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
 			<option value="">@NoneLabel</option>
 			@foreach (EntityOption option in Options)
 			{
@@ -51,6 +52,10 @@
 </div>
 
 @code {
+	/// <summary>The id of the text box or list, for a label's for attribute.</summary>
+	[Parameter]
+	public string? Id { get; set; }
+
 	[Parameter]
 	public string? Value { get; set; }
 

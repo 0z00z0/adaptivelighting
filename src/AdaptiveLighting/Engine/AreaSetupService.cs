@@ -82,8 +82,7 @@ public static class AreaSetupService
 				noLongerQualifying.Add(areaId);
 		}
 
-		// Every area Home Assistant reports that is neither already a room here nor about to become one — the
-		// silent drop "set up rooms again" used to make. Named alphabetically, so a long house reads in a fixed order.
+		// Every area Home Assistant reports that is neither a room here nor about to become one, in a fixed order.
 		List<SkippedArea> notQualifying = [.. registry.AreaIds
 			.Where(id => !string.IsNullOrWhiteSpace(id))
 			.Where(id => !alreadyConfigured.Contains(id) && !qualifying.Contains(id))
@@ -95,9 +94,8 @@ public static class AreaSetupService
 
 	/// <summary>Carries <paramref name="plan"/> out on <paramref name="config"/>, in memory.</summary>
 	// A rebuilt area is replaced by a fresh proposal. AreaId, Enabled, Levels and LightLevels survive because
-	// discovery does not produce them. Areas outside the plan keep their exact instance, so a document with no rebuilds
-	// serialises byte for byte as it was. A plan is held across edits, so the document in hand may be a later one
-	// than Plan read; the duplicate check is repeated here, which also makes applying a plan twice idempotent.
+	// discovery does not produce them. Areas outside the plan keep their instance, so a document with no rebuilds
+	// serialises unchanged. The document may be newer than the one Plan read, so the duplicate check runs again.
 	public static void Apply(AdaptiveLightingConfig config, SetupPlan plan)
 	{
 		ArgumentNullException.ThrowIfNull(config);
@@ -172,6 +170,7 @@ public static class AreaSetupService
 	private static int PinnedEntityCount(AreaConfig area) =>
 		(area.Lights?.Count ?? 0)
 		+ (area.MotionSensors?.Count ?? 0)
+		+ (area.LeadInSensors?.Count ?? 0)
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
 		+ (area.FollowOutdoorLux is not null ? 1 : 0)
 		+ (area.DaylightSensor is { Length: > 0 } ? 1 : 0)
@@ -181,6 +180,7 @@ public static class AreaSetupService
 		+ (area.KeepLitWhenOnInverted is not null ? 1 : 0)
 		+ (area.SceneOnMotion is { Length: > 0 } ? 1 : 0)
 		+ (area.SceneWhenEmpty is { Length: > 0 } ? 1 : 0)
+		+ (area.TreatAutomationsAsManual is not null ? 1 : 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	// The only copy of this count, pinned against the model by a reflection test. Enabled and Levels are absent

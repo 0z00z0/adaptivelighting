@@ -50,12 +50,9 @@ option, which is what the *move it to…* control needs to appear.
 
 Also: `app.UseAntiforgery()` is required, and a `wwwroot` folder must exist even if it is empty.
 
-**`UseStaticFiles()` is not needed and is not here.** An earlier version of this file said to call it *as well*,
-on the strength of a note claiming `MapStaticAssets` returns 0-byte bodies. Measured on 2026-08-05 with
-`UseStaticFiles` removed entirely: `app.css` 200 / 182 663 bytes, `blazor.web.js` 200 / 200 538 bytes, circuit
-open, Schedule tab rendering. The 0-byte symptom had a different cause — the missing `Internal.Assets` package
-in a Production environment — and the extra call was cargo-cult. The ESPHomeAdmin session pushed back on it,
-which is how it got measured.
+**`UseStaticFiles()` is not needed and is not here.** The 0-byte response it looks like it would fix comes from
+a missing `Internal.Assets` package in a Production environment. With it absent: `app.css` 200 / 182 663 bytes,
+`blazor.web.js` 200 / 200 538 bytes, circuit open, Schedule tab rendering.
 
 ## Not in the solution
 

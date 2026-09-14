@@ -182,5 +182,5 @@ else
 
 	// A bare @double attribute renders through the current culture: under nb-NO 62.5 becomes value="62,5",
 	// which no browser reads as a number, so the field shows empty and min/step silently drop.
-	private static string Invariant(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
+	private static string Invariant(double value) => InvariantNumber.Format(value, 4);
 }

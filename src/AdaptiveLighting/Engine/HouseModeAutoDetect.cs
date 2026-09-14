@@ -6,7 +6,7 @@ namespace AdaptiveLighting.Engine;
 // Adoption writes kinds and nothing else: no scene, no reset trigger, no period switching to it, so an adopted
 // select is read and never written. Adopting the wrong dropdown holds a whole house Away, which is why the bar
 // is two distinct kinds, one of them Normal, and only one qualifying select in the house.
-public static class HouseModeAutoDetect
+internal static class HouseModeAutoDetect
 {
 	private const string SelectDomain = "input_select";
 	private const string OptionsAttribute = "options";

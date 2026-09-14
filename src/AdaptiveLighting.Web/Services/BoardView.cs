@@ -328,6 +328,10 @@ public static class BoardView
 
 		return snapshot.State switch
 		{
+			AreaState.PreOff when snapshot.IsLeadIn is true => snapshot.NextChangeAt is { } off
+				? $"lead-in — lights out {Countdown(off, now)} unless someone comes in"
+				: "lead-in — the lights go out shortly unless someone comes in",
+
 			AreaState.PreOff => snapshot.NextChangeAt is { } off
 				? $"warning dim — lights out {Countdown(off, now)} unless someone moves"
 				: "warning dim — the lights go out shortly unless someone moves",

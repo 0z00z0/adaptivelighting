@@ -118,6 +118,6 @@ public sealed class FakeHaContext : IHaContext
 	public void SendEvent(string eventType, object? data) => SentEvents.Add((eventType, data));
 
 	/// <summary>Delivers an event, as Home Assistant would. Not the other end of <see cref="SendEvent"/>.</summary>
-	public void RaiseEvent(string eventType, object? data) =>
-		_events.OnNext(new Event { EventType = eventType, DataElement = JsonSerializer.SerializeToElement(data) });
+	public void RaiseEvent(string eventType, object? data, Context? context = null) =>
+		_events.OnNext(new Event { EventType = eventType, DataElement = JsonSerializer.SerializeToElement(data), Context = context });
 }

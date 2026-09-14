@@ -164,17 +164,17 @@ public static class RoomSettings
 				new RoomSetting(
 					nameof(AreaSettings.VacancyTimeoutSeconds),
 					"Lights stay on for",
-					"How long after the last movement the lights hold, before the warning dim starts. Raise it for rooms where people sit still; 10 min suits most.",
+					"How long after the last movement the lights hold, before they dim ahead of switching off. Raise it for rooms where people sit still; 10 min suits most.",
 					RoomControl.Seconds, Step: 60, Min: 1),
 				new RoomSetting(
 					nameof(AreaSettings.PreOffBrightnessFactor),
-					"Warning dim level",
-					"How far the lights drop for the warning. 50 % is half the brightness the room was holding; lower makes the warning harder to miss.",
+					"Dim light level",
+					"The share of the room's usual level the lights use in two moments: when they dim shortly before switching off, and when a lead-in sensor lights the room while it is dark, before anyone comes in. 50 % is half; lower makes the dim harder to miss.",
 					RoomControl.Fraction, Step: 5, Min: 0, Max: 100),
 				new RoomSetting(
 					nameof(AreaSettings.PreOffSeconds),
-					"Warning dim lasts",
-					"How long the room sits dimmed before the lights go out. Any movement in that time brings them straight back. Must be shorter than the time above.",
+					"Dim light lasts",
+					"How long that dim light lasts before the lights go off, unless movement is seen in the room, which brings them straight back up. Must be shorter than the time above.",
 					RoomControl.Seconds, Step: 5, Min: 0),
 				new RoomSetting(
 					nameof(AreaSettings.OverrideUntilVacant),

@@ -8,6 +8,8 @@ namespace AdaptiveLighting.Abstractions;
 ///     field a snapshot from an older build never carried. <c>Timestamp</c> is scheduler time, not wall-clock, so
 ///     tests read what they set. <c>AreaId</c> is the stable join back to the document, since <c>AreaName</c> is
 ///     editable mid-session. <c>Forced</c> is carried, never re-derived: only the engine knows which entity it read.
+///     <c>IsLeadIn</c> is carried for the whole dim light and cleared on leaving <c>PreOff</c>, unlike
+///     <see cref="Reason"/>, which only names the publish that changed something.
 /// </remarks>
 public sealed record AreaSnapshot(
 	string AreaName,
@@ -41,16 +43,19 @@ public sealed record AreaSnapshot(
 	string? TestingLightId = null,
 	IReadOnlyList<string>? LightsMoved = null,
 	int? LightsNotResponding = null,
-	int? LightCount = null)
+	int? LightCount = null,
+	string? ChangedBy = null,
+	DateTimeOffset? ChangedAt = null,
+	bool? IsLeadIn = null)
 {
 	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
 	///     Not record equality: <c>==</c> compares the "as of" fields, every one of which moves on every tick, so
 	///     diffing on it would suppress nothing. Timestamps, <see cref="Reason"/>, <see cref="DarknessDetail"/>,
-	///     <see cref="AutoOnBlockedBy"/> and <see cref="HeldLitBy"/> date or describe the snapshot; they say nothing
-	///     about the area. <see cref="TestingPeriodId"/> and <see cref="TestEndsAt"/> are compared, unlike those:
+	///     <see cref="AutoOnBlockedBy"/>, <see cref="HeldLitBy"/>, <see cref="ChangedBy"/> and <see cref="ChangedAt"/> date
+	///     or describe the snapshot; they say nothing about the area. <see cref="TestingPeriodId"/> and <see cref="TestEndsAt"/> are compared, unlike those:
 	///     a level test starting or ending is real news, and it is the only news a snapshot carries while nothing
-	///     else about the area moves — a suppressed publish would leave a fresh page load with nothing to redraw.
+	///     else about the area moves. A suppressed publish would leave a fresh page load with nothing to redraw.
 	/// </remarks>
 	public bool HasSameMeaningAs(AreaSnapshot? other) =>
 		other is not null &&
@@ -67,6 +72,7 @@ public sealed record AreaSnapshot(
 		Nullable.Equals(LevelsFromRoom, other.LevelsFromRoom) &&
 		Nullable.Equals(IsAnyoneHome, other.IsAnyoneHome) &&
 		Nullable.Equals(IsHeldLit, other.IsHeldLit) &&
+		Nullable.Equals(IsLeadIn, other.IsLeadIn) &&
 		string.Equals(SceneApplied, other.SceneApplied, StringComparison.Ordinal) &&
 		string.Equals(TestingPeriodId, other.TestingPeriodId, StringComparison.Ordinal) &&
 		Nullable.Equals(TestEndsAt, other.TestEndsAt) &&

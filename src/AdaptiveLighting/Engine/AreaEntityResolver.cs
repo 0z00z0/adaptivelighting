@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using NetDaemon.HassModel.Entities;
@@ -21,6 +23,9 @@ public sealed record ResolvedArea(
 	/// <summary>Entities that stop the engine switching this area's lights off while they apply.</summary>
 	public IReadOnlyList<string> KeepLitWhenOn { get; init; } = [];
 
+	/// <summary>Sensors outside the area whose movement lights it dimly before anyone comes in.</summary>
+	public IReadOnlyList<string> LeadInSensors { get; init; } = [];
+
 	/// <summary>Whether <see cref="IgnoreWhenOn"/> applies while its entities read off instead of on.</summary>
 	public bool IgnoreWhenOnInverted { get; init; }
 
@@ -37,6 +42,9 @@ public sealed record ResolvedArea(
 	// Left unresolved for the same reason FollowOutdoorLux is: a room that says nothing keeps following the
 	// house when the house changes its mind.
 	public string? DaylightSensor { get; init; }
+
+	/// <summary>The room's own answer to whether an automation's change is manual, or <c>null</c> to follow the house.</summary>
+	public bool? TreatAutomationsAsManual { get; init; }
 
 	/// <summary>Whether any of the area's lights offers colour of any kind, or <c>null</c> when none answered.</summary>
 	// False is the brightness-only room, which is a different fact from LightsSupportColorTemp being null: that
@@ -176,7 +184,11 @@ public sealed class AreaEntityResolver
 
 	/// <summary>Resolves <paramref name="area"/>, or explains why it cannot be.</summary>
 	/// <returns><c>false</c> when the area must be skipped. A skipped area is never a reason to fail the house.</returns>
-	public bool TryResolve(AreaConfig area, AreaSettings defaults, out ResolvedArea? resolved, out string? error)
+	public bool TryResolve(
+		AreaConfig area,
+		AreaSettings defaults,
+		[NotNullWhen(true)] out ResolvedArea? resolved,
+		[NotNullWhen(false)] out string? error)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 		ArgumentNullException.ThrowIfNull(defaults);
@@ -274,11 +286,13 @@ public sealed class AreaEntityResolver
 			LightLevels = SettleLightLevels(name, area, leaves),
 			LightsSupportAnyColour = anyColour,
 			KeepLitWhenOn = [.. area.KeepLitWhenOn ?? []],
+			LeadInSensors = [.. area.LeadInSensors ?? []],
 			IgnoreWhenOnInverted = area.IgnoreWhenOnInverted == true,
 			KeepLitWhenOnInverted = area.KeepLitWhenOnInverted == true,
 			SceneOnMotion = Trimmed(area.SceneOnMotion),
 			SceneWhenEmpty = Trimmed(area.SceneWhenEmpty),
-			DaylightSensor = Trimmed(area.DaylightSensor)
+			DaylightSensor = Trimmed(area.DaylightSensor),
+			TreatAutomationsAsManual = area.TreatAutomationsAsManual
 		};
 
 		return true;

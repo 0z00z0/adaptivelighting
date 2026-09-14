@@ -201,4 +201,27 @@ public sealed class OverrideDetectorTests
 		var (configured, _, _) = Build(g => g.TreatAutomationsAsManual = false);
 		Assert.IsFalse(configured.IsManual(ChangeOrigin.Automation));
 	}
+
+	// A room that says nothing follows the house either way; a room that answers keeps its answer either way.
+	[TestMethod]
+	public void A_Room_Follows_The_House_On_Automations_Unless_It_Answers_For_Itself()
+	{
+		TestScheduler scheduler = new();
+
+		foreach (bool house in new[] { true, false })
+		{
+			GlobalConfig global = new() { TreatAutomationsAsManual = house };
+
+			Assert.AreEqual(house, new OverrideDetector(global, scheduler).IsManual(ChangeOrigin.Automation),
+				$"a room stating nothing follows the house's {house}");
+			Assert.IsTrue(new OverrideDetector(global, scheduler, true).IsManual(ChangeOrigin.Automation),
+				$"a room saying yes holds an automation's change while the house says {house}");
+			Assert.IsFalse(new OverrideDetector(global, scheduler, false).IsManual(ChangeOrigin.Automation),
+				$"a room saying no ignores an automation's change while the house says {house}");
+
+			Assert.IsTrue(new OverrideDetector(global, scheduler, false).IsManual(ChangeOrigin.PhysicalDevice),
+				"the room's answer is about automations only: a hand at the switch is always manual");
+			Assert.IsTrue(new OverrideDetector(global, scheduler, false).IsManual(ChangeOrigin.HaUser));
+		}
+	}
 }

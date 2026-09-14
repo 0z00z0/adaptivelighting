@@ -30,12 +30,12 @@ if (!TryResolvePort(builder.Configuration["port"], out int port))
 }
 
 // Explicit, not left to the environment: static web assets are wired up automatically only in Development, and
-// without them the RCL's _content/** and _framework/blazor.web.js both 404 — the page server-renders and then
-// sits there with no circuit, which looks like a broken UI rather than a broken host.
+// without them the RCL's _content/** and _framework/blazor.web.js both 404. The page server-renders and then
+// sits there with no circuit, which looks like a broken UI, not a broken host.
 builder.WebHost.UseStaticWebAssets();
 
 // local.yaml is gitignored: point it at a copy of a real document to reproduce a house, or leave it absent and
-// the engine writes a starting one. A real document must never be committed — this repository is public.
+// the engine writes a starting one. A real document must never be committed; this repository is public.
 string document = builder.Configuration["ConfigPath"]
 	?? Path.Combine(builder.Environment.ContentRootPath, "local.yaml");
 
@@ -45,7 +45,7 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 });
 
 // The fake house. Populated below so the two helper screens have live options to reconcile against, including
-// one deliberate orphan on each — the state the new "move it to…" control exists for.
+// one orphan on each, the state the "move it to…" control exists for.
 FakeHaContext ha = new();
 FakeHaRegistry registry = new();
 

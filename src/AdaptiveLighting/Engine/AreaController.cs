@@ -11,7 +11,7 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Engine;
 
 /// <summary>What an area is aiming at now: the room's own answer, and one per light that states its own.</summary>
-// Lights is empty for the ordinary room, which is what keeps its command path byte for byte what it was.
+// Lights is empty for a room with no per-light levels, so SendUnrecorded commands its entries as a whole.
 internal sealed record AreaTargets(LightTarget Room, IReadOnlyDictionary<string, LightTarget> Lights);
 
 /// <summary>One area's state machine.</summary>
@@ -57,8 +57,7 @@ public sealed class AreaController : IDisposable
 	private readonly SerialDisposable _overrideTimer = new();
 	private readonly SerialDisposable _suppressionTimer = new();
 
-	// The return a level test owes the room. A SerialDisposable, so a second test drops the first one's pending
-	// return and the room is left with exactly one, ten seconds from the newest press.
+	// The return a level test owes the room. Serial, so a second press leaves one return, ten seconds after it.
 	private readonly SerialDisposable _levelTest = new();
 
 	// Wakes the area at the boundary itself, so a lit room reaches the new period's levels then and not up to a
@@ -102,27 +101,35 @@ public sealed class AreaController : IDisposable
 	// area decides on, so every timer, hold and gate carries on around it.
 	private bool _levelTesting;
 
-	// The period a running test is showing, and when the engine takes the room back. Set together with
-	// _levelTesting and cleared wherever it is, so the snapshot never reports one without the other. Read by
-	// Snapshot so a page that reloads or navigates back mid-test can redraw the countdown from the report
-	// instead of the drawing it lost.
+	// The period a running test shows and when it ends. Set and cleared with _levelTesting; the snapshot carries
+	// them so a page reloaded mid-test can redraw the countdown.
 	private string? _testingPeriodId;
 	private DateTimeOffset? _testEndsAt;
 
-	// The lights a running test shows on their own, or null while the test is the whole room's. The return covers
-	// exactly these, so a lamp tested alone does not re-command the rest of the room.
+	// The lights a running test shows on their own, or null for a whole-room test. The return covers only these.
 	private HashSet<string>? _testedLights;
 	private string? _testingLightId;
 
-	// The fixtures as they stood before a test, for a room holding levels the engine did not choose. Null while
-	// the engine owns them, because ReassertLights resolves a fresher answer than any capture could. Read once
-	// per test and cleared as it is spent, so a second press cannot overwrite it with the first test's own levels
-	// and a second return cannot apply it twice.
+	// The fixtures before a test, for levels the engine did not choose; null while the engine owns them. Taken once
+	// per test and cleared when spent, so a second press or a second return cannot reuse it.
 	private IReadOnlyList<(string Light, LightCommand Command)>? _capturedLevels;
 
 	// A hold-lit entity refused the engine's own off after the countdown that would have sent it had already fired.
 	// Nothing else would ever run it again, so OnTick settles it once the hold releases.
 	private bool _offHeldBack;
+
+	// PreOff was entered from a lead-in. Cleared by Enter on leaving PreOff.
+	private bool _leadIn;
+
+	// Names who caused a change for the log. Null names nobody.
+	private readonly ChangeOriginNames? _originNames;
+
+	// The newest change somebody else made to these lights, manual or left alone, and when it was seen.
+	private string? _changedBy;
+	private DateTimeOffset? _changedAt;
+
+	// The automation run whose change was last reported as left alone, so one run's burst of updates is one row.
+	private string? _ignoredContextId;
 
 	// The scene the area is sitting on, or null. Set by ApplyScene and cleared by Send: any light command is the
 	// engine aiming the room itself, which the scene no longer describes.
@@ -135,10 +142,8 @@ public sealed class AreaController : IDisposable
 
 	private bool _disposed;
 
-	// areaId is published on every snapshot so a reader can join live state to the document by identity, never by
-	// display name; it travels beside area because the engine itself has no use for it. sunMoved is this room's
-	// own sun entity announcing that its rising or setting moved, and omitting it leaves the boundaries to the
-	// periodic tick alone.
+	// areaId goes on every snapshot so readers join live state to the document by id, never by name. Without
+	// sunMoved only the periodic tick re-arms the boundaries.
 	public AreaController(
 		IHaContext ha,
 		IScheduler scheduler,
@@ -153,11 +158,13 @@ public sealed class AreaController : IDisposable
 		string? areaId = null,
 		IEntityLastSeen? lastSeen = null,
 		IObservable<Unit>? sunMoved = null,
-		IReadOnlyDictionary<string, CircadianCalculator>? lightCalculators = null)
+		IReadOnlyDictionary<string, CircadianCalculator>? lightCalculators = null,
+		ChangeOriginNames? originNames = null)
 	{
 		ArgumentNullException.ThrowIfNull(loggerFactory);
 
 		_sunMoved = sunMoved;
+		_originNames = originNames;
 
 		_lightCalculators = lightCalculators is { Count: > 0 } stated
 			? stated
@@ -202,7 +209,7 @@ public sealed class AreaController : IDisposable
 		_luxBrightness = new LuxBrightnessCurve(
 			area.Settings,
 			new LuxReader(ha, daylightSensors, staleAfter, () => _scheduler.Now, lastSeen).Read);
-		_detector = new OverrideDetector(global, scheduler);
+		_detector = new OverrideDetector(global, scheduler, area.TreatAutomationsAsManual);
 
 		foreach (string entry in area.Lights)
 			foreach (string leaf in LeavesOf(entry))
@@ -218,7 +225,7 @@ public sealed class AreaController : IDisposable
 
 		_leaves = AllLeaves();
 
-		_boundary =new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
+		_boundary = new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
 	}
 
 	/// <summary>How long a level test holds the room before the engine takes it back.</summary>
@@ -292,11 +299,7 @@ public sealed class AreaController : IDisposable
 				TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0),
 				LightCommandsFor(periodKey));
 
-			_levelTesting = true;
-			_testingPeriodId = periodKey;
-			_testingLightId = null;
-			_testEndsAt = _scheduler.Now + TimeSpan.FromSeconds(LevelTestSeconds);
-			_levelTest.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
+			StartLevelTest(periodKey, lightId: null);
 
 			_logger.LogInformation("{Area}: testing period '{Period}' for {Seconds}s.", Name, target.PeriodName, LevelTestSeconds);
 
@@ -324,7 +327,7 @@ public sealed class AreaController : IDisposable
 			if (RefuseLevelTest() is { } refusal)
 				return refusal;
 
-			if (!AllLeaves().Contains(lightEntityId))
+			if (!_leaves.Contains(lightEntityId))
 				return "This room does not command that light.";
 
 			CircadianCalculator calculator = _lightCalculators.TryGetValue(lightEntityId, out CircadianCalculator? own)
@@ -349,11 +352,7 @@ public sealed class AreaController : IDisposable
 
 			SendToLight(lightEntityId, TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0));
 
-			_levelTesting = true;
-			_testingPeriodId = periodKey;
-			_testingLightId = lightEntityId;
-			_testEndsAt = _scheduler.Now + TimeSpan.FromSeconds(LevelTestSeconds);
-			_levelTest.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
+			StartLevelTest(periodKey, lightEntityId);
 
 			_logger.LogInformation("{Area}: testing period '{Period}' on {Light} for {Seconds}s.",
 				Name, target.PeriodName, lightEntityId, LevelTestSeconds);
@@ -410,8 +409,7 @@ public sealed class AreaController : IDisposable
 	public void ExpectHouseScene()
 	{
 		lock (_gate)
-			foreach (string light in _area.Lights)
-				_detector.ExpectScene(light, TransitionSeconds());
+			ExpectSceneOnEveryLight();
 	}
 
 	/// <summary>Subscribes and publishes the opening snapshot, leaving the lights as found.</summary>
@@ -420,6 +418,12 @@ public sealed class AreaController : IDisposable
 	{
 		foreach (string sensor in _area.MotionSensors)
 			_subscriptions.Add(_ha.Entity(sensor).WhenTurnsOn(_ => OnMotion(), _logger));
+
+		foreach (string sensor in _area.LeadInSensors)
+		{
+			string leadIn = sensor;
+			_subscriptions.Add(_ha.Entity(leadIn).WhenTurnsOn(_ => OnLeadIn(leadIn), _logger));
+		}
 
 		foreach (string light in _area.Lights)
 			_subscriptions.Add(_ha.Entity(light)
@@ -494,6 +498,9 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
+			if (_disposed)
+				return;
+
 			_lastMotionAt = _scheduler.Now;
 
 			switch (_state)
@@ -555,10 +562,53 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	/// <summary>Lights a dark, empty room at its dim light when a sensor outside it sees movement.</summary>
+	// Lands in PreOff so the dim light, the motion rescue and the off are the warning dim's own. Only from the resting
+	// state with every light off: a lit, held or hand-switched-off room ignores it. No vacancy countdown starts.
+	private void OnLeadIn(string sensor)
+	{
+		lock (_gate)
+		{
+			if (_disposed)
+				return;
+
+			if (_state == AreaState.PreOff && _leadIn)
+			{
+				ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_area.Settings.PreOffSeconds), OnPreOffElapsed);
+				Publish(TransitionReason.LeadIn);
+				return;
+			}
+
+			if (_state != AreaState.AutoVacant || _area.Lights.Any(_ha.IsOn))
+			{
+				_logger.LogDebug("{Area}: lead-in from {Sensor} ignored while the room is {State}.", Name, sensor, _state);
+				return;
+			}
+
+			if (!CanAutoOn(out string blockedBy))
+			{
+				_logger.LogDebug("{Area}: lead-in from {Sensor} but auto-on is blocked: {Reason}.", Name, sensor, blockedBy);
+				return;
+			}
+
+			_logger.LogInformation("{Area}: lead-in from {Sensor}; lit at the dim light for {Seconds}s unless someone comes in.",
+				Name, sensor, _area.Settings.PreOffSeconds);
+
+			Enter(AreaState.PreOff, TransitionReason.LeadIn);
+			_leadIn = true;
+
+			ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_area.Settings.PreOffSeconds), OnPreOffElapsed);
+			ApplyTarget(TransitionReason.LeadIn, _area.Settings.PreOffBrightnessFactor);
+		}
+	}
+
 	private void OnLightChanged(StateChange change)
 	{
 		lock (_gate)
 		{
+			if (_disposed)
+				return;
+
 			NoteAvailability(change);
 
 			// A radio, not a hand. See IsHandAtTheSwitch.
@@ -566,21 +616,30 @@ public sealed class AreaController : IDisposable
 				return;
 
 			ChangeOrigin origin = _detector.Classify(change);
-			if (!_detector.IsManual(origin))
+			bool manual = _detector.IsManual(origin);
+
+			// While disabled, away or holding a scene there is nothing to override, and nothing to report.
+			if ((!manual && origin != ChangeOrigin.Automation) || _state is AreaState.Disabled or AreaState.Away or AreaState.SceneHold)
 				return;
 
-			// While disabled, away or holding a scene there is nothing to override.
-			if (_state is AreaState.Disabled or AreaState.Away or AreaState.SceneHold)
-				return;
+			Context? context = change.New?.Context;
 
-			// A hand at the switch is the newest word on these levels, so a running test's return is dropped
-			// rather than sent ten seconds later over the top of it.
+			if (!manual)
+			{
+				ReportAutomationLeftAlone(change, context);
+				return;
+			}
+
+			// A hand at the switch is the newest word on these levels, so a running test's return is dropped.
 			AbandonLevelTest();
 
 			bool turnedOn = change.TurnedOn();
 
-			_logger.LogInformation("{Area}: manual change on {EntityId} attributed to {Origin}; light is now {State}.",
-				Name, change.New?.EntityId, origin, turnedOn ? "on" : "off");
+			_changedBy = _originNames?.Describe(origin, context);
+			_changedAt = _scheduler.Now;
+
+			_logger.LogInformation("{Area}: manual change on {EntityId} attributed to {Origin} ({By}); light is now {State}.",
+				Name, change.New?.EntityId, origin, _changedBy ?? "not named", turnedOn ? "on" : "off");
 
 			if (turnedOn)
 			{
@@ -601,6 +660,23 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	/// <summary>Reports an automation's change this room leaves alone, once per automation run.</summary>
+	// Bypasses Publish's guard as ReportDeclinedMotion does: nothing the snapshot compares has moved.
+	private void ReportAutomationLeftAlone(StateChange change, Context? context)
+	{
+		if (context?.Id is { Length: > 0 } run && string.Equals(run, _ignoredContextId, StringComparison.Ordinal))
+			return;
+
+		_ignoredContextId = context?.Id;
+		_changedBy = _originNames?.Describe(ChangeOrigin.Automation, context);
+		_changedAt = _scheduler.Now;
+
+		_logger.LogInformation("{Area}: change on {EntityId} made by an automation ({By}) is left alone.",
+			Name, change.New?.EntityId, _changedBy ?? "not named");
+
+		PublishUnguarded(TransitionReason.AutomationIgnored);
+	}
+
 	/// <summary>Whether the change could have been a person at a switch at all, before anyone asks who caused it.</summary>
 	// A bulb dropping off the radio looks like a human: Home Assistant writes unavailable with a context carrying
 	// neither a user nor a parent, which OverrideDetector reads as PhysicalDevice, and TurnedOn reads as not-on.
@@ -615,7 +691,8 @@ public sealed class AreaController : IDisposable
 	private void OnMemberChanged(StateChange change)
 	{
 		lock (_gate)
-			NoteAvailability(change);
+			if (!_disposed)
+				NoteAvailability(change);
 	}
 
 	// Must run before the group's own change is classified. Home Assistant writes the group while handling the
@@ -641,6 +718,9 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
+			if (_disposed)
+				return;
+
 			HouseState previous = _house;
 			_house = house;
 
@@ -746,15 +826,16 @@ public sealed class AreaController : IDisposable
 		// corrected all re-arm within one tick. Under the gate: the arm reads the calculator, which the sun's own
 		// subscription can be inside on another thread.
 		lock (_gate)
-			_boundary.Arm();
+			if (!_disposed)
+				_boundary.Arm();
 	}
 
 	private void Evaluate()
 	{
 		lock (_gate)
 		{
-			// A discarded controller still holds live timers for a moment, and its replacement is already running
-			// against the saved configuration. Commanding anything from here would be the old table talking.
+			// Every callback checks this: a timer or event already on its way still arrives after Dispose, and the
+			// replacement is running on the saved configuration.
 			if (_disposed)
 				return;
 
@@ -787,7 +868,8 @@ public sealed class AreaController : IDisposable
 	private void OnVacancyTimeout()
 	{
 		lock (_gate)
-			VacancyTimedOut();
+			if (!_disposed)
+				VacancyTimedOut();
 	}
 
 	private void VacancyTimedOut()
@@ -815,8 +897,7 @@ public sealed class AreaController : IDisposable
 		// Nothing is about to go off, so there is nothing to warn about and the dim would be a step to nowhere.
 		if (_area.SceneWhenEmpty is { Length: > 0 })
 		{
-			_nextChangeAt = null;
-			_nextChangeFrom = null;
+			ClearCountdown();
 			Enter(AreaState.AutoVacant, TransitionReason.VacancyTimeout);
 			SettleEmpty(TransitionReason.VacancyTimeout);
 			return;
@@ -833,7 +914,8 @@ public sealed class AreaController : IDisposable
 	private void OnPreOffElapsed()
 	{
 		lock (_gate)
-			PreOffElapsed();
+			if (!_disposed)
+				PreOffElapsed();
 	}
 
 	private void PreOffElapsed()
@@ -841,29 +923,29 @@ public sealed class AreaController : IDisposable
 		if (_state != AreaState.PreOff)
 			return;
 
+		TransitionReason reason = _leadIn ? TransitionReason.LeadInUnanswered : TransitionReason.PreOffElapsed;
+
 		// Held at the dimmed level, which is still lit. Restoring the full target would be the engine commanding
 		// a room up, which the hold never does.
 		if (HoldingLit() is { } holder)
 		{
-			HoldOffBack(holder, TransitionReason.PreOffElapsed);
+			HoldOffBack(holder, reason);
 			return;
 		}
 
-		_nextChangeAt = null;
-		_nextChangeFrom = null;
-		Enter(AreaState.AutoVacant, TransitionReason.PreOffElapsed);
-		SettleEmpty(TransitionReason.PreOffElapsed);
+		ClearCountdown();
+		Enter(AreaState.AutoVacant, reason);
+		SettleEmpty(reason);
 	}
 
 	private void OnOverrideExpired()
 	{
 		lock (_gate)
 		{
-			if (_state != AreaState.OverriddenOn)
+			if (_disposed || _state != AreaState.OverriddenOn)
 				return;
 
-			_nextChangeAt = null;
-			_nextChangeFrom = null;
+			ClearCountdown();
 
 			if (IsOccupied())
 			{
@@ -891,11 +973,10 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
-			if (_state != AreaState.SuppressedOff)
+			if (_disposed || _state != AreaState.SuppressedOff)
 				return;
 
-			_nextChangeAt = null;
-			_nextChangeFrom = null;
+			ClearCountdown();
 			Enter(AreaState.AutoVacant, TransitionReason.SuppressionLifted);
 			Publish(TransitionReason.SuppressionLifted);
 		}
@@ -954,8 +1035,8 @@ public sealed class AreaController : IDisposable
 
 		if (!_area.Settings.WelcomeHome || !CanAutoOn(out _))
 		{
-			// A room the leaving sweep deliberately left on — SkipAwaySweep, or a hold that refused the off — is
-			// still lit, and AutoVacant arms no vacancy timeout, so without this it burns with nothing to end it.
+			// A room the leaving sweep left on (SkipAwaySweep, or a hold that refused the off) is still lit, and
+			// AutoVacant arms no vacancy timeout, so without this it burns with nothing to end it.
 			AdoptIfLit(reason);
 
 			Publish(reason);
@@ -1013,9 +1094,7 @@ public sealed class AreaController : IDisposable
 		_reportedDecline = block;
 		_reportedDeclineEntity = blocker;
 
-		AreaSnapshot snapshot = Snapshot(TransitionReason.Motion);
-		_lastPublished = snapshot;
-		_publisher.Publish(snapshot);
+		PublishUnguarded(TransitionReason.Motion);
 	}
 
 	// Called wherever the area actually lights on movement, or a second spell under the same gate goes unreported.
@@ -1076,8 +1155,7 @@ public sealed class AreaController : IDisposable
 		_logger.LogDebug("{Area}: {Holder} is holding the lights on, so {Reason} commands nothing.", Name, holder, reason);
 
 		_offHeldBack = true;
-		_nextChangeAt = null;
-		_nextChangeFrom = null;
+		ClearCountdown();
 		Publish(reason);
 	}
 
@@ -1148,7 +1226,7 @@ public sealed class AreaController : IDisposable
 	}
 
 	/// <summary>The room's target and one for every light that states levels of its own.</summary>
-	// Each light is passed through the daylight curve and the sleep clamp exactly as the room's is, so no light
+	// Each light is passed through the daylight curve and the sleep clamp as the room's is, so no light
 	// can climb past the night rules by stating a level.
 	private AreaTargets? ResolveTargets()
 	{
@@ -1259,7 +1337,7 @@ public sealed class AreaController : IDisposable
 		return commands;
 	}
 
-	/// <summary>The same, for a period named by hand rather than the one in force.</summary>
+	/// <summary>The same, for a period named by hand instead of the one in force.</summary>
 	// The sleep clamp is left out on purpose: a test is somebody asking what a period looks like, and the room's
 	// own answer above is resolved the same way.
 	private IReadOnlyDictionary<string, LightCommand>? LightCommandsFor(string periodKey)
@@ -1332,13 +1410,7 @@ public sealed class AreaController : IDisposable
 	private void ApplyScene(string sceneId, TransitionReason reason)
 	{
 		RefreshDarkness();
-
-		// Declared before the call, as a command would be: the scene's own light changes carry neither a user nor
-		// a parent, which the detector reads as a hand at the switch.
-		foreach (string light in _area.Lights)
-			_detector.ExpectScene(light, TransitionSeconds());
-
-		_actuator.ActivateScene(sceneId);
+		RunScene(sceneId);
 
 		_standingScene = sceneId;
 		_lastTargets = null;
@@ -1347,6 +1419,20 @@ public sealed class AreaController : IDisposable
 		_lastCommandAt = _scheduler.Now;
 
 		Publish(reason);
+	}
+
+	// Declared before the call, as a command would be: the scene's own light changes carry neither a user nor a
+	// parent, which the detector reads as a hand at the switch.
+	private void RunScene(string sceneId)
+	{
+		ExpectSceneOnEveryLight();
+		_actuator.ActivateScene(sceneId);
+	}
+
+	private void ExpectSceneOnEveryLight()
+	{
+		foreach (string light in _area.Lights)
+			_detector.ExpectScene(light, TransitionSeconds());
 	}
 
 	private void TurnOff(TransitionReason reason)
@@ -1374,8 +1460,8 @@ public sealed class AreaController : IDisposable
 	// detector's primary heuristic, and the area reads its own work as a hand at the switch.
 	private void SendUnrecorded(LightCommand command, IReadOnlyDictionary<string, LightCommand>? lightCommands = null)
 	{
-		// Nothing in this room states a level of its own, so membership is not consulted at all and every entry is
-		// commanded exactly as it was before any of this existed. This branch is the safety property.
+		// Nothing in this room states a level of its own, so membership is not consulted and every entry gets the
+		// room's command. This branch is the safety property.
 		if (lightCommands is not { Count: > 0 } stated)
 		{
 			foreach (string light in _area.Lights)
@@ -1492,7 +1578,7 @@ public sealed class AreaController : IDisposable
 
 		// A test here has nothing to give the room back: an away room's levels are the sweep's or the away
 		// scene's, and neither is captured, so the return would hand it back by sweeping it dark. A guest scene
-		// is deliberately not refused — those levels are read off the fixtures and put back.
+		// is not refused: those levels are read off the fixtures and put back.
 		if (_house.Mode == HouseMode.Away)
 			return "The house is set to away, so its lights are not being moved for a test.";
 
@@ -1501,8 +1587,8 @@ public sealed class AreaController : IDisposable
 
 	/// <summary>Why <see cref="LightNow"/> would refuse, or <c>null</c> when it would light the room.</summary>
 	// The gates a press does not defeat: either the engine may command nothing here at all, or the house carries
-	// a standing instruction this room is not free to ignore. The conditions AutoOnBlockNow judges — darkness,
-	// sleep, a blocking entity — are deliberately absent, because overriding those is what the button is for.
+	// a standing instruction this room is not free to ignore. Darkness, sleep and a blocking entity are absent,
+	// because overriding those is what the button is for.
 	private string? RefuseLightNow()
 	{
 		if (_disposed)
@@ -1572,7 +1658,16 @@ public sealed class AreaController : IDisposable
 		return null;
 	}
 
-	/// <summary>Drops a running test's return, leaving the fixtures exactly where they are.</summary>
+	private void StartLevelTest(string periodKey, string? lightId)
+	{
+		_levelTesting = true;
+		_testingPeriodId = periodKey;
+		_testingLightId = lightId;
+		_testEndsAt = _scheduler.Now + TimeSpan.FromSeconds(LevelTestSeconds);
+		_levelTest.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
+	}
+
+	/// <summary>Drops a running test's return, leaving the fixtures where they are.</summary>
 	// For a hand at the switch mid-test: the person has just said what these lights are, so the capture is stale
 	// and the return would arrive ten seconds later over the top of it.
 	private void AbandonLevelTest()
@@ -1628,7 +1723,7 @@ public sealed class AreaController : IDisposable
 			return;
 		}
 
-		// Declared before each command, exactly as the way in does it, or the room reads the return as a person
+		// Declared before each command, as the way in does it, or the room reads the return as a person
 		// and falls into a fresh hold on top of the one it is already keeping.
 		foreach ((string light, LightCommand command) in captured)
 		{
@@ -1654,10 +1749,7 @@ public sealed class AreaController : IDisposable
 		// Standing scene first: the room's look is that scene, and no level command describes it.
 		if (_standingScene is { Length: > 0 } scene)
 		{
-			foreach (string light in _area.Lights)
-				_detector.ExpectScene(light, TransitionSeconds());
-
-			_actuator.ActivateScene(scene);
+			RunScene(scene);
 			_lastCommandAt = _scheduler.Now;
 			return;
 		}
@@ -1723,11 +1815,8 @@ public sealed class AreaController : IDisposable
 	private void RestartOverrideTimer() =>
 		ArmCountdown(_overrideTimer, OverrideHold(), OnOverrideExpired);
 
-	// A movement-led hold runs for exactly the vacancy timeout and motion restarts it, so IsOccupied is false when
-	// it fires unless a sensor still reads on, and OnOverrideExpired lands on the empty-room branch without knowing
-	// which mode ran.
-	// An area with no motion sensor restarts it never, so the hold runs once and the room settles empty. Anything
-	// that re-arms this while IsOccupied is false would hold such a room lit for ever.
+	// A movement-led hold runs for the vacancy timeout and motion restarts it, so IsOccupied is false when it fires
+	// unless a sensor still reads on. Re-arming it while IsOccupied is false holds a sensorless room lit for ever.
 	private TimeSpan OverrideHold() =>
 		_area.Settings.OverrideUntilVacant
 			? TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds)
@@ -1742,11 +1831,16 @@ public sealed class AreaController : IDisposable
 		timer.Disposable = _scheduler.Schedule(delay, onElapsed);
 	}
 
+	private void ClearCountdown()
+	{
+		_nextChangeAt = null;
+		_nextChangeFrom = null;
+	}
+
 	private void CancelAutoTimers()
 	{
 		_offHeldBack = false;
-		_nextChangeAt = null;
-		_nextChangeFrom = null;
+		ClearCountdown();
 		_vacancyTimer.Disposable = Disposable.Empty;
 		_preOffTimer.Disposable = Disposable.Empty;
 	}
@@ -1760,8 +1854,8 @@ public sealed class AreaController : IDisposable
 
 	private static bool TargetsMatch(LightTarget left, LightTarget? right) =>
 		right is not null &&
-		Math.Abs(left.BrightnessPct - right.BrightnessPct) < GlobalConfig.BrightnessTolerancePct &&
-		Math.Abs(left.ColorTempKelvin - right.ColorTempKelvin) < GlobalConfig.ColorTempToleranceKelvin;
+		Math.Abs(left.BrightnessPct - right.BrightnessPct) < LightTolerance.BrightnessPct &&
+		Math.Abs(left.ColorTempKelvin - right.ColorTempKelvin) < LightTolerance.ColorTempKelvin;
 
 	// The tick re-applies when any one of them has moved, so a light on its own levels crosses its own boundary
 	// without waiting for the room to cross one.
@@ -1776,6 +1870,9 @@ public sealed class AreaController : IDisposable
 	{
 		if (_state != state)
 			_logger.LogInformation("{Area}: {From} -> {To} ({Reason}).", Name, _state, state, reason);
+
+		if (state != AreaState.PreOff)
+			_leadIn = false;
 
 		_state = state;
 	}
@@ -1798,6 +1895,14 @@ public sealed class AreaController : IDisposable
 		_publisher.Publish(snapshot);
 	}
 
+	// For news the snapshot's compared fields do not carry, which Publish's guard would drop.
+	private void PublishUnguarded(TransitionReason reason)
+	{
+		AreaSnapshot snapshot = Snapshot(reason);
+		_lastPublished = snapshot;
+		_publisher.Publish(snapshot);
+	}
+
 	private AreaSnapshot Snapshot(TransitionReason reason)
 	{
 		// Null when the last command was "off", and also when there has never been one, which LastCommandAt
@@ -1815,38 +1920,42 @@ public sealed class AreaController : IDisposable
 		string? heldLitBy = HoldingLit();
 
 		return new AreaSnapshot(
-			Name,
-			_state,
-			reason,
-			_house.Mode,
-			_house.KillSwitchActive,
-			_lastDarkVerdict,
-			_resolvedPeriodName,
-			standing?.BrightnessPct,
-			standing?.ColorTempKelvin,
-			_scheduler.Now,
-			_lastCommandAt,
-			_lastMotionAt,
-			_nextChangeAt,
-			_nextChangeFrom,
-			_house.ModeValue,
-			_lastDarknessDetail,
-			_areaId,
-			blocked,
-			blocker,
-			_resolvedLevelsFromRoom,
-			_house.IsAnyoneHome,
-			_house.Forced,
-			heldLitBy is not null,
-			heldLitBy,
-			_standingScene,
-			_testingPeriodId,
-			_testEndsAt,
-			standing is not null ? LightStandings() : null,
-			_testingLightId,
-			_lightsMoved,
-			_notResponding.Count,
-			_leaves.Count);
+			AreaName: Name,
+			State: _state,
+			Reason: reason,
+			Mode: _house.Mode,
+			KillSwitchActive: _house.KillSwitchActive,
+			IsDark: _lastDarkVerdict,
+			PeriodName: _resolvedPeriodName,
+			BrightnessPct: standing?.BrightnessPct,
+			ColorTempKelvin: standing?.ColorTempKelvin,
+			Timestamp: _scheduler.Now,
+			LastCommandAt: _lastCommandAt,
+			LastMotionAt: _lastMotionAt,
+			NextChangeAt: _nextChangeAt,
+			NextChangeFrom: _nextChangeFrom,
+			HouseModeValue: _house.ModeValue,
+			DarknessDetail: _lastDarknessDetail,
+			AreaId: _areaId,
+			AutoOnBlockedBy: blocked,
+			AutoOnBlockingEntity: blocker,
+			LevelsFromRoom: _resolvedLevelsFromRoom,
+			IsAnyoneHome: _house.IsAnyoneHome,
+			Forced: _house.Forced,
+			IsHeldLit: heldLitBy is not null,
+			HeldLitBy: heldLitBy,
+			SceneApplied: _standingScene,
+			TestingPeriodId: _testingPeriodId,
+			TestEndsAt: _testEndsAt,
+			LightLevels: standing is not null ? LightStandings() : null,
+			TestingLightId: _testingLightId,
+			LightsMoved: _lightsMoved,
+			LightsNotResponding: _notResponding.Count,
+			LightCount: _leaves.Count,
+			ChangedBy: _changedBy,
+			ChangedAt: _changedAt,
+			// Enter clears _leadIn on leaving PreOff.
+			IsLeadIn: _leadIn);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>

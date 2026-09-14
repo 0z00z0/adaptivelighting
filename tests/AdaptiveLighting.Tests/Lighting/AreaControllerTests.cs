@@ -24,6 +24,7 @@ public sealed class AreaControllerTests
 	private const string SecondLight = "light.area_second";
 	private const string Lux = "sensor.area_lux";
 	private const string Blocker = "binary_sensor.projector";
+	private const string Steps = "binary_sensor.front_steps_motion";
 
 	/// <summary>Everything a test needs to drive one area and read what it did.</summary>
 	private sealed record Fixture(
@@ -122,7 +123,10 @@ public sealed class AreaControllerTests
 		bool withMotionSensor = true,
 		string? sceneOnMotion = null,
 		IReadOnlyList<string>? lights = null,
-		IReadOnlyDictionary<string, IReadOnlySet<string>>? leavesOfEntry = null)
+		IReadOnlyDictionary<string, IReadOnlySet<string>>? leavesOfEntry = null,
+		bool? treatAutomationsAsManual = null,
+		IReadOnlyList<string>? leadIn = null,
+		bool nameOrigins = false)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -163,7 +167,9 @@ public sealed class AreaControllerTests
 			"Test", settings, lights ?? [Light], withMotionSensor ? [Motion] : [], [Lux], ignoreWhenOn ?? [])
 		{
 			SceneOnMotion = sceneOnMotion,
-			LeavesOfEntry = leavesOfEntry ?? new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+			LeavesOfEntry = leavesOfEntry ?? new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal),
+			TreatAutomationsAsManual = treatAutomationsAsManual,
+			LeadInSensors = leadIn ?? []
 		};
 		var actuator = new FakeLightActuator();
 		var publisher = new FakeStatePublisher();
@@ -173,7 +179,8 @@ public sealed class AreaControllerTests
 			ha, wrapScheduler?.Invoke(scheduler) ?? scheduler, area, global, table,
 			new CircadianCalculator(table, global, () => sun?.Times ?? SunTimes.Unknown, levels, zone: TimeZoneInfo.Utc),
 			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area",
-			sunMoved: watchSun ? sun?.Moved : null);
+			sunMoved: watchSun ? sun?.Moved : null,
+			originNames: nameOrigins ? new ChangeOriginNames(ha, NullLogger.Instance) : null);
 
 		// The orchestrator composes and publishes the opening house state before it starts any room, so that is
 		// what the controller reads off the stream the moment it subscribes.
@@ -238,6 +245,66 @@ public sealed class AreaControllerTests
 		t.Ha.Trigger(Motion, "on");
 
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
+	}
+
+	// ===================== lead-in =====================
+
+	[TestMethod]
+	public void A_Lead_In_Lights_A_Dark_Room_Dimly_And_Movement_Inside_Raises_It()
+	{
+		Fixture t = Build(leadIn: [Steps], seed: ha => ha.SetState(Steps, "off"));
+
+		t.Ha.Trigger(Steps, "on");
+
+		Assert.AreEqual(AreaState.PreOff, t.Area.State);
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 35 }, "the lead-in lights at the dim light, half the evening's 70 %");
+		Assert.IsTrue(t.Publisher.Snapshots[^1].IsLeadIn is true, "the snapshot must carry the lead-in, not just the reason of one publish");
+
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 89 }, PhysicalDevice());
+		Assert.AreEqual(AreaState.PreOff, t.Area.State, "the lead-in's own echo must not hold the hall at the dim light");
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
+		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70 }, "movement inside raises the room to its own level");
+		Assert.IsFalse(t.Publisher.Snapshots[^1].IsLeadIn is true, "leaving PreOff clears it, so the badge does not outlive the dim light it described");
+	}
+
+	[TestMethod]
+	public void A_Lead_In_Nobody_Follows_Goes_Off_When_The_Dim_Light_Runs_Out()
+	{
+		Fixture t = Build(leadIn: [Steps], seed: ha => ha.SetState(Steps, "off"));
+
+		t.Ha.Trigger(Steps, "on");
+		Advance(t, TimeSpan.FromSeconds(20));
+		t.Ha.Trigger(Steps, "off");
+		t.Ha.Trigger(Steps, "on");
+
+		Advance(t, TimeSpan.FromSeconds(29));
+		Assert.AreEqual(AreaState.PreOff, t.Area.State, "a second lead-in starts the dim light's wait again");
+
+		Advance(t, TimeSpan.FromSeconds(1));
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
+		Assert.IsTrue(t.Actuator.Last is { On: false }, "nobody came in, so the lights go off");
+
+		t.Actuator.Clear();
+		Advance(t, TimeSpan.FromMinutes(15));
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "a lead-in alone starts no vacancy countdown that could command later");
+	}
+
+	[TestMethod]
+	public void A_Lead_In_Is_Refused_By_A_Blocking_Entity()
+	{
+		Fixture t = Build(ignoreWhenOn: [Blocker], leadIn: [Steps], seed: ha =>
+		{
+			ha.SetState(Steps, "off");
+			ha.SetState(Blocker, "on");
+		});
+
+		t.Ha.Trigger(Steps, "on");
+
+		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
+		Assert.AreEqual(0, t.Actuator.Applied.Count, "the projector's block refuses the lead-in as it refuses movement");
 	}
 
 	// ===================== AutoActive -> PreOff -> AutoVacant =====================
@@ -780,6 +847,48 @@ public sealed class AreaControllerTests
 		t.Ha.Trigger(Light, "off", null, new Context { Id = "x", UserId = "u", ParentId = "automation" });
 
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "the knob must actually do something");
+	}
+
+	// A hall told to ignore automations must not take the bathroom's hair-dryer automation with it, and a room can
+	// hold an automation's change in a house that ignores them.
+	[TestMethod]
+	public void An_Automation_Ignored_In_One_Room_Still_Holds_In_A_Room_That_Follows_The_House()
+	{
+		Fixture follows = Build();
+		Fixture ignores = Build(treatAutomationsAsManual: false);
+		Fixture holds = Build(tweakGlobal: g => g.TreatAutomationsAsManual = false, treatAutomationsAsManual: true);
+
+		foreach (Fixture room in new[] { follows, ignores, holds })
+		{
+			room.Ha.Trigger(Motion, "on");
+			Advance(room, TimeSpan.FromSeconds(30));
+			room.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, new Context { Id = "run", ParentId = "trigger" });
+		}
+
+		Assert.AreEqual(AreaState.OverriddenOn, follows.Area.State, "a room stating nothing follows a house that holds automations");
+		Assert.AreEqual(AreaState.AutoActive, ignores.Area.State, "a room saying no leaves the automation's change alone");
+		Assert.AreEqual(AreaState.OverriddenOn, holds.Area.State, "a room saying yes holds it in a house that says no");
+	}
+
+	// A hall that ignores its automation still says which automation it ignored, once per run.
+	[TestMethod]
+	public void An_Automation_Change_Left_Alone_Is_Reported_Once_With_The_Automations_Name()
+	{
+		Fixture t = Build(treatAutomationsAsManual: false, nameOrigins: true);
+		t.Ha.Trigger(Motion, "on");
+		Advance(t, TimeSpan.FromSeconds(30));
+		t.Publisher.Snapshots.Clear();
+
+		Context run = new() { Id = "run", ParentId = "trigger" };
+		t.Ha.RaiseEvent(ChangeOriginNames.AutomationTriggeredEvent, new { name = "Evening lights" }, new Context { Id = "run" });
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 13 }, run);
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 14 }, run);
+
+		AreaSnapshot[] reported = [.. t.Publisher.Snapshots.Where(snapshot => snapshot.Reason == TransitionReason.AutomationIgnored)];
+
+		Assert.AreEqual(1, reported.Length, "one automation run is one row, however many updates it sends");
+		Assert.AreEqual("By automation: Evening lights", reported[0].ChangedBy);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
 
 	// ===================== kill switch =====================
@@ -2469,7 +2578,7 @@ public sealed class AreaControllerTests
 	public void Abandoning_A_Test_Publishes_That_None_Is_Running()
 	{
 		// The shipped echo window plus a night fade outlasts a whole test, so a hand can only be read as one here
-		// with both shortened — the same trap A_Hand_At_The_Switch_During_A_Test_... below works around.
+		// with both shortened; the same trap A_Hand_At_The_Switch_During_A_Test_... below works around.
 		Fixture t = Build(s => s.NightTransitionSeconds = 0, g => g.SelfEchoWindowSeconds = 0);
 		t.Area.TestPeriod("day");
 

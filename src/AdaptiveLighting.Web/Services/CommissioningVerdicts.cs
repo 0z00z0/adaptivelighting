@@ -83,7 +83,7 @@ public static class CommissioningVerdicts
 			return notes;
 		}
 
-		// Ahead of the suspects: this one is about the whole room rather than some of its lights, and a row that
+		// Ahead of the suspects: this one is about the whole room, not some of its lights, and a row that
 		// buried it among the info chips would read as an ordinary room.
 		if (motionCount == 0)
 			notes.Add(new Verdict(SwitchDrivenNote, VerdictTone.Warn));

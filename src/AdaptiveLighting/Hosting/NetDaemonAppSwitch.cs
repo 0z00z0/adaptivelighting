@@ -1,4 +1,4 @@
-using System.Linq;
+using System.Reflection;
 using System.Text;
 
 using NetDaemon.AppModel;
@@ -7,10 +7,9 @@ namespace AdaptiveLighting.Hosting;
 
 /// <summary>Derives the entity id of the enable helper NetDaemon's state manager publishes for an app.</summary>
 /// <remarks>
-///     <c>AddNetDaemonStateManager()</c> names it <c>netdaemon_</c> plus the app's fully qualified type name
-///     snake-cased, so <c>Example.NetDaemon.Home.AdaptiveLightingApp</c> becomes
-///     <c>input_boolean.netdaemon_example_net_daemon_home_adaptive_lighting_app</c>. Derived from the type here, not
-///     hardcoded, so separate hosts cannot drift apart.
+///     <c>AddNetDaemonStateManager()</c> names it <c>netdaemon_</c> plus the app id snake-cased, so
+///     <c>Example.NetDaemon.Home.AdaptiveLightingApp</c> becomes
+///     <c>input_boolean.netdaemon_example_net_daemon_home_adaptive_lighting_app</c>.
 /// </remarks>
 public static class NetDaemonAppSwitch
 {
@@ -30,11 +29,8 @@ public static class NetDaemonAppSwitch
 	{
 		ArgumentNullException.ThrowIfNull(appType);
 
-		// [NetDaemonApp(Id = "...")] pins a short id, and the state manager then names the switch from that, not
-		// from the type. Read reflectively so this assembly need not reference NetDaemon.AppModel.
-		object? appAttribute = appType.GetCustomAttributes(inherit: false)
-			.FirstOrDefault(attribute => string.Equals(attribute.GetType().Name, "NetDaemonAppAttribute", StringComparison.Ordinal));
-		string? explicitId = appAttribute?.GetType().GetProperty("Id")?.GetValue(appAttribute) as string;
+		// [NetDaemonApp(Id = "...")] pins a short id, and the state manager names the switch from that instead of the type.
+		string? explicitId = appType.GetCustomAttribute<NetDaemonAppAttribute>(inherit: false)?.Id;
 
 		return string.IsNullOrWhiteSpace(explicitId)
 			? EntityIdForTypeName(appType.FullName ?? appType.Name)

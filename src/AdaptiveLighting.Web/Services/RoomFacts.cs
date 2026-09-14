@@ -71,9 +71,7 @@ public static class RoomFacts
 			? new RoomFact("Last movement", Stamp(motion, now), $"Movement was last seen at {Clock(motion)}.")
 			: new RoomFact("Last movement", "none seen", "No movement has been reported since the engine started."));
 
-		facts.Add(snapshot.LastCommandAt is { } command
-			? new RoomFact("Last changed", Stamp(command, now), $"The engine last changed these lights at {Clock(command)}.")
-			: new RoomFact("Last changed", "not yet", "The engine has not changed these lights since it started."));
+		facts.Add(LastChange(snapshot, now));
 
 		facts.Add(new RoomFact(
 			"Time of day",
@@ -81,6 +79,21 @@ public static class RoomFacts
 			"The schedule period this room is in. It sets brightness and warmth."));
 
 		return facts;
+	}
+
+	// The newer of the engine's own last command and the last change somebody else made, with who made it.
+	private static RoomFact LastChange(AreaSnapshot snapshot, DateTimeOffset now)
+	{
+		if (snapshot.ChangedAt is { } changed && (snapshot.LastCommandAt is not { } commanded || changed > commanded))
+		{
+			return snapshot.ChangedBy is { Length: > 0 } by
+				? new RoomFact("Last changed", Stamp(changed, now), $"These lights were last changed at {Clock(changed)}.", by)
+				: new RoomFact("Last changed", Stamp(changed, now), $"These lights were last changed at {Clock(changed)}, by something the engine could not name.");
+		}
+
+		return snapshot.LastCommandAt is { } command
+			? new RoomFact("Last changed", Stamp(command, now), $"The engine last changed these lights at {Clock(command)}.", ChangeOriginNames.ByTheEngine)
+			: new RoomFact("Last changed", "not yet", "The engine has not changed these lights since it started.");
 	}
 
 	// An older engine reports the hold without naming it, so the copy stays true with nothing to name.
@@ -117,6 +130,7 @@ public static class RoomFacts
 			{ State: AreaState.AutoActive, LastCommandAt: null } =>
 				"These lights were already on when the engine started. They're managed now — their levels weren't touched.",
 			{ State: AreaState.AutoActive } => Levels("Lit at", snapshot),
+			{ State: AreaState.PreOff, Reason: TransitionReason.LeadIn } => Levels("Lit dimly at", snapshot, " ahead of anyone coming in"),
 			{ State: AreaState.PreOff } => Levels("Dimmed to", snapshot, " as a warning"),
 			{ State: AreaState.OverriddenOn } => "Someone set these lights manually — they're being left alone.",
 			{ State: AreaState.SuppressedOff } => "Someone switched these lights off. Movement is ignored for now.",
@@ -156,6 +170,8 @@ public static class RoomFacts
 		return snapshot.State switch
 		{
 			AreaState.AutoActive when countdown is not null => $"Starts dimming {countdown} unless someone moves.",
+			AreaState.PreOff when countdown is not null && snapshot.Reason is TransitionReason.LeadIn =>
+				$"Lights out {countdown} unless someone comes in.",
 			AreaState.PreOff when countdown is not null => $"Lights out {countdown} — any movement keeps them on.",
 			AreaState.OverriddenOn when countdown is not null => $"Back under automatic control {countdown}.",
 			AreaState.SuppressedOff when countdown is not null =>
@@ -189,8 +205,8 @@ public static class RoomFacts
 
 	/// <summary>The period a running level test is showing, or <c>null</c> once its deadline has passed.</summary>
 	/// <remarks>
-	///     Read off the report alone, so a page that just loaded or navigated back — carrying no local memory of
-	///     which button was pressed — redraws the same countdown a page that has been open throughout would show.
+	///     Read off the report alone, so a page that just loaded or navigated back (carrying no local memory of
+	///     which button was pressed) redraws the same countdown a page that has been open throughout would show.
 	/// </remarks>
 	public static string? TestingPeriod(AreaSnapshot snapshot, DateTimeOffset now)
 	{

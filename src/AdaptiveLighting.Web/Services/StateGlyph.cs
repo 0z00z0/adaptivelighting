@@ -13,10 +13,13 @@ public sealed record StateMark(string? Icon, string Family, string Word, bool Bl
 /// </remarks>
 public static class StateGlyph
 {
-	public static StateMark For(AreaState state) => state switch
+	/// <summary>The mark for a live state. <paramref name="isLeadIn"/> only changes <see cref="AreaState.PreOff"/>'s
+	/// word: a lead-in sensor lighting a dark room ahead of anyone coming in reads differently from the ordinary
+	/// dim light before switching off, though both share the shape.</summary>
+	public static StateMark For(AreaState state, bool isLeadIn = false) => state switch
 	{
 		AreaState.AutoActive => new StateMark(Glyph.StateAuto, "state-machine", "lit · auto", false),
-		AreaState.PreOff => new StateMark(Glyph.StateDimming, "state-warn", "warning dim", true),
+		AreaState.PreOff => new StateMark(Glyph.StateDimming, "state-warn", isLeadIn ? "lead-in · auto" : "warning dim", true),
 
 		// The three human states share one shape: a person decided, and the word says which.
 		AreaState.OverriddenOn => new StateMark(Glyph.StateManual, "state-human", "set manually", false),
@@ -28,7 +31,7 @@ public static class StateGlyph
 		// No shape: the engine is watching and commanding nothing.
 		AreaState.AutoVacant => new StateMark(null, "state-idle", "watching", false),
 		AreaState.Away => new StateMark(null, "state-idle", "house away", false),
-		_ => new StateMark(null, "state-idle", state.ToString(), false)
+		_ => new StateMark(null, "state-idle", "unknown", false)
 	};
 
 	/// <summary>Whether this state's colour follows the light's actual warmth; only a room the engine holds lit has a commanded Kelvin.</summary>

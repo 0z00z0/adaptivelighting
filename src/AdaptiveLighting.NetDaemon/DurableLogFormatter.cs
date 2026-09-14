@@ -9,18 +9,11 @@ namespace AdaptiveLighting.NetDaemon;
 
 /// <summary>Renders one log event for the durable file, from the template instead of the message.</summary>
 /// <remarks>
-///     <para>
-///         <c>LogEvent.RenderMessage</c> is never called: it hands back the interpolated string, secrets and all.
-///         Rendering from <see cref="MessageTemplate.Tokens"/> keeps the literal halves and the runtime values
-///         apart, so every value goes through <see cref="LoggedValue"/> before it is joined to anything, and no
-///         caller has a way in that skips the filter.
-///     </para>
-///     <para>
-///         A property's format specifier and alignment are dropped: honouring them would run an unseen formatter
-///         on a value this type is trying to bound.
-///     </para>
+///     Never calls <c>LogEvent.RenderMessage</c>, which returns the interpolated string, secrets and all. Rendering from
+///     <see cref="MessageTemplate.Tokens"/> sends every value through <see cref="LoggedValue"/>. Format specifiers and
+///     alignment are dropped: honouring them would run an unseen formatter on a value this type bounds.
 /// </remarks>
-public sealed class DurableLogFormatter : ITextFormatter
+internal sealed class DurableLogFormatter : ITextFormatter
 {
 	/// <summary>Full ISO date, and the offset with it: this file is read days later and across midnight.</summary>
 	public const string TimestampFormat = "yyyy-MM-dd HH:mm:ss.fffzzz";

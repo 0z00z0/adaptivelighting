@@ -229,12 +229,11 @@ public sealed class ScheduleTests
 	// ===================== the three surfaces agree =====================
 
 	/// <summary>One instant, one document and one latch, driven through the room page's path, the schedule editor's path and <see cref="ModeService.ComputePreview"/>.</summary>
-	// Built around the current local instant because ComputePreview resolves in TimeZoneInfo.Local; nothing here
-	// asserts a wall clock, only that the three answers are the same one.
+	// Fixed local noon, well clear of midnight, because ComputePreview resolves in TimeZoneInfo.Local.
 	[TestMethod]
 	public void The_Room_Page_The_Schedule_Editor_And_The_Mode_Cards_Give_One_Answer()
 	{
-		DateTimeOffset now = DateTimeOffset.Now;
+		DateTimeOffset now = new(new DateTime(2026, 8, 11, 12, 0, 0, DateTimeKind.Local));
 		TimeOnly local = TimeOnly.FromDateTime(now.LocalDateTime);
 
 		// Relative to now, so the assertion holds in any zone: "previous" has started, "held" has started by the

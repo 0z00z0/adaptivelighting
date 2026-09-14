@@ -448,8 +448,7 @@ public sealed class AreaSetupServiceTests
 			"reported, not removed");
 	}
 
-	// #81: an area Home Assistant reports used to vanish with no word said. A wrong or missing reason here is
-	// exactly what reaches a person looking at "Set up rooms again" for the room they expected.
+	// A wrong or missing reason here reaches the person looking at "Set up rooms again" for the room they expected.
 	[TestMethod]
 	public void An_Area_With_No_Light_Is_Named_With_That_Reason_Even_Though_Never_Configured()
 	{
@@ -584,6 +583,7 @@ public sealed class AreaSetupServiceTests
 	private static int PinnedCountOf(AreaConfig area) =>
 		(area.Lights?.Count ?? 0)
 		+ (area.MotionSensors?.Count ?? 0)
+		+ (area.LeadInSensors?.Count ?? 0)
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
 		+ (area.FollowOutdoorLux is not null ? 1 : 0)
 		+ (area.IgnoreWhenOn?.Count ?? 0)
@@ -593,6 +593,7 @@ public sealed class AreaSetupServiceTests
 		+ (area.SceneOnMotion is { Length: > 0 } ? 1 : 0)
 		+ (area.SceneWhenEmpty is { Length: > 0 } ? 1 : 0)
 		+ (area.DaylightSensor is { Length: > 0 } ? 1 : 0)
+		+ (area.TreatAutomationsAsManual is not null ? 1 : 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>Property names that are the room's identity or its entity lists, not one of its settings.</summary>
@@ -602,6 +603,7 @@ public sealed class AreaSetupServiceTests
 		nameof(AreaConfig.AreaId),
 		nameof(AreaConfig.Lights),
 		nameof(AreaConfig.MotionSensors),
+		nameof(AreaConfig.LeadInSensors),
 		nameof(AreaConfig.LuxSensor),
 
 		// The twin of LuxSensor above, so it counts as a pinned entity choice, which keeps the settings numerator honest.
@@ -620,6 +622,9 @@ public sealed class AreaSetupServiceTests
 		nameof(AreaConfig.SceneOnMotion),
 		nameof(AreaConfig.SceneWhenEmpty),
 		nameof(AreaConfig.DaylightSensor),
+
+		// Inherits from Global, not from AreaSettings, so it is outside the settings denominator.
+		nameof(AreaConfig.TreatAutomationsAsManual),
 
 		// Survives the rebuild, so it is never one of the losses.
 		nameof(AreaConfig.Enabled),

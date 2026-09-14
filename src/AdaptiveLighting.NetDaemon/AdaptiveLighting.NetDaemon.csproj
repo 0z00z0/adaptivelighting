@@ -26,4 +26,8 @@
 		<ProjectReference Include="..\AdaptiveLighting.Web\AdaptiveLighting.Web.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<InternalsVisibleTo Include="AdaptiveLighting.Tests" />
+	</ItemGroup>
+
 </Project>

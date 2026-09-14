@@ -37,7 +37,7 @@ public sealed class StateGlyphTests
 	[TestMethod]
 	public void No_Two_States_Are_Drawn_The_Same_Way()
 	{
-		StateMark[] marks = [.. AllStates.Select(StateGlyph.For)];
+		StateMark[] marks = [.. AllStates.Select(state => StateGlyph.For(state))];
 
 		Assert.AreEqual(marks.Length, marks.Distinct().Count(),
 			"two states rendering to the same shape, colour and word cannot be told apart at all");
@@ -81,6 +81,21 @@ public sealed class StateGlyphTests
 	{
 		Assert.IsNull(StateGlyph.For(AreaState.AutoVacant).Icon);
 		Assert.IsNull(StateGlyph.For(AreaState.Away).Icon);
+	}
+
+	// A lead-in and the ordinary warning dim share a shape, since both are the dim light before the room could go
+	// dark; only the word tells a lead-in apart, and only when the caller says so.
+	[TestMethod]
+	public void A_Lead_In_Does_Not_Say_Warning_Dim()
+	{
+		StateMark ordinary = StateGlyph.For(AreaState.PreOff);
+		StateMark leadIn = StateGlyph.For(AreaState.PreOff, isLeadIn: true);
+
+		Assert.AreNotEqual(ordinary.Word, leadIn.Word);
+		Assert.IsFalse(leadIn.Word.Contains("warning dim", StringComparison.OrdinalIgnoreCase));
+		Assert.AreEqual(ordinary.Icon, leadIn.Icon, "both are the dim light before the room could go dark");
+		Assert.AreEqual(ordinary.Family, leadIn.Family);
+		Assert.AreEqual(ordinary.Blinks, leadIn.Blinks);
 	}
 
 	[TestMethod]

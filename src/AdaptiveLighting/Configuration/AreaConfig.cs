@@ -16,6 +16,14 @@ public class AreaConfig
 
 	public List<string>? MotionSensors { get; set; }
 
+	/// <summary>Sensors outside the room whose movement lights it dimly ahead of anyone coming in, such as the front steps.</summary>
+	/// <remarks>
+	///     Lights at <see cref="AreaSettings.PreOffBrightnessFactor"/> for <see cref="AreaSettings.PreOffSeconds"/>, through
+	///     every auto-on gate. Never discovered and never a motion sensor: it neither occupies the room nor starts its vacancy
+	///     countdown. <c>null</c> and an empty list both mean no lead-in.
+	/// </remarks>
+	public List<string>? LeadInSensors { get; set; }
+
 	/// <summary>Explicit lux sensor id. When present, fully replaces discovery for this slot.</summary>
 	public string? LuxSensor { get; set; }
 
@@ -63,6 +71,10 @@ public class AreaConfig
 	/// <summary>Entity ids discovery must skip for this room, such as a fridge's illuminance sensor sitting in its HA area.</summary>
 	/// <remarks>Filters discovery only. An explicit <see cref="Lights"/> or <see cref="MotionSensors"/> list is untouched.</remarks>
 	public List<string>? ExcludeEntities { get; set; }
+
+	/// <summary>Whether a change another automation makes counts as a manual change in this room.</summary>
+	/// <remarks><c>null</c> follows <see cref="GlobalConfig.TreatAutomationsAsManual"/>; no twin in <see cref="AreaSettings"/>, so the house keeps one value.</remarks>
+	public bool? TreatAutomationsAsManual { get; set; }
 
 	/// <inheritdoc cref="AreaSettings.VacancyTimeoutSeconds"/>
 	public int? VacancyTimeoutSeconds { get; set; }

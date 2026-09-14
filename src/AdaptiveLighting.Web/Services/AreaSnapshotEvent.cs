@@ -104,6 +104,11 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("held_lit_by")]
 	public string? HeldLitBy { get; init; }
 
+	/// <summary>Whether a lead-in sensor, not the vacancy timeout, put the area into <c>PreOff</c>. <c>null</c>
+	/// from a build that never published it.</summary>
+	[JsonPropertyName("is_lead_in")]
+	public bool? IsLeadIn { get; init; }
+
 	/// <summary>The room's own scene the area is sitting on, or <c>null</c> when the engine is aiming it itself.</summary>
 	[JsonPropertyName("scene_applied")]
 	public string? SceneApplied { get; init; }
@@ -157,6 +162,14 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("light_count")]
 	public int? LightCount { get; init; }
 
+	/// <summary>Who made the newest change somebody else made to the room's lights, in the log's words, or <c>null</c>.</summary>
+	[JsonPropertyName("changed_by")]
+	public string? ChangedBy { get; init; }
+
+	/// <summary>When that change was seen, or <c>null</c> when none has been.</summary>
+	[JsonPropertyName("changed_at")]
+	public DateTimeOffset? ChangedAt { get; init; }
+
 	/// <summary>
 	///     Rebuilds an <see cref="AreaSnapshot"/>, or <c>null</c> when the payload names no area. An unparseable
 	///     enum name degrades to its zero value; nothing throws.
@@ -204,7 +217,10 @@ public sealed record AreaSnapshotEvent
 			TestingLightId: TestingLightId,
 			LightsMoved: LightsMoved is { Count: > 0 } moved ? moved : null,
 			LightsNotResponding: LightsNotResponding,
-			LightCount: LightCount);
+			LightCount: LightCount,
+			ChangedBy: ChangedBy,
+			ChangedAt: ChangedAt,
+			IsLeadIn: IsLeadIn);
 	}
 }
 

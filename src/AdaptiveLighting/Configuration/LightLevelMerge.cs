@@ -51,9 +51,8 @@ public static class LightLevelMerge
 		};
 	}
 
-	// Either half of the pair counts. A row carrying only the curve flag is exactly what the page writes when the
-	// curve box is ticked, since nothing seeds a brightness beside it, and reading such a row as saying nothing
-	// would make ticking the box on a light do nothing at all.
+	// Either half counts. Ticking the curve box writes a row with only the flag, and reading that row as empty
+	// would make the box do nothing on a light.
 	private static bool SpeaksToBrightness(RoomLevelOverride? level) =>
 		level is not null && (level.BrightnessPct is not null || level.FollowDaylightCurve == true);
 

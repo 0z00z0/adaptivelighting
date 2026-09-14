@@ -10,10 +10,14 @@
 <RunSettings>
 	<RunConfiguration>
 		<TestCaseFilter>
-			<!-- Override detection, away decided by the house mode, stored raw brightness: whole classes. -->
+			<!-- Override detection, away decided by the house mode, stored raw brightness, 0 % means off,
+				a replaced room or mode monitor acting after a save, the mode reset race: whole classes. -->
 			FullyQualifiedName~AdaptiveLighting.Tests.Lighting.OverrideDetectorTests.
 			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.ConfiguredAwayTests.
 			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.RawBrightnessStorageTests.
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.ZeroBrightnessTests.
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.AreaControllerDisposalTests.
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.ModeMonitorRaceTests.
 
 			<!-- A room: auto-on gates, vacancy and pre-off, manual override, away sweep, sleep, adoption. -->
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Motion_When_Dark_Turns_The_Area_On_At_The_Periods_Levels
@@ -21,6 +25,9 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Auto_On_Is_Blocked_While_An_IgnoreWhenOn_Entity_Is_On
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Vacancy_Dims_To_PreOff_And_Then_Turns_Off
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Motion_During_The_PreOff_Grace_Restores_The_Area
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Lead_In_Lights_A_Dark_Room_Dimly_And_Movement_Inside_Raises_It
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Lead_In_Nobody_Follows_Goes_Off_When_The_Dim_Light_Runs_Out
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Lead_In_Is_Refused_By_A_Blocking_Entity
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Manual_On_Overrides_And_The_Engine_Backs_Off_Until_Expiry
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Override_Expiring_While_Vacant_Turns_The_Area_Off
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Override_Expiring_While_Occupied_Resumes_Control_Instead
@@ -28,6 +35,7 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Our_Own_Echo_Is_Not_Read_As_A_Human
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Light_Dropping_Off_The_Network_Is_Not_A_Human_Switching_It_Off
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Real_Off_Is_Still_Read_As_A_Human
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.An_Automation_Ignored_In_One_Room_Still_Holds_In_A_Room_That_Follows_The_House
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Bulb_Leaving_Or_Rejoining_Its_Group_Is_Not_A_Hand_But_A_Real_Change_Still_Is
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.The_Kill_Switch_Muzzles_The_Engine_And_Releases_Cleanly
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Disabled_Area_Never_Commands_Anything
@@ -198,6 +206,9 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.The_Port_Comes_From_Configuration_And_Defaults_To_10000
 			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.DurableLogFormatterTests.A_Token_Logged_Through_ILogger_Never_Reaches_The_File
 			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.LoggedValueTests.A_Home_Assistant_Long_Lived_Token_Is_Replaced_Wherever_It_Sits
+
+			<!-- This list names itself: a rename that misses this file would otherwise drop a test silently. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Tooling.CoreRunSettingsTests.Every_Name_In_The_Core_Set_Resolves_To_A_Real_Test
 		</TestCaseFilter>
 	</RunConfiguration>
 </RunSettings>

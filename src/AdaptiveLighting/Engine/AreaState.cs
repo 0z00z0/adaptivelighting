@@ -69,7 +69,17 @@ public enum TransitionReason
 	ManualLightOn,
 
 	/// <summary>A light the room commands stopped answering Home Assistant, or started again. Nothing the area decides on moved.</summary>
-	LightAvailability
+	LightAvailability,
+
+	/// <summary>A lead-in sensor saw movement, so a dark, empty room was lit at its dim light ahead of anyone coming in.</summary>
+	/// <remarks>Also the reason when a further lead-in restarts the wait.</remarks>
+	LeadIn,
+
+	/// <summary>Nobody came in while a lead-in held the dim light, so the room went off.</summary>
+	LeadInUnanswered,
+
+	/// <summary>An automation changed the lights and this room does not count that as manual. Nothing the area decides on moved.</summary>
+	AutomationIgnored
 }
 
 /// <summary>Which gate is refusing to switch an area's lights on for movement.</summary>

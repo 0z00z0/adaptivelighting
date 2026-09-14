@@ -11,7 +11,7 @@ namespace AdaptiveLighting.Web.Services;
 // number would read as whichever the last caller meant.
 public sealed record LightEntry(string EntityId, IReadOnlyList<string> Leaves, int OwnLights, int OwnPeriods)
 {
-	/// <summary>Whether this entry reaches lights through membership rather than being one itself.</summary>
+	/// <summary>Whether this entry reaches lights through membership instead of being one itself.</summary>
 	public bool IsGroup => Leaves.Count > 1 || !Leaves.Contains(EntityId, StringComparer.OrdinalIgnoreCase);
 
 	/// <summary>What the line says about itself, beside its name.</summary>

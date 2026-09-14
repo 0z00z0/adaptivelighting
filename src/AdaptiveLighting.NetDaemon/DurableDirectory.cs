@@ -5,21 +5,14 @@ using Microsoft.Extensions.Logging;
 
 namespace AdaptiveLighting.NetDaemon;
 
-/// <summary>The lighting document's own directory, for the things that have to outlive a deploy.</summary>
-/// <remarks>
-///     The deploy folder is wiped and re-copied every time, so <c>AdaptiveLighting:ConfigPath</c> names the only
-///     directory a host has already promised to keep. The key ring and the durable log each get a subfolder of it.
-/// </remarks>
-public static class DurableDirectory
+/// <summary>The lighting document's own directory: the one place a deploy keeps, for the key ring and the durable log.</summary>
+internal static class DurableDirectory
 {
 	private const string FallbackStem = "adaptive-lighting";
 
 	/// <summary>The document's directory on this machine, or <c>null</c> when nothing here outlives a deploy.</summary>
-	/// <remarks>
-	///     Asked of <see cref="LightingConfigPath.Resolve"/>, never re-derived from <see cref="IConfiguration"/>: a
-	///     configured path whose directory cannot be created makes <c>Resolve</c> fall back to the in-tree file, and a
-	///     second derivation would aim the durable log at a document the app is not editing.
-	/// </remarks>
+	// Ask LightingConfigPath.Resolve, never re-derive: Resolve can fall back to the in-tree file, and a second
+	// derivation would aim the log at a document the app is not editing.
 	public static string? Locate(IConfiguration configuration, string contentRootPath, ILogger logger)
 	{
 		ArgumentNullException.ThrowIfNull(configuration);

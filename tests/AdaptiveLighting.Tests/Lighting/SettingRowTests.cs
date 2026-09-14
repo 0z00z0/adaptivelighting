@@ -36,15 +36,15 @@ public sealed class SettingRowTests
 	[TestMethod]
 	public async Task The_Info_Button_Names_The_Setting_It_Explains()
 	{
-		string html = await RenderAsync("Warning dim level", Help);
+		string html = await RenderAsync("Dim light level", Help);
 
-		StringAssert.Contains(html, "More about Warning dim level");
+		StringAssert.Contains(html, "More about Dim light level");
 	}
 
 	[TestMethod]
 	public async Task A_Row_With_Nothing_To_Explain_Draws_No_Info_Button()
 	{
-		string html = await RenderAsync("Warning dim level", help: null);
+		string html = await RenderAsync("Dim light level", help: null);
 
 		Assert.IsFalse(html.Contains("info-icon", StringComparison.Ordinal), html);
 	}

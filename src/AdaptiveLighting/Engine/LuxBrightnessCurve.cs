@@ -4,7 +4,7 @@ namespace AdaptiveLighting.Engine;
 
 /// <summary>Sets the brightness from the light outside, for the periods that hand it that job.</summary>
 // Interpolation is on log10(lux), so each decade gets an equal share of the curve. Pure and open-loop: no clock,
-// no Home Assistant, no servo. It replaces the period's own level rather than adding to it, so both ends are free
+// no Home Assistant, no servo. It replaces the period's own level and adds nothing to it, so both ends are free
 // across 0-100 % and nothing about the schedule bounds them.
 public sealed class LuxBrightnessCurve
 {

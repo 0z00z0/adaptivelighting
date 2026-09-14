@@ -3,21 +3,21 @@
 
 	1. The live readout. A Blazor Server @onchange only fires on release, so without this the number beside the
 	   rail sits stale mid-drag. Every position's words are baked server-side into data-psl-readouts on the
-	   input, so the browser can show the right one on the native `input` event with no round trip at all — the
+	   input, so the browser can show the right one on the native `input` event with no round trip at all; the
 	   server still gets the final value through the existing @onchange on release, unchanged.
 
 	2. The brightness satellite. Press-and-hold the thumb without moving it, and a small handle appears beside it
-	   that nudges the value in single 8-bit raw-brightness steps rather than jumping between named presets, and
+	   that nudges the value in single 8-bit raw-brightness steps instead of jumping between named presets, and
 	   names the raw value it is on. That number is written here for the same reason the readout above is: a raw
 	   step is the smallest move this handle makes, and one shown a round trip late cannot say which one it was.
 	   Two things gate arming, and both exist because it takes the gesture away from the coarse rail for good: the
 	   press has to land on the thumb, and the rail has to carry data-psl-fine, which PresetSlider withholds while
 	   the thumb is docked in the house-default pocket.
-	   Deliberately not a rewrite of the rail itself: the native <input type=range> keeps working exactly as it
-	   does today for every other case, because pointerdown is never intercepted — only watched. Once the hold
+	   Not a rewrite of the rail itself: the native <input type=range> keeps working as it
+	   does today for every other case, because pointerdown is never intercepted, only watched. Once the hold
 	   is recognised, capture is handed from the input to the satellite element (setPointerCapture works on any
 	   element while the pointer is still down, not only the one that received pointerdown), so the input simply
-	   stops receiving move events for that gesture rather than fighting the satellite over the value.
+	   stops receiving move events for that gesture instead of fighting the satellite over the value.
 
 	Like theme.js and lux-curve.js, neither job takes the page down if it cannot attach: a browser without
 	pointer events, or a rail rendered before this script loads, just keeps the coarse-only behaviour it had
@@ -74,7 +74,7 @@ window.adaptiveLightingPresetSlider = (function () {
 		host.classList.toggle('psl-default', !!readout.d);
 	}
 
-	// Delegated on document rather than attached per rail: a Blazor Server re-render can replace the input node
+	// Delegated on document, not attached per rail: a Blazor Server re-render can replace the input node
 	// (e.g. after the coarse value commits), and delegation needs no re-attaching when that happens.
 	document.addEventListener('input', function (event) {
 		var input = event.target;
@@ -101,7 +101,7 @@ window.adaptiveLightingPresetSlider = (function () {
 	var HOLD_MS = 450;
 	var MOVE_TOLERANCE_PX = 6;
 
-	// Every 3px of satellite drag is one raw step; a chosen feel rather than a derived number, adjustable here
+	// Every 3px of satellite drag is one raw step; a chosen feel, not a derived number, adjustable here
 	// alone. Thumb width must match --psl-thumb in app.css, since a native range thumb's screen position cannot
 	// otherwise be read back from the DOM.
 	var PX_PER_STEP = 3;
@@ -179,7 +179,7 @@ window.adaptiveLightingPresetSlider = (function () {
 			satellite.style.left = x + 'px';
 		}
 
-		// Written here rather than waited for from the server: a raw step is the smallest thing this handle can
+		// Written here, not waited for from the server: a raw step is the smallest thing this handle can
 		// do, and a number that arrives a round trip after the finger moved cannot show which one it did.
 		function showRaw(raw) {
 			if (readout) {
@@ -249,7 +249,7 @@ window.adaptiveLightingPresetSlider = (function () {
 
 			// A hold only counts on the thumb, as this file's own header says. Without the test, a press anywhere
 			// on the rail hands capture to the satellite after 450 ms and the coarse value stops moving for the
-			// rest of the gesture — so a slow drag towards the leftmost stop never reaches it.
+			// rest of the gesture, so a slow drag towards the leftmost stop never reaches it.
 			if (Math.abs(event.clientX - thumbCenterX(input)) > THUMB_WIDTH_PX / 2) {
 				return;
 			}
@@ -270,7 +270,7 @@ window.adaptiveLightingPresetSlider = (function () {
 		}
 
 		// Watched on the input itself, before the hold completes: a real drag or an early release cancels the
-		// timer so the rail keeps behaving exactly as it always has.
+		// timer so the rail keeps its ordinary behaviour.
 		function onEarlyMove(event) {
 			if (!waiting || event.pointerId !== pointerId) {
 				return;

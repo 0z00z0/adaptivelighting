@@ -186,7 +186,7 @@ public sealed class HaStatePublisherTests
 		Assert.AreEqual("scene.stue_natt", rebuilt!.SceneApplied);
 	}
 
-	// The pair a page reads to redraw the countdown after a reload or a navigate-back — see Room.razor's
+	// The pair a page reads to redraw the countdown after a reload or a navigate-back. See Room.razor's
 	// TestingPeriod. Without this round trip, only the page that clicked Test ever draws it.
 	[TestMethod]
 	public void The_Running_Test_Survives_The_Serialize_Event_ToSnapshot_Round_Trip()

@@ -878,6 +878,55 @@ restart on the wrong option. A remembered "already asked" latch would make both 
   `unavailable` with a context carrying neither user nor parent, which is exactly `PhysicalDevice`. Without
   that guard a Zigbee hiccup pins the area in `SuppressedOff` and the reconnect pins it in `OverriddenOn`.
 
+### Whether an automation's change is manual is a room's answer
+
+`GlobalConfig.TreatAutomationsAsManual` is the house's answer and `AreaConfig.TreatAutomationsAsManual` a
+room's own. A room stating nothing follows the house, and the fallback is taken in `OverrideDetector.IsManual`
+at the moment a change is classified.
+
+- The answer moves `Automation` and nothing else. A wall switch, a device report and a person in the app are
+  manual in every room.
+- There is no twin in `AreaSettings`. A copy under `Defaults` would be a second house value beside `Global`'s,
+  and two house values for one question drift. The cost is that the room's answer is not one of the "N of 23"
+  its page counts, and its row names the house's *Fine tuning* setting instead.
+- A rebuild destroys it, so `AreaSetupService.PinnedEntityCount` counts it with the other per-room choices that
+  have no house default.
+- A change reaches the engine as an automation only while it carries a parent. The next section says when a
+  device report loses it.
+
+### Who made a change, in the log's words
+
+A light change somebody else made is reported with who made it, as close to Home Assistant's logbook as the
+engine can get. `ChangeOriginNames` does the naming and nothing else: whether the change is manual stays
+`OverrideDetector`'s answer.
+
+| Origin | Words | Read off |
+|---|---|---|
+| Automation | "By automation: <name>" | the `automation_triggered` event whose context id is the change's own, else its parent's |
+| A person using Home Assistant | "By <name>" | the `person` entity whose `user_id` attribute is the context's user |
+| A wall switch or the device itself | "At the device or wall switch" | a context with neither user nor parent |
+| The engine | "By adaptive lighting" | the engine's own last command, on the room page's *Last changed* only |
+
+- A name that cannot be found leaves the row worded as before, with no second line. An automation run from
+  before the engine started, or more than `ChangeOriginNames.RememberedRuns` (256) runs ago, has no name.
+- Home Assistant fires `automation_triggered` as a run starts, before its actions, and NetDaemon hands the app
+  events and state changes from one ordered stream. The name is therefore known when the change is classified.
+  One parent level is looked at, as the logbook does, so a script an automation called is named after the
+  automation.
+- A person is named from the person entities because any token can read states. Home Assistant's user list
+  (`config/auth/list`) needs an administrator, and the add-on's Supervisor token is not one. This rests on Home
+  Assistant's documentation and source; it was not measured on a house.
+- **A device report arriving more than 5 seconds after a service call carries no parent and reads as the
+  device.** Home Assistant reuses the caller's context only for a state the entity writes within 5 seconds of
+  the call. A light that reports later, which Z-Wave JS does, writes a fresh context, so an automation's level
+  arrives as "At the device or wall switch" and counts as manual even in a room that ignores automations. ZHA
+  writes its state straight after the command and keeps the parent.
+- An automation's change the room leaves alone is published as `AutomationIgnored`, once per context id,
+  bypassing the meaning guard as a declined movement does, because nothing the snapshot compares has moved. A
+  run's burst of attribute updates is one row.
+- `ChangedBy` and `ChangedAt` ride every snapshot as `changed_by` and `changed_at`. Neither is compared in
+  `HasSameMeaningAs`; they describe the report.
+
 ### A bulb leaving or rejoining its group is not a hand
 
 A light group reads on or off from the members still answering. When lit bulbs drop off the network and the
@@ -983,6 +1032,34 @@ light level, because the engine did not turn them on and switching them off is n
 
 `AdoptedAtStartup` carries no commanded levels, because there was no command. A row or snapshot must not
 invent brightness or kelvin figures for it.
+
+### A lead-in lights a dark room at the dim light
+
+`AreaConfig.LeadInSensors` names sensors outside a room: the front steps, the room next door. One of them
+turning on lights the room ahead of anyone coming in, as the engine's own command.
+
+- It is the dim light before switching off, entered from the other end. The room goes from `AutoVacant` to
+  `PreOff`, commanded through `ApplyTarget` at `PreOffBrightnessFactor` of its current target, and
+  `PreOffSeconds` counts down. Movement in the room takes the ordinary `PreOff` rescue to `AutoActive` and starts
+  the vacancy countdown; nobody coming in ends in the ordinary off. The page's *Dim light level* and *Dim light
+  lasts* therefore serve both, and there is no lead-in level or length of its own.
+- `AutoOnBlockNow` decides whether it may light, as it does for movement: the master switch, away, a guest scene,
+  sleep, *Don't switch on while*, darkness. The sleep ceiling applies through `Shape`. A refused lead-in is logged
+  at debug and publishes nothing.
+- Only the resting state with every light off takes it. A room lit, held by hand or switched off by hand ignores
+  it, and so does a room already dimming before switching off, because that room is lit.
+- A further lead-in during its own dim light re-arms the wait. `_leadIn` tells the two `PreOff`s apart, and
+  `Enter` clears it on leaving the state, so it cannot outlive the dim light it describes.
+- A lead-in sensor is not a motion sensor. It never counts as occupancy, never restarts the vacancy countdown,
+  and is not in the house's motion union for mode resets.
+- Reasons: `LeadIn` on lighting and on each restart, `LeadInUnanswered` for the off. The activity log files the
+  first under Movement and the second under Light change. The room page's headline and next line word a `PreOff`
+  published as `LeadIn` as a lead-in from that publish's own reason; a later publish in the same dim light under
+  another reason reads there as the ordinary warning. The badge (`StateGlyph`, `BoardView`) instead reads the
+  snapshot's own `IsLeadIn`, which `AreaController` carries for the whole dim light and clears on leaving
+  `PreOff`, so it does not drift with the reason.
+- The command is declared to the detector like every other, so the lead-in's own echo is never a hand at the
+  switch.
 
 ### A room's two scenes each replace one transition, and nothing else
 
@@ -1957,8 +2034,8 @@ document settles on what both surfaces already show.
 | echo window + transition | manual-override detection | a 30 s fade otherwise reads as a person at the switch |
 | 23 | per-room settings count | the re-setup warning counts against it |
 | 3 | names before "and N others" | naming three beats spending a clause to avoid printing one word |
-| 2 % | `BrightnessTolerancePct` | HA reports brightness as a 0–255 integer against the engine's per cent, so a round trip lands ~1 % off; 2 % is wider than that and narrower than an eye |
-| 50 K | `ColorTempToleranceKelvin` | under 2 % at the warm end, invisible anywhere in the range |
+| 2 % | `LightTolerance.BrightnessPct` | HA reports brightness as a 0–255 integer against the engine's per cent, so a round trip lands ~1 % off; 2 % is wider than that and narrower than an eye |
+| 50 K | `LightTolerance.ColorTempKelvin` | under 2 % at the warm end, invisible anywhere in the range |
 | 30 s | `DiscoverySettle` | how long Home Assistant's state cache needs before the registry reads whole |
 | 1 s | `BoundaryTimer.Lead` | the wake fires just past the boundary, so the instant the callback reads is on the new period's side of it; short enough that nobody can see it and long enough to cover a timer that fires a hair early |
 | ~3× | lux ladder ratio | illuminance spans four orders of magnitude; a fixed step is unusable at one end or the other |

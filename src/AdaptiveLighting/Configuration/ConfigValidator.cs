@@ -141,19 +141,17 @@ public static class ConfigValidator
 					+ "the mapping does nothing.");
 	}
 
-	/// <summary>The house names an outdoor lux sensor and no room asked to read it, or the reverse.</summary>
+	/// <summary>The house names an outdoor lux sensor and nothing reads it, or a room follows a sensor the house does not name.</summary>
 	/// <remarks>A warning only: the validator is pure and cannot run discovery, so it cannot know which rooms will find a sensor of their own.</remarks>
 	private static void ValidateOutdoorLuxOptIn(AdaptiveLightingConfig config, ValidationResult result)
 	{
 		bool houseHasOne = config.Global.OutdoorLuxSensor is { Length: > 0 };
 		List<AreaConfig> following = [.. config.Areas.Where(area => area.FollowOutdoorLux == true)];
 
-		if (houseHasOne && following.Count == 0)
+		if (houseHasOne && following.Count == 0 && !config.Areas.Any(ReadsHouseSensorForCurve))
 			result.AddWarning(
-				"Global.OutdoorLuxSensor is set but no room follows it. It used to be applied automatically to every room "
-				+ "that found no light sensor of its own; that fallback is gone, so those rooms now have no lux reading and "
-				+ "count as dark — they will light on movement where they previously waited for the outdoor reading to drop. "
-				+ "Set FollowOutdoorLux on the rooms that should keep gating on it.");
+				"Global.OutdoorLuxSensor is set, but no room follows it for darkness and no room reads it for the "
+				+ "daylight curve. Set FollowOutdoorLux on the rooms that should go dark by it.");
 
 		if (!houseHasOne)
 			foreach (AreaConfig area in following)
@@ -161,6 +159,12 @@ public static class ConfigValidator
 					$"[{area.DisplayName}] FollowOutdoorLux is on but Global.OutdoorLuxSensor names no sensor, so the room "
 					+ "has no lux reading and counts as dark. Name the house's outdoor sensor, or give the room a LuxSensor.");
 	}
+
+	// A room with no DaylightSensor of its own reads the house sensor once the room or one of its lights follows the curve.
+	private static bool ReadsHouseSensorForCurve(AreaConfig area) =>
+		area.DaylightSensor is not { Length: > 0 }
+		&& (area.Levels.Any(level => level.FollowDaylightCurve == true)
+			|| (area.LightLevels ?? []).Any(light => light?.Levels?.Any(level => level.FollowDaylightCurve == true) == true));
 
 	/// <summary>A room follows the daylight curve for one of its periods, but has nothing to read it from.</summary>
 	/// <remarks>
@@ -509,7 +513,7 @@ public static class ConfigValidator
 
 	/// <summary>Warns when nothing is marked Away, which makes every away behaviour unreachable.</summary>
 	// A warning, never an error: such a house runs perfectly well, it simply never goes away. Two paths produce
-	// one unaided — the select auto-detection and the first-run room setup — so nothing else would ever say it.
+	// one unaided (the select auto-detection and the first-run room setup), so nothing else would ever say it.
 	private static void ValidateAwayReachable(HouseModeConfig houseMode, ValidationResult result)
 	{
 		if (houseMode.Options.All(o => string.IsNullOrWhiteSpace(o.Value)) || houseMode.HasAwayOption)
@@ -708,7 +712,7 @@ public static class ConfigValidator
 
 	/// <summary>The rows one owner states, whether that owner is a room or a single light inside one.</summary>
 	// scope carries its own brackets and reads as the sentence's subject, so a light's warning names the light
-	// and a room's reads exactly as it always did.
+	// and a room's names the room.
 	private static void ValidateLevelRows(
 		List<TimePeriodConfig> periods,
 		string scope,
@@ -829,6 +833,9 @@ public static class ConfigValidator
 
 		foreach (string sensor in area.MotionSensors ?? [])
 			yield return sensor;
+
+		foreach (string leadIn in area.LeadInSensors ?? [])
+			yield return leadIn;
 
 		foreach (string blocker in area.IgnoreWhenOn ?? [])
 			yield return blocker;

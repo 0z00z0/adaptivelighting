@@ -18,25 +18,16 @@ public enum SaveStatus
 	/// <summary>Refused: the document has errors that make it unrunnable. Nothing was written.</summary>
 	Rejected,
 
-	/// <summary>
-	///     Refused: what the page holds was written by somebody else while the page sat open, so the save would have
-	///     reverted them. Nothing was written.
-	/// </summary>
-	/// <remarks>
-	///     Raised by the pages, not by this class. Trying the same save again cannot clear it, so a page reporting
-	///     one offers a reload instead of a retry.
-	/// </remarks>
+	/// <summary>Refused: the file changed while the page sat open, and saving would revert that. Nothing was written.</summary>
+	/// <remarks>Raised by the pages. A retry cannot clear it, so a page offers a reload.</remarks>
 	Conflicted,
 
 	/// <summary>Written, but the file system or the engine rebuild failed afterwards.</summary>
 	Failed
 }
 
-/// <summary>The outcome of a save.</summary>
-/// <remarks>
-///     On <see cref="SaveStatus.Saved"/> the validation may still carry area errors: those cost an area, not the
-///     save. <c>Message</c> is a sentence for the operator, never a restatement of the validation.
-/// </remarks>
+/// <summary>The outcome of a save. <c>Message</c> is one sentence for the operator.</summary>
+/// <remarks>A <see cref="SaveStatus.Saved"/> result may still carry area errors, which cost an area and not the save.</remarks>
 public sealed record SaveResult(SaveStatus Status, ValidationResult Validation, string Message)
 {
 	/// <summary>Whether the document reached disk.</summary>
@@ -61,16 +52,10 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>Handed to every area's illuminance gate, so a dead sensor is judged on evidence that survives a restart.</summary>
 	private readonly IEntityLastSeen? _lastSeen;
 
-	/// <summary>
-	///     Handed to the mode brain, so a period boundary that went by while the engine was stopped is not lost.
-	///     Built here, not injected: its path comes from <see cref="LightingConfigStore.FilePath"/>.
-	/// </summary>
+	// A period boundary that went by while the engine was stopped is not lost. Its path comes from the store.
 	private readonly ILastPeriodStore? _lastPeriod;
 
-	/// <summary>
-	///     Handed to the orchestrator, so a room that cannot be set up is reported once instead of at every start.
-	///     Built here for the same reason as <see cref="_lastPeriod"/>: its path comes from the configuration document.
-	/// </summary>
+	// A room that cannot be set up is reported once instead of at every start. Its path comes from the store.
 	private readonly IAreaSetupMemory? _setupMemory;
 
 	// Every transition of the orchestrator goes through this: two browser tabs saving must not interleave a
@@ -88,9 +73,7 @@ public sealed class LightingEngineHost : IDisposable
 	private LightingOrchestrator? _orchestrator;
 
 	/// <summary>Creates the host. Nothing runs until <see cref="Attach"/> and <see cref="Reload"/>.</summary>
-	/// <remarks>
-	///     Without <c>lastSeen</c> the gates fall back to Home Assistant's own timestamps, which reset on its restart.
-	/// </remarks>
+	/// <remarks>Without <c>lastSeen</c> the gates use Home Assistant's own timestamps, which reset on its restart.</remarks>
 	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen = null)
 	{
 		_lastSeen = lastSeen;
@@ -134,16 +117,10 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>The house-wide things the engine did to itself: one row per rebuild, never one per area.</summary>
 	public IObservable<EngineNotice> Notices => _notices;
 
-	/// <summary>
-	///     The app's built-in enable switch, or <c>null</c> before <see cref="Attach"/>. Used as the kill switch
-	///     whenever the document leaves <c>KillSwitchEntity</c> unset; never written to YAML.
-	/// </summary>
+	/// <summary>The app's enable switch, or <c>null</c> before <see cref="Attach"/>: the kill switch when the document names none.</summary>
 	public string? DefaultKillSwitchEntity => _defaultKillSwitchEntity;
 
-	/// <summary>
-	///     Whether the bootstrap has handed over Home Assistant yet. When <c>false</c> the UI can still edit and
-	///     save, but nothing can be started or validated against the registry.
-	/// </summary>
+	/// <summary>Whether Home Assistant is handed over yet. Until then the UI can edit and save, but nothing starts.</summary>
 	public bool IsAttached => _ha is not null;
 
 	public bool IsRunning => _orchestrator is not null;
@@ -151,18 +128,11 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>How many areas resolved and are being commanded. Zero while faulted.</summary>
 	public int RunningAreaCount => _orchestrator?.Areas.Count ?? 0;
 
-	/// <summary>
-	///     The bulbs more than one room commands, as the running engine found them. Empty while faulted, and empty
-	///     in the ordinary house.
-	/// </summary>
-	/// <remarks>Forwarded, never recomputed: the finding is made once, at engine start.</remarks>
+	/// <summary>The bulbs more than one room commands, found once at engine start. Empty while faulted.</summary>
 	public IReadOnlyList<SuspectLight> SharedLights => _orchestrator?.SharedLights ?? [];
 
 	/// <summary>The running engine's latch for periods that wait for movement, or <c>null</c> while it is not running.</summary>
-	/// <remarks>
-	///     Read per call and never cached: a save rebuilds the orchestrator, and the new engine's latch is a different
-	///     object. A fresh latch would answer "not begun" for every held period.
-	/// </remarks>
+	// Never cache it: a save rebuilds the orchestrator, and a stale latch answers "not begun" for every held period.
 	public MotionPeriodLatch? MotionPeriods => _orchestrator?.MotionPeriods;
 
 	/// <summary>Why a level test cannot run in <paramref name="areaId"/> right now, or <c>null</c> when one can.</summary>
@@ -173,25 +143,16 @@ public sealed class LightingEngineHost : IDisposable
 			return RunningArea(areaId) is { } area ? area.LevelTestRefusal() : NotRunningRefusal();
 	}
 
-	/// <summary>
-	///     Puts the period <paramref name="periodKey"/> names on one room's real lights for
-	///     <see cref="AreaController.LevelTestSeconds"/> seconds, then hands the room back to the engine.
-	/// </summary>
+	/// <summary>Puts a period's levels on one room's lights for <see cref="AreaController.LevelTestSeconds"/> seconds, then hands the room back.</summary>
 	/// <returns><c>null</c> once the test is running, or the sentence saying why it is not.</returns>
-	/// <remarks>
-	///     The engine owns the return, not the caller: it is scheduled on the same scheduler every other deadline
-	///     runs on, so closing the page or the browser cannot leave a room stranded on test levels.
-	/// </remarks>
+	/// <remarks>The engine schedules the return, so closing the page cannot strand a room on test levels.</remarks>
 	public string? TestPeriod(string? areaId, string periodKey)
 	{
 		lock (_gate)
 			return RunningArea(areaId) is { } area ? area.TestPeriod(periodKey) : NotRunningRefusal();
 	}
 
-	/// <summary>
-	///     Puts the period <paramref name="periodKey"/> names on one light of one room for
-	///     <see cref="AreaController.LevelTestSeconds"/> seconds, then gives that light back.
-	/// </summary>
+	/// <summary>Puts a period's levels on one light for <see cref="AreaController.LevelTestSeconds"/> seconds, then gives it back.</summary>
 	/// <returns><c>null</c> once the test is running, or the sentence saying why it is not.</returns>
 	public string? TestLight(string? areaId, string lightEntityId, string periodKey)
 	{
@@ -233,14 +194,8 @@ public sealed class LightingEngineHost : IDisposable
 
 	public DateTimeOffset? LastStartedUtc { get; private set; }
 
-	/// <summary>
-	///     Hands this host the Home Assistant connection it rebuilds against. Called once, by the per-host
-	///     <c>[NetDaemonApp]</c> bootstrap, which is the only thing the app model gives a live scope to.
-	/// </summary>
-	/// <remarks>
-	///     <c>defaultKillSwitchEntity</c> comes from <see cref="NetDaemonAppSwitch.EntityIdFor(NetDaemon.AppModel.ICurrentApp)"/> and is held in
-	///     memory only, never written to YAML.
-	/// </remarks>
+	/// <summary>Hands this host the Home Assistant connection it rebuilds against, once, from the house's <c>[NetDaemonApp]</c>.</summary>
+	/// <remarks><c>defaultKillSwitchEntity</c> comes from <see cref="NetDaemonAppSwitch"/> and is never written to YAML.</remarks>
 	public void Attach(IHaContext ha, IHaRegistry registry, IScheduler scheduler, string? defaultKillSwitchEntity = null)
 	{
 		ArgumentNullException.ThrowIfNull(ha);
@@ -256,10 +211,7 @@ public sealed class LightingEngineHost : IDisposable
 		}
 	}
 
-	/// <summary>
-	///     Stops the engine and gives back the Home Assistant connection. Called when the bootstrap app is disposed,
-	///     because the context it handed over dies with it.
-	/// </summary>
+	/// <summary>Stops the engine and gives back the Home Assistant connection, which dies with the bootstrap app.</summary>
 	public void Detach()
 	{
 		lock (_gate)
@@ -525,7 +477,26 @@ public sealed class LightingEngineHost : IDisposable
 
 			// Re-read, never the in-memory object: a save is reported successful only once the bytes on disk parse
 			// back into a document the engine accepts, which is what matters after a restart.
-			return ApplyCore(_store.Load(), EngineNoticeKind.SettingsSaved);
+			AdaptiveLightingConfig written;
+
+			try
+			{
+				written = _store.Load();
+			}
+			catch (LightingConfigException exception)
+			{
+				StopCore();
+				Fault = $"The settings file was written but does not read back, so nothing is running. {exception.Message}";
+				_logger.LogError(exception, "The lighting configuration at {Path} does not read back after the write.", _store.FilePath);
+
+				ValidationResult unreadable = new();
+				unreadable.AddError(exception.Message);
+				LastValidation = unreadable;
+
+				return new SaveResult(SaveStatus.Failed, unreadable, "The file was written but does not read back, so nothing is running.");
+			}
+
+			return ApplyCore(written, EngineNoticeKind.SettingsSaved);
 		}
 	}
 
@@ -615,7 +586,7 @@ public sealed class LightingEngineHost : IDisposable
 				_registry,
 				_scheduler,
 				config,
-				new HaLightActuator(_ha, config.Global, _loggerFactory.CreateLogger<HaLightActuator>()),
+				new HaLightActuator(_ha, _loggerFactory.CreateLogger<HaLightActuator>()),
 				new HaStatePublisher(_ha, _loggerFactory.CreateLogger<HaStatePublisher>()),
 				new HaNotifier(_ha, _loggerFactory.CreateLogger<HaNotifier>()),
 				_loggerFactory,

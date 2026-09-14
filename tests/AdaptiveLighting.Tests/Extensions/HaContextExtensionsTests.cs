@@ -103,7 +103,7 @@ public sealed class HaContextExtensionsTests
 	public void NotifyPersistent_Uses_Create_With_An_Optional_Id()
 	{
 		var ha = new FakeHaContext();
-		ha.NotifyPersistent("Title", "Body", "laget_lighting_x");
+		ha.NotifyPersistent("Title", "Body", "adaptive_lighting_x");
 
 		var call = ha.Calls.Single();
 		Assert.AreEqual("persistent_notification", call.Domain);
@@ -112,7 +112,7 @@ public sealed class HaContextExtensionsTests
 		var data = (Dictionary<string, object>)call.Data!;
 		Assert.AreEqual("Title", data["title"]);
 		Assert.AreEqual("Body", data["message"]);
-		Assert.AreEqual("laget_lighting_x", data["notification_id"]);
+		Assert.AreEqual("adaptive_lighting_x", data["notification_id"]);
 	}
 
 	[TestMethod]

@@ -9,11 +9,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>Brightness is stored as the 0-255 byte Home Assistant accepts, and a document written before that still
-/// puts every lamp exactly where it always put it.</summary>
+/// puts every lamp where it always put it.</summary>
 /// <remarks>
 ///     The invariant these tests exist for is the byte a lamp lands on, not the number in the payload. Percent and
-///     raw are not a lossless pair — 74 of the 101 whole percents do not survive a trip through a byte and back at
-///     one decimal — so a design that converted an old document on load would move most houses. The old percentage
+///     raw are not a lossless pair: 74 of the 101 whole percents do not survive a trip through a byte and back at
+///     one decimal, so a design that converted an old document on load would move most houses. The old percentage
 ///     key is bound unchanged instead, and the byte grid is reached at the next save.
 /// </remarks>
 [TestClass]
@@ -76,7 +76,7 @@ public sealed class RawBrightnessStorageTests
 		FakeHaContext ha = new();
 		ha.SetState(Light, "off");
 
-		new HaLightActuator(ha, new GlobalConfig(), NullLogger.Instance)
+		new HaLightActuator(ha, NullLogger.Instance)
 			.Apply(Light, new LightCommand(true, target.BrightnessPct));
 
 		return (double)((Dictionary<string, object>)ha.Calls.Single().Data!)["brightness_pct"];
@@ -142,7 +142,7 @@ public sealed class RawBrightnessStorageTests
 
 	// ---- what the new storage buys -------------------------------------------------------------------------
 
-	/// <summary>The symptom this change exists to remove: a fine-adjusted value used to come back as its neighbour.</summary>
+	/// <summary>A fine-adjusted value must not come back as its neighbour.</summary>
 	[TestMethod]
 	public void A_Fine_Adjusted_Level_Survives_A_Save()
 	{

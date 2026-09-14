@@ -53,6 +53,7 @@ public sealed class HaStatePublisher : IStatePublisher
 				auto_on_blocking_entity = snapshot.AutoOnBlockingEntity,
 				is_held_lit = snapshot.IsHeldLit,
 				held_lit_by = snapshot.HeldLitBy,
+				is_lead_in = snapshot.IsLeadIn,
 				scene_applied = snapshot.SceneApplied,
 				testing_period_id = snapshot.TestingPeriodId,
 				test_ends_at = snapshot.TestEndsAt,
@@ -66,6 +67,8 @@ public sealed class HaStatePublisher : IStatePublisher
 				lights_moved = snapshot.LightsMoved,
 				lights_not_responding = snapshot.LightsNotResponding,
 				light_count = snapshot.LightCount,
+				changed_by = snapshot.ChangedBy,
+				changed_at = snapshot.ChangedAt,
 				levels_from_room = snapshot.LevelsFromRoom?.ToString(),
 				// Flat fields, so an automation trigger can read one without walking an object.
 				is_anyone_home = snapshot.IsAnyoneHome,

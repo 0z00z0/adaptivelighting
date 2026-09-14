@@ -6,6 +6,7 @@
 @inject ActivityLog Log
 @inject NavigationManager Nav
 @inject ILogger<Room> Logger
+@inject IJSRuntime Js
 
 @* There is no save bar. An edit mutates this page's own copy of the room and starts a short timer; when it
    expires RoomWrite re-reads the document, puts this one room into it, and sends that through
@@ -13,6 +14,9 @@
    settings sections cover the same settings twice, which is intended. *@
 
 <PageTitle>@PageName &mdash; Adaptive lighting</PageTitle>
+
+@* Only a refused save can be lost: anything else is written on the way out. *@
+<NavigationLock OnBeforeInternalNavigation="ConfirmLeave" ConfirmExternalNavigation="@HasRefusedEdit" />
 
 @if (_loadError is { Length: > 0 } loadError)
 {
@@ -51,7 +55,7 @@ else
 
 				@if (_snapshot is { } live)
 				{
-					<StateChip State="@live.State" Kelvin="@live.ColorTempKelvin" Title="@StateTitle(live)" />
+					<StateChip State="@live.State" Kelvin="@live.ColorTempKelvin" IsLeadIn="@(live.IsLeadIn ?? false)" />
 					<span class="room-since">@RoomFacts.Since(live, _now)</span>
 				}
 				else
@@ -217,7 +221,8 @@ else
 			{
 				<span class="sgroup-count" title="Periods this room sets for itself">@chosen</span>
 			}
-			<span class="room-save @SaveClass" role="status">@SaveLine</span>
+			@* The first card head already announces the save. *@
+			<span class="room-save @SaveClass" aria-hidden="true">@SaveLine</span>
 		</div>
 
 		<p class="room-card-foot lvl-lede">@LevelsLede</p>
@@ -378,6 +383,18 @@ else
 								   but they are movement rules and belong in this section. *@
 								@if (string.Equals(current.Title, RoomSettings.MovementSection, StringComparison.Ordinal))
 								{
+									<SettingRow Label="Light dimly when these see movement"
+												Help="Sensors outside this room: the front steps, the room next door. When one of them sees movement while this room is dark, empty and running by itself, the room lights at Dim light level of its usual level for Dim light lasts. Movement in the room then brings the lights up to their usual level; if nobody comes in, they go off again. Everything that stops movement lighting the room stops this too: daylight, away, sleep, Don't switch on while. A room already lit, or set or switched off by hand, takes no notice. Offered from the whole house.">
+										<EntityListPicker Value="@(room.LeadInSensors ?? [])"
+														  ValueChanged="@(value => SetList(value, list => room.LeadInSensors = list))"
+														  Options="@_leadInSensors"
+														  NameResolver="@Name"
+														  KnownResolver="@Catalog.Knows"
+														  EmptyLabel="Nothing outside lights this room ahead of time."
+														  AddLabel="Add a sensor…"
+														  Placeholder="binary_sensor.front_steps_motion" />
+									</SettingRow>
+
 									<SettingRow Label="Don't switch on while"
 												Help="The room won't light itself while any of these is on: a projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Tick the box for the opposite, so it holds while they are off — for a “lighting allowed” switch you turn off. Offered from the whole house, since a blocker often belongs to no room.">
 										<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
@@ -401,7 +418,7 @@ else
 									</SettingRow>
 
 									<SettingRow Label="Don't switch off while"
-												Help="The room won't turn its own lights off while any of these is on, so the countdown, the warning dim and the leaving sweep leave it alone: a meeting light, a guest switch. It never turns anything on, and switching off by hand still works. Tick the box for the opposite, so it holds while they are off.">
+												Help="The room won't turn its own lights off while any of these is on, so the countdown, the dim light before switching off and the leaving sweep leave it alone: a meeting light, a guest switch. It never turns anything on, and switching off by hand still works. Tick the box for the opposite, so it holds while they are off.">
 										<EntityListPicker Value="@(room.KeepLitWhenOn ?? [])"
 														  ValueChanged="@(value => SetList(value, list => room.KeepLitWhenOn = list))"
 														  Options="@_blockers"
@@ -422,6 +439,24 @@ else
 										}
 									</SettingRow>
 
+									@* Inherits from the house's Fine tuning, not from the house default settings, so it is not one of the N of M. *@
+									<SettingRow Label="Other automations count as manual changes"
+												Help="Yes: when another Home Assistant automation changes these lights, the room stands back exactly as it does for somebody at the switch, for as long as Manual changes hold. No: the room leaves the change alone and carries on by itself, so its next re-check or movement sets its own level again. Unless set here, the room follows the house setting under House → Fine tuning."
+												IsOwn="@(room.TreatAutomationsAsManual is not null)"
+												HouseText="@(_document.Global.TreatAutomationsAsManual ? "yes" : "no")"
+												Reverted="@(() => Set(() => room.TreatAutomationsAsManual = null))">
+										<div class="seg" role="group" aria-label="Other automations count as manual changes">
+											<button type="button"
+													class="@(AutomationsCountAsManual ? "cur" : null)"
+													aria-pressed="@(AutomationsCountAsManual ? "true" : "false")"
+													@onclick="() => Set(() => room.TreatAutomationsAsManual = true)">Yes</button>
+											<button type="button"
+													class="@(AutomationsCountAsManual ? null : "cur")"
+													aria-pressed="@(AutomationsCountAsManual ? "false" : "true")"
+													@onclick="() => Set(() => room.TreatAutomationsAsManual = false)">No</button>
+										</div>
+									</SettingRow>
+
 									<SettingRow Label="Run a scene instead, on movement"
 												Help="When movement would light this room, it runs this scene instead of setting its own brightness and warmth, and leaves it alone afterwards. Everything that can refuse to light the room still refuses — the master switch, this room's switch, an away house, sleep, too much daylight, a blocker above. A scene is what happens instead of switching on, never a reason to.">
 										<EntityPicker Value="@room.SceneOnMotion"
@@ -435,7 +470,7 @@ else
 									</SettingRow>
 
 									<SettingRow Label="Run a scene instead, when empty"
-												Help="When the room has been empty long enough to go off, it runs this scene and stays there — atmospheric lighting rather than darkness. The warning dim before switching off does not run, since nothing is about to go off. Leaving the house still switches the room off, and switching it off by hand still works.">
+												Help="When the room has been empty long enough to go off, it runs this scene and stays there — atmospheric lighting rather than darkness. The dim light before switching off does not run, since nothing is about to go off. Leaving the house still switches the room off, and switching it off by hand still works.">
 										<EntityPicker Value="@room.SceneWhenEmpty"
 													  ValueChanged="@(value => Set(() => room.SceneWhenEmpty = value))"
 													  Options="@_scenes"
@@ -499,7 +534,7 @@ else
 						string entityId = light;
 						<span class="gchip gchip-light">
 							<span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code>
-							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
+							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" aria-label="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
 						</span>
 					}
 					@foreach (string sensor in resolved.MotionSensors)
@@ -507,7 +542,7 @@ else
 						string entityId = sensor;
 						<span class="gchip gchip-motion">
 							<span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code>
-							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
+							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" aria-label="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
 						</span>
 					}
 					@foreach (string sensor in resolved.LuxSensors)
@@ -515,7 +550,7 @@ else
 						string entityId = sensor;
 						<span class="gchip gchip-lux">
 							<span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code>
-							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
+							<button type="button" class="chip-remove" title="@($"Leave {Name(entityId)} out of this room")" aria-label="@($"Leave {Name(entityId)} out of this room")" @onclick="() => Exclude(entityId)">&times;</button>
 						</span>
 					}
 				</div>
@@ -554,7 +589,7 @@ else
 						string entityId = entity;
 						<span class="gchip gchip-out">
 							<span class="chip-name">@Name(entityId)</span><code class="chip-id">@entityId</code>
-							<button type="button" class="chip-remove" title="@($"Let discovery find {Name(entityId)} again")" @onclick="() => Include(entityId)">&times;</button>
+							<button type="button" class="chip-remove" title="@($"Let discovery find {Name(entityId)} again")" aria-label="@($"Let discovery find {Name(entityId)} again")" @onclick="() => Include(entityId)">&times;</button>
 						</span>
 					}
 				</div>
@@ -791,7 +826,7 @@ else
 	private bool _switchOnDismissed;
 
 	// The level test running on the real lights, from this visit's own click. The engine owns the return, so
-	// these two only draw it, and only until the snapshot in _snapshot carries the same news — see TestingPeriod.
+	// these two only draw it, and only until the snapshot in _snapshot carries the same news (see TestingPeriod).
 	private string? _testingPeriodId;
 	private string? _testingLightId;
 	private DateTimeOffset? _testEndsAt;
@@ -816,6 +851,7 @@ else
 	private IReadOnlyList<EntityOption> _motionSensors = [];
 	private IReadOnlyList<EntityOption> _luxSensors = [];
 	private IReadOnlyList<EntityOption> _blockers = [];
+	private IReadOnlyList<EntityOption> _leadInSensors = [];
 	private IReadOnlyList<EntityOption> _sunEntities = [];
 	private IReadOnlyList<EntityOption> _scenes = [];
 
@@ -911,6 +947,7 @@ else
 		_areas = Catalog.Areas(_document.Global);
 		_sunEntities = Catalog.EntitiesInDomains("sun");
 		_blockers = Catalog.EntitiesInDomains("binary_sensor", "input_boolean", "switch", "media_player");
+		_leadInSensors = Catalog.EntitiesInDomains("binary_sensor");
 		_scenes = Catalog.EntitiesInDomains("scene");
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _document.Global.EffectiveMotionDeviceClasses]);
 		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_document.Global.IlluminanceDeviceClass]);
@@ -1058,7 +1095,7 @@ else
 
 		_daylightLux = Catalog.LuxOf(DaylightSensorId);
 
-		// Asked of the engine on the ticker rather than composed here, so a room that falls under somebody's hand
+		// Asked of the engine on the ticker, not composed here, so a room that falls under somebody's hand
 		// while the page sits open has its Test buttons closed within the second.
 		_testRefusal = Engine.LevelTestRefusal(room.AreaId);
 		_lightOnRefusal = Engine.LightNowRefusal(room.AreaId);
@@ -1067,7 +1104,7 @@ else
 	/// <summary>Why the Light on button is closed, or <c>null</c> when it can be pressed.</summary>
 	private string? LightOnRefusal => _lightOnRefusal;
 
-	/// <summary>What the button promises, with this room's own timeout in it rather than a vague "for a while".</summary>
+	/// <summary>What the button promises, with this room's own timeout in it instead of a vague "for a while".</summary>
 	private string LightOnTitle =>
 		LightOnRefusal is { Length: > 0 } refusal
 			? refusal
@@ -1087,7 +1124,7 @@ else
 
 	/// <summary>The period whose test is still holding the lights, or <c>null</c> when none is.</summary>
 	/// <remarks>
-	///     Local state first, for the click that just armed it — the report has not had time to reach the cache
+	///     Local state first, for the click that just armed it: the report has not had time to reach the cache
 	///     yet. A fresh component carries none, so it falls back to the last snapshot, which the engine publishes
 	///     the moment a test starts; that is what redraws the countdown after a reload or a navigate-back instead
 	///     of showing plain Test buttons while the engine's own return is still pending.
@@ -1239,6 +1276,9 @@ else
 	/// <summary>The room's settings with its inheritance resolved.</summary>
 	private AreaSettings Effective => _room is { } room ? room.Effective(_document.Defaults) : _document.Defaults;
 
+	/// <summary>The room's own answer on automations, or the house's while it states none.</summary>
+	private bool AutomationsCountAsManual => _room?.TreatAutomationsAsManual ?? _document.Global.TreatAutomationsAsManual;
+
 	// Not a light switch, and the wording says so: switching it off changes nothing about the lamps right now.
 	private string SwitchTitle => IsEnabled
 		? "On — this app runs the lighting in this room. Switching it off leaves the lamps exactly as they are."
@@ -1275,8 +1315,6 @@ else
 
 	private string CountdownTitle =>
 		_snapshot is { NextChangeAt: { } due } ? $"Next change {RoomFacts.In(due, _now)}." : string.Empty;
-
-	private static string StateTitle(AreaSnapshot snapshot) => $"State: {snapshot.State}";
 
 	/// <summary>The validator's complaint about this room, when it has one.</summary>
 	/// <remarks>Matched on <see cref="AreaConfig.DisplayName"/>, never <see cref="RoomName"/>: the validator is
@@ -1608,6 +1646,17 @@ else
 		}
 	}
 
+	private bool HasRefusedEdit => _dirty && _failure is not null;
+
+	private async Task ConfirmLeave(LocationChangingContext context)
+	{
+		if (!HasRefusedEdit)
+			return;
+
+		if (!await Js.InvokeAsync<bool>("confirm", "Leave this room? The change that could not be saved will be lost."))
+			context.PreventNavigation();
+	}
+
 	/// <summary>Throws away everything unsaved by re-reading the file.</summary>
 	private void Discard()
 	{
@@ -1616,7 +1665,7 @@ else
 	}
 
 	/// <summary>Everything this page has to say about saving, in the one line the card heads already carry.</summary>
-	/// <remarks>The confirmation clears on the page's one-second ticker rather than a timer of its own, since
+	/// <remarks>The confirmation clears on the page's one-second ticker, with no timer of its own, since
 	/// every read of this property happens in a render that ticker drives.</remarks>
 	private SaveNotice Save => SaveNotice.Of(_failure is not null, _dirty, _savedAt, _now, ConfirmationLingers);
 

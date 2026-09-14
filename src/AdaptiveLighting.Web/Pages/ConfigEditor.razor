@@ -6,6 +6,7 @@
 @inject HomeLocation HomeGeo
 @inject AreaSnapshotCache Cache
 @inject ILogger<ConfigEditor> Logger
+@inject IJSRuntime Js
 
 @* The rooms are a list and not an editor: each row opens /room/{areaId}, the only place a room's settings are
    edited. The write path is the save bar and never a debounce, because every edit here changes something every
@@ -17,6 +18,8 @@
    can. *@
 
 <PageTitle>The house &mdash; Adaptive lighting</PageTitle>
+
+<NavigationLock OnBeforeInternalNavigation="ConfirmLeave" ConfirmExternalNavigation="@HasUnsavedEdits" />
 
 <h1>The house</h1>
 
@@ -189,9 +192,10 @@ else
 				{
 					<div class="panel house-add">
 						<div class="field">
-							<div class="field-head"><label class="field-label">Which room?</label></div>
+							<div class="field-head"><label class="field-label" for="add-room-area">Which room?</label></div>
 							<div class="field-control">
-								<AreaPicker Value="@_addAreaId"
+								<AreaPicker Id="add-room-area"
+											Value="@_addAreaId"
 											ValueChanged="@AddRoom"
 											Areas="@_addableAreas"
 											NoneLabel="(pick a room)"
@@ -685,16 +689,17 @@ else
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Only manage lights with (label)
+							<span class="field-label"><label for="include-label">Only manage lights with (label)</label>
 								<InfoPopover Label="Only manage lights with (label)">
 									Set it and every light without this label stops being managed, in every room &mdash; useful
 									when a room resolves to status LEDs and colour channels as well as lamps. Lights you named
 									by hand in a room are managed either way, and <em>Never touch</em> below still wins.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control">
-							<LabelPicker Value="@_config.Global.IncludeLabel"
+							<LabelPicker Id="include-label"
+										 Value="@_config.Global.IncludeLabel"
 										 ValueChanged="@SetIncludeLabel"
 										 Options="@_labelOptions"
 										 NoneLabel="(none — manage every light that's found)"
@@ -706,16 +711,17 @@ else
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Never touch (label)
+							<span class="field-label"><label for="exclude-label">Never touch (label)</label>
 								<InfoPopover Label="Never touch (label)">
 									Anything carrying this label stops being found: never discovered, never commanded, never
 									counted. Put it on the fridge lamp and the router's status LED. A light you named by hand
 									in a room is the one thing it does not reach.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control">
-							<LabelPicker Value="@_config.Global.ExcludeLabel"
+							<LabelPicker Id="exclude-label"
+										 Value="@_config.Global.ExcludeLabel"
 										 ValueChanged="@SetExcludeLabel"
 										 Options="@_labelOptions"
 										 NoneLabel="(none — nothing is excluded)"
@@ -727,16 +733,17 @@ else
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Counts as motion (label)
+							<span class="field-label"><label for="motion-label">Counts as motion (label)</label>
 								<InfoPopover Label="Counts as motion (label)">
 									A sensor carrying this label wakes the lights in its room whatever Home Assistant thinks it
 									measures. For the odd door or vibration sensor that is really a presence sensor. It adds to
 									the device classes below rather than replacing them.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control">
-							<LabelPicker Value="@_config.Global.MotionLabel"
+							<LabelPicker Id="motion-label"
+										 Value="@_config.Global.MotionLabel"
 										 ValueChanged="@SetMotionLabel"
 										 Options="@_labelOptions"
 										 NoneLabel="(none — device classes decide)"
@@ -749,17 +756,18 @@ else
 					   house discovers darkness with. *@
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Outdoor light-level sensor
+							<span class="field-label"><label for="outdoor-lux-sensor">Outdoor light-level sensor</label>
 								<InfoPopover Label="Outdoor light-level sensor">
 									Where the house reads the daylight, so darkness follows the clouds rather than the clock.
 									A room reads it only when the settings file gives that room <code>FollowOutdoorLux: true</code>
 									&mdash; there is no control for that here. A room with a light-level sensor of its own always
 									uses that instead.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control">
-							<EntityPicker Value="@_config.Global.OutdoorLuxSensor"
+							<EntityPicker Id="outdoor-lux-sensor"
+										  Value="@_config.Global.OutdoorLuxSensor"
 										  ValueChanged="@(value => SetOutdoorLux(value))"
 										  Options="@_luxSensors"
 										  NoneLabel="(none — no room can follow the house's daylight)"
@@ -773,15 +781,15 @@ else
 
 						<div class="field">
 							<div class="field-head">
-								<label class="field-label">What counts as a motion sensor
+								<span class="field-label"><span id="motion-device-classes">What counts as a motion sensor</span>
 									<InfoPopover Label="What counts as a motion sensor">
 										Which kinds of binary sensor wake the lights. The built-in set &mdash; motion, occupancy,
 										presence &mdash; suits nearly every house. Ticking anything <strong>replaces</strong> that
 										set rather than adding to it, so a room can go silent by losing a class you forgot to tick.
 									</InfoPopover>
-								</label>
+								</span>
 							</div>
-							<div class="field-control checks">
+							<div class="field-control checks" role="group" aria-labelledby="motion-device-classes">
 								@foreach (string deviceClass in _motionDeviceClassChoices)
 								{
 									string current = deviceClass;
@@ -804,16 +812,16 @@ else
 
 						<div class="field">
 							<div class="field-head">
-								<label class="field-label">What counts as a light-level sensor
+								<span class="field-label"><label for="illuminance-device-class">What counts as a light-level sensor</label>
 									<InfoPopover Label="What counts as a light-level sensor">
 										Which kind of sensor a room takes its light reading from. <code>illuminance</code> is
 										nearly always right; change it and rooms whose sensor reports something else start
 										reading the daylight, and rooms that were reading it stop.
 									</InfoPopover>
-								</label>
+								</span>
 							</div>
 							<div class="field-control">
-								<select class="cell wide" @bind="_config.Global.IlluminanceDeviceClass">
+								<select id="illuminance-device-class" class="cell wide" @bind="_config.Global.IlluminanceDeviceClass" @bind:after="OnIlluminanceDeviceClassChanged">
 									@foreach (string deviceClass in _sensorDeviceClasses)
 									{
 										<option value="@deviceClass">@deviceClass</option>
@@ -842,17 +850,18 @@ else
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Who lives here
+							<span class="field-label"><label for="house-persons">Who lives here</label>
 								<InfoPopover Label="Who lives here">
 									Whose phones are watched, so the dashboard can show who is home. Empty means everyone
 									Home Assistant knows, including people added later &mdash; usually right. Name people
 									only to leave someone out: a car tracker or a guest phone whose comings and goings are
 									not worth showing.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control">
-							<EntityListPicker Value="@_config.Global.Persons"
+							<EntityListPicker Id="house-persons"
+											  Value="@_config.Global.Persons"
 											  ValueChanged="@SetPersons"
 											  Options="@_persons"
 											  NameResolver="@Name"
@@ -873,16 +882,17 @@ else
 					</p>
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Master switch
+							<span class="field-label"><label for="kill-switch-entity">Master switch</label>
 								<InfoPopover Label="Master switch">
 									Which Home Assistant switch pauses everything. Left unset it uses this app's own switch,
 									which is what the dashboard's On/Off control flips. Point it at your own toggle to gate the
 									app on something else &mdash; an alarm state, a holiday helper.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control">
-							<EntityPicker Value="@_config.Global.KillSwitchEntity"
+							<EntityPicker Id="kill-switch-entity"
+										  Value="@_config.Global.KillSwitchEntity"
 										  ValueChanged="@(value => Set(() => _config.Global.KillSwitchEntity = value))"
 										  Options="@_switches"
 										  NoneLabel="(default — this app's own enable switch)"
@@ -933,13 +943,13 @@ else
 						   Description="What this house is called in logs and notifications.">
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">House name
+							<span class="field-label"><label for="house-name">House name</label>
 								<InfoPopover Label="House name">
 									A label for logs and notifications, so two houses can be told apart.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
-						<div class="field-control"><input class="cell wide" @bind="_config.ConfigName" placeholder="Adaptive lighting" /></div>
+						<div class="field-control"><input id="house-name" class="cell wide" @bind="_config.ConfigName" @bind:after="Revalidate" placeholder="Adaptive lighting" /></div>
 					</div>
 				</GroupFold>
 
@@ -949,14 +959,14 @@ else
 					   value. The input starts empty and overwrites the stored value only when typed into. *@
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">NetDaemon user id
+							<span class="field-label"><label for="netdaemon-user-id">NetDaemon user id</label>
 								<InfoPopover Label="NetDaemon user id">
 									The Home Assistant user this app connects as &mdash; find it under Settings → People, on
 									the token's user. Naming it lets a light change be recognised as the app's own by who made
 									it. Left unset, that is judged by timing alone, so a person at a switch during the window
 									below can be mistaken for the app.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control">
 							@if (string.IsNullOrWhiteSpace(_config.Global.NetDaemonUserId))
@@ -972,52 +982,53 @@ else
 							}
 						</div>
 						<div class="field-control">
-							<input class="cell wide" type="password" autocomplete="off" placeholder="type a new value to replace it" @bind="_userIdInput" />
+							<input id="netdaemon-user-id" class="cell wide" type="password" autocomplete="off" placeholder="type a new value to replace it" @bind="_userIdInput" />
 						</div>
 					</div>
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Re-check the rooms every
+							<span class="field-label"><label for="circadian-tick-seconds">Re-check the rooms every</label>
 								<InfoPopover Label="Re-check the rooms every">
 									How often each room re-reads the time of day and the light outside, in seconds. 60 is
 									plenty; shorter makes dusk arrive sooner but costs a pass over every room each time.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control">
-							<input class="cell num" type="number" min="1" @bind="_config.Global.CircadianTickSeconds" /> <span class="unit">s</span>
+							<input id="circadian-tick-seconds" class="cell num" type="number" min="1" @bind="_config.Global.CircadianTickSeconds" @bind:after="Revalidate" /> <span class="unit">s</span>
 						</div>
 					</div>
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Recognise own changes for
+							<span class="field-label"><label for="self-echo-window-seconds">Recognise own changes for</label>
 								<InfoPopover Label="Recognise own changes for">
 									A light that changes within this many seconds of one of the app's own commands is read as
 									the echo of that command, not as somebody at a switch. Too short and the app mistakes
 									itself for a person and backs off; too long and a real manual change is ignored. 8 s suits
 									most houses.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control">
-							<input class="cell num" type="number" min="0" @bind="_config.Global.SelfEchoWindowSeconds" /> <span class="unit">s</span>
+							<input id="self-echo-window-seconds" class="cell num" type="number" min="0" @bind="_config.Global.SelfEchoWindowSeconds" @bind:after="Revalidate" /> <span class="unit">s</span>
 						</div>
 					</div>
 
 					<div class="field">
 						<div class="field-head">
-							<label class="field-label">Other automations count as manual changes
+							<span class="field-label"><label for="treat-automations-as-manual">Other automations count as manual changes</label>
 								<InfoPopover Label="Other automations count as manual changes">
 									Ticked, a light another automation changes is treated as a manual change: this app stands
 									back for as long as <em>Manual changes hold for</em> says. Unticked, it corrects the light on
-									the next re-check and keeps winning.
+									the next re-check and keeps winning. A room can answer this for itself on its own page,
+									under <em>Movement &amp; timing</em>; every other room follows this box.
 								</InfoPopover>
-							</label>
+							</span>
 						</div>
 						<div class="field-control checks">
-							<label><input type="checkbox" @bind="_config.Global.TreatAutomationsAsManual" /> a change from another automation counts as a manual change</label>
+							<label><input id="treat-automations-as-manual" type="checkbox" @bind="_config.Global.TreatAutomationsAsManual" @bind:after="Revalidate" /> a change from another automation counts as a manual change</label>
 						</div>
 					</div>
 
@@ -1310,6 +1321,17 @@ else
 		|| !string.IsNullOrWhiteSpace(_userIdInput)
 		|| _saveConfirmation is { Length: > 0 }
 		|| _result is { Written: false };
+
+	private bool HasUnsavedEdits => _dirty || !string.IsNullOrWhiteSpace(_userIdInput);
+
+	private async Task ConfirmLeave(LocationChangingContext context)
+	{
+		if (!HasUnsavedEdits)
+			return;
+
+		if (!await Js.InvokeAsync<bool>("confirm", "Leave this page? Changes that are not saved will be lost."))
+			context.PreventNavigation();
+	}
 
 	/// <summary>Records the document as matching the file, after a load and after a save that wrote.</summary>
 	private void MarkClean()
@@ -1781,7 +1803,7 @@ else
 			if (_result.Written)
 			{
 				DateTimeOffset? writtenAfter = Engine.Store.LastWrittenUtc;
-				string savedAt = writtenAfter is { } utc ? utc.ToLocalTime().ToString("HH:mm:ss") : "now";
+				string savedAt = writtenAfter is { } utc ? utc.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture) : "now";
 				bool advanced = writtenAfter is { } a && (writtenBefore is not { } b || a >= b);
 
 				// _result is cleared so the persistent note never restates the toast. A refused save keeps it.
@@ -2013,6 +2035,13 @@ else
 		// presence override picker, which is built from the motion sensors.
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _config.Global.EffectiveMotionDeviceClasses]);
 		_presenceEntities = [.. _motionSensors.Concat(Catalog.EntitiesInDomains("person"))];
+		_areas = Catalog.Areas(_config.Global);
+		Revalidate();
+	}
+
+	private void OnIlluminanceDeviceClassChanged()
+	{
+		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_config.Global.IlluminanceDeviceClass]);
 		_areas = Catalog.Areas(_config.Global);
 		Revalidate();
 	}

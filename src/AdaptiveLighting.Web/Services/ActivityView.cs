@@ -35,8 +35,8 @@ public sealed record ActivityRow(
 
 /// <summary>What a row is about, as the activity page's filter chips divide it.</summary>
 /// <remarks>
-///     Categories follow the words the row shows, not the report behind it. A report is in exactly one of them,
-///     so that switching a chip off removes precisely the reports it counts. Flags all the same, because a chip
+///     Categories follow the words the row shows, not the report behind it. A report is in one of them and no other,
+///     so that switching a chip off removes the same reports it counts. Flags all the same, because a chip
 ///     set is what the filter carries.
 /// </remarks>
 [Flags]
@@ -123,7 +123,7 @@ public static class ActivityView
 		new(ActivityCategory.Illumination, "Darkness",
 			"How dark the room measured, against the level it counts as dark."),
 		new(ActivityCategory.ManualChange, "Manual changes",
-			"Somebody set or switched the lights themselves, and what happened when that ran out."),
+			"Somebody or another automation set or switched the lights, and what happened when that ran out."),
 		new(ActivityCategory.Declined, "Nothing happened",
 			"The engine could have lit the room and did not — with the reason."),
 		new(ActivityCategory.Mode, "Mode changes", "The house moved to a different mode."),
@@ -149,6 +149,17 @@ public static class ActivityView
 
 		if (snapshot.KillSwitchActive)
 			return new ActivityLine("Paused by the master switch", "No lights change until it's turned back on.");
+
+		// Worded here, not in Condition: the dim light is PreOff's, whose condition says nothing. A lead-in report
+		// outside PreOff lit nothing, so Condition names whatever gate held the room dark.
+		if (snapshot is { Reason: TransitionReason.LeadIn, State: AreaState.PreOff })
+			return new ActivityLine(
+				Headline(snapshot),
+				"Nobody has come in yet. Movement in the room brings the lights up; without it they go off when the dim light runs out.");
+
+		// Who made it, as Home Assistant's logbook words it. Unnamed, the row reads as it did before names existed.
+		if (snapshot.Reason is TransitionReason.ManualOn or TransitionReason.ManualOff or TransitionReason.AutomationIgnored)
+			return new ActivityLine(Headline(snapshot), snapshot.ChangedBy is { Length: > 0 } by ? by : Condition(snapshot));
 
 		// A quiet re-check that found the darkness verdict had moved. That verdict is the news, so it leads.
 		if (snapshot is { Reason: TransitionReason.CircadianTick, State: AreaState.AutoVacant, IsDark: { } dark })
@@ -248,7 +259,7 @@ public static class ActivityView
 	/// <summary>What a report is about, as the chips divide it.</summary>
 	/// <remarks>
 	///     Ordered, and tracks <see cref="Describe"/> branch for branch: the chip follows the words the row
-	///     shows. One answer, never several — a report filed under two chips survives either being switched
+	///     shows. One answer, never several: a report filed under two chips survives either being switched
 	///     off, which is a button that does nothing. No catch-all above the last line: a reason added to the
 	///     enum has to be placed here by hand, and until it is, an exhaustive test fails.
 	/// </remarks>
@@ -275,7 +286,7 @@ public static class ActivityView
 
 		// Every remaining motion report is worded "Movement…", so the movement chip has to take all of them or
 		// switching it off leaves rows that plainly are movement.
-		if (snapshot.Reason is TransitionReason.Motion)
+		if (snapshot.Reason is TransitionReason.Motion or TransitionReason.LeadIn)
 			return ActivityCategory.Movement;
 
 		if (snapshot.Reason is TransitionReason.HouseModeChanged)
@@ -287,7 +298,8 @@ public static class ActivityView
 		if (snapshot.Reason is TransitionReason.ManualOn
 			or TransitionReason.ManualOff
 			or TransitionReason.OverrideExpired
-			or TransitionReason.SuppressionLifted)
+			or TransitionReason.SuppressionLifted
+			or TransitionReason.AutomationIgnored)
 			return ActivityCategory.ManualChange;
 
 		// Ahead of the light change and the darkness verdict: a room the engine could have lit and did not is
@@ -389,7 +401,10 @@ public static class ActivityView
 	// snapshot is built.
 	private static bool CommandedTheLights(AreaSnapshot snapshot) => snapshot.Reason switch
 	{
-		TransitionReason.VacancyTimeout or TransitionReason.PreOffElapsed => true,
+		TransitionReason.VacancyTimeout
+			or TransitionReason.PreOffElapsed
+			or TransitionReason.LeadIn
+			or TransitionReason.LeadInUnanswered => true,
 
 		// An override running out hands the room back by commanding it.
 		TransitionReason.OverrideExpired => true,
@@ -401,7 +416,8 @@ public static class ActivityView
 			or TransitionReason.ManualOff
 			or TransitionReason.SuppressionLifted
 			or TransitionReason.EnablementChanged
-			or TransitionReason.LightAvailability => false,
+			or TransitionReason.LightAvailability
+			or TransitionReason.AutomationIgnored => false,
 
 		// What is left commands where it left the room lit and aimed. That is what AutoActive means.
 		_ => snapshot.State is AreaState.AutoActive
@@ -669,6 +685,11 @@ public static class ActivityView
 		},
 		TransitionReason.VacancyTimeout => Lit("No movement — dimmed as a warning", snapshot),
 		TransitionReason.PreOffElapsed => "Dim warning unanswered — lights off",
+		TransitionReason.LeadIn => snapshot.State == AreaState.PreOff
+			? Lit("Movement nearby — lit dimly", snapshot)
+			: "Movement nearby",
+		TransitionReason.LeadInUnanswered => "Nobody came in — lights off",
+		TransitionReason.AutomationIgnored => "An automation changed the lights — not treated as a manual change",
 		TransitionReason.ManualOn => "Lights set manually",
 		TransitionReason.ManualOff => "Lights switched off manually",
 		TransitionReason.OverrideExpired => "The manual change ran its course",
