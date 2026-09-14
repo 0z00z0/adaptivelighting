@@ -121,7 +121,8 @@ public sealed class AreaControllerTests
 		Func<IScheduler, IScheduler>? wrapScheduler = null,
 		bool withMotionSensor = true,
 		string? sceneOnMotion = null,
-		IReadOnlyList<string>? lights = null)
+		IReadOnlyList<string>? lights = null,
+		IReadOnlyDictionary<string, IReadOnlySet<string>>? leavesOfEntry = null)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -161,7 +162,8 @@ public sealed class AreaControllerTests
 		var area = new ResolvedArea(
 			"Test", settings, lights ?? [Light], withMotionSensor ? [Motion] : [], [Lux], ignoreWhenOn ?? [])
 		{
-			SceneOnMotion = sceneOnMotion
+			SceneOnMotion = sceneOnMotion,
+			LeavesOfEntry = leavesOfEntry ?? new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
 		};
 		var actuator = new FakeLightActuator();
 		var publisher = new FakeStatePublisher();
@@ -699,6 +701,47 @@ public sealed class AreaControllerTests
 		t.Ha.Trigger(Light, "unknown", null, PhysicalDevice());
 
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
+	}
+
+	// A group reads on or off from the members still answering, so lit bulbs dropping out turn the group off and
+	// their return turns it on, with no person anywhere near a switch.
+	[TestMethod]
+	public void A_Bulb_Leaving_Or_Rejoining_Its_Group_Is_Not_A_Hand_But_A_Real_Change_Still_Is()
+	{
+		const string group = "light.hall_group";
+		const string lit = "light.hall_bulb_1";
+		const string dark = "light.hall_bulb_2";
+
+		Fixture t = Build(
+			lights: [group],
+			leavesOfEntry: new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+			{
+				[group] = new HashSet<string>(StringComparer.Ordinal) { lit, dark }
+			},
+			seed: ha =>
+			{
+				ha.SetState(group, "off");
+				ha.SetState(lit, "off");
+				ha.SetState(dark, "off");
+			});
+
+		t.Ha.Trigger(Motion, "on");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
+		Advance(t, TimeSpan.FromSeconds(30));
+
+		t.Ha.Trigger(lit, "unavailable", null, PhysicalDevice());
+		t.Ha.Trigger(group, "off", null, PhysicalDevice());
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "a bulb dropping out is not a person switching the room off");
+
+		Advance(t, TimeSpan.FromSeconds(30));
+		t.Ha.Trigger(lit, "on", new() { ["brightness"] = 178 }, PhysicalDevice());
+		t.Ha.Trigger(group, "on", new() { ["brightness"] = 178 }, PhysicalDevice());
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "a bulb rejoining is not a person switching the room on");
+
+		// The control: once the window has passed, the same change on the group is a hand at the switch again.
+		Advance(t, TimeSpan.FromSeconds(30));
+		t.Ha.Trigger(group, "off", null, PhysicalDevice());
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State, "a real off on the group is still read as a person");
 	}
 
 	/// <summary>The guard must not swallow the thing it sits in front of.</summary>

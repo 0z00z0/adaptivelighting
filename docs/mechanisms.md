@@ -878,6 +878,24 @@ restart on the wrong option. A remembered "already asked" latch would make both 
   `unavailable` with a context carrying neither user nor parent, which is exactly `PhysicalDevice`. Without
   that guard a Zigbee hiccup pins the area in `SuppressedOff` and the reconnect pins it in `OverriddenOn`.
 
+### A bulb leaving or rejoining its group is not a hand
+
+A light group reads on or off from the members still answering. When lit bulbs drop off the network and the
+rest are off, the group turns off; when they come back, it turns on. Both ends of that change are on or off, and
+the context carries neither user nor parent, so `IsHandAtTheSwitch` and the context both read it as a person.
+
+- The controller subscribes to every light beneath a group entry, not only to the entries. A member whose state
+  crosses between answering (on or off) and not answering (unavailable, unknown, absent) opens a window on every
+  entry it sits under, through `OverrideDetector.ExpectMemberAvailabilityChange`.
+- The window matches either polarity for `SelfEchoWindowSeconds`, the same echo window a command gets.
+- **Ordering is what makes this work.** Home Assistant writes the group while handling the member's change, and
+  NetDaemon hands one app's events to every subscription from a single ordered queue, so the member's change is
+  always noted before the group's is classified.
+- The cost: a hand at the switch inside that window after a bulb drops out, 8 seconds by default, is missed,
+  and the room keeps automating.
+- Scene windows and member windows are kept apart from command expectations and are never shortened. A command
+  sent inside one would otherwise narrow it to a single polarity.
+
 ### What ends a manual hold
 
 `AreaSettings.OverrideUntilVacant` picks between two clocks and nothing else changes: the manual level stands,

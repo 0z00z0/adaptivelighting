@@ -28,6 +28,7 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Our_Own_Echo_Is_Not_Read_As_A_Human
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Light_Dropping_Off_The_Network_Is_Not_A_Human_Switching_It_Off
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Real_Off_Is_Still_Read_As_A_Human
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Bulb_Leaving_Or_Rejoining_Its_Group_Is_Not_A_Hand_But_A_Real_Change_Still_Is
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.The_Kill_Switch_Muzzles_The_Engine_And_Releases_Cleanly
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Disabled_Area_Never_Commands_Anything
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_House_The_Trackers_Call_Empty_Is_Not_Away

@@ -12,6 +12,10 @@ against each other.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A bulb dropping off the network no longer puts its room on a manual hold.** When some bulbs in a light group stopped answering, or came back, the group's own on or off reading changed and the room took it for somebody at the switch. A change that arrives with a bulb leaving or rejoining is now left alone; the same change a few seconds later is still read as a person.
+
 ## [2026.9.12] - 2026-09-13
 
 ### Added

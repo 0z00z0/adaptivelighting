@@ -41,6 +41,10 @@ public sealed class AreaController : IDisposable
 	private readonly IObservable<HouseState> _houseChanged;
 	private readonly ILogger _logger;
 
+	// Every light beneath a group entry, and the entries it sits under. Read off the resolved area, never Home
+	// Assistant, so it is settled before Start.
+	private readonly Dictionary<string, List<string>> _entriesOfMember = new(StringComparer.OrdinalIgnoreCase);
+
 	private readonly object _gate = new();
 	private readonly CompositeDisposable _subscriptions = [];
 	private readonly SerialDisposable _vacancyTimer = new();
@@ -195,7 +199,19 @@ public sealed class AreaController : IDisposable
 			new LuxReader(ha, daylightSensors, staleAfter, () => _scheduler.Now, lastSeen).Read);
 		_detector = new OverrideDetector(global, scheduler);
 
-		_boundary = new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
+		foreach (string entry in area.Lights)
+			foreach (string leaf in LeavesOf(entry))
+			{
+				if (string.Equals(leaf, entry, StringComparison.OrdinalIgnoreCase))
+					continue;
+
+				if (!_entriesOfMember.TryGetValue(leaf, out List<string>? entries))
+					_entriesOfMember[leaf] = entries = [];
+
+				entries.Add(entry);
+			}
+
+		_boundary =new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
 	}
 
 	/// <summary>How long a level test holds the room before the engine takes it back.</summary>
@@ -393,6 +409,13 @@ public sealed class AreaController : IDisposable
 				.StateAllChanges()
 				.SubscribeSafe(OnLightChanged, _logger));
 
+		// A member that is also an entry is already heard through OnLightChanged.
+		foreach (string member in _entriesOfMember.Keys)
+			if (!_area.Lights.Contains(member, StringComparer.OrdinalIgnoreCase))
+				_subscriptions.Add(_ha.Entity(member)
+					.StateAllChanges()
+					.SubscribeSafe(OnMemberChanged, _logger));
+
 		_subscriptions.Add(_houseChanged.SubscribeSafe(OnHouseChanged, _logger));
 
 		// A moved sun time can put a boundary in the past as easily as the future, so this evaluates before it re-arms.
@@ -515,6 +538,8 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
+			NoteAvailability(change);
+
 			// A radio, not a hand. See IsHandAtTheSwitch.
 			if (!IsHandAtTheSwitch(change))
 				return;
@@ -565,6 +590,24 @@ public sealed class AreaController : IDisposable
 
 	// On or off, as opposed to unavailable, unknown or absent.
 	private static bool IsOnOrOff(EntityState? state) => state is not null && (state.IsOn() || state.IsOff());
+
+	private void OnMemberChanged(StateChange change)
+	{
+		lock (_gate)
+			NoteAvailability(change);
+	}
+
+	// Must run before the group's own change is classified. Home Assistant writes the group while handling the
+	// member's change and NetDaemon delivers one app's events in order, so the member always arrives first.
+	private void NoteAvailability(StateChange change)
+	{
+		if (IsOnOrOff(change.Old) == IsOnOrOff(change.New) || change.EntityId() is not { } entityId)
+			return;
+
+		if (_entriesOfMember.TryGetValue(entityId, out List<string>? entries))
+			foreach (string entry in entries)
+				_detector.ExpectMemberAvailabilityChange(entry);
+	}
 
 	private void OnHouseChanged(HouseState house)
 	{
