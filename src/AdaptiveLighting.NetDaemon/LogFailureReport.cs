@@ -21,10 +21,7 @@ internal sealed class LogFailureReport
 	private DateTimeOffset _lastAt;
 
 	/// <summary>Creates a reporter over a destination, standard error by default.</summary>
-	/// <param name="report">
-	///     Where a failure is announced. Never an <c>ILogger</c>: a failure sent back through the logging pipeline
-	///     arrives here again.
-	/// </param>
+	/// <param name="report">Where a failure is announced. Never an <c>ILogger</c>, or the failure loops back here.</param>
 	/// <param name="now">The clock, so a test does not have to wait out <see cref="RepeatAfter"/>.</param>
 	public LogFailureReport(Action<string>? report = null, Func<DateTimeOffset>? now = null)
 	{

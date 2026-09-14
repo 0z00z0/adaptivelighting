@@ -8,11 +8,7 @@ using Serilog.Sinks.SystemConsole.Themes;
 
 namespace AdaptiveLighting.NetDaemon;
 
-/// <summary>Stamps the log with a full ISO date instead of a bare time, and keeps a durable copy of it.</summary>
-/// <remarks>
-///     NetDaemon's default console template writes <c>HH:mm:ss</c>, and an add-on log is read days later and across
-///     midnight, where a bare time cannot be placed at all.
-/// </remarks>
+/// <summary>Stamps the log with a full ISO date, since an add-on log is read days later and across midnight, and keeps a durable copy.</summary>
 public static class IsoTimestampLogging
 {
 	/// <summary>Replaces the host's console logger with one whose timestamps carry the date.</summary>
