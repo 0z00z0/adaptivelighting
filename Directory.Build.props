@@ -7,6 +7,8 @@
     supported combination. They go to GitHub Packages under 0z00z0, and nowhere else.
     The tag is authoritative for a release: release.yml overrides Version from it with -p:Version.
     This value is what anything built outside that workflow reports, so keep it on the latest tag.
+    Each release sets this Version and the AdaptiveLighting.NetDaemon version in
+    samples/MinimalHost/MinimalHost.csproj to the tag's version, so the sample installs what the changelog describes.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -25,7 +27,11 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>netdaemon;home-assistant;homeassistant;lighting;circadian;adaptive-lighting;home-automation</PackageTags>
+    <NeutralLanguage>en-GB</NeutralLanguage>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Normalised source paths in CI, so the embedded symbols do not depend on the checkout folder. -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
 
     <!--
       Debug data travels inside the DLL, so a stack trace off a deployed house resolves to a line number

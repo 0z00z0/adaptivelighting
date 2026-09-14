@@ -7,21 +7,16 @@
 
   <ItemGroup>
     <!--
-      Only what the engine compiles against. NetDaemon.AppModel carries the app-model/options/logging
-      abstractions the engine binds (ILogger, and IAppConfig<T> in the host bootstrap); NetDaemon.HassModel
-      carries IHaContext and the Entity/registry types. The engine schedules on System.Reactive's IScheduler
-      (transitive) — not INetDaemonScheduler — and does its own logging via Microsoft.Extensions.Logging, so
-      the host-oriented NetDaemon.Extensions.{Logging,Scheduling,Mqtt} packages were removed in Phase C: none
-      was bound against by any file here, and both hosts reference the ones they need directly.
+      Only what the engine compiles against: NetDaemon.AppModel for the app-model and logging abstractions,
+      NetDaemon.HassModel for IHaContext and the entity and registry types. The engine schedules on
+      System.Reactive's IScheduler and logs through Microsoft.Extensions.Logging, so no NetDaemon.Extensions.*
+      package is needed here; hosts reference the ones they use.
     -->
     <PackageReference Include="NetDaemon.AppModel" Version="26.36.0" />
     <PackageReference Include="NetDaemon.HassModel" Version="26.36.0" />
     <!--
-      Explicit rather than transitive. YamlDotNet was already in the graph via NetDaemon.AppModel, and
-      AdaptiveLighting.Configuration.LightingConfigDocument compiles against it directly — a
-      compile-time dependency has no business being an accident of somebody else's package graph.
-      18.1.0 is the floor NetDaemon.AppModel 26.36.0 declares, so this pins what the process
-      already loads rather than introducing a second opinion. Below it, restore fails with NU1605.
+      Explicit: LightingConfigDocument compiles against YamlDotNet directly. 18.1.0 is the floor
+      NetDaemon.AppModel 26.36.0 declares; below it, restore fails with NU1605.
     -->
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
@@ -31,7 +26,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Tests reach a couple of internals (the room-role heuristic) without widening the public API. -->
     <InternalsVisibleTo Include="AdaptiveLighting.Tests" />
   </ItemGroup>
 

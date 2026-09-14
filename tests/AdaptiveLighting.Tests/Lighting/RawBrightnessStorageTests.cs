@@ -76,7 +76,7 @@ public sealed class RawBrightnessStorageTests
 		FakeHaContext ha = new();
 		ha.SetState(Light, "off");
 
-		new HaLightActuator(ha, new GlobalConfig(), NullLogger.Instance)
+		new HaLightActuator(ha, NullLogger.Instance)
 			.Apply(Light, new LightCommand(true, target.BrightnessPct));
 
 		return (double)((Dictionary<string, object>)ha.Calls.Single().Data!)["brightness_pct"];

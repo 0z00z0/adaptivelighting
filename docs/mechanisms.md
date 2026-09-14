@@ -2034,8 +2034,8 @@ document settles on what both surfaces already show.
 | echo window + transition | manual-override detection | a 30 s fade otherwise reads as a person at the switch |
 | 23 | per-room settings count | the re-setup warning counts against it |
 | 3 | names before "and N others" | naming three beats spending a clause to avoid printing one word |
-| 2 % | `BrightnessTolerancePct` | HA reports brightness as a 0–255 integer against the engine's per cent, so a round trip lands ~1 % off; 2 % is wider than that and narrower than an eye |
-| 50 K | `ColorTempToleranceKelvin` | under 2 % at the warm end, invisible anywhere in the range |
+| 2 % | `LightTolerance.BrightnessPct` | HA reports brightness as a 0–255 integer against the engine's per cent, so a round trip lands ~1 % off; 2 % is wider than that and narrower than an eye |
+| 50 K | `LightTolerance.ColorTempKelvin` | under 2 % at the warm end, invisible anywhere in the range |
 | 30 s | `DiscoverySettle` | how long Home Assistant's state cache needs before the registry reads whole |
 | 1 s | `BoundaryTimer.Lead` | the wake fires just past the boundary, so the instant the callback reads is on the new period's side of it; short enough that nobody can see it and long enough to cover a timer that fires a hair early |
 | ~3× | lux ladder ratio | illuminance spans four orders of magnitude; a fixed step is unusable at one end or the other |

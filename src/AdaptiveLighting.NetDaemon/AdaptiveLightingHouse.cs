@@ -22,17 +22,10 @@ public sealed record AdaptiveLightingHouseOptions(string? KeyRingPath = null, in
 
 /// <summary>Adopts AdaptiveLighting into a NetDaemon host.</summary>
 /// <remarks>
-///     <para>
-///         This owns the process's only root Blazor component: <see cref="UseAdaptiveLighting"/> calls
-///         <c>MapRazorComponents&lt;App&gt;()</c>, and a second root in the same service container puts two "/"
-///         endpoints in one route table, failing every request with an <c>AmbiguousMatchException</c>. A second
-///         Blazor app needs its own service container and its own Kestrel.
-///     </para>
-///     <para>
-///         EXPOSURE: the UI listens on every interface with no authentication, so anyone who reaches the port can
-///         rewrite the lighting configuration. Keep it on a trusted LAN, and put it behind Home Assistant ingress
-///         or an authenticating proxy if it ever has to be reachable from outside.
-///     </para>
+///     Owns the process's only root Blazor component: a second root in the same container puts two "/" endpoints in
+///     one route table, and every request fails with <c>AmbiguousMatchException</c>.
+///     EXPOSURE: the UI listens on every interface with no authentication. Keep it on a trusted LAN, or behind Home
+///     Assistant ingress or an authenticating proxy.
 /// </remarks>
 public static class AdaptiveLightingHouse
 {
@@ -60,15 +53,19 @@ public static class AdaptiveLightingHouse
 
 		AdaptiveLightingHouseOptions settings = options ?? new AdaptiveLightingHouseOptions();
 
-		AddKeyRing(builder, settings);
-		Listen(builder, settings);
+		// No host logger exists before Build. Disposing the factory flushes the console queue, so both messages print.
+		using ILoggerFactory loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+		ILogger logger = loggerFactory.CreateLogger(typeof(AdaptiveLightingHouse).FullName!);
+
+		AddKeyRing(builder, settings, logger);
+		Listen(builder, settings, logger);
 
 		return builder;
 	}
 
 	/// <summary>Binds the UI's port; <c>0</c> leaves Kestrel alone for a host that configures its own.</summary>
 	/// <remarks>Kestrel's option delegates are additive, so a host that also listens on its own port keeps doing so.</remarks>
-	private static void Listen(WebApplicationBuilder builder, AdaptiveLightingHouseOptions options)
+	private static void Listen(WebApplicationBuilder builder, AdaptiveLightingHouseOptions options, ILogger logger)
 	{
 		int port = options.Port
 			?? (int.TryParse(builder.Configuration[PortKey], out int configured) ? configured : DefaultPort);
@@ -78,7 +75,7 @@ public static class AdaptiveLightingHouse
 
 		builder.WebHost.ConfigureKestrel(kestrel => kestrel.ListenAnyIP(port));
 
-		Logger().LogWarning(
+		logger.LogWarning(
 			"The lighting UI is listening on port {Port} on every interface, with no authentication: anyone who "
 			+ "can reach it can rewrite this house's lighting configuration. Keep it on the LAN — do not forward "
 			+ "or NAT it. Set {Key} to 0 to bind it yourself.",
@@ -105,14 +102,11 @@ public static class AdaptiveLightingHouse
 
 	/// <summary>Persists the DataProtection key ring beside the lighting document, so a deploy keeps every open tab signed in.</summary>
 	/// <remarks>
-	///     The parent directory is the test, matching <c>LightingConfigPath.Resolve</c>: <c>/config</c> exists on a
-	///     Home Assistant box while the app's own folder may not yet, and testing the folder would skip the key ring
-	///     on a first run for the in-container default, which the next restart throws away.
+	///     The parent directory is the test, as in <c>LightingConfigPath.Resolve</c>: <c>/config</c> exists on a Home
+	///     Assistant box before the app's own folder does.
 	/// </remarks>
-	private static void AddKeyRing(WebApplicationBuilder builder, AdaptiveLightingHouseOptions options)
+	private static void AddKeyRing(WebApplicationBuilder builder, AdaptiveLightingHouseOptions options, ILogger logger)
 	{
-		ILogger logger = Logger();
-
 		if (KeyRingDirectory(builder, options, logger) is not { } keyRing)
 		{
 			// A silent fallback here reads as working until a deploy logs everybody out.
@@ -135,12 +129,6 @@ public static class AdaptiveLightingHouse
 
 		logger.LogInformation("DataProtection keys are kept at {Path}.", keyRing);
 	}
-
-	// Registration runs before the host is built, so there is no ILogger to resolve yet, and both messages have to
-	// reach an operator on the run that decides them.
-	private static ILogger Logger() => LoggerFactory
-		.Create(logging => logging.AddConsole())
-		.CreateLogger(typeof(AdaptiveLightingHouse).FullName!);
 
 	private static string? KeyRingDirectory(WebApplicationBuilder builder, AdaptiveLightingHouseOptions options, ILogger logger) =>
 		options.KeyRingPath is { Length: > 0 } explicitPath

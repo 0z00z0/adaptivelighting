@@ -51,6 +51,18 @@ public sealed class ConfigValidatorTests
 			ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("no room follows it", StringComparison.Ordinal)));
 	}
 
+	/// <summary>A house using the sensor only for the daylight curve is using it, so it is not warned about.</summary>
+	[TestMethod]
+	public void A_Room_On_The_Daylight_Curve_Silences_That_Warning()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.OutdoorLuxSensor = "sensor.outdoor_lux";
+		config.Areas[0].Levels = [OnCurve()];
+
+		Assert.IsFalse(
+			ConfigValidator.Validate(config).Warnings.Any(w => w.Contains("no room follows it", StringComparison.Ordinal)));
+	}
+
 	[TestMethod]
 	public void Following_An_Outdoor_Sensor_The_House_Does_Not_Name_Warns_Per_Room()
 	{

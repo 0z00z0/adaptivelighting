@@ -20,7 +20,7 @@ public sealed class ColorControlTests
 	private const string Motion = "binary_sensor.a_motion";
 	private const string SupportedColorModes = "supported_color_modes";
 
-	private static HaLightActuator Actuator(FakeHaContext ha) => new(ha, new GlobalConfig(), NullLogger.Instance);
+	private static HaLightActuator Actuator(FakeHaContext ha) => new(ha, NullLogger.Instance);
 
 	private static Dictionary<string, object> DataOf(ServiceCall call) => (Dictionary<string, object>)call.Data!;
 
