@@ -73,7 +73,7 @@ public sealed class ModeMonitorRaceTests
 		rig.Ha.Inner.Calls.Count(call =>
 			call.Domain == "input_select"
 			&& call.Service == "select_option"
-			&& call.Data?.GetType().GetProperty("option")?.GetValue(call.Data) as string == option);
+			&& call.Option() == option);
 
 	[TestMethod]
 	public void A_Grace_Expiry_Already_In_Flight_Writes_Nothing_Once_The_Monitor_Is_Disposed()

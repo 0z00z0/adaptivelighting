@@ -44,21 +44,6 @@ public sealed class ModeMonitorTests
 
 	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor, FakeLastPeriodStore LastPeriod);
 
-	/// <summary>The note recording which period the last run ended in, where null is a first run, a deleted note or a corrupt one.</summary>
-	private sealed class FakeLastPeriodStore(string? recalled = null) : ILastPeriodStore
-	{
-		/// <summary>Every period written, in order.</summary>
-		public List<string> Saved { get; } = [];
-
-		public string? Load() => recalled;
-
-		public bool TrySave(string periodName)
-		{
-			Saved.Add(periodName);
-			return true;
-		}
-	}
-
 	/// <summary>A note that throws on both operations.</summary>
 	private sealed class ThrowingLastPeriodStore : ILastPeriodStore
 	{
@@ -146,10 +131,7 @@ public sealed class ModeMonitorTests
 	private static void Advance(Rig rig, TimeSpan by) => rig.Scheduler.AdvanceBy(by.Ticks);
 
 	private static int SelectCalls(FakeHaContext ha, string option) =>
-		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option" && OptionOf(c) == option);
-
-	private static string? OptionOf(ServiceCall call) =>
-		call.Data?.GetType().GetProperty("option")?.GetValue(call.Data) as string;
+		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option" && c.Option() == option);
 
 	// ---- Kind / scene derivation --------------------------------------------------------------
 
@@ -1159,7 +1141,7 @@ public sealed class ModeMonitorTests
 
 	private static int PeriodSelectCalls(FakeHaContext ha, string option) =>
 		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"
-			&& c.Target?.EntityIds?.Contains(PeriodSelect) == true && OptionOf(c) == option);
+			&& c.Target?.EntityIds?.Contains(PeriodSelect) == true && c.Option() == option);
 
 	private static int AnyPeriodSelectCalls(FakeHaContext ha) =>
 		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"
@@ -1706,15 +1688,6 @@ public sealed class ModeMonitorTests
 		{
 			if (logLevel == LogLevel.Warning)
 				Warnings++;
-		}
-
-		private sealed class NullScope : IDisposable
-		{
-			public static readonly NullScope Instance = new();
-
-			public void Dispose()
-			{
-			}
 		}
 	}
 }

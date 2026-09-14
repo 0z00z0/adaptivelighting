@@ -1,7 +1,7 @@
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Engine;
 
-namespace AdaptiveLighting.Tests.Lighting;
+namespace AdaptiveLighting.TestFakes;
 
 /// <summary>Records what the controller wanted the lights to do, without the HA wire format in the way.</summary>
 public sealed class FakeLightActuator : ILightActuator

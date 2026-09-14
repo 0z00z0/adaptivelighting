@@ -1,6 +1,6 @@
 using AdaptiveLighting.Abstractions;
 
-namespace AdaptiveLighting.Tests.Lighting;
+namespace AdaptiveLighting.TestFakes;
 
 /// <summary>An in-memory area registry: area id to entity ids, entity id to labels, and area id to floor.</summary>
 /// <remarks>HassModel's Area and Floor cannot be constructed in a test, so the resolver binds this seam and not IHaRegistry.</remarks>

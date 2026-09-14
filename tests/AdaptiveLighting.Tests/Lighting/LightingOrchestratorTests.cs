@@ -592,8 +592,7 @@ public sealed class LightingOrchestratorTests
 	}
 
 	private static int SleepCalls(FakeHaContext ha) =>
-		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"
-			&& c.Data?.GetType().GetProperty("option")?.GetValue(c.Data) as string == "Sover");
+		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option" && c.Option() == "Sover");
 
 	/// <summary>The sun entity moving its own next setting is what re-arms every boundary anchored to it.</summary>
 	[TestMethod]
@@ -703,37 +702,17 @@ public sealed class LightingOrchestratorTests
 		Assert.IsNotNull(t.Orchestrator.SunMoved(Sun), "a named sun is watched");
 	}
 
-	/// <summary>Captures the warnings the engine writes.</summary>
+	/// <summary>Captures the warnings the engine writes, across every category, in one shared recorder.</summary>
 	private sealed class RecordingLoggerFactory : ILoggerFactory
 	{
-		private readonly List<string> _warnings = [];
+		private readonly RecordingLogger _logger = new();
 
-		public IReadOnlyList<string> Warnings => _warnings;
+		public IReadOnlyList<string> Warnings => _logger.Warnings;
 
-		public ILogger CreateLogger(string categoryName) => new Recorder(_warnings);
+		public ILogger CreateLogger(string categoryName) => _logger;
 
 		public void AddProvider(ILoggerProvider provider) { }
 
 		public void Dispose() { }
-
-		private sealed class Recorder(List<string> warnings) : ILogger
-		{
-			public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-			public bool IsEnabled(LogLevel logLevel) => true;
-
-			public void Log<TState>(
-				LogLevel logLevel,
-				EventId eventId,
-				TState state,
-				Exception? exception,
-				Func<TState, Exception?, string> formatter)
-			{
-				ArgumentNullException.ThrowIfNull(formatter);
-
-				if (logLevel >= LogLevel.Warning)
-					warnings.Add(formatter(state, exception));
-			}
-		}
 	}
 }

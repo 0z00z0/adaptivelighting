@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+		The fakes shared between the test suite and tools/uihost: a hand-written IHaContext and the other
+		seams a controller test or a preview needs. Not packable and not published, so no MSTest reference
+		reaches a consumer that only wants the fakes.
+	-->
+
+	<PropertyGroup>
+		<IsPackable>false</IsPackable>
+		<GenerateDocumentationFile>false</GenerateDocumentationFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\AdaptiveLighting\AdaptiveLighting.csproj" />
+	</ItemGroup>
+
+</Project>
