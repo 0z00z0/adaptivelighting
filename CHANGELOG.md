@@ -15,6 +15,7 @@ against each other.
 ### Fixed
 
 - **A bulb dropping off the network no longer puts its room on a manual hold.** When some bulbs in a light group stopped answering, or came back, the group's own on or off reading changed and the room took it for somebody at the switch. A change that arrives with a bulb leaving or rejoining is now left alone; the same change a few seconds later is still read as a person.
+- **The house's own scene no longer puts rooms on a manual hold.** A scene set on a normal or sleep house mode, such as a bedtime scene, changed the lights in rooms that were still running, and each of those rooms took the change for somebody at the switch. Every room is now told to expect the scene before it runs.
 
 ## [2026.9.12] - 2026-09-13
 

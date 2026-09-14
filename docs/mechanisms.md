@@ -896,6 +896,20 @@ the context carries neither user nor parent, so `IsHandAtTheSwitch` and the cont
 - Scene windows and member windows are kept apart from command expectations and are never shortened. A command
   sent inside one would otherwise narrow it to a single polarity.
 
+### The house's own scenes are expected
+
+A house-mode option's scene is run by the orchestrator, once on entry. Away and Guest pause the rooms, but a
+Normal or Sleep scene leaves them automating, so the scene's light changes reach a room that is still listening,
+with neither user nor parent in the context.
+
+- Before the scene call, `LightingOrchestrator` tells **every** room to expect it (`AreaController.ExpectHouseScene`),
+  the same way a room's own scene is declared. The scene's contents are unreadable, so no room can be left out.
+- The window matches either polarity for the room's echo window plus its transition.
+- The room retargets for the new mode in the same instant, and that command's expectation says on. Because
+  scene windows are stored apart from command expectations, the scene switching a lamp off is still the house's
+  own work.
+- The cost: a person switching a light inside that window, in any room, is missed.
+
 ### What ends a manual hold
 
 `AreaSettings.OverrideUntilVacant` picks between two clocks and nothing else changes: the manual level stands,

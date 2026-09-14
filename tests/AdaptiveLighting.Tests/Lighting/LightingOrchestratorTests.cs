@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
 
+using NetDaemon.HassModel;
+
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>The scene applied on entry to an Away or Guest mode, once per entry and never re-asserted.</summary>
@@ -320,6 +322,62 @@ public sealed class LightingOrchestratorTests
 
 		Assert.AreEqual(AreaState.AutoActive, engine.Areas[0].State);
 		Assert.IsTrue(publisher.Snapshots.Any(snapshot => snapshot.Reason == TransitionReason.AdoptedAtStartup));
+
+		engine.Dispose();
+	}
+
+	// A Normal or Sleep scene leaves the rooms running, so its light changes reach a room that is still automating,
+	// and the room retargets for the new mode in the same instant.
+	[TestMethod]
+	public void The_Houses_Own_Scene_Is_Not_Read_As_A_Hand_At_The_Switch()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Person, "home");
+		ha.SetState(Select, "Normal");
+		ha.SetState(Stue, "on");
+		ha.SetState(StueMotion, "off");
+
+		HouseModeConfig mode = new()
+		{
+			Entity = Select,
+			Options =
+			[
+				new() { Value = "Normal", Kind = ModeKind.Normal },
+				new() { Value = "Sover", Kind = ModeKind.Sleep, Scene = "scene.natt" }
+			]
+		};
+
+		AdaptiveLightingConfig config = new()
+		{
+			Global = new GlobalConfig { Persons = [Person], HouseMode = mode, CircadianTickSeconds = 60 },
+			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+		};
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		FakeLightActuator actuator = new();
+		LightingOrchestrator engine = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			actuator, new FakeStatePublisher(), new FakeNotifier(), NullLoggerFactory.Instance);
+
+		engine.Start();
+		Assert.AreEqual(AreaState.AutoActive, engine.Areas[0].State, "the lit room is taken charge of");
+
+		scheduler.AdvanceBy(TimeSpan.FromSeconds(30).Ticks);
+		ha.Trigger(Select, "Sover");
+		CollectionAssert.AreEqual(new[] { "scene.natt" }, actuator.Scenes);
+
+		// The scene's own change as Home Assistant reports it: no user and no parent.
+		ha.Trigger(Stue, "off", null, new Context { Id = "scene" });
+		Assert.AreEqual(AreaState.AutoActive, engine.Areas[0].State,
+			"the house's own bedtime scene is not a person switching the room off");
+
+		// The control: once the window has passed, the same kind of change is a hand at the switch.
+		scheduler.AdvanceBy(TimeSpan.FromMinutes(3).Ticks);
+		ha.Trigger(Stue, "on", null, new Context { Id = "wall" });
+		Assert.AreEqual(AreaState.OverriddenOn, engine.Areas[0].State, "a real change after the scene is still read as a person");
 
 		engine.Dispose();
 	}

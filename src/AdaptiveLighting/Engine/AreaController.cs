@@ -397,6 +397,16 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	/// <summary>Declares a house scene about to run, so its changes to this room's lights are not read as a person's.</summary>
+	// Must precede the orchestrator's scene call, as ExpectScene precedes the room's own. A Normal or Sleep scene
+	// leaves the room automating, so its echo reaches OnLightChanged.
+	public void ExpectHouseScene()
+	{
+		lock (_gate)
+			foreach (string light in _area.Lights)
+				_detector.ExpectScene(light, TransitionSeconds());
+	}
+
 	/// <summary>Subscribes and publishes the opening snapshot, leaving the lights as found.</summary>
 	// An area found lit adopts them; see AdoptIfLit.
 	public void Start()
