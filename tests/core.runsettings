@@ -21,6 +21,9 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Auto_On_Is_Blocked_While_An_IgnoreWhenOn_Entity_Is_On
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Vacancy_Dims_To_PreOff_And_Then_Turns_Off
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Motion_During_The_PreOff_Grace_Restores_The_Area
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Lead_In_Lights_A_Dark_Room_Dimly_And_Movement_Inside_Raises_It
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Lead_In_Nobody_Follows_Goes_Off_When_The_Dim_Light_Runs_Out
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Lead_In_Is_Refused_By_A_Blocking_Entity
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Manual_On_Overrides_And_The_Engine_Backs_Off_Until_Expiry
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Override_Expiring_While_Vacant_Turns_The_Area_Off
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Override_Expiring_While_Occupied_Resumes_Control_Instead

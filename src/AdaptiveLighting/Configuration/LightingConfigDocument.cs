@@ -277,6 +277,7 @@ public static class LightingConfigDocument
 		{
 			repaired |= DropBlanks(area.Lights);
 			repaired |= DropBlanks(area.MotionSensors);
+			repaired |= DropBlanks(area.LeadInSensors);
 			repaired |= DropBlanks(area.IgnoreWhenOn);
 			repaired |= DropBlanks(area.KeepLitWhenOn);
 			repaired |= DropBlanks(area.ExcludeEntities);

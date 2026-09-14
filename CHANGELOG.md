@@ -15,6 +15,11 @@ against each other.
 ### Added
 
 - **A room can decide for itself whether another automation's change counts as a manual one.** The house setting *Other automations count as manual changes* stays as it was, and every room follows it until its own page says otherwise under *Movement & timing*, where the row shows the house's answer while it follows. A bathroom can keep holding the level its hair-dryer automation sets while a hall ignores the level its own automation sets. In the file the room's answer is `TreatAutomationsAsManual`; a document that never names it behaves exactly as before.
+- **A room can light dimly when somebody is on the way in.** Name the sensors outside it, such as the front steps or the room next door, under *Light dimly when these see movement* on the room's page. When one of them sees movement while the room is dark, empty and running by itself, the room lights at its *Dim light level* for *Dim light lasts*. Movement in the room brings the lights up to its usual level, and if nobody comes in they go off again. Everything that stops movement lighting the room stops this too, sleep and *Don't switch on while* included, and a room already lit or set by hand takes no notice. The activity log says "Movement nearby — lit dimly" and, when nobody came, "Nobody came in — lights off". In the file it is `LeadInSensors`.
+
+### Changed
+
+- **"Warning dim level" is now "Dim light level", and "Warning dim lasts" is now "Dim light lasts".** The two settings now set both the dim light shortly before a room switches off and the dim light a lead-in shows, and their explanations say so. The keys in the file, `PreOffBrightnessFactor` and `PreOffSeconds`, are unchanged, so no document needs touching.
 
 ## [2026.9.13] - 2026-09-14
 

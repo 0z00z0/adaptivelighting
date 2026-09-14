@@ -200,7 +200,7 @@ public static class AreaSentences
 			.Text(" without movement, dim to ")
 			.Percent(
 				nameof(AreaSettings.PreOffBrightnessFactor),
-				"Warning dim level",
+				"Dim light level",
 				effective.PreOffBrightnessFactor * 100,
 				DimLevelChoices,
 				OriginOf(area, area?.PreOffBrightnessFactor),
@@ -208,7 +208,7 @@ public static class AreaSentences
 			.Text(" for ")
 			.Duration(
 				nameof(AreaSettings.PreOffSeconds),
-				"Warning dim lasts",
+				"Dim light lasts",
 				effective.PreOffSeconds,
 				DimForChoices,
 				OriginOf(area, area?.PreOffSeconds),

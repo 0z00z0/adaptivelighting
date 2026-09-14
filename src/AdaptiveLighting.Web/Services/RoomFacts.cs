@@ -117,6 +117,7 @@ public static class RoomFacts
 			{ State: AreaState.AutoActive, LastCommandAt: null } =>
 				"These lights were already on when the engine started. They're managed now — their levels weren't touched.",
 			{ State: AreaState.AutoActive } => Levels("Lit at", snapshot),
+			{ State: AreaState.PreOff, Reason: TransitionReason.LeadIn } => Levels("Lit dimly at", snapshot, " ahead of anyone coming in"),
 			{ State: AreaState.PreOff } => Levels("Dimmed to", snapshot, " as a warning"),
 			{ State: AreaState.OverriddenOn } => "Someone set these lights manually — they're being left alone.",
 			{ State: AreaState.SuppressedOff } => "Someone switched these lights off. Movement is ignored for now.",
@@ -156,6 +157,8 @@ public static class RoomFacts
 		return snapshot.State switch
 		{
 			AreaState.AutoActive when countdown is not null => $"Starts dimming {countdown} unless someone moves.",
+			AreaState.PreOff when countdown is not null && snapshot.Reason is TransitionReason.LeadIn =>
+				$"Lights out {countdown} unless someone comes in.",
 			AreaState.PreOff when countdown is not null => $"Lights out {countdown} — any movement keeps them on.",
 			AreaState.OverriddenOn when countdown is not null => $"Back under automatic control {countdown}.",
 			AreaState.SuppressedOff when countdown is not null =>

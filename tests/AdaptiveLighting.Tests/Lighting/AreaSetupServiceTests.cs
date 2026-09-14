@@ -584,6 +584,7 @@ public sealed class AreaSetupServiceTests
 	private static int PinnedCountOf(AreaConfig area) =>
 		(area.Lights?.Count ?? 0)
 		+ (area.MotionSensors?.Count ?? 0)
+		+ (area.LeadInSensors?.Count ?? 0)
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
 		+ (area.FollowOutdoorLux is not null ? 1 : 0)
 		+ (area.IgnoreWhenOn?.Count ?? 0)
@@ -603,6 +604,7 @@ public sealed class AreaSetupServiceTests
 		nameof(AreaConfig.AreaId),
 		nameof(AreaConfig.Lights),
 		nameof(AreaConfig.MotionSensors),
+		nameof(AreaConfig.LeadInSensors),
 		nameof(AreaConfig.LuxSensor),
 
 		// The twin of LuxSensor above, so it counts as a pinned entity choice, which keeps the settings numerator honest.

@@ -124,6 +124,10 @@ public sealed class AreaController : IDisposable
 	// Nothing else would ever run it again, so OnTick settles it once the hold releases.
 	private bool _offHeldBack;
 
+	// PreOff entered from a lead-in rather than from a vacancy timeout. Cleared by Enter on leaving PreOff, so it can
+	// never outlive the dim light it describes.
+	private bool _leadIn;
+
 	// The scene the area is sitting on, or null. Set by ApplyScene and cleared by Send: any light command is the
 	// engine aiming the room itself, which the scene no longer describes.
 	private string? _standingScene;
@@ -421,6 +425,12 @@ public sealed class AreaController : IDisposable
 		foreach (string sensor in _area.MotionSensors)
 			_subscriptions.Add(_ha.Entity(sensor).WhenTurnsOn(_ => OnMotion(), _logger));
 
+		foreach (string sensor in _area.LeadInSensors)
+		{
+			string leadIn = sensor;
+			_subscriptions.Add(_ha.Entity(leadIn).WhenTurnsOn(_ => OnLeadIn(leadIn), _logger));
+		}
+
 		foreach (string light in _area.Lights)
 			_subscriptions.Add(_ha.Entity(light)
 				.StateAllChanges()
@@ -552,6 +562,43 @@ public sealed class AreaController : IDisposable
 				default:
 					return;
 			}
+		}
+	}
+
+	/// <summary>Lights a dark, empty room at its dim light when a sensor outside it sees movement.</summary>
+	// Lands in PreOff so the dim light, the motion rescue and the off are the warning dim's own. Only from the resting
+	// state with every light off: a lit, held or hand-switched-off room ignores it. No vacancy countdown starts.
+	private void OnLeadIn(string sensor)
+	{
+		lock (_gate)
+		{
+			if (_state == AreaState.PreOff && _leadIn)
+			{
+				ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_area.Settings.PreOffSeconds), OnPreOffElapsed);
+				Publish(TransitionReason.LeadIn);
+				return;
+			}
+
+			if (_state != AreaState.AutoVacant || _area.Lights.Any(_ha.IsOn))
+			{
+				_logger.LogDebug("{Area}: lead-in from {Sensor} ignored while the room is {State}.", Name, sensor, _state);
+				return;
+			}
+
+			if (!CanAutoOn(out string blockedBy))
+			{
+				_logger.LogDebug("{Area}: lead-in from {Sensor} but auto-on is blocked: {Reason}.", Name, sensor, blockedBy);
+				return;
+			}
+
+			_logger.LogInformation("{Area}: lead-in from {Sensor}; lit at the dim light for {Seconds}s unless someone comes in.",
+				Name, sensor, _area.Settings.PreOffSeconds);
+
+			Enter(AreaState.PreOff, TransitionReason.LeadIn);
+			_leadIn = true;
+
+			ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_area.Settings.PreOffSeconds), OnPreOffElapsed);
+			ApplyTarget(TransitionReason.LeadIn, _area.Settings.PreOffBrightnessFactor);
 		}
 	}
 
@@ -841,18 +888,20 @@ public sealed class AreaController : IDisposable
 		if (_state != AreaState.PreOff)
 			return;
 
+		TransitionReason reason = _leadIn ? TransitionReason.LeadInUnanswered : TransitionReason.PreOffElapsed;
+
 		// Held at the dimmed level, which is still lit. Restoring the full target would be the engine commanding
 		// a room up, which the hold never does.
 		if (HoldingLit() is { } holder)
 		{
-			HoldOffBack(holder, TransitionReason.PreOffElapsed);
+			HoldOffBack(holder, reason);
 			return;
 		}
 
 		_nextChangeAt = null;
 		_nextChangeFrom = null;
-		Enter(AreaState.AutoVacant, TransitionReason.PreOffElapsed);
-		SettleEmpty(TransitionReason.PreOffElapsed);
+		Enter(AreaState.AutoVacant, reason);
+		SettleEmpty(reason);
 	}
 
 	private void OnOverrideExpired()
@@ -1776,6 +1825,9 @@ public sealed class AreaController : IDisposable
 	{
 		if (_state != state)
 			_logger.LogInformation("{Area}: {From} -> {To} ({Reason}).", Name, _state, state, reason);
+
+		if (state != AreaState.PreOff)
+			_leadIn = false;
 
 		_state = state;
 	}

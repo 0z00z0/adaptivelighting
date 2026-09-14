@@ -378,6 +378,18 @@ else
 								   but they are movement rules and belong in this section. *@
 								@if (string.Equals(current.Title, RoomSettings.MovementSection, StringComparison.Ordinal))
 								{
+									<SettingRow Label="Light dimly when these see movement"
+												Help="Sensors outside this room: the front steps, the room next door. When one of them sees movement while this room is dark, empty and running by itself, the room lights at Dim light level of its usual level for Dim light lasts. Movement in the room then brings the lights up to their usual level; if nobody comes in, they go off again. Everything that stops movement lighting the room stops this too: daylight, away, sleep, Don't switch on while. A room already lit, or set or switched off by hand, takes no notice. Offered from the whole house.">
+										<EntityListPicker Value="@(room.LeadInSensors ?? [])"
+														  ValueChanged="@(value => SetList(value, list => room.LeadInSensors = list))"
+														  Options="@_leadInSensors"
+														  NameResolver="@Name"
+														  KnownResolver="@Catalog.Knows"
+														  EmptyLabel="Nothing outside lights this room ahead of time."
+														  AddLabel="Add a sensor…"
+														  Placeholder="binary_sensor.front_steps_motion" />
+									</SettingRow>
+
 									<SettingRow Label="Don't switch on while"
 												Help="The room won't light itself while any of these is on: a projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Tick the box for the opposite, so it holds while they are off — for a “lighting allowed” switch you turn off. Offered from the whole house, since a blocker often belongs to no room.">
 										<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
@@ -401,7 +413,7 @@ else
 									</SettingRow>
 
 									<SettingRow Label="Don't switch off while"
-												Help="The room won't turn its own lights off while any of these is on, so the countdown, the warning dim and the leaving sweep leave it alone: a meeting light, a guest switch. It never turns anything on, and switching off by hand still works. Tick the box for the opposite, so it holds while they are off.">
+												Help="The room won't turn its own lights off while any of these is on, so the countdown, the dim light before switching off and the leaving sweep leave it alone: a meeting light, a guest switch. It never turns anything on, and switching off by hand still works. Tick the box for the opposite, so it holds while they are off.">
 										<EntityListPicker Value="@(room.KeepLitWhenOn ?? [])"
 														  ValueChanged="@(value => SetList(value, list => room.KeepLitWhenOn = list))"
 														  Options="@_blockers"
@@ -453,7 +465,7 @@ else
 									</SettingRow>
 
 									<SettingRow Label="Run a scene instead, when empty"
-												Help="When the room has been empty long enough to go off, it runs this scene and stays there — atmospheric lighting rather than darkness. The warning dim before switching off does not run, since nothing is about to go off. Leaving the house still switches the room off, and switching it off by hand still works.">
+												Help="When the room has been empty long enough to go off, it runs this scene and stays there — atmospheric lighting rather than darkness. The dim light before switching off does not run, since nothing is about to go off. Leaving the house still switches the room off, and switching it off by hand still works.">
 										<EntityPicker Value="@room.SceneWhenEmpty"
 													  ValueChanged="@(value => Set(() => room.SceneWhenEmpty = value))"
 													  Options="@_scenes"
@@ -834,6 +846,7 @@ else
 	private IReadOnlyList<EntityOption> _motionSensors = [];
 	private IReadOnlyList<EntityOption> _luxSensors = [];
 	private IReadOnlyList<EntityOption> _blockers = [];
+	private IReadOnlyList<EntityOption> _leadInSensors = [];
 	private IReadOnlyList<EntityOption> _sunEntities = [];
 	private IReadOnlyList<EntityOption> _scenes = [];
 
@@ -929,6 +942,7 @@ else
 		_areas = Catalog.Areas(_document.Global);
 		_sunEntities = Catalog.EntitiesInDomains("sun");
 		_blockers = Catalog.EntitiesInDomains("binary_sensor", "input_boolean", "switch", "media_player");
+		_leadInSensors = Catalog.EntitiesInDomains("binary_sensor");
 		_scenes = Catalog.EntitiesInDomains("scene");
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _document.Global.EffectiveMotionDeviceClasses]);
 		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_document.Global.IlluminanceDeviceClass]);

@@ -172,6 +172,7 @@ public static class AreaSetupService
 	private static int PinnedEntityCount(AreaConfig area) =>
 		(area.Lights?.Count ?? 0)
 		+ (area.MotionSensors?.Count ?? 0)
+		+ (area.LeadInSensors?.Count ?? 0)
 		+ (area.LuxSensor is { Length: > 0 } ? 1 : 0)
 		+ (area.FollowOutdoorLux is not null ? 1 : 0)
 		+ (area.DaylightSensor is { Length: > 0 } ? 1 : 0)

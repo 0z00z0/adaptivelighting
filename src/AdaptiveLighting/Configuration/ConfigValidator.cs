@@ -830,6 +830,9 @@ public static class ConfigValidator
 		foreach (string sensor in area.MotionSensors ?? [])
 			yield return sensor;
 
+		foreach (string leadIn in area.LeadInSensors ?? [])
+			yield return leadIn;
+
 		foreach (string blocker in area.IgnoreWhenOn ?? [])
 			yield return blocker;
 

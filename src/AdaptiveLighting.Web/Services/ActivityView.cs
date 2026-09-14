@@ -150,6 +150,12 @@ public static class ActivityView
 		if (snapshot.KillSwitchActive)
 			return new ActivityLine("Paused by the master switch", "No lights change until it's turned back on.");
 
+		// Worded here, not in Condition: the dim light is PreOff's, whose condition says nothing.
+		if (snapshot.Reason is TransitionReason.LeadIn)
+			return new ActivityLine(
+				Headline(snapshot),
+				"Nobody has come in yet. Movement in the room brings the lights up; without it they go off when the dim light runs out.");
+
 		// A quiet re-check that found the darkness verdict had moved. That verdict is the news, so it leads.
 		if (snapshot is { Reason: TransitionReason.CircadianTick, State: AreaState.AutoVacant, IsDark: { } dark })
 			return new ActivityLine(dark ? DarkEnough(snapshot) : TooBright, Reading(snapshot));
@@ -275,7 +281,7 @@ public static class ActivityView
 
 		// Every remaining motion report is worded "Movement…", so the movement chip has to take all of them or
 		// switching it off leaves rows that plainly are movement.
-		if (snapshot.Reason is TransitionReason.Motion)
+		if (snapshot.Reason is TransitionReason.Motion or TransitionReason.LeadIn)
 			return ActivityCategory.Movement;
 
 		if (snapshot.Reason is TransitionReason.HouseModeChanged)
@@ -389,7 +395,10 @@ public static class ActivityView
 	// snapshot is built.
 	private static bool CommandedTheLights(AreaSnapshot snapshot) => snapshot.Reason switch
 	{
-		TransitionReason.VacancyTimeout or TransitionReason.PreOffElapsed => true,
+		TransitionReason.VacancyTimeout
+			or TransitionReason.PreOffElapsed
+			or TransitionReason.LeadIn
+			or TransitionReason.LeadInUnanswered => true,
 
 		// An override running out hands the room back by commanding it.
 		TransitionReason.OverrideExpired => true,
@@ -669,6 +678,8 @@ public static class ActivityView
 		},
 		TransitionReason.VacancyTimeout => Lit("No movement — dimmed as a warning", snapshot),
 		TransitionReason.PreOffElapsed => "Dim warning unanswered — lights off",
+		TransitionReason.LeadIn => Lit("Movement nearby — lit dimly", snapshot),
+		TransitionReason.LeadInUnanswered => "Nobody came in — lights off",
 		TransitionReason.ManualOn => "Lights set manually",
 		TransitionReason.ManualOff => "Lights switched off manually",
 		TransitionReason.OverrideExpired => "The manual change ran its course",

@@ -998,6 +998,31 @@ light level, because the engine did not turn them on and switching them off is n
 `AdoptedAtStartup` carries no commanded levels, because there was no command. A row or snapshot must not
 invent brightness or kelvin figures for it.
 
+### A lead-in lights a dark room at the dim light
+
+`AreaConfig.LeadInSensors` names sensors outside a room: the front steps, the room next door. One of them
+turning on lights the room ahead of anyone coming in, as the engine's own command.
+
+- It is the dim light before switching off, entered from the other end. The room goes from `AutoVacant` to
+  `PreOff`, commanded through `ApplyTarget` at `PreOffBrightnessFactor` of its current target, and
+  `PreOffSeconds` counts down. Movement in the room takes the ordinary `PreOff` rescue to `AutoActive` and starts
+  the vacancy countdown; nobody coming in ends in the ordinary off. The page's *Dim light level* and *Dim light
+  lasts* therefore serve both, and there is no lead-in level or length of its own.
+- `AutoOnBlockNow` decides whether it may light, as it does for movement: the master switch, away, a guest scene,
+  sleep, *Don't switch on while*, darkness. The sleep ceiling applies through `Shape`. A refused lead-in is logged
+  at debug and publishes nothing.
+- Only the resting state with every light off takes it. A room lit, held by hand or switched off by hand ignores
+  it, and so does a room already dimming before switching off, because that room is lit.
+- A further lead-in during its own dim light re-arms the wait. `_leadIn` tells the two `PreOff`s apart, and
+  `Enter` clears it on leaving the state, so it cannot outlive the dim light it describes.
+- A lead-in sensor is not a motion sensor. It never counts as occupancy, never restarts the vacancy countdown,
+  and is not in the house's motion union for mode resets.
+- Reasons: `LeadIn` on lighting and on each restart, `LeadInUnanswered` for the off. The activity log files the
+  first under Movement and the second under Light change. The room page words a `PreOff` published as `LeadIn`
+  as a lead-in; a later publish in the same dim light under another reason reads as the ordinary warning.
+- The command is declared to the detector like every other, so the lead-in's own echo is never a hand at the
+  switch.
+
 ### A room's two scenes each replace one transition, and nothing else
 
 `SceneOnMotion` and `SceneWhenEmpty` are per-room and independent. Each replaces one command the engine had

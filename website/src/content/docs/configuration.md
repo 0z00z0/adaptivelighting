@@ -34,13 +34,13 @@ room's own.
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
-| **Lights stay on for** | After the last movement, how long the lights stay on before the warning dim. Longer for rooms where people sit still. | 10 min | `VacancyTimeoutSeconds` |
-| **Warning dim level** | How deep the warning dim is. 50 % is half the brightness the room was holding. | 50 % | `PreOffBrightnessFactor` |
-| **Warning dim lasts** | Before going out, the lights dim for this long. Any movement brings them straight back. | 30 s | `PreOffSeconds` |
+| **Lights stay on for** | After the last movement, how long the lights stay on before they dim ahead of switching off. Longer for rooms where people sit still. | 10 min | `VacancyTimeoutSeconds` |
+| **Dim light level** | The share of the room's usual level the lights use when they dim shortly before switching off, and when a lead-in sensor lights a dark room before anyone comes in. 50 % is half. | 50 % | `PreOffBrightnessFactor` |
+| **Dim light lasts** | How long that dim light lasts before the lights go off, unless movement is seen in the room. | 30 s | `PreOffSeconds` |
 | **Manual changes hold for** | When someone adjusts a light by hand, their choice is left alone for this long. | 2 h | `OverrideDurationMinutes` |
 | **After switching off by hand, wait** | After someone turns the lights off by hand, movement won't turn them back on until the room has been empty this long. | 10 min | `VacancyResetMinutes` |
 
-The warning dim must be shorter than the time the lights stay on.
+*Dim light lasts* must be shorter than *Lights stay on for*.
 
 Four more controls close the section, though none is one of the 22: two lists that decide whether
 the room switches itself on and off, and two scenes it can run instead. They belong to one room and
@@ -139,13 +139,14 @@ These belong to one room and have no house-wide baseline. They live on the room'
 | **Not right? Pick by hand → Daylight sensor** | Which reading the daylight curve follows here. Left alone it is the house's outdoor sensor; an indoor one measures this room's own lamps, so the curve would chase itself. Any light-level sensor in the house can be picked. | `DaylightSensor` |
 | The **×** on a found chip | Leaves one entity out of this room — a fridge's own light sensor, a hallway lamp filed under the wrong room. Listed afterwards so you can put it back. | `ExcludeEntities` |
 | **Don't switch on while** | While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Offered from the whole house, since a blocker often belongs to no room. | `IgnoreWhenOn` |
-| **Don't switch off while** | While any of these is on, the room won't turn its own lights off: the countdown, the warning dim and the leaving sweep all leave it alone. It never turns anything *on*, and switching off by hand still works. | `KeepLitWhenOn` |
+| **Light dimly when these see movement** | Sensors outside the room: the front steps, the room next door. When one sees movement while this room is dark, empty and running by itself, the room lights at *Dim light level* for *Dim light lasts*. Movement in the room then brings the lights up to their usual level; if nobody comes in they go off again. Everything that stops movement lighting the room stops this too, and a room already lit, or set or switched off by hand, takes no notice. | `LeadInSensors` |
+| **Don't switch off while** | While any of these is on, the room won't turn its own lights off: the countdown, the dim light before switching off and the leaving sweep all leave it alone. It never turns anything *on*, and switching off by hand still works. | `KeepLitWhenOn` |
 | **Other automations count as manual changes** | This room's own answer to the house setting of the same name under *Fine tuning*. *Yes*: a change another Home Assistant automation makes to these lights holds the way a hand at the switch does. *No*: the room leaves the change alone and carries on by itself. Left unset, the room follows the house, and the row says *house setting*. | `TreatAutomationsAsManual` |
 | **Run a scene instead, on movement** | Movement runs this scene rather than setting the room's own brightness and warmth, and the room is left alone afterwards. | `SceneOnMotion` |
 | **Run a scene instead, when empty** | When the room has been empty long enough to go off it runs this scene and stays there. | `SceneWhenEmpty` |
 | The room's switch, in its header | Whether the engine commands this room at all. A switched-off room is still watched and still reported. | `Enabled` |
 
-The two lists, the two scenes and the automations row close the *Movement & timing* section under **All settings**,
+The lead-in list, the two gate lists, the two scenes and the automations row close the *Movement & timing* section under **All settings**,
 beside the timings they work with.
 
 **Both lists can be turned round.** Tick *while these are off instead* under either one and the rule

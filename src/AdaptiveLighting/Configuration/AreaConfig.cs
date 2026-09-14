@@ -16,6 +16,14 @@ public class AreaConfig
 
 	public List<string>? MotionSensors { get; set; }
 
+	/// <summary>Sensors outside the room whose movement lights it dimly ahead of anyone coming in, such as the front steps.</summary>
+	/// <remarks>
+	///     Lights at <see cref="AreaSettings.PreOffBrightnessFactor"/> for <see cref="AreaSettings.PreOffSeconds"/>, through
+	///     every auto-on gate. Never discovered and never a motion sensor: it neither occupies the room nor starts its vacancy
+	///     countdown. <c>null</c> and an empty list both mean no lead-in.
+	/// </remarks>
+	public List<string>? LeadInSensors { get; set; }
+
 	/// <summary>Explicit lux sensor id. When present, fully replaces discovery for this slot.</summary>
 	public string? LuxSensor { get; set; }
 

@@ -21,6 +21,9 @@ public sealed record ResolvedArea(
 	/// <summary>Entities that stop the engine switching this area's lights off while they apply.</summary>
 	public IReadOnlyList<string> KeepLitWhenOn { get; init; } = [];
 
+	/// <summary>Sensors outside the area whose movement lights it dimly before anyone comes in.</summary>
+	public IReadOnlyList<string> LeadInSensors { get; init; } = [];
+
 	/// <summary>Whether <see cref="IgnoreWhenOn"/> applies while its entities read off instead of on.</summary>
 	public bool IgnoreWhenOnInverted { get; init; }
 
@@ -277,6 +280,7 @@ public sealed class AreaEntityResolver
 			LightLevels = SettleLightLevels(name, area, leaves),
 			LightsSupportAnyColour = anyColour,
 			KeepLitWhenOn = [.. area.KeepLitWhenOn ?? []],
+			LeadInSensors = [.. area.LeadInSensors ?? []],
 			IgnoreWhenOnInverted = area.IgnoreWhenOnInverted == true,
 			KeepLitWhenOnInverted = area.KeepLitWhenOnInverted == true,
 			SceneOnMotion = Trimmed(area.SceneOnMotion),

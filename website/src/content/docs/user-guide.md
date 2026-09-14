@@ -188,6 +188,12 @@ The page has:
   while one of those is on, the room will not turn itself off. Either list can be turned round with
   *while these are off instead*, for a switch you turn **off** to mean the same thing.
 
+  *Light dimly when these see movement* names sensors outside the room, such as the front steps.
+  When one of them sees movement while the room is dark and empty, the room lights at *Dim light
+  level* for *Dim light lasts*: someone coming in brings the lights up to the room's usual level, and
+  if nobody does they go off again. The same two settings set the dim light a room shows shortly
+  before it switches off, so changing one changes both.
+
   *Other automations count as manual changes* answers, for this room alone, whether a change another
   Home Assistant automation makes to its lights holds like a hand at the switch. A bathroom whose
   automation turns the light up for the hair dryer wants **Yes**; a hall whose automation sets a
