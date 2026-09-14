@@ -5,5 +5,4 @@ global using System.Linq;
 
 global using Microsoft.Extensions.Logging;
 
-global using NetDaemon.AppModel;
 global using NetDaemon.HassModel;

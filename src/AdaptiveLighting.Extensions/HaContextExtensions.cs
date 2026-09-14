@@ -86,7 +86,7 @@ public static class HaContextExtensions
 	/// </remarks>
 	public static void NotifyPersistent(this IHaContext ha, string title, string message, string? notificationId = null)
 	{
-		var data = new Dictionary<string, object>(StringComparer.Ordinal)
+		Dictionary<string, object> data = new(StringComparer.Ordinal)
 		{
 			["title"] = title,
 			["message"] = message
@@ -106,27 +106,10 @@ public static class HaContextExtensions
 	public static void SetInputNumber(this IHaContext ha, string entityId, double value) =>
 		ha.CallService("input_number", "set_value", ServiceTarget.FromEntity(entityId), new { value });
 
-	/// <summary>Sets an <c>input_boolean</c> helper on or off (via <c>turn_on</c>/<c>turn_off</c>).</summary>
-	public static void SetInputBoolean(this IHaContext ha, string entityId, bool value) =>
-		ha.CallService("input_boolean", value ? "turn_on" : "turn_off", ServiceTarget.FromEntity(entityId));
-
-	/// <summary>Runs a Home Assistant script by its object id (<c>script.&lt;name&gt;</c> is called as <c>script.&lt;name&gt;</c>).</summary>
-	public static void RunScript(this IHaContext ha, string script) => ha.CallService("script", script);
-
-	/// <summary>Every entity in <paramref name="area"/> whose id starts with <paramref name="domain"/>.</summary>
-	/// <remarks>Prefer the registry lookups in <see cref="RegistryExtensions"/>; this matches on the area name.</remarks>
-	public static List<Entity> GetEntitiesInAreaByDomain(this IHaContext ha, string area, string domain) =>
-		[.. ha.GetAllEntities().Where(e => e.Area == area && e.EntityId.HasDomain(domain))];
-
-	/// <summary>Every entity id in <paramref name="area"/> whose id starts with <paramref name="domain"/>.</summary>
-	/// <remarks>Prefer the registry lookups in <see cref="RegistryExtensions"/>; this matches on the area name.</remarks>
-	public static List<string> GetEntityIdsInAreaByDomain(this IHaContext ha, string area, string domain) =>
-		[.. ha.GetAllEntities().Where(e => e.Area == area && e.EntityId.HasDomain(domain)).Select(e => e.EntityId)];
-
 	private static string DomainForServiceCall(string[] entityIds)
 	{
 		// A malformed id has no domain to call under, so it fails loud instead of reaching CallService as null.
-		var domains = entityIds
+		List<string> domains = entityIds
 			.Select(id => id.Domain() ?? throw new ArgumentException($"'{id}' is not a valid entity id.", nameof(entityIds)))
 			.ToList();
 

@@ -103,7 +103,7 @@ public static class EntityStateExtensions
 	/// </remarks>
 	public static DateTimeOffset? AttrDateTimeOffset(this EntityState? state, string attribute) =>
 		state.AttrString(attribute) is { } text
-		&& DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
+		&& DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTimeOffset parsed)
 			? parsed
 			: null;
 
