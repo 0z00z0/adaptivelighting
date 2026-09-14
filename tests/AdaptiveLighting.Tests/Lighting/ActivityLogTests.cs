@@ -291,7 +291,8 @@ public sealed class ActivityLogTests
 	[TestMethod]
 	public void Grouping_Cuts_The_Timeline_By_Day_Without_Reordering_It()
 	{
-		DateTimeOffset now = DateTimeOffset.Now;
+		// Fixed instant. The real clock made this fail for half an hour after every midnight.
+		DateTimeOffset now = Noon;
 		ActivityEntry[] entries =
 		[
 			Entry(4, Report("Stue", at: now.AddMinutes(-5))),

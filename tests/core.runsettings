@@ -10,10 +10,11 @@
 <RunSettings>
 	<RunConfiguration>
 		<TestCaseFilter>
-			<!-- Override detection, away decided by the house mode, stored raw brightness: whole classes. -->
+			<!-- Override detection, away decided by the house mode, stored raw brightness, 0 % means off: whole classes. -->
 			FullyQualifiedName~AdaptiveLighting.Tests.Lighting.OverrideDetectorTests.
 			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.ConfiguredAwayTests.
 			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.RawBrightnessStorageTests.
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.ZeroBrightnessTests.
 
 			<!-- A room: auto-on gates, vacancy and pre-off, manual override, away sweep, sleep, adoption. -->
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Motion_When_Dark_Turns_The_Area_On_At_The_Periods_Levels

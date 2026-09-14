@@ -71,6 +71,7 @@ public sealed class LightingConfigDocumentTests
 				AreaId = "uteplass",
 				Lights = ["light.outdoor_front", "light.outdoor_back"],
 				MotionSensors = ["binary_sensor.outdoor_mmwave"],
+				LeadInSensors = ["binary_sensor.uteplass_path"],
 				LuxSensor = "sensor.outdoor_illuminance",
 				IgnoreWhenOn = ["binary_sensor.projector"],
 				SceneOnMotion = "scene.uteplass_ankomst",
@@ -91,7 +92,8 @@ public sealed class LightingConfigDocumentTests
 				SleepBlocksAutoOn = false,
 				SkipAwaySweep = true,
 				WelcomeHome = false,
-				Enabled = true
+				Enabled = true,
+				TreatAutomationsAsManual = true
 			}
 		]
 	};
@@ -357,6 +359,7 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(expected.AreaId, actual.AreaId);
 		CollectionAssert.AreEqual(expected.Lights, actual.Lights);
 		CollectionAssert.AreEqual(expected.MotionSensors, actual.MotionSensors);
+		CollectionAssert.AreEqual(expected.LeadInSensors, actual.LeadInSensors);
 		Assert.AreEqual(expected.LuxSensor, actual.LuxSensor);
 		CollectionAssert.AreEqual(expected.IgnoreWhenOn, actual.IgnoreWhenOn);
 		Assert.AreEqual(expected.SceneOnMotion, actual.SceneOnMotion);
@@ -378,6 +381,7 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(expected.SkipAwaySweep, actual.SkipAwaySweep);
 		Assert.AreEqual(expected.WelcomeHome, actual.WelcomeHome);
 		Assert.AreEqual(expected.Enabled, actual.Enabled);
+		Assert.AreEqual(expected.TreatAutomationsAsManual, actual.TreatAutomationsAsManual);
 	}
 
 	// Null means "inherit Defaults": writing nulls back as concrete values freezes every area at the defaults of
