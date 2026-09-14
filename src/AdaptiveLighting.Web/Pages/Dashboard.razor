@@ -113,7 +113,7 @@ else
 		@foreach (AreaSnapshot area in _exceptions)
 		{
 			<a class="tray-chip @TrayEdge(area.State)" href="@RoomHref(area.AreaId)">
-				<StateChip State="area.State" Kelvin="area.ColorTempKelvin" Bare="true" />
+				<StateChip State="area.State" Kelvin="area.ColorTempKelvin" Bare="true" IsLeadIn="@(area.IsLeadIn ?? false)" />
 				<span class="tray-text"><b>@area.AreaName</b> &mdash; @BoardView.ExceptionLine(area, _now)</span>
 			</a>
 		}
@@ -186,7 +186,7 @@ else
 						{
 							<a class="lane" href="@RoomHref(lane.AreaId)" title="@LaneTitle(lane)" @key="lane.Key">
 								<span class="lane-name">
-									<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" />
+									<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" />
 									<span class="lane-room">@lane.Name</span>
 									@if (RoomFacts.NotResponding(lane.Latest) is { Length: > 0 })
 									{
@@ -244,7 +244,7 @@ else
 						@foreach (BoardLane lane in resting)
 						{
 							<a class="quiet-chip" href="@RoomHref(lane.AreaId)" title="@LaneTitle(lane)" @key="lane.Key">
-								<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" />
+								<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" />
 								@lane.Name
 								@if (RoomFacts.NotResponding(lane.Latest) is { Length: > 0 })
 								{
@@ -573,8 +573,8 @@ else
 	private string LaneTitle(BoardLane lane)
 	{
 		string title = LightReadout.Line(lane.Latest, entityId => Catalog.FriendlyNameOf(entityId) ?? entityId) is { } lights
-			? $"{lane.Name} — {StateGlyph.For(lane.Latest.State).Word} — {lights}"
-			: $"{lane.Name} — {StateGlyph.For(lane.Latest.State).Word}";
+			? $"{lane.Name} — {StateGlyph.For(lane.Latest.State, lane.Latest.IsLeadIn ?? false).Word} — {lights}"
+			: $"{lane.Name} — {StateGlyph.For(lane.Latest.State, lane.Latest.IsLeadIn ?? false).Word}";
 
 		return RoomFacts.NotResponding(lane.Latest) is { Length: > 0 } dropped ? $"{title} — {dropped}" : title;
 	}

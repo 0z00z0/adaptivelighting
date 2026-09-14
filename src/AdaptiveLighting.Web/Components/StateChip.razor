@@ -24,6 +24,11 @@
 	[Parameter, EditorRequired]
 	public AreaState State { get; set; }
 
+	/// <summary>Whether a lead-in sensor, not the vacancy timeout, is what put the area into <see cref="AreaState.PreOff"/>.
+	/// From the engine snapshot's own <c>IsLeadIn</c>; this component never re-derives it.</summary>
+	[Parameter]
+	public bool IsLeadIn { get; set; }
+
 	/// <summary>The colour temperature the room was commanded to, ignored unless
 	/// <see cref="StateGlyph.TakesKelvinTint"/> says the state carries one.</summary>
 	[Parameter]
@@ -41,7 +46,7 @@
 	[Parameter]
 	public string? Title { get; set; }
 
-	private StateMark Mark => StateGlyph.For(State);
+	private StateMark Mark => StateGlyph.For(State, IsLeadIn);
 
 	private bool ShowsWord => ShowWord && !Bare;
 

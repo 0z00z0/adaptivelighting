@@ -8,6 +8,8 @@ namespace AdaptiveLighting.Abstractions;
 ///     field a snapshot from an older build never carried. <c>Timestamp</c> is scheduler time, not wall-clock, so
 ///     tests read what they set. <c>AreaId</c> is the stable join back to the document, since <c>AreaName</c> is
 ///     editable mid-session. <c>Forced</c> is carried, never re-derived: only the engine knows which entity it read.
+///     <c>IsLeadIn</c> is carried for the whole dim light and cleared on leaving <c>PreOff</c>, unlike
+///     <see cref="Reason"/>, which only names the publish that changed something.
 /// </remarks>
 public sealed record AreaSnapshot(
 	string AreaName,
@@ -43,7 +45,8 @@ public sealed record AreaSnapshot(
 	int? LightsNotResponding = null,
 	int? LightCount = null,
 	string? ChangedBy = null,
-	DateTimeOffset? ChangedAt = null)
+	DateTimeOffset? ChangedAt = null,
+	bool? IsLeadIn = null)
 {
 	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
@@ -69,6 +72,7 @@ public sealed record AreaSnapshot(
 		Nullable.Equals(LevelsFromRoom, other.LevelsFromRoom) &&
 		Nullable.Equals(IsAnyoneHome, other.IsAnyoneHome) &&
 		Nullable.Equals(IsHeldLit, other.IsHeldLit) &&
+		Nullable.Equals(IsLeadIn, other.IsLeadIn) &&
 		string.Equals(SceneApplied, other.SceneApplied, StringComparison.Ordinal) &&
 		string.Equals(TestingPeriodId, other.TestingPeriodId, StringComparison.Ordinal) &&
 		Nullable.Equals(TestEndsAt, other.TestEndsAt) &&

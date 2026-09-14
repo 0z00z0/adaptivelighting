@@ -51,7 +51,7 @@ else
 
 				@if (_snapshot is { } live)
 				{
-					<StateChip State="@live.State" Kelvin="@live.ColorTempKelvin" Title="@StateTitle(live)" />
+					<StateChip State="@live.State" Kelvin="@live.ColorTempKelvin" Title="@StateTitle(live)" IsLeadIn="@(live.IsLeadIn ?? false)" />
 					<span class="room-since">@RoomFacts.Since(live, _now)</span>
 				}
 				else

@@ -258,6 +258,7 @@ public sealed class AreaControllerTests
 
 		Assert.AreEqual(AreaState.PreOff, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 35 }, "the lead-in lights at the dim light, half the evening's 70 %");
+		Assert.IsTrue(t.Publisher.Snapshots[^1].IsLeadIn is true, "the snapshot must carry the lead-in, not just the reason of one publish");
 
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 89 }, PhysicalDevice());
 		Assert.AreEqual(AreaState.PreOff, t.Area.State, "the lead-in's own echo must not hold the hall at the dim light");
@@ -266,6 +267,7 @@ public sealed class AreaControllerTests
 
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70 }, "movement inside raises the room to its own level");
+		Assert.IsFalse(t.Publisher.Snapshots[^1].IsLeadIn is true, "leaving PreOff clears it, so the badge does not outlive the dim light it described");
 	}
 
 	[TestMethod]

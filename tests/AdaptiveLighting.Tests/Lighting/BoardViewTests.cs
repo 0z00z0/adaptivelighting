@@ -42,7 +42,8 @@ public sealed class BoardViewTests
 		AreaState state,
 		string name = "Stue",
 		int? kelvin = null,
-		DateTimeOffset? nextChangeAt = null) =>
+		DateTimeOffset? nextChangeAt = null,
+		bool isLeadIn = false) =>
 		new(
 			name,
 			state,
@@ -58,7 +59,8 @@ public sealed class BoardViewTests
 			null,
 			nextChangeAt,
 			null,
-			AreaId: name.ToLowerInvariant());
+			AreaId: name.ToLowerInvariant(),
+			IsLeadIn: isLeadIn);
 
 	private static ActivityEntry Entry(long sequence, DateTimeOffset at, AreaState state, int? kelvin = null) =>
 		new(sequence, Report(state, kelvin: kelvin) with { Timestamp = at });
@@ -536,6 +538,17 @@ public sealed class BoardViewTests
 
 		StringAssert.Contains(line, "in 18 s");
 		StringAssert.Contains(line, "unless someone moves");
+	}
+
+	// A lead-in and the ordinary warning dim share the AreaState; only the snapshot's own IsLeadIn tells them apart.
+	[TestMethod]
+	public void A_Lead_In_Tray_Line_Does_Not_Say_Warning_Dim()
+	{
+		string line = BoardView.ExceptionLine(Report(AreaState.PreOff, nextChangeAt: Now.AddSeconds(18), isLeadIn: true), Now);
+
+		StringAssert.Contains(line, "lead-in");
+		StringAssert.Contains(line, "unless someone comes in");
+		Assert.IsFalse(line.Contains("warning dim", StringComparison.Ordinal));
 	}
 
 	/// <summary>No armed deadline is a real state: an override with no expiry stands until somebody resumes it.</summary>

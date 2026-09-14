@@ -53,6 +53,7 @@ public sealed class HaStatePublisher : IStatePublisher
 				auto_on_blocking_entity = snapshot.AutoOnBlockingEntity,
 				is_held_lit = snapshot.IsHeldLit,
 				held_lit_by = snapshot.HeldLitBy,
+				is_lead_in = snapshot.IsLeadIn,
 				scene_applied = snapshot.SceneApplied,
 				testing_period_id = snapshot.TestingPeriodId,
 				test_ends_at = snapshot.TestEndsAt,

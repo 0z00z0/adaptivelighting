@@ -1941,7 +1941,9 @@ public sealed class AreaController : IDisposable
 			_notResponding.Count,
 			_leaves.Count,
 			_changedBy,
-			_changedAt);
+			_changedAt,
+			// _leadIn is already false whenever _state isn't PreOff: Enter clears it on leaving the state.
+			_leadIn);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>

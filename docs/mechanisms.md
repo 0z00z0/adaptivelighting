@@ -1053,8 +1053,11 @@ turning on lights the room ahead of anyone coming in, as the engine's own comman
 - A lead-in sensor is not a motion sensor. It never counts as occupancy, never restarts the vacancy countdown,
   and is not in the house's motion union for mode resets.
 - Reasons: `LeadIn` on lighting and on each restart, `LeadInUnanswered` for the off. The activity log files the
-  first under Movement and the second under Light change. The room page words a `PreOff` published as `LeadIn`
-  as a lead-in; a later publish in the same dim light under another reason reads as the ordinary warning.
+  first under Movement and the second under Light change. The room page's headline and next line word a `PreOff`
+  published as `LeadIn` as a lead-in from that publish's own reason; a later publish in the same dim light under
+  another reason reads there as the ordinary warning. The badge (`StateGlyph`, `BoardView`) instead reads the
+  snapshot's own `IsLeadIn`, which `AreaController` carries for the whole dim light and clears on leaving
+  `PreOff`, so it does not drift with the reason.
 - The command is declared to the detector like every other, so the lead-in's own echo is never a hand at the
   switch.
 

@@ -104,6 +104,11 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("held_lit_by")]
 	public string? HeldLitBy { get; init; }
 
+	/// <summary>Whether a lead-in sensor, not the vacancy timeout, put the area into <c>PreOff</c>. <c>null</c>
+	/// from a build that never published it.</summary>
+	[JsonPropertyName("is_lead_in")]
+	public bool? IsLeadIn { get; init; }
+
 	/// <summary>The room's own scene the area is sitting on, or <c>null</c> when the engine is aiming it itself.</summary>
 	[JsonPropertyName("scene_applied")]
 	public string? SceneApplied { get; init; }
@@ -214,7 +219,8 @@ public sealed record AreaSnapshotEvent
 			LightsNotResponding: LightsNotResponding,
 			LightCount: LightCount,
 			ChangedBy: ChangedBy,
-			ChangedAt: ChangedAt);
+			ChangedAt: ChangedAt,
+			IsLeadIn: IsLeadIn);
 	}
 }
 

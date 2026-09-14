@@ -31,12 +31,6 @@ An item with no number is one this file records before the tracker has minted on
   the same light from a dashboard and read it again. A light driven through Z-Wave JS is expected to read "At the
   device or wall switch" for the automation, for the reason in `docs/mechanisms.md`.
 
-- **The board and the state chip say "warning dim" while a lead-in holds the dim light.** `StateGlyph` and
-  `BoardView` word every `AreaState.PreOff` as the dim before switching off. The room page's headline and next
-  line read the snapshot's `LeadIn` reason and say "Lit dimly … ahead of anyone coming in", but the board, the
-  chip, and a later publish inside the same dim light under another reason still say warning dim. Following the
-  words to the state needs the lead-in carried on the snapshot.
-
 - **A room set to ignore automations keeps a light an automation switched on while the room was empty.** An
   ignored change in `AutoVacant` arms no countdown, so the light burns until movement or a hand ends it. A lead-in
   replaces the automation that causes this for a hall; a house giving a room *No* under *Other automations count
