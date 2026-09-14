@@ -1,6 +1,8 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
+using Fixture = AdaptiveLighting.Tests.Common.AreaFixture;
+
 namespace AdaptiveLighting.Tests.Lighting;
 
 public sealed partial class AreaControllerTests

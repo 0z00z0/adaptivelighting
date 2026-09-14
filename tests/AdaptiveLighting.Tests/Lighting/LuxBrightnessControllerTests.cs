@@ -2,9 +2,12 @@ using System.Reactive.Subjects;
 
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
+
+using Fixture = AdaptiveLighting.Tests.Common.AreaFixture;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -18,13 +21,6 @@ public sealed class LuxBrightnessControllerTests
 	private const string Light = "light.hallway";
 	private const string Lux = "sensor.hallway_lux";
 	private const string OutdoorLux = "sensor.outdoor_lux";
-
-	private sealed record Fixture(
-		TestScheduler Scheduler,
-		FakeHaContext Ha,
-		FakeLightActuator Actuator,
-		BehaviorSubject<HouseState> House,
-		AreaController Area);
 
 	/// <summary>The house-mode helper, for the one test that needs sleep to outrank the sun.</summary>
 	private static HouseModeConfig SoverMode() => new()
@@ -50,44 +46,6 @@ public sealed class LuxBrightnessControllerTests
 		string? daylightSensor = null,
 		HouseModeConfig? houseMode = null)
 	{
-		TestScheduler scheduler = new();
-		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
-
-		FakeHaContext ha = new();
-		ha.SetState(Motion, "off");
-		ha.SetState(Light, "off");
-		ha.SetState(Lux, lux);
-
-		if (outdoorLux is not null)
-			ha.SetState(OutdoorLux, outdoorLux);
-
-		AreaSettings settings = new()
-		{
-			VacancyTimeoutSeconds = 600,
-			PreOffSeconds = 30,
-			Darkness = DarknessSource.Always,
-			LuxBrightnessStartLux = 100,
-			LuxBrightnessFullLux = 10000,
-			LuxBrightnessMinPct = 70,
-			LuxBrightnessMaxPct = 100
-		};
-		tweak?.Invoke(settings);
-
-		GlobalConfig global = new()
-		{
-			SmoothTransitions = false,
-			CircadianTickSeconds = 60,
-			OutdoorLuxSensor = outdoorLux is null ? null : OutdoorLux,
-			HouseMode = houseMode
-		};
-
-		List<TimePeriodConfig> table =
-		[
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
-		];
-
 		// The curve opt-in is this room's own, per period, through its Levels row, never the period itself.
 		List<RoomLevelOverride> levels =
 		[
@@ -98,22 +56,42 @@ public sealed class LuxBrightnessControllerTests
 			}.OfType<RoomLevelOverride>()
 		];
 
-		ResolvedArea area = new(
-			"Hallway", settings, [Light], [Motion], luxSensor is null ? [] : [luxSensor], [])
-		{
-			DaylightSensor = daylightSensor
-		};
+		return new AreaTestBuilder()
+			.States(ha =>
+			{
+				ha.SetState(Motion, "off");
+				ha.SetState(Light, "off");
+				ha.SetState(Lux, lux);
 
-		FakeLightActuator actuator = new();
-		BehaviorSubject<HouseState> house = new(HouseState.Initial);
-
-		AreaController controller = new(
-			ha, scheduler, area, global, table,
-			new CircadianCalculator(table, global, () => SunTimes.Unknown, levels),
-			actuator, new FakeStatePublisher(), house, NullLoggerFactory.Instance, areaId: "hallway");
-
-		controller.Start();
-		return new Fixture(scheduler, ha, actuator, house, controller);
+				if (outdoorLux is not null)
+					ha.SetState(OutdoorLux, outdoorLux);
+			})
+			.ShippedSettings()
+			.Settings(settings =>
+			{
+				settings.VacancyTimeoutSeconds = 600;
+				settings.PreOffSeconds = 30;
+				settings.Darkness = DarknessSource.Always;
+				settings.LuxBrightnessStartLux = 100;
+				settings.LuxBrightnessFullLux = 10000;
+				settings.LuxBrightnessMinPct = 70;
+				settings.LuxBrightnessMaxPct = 100;
+			})
+			.Settings(tweak)
+			.Global(global =>
+			{
+				global.OutdoorLuxSensor = outdoorLux is null ? null : OutdoorLux;
+				global.HouseMode = houseMode;
+			})
+			.Named("Hallway", "hallway")
+			.Lights([Light])
+			.MotionSensors([Motion])
+			.LuxSensors(luxSensor is null ? [] : [luxSensor])
+			.Shape(area => area with { DaylightSensor = daylightSensor })
+			.RoomLevels(levels)
+			.Zone(TimeZoneInfo.Local)
+			.OpeningHouse(null)
+			.Build();
 	}
 
 	/// <summary>Turns the area on through motion that then clears, and hands back the brightness it was commanded to.</summary>

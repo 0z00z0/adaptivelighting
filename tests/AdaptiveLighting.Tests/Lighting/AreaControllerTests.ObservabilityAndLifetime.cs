@@ -1,11 +1,9 @@
-using System.Reactive.Subjects;
-
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Reactive.Testing;
+using Fixture = AdaptiveLighting.Tests.Common.AreaFixture;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -48,31 +46,24 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void The_Startup_Snapshot_Reads_The_Actual_Sensor_Not_A_Default()
 	{
-		var scheduler = new TestScheduler();
-		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+		Fixture t = new AreaTestBuilder()
+			.States(ha =>
+			{
+				ha.SetState(Motion, "off");
+				ha.SetState(Light, "off");
+				ha.SetState(Lux, "5000");
+			})
+			.ShippedSettings()
+			.Settings(settings => settings.Darkness = DarknessSource.Lux)
+			.Periods(new List<TimePeriodConfig>
+			{
+				new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
+			})
+			.Named("Test", areaId: null)
+			.OpeningHouse(null)
+			.Build();
 
-		var ha = new FakeHaContext();
-		ha.SetState(Motion, "off");
-		ha.SetState(Light, "off");
-		ha.SetState(Lux, "5000");
-
-		var settings = new AreaSettings { Darkness = DarknessSource.Lux };
-		var global = new GlobalConfig { SmoothTransitions = false, CircadianTickSeconds = 60 };
-		var periods = new List<TimePeriodConfig>
-		{
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
-		};
-
-		var publisher = new FakeStatePublisher();
-		var controller = new AreaController(
-			ha, scheduler, new ResolvedArea("Test", settings, [Light], [Motion], [Lux], []), global, periods,
-			new CircadianCalculator(periods, global, () => SunTimes.Unknown, zone: TimeZoneInfo.Utc),
-			new FakeLightActuator(), publisher, new BehaviorSubject<HouseState>(HouseState.Initial),
-			NullLoggerFactory.Instance);
-
-		controller.Start();
-
-		Assert.AreEqual(false, publisher.Snapshots.Single().IsDark,
+		Assert.AreEqual(false, t.Publisher.Snapshots.Single().IsDark,
 			"5000 lux is not dark, and the opening snapshot must say so rather than echo a default");
 	}
 
@@ -99,32 +90,32 @@ public sealed partial class AreaControllerTests
 	/// <summary>Starts a room that resolved no lux sensor of its own and hands back its opening report.</summary>
 	private static AreaSnapshot SensorlessRoom(string outdoorLux, bool followOutdoorLux)
 	{
-		var scheduler = new TestScheduler();
-		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
-
 		const string Outdoor = "sensor.ute_lux";
-		var ha = new FakeHaContext();
-		ha.SetState(Motion, "off");
-		ha.SetState(Light, "off");
-		ha.SetState(Outdoor, outdoorLux);
 
-		var settings = new AreaSettings { Darkness = DarknessSource.Lux, LuxThreshold = 1000 };
-		var global = new GlobalConfig { SmoothTransitions = false, CircadianTickSeconds = 60, OutdoorLuxSensor = Outdoor };
-		var periods = new List<TimePeriodConfig>
-		{
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
-		};
+		Fixture t = new AreaTestBuilder()
+			.States(ha =>
+			{
+				ha.SetState(Motion, "off");
+				ha.SetState(Light, "off");
+				ha.SetState(Outdoor, outdoorLux);
+			})
+			.ShippedSettings()
+			.Settings(settings =>
+			{
+				settings.Darkness = DarknessSource.Lux;
+				settings.LuxThreshold = 1000;
+			})
+			.Global(global => global.OutdoorLuxSensor = Outdoor)
+			.Periods(new List<TimePeriodConfig>
+			{
+				new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
+			})
+			.Named("Test", areaId: null)
+			.LuxSensors([])
+			.FollowOutdoorLux(followOutdoorLux)
+			.OpeningHouse(null)
+			.Build();
 
-		var publisher = new FakeStatePublisher();
-		var controller = new AreaController(
-			ha, scheduler,
-			new ResolvedArea("Test", settings, [Light], [Motion], [], [], followOutdoorLux),
-			global, periods,
-			new CircadianCalculator(periods, global, () => SunTimes.Unknown, zone: TimeZoneInfo.Utc),
-			new FakeLightActuator(), publisher, new BehaviorSubject<HouseState>(HouseState.Initial),
-			NullLoggerFactory.Instance);
-
-		controller.Start();
-		return publisher.Snapshots.Single();
+		return t.Publisher.Snapshots.Single();
 	}
 }

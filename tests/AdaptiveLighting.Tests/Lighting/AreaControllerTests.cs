@@ -4,12 +4,14 @@ using System.Reactive.Subjects;
 
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
 
 using NetDaemon.HassModel;
 using NetDaemon.HassModel.Entities;
+
+using Fixture = AdaptiveLighting.Tests.Common.AreaFixture;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -18,21 +20,12 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed partial class AreaControllerTests
 {
-	private const string Motion = "binary_sensor.area_motion";
-	private const string Light = "light.area";
+	private const string Motion = AreaTestBuilder.Motion;
+	private const string Light = AreaTestBuilder.Light;
 	private const string SecondLight = "light.area_second";
-	private const string Lux = "sensor.area_lux";
+	private const string Lux = AreaTestBuilder.Lux;
 	private const string Blocker = "binary_sensor.projector";
 	private const string Steps = "binary_sensor.front_steps_motion";
-
-	/// <summary>Everything a test needs to drive one area and read what it did.</summary>
-	private sealed record Fixture(
-		TestScheduler Scheduler,
-		FakeHaContext Ha,
-		FakeLightActuator Actuator,
-		FakeStatePublisher Publisher,
-		BehaviorSubject<HouseState> House,
-		AreaController Area);
 
 	/// <summary>Hands the test the period-boundary callback, so it can be called back by hand as Home Assistant's own thread would.</summary>
 	private sealed class BoundaryCapturingScheduler : IScheduler
@@ -125,70 +118,29 @@ public sealed partial class AreaControllerTests
 		IReadOnlyDictionary<string, IReadOnlySet<string>>? leavesOfEntry = null,
 		bool? treatAutomationsAsManual = null,
 		IReadOnlyList<string>? leadIn = null,
-		bool nameOrigins = false)
-	{
-		var scheduler = new TestScheduler();
-		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
-
-		var ha = new FakeHaContext();
-		ha.SetState(Motion, "off");
-		ha.SetState(Light, "off");
-		ha.SetState(Lux, "5");
-
-		// Before Start(), so a test can hand the controller a world that already exists.
-		seed?.Invoke(ha);
-
-		var settings = new AreaSettings
-		{
-			VacancyTimeoutSeconds = 600,
-			PreOffSeconds = 30,
-			Darkness = DarknessSource.Lux,
-			OverrideDurationMinutes = 120,
-
-			// Pinned, unlike the shipped default: most of these tests are about the fixed hold's clock, and one
-			// that arms the vacancy timeout instead would be measuring a different rule under the same name.
-			OverrideUntilVacant = false,
-			VacancyResetMinutes = 10
-		};
-		tweak?.Invoke(settings);
-
-		var global = new GlobalConfig { SmoothTransitions = false, CircadianTickSeconds = 60 };
-		tweakGlobal?.Invoke(global);
-
-		var table = periods ?? new List<TimePeriodConfig>
-		{
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
-		};
-
-		var area = new ResolvedArea(
-			"Test", settings, lights ?? [Light], withMotionSensor ? [Motion] : [], [Lux], ignoreWhenOn ?? [])
-		{
-			SceneOnMotion = sceneOnMotion,
-			LeavesOfEntry = leavesOfEntry ?? new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal),
-			TreatAutomationsAsManual = treatAutomationsAsManual,
-			LeadInSensors = leadIn ?? []
-		};
-		var actuator = new FakeLightActuator();
-		var publisher = new FakeStatePublisher();
-		var house = new BehaviorSubject<HouseState>(HouseState.Initial);
-
-		var controller = new AreaController(
-			ha, wrapScheduler?.Invoke(scheduler) ?? scheduler, area, global, table,
-			new CircadianCalculator(table, global, () => sun?.Times ?? SunTimes.Unknown, levels, zone: TimeZoneInfo.Utc),
-			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area",
-			sunMoved: watchSun ? sun?.Moved : null,
-			originNames: nameOrigins ? new ChangeOriginNames(ha, NullLogger.Instance) : null);
-
-		// The orchestrator composes and publishes the opening house state before it starts any room, so that is
-		// what the controller reads off the stream the moment it subscribes.
-		house.OnNext(openingHouse ?? House());
-
-		controller.Start();
-
-		return new Fixture(scheduler, ha, actuator, publisher, house, controller);
-	}
+		bool nameOrigins = false) =>
+		new AreaTestBuilder()
+			.Seed(seed)
+			.Settings(tweak)
+			.Global(tweakGlobal)
+			.Periods(periods)
+			.Lights(lights ?? [Light])
+			.MotionSensors(withMotionSensor ? [Motion] : [])
+			.IgnoreWhenOn(ignoreWhenOn ?? [])
+			.Shape(area => area with
+			{
+				SceneOnMotion = sceneOnMotion,
+				LeavesOfEntry = leavesOfEntry ?? area.LeavesOfEntry,
+				TreatAutomationsAsManual = treatAutomationsAsManual,
+				LeadInSensors = leadIn ?? []
+			})
+			.RoomLevels(levels)
+			.Sun(() => sun?.Times ?? SunTimes.Unknown)
+			.SunMoved(watchSun ? sun?.Moved : null)
+			.WrapScheduler(scheduler => wrapScheduler?.Invoke(scheduler) ?? scheduler)
+			.NameOrigins(nameOrigins)
+			.OpeningHouse(openingHouse ?? House())
+			.Build();
 
 	private static void Advance(Fixture fixture, TimeSpan by) => fixture.Scheduler.AdvanceBy(by.Ticks);
 
