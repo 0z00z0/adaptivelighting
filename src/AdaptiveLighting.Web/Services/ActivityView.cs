@@ -295,6 +295,11 @@ public static class ActivityView
 		if (WasDeclined(snapshot))
 			return ActivityCategory.Declined;
 
+		// After the refusal: a light dropping out decided nothing, and a flapping radio would otherwise fill the
+		// default view. The room page carries the warning while it lasts.
+		if (snapshot.Reason is TransitionReason.LightAvailability)
+			return ActivityCategory.Background;
+
 		if (CommandedTheLights(snapshot))
 			return ActivityCategory.LightChange;
 
@@ -395,7 +400,8 @@ public static class ActivityView
 			or TransitionReason.ManualOn
 			or TransitionReason.ManualOff
 			or TransitionReason.SuppressionLifted
-			or TransitionReason.EnablementChanged => false,
+			or TransitionReason.EnablementChanged
+			or TransitionReason.LightAvailability => false,
 
 		// What is left commands where it left the room lit and aimed. That is what AutoActive means.
 		_ => snapshot.State is AreaState.AutoActive
@@ -690,6 +696,7 @@ public static class ActivityView
 			? "A guest scene has this room"
 			: "The guest scene let this room go",
 		TransitionReason.ManualLightOn => Lit("Switched on from the app", snapshot),
+		TransitionReason.LightAvailability => RoomFacts.NotResponding(snapshot)?.TrimEnd('.') ?? "Every light is responding again",
 		TransitionReason.LevelTestStarted => snapshot.TestingPeriodId is { Length: > 0 } tested
 			? $"Testing the '{tested}' period on the real lights"
 			: "Testing a period on the real lights",

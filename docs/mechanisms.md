@@ -910,6 +910,24 @@ with neither user nor parent in the context.
   own work.
 - The cost: a person switching a light inside that window, in any room, is missed.
 
+### A room says when its lights stop answering
+
+A group reads on or off from the members still answering, so four lit bulbs that drop out beside four dark ones
+leave the group reading off. The engine then believes the room is dark and sends nothing, which is right for what
+it can see, and the four bulbs stay lit. Nothing about that is visible from the group alone.
+
+- The controller counts the lights it commands, groups followed down, that read unavailable, unknown or absent.
+  The count is seeded once at start and kept from the same subscriptions that notice a member leaving, so no
+  snapshot reads state to produce it.
+- `AreaSnapshot` carries `LightsNotResponding` and `LightCount`, published as `lights_not_responding` and
+  `light_count`. Both count in `HasSameMeaningAs`, so a change goes out at once, under
+  `TransitionReason.LightAvailability`.
+- The room page shows a warning while the count is above zero, and the dashboard marks the room's lane. Both read
+  the published count through `RoomFacts.NotResponding`, never Home Assistant.
+- The activity log files `LightAvailability` under Background: it decided nothing, and a flapping radio would
+  otherwise fill the default view.
+- A group entity that is itself unavailable is not counted: its members are.
+
 ### What ends a manual hold
 
 `AreaSettings.OverrideUntilVacant` picks between two clocks and nothing else changes: the manual level stands,

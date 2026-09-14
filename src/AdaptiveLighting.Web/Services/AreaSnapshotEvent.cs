@@ -149,6 +149,14 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("lights_moved")]
 	public List<string>? LightsMoved { get; init; }
 
+	/// <summary>How many of the room's lights Home Assistant reports unavailable or unknown, groups followed down.</summary>
+	[JsonPropertyName("lights_not_responding")]
+	public int? LightsNotResponding { get; init; }
+
+	/// <summary>How many lights the room commands, groups followed down.</summary>
+	[JsonPropertyName("light_count")]
+	public int? LightCount { get; init; }
+
 	/// <summary>
 	///     Rebuilds an <see cref="AreaSnapshot"/>, or <c>null</c> when the payload names no area. An unparseable
 	///     enum name degrades to its zero value; nothing throws.
@@ -194,7 +202,9 @@ public sealed record AreaSnapshotEvent
 				? [.. lights.Where(light => light.EntityId is { Length: > 0 }).Select(light => new LightStanding(light.EntityId!, light.BrightnessPct, light.ColorTempKelvin))]
 				: null,
 			TestingLightId: TestingLightId,
-			LightsMoved: LightsMoved is { Count: > 0 } moved ? moved : null);
+			LightsMoved: LightsMoved is { Count: > 0 } moved ? moved : null,
+			LightsNotResponding: LightsNotResponding,
+			LightCount: LightCount);
 	}
 }
 

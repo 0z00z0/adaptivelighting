@@ -188,6 +188,10 @@ else
 								<span class="lane-name">
 									<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" />
 									<span class="lane-room">@lane.Name</span>
+									@if (RoomFacts.NotResponding(lane.Latest) is { Length: > 0 })
+									{
+										<span class="lane-dropout" aria-hidden="true">!</span>
+									}
 								</span>
 								<span class="board-track">
 									@foreach (LaneBlock block in lane.Blocks)
@@ -242,6 +246,10 @@ else
 							<a class="quiet-chip" href="@RoomHref(lane.AreaId)" title="@LaneTitle(lane)" @key="lane.Key">
 								<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" />
 								@lane.Name
+								@if (RoomFacts.NotResponding(lane.Latest) is { Length: > 0 })
+								{
+									<span class="lane-dropout" aria-hidden="true">!</span>
+								}
 							</a>
 						}
 					}
@@ -562,10 +570,14 @@ else
 		areaId is { Length: > 0 } id ? $"room/{Uri.EscapeDataString(id)}" : null;
 
 	// Lights on levels of their own are named after the room's state, and only where one differs from the room.
-	private string LaneTitle(BoardLane lane) =>
-		LightReadout.Line(lane.Latest, entityId => Catalog.FriendlyNameOf(entityId) ?? entityId) is { } lights
+	private string LaneTitle(BoardLane lane)
+	{
+		string title = LightReadout.Line(lane.Latest, entityId => Catalog.FriendlyNameOf(entityId) ?? entityId) is { } lights
 			? $"{lane.Name} — {StateGlyph.For(lane.Latest.State).Word} — {lights}"
 			: $"{lane.Name} — {StateGlyph.For(lane.Latest.State).Word}";
+
+		return RoomFacts.NotResponding(lane.Latest) is { Length: > 0 } dropped ? $"{title} — {dropped}" : title;
+	}
 
 	/// <summary>Which edge a tray chip carries: the warning dim is about to act, the other three are standing.</summary>
 	private static string TrayEdge(AreaState state) => state == AreaState.PreOff ? "tray-warn" : "tray-human";

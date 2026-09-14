@@ -39,7 +39,9 @@ public sealed record AreaSnapshot(
 	DateTimeOffset? TestEndsAt = null,
 	IReadOnlyList<LightStanding>? LightLevels = null,
 	string? TestingLightId = null,
-	IReadOnlyList<string>? LightsMoved = null)
+	IReadOnlyList<string>? LightsMoved = null,
+	int? LightsNotResponding = null,
+	int? LightCount = null)
 {
 	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
@@ -69,6 +71,8 @@ public sealed record AreaSnapshot(
 		string.Equals(TestingPeriodId, other.TestingPeriodId, StringComparison.Ordinal) &&
 		Nullable.Equals(TestEndsAt, other.TestEndsAt) &&
 		string.Equals(TestingLightId, other.TestingLightId, StringComparison.Ordinal) &&
+		LightsNotResponding == other.LightsNotResponding &&
+		LightCount == other.LightCount &&
 		SameLights(LightLevels, other.LightLevels) &&
 		Forced == other.Forced;
 

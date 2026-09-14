@@ -45,6 +45,11 @@ public sealed class AreaController : IDisposable
 	// Assistant, so it is settled before Start.
 	private readonly Dictionary<string, List<string>> _entriesOfMember = new(StringComparer.OrdinalIgnoreCase);
 
+	// Every light the room commands, groups followed down, and those not answering. Kept from the subscriptions, so
+	// a snapshot never reads state to count them.
+	private readonly HashSet<string> _leaves;
+	private readonly HashSet<string> _notResponding = new(StringComparer.OrdinalIgnoreCase);
+
 	private readonly object _gate = new();
 	private readonly CompositeDisposable _subscriptions = [];
 	private readonly SerialDisposable _vacancyTimer = new();
@@ -210,6 +215,8 @@ public sealed class AreaController : IDisposable
 
 				entries.Add(entry);
 			}
+
+		_leaves = AllLeaves();
 
 		_boundary =new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
 	}
@@ -438,6 +445,10 @@ public sealed class AreaController : IDisposable
 
 		lock (_gate)
 		{
+			foreach (string leaf in _leaves)
+				if (!IsOnOrOff(_ha.GetState(leaf)))
+					_notResponding.Add(leaf);
+
 			// What cannot be known yet, the last command and last motion, stays null instead of being guessed.
 			RefreshDarkness();
 			Publish(AdoptIfLit() ? TransitionReason.AdoptedAtStartup : TransitionReason.Startup);
@@ -617,6 +628,13 @@ public sealed class AreaController : IDisposable
 		if (_entriesOfMember.TryGetValue(entityId, out List<string>? entries))
 			foreach (string entry in entries)
 				_detector.ExpectMemberAvailabilityChange(entry);
+
+		// A group entity going unavailable is counted through its members, never as a bulb of its own.
+		if (!_leaves.Contains(entityId))
+			return;
+
+		if (IsOnOrOff(change.New) ? _notResponding.Remove(entityId) : _notResponding.Add(entityId))
+			Publish(TransitionReason.LightAvailability);
 	}
 
 	private void OnHouseChanged(HouseState house)
@@ -1826,7 +1844,9 @@ public sealed class AreaController : IDisposable
 			_testEndsAt,
 			standing is not null ? LightStandings() : null,
 			_testingLightId,
-			_lightsMoved);
+			_lightsMoved,
+			_notResponding.Count,
+			_leaves.Count);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>
