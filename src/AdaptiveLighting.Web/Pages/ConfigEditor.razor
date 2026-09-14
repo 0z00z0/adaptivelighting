@@ -1153,9 +1153,9 @@ else
 
 	private readonly Dictionary<AreaConfig, string> _roomNames = [];
 
-	// Keyed by area id with a name fallback, the same join the snapshot cache uses. Read from the cache, never
-	// subscribed to: a live re-render mid-edit costs the thing being edited.
-	private IReadOnlyDictionary<string, AreaState> _liveStates = new Dictionary<string, AreaState>(StringComparer.Ordinal);
+	// Per room, found through AreaSnapshotCache.Find. Read from the cache, never subscribed to: a live re-render
+	// mid-edit costs the thing being edited.
+	private IReadOnlyDictionary<AreaConfig, AreaState> _liveStates = new Dictionary<AreaConfig, AreaState>();
 
 	// Null means the re-setup panel is closed; otherwise these are the rooms it opens with ticked.
 	private IReadOnlyCollection<string>? _setupScope;
@@ -1174,11 +1174,10 @@ else
 	private bool _showAllRooms;
 	private readonly HashSet<string> _openedGroups = new(StringComparer.Ordinal);
 
-	/// <summary>Whether Home Assistant is answering, as opposed to merely not throwing.</summary>
-	/// <remarks><see cref="HaCatalog.IsHomeAssistantReady"/> only reports whether a read threw, and the registry
-	/// answers an empty list where it has nothing, so checking that something came back covers both.</remarks>
-	private bool HomeAssistantIsAnswering =>
-		Catalog.IsHomeAssistantReady && (_areas.Count > 0 || _luxSensors.Count > 0 || _switches.Count > 0);
+	// Taken wherever the area or light-level lists are re-read, never per render: the answer reads the registry.
+	private bool _homeAssistantAnswers;
+
+	private bool HomeAssistantIsAnswering => _homeAssistantAnswers;
 
 	/// <summary>Which section to open on load; read once, after which the rail owns the choice.</summary>
 	[Parameter]
@@ -1289,6 +1288,7 @@ else
 		// sensor in the house.
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _config.Global.EffectiveMotionDeviceClasses]);
 		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_config.Global.IlluminanceDeviceClass]);
+		_homeAssistantAnswers = Catalog.IsHomeAssistantResponding(_config.Global);
 
 		// The presence-reset override picker: discovered motion sensors plus person entities.
 		_presenceEntities = [.. _motionSensors.Concat(Catalog.EntitiesInDomains("person"))];
@@ -1387,27 +1387,23 @@ else
 			_roomNames[area] = HouseView.DisplayName(area, Catalog.AreaRegistry);
 	}
 
-	/// <summary>The live state of each room the cache has heard from, keyed by area id and falling back to its name.</summary>
+	/// <summary>The live state of each room the cache has heard from, taken with the room names it is matched by.</summary>
 	private void RefreshLiveStates()
 	{
-		Dictionary<string, AreaState> states = new(StringComparer.Ordinal);
+		Dictionary<AreaConfig, AreaState> states = [];
 
-		foreach (AreaSnapshot snapshot in Cache.Snapshots)
-			states[snapshot.AreaId is { Length: > 0 } areaId ? areaId : snapshot.AreaName] = snapshot.State;
+		foreach (AreaConfig area in _config.Areas)
+		{
+			if (Cache.Find(area.AreaId, RoomName(area)) is { } snapshot)
+				states[area] = snapshot.State;
+		}
 
 		_liveStates = states;
 	}
 
 	/// <summary>What a room is doing right now, or <c>null</c> when nothing has been heard about it.</summary>
-	/// <remarks>By area id first: ids do not change while a page is open and display names do. The name
-	/// fallback covers a room configured with explicit entities.</remarks>
-	private AreaState? LiveStateOf(AreaConfig area)
-	{
-		if (area.AreaId is { Length: > 0 } areaId && _liveStates.TryGetValue(areaId, out AreaState byId))
-			return byId;
-
-		return _liveStates.TryGetValue(RoomName(area), out AreaState byName) ? byName : null;
-	}
+	private AreaState? LiveStateOf(AreaConfig area) =>
+		_liveStates.TryGetValue(area, out AreaState state) ? state : null;
 
 	/// <summary>A room's own page, or <c>null</c> when there is nothing to open yet.</summary>
 	/// <remarks>A room with no area has no route, and one added since the last save has none yet: the room page
@@ -1908,6 +1904,7 @@ else
 	{
 		mutate();
 		_areas = Catalog.Areas(_config.Global);
+		_homeAssistantAnswers = Catalog.IsHomeAssistantResponding(_config.Global);
 		Revalidate();
 	}
 
@@ -2036,6 +2033,7 @@ else
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _config.Global.EffectiveMotionDeviceClasses]);
 		_presenceEntities = [.. _motionSensors.Concat(Catalog.EntitiesInDomains("person"))];
 		_areas = Catalog.Areas(_config.Global);
+		_homeAssistantAnswers = Catalog.IsHomeAssistantResponding(_config.Global);
 		Revalidate();
 	}
 
@@ -2043,10 +2041,11 @@ else
 	{
 		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_config.Global.IlluminanceDeviceClass]);
 		_areas = Catalog.Areas(_config.Global);
+		_homeAssistantAnswers = Catalog.IsHomeAssistantResponding(_config.Global);
 		Revalidate();
 	}
 
-	private string Name(string entityId) => Catalog.FriendlyNameOf(entityId) ?? entityId;
+	private string Name(string entityId) => Catalog.FriendlyNameOrId(entityId);
 
 	/// <summary>The empty-picker note: this page knows why a list is empty and the component does not, so a
 	/// lost connection is not reported as an empty domain.</summary>

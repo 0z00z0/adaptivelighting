@@ -43,6 +43,9 @@ public static class ServiceCollectionExtensions
 		// The record's other feed: the engine's own rebuilds, which never reach Home Assistant as an area event.
 		services.AddHostedService<EngineNoticeRecorder>();
 
+		// Scoped, so an edit to a shared document stays inside one circuit.
+		services.AddScoped<DocumentCache>();
+
 		// Scoped: these depend on IHaContext, which NetDaemon scopes per Blazor circuit.
 		services.AddScoped<ModeService>();
 		services.AddScoped<HaCatalog>();

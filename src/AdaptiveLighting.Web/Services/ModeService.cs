@@ -2,6 +2,8 @@ using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Hosting;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Web.Services;
@@ -83,11 +85,7 @@ public sealed class ModeService
 	private readonly HaCatalog _catalog;
 	private readonly LightingEngineHost _engine;
 	private readonly ILogger<ModeService> _logger;
-
-	// Cached against the store file's last-write time, so the per-second dashboard ticker costs a stat, not a
-	// YAML parse.
-	private AdaptiveLightingConfig? _cachedConfig;
-	private DateTimeOffset? _cachedStamp;
+	private readonly DocumentCache _documents;
 
 	/// <summary>Whether Home Assistant's state cache answered the last time <see cref="GetToggles"/> asked.</summary>
 	/// <remarks>
@@ -96,7 +94,14 @@ public sealed class ModeService
 	/// </remarks>
 	public bool IsHomeAssistantReady { get; private set; } = true;
 
+	/// <summary>Creates the service with a document cache of its own.</summary>
 	public ModeService(IHaContext ha, IAppConfig<AdaptiveLightingConfig> config, HaCatalog catalog, LightingEngineHost engine, ILogger<ModeService> logger)
+		: this(ha, config, catalog, engine, new DocumentCache(engine, NullLogger<DocumentCache>.Instance), logger)
+	{
+	}
+
+	/// <summary>Creates the service over the circuit's shared document cache.</summary>
+	public ModeService(IHaContext ha, IAppConfig<AdaptiveLightingConfig> config, HaCatalog catalog, LightingEngineHost engine, DocumentCache documents, ILogger<ModeService> logger)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 		ArgumentNullException.ThrowIfNull(engine);
@@ -105,39 +110,16 @@ public sealed class ModeService
 		_seedConfig = config.Value;
 		_catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
 		_engine = engine;
+		_documents = documents ?? throw new ArgumentNullException(nameof(documents));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
 	}
 
 	/// <summary>The live configuration document, re-read whenever it changes on disk.</summary>
 	/// <remarks>
 	///     Reads the store, never <c>IAppConfig</c>, which is frozen at process start and would hide anything
-	///     configured since. A parse failure keeps the last good document instead of blanking the page mid-save.
+	///     configured since. The seed stands in only until a file has parsed.
 	/// </remarks>
-	private AdaptiveLightingConfig Config
-	{
-		get
-		{
-			if (!_engine.Store.Exists)
-				return _seedConfig;
-
-			DateTimeOffset? stamp = _engine.Store.LastWrittenUtc;
-			if (_cachedConfig is null || stamp != _cachedStamp)
-			{
-				try
-				{
-					_cachedConfig = _engine.Store.Load();
-					_cachedStamp = stamp;
-				}
-				catch (LightingConfigException exception)
-				{
-					_logger.LogDebug(exception, "Could not read the lighting configuration for the dashboard; keeping the last good copy.");
-					return _cachedConfig ?? _seedConfig;
-				}
-			}
-
-			return _cachedConfig ?? _seedConfig;
-		}
-	}
+	private AdaptiveLightingConfig Config => _documents.Read() ?? _seedConfig;
 
 	/// <summary>Copies the engine's built-in enable switch onto the shared config before every read.</summary>
 	/// <remarks>
@@ -362,7 +344,7 @@ public sealed class ModeService
 			EntityState? state = TryGetState(entityId);
 			people.Add(new PersonView(
 				entityId,
-				_catalog.FriendlyNameOf(entityId) ?? entityId,
+				_catalog.FriendlyNameOrId(entityId),
 				state.StateIs(HomeState),
 				state is not null));
 		}

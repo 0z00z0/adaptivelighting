@@ -4,6 +4,7 @@
 @inject AreaSnapshotCache Cache
 @inject ActivityLog Log
 @inject LightingEngineHost Engine
+@inject DocumentCache Documents
 @inject ModeService Service
 @inject HaCatalog Catalog
 @inject ILogger<Dashboard> Logger
@@ -112,7 +113,7 @@ else
 	<div class="tray">
 		@foreach (AreaSnapshot area in _exceptions)
 		{
-			<a class="tray-chip @TrayEdge(area.State)" href="@RoomHref(area.AreaId)">
+			<a class="tray-chip @TrayEdge(area.State)" href="@HouseView.RoomHref(area.AreaId)">
 				<StateChip State="area.State" Kelvin="area.ColorTempKelvin" Bare="true" IsLeadIn="@(area.IsLeadIn ?? false)" />
 				<span class="tray-text"><b>@area.AreaName</b> &mdash; @BoardView.ExceptionLine(area, _now)</span>
 			</a>
@@ -184,7 +185,7 @@ else
 
 						@foreach (BoardLane lane in busy)
 						{
-							<a class="lane" href="@RoomHref(lane.AreaId)" title="@LaneTitle(lane)" @key="lane.Key">
+							<a class="lane" href="@HouseView.RoomHref(lane.AreaId)" title="@LaneTitle(lane)" @key="lane.Key">
 								<span class="lane-name">
 									<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" />
 									<span class="lane-room">@lane.Name</span>
@@ -243,7 +244,7 @@ else
 
 						@foreach (BoardLane lane in resting)
 						{
-							<a class="quiet-chip" href="@RoomHref(lane.AreaId)" title="@LaneTitle(lane)" @key="lane.Key">
+							<a class="quiet-chip" href="@HouseView.RoomHref(lane.AreaId)" title="@LaneTitle(lane)" @key="lane.Key">
 								<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" />
 								@lane.Name
 								@if (RoomFacts.NotResponding(lane.Latest) is { Length: > 0 })
@@ -320,34 +321,9 @@ else
 	else
 	{
 		<ol class="log log-compact">
-			@foreach (ActivityRow row in _logRows)
+			@foreach (Services.ActivityRow row in _logRows)
 			{
-				<li class="log-row family-@row.Family" @key="row.Sequence">
-					<div class="log-when">
-						<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)"
-							  title="@Full(row.At)">@Clock(row.At)</time>
-						@if (row.IsAboutTheHouse)
-						{
-							@* Not attributed to a room, because no room did it. *@
-							<span class="log-room log-room-house" title="@ActivityView.ReportedBy(row)">@HouseLabel(row)</span>
-						}
-						else if (row.Snapshot is { AreaId: { Length: > 0 } areaId })
-						{
-							<a class="log-room log-room-link" href="@RoomHref(areaId)">@row.Room</a>
-						}
-						else
-						{
-							<span class="log-room">@row.Room</span>
-						}
-					</div>
-					<div class="log-body">
-						<span class="log-what">@row.Line.What</span>
-						@if (row.Line.Why is { Length: > 0 } why)
-						{
-							<span class="log-why">@why</span>
-						}
-					</div>
-				</li>
+				<ActivityRow @key="row.Sequence" Row="row" LinkRoom="true" />
 			}
 		</ol>
 
@@ -364,7 +340,7 @@ else
 	// not the raw buffer, so the footer's "N reports on the Activity page" is a count that link can keep.
 	private int _kept;
 	private int _reachable;
-	private IReadOnlyList<ActivityRow> _logRows = [];
+	private IReadOnlyList<Services.ActivityRow> _logRows = [];
 
 	private IReadOnlyList<BoardLane> _lanes = [];
 	private bool _hasMarks;
@@ -376,7 +352,6 @@ else
 	private IReadOnlyList<DateTimeOffset> _ticks = [];
 	private double _nowPercent;
 	private AdaptiveLightingConfig? _schedule;
-	private DateTimeOffset? _periodsStamp;
 	private MasterSwitchView? _masterSwitch;
 	private HouseModeView? _houseMode;
 	private IReadOnlyList<PersonView> _people = [];
@@ -468,8 +443,8 @@ else
 			if (entry.Snapshot is not { } snapshot)
 				continue;
 
-			if (!byRoom.TryGetValue(KeyOf(snapshot), out List<ActivityEntry>? room))
-				byRoom[KeyOf(snapshot)] = room = [];
+			if (!byRoom.TryGetValue(AreaSnapshotCache.KeyOf(snapshot), out List<ActivityEntry>? room))
+				byRoom[AreaSnapshotCache.KeyOf(snapshot)] = room = [];
 
 			room.Add(entry);
 		}
@@ -477,7 +452,7 @@ else
 		List<BoardLane> lanes = new(visible.Count);
 		foreach (AreaSnapshot snapshot in visible)
 		{
-			string key = KeyOf(snapshot);
+			string key = AreaSnapshotCache.KeyOf(snapshot);
 			IReadOnlyList<ActivityEntry> history = byRoom.TryGetValue(key, out List<ActivityEntry>? found) ? found : [];
 
 			lanes.Add(new BoardLane(
@@ -507,27 +482,11 @@ else
 	}
 
 	/// <summary>Re-reads the circadian table for the band above the lanes.</summary>
-	/// <remarks>Cached against the store file's last-write time, so the per-second ticker costs a stat and not
-	/// a YAML parse. A parse failure keeps the last good table instead of blanking the band mid-save.</remarks>
+	/// <remarks>A parse failure keeps the last good table instead of blanking the band mid-save.</remarks>
 	private void ReadSchedule()
 	{
-		if (Engine.Store.Exists)
-		{
-			DateTimeOffset? stamp = Engine.Store.LastWrittenUtc;
-
-			if (_schedule is null || stamp != _periodsStamp)
-			{
-				try
-				{
-					_schedule = Engine.Store.Load();
-					_periodsStamp = stamp;
-				}
-				catch (LightingConfigException exception)
-				{
-					Logger.LogDebug(exception, "Could not read the schedule for the board; keeping the last good copy.");
-				}
-			}
-		}
+		if (Documents.Read() is { } document)
+			_schedule = document;
 
 		if (_schedule is not { } schedule)
 		{
@@ -560,19 +519,10 @@ else
 			_window);
 	}
 
-	/// <summary>What a report is filed under, matching the snapshot cache's own key so the two agree.</summary>
-	private static string KeyOf(AreaSnapshot snapshot) =>
-		snapshot.AreaId is { Length: > 0 } areaId ? areaId : snapshot.AreaName;
-
-	/// <summary>A room's own page, or <c>null</c> for a room configured with explicit entities.</summary>
-	/// <remarks>Null makes Blazor drop the href, leaving an anchor that is neither a link nor a tab stop.</remarks>
-	private static string? RoomHref(string? areaId) =>
-		areaId is { Length: > 0 } id ? $"room/{Uri.EscapeDataString(id)}" : null;
-
 	// Lights on levels of their own are named after the room's state, and only where one differs from the room.
 	private string LaneTitle(BoardLane lane)
 	{
-		string title = LightReadout.Line(lane.Latest, entityId => Catalog.FriendlyNameOf(entityId) ?? entityId) is { } lights
+		string title = LightReadout.Line(lane.Latest, Catalog.FriendlyNameOrId) is { } lights
 			? $"{lane.Name} — {StateGlyph.For(lane.Latest.State, lane.Latest.IsLeadIn ?? false).Word} — {lights}"
 			: $"{lane.Name} — {StateGlyph.For(lane.Latest.State, lane.Latest.IsLeadIn ?? false).Word}";
 
@@ -601,9 +551,6 @@ else
 		? "The one report so far is routine."
 		: $"All {_reachable} reports so far are routine.";
 
-	private static string HouseLabel(ActivityRow row) =>
-		row.Rooms.Count > 1 ? $"House · {row.Rooms.Count} rooms" : "House";
-
 	/// <summary>The first tick hangs off the left edge and the last off the right, so neither is clipped.</summary>
 	private string? TickClass(int index) =>
 		index == 0 ? "board-tick-first" : index == _window.Ticks.Count - 1 ? "board-tick-last" : null;
@@ -611,12 +558,6 @@ else
 	// Invariant, always. Under nb-NO a double renders 62,5 and "left: 62,5%" is not a length, so the
 	// declaration is dropped and every block on the board stacks at the left edge.
 	private static string Pct(double value) => InvariantNumber.Format(value, 3);
-
-	private static string Clock(DateTimeOffset at) =>
-		at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);
-
-	private static string Full(DateTimeOffset at) =>
-		at.ToLocalTime().ToString("dddd d MMMM yyyy, HH:mm:ss", CultureInfo.CurrentCulture);
 
 	/// <summary>Re-reads the page the moment the commissioning board's save lands, ahead of the next tick.</summary>
 	private void OnCommissioned()

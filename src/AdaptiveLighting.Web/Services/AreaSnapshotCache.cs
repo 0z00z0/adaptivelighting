@@ -51,6 +51,30 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 
 	public bool HasData => !_snapshots.IsEmpty;
 
+	/// <summary>A room's newest snapshot, by area id first and display name second, or <c>null</c> when it has not
+	/// reported.</summary>
+	/// <remarks>The name covers a room configured with explicit entities, which reports no area id. Names are
+	/// matched in <see cref="Snapshots"/> order, so two rooms sharing a name resolve the same way every time.</remarks>
+	public AreaSnapshot? Find(string? areaId, string? name)
+	{
+		if (areaId is { Length: > 0 } id
+			&& _snapshots.TryGetValue(id, out AreaSnapshot? byId)
+			&& string.Equals(byId.AreaId, id, StringComparison.Ordinal))
+			return byId;
+
+		return name is { Length: > 0 }
+			? Snapshots.FirstOrDefault(snapshot => string.Equals(snapshot.AreaName, name, StringComparison.OrdinalIgnoreCase))
+			: null;
+	}
+
+	/// <summary>What a snapshot is filed under: its area id, or its name when it has none.</summary>
+	public static string KeyOf(AreaSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		return snapshot.AreaId is { Length: > 0 } areaId ? areaId : snapshot.AreaName;
+	}
+
 	public Task StartAsync(CancellationToken cancellationToken)
 	{
 		// A web UI that cannot subscribe is a degraded UI, not a dead host: the NetDaemon side keeps running.
@@ -103,6 +127,8 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		if (snapshot is null)
 			return;
 
+		// Keyed on the registry area id, the stable half: a room renamed while a page is open replaces itself
+		// instead of arriving as a second entry.
 		_snapshots[KeyOf(snapshot)] = snapshot;
 
 		// Filed before the push: the activity page re-reads the history on this notification, so it must not be
@@ -111,9 +137,4 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 
 		_changes.OnNext(snapshot);
 	}
-
-	// Keyed on the registry area id, which is the stable half: a room renamed while the page is open replaces
-	// itself instead of arriving as a second entry. The name covers an area with no AreaId at all.
-	private static string KeyOf(AreaSnapshot snapshot) =>
-		snapshot.AreaId is { Length: > 0 } areaId ? areaId : snapshot.AreaName;
 }
