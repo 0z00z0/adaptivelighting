@@ -227,6 +227,23 @@ public static class RoomFacts
 		};
 	}
 
+	/// <summary>How many of the room's lights have stopped answering, or <c>null</c> while every one answers.</summary>
+	/// <remarks>Read off the count the engine published, never off Home Assistant.</remarks>
+	public static string? NotResponding(AreaSnapshot snapshot)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+
+		return snapshot switch
+		{
+			{ LightsNotResponding: not > 0 } => null,
+			{ LightCount: 1 } => "This room's light is not responding.",
+			{ LightsNotResponding: 1, LightCount: { } total } => $"1 of {total} lights is not responding.",
+			{ LightsNotResponding: { } missing, LightCount: { } total } => $"{missing} of {total} lights are not responding.",
+			{ LightsNotResponding: 1 } => "1 light is not responding.",
+			{ LightsNotResponding: { } missing } => $"{missing} lights are not responding."
+		};
+	}
+
 	public static bool IsOverdue(AreaSnapshot snapshot, DateTimeOffset now)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);

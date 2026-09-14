@@ -64,6 +64,8 @@ public sealed class HaStatePublisher : IStatePublisher
 					color_temp_kelvin = light.ColorTempKelvin
 				}).ToArray(),
 				lights_moved = snapshot.LightsMoved,
+				lights_not_responding = snapshot.LightsNotResponding,
+				light_count = snapshot.LightCount,
 				levels_from_room = snapshot.LevelsFromRoom?.ToString(),
 				// Flat fields, so an automation trigger can read one without walking an object.
 				is_anyone_home = snapshot.IsAnyoneHome,

@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Extensions;
 using AdaptiveLighting.Hosting;
 using AdaptiveLighting.Tests.Lighting;
 using AdaptiveLighting.Web;
@@ -161,6 +162,9 @@ static void SeedLights(FakeHaContext ha)
 	Lamp(ha, "light.stue_gammel_lampe", "Gammel lampe");
 
 	Lamp(ha, "light.bad_tak", "Bad tak");
+
+	// One ceiling bulb off the network, so a room naming the ceiling group shows the not-responding warning.
+	ha.SetState("light.stue_tak_2", "unavailable", new() { ["friendly_name"] = "Taklys 2" });
 	ha.SetState("binary_sensor.stue_bevegelse", "off", new() { ["device_class"] = "motion", ["friendly_name"] = "Stue bevegelse" });
 	ha.SetState("sensor.stue_lux", "18", new() { ["device_class"] = "illuminance", ["friendly_name"] = "Stue lysnivå" });
 }
@@ -204,6 +208,8 @@ static void SeedSnapshots(FakeHaContext ha, LightingConfigStore store)
 		if (holder is not null)
 			ha.SetState(holder, "playing", new() { ["friendly_name"] = Friendly(holder) });
 
+		(int missing, int total) = Availability(ha, area.Lights);
+
 		ha.RaiseEvent("adaptive_lighting_area", new
 		{
 			area = name,
@@ -227,11 +233,41 @@ static void SeedSnapshots(FakeHaContext ha, LightingConfigStore store)
 			is_held_lit = holder is not null,
 			held_lit_by = holder,
 			scene_applied = scene,
-			is_anyone_home = true
+			is_anyone_home = true,
+			lights_not_responding = total > 0 ? missing : (int?)null,
+			light_count = total > 0 ? total : (int?)null
 		});
 
 		index++;
 	}
+}
+
+// The engine's count, taken the fake house's way: groups followed down their entity_id attribute.
+static (int Missing, int Total) Availability(FakeHaContext ha, IReadOnlyList<string>? lights)
+{
+	HashSet<string> leaves = new(StringComparer.Ordinal);
+	HashSet<string> seen = new(StringComparer.Ordinal);
+	Stack<string> pending = new(lights ?? []);
+
+	while (pending.Count > 0)
+	{
+		string current = pending.Pop();
+
+		if (!seen.Add(current))
+			continue;
+
+		IReadOnlyList<string> members = ha.AttrStringList(current, "entity_id");
+
+		if (members.Count == 0)
+			leaves.Add(current);
+
+		foreach (string member in members)
+			pending.Push(member);
+	}
+
+	int missing = leaves.Count(leaf => ha.GetState(leaf)?.State is not ("on" or "off"));
+
+	return (missing, leaves.Count);
 }
 
 static string? NonEmpty(string? value) => value is { Length: > 0 } text ? text : null;

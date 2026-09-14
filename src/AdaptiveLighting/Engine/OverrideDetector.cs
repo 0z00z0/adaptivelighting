@@ -34,6 +34,9 @@ public sealed class OverrideDetector
 	private readonly GlobalConfig _global;
 	private readonly IScheduler _scheduler;
 	private readonly Dictionary<string, Expectation> _expectations = new(StringComparer.OrdinalIgnoreCase);
+
+	// Scenes and member dropouts, whose effect on a light cannot be read in advance: either polarity is expected.
+	private readonly Dictionary<string, DateTimeOffset> _eitherWay = new(StringComparer.OrdinalIgnoreCase);
 	private readonly object _gate = new();
 
 	public OverrideDetector(GlobalConfig global, IScheduler scheduler)
@@ -58,11 +61,23 @@ public sealed class OverrideDetector
 	/// <summary>Declares a scene about to be run on <paramref name="entityId"/>, without saying where it will leave it.</summary>
 	// A scene's own light changes carry neither a user nor a parent, which classifies as PhysicalDevice. The
 	// scene's contents are unreadable, so the expectation matches on or off alike for the length of the window.
-	public void ExpectScene(string entityId, double transitionSeconds)
+	public void ExpectScene(string entityId, double transitionSeconds) =>
+		ExpectEitherWay(entityId, TimeSpan.FromSeconds(_global.SelfEchoWindowSeconds + transitionSeconds));
+
+	/// <summary>Declares that a light beneath the group <paramref name="entityId"/> has just dropped out or come back.</summary>
+	// The group recomputes from the members still answering, so its on/off or brightness moves with a context
+	// carrying neither a user nor a parent.
+	public void ExpectMemberAvailabilityChange(string entityId) =>
+		ExpectEitherWay(entityId, TimeSpan.FromSeconds(_global.SelfEchoWindowSeconds));
+
+	// Kept apart from command expectations and never shortened: a command sent inside the window must not narrow it
+	// to one polarity, or a house scene followed by the room's own retarget reads the scene's off as a hand.
+	private void ExpectEitherWay(string entityId, TimeSpan window)
 	{
-		TimeSpan window = TimeSpan.FromSeconds(_global.SelfEchoWindowSeconds + transitionSeconds);
+		DateTimeOffset expiresAt = _scheduler.Now + window;
 		lock (_gate)
-			_expectations[entityId] = new Expectation(null, _scheduler.Now + window);
+			if (!_eitherWay.TryGetValue(entityId, out DateTimeOffset standing) || standing < expiresAt)
+				_eitherWay[entityId] = expiresAt;
 	}
 
 	public ChangeOrigin Classify(StateChange change)
@@ -101,6 +116,14 @@ public sealed class OverrideDetector
 	{
 		lock (_gate)
 		{
+			if (_eitherWay.TryGetValue(entityId, out DateTimeOffset eitherWayUntil))
+			{
+				if (_scheduler.Now <= eitherWayUntil)
+					return true;
+
+				_eitherWay.Remove(entityId);
+			}
+
 			if (!_expectations.TryGetValue(entityId, out Expectation? expectation))
 				return false;
 
@@ -111,10 +134,9 @@ public sealed class OverrideDetector
 			}
 
 			// Kept until it expires, not consumed: one turn_on produces a burst of changes as the light settles.
-			return expectation.On is not { } on || on == (newState?.IsOn() ?? false);
+			return expectation.On == (newState?.IsOn() ?? false);
 		}
 	}
 
-	// On is null for a scene, whose contents the engine cannot read, so either polarity is its own echo.
-	private sealed record Expectation(bool? On, DateTimeOffset ExpiresAt);
+	private sealed record Expectation(bool On, DateTimeOffset ExpiresAt);
 }

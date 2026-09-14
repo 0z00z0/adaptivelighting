@@ -100,6 +100,14 @@ else
 				{
 					<p class="room-next @(RoomFacts.IsOverdue(snapshot, _now) ? "room-overdue" : null)">@next</p>
 				}
+
+				@if (RoomFacts.NotResponding(snapshot) is { Length: > 0 } dropped)
+				{
+					<div class="notice warn room-not-responding" role="status">
+						<strong>@dropped</strong> The room reads on or off from the lights that still answer, so a light
+						that dropped out while it was lit may still be on.
+					</div>
+				}
 			}
 			@* Nothing said when there is no report: the header already carries a "no report yet" badge. *@
 

@@ -28,6 +28,7 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Our_Own_Echo_Is_Not_Read_As_A_Human
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Light_Dropping_Off_The_Network_Is_Not_A_Human_Switching_It_Off
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Real_Off_Is_Still_Read_As_A_Human
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Bulb_Leaving_Or_Rejoining_Its_Group_Is_Not_A_Hand_But_A_Real_Change_Still_Is
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.The_Kill_Switch_Muzzles_The_Engine_And_Releases_Cleanly
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_Disabled_Area_Never_Commands_Anything
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.A_House_The_Trackers_Call_Empty_Is_Not_Away
@@ -89,6 +90,7 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingOrchestratorTests.The_Master_Switch_Stops_The_Away_And_Guest_Scenes
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingOrchestratorTests.An_Away_House_Does_Not_Take_Charge_Of_Lit_Rooms_At_Start_Up
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingOrchestratorTests.SceneMode_AppliesTheSceneOnceOnEntry_AndDoesNotReassert
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingOrchestratorTests.The_Houses_Own_Scene_Is_Not_Read_As_A_Hand_At_The_Switch
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ScheduleTests.Under_Home_Assistant_Authority_The_Select_Decides_And_The_Clock_Does_Not
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ScheduleTests.An_Unreadable_Or_Unmapped_Select_Falls_Back_To_The_Clock
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PeriodSelectReaderTests.TheTwoDirectionsAreNeverBothLive

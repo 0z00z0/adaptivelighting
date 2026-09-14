@@ -878,6 +878,56 @@ restart on the wrong option. A remembered "already asked" latch would make both 
   `unavailable` with a context carrying neither user nor parent, which is exactly `PhysicalDevice`. Without
   that guard a Zigbee hiccup pins the area in `SuppressedOff` and the reconnect pins it in `OverriddenOn`.
 
+### A bulb leaving or rejoining its group is not a hand
+
+A light group reads on or off from the members still answering. When lit bulbs drop off the network and the
+rest are off, the group turns off; when they come back, it turns on. Both ends of that change are on or off, and
+the context carries neither user nor parent, so `IsHandAtTheSwitch` and the context both read it as a person.
+
+- The controller subscribes to every light beneath a group entry, not only to the entries. A member whose state
+  crosses between answering (on or off) and not answering (unavailable, unknown, absent) opens a window on every
+  entry it sits under, through `OverrideDetector.ExpectMemberAvailabilityChange`.
+- The window matches either polarity for `SelfEchoWindowSeconds`, the same echo window a command gets.
+- **Ordering is what makes this work.** Home Assistant writes the group while handling the member's change, and
+  NetDaemon hands one app's events to every subscription from a single ordered queue, so the member's change is
+  always noted before the group's is classified.
+- The cost: a hand at the switch inside that window after a bulb drops out, 8 seconds by default, is missed,
+  and the room keeps automating.
+- Scene windows and member windows are kept apart from command expectations and are never shortened. A command
+  sent inside one would otherwise narrow it to a single polarity.
+
+### The house's own scenes are expected
+
+A house-mode option's scene is run by the orchestrator, once on entry. Away and Guest pause the rooms, but a
+Normal or Sleep scene leaves them automating, so the scene's light changes reach a room that is still listening,
+with neither user nor parent in the context.
+
+- Before the scene call, `LightingOrchestrator` tells **every** room to expect it (`AreaController.ExpectHouseScene`),
+  the same way a room's own scene is declared. The scene's contents are unreadable, so no room can be left out.
+- The window matches either polarity for the room's echo window plus its transition.
+- The room retargets for the new mode in the same instant, and that command's expectation says on. Because
+  scene windows are stored apart from command expectations, the scene switching a lamp off is still the house's
+  own work.
+- The cost: a person switching a light inside that window, in any room, is missed.
+
+### A room says when its lights stop answering
+
+A group reads on or off from the members still answering, so four lit bulbs that drop out beside four dark ones
+leave the group reading off. The engine then believes the room is dark and sends nothing, which is right for what
+it can see, and the four bulbs stay lit. Nothing about that is visible from the group alone.
+
+- The controller counts the lights it commands, groups followed down, that read unavailable, unknown or absent.
+  The count is seeded once at start and kept from the same subscriptions that notice a member leaving, so no
+  snapshot reads state to produce it.
+- `AreaSnapshot` carries `LightsNotResponding` and `LightCount`, published as `lights_not_responding` and
+  `light_count`. Both count in `HasSameMeaningAs`, so a change goes out at once, under
+  `TransitionReason.LightAvailability`.
+- The room page shows a warning while the count is above zero, and the dashboard marks the room's lane. Both read
+  the published count through `RoomFacts.NotResponding`, never Home Assistant.
+- The activity log files `LightAvailability` under Background: it decided nothing, and a flapping radio would
+  otherwise fill the default view.
+- A group entity that is itself unavailable is not counted: its members are.
+
 ### What ends a manual hold
 
 `AreaSettings.OverrideUntilVacant` picks between two clocks and nothing else changes: the manual level stands,

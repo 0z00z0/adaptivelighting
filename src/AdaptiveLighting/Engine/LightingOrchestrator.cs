@@ -402,7 +402,13 @@ public sealed class LightingOrchestrator : IDisposable
 				_logger.LogInformation(
 					"The master switch is on, so the {Mode} scene {Scene} is not applied.", state.Mode, scene);
 			else
+			{
+				// Every room: the scene's contents are unreadable, and a room left out reads the echo as a hand.
+				foreach (AreaController area in _areas)
+					area.ExpectHouseScene();
+
 				_actuator.ActivateScene(scene);
+			}
 		}
 
 		// The forcing clause repeats ModeMonitor's, because this is the line that says the house went Away.

@@ -66,7 +66,10 @@ public enum TransitionReason
 	LevelTestStarted,
 
 	/// <summary>Somebody asked for this room's lights from the app, and the room lit as movement would light it.</summary>
-	ManualLightOn
+	ManualLightOn,
+
+	/// <summary>A light the room commands stopped answering Home Assistant, or started again. Nothing the area decides on moved.</summary>
+	LightAvailability
 }
 
 /// <summary>Which gate is refusing to switch an area's lights on for movement.</summary>

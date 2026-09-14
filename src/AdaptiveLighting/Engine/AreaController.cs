@@ -41,6 +41,15 @@ public sealed class AreaController : IDisposable
 	private readonly IObservable<HouseState> _houseChanged;
 	private readonly ILogger _logger;
 
+	// Every light beneath a group entry, and the entries it sits under. Read off the resolved area, never Home
+	// Assistant, so it is settled before Start.
+	private readonly Dictionary<string, List<string>> _entriesOfMember = new(StringComparer.OrdinalIgnoreCase);
+
+	// Every light the room commands, groups followed down, and those not answering. Kept from the subscriptions, so
+	// a snapshot never reads state to count them.
+	private readonly HashSet<string> _leaves;
+	private readonly HashSet<string> _notResponding = new(StringComparer.OrdinalIgnoreCase);
+
 	private readonly object _gate = new();
 	private readonly CompositeDisposable _subscriptions = [];
 	private readonly SerialDisposable _vacancyTimer = new();
@@ -195,7 +204,21 @@ public sealed class AreaController : IDisposable
 			new LuxReader(ha, daylightSensors, staleAfter, () => _scheduler.Now, lastSeen).Read);
 		_detector = new OverrideDetector(global, scheduler);
 
-		_boundary = new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
+		foreach (string entry in area.Lights)
+			foreach (string leaf in LeavesOf(entry))
+			{
+				if (string.Equals(leaf, entry, StringComparison.OrdinalIgnoreCase))
+					continue;
+
+				if (!_entriesOfMember.TryGetValue(leaf, out List<string>? entries))
+					_entriesOfMember[leaf] = entries = [];
+
+				entries.Add(entry);
+			}
+
+		_leaves = AllLeaves();
+
+		_boundary =new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
 	}
 
 	/// <summary>How long a level test holds the room before the engine takes it back.</summary>
@@ -381,6 +404,16 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	/// <summary>Declares a house scene about to run, so its changes to this room's lights are not read as a person's.</summary>
+	// Must precede the orchestrator's scene call, as ExpectScene precedes the room's own. A Normal or Sleep scene
+	// leaves the room automating, so its echo reaches OnLightChanged.
+	public void ExpectHouseScene()
+	{
+		lock (_gate)
+			foreach (string light in _area.Lights)
+				_detector.ExpectScene(light, TransitionSeconds());
+	}
+
 	/// <summary>Subscribes and publishes the opening snapshot, leaving the lights as found.</summary>
 	// An area found lit adopts them; see AdoptIfLit.
 	public void Start()
@@ -392,6 +425,13 @@ public sealed class AreaController : IDisposable
 			_subscriptions.Add(_ha.Entity(light)
 				.StateAllChanges()
 				.SubscribeSafe(OnLightChanged, _logger));
+
+		// A member that is also an entry is already heard through OnLightChanged.
+		foreach (string member in _entriesOfMember.Keys)
+			if (!_area.Lights.Contains(member, StringComparer.OrdinalIgnoreCase))
+				_subscriptions.Add(_ha.Entity(member)
+					.StateAllChanges()
+					.SubscribeSafe(OnMemberChanged, _logger));
 
 		_subscriptions.Add(_houseChanged.SubscribeSafe(OnHouseChanged, _logger));
 
@@ -405,6 +445,10 @@ public sealed class AreaController : IDisposable
 
 		lock (_gate)
 		{
+			foreach (string leaf in _leaves)
+				if (!IsOnOrOff(_ha.GetState(leaf)))
+					_notResponding.Add(leaf);
+
 			// What cannot be known yet, the last command and last motion, stays null instead of being guessed.
 			RefreshDarkness();
 			Publish(AdoptIfLit() ? TransitionReason.AdoptedAtStartup : TransitionReason.Startup);
@@ -515,6 +559,8 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
+			NoteAvailability(change);
+
 			// A radio, not a hand. See IsHandAtTheSwitch.
 			if (!IsHandAtTheSwitch(change))
 				return;
@@ -565,6 +611,31 @@ public sealed class AreaController : IDisposable
 
 	// On or off, as opposed to unavailable, unknown or absent.
 	private static bool IsOnOrOff(EntityState? state) => state is not null && (state.IsOn() || state.IsOff());
+
+	private void OnMemberChanged(StateChange change)
+	{
+		lock (_gate)
+			NoteAvailability(change);
+	}
+
+	// Must run before the group's own change is classified. Home Assistant writes the group while handling the
+	// member's change and NetDaemon delivers one app's events in order, so the member always arrives first.
+	private void NoteAvailability(StateChange change)
+	{
+		if (IsOnOrOff(change.Old) == IsOnOrOff(change.New) || change.EntityId() is not { } entityId)
+			return;
+
+		if (_entriesOfMember.TryGetValue(entityId, out List<string>? entries))
+			foreach (string entry in entries)
+				_detector.ExpectMemberAvailabilityChange(entry);
+
+		// A group entity going unavailable is counted through its members, never as a bulb of its own.
+		if (!_leaves.Contains(entityId))
+			return;
+
+		if (IsOnOrOff(change.New) ? _notResponding.Remove(entityId) : _notResponding.Add(entityId))
+			Publish(TransitionReason.LightAvailability);
+	}
 
 	private void OnHouseChanged(HouseState house)
 	{
@@ -1773,7 +1844,9 @@ public sealed class AreaController : IDisposable
 			_testEndsAt,
 			standing is not null ? LightStandings() : null,
 			_testingLightId,
-			_lightsMoved);
+			_lightsMoved,
+			_notResponding.Count,
+			_leaves.Count);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>

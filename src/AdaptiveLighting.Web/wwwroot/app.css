@@ -4192,6 +4192,13 @@ button.mode-pill:disabled {
 	white-space: nowrap;
 }
 
+/* A room with lights not answering. The warn token is themed, so no palette needs a copy. */
+.lane-dropout {
+	flex: none;
+	color: var(--warn);
+	font-weight: 700;
+}
+
 /* A floor header, and it appears only when the floor has a lane under it. */
 .board-floor {
 	display: flex;
