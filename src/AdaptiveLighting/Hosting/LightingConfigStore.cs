@@ -5,7 +5,7 @@ using AdaptiveLighting.Configuration;
 namespace AdaptiveLighting.Hosting;
 
 /// <summary>What a write does with a document the engine cannot run.</summary>
-public enum InvalidDocument
+internal enum InvalidDocument
 {
 	/// <summary>Refuse the write and leave the file as it was.</summary>
 	Refuse,
@@ -17,7 +17,7 @@ public enum InvalidDocument
 /// <summary>What one call to <see cref="LightingConfigStore.Save"/> did.</summary>
 /// <param name="Written">Whether the bytes reached the disk.</param>
 /// <param name="Validation">The document as validated after normalisation, whether or not it was written.</param>
-public sealed record ConfigWriteResult(bool Written, ValidationResult Validation);
+internal sealed record ConfigWriteResult(bool Written, ValidationResult Validation);
 
 /// <summary>The one file the lighting UI is allowed to write, and the only way it writes it.</summary>
 /// <remarks>
@@ -147,7 +147,13 @@ public sealed class LightingConfigStore
 			try
 			{
 				Directory.CreateDirectory(directory);
-				File.WriteAllText(temporary, yaml, Utf8NoBom);
+
+				// Flushed to disk before the replace: on a power cut the rename can otherwise reach disk before the data.
+				using (FileStream stream = new(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+				{
+					stream.Write(Utf8NoBom.GetBytes(yaml));
+					stream.Flush(flushToDisk: true);
+				}
 
 				if (File.Exists(FilePath))
 					// One call: replace the target and move the old contents to the backup, leaving no window in

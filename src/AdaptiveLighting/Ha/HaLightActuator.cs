@@ -1,7 +1,6 @@
 using System.Globalization;
 
 using AdaptiveLighting.Abstractions;
-using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
 using NetDaemon.HassModel.Entities;
@@ -13,7 +12,7 @@ namespace AdaptiveLighting.Ha;
 ///     Commands the light already satisfies are suppressed: every circadian tick would otherwise re-send the same
 ///     levels to every light in the house, and a light told to fade to where it already is visibly restarts the fade.
 /// </remarks>
-public sealed class HaLightActuator : ILightActuator
+internal sealed class HaLightActuator : ILightActuator
 {
 	private const string LightDomain = "light";
 	private const string SceneDomain = "scene";

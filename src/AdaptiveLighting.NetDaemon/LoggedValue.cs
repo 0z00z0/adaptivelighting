@@ -8,18 +8,12 @@ namespace AdaptiveLighting.NetDaemon;
 
 /// <summary>The one place a runtime value becomes text in the durable log.</summary>
 /// <remarks>
-///     <para>
-///         Nothing reaches the file except through here: <see cref="DurableLogFormatter"/> renders the message
-///         template itself and never asks Serilog for a rendered message, so the file sink is handed a finished line.
-///     </para>
-///     <para>
-///         Two filters. A property whose name reads as a credential is replaced whole, covering <c>{Token}</c>,
-///         <c>{Password}</c> and anything nested under them. A value whose shape reads as one has that part
-///         replaced: a JWT, a <c>password=</c> pair, a URI's user info, or a long opaque mixed-case run. Entity ids
-///         and paths survive both, being lower case, and the opaque test stops at a separator.
-///     </para>
+///     <see cref="DurableLogFormatter"/> renders the template itself, so nothing reaches the file except through here.
+///     A property whose name reads as a credential is replaced whole, nested values included. A value shaped like one
+///     has that part replaced: a JWT, a <c>password=</c> pair, a URI's user info, a long opaque mixed-case run.
+///     Entity ids and paths survive both, being lower case.
 /// </remarks>
-public static partial class LoggedValue
+internal static partial class LoggedValue
 {
 	/// <summary>What a rejected value is written as, kept in the line so a reader knows something was dropped.</summary>
 	public const string Hidden = "***";

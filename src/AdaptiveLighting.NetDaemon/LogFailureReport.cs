@@ -4,17 +4,11 @@ namespace AdaptiveLighting.NetDaemon;
 
 /// <summary>Puts Serilog's own failures somewhere a person reads, without repeating one line per lost event.</summary>
 /// <remarks>
-///     <para>
-///         A sink that cannot write reports through <c>Serilog.Debugging.SelfLog</c>, which is off unless something
-///         turns it on. Nothing else here does, so an unwritable durable log would otherwise be silent.
-///     </para>
-///     <para>
-///         The file sink reports per event, and a house at the measured rate loses around a dozen a minute, each
-///         carrying a stack trace. Repeats of the same message are held back for <see cref="RepeatAfter"/> so an
-///         outage costs one report rather than a flood, while a different failure is never held back at all.
-///     </para>
+///     A failing sink reports only through <c>Serilog.Debugging.SelfLog</c>, which is off unless turned on. The file
+///     sink reports per event, and a house at the measured rate loses around a dozen a minute, each with a stack
+///     trace. A repeat of the same message is held back for <see cref="RepeatAfter"/>; a different failure never is.
 /// </remarks>
-public sealed class LogFailureReport
+internal sealed class LogFailureReport
 {
 	/// <summary>How long the same message is held back before it is worth saying again.</summary>
 	public static readonly TimeSpan RepeatAfter = TimeSpan.FromMinutes(5);

@@ -55,7 +55,7 @@ public sealed record AreaSnapshot(
 	///     <see cref="AutoOnBlockedBy"/>, <see cref="HeldLitBy"/>, <see cref="ChangedBy"/> and <see cref="ChangedAt"/> date
 	///     or describe the snapshot; they say nothing about the area. <see cref="TestingPeriodId"/> and <see cref="TestEndsAt"/> are compared, unlike those:
 	///     a level test starting or ending is real news, and it is the only news a snapshot carries while nothing
-	///     else about the area moves — a suppressed publish would leave a fresh page load with nothing to redraw.
+	///     else about the area moves. A suppressed publish would leave a fresh page load with nothing to redraw.
 	/// </remarks>
 	public bool HasSameMeaningAs(AreaSnapshot? other) =>
 		other is not null &&

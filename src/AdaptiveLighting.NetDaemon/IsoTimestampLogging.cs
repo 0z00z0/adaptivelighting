@@ -17,16 +17,10 @@ public static class IsoTimestampLogging
 {
 	/// <summary>Replaces the host's console logger with one whose timestamps carry the date.</summary>
 	/// <remarks>
-	///     Chain this after the host's own logging call, which for NetDaemon is <c>UseNetDaemonDefaultLogging()</c>.
-	///     It replaces the logger instead of reconfiguring it, so whichever runs last wins: put it earlier and the
-	///     default template returns, taking every Debug line with it.
-	///     <para>
-	///         <c>minimumLevel</c> is the floor for everything but the Microsoft namespaces, which stay at Warning.
-	///     </para>
-	///     <para>
-	///         The durable copy attaches to this same call, because a second <c>UseSerilog</c> would replace this one
-	///         instead of adding to it. A host with no <c>AdaptiveLighting:ConfigPath</c> gets the console alone.
-	///     </para>
+	///     Chain this after <c>UseNetDaemonDefaultLogging()</c>: it replaces the logger, so an earlier call brings the
+	///     default template back and drops every Debug line. <c>minimumLevel</c> covers everything but the Microsoft
+	///     namespaces, which stay at Warning. The durable copy attaches here, because a second <c>UseSerilog</c> would
+	///     replace this one; a host with no <c>AdaptiveLighting:ConfigPath</c> gets the console alone.
 	/// </remarks>
 	public static IHostBuilder UseIsoTimestampLogging(
 		this IHostBuilder builder,

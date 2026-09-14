@@ -14,7 +14,7 @@ public sealed class HaAdapterTests
 {
 	private const string Light = "light.a";
 
-	private static HaLightActuator Actuator(FakeHaContext ha) => new(ha, new GlobalConfig(), NullLogger.Instance);
+	private static HaLightActuator Actuator(FakeHaContext ha) => new(ha, NullLogger.Instance);
 
 	private static Dictionary<string, object> DataOf(ServiceCall call) => (Dictionary<string, object>)call.Data!;
 

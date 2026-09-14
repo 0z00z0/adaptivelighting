@@ -4,18 +4,11 @@ namespace AdaptiveLighting.NetDaemon;
 
 /// <summary>The durable copy of the log: one file a day, pruned by age and by count, in a directory a deploy keeps.</summary>
 /// <remarks>
-///     <para>
-///         Supervisor's own buffer holds the add-on log and two restarts overwrite it, so the same lines are kept
-///         in the configuration document's directory, which survives a deploy.
-///     </para>
-///     <para>
-///         Retention is bounded twice over, and both bounds are stated rather than derived. <see cref="RetainedFileTime"/>
-///         is what a reader gets in the ordinary case; <see cref="RetainedFileCount"/> multiplied by
-///         <see cref="MaxFileBytes"/> is the ceiling on disk whatever the house does. A single ceiling could not do
-///         both: a fortnight at the measured rate is more bytes than a byte budget alone would keep.
-///     </para>
+///     Two restarts overwrite Supervisor's buffer, so the lines are also kept beside the configuration document.
+///     <see cref="RetainedFileTime"/> is what a reader gets; <see cref="RetainedFileCount"/> times <see cref="MaxFileBytes"/>
+///     caps the disk. A fortnight at the measured rate is more bytes than a byte budget alone would keep.
 /// </remarks>
-public static class DurableLogFile
+internal static class DurableLogFile
 {
 	/// <summary>The subdirectory the log lives in, beside the document instead of on top of it.</summary>
 	public const string FolderName = "log";

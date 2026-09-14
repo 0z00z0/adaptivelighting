@@ -10,7 +10,7 @@ namespace AdaptiveLighting.NetDaemon;
 ///     The deploy folder is wiped and re-copied every time, so <c>AdaptiveLighting:ConfigPath</c> names the only
 ///     directory a host has already promised to keep. The key ring and the durable log each get a subfolder of it.
 /// </remarks>
-public static class DurableDirectory
+internal static class DurableDirectory
 {
 	private const string FallbackStem = "adaptive-lighting";
 

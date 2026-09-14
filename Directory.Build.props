@@ -27,7 +27,11 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>netdaemon;home-assistant;homeassistant;lighting;circadian;adaptive-lighting;home-automation</PackageTags>
+    <NeutralLanguage>en-GB</NeutralLanguage>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Normalised source paths in CI, so the embedded symbols do not depend on the checkout folder. -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
 
     <!--
       Debug data travels inside the DLL, so a stack trace off a deployed house resolves to a line number

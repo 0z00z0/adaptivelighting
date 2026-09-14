@@ -7,7 +7,7 @@ namespace AdaptiveLighting.Ha;
 ///     <c>persistent_notification.create</c>, since <c>notify.persistent_notification</c> takes no notification id.
 ///     Re-raising the same problem then replaces its card instead of stacking one.
 /// </remarks>
-public sealed class HaNotifier : INotifier
+internal sealed class HaNotifier : INotifier
 {
 	private const string NotificationIdPrefix = "adaptive_lighting_";
 
