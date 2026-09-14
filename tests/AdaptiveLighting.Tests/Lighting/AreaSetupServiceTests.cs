@@ -448,8 +448,7 @@ public sealed class AreaSetupServiceTests
 			"reported, not removed");
 	}
 
-	// #81: an area Home Assistant reports used to vanish with no word said. A wrong or missing reason here is
-	// exactly what reaches a person looking at "Set up rooms again" for the room they expected.
+	// A wrong or missing reason here reaches the person looking at "Set up rooms again" for the room they expected.
 	[TestMethod]
 	public void An_Area_With_No_Light_Is_Named_With_That_Reason_Even_Though_Never_Configured()
 	{

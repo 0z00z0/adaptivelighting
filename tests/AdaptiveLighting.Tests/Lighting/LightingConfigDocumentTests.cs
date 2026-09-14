@@ -1291,8 +1291,8 @@ public sealed class LightingConfigDocumentTests
 
 	// ===================== retired keys reaching something a person reads =====================
 	//
-	// The key is unmatched by the time the binder is done, so the read is the only place it can be seen. It used to
-	// reach the log alone, which nobody watching the browser is reading.
+	// The key is unmatched by the time the binder is done, so the read is the only place it can be seen; the log
+	// alone reaches nobody watching the browser.
 
 	/// <summary>A document carrying one retired key, wherever in the section it sits.</summary>
 	private static string DocumentCarrying(string key) =>

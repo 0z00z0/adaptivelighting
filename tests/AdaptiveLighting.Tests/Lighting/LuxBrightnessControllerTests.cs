@@ -88,7 +88,7 @@ public sealed class LuxBrightnessControllerTests
 			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		];
 
-		// The curve opt-in is this room's own, per period, through its Levels row — never the period itself.
+		// The curve opt-in is this room's own, per period, through its Levels row, never the period itself.
 		List<RoomLevelOverride> levels =
 		[
 			.. new[]

@@ -5,7 +5,7 @@
 		UI change can be looked at before it reaches a house: the RCL already ships App.razor and Routes.razor,
 		so this is a Program.cs, a fake Home Assistant and a copy of a real document.
 
-		Scratchpad, not the repo. Nothing here ships.
+		A development tool. It is not part of a release and is never published.
 	-->
 
 	<PropertyGroup>

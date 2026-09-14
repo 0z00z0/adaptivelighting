@@ -906,7 +906,7 @@ public sealed class ConfigValidatorTests
 		Assert.IsFalse(ConfigValidator.Validate(missing).IsValid, "a ClampPeriodId naming no period is an error");
 
 		var offSleep = WithHouseMode();
-		offSleep.Global.HouseMode!.OptionFor("Borte")!.ClampPeriodId = "night";   // Away, not Sleep — inert
+		offSleep.Global.HouseMode!.OptionFor("Borte")!.ClampPeriodId = "night";   // Away, not Sleep: inert
 		var result = ConfigValidator.Validate(offSleep);
 		Assert.IsTrue(result.IsValid, "a ClampPeriodId on a non-sleep option is inert, a warning not an error");
 		Assert.IsTrue(result.Warnings.Any(w => w.Contains("ClampPeriodId", StringComparison.Ordinal)));

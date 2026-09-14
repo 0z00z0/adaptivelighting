@@ -1204,7 +1204,7 @@ public sealed class ModeMonitorTests
 		Advance(rig, TimeSpan.FromHours(2) + TimeSpan.FromMinutes(59));   // 22:59, still the evening
 		Assert.AreEqual(0, AnyPeriodSelectCalls(rig.Ha), "the evening is already showing, so nothing is written");
 
-		Advance(rig, TimeSpan.FromMinutes(1));   // 23:00 — one tick inside the night
+		Advance(rig, TimeSpan.FromMinutes(1));   // 23:00, one tick inside the night
 
 		Assert.AreEqual(1, PeriodSelectCalls(rig.Ha, "Natt"), "the boundary moved, so the mirror moved with it");
 

@@ -226,7 +226,7 @@ public sealed class DurableLogFileTests
 		CollectionAssert.Contains(temp.Files, recent, string.Join(" | ", temp.Files));
 	}
 
-	// ===================== the undated pair an earlier version wrote =====================
+	// ===================== the undated pair outside the dated template =====================
 
 	/// <summary>Serilog's retention matches the dated template, so it would never reach these and the ceiling would be wrong.</summary>
 	[TestMethod]

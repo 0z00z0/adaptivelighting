@@ -28,13 +28,12 @@ jobs:
 
       - run: dotnet pack AdaptiveLighting.slnx -c Release --no-build -p:Version=$PKG_VERSION -o artifacts
 
-      # GitHub Packages is the only feed these packages go to. Settled 2026-08-09; nuget.org is not a fallback
-      # and not a later step. This job is the only publish path, so keep it the only place a source is named.
+      # GitHub Packages is the only feed these packages go to; nuget.org is not a fallback and not a later step.
+      # This job is the only publish path, so keep it the only place a source is named.
       #
       # GITHUB_TOKEN, not a PAT: it is minted per run, so there is no secret to create, rotate or forget, and
-      # nothing that expires and breaks a release with no warning. A PAT was considered and dropped — the
-      # argument for it was that one credential could also serve restore, but restore happens on a developer's
-      # machine against the user-level NuGet.Config and never touches this job.
+      # nothing that expires and breaks a release with no warning. Restore happens on a developer machine
+      # against the user-level NuGet.Config and never touches this job.
       #
       # --no-symbols: GitHub Packages has no symbol server. Debug data is embedded in the assemblies
       # instead, so no .snupkg is packed and the flag is a guard against one ever being pushed uninvited.

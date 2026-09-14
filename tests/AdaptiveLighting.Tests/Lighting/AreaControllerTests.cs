@@ -2578,7 +2578,7 @@ public sealed class AreaControllerTests
 	public void Abandoning_A_Test_Publishes_That_None_Is_Running()
 	{
 		// The shipped echo window plus a night fade outlasts a whole test, so a hand can only be read as one here
-		// with both shortened — the same trap A_Hand_At_The_Switch_During_A_Test_... below works around.
+		// with both shortened; the same trap A_Hand_At_The_Switch_During_A_Test_... below works around.
 		Fixture t = Build(s => s.NightTransitionSeconds = 0, g => g.SelfEchoWindowSeconds = 0);
 		t.Area.TestPeriod("day");
 
