@@ -31,7 +31,7 @@
 							@onclick="() => Move(position, -1)" @onclick:stopPropagation="true">&uarr;</button>
 					<button type="button" title="Move later" disabled="@(position == Periods.Count - 1)"
 							@onclick="() => Move(position, 1)" @onclick:stopPropagation="true">&darr;</button>
-					<button type="button" class="danger" title="Remove this period"
+					<button type="button" class="danger" title="Remove this period" aria-label="Remove this period"
 							@onclick="() => Remove(position)" @onclick:stopPropagation="true">&times;</button>
 				</span>
 
@@ -39,9 +39,9 @@
 			</summary>
 
 			<div class="field">
-				<div class="field-head"><label class="field-label">Period name</label></div>
+				<div class="field-head"><label class="field-label" for="@($"period-name-{position}")">Period name</label></div>
 				<div class="field-control">
-					<input type="text" class="cell wide" @bind="period.Name" @bind:event="oninput" placeholder="evening" />
+					<input type="text" id="@($"period-name-{position}")" class="cell wide" @bind="period.Name" @bind:event="oninput" placeholder="evening" />
 				</div>
 				<div class="field-help">
 					Shown on the dashboard. Rename it whenever you like — nothing points at the name.

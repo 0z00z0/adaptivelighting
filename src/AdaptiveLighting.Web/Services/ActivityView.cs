@@ -35,8 +35,8 @@ public sealed record ActivityRow(
 
 /// <summary>What a row is about, as the activity page's filter chips divide it.</summary>
 /// <remarks>
-///     Categories follow the words the row shows, not the report behind it. A report is in exactly one of them,
-///     so that switching a chip off removes precisely the reports it counts. Flags all the same, because a chip
+///     Categories follow the words the row shows, not the report behind it. A report is in one of them and no other,
+///     so that switching a chip off removes the same reports it counts. Flags all the same, because a chip
 ///     set is what the filter carries.
 /// </remarks>
 [Flags]
@@ -258,7 +258,7 @@ public static class ActivityView
 	/// <summary>What a report is about, as the chips divide it.</summary>
 	/// <remarks>
 	///     Ordered, and tracks <see cref="Describe"/> branch for branch: the chip follows the words the row
-	///     shows. One answer, never several — a report filed under two chips survives either being switched
+	///     shows. One answer, never several: a report filed under two chips survives either being switched
 	///     off, which is a button that does nothing. No catch-all above the last line: a reason added to the
 	///     enum has to be placed here by hand, and until it is, an exhaustive test fails.
 	/// </remarks>

@@ -11,10 +11,8 @@
 
 	@if (_open)
 	{
-		@* preventDefault is load-bearing: most (i) icons sit inside a <label>, and a click on any descendant of a
-		   label is forwarded to the first labelable element inside it, which here is the (i) button. Without it
-		   the scrim closes the panel and the forwarded click reopens it at once. *@
-		<span class="info-scrim" aria-hidden="true" @onclick="Close" @onclick:preventDefault="true"></span>
+		@* Never put this component inside a <label>: a click in a label is forwarded to the (i) button and reopens the panel. *@
+		<span class="info-scrim" aria-hidden="true" @onclick="Close"></span>
 
 		<span class="info-panel" role="note">
 			<span class="info-title">@Label</span>
