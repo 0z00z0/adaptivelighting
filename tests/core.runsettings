@@ -203,6 +203,9 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.The_Port_Comes_From_Configuration_And_Defaults_To_10000
 			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.DurableLogFormatterTests.A_Token_Logged_Through_ILogger_Never_Reaches_The_File
 			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.LoggedValueTests.A_Home_Assistant_Long_Lived_Token_Is_Replaced_Wherever_It_Sits
+
+			<!-- This list names itself: a rename that misses this file would otherwise drop a test silently. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Tooling.CoreRunSettingsTests.Every_Name_In_The_Core_Set_Resolves_To_A_Real_Test
 		</TestCaseFilter>
 	</RunConfiguration>
 </RunSettings>
