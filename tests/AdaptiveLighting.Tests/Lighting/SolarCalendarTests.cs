@@ -21,7 +21,7 @@ public sealed class SolarCalendarTests
 	[TestMethod]
 	public void An_Eastward_Move_Brings_Sunrise_Earlier_By_Four_Minutes_Per_Degree()
 	{
-		DateOnly day = new(2024, 3, 20);   // near the equinox, sunrise mid-morning — well clear of midnight
+		DateOnly day = new(2024, 3, 20);   // near the equinox, sunrise mid-morning, well clear of midnight
 
 		TimeOnly? west = SolarCalendar.On(day, 40.0, 0.0).Sunrise;
 		TimeOnly? east = SolarCalendar.On(day, 40.0, 10.0).Sunrise;

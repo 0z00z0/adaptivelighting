@@ -10,10 +10,11 @@
 <RunSettings>
 	<RunConfiguration>
 		<TestCaseFilter>
-			<!-- Override detection, away decided by the house mode, stored raw brightness: whole classes. -->
+			<!-- Override detection, away decided by the house mode, stored raw brightness, 0 % means off: whole classes. -->
 			FullyQualifiedName~AdaptiveLighting.Tests.Lighting.OverrideDetectorTests.
 			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.ConfiguredAwayTests.
 			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.RawBrightnessStorageTests.
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.ZeroBrightnessTests.
 
 			<!-- A room: auto-on gates, vacancy and pre-off, manual override, away sweep, sleep, adoption. -->
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.AreaControllerTests.Motion_When_Dark_Turns_The_Area_On_At_The_Periods_Levels
@@ -202,6 +203,9 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.The_Port_Comes_From_Configuration_And_Defaults_To_10000
 			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.DurableLogFormatterTests.A_Token_Logged_Through_ILogger_Never_Reaches_The_File
 			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.LoggedValueTests.A_Home_Assistant_Long_Lived_Token_Is_Replaced_Wherever_It_Sits
+
+			<!-- This list names itself: a rename that misses this file would otherwise drop a test silently. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Tooling.CoreRunSettingsTests.Every_Name_In_The_Core_Set_Resolves_To_A_Real_Test
 		</TestCaseFilter>
 	</RunConfiguration>
 </RunSettings>

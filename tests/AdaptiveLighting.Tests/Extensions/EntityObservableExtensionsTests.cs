@@ -75,9 +75,9 @@ public sealed class EntityObservableExtensionsTests
 				throw new InvalidOperationException("boom");
 		}, NullLogger.Instance);
 
-		ha.Trigger(Sensor, "on");    // fires #1, throws — SubscribeSafe swallows it
+		ha.Trigger(Sensor, "on");    // fires #1, throws; SubscribeSafe swallows it
 		ha.Trigger(Sensor, "off");
-		ha.Trigger(Sensor, "on");    // fires #2 — the subscription is still alive
+		ha.Trigger(Sensor, "on");    // fires #2; the subscription is still alive
 
 		Assert.AreEqual(2, count, "a thrown handler must not kill the subscription");
 	}

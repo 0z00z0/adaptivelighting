@@ -83,6 +83,8 @@ public sealed class DurableLogFileTests
 	{
 		using TempDirectory temp = new();
 
+		// Captured once, beside the write: Serilog dates the file from its own clock read, a second one would race at midnight.
+		DateTime today = DateTime.Now;
 		using (Serilog.Core.Logger logger = temp.Logger("cabin"))
 			logger.Debug("one line");
 
@@ -90,7 +92,7 @@ public sealed class DurableLogFileTests
 
 		StringAssert.StartsWith(name, "cabin-");
 		StringAssert.EndsWith(name, ".log");
-		StringAssert.Contains(name, DateTime.Now.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
+		StringAssert.Contains(name, today.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
 	}
 
 	[TestMethod]
@@ -224,7 +226,7 @@ public sealed class DurableLogFileTests
 		CollectionAssert.Contains(temp.Files, recent, string.Join(" | ", temp.Files));
 	}
 
-	// ===================== the undated pair an earlier version wrote =====================
+	// ===================== the undated pair outside the dated template =====================
 
 	/// <summary>Serilog's retention matches the dated template, so it would never reach these and the ceiling would be wrong.</summary>
 	[TestMethod]
@@ -266,10 +268,13 @@ public sealed class DurableLogFileTests
 		using TempDirectory temp = new();
 		Directory.CreateDirectory(temp.LogFolder);
 
+		// Captured once: Serilog dates the file from its own clock read, a second one would race at midnight.
+		DateTime today = DateTime.Now;
+
 		// A directory sitting where today's file goes: the write cannot succeed, and must not take the host with it.
 		string blocked = Path.Combine(
 			temp.LogFolder,
-			"b1-" + DateTime.Now.ToString("yyyyMMdd", CultureInfo.InvariantCulture) + ".log");
+			"b1-" + today.ToString("yyyyMMdd", CultureInfo.InvariantCulture) + ".log");
 
 		Directory.CreateDirectory(blocked);
 

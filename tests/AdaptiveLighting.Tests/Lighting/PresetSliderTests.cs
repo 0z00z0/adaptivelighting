@@ -161,7 +161,7 @@ public sealed class PresetSliderTests
 	}
 
 	/// <summary>Every real stop's live-readout entry carries the same words the static markup would show if that
-	/// position were the current one — the whole point of shipping the data client-side.</summary>
+	/// position were the current one. That is the whole point of shipping the data client-side.</summary>
 	[TestMethod]
 	public async Task Live_Readout_Data_Covers_Every_Named_Stop_In_Order()
 	{
@@ -177,7 +177,7 @@ public sealed class PresetSliderTests
 	}
 
 	/// <summary>An off-ladder value's own inserted stop is the one live-readout entry marked custom, and only
-	/// that one — dragging away from it always lands on a named stop.</summary>
+	/// that one: dragging away from it always lands on a named stop.</summary>
 	[TestMethod]
 	public async Task Live_Readout_Data_Marks_Only_The_Off_Ladder_Position_As_Custom()
 	{
@@ -211,7 +211,7 @@ public sealed class PresetSliderTests
 
 	/// <summary>
 	///     A press-and-hold on a rail sitting in the pocket must not arm the fine handle. Arming hands pointer
-	///     capture to the satellite, and from that moment the coarse rail cannot move at all — so a drag out of
+	///     capture to the satellite, and from that moment the coarse rail cannot move at all. A drag out of
 	///     the pocket, or back into it, is swallowed by a handle whose nudges clamp at 0 % and can never mean
 	///     "borrow".
 	/// </summary>
@@ -476,8 +476,8 @@ public sealed class LevelsEditorTests
 
 	/// <summary>
 	///     A room borrowing the house value reads its number once. Both readout groups are always in the markup so
-	///     the drag can swap them without a round trip, and only the <c>hidden</c> attribute separates them — which
-	///     a class rule setting <c>display</c> silently beats, printing "the schedule's 100 % 100 %".
+	///     the drag can swap them without a round trip, and only the <c>hidden</c> attribute separates them. A class
+	///     rule setting <c>display</c> silently beats it, printing "the schedule's 100 % 100 %".
 	/// </summary>
 	[TestMethod]
 	public void The_Stylesheet_Lets_The_Hidden_Attribute_Win()
