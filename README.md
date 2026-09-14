@@ -42,7 +42,7 @@ Lights come on when you enter a room, dim as a warning before switching off so t
 
 ## Status
 
-**Preview.** Covered by 1447 tests; the API and the configuration schema may still move. Requires **.NET 10** and the **NetDaemon V6** add-on.
+**Preview.** Covered by a growing test suite; the API and the configuration schema may still move. Requires **.NET 10** and the **NetDaemon V6** add-on.
 
 **2.0 renames zones to areas** — the types, the YAML, the UI and the published Home Assistant event all say *area* now. A pre-2.0 configuration migrates itself on first start; an HA automation listening for the old event does not. Read [CHANGELOG.md](CHANGELOG.md) before upgrading.
 
