@@ -150,8 +150,9 @@ public static class ActivityView
 		if (snapshot.KillSwitchActive)
 			return new ActivityLine("Paused by the master switch", "No lights change until it's turned back on.");
 
-		// Worded here, not in Condition: the dim light is PreOff's, whose condition says nothing.
-		if (snapshot.Reason is TransitionReason.LeadIn)
+		// Worded here, not in Condition: the dim light is PreOff's, whose condition says nothing. A lead-in report
+		// outside PreOff lit nothing, so Condition names whatever gate held the room dark.
+		if (snapshot is { Reason: TransitionReason.LeadIn, State: AreaState.PreOff })
 			return new ActivityLine(
 				Headline(snapshot),
 				"Nobody has come in yet. Movement in the room brings the lights up; without it they go off when the dim light runs out.");
@@ -684,7 +685,9 @@ public static class ActivityView
 		},
 		TransitionReason.VacancyTimeout => Lit("No movement — dimmed as a warning", snapshot),
 		TransitionReason.PreOffElapsed => "Dim warning unanswered — lights off",
-		TransitionReason.LeadIn => Lit("Movement nearby — lit dimly", snapshot),
+		TransitionReason.LeadIn => snapshot.State == AreaState.PreOff
+			? Lit("Movement nearby — lit dimly", snapshot)
+			: "Movement nearby",
 		TransitionReason.LeadInUnanswered => "Nobody came in — lights off",
 		TransitionReason.AutomationIgnored => "An automation changed the lights — not treated as a manual change",
 		TransitionReason.ManualOn => "Lights set manually",
