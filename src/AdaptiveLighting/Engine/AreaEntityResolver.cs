@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using NetDaemon.HassModel.Entities;
@@ -182,7 +184,11 @@ public sealed class AreaEntityResolver
 
 	/// <summary>Resolves <paramref name="area"/>, or explains why it cannot be.</summary>
 	/// <returns><c>false</c> when the area must be skipped. A skipped area is never a reason to fail the house.</returns>
-	public bool TryResolve(AreaConfig area, AreaSettings defaults, out ResolvedArea? resolved, out string? error)
+	public bool TryResolve(
+		AreaConfig area,
+		AreaSettings defaults,
+		[NotNullWhen(true)] out ResolvedArea? resolved,
+		[NotNullWhen(false)] out string? error)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 		ArgumentNullException.ThrowIfNull(defaults);

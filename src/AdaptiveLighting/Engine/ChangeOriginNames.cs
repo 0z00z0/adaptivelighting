@@ -89,7 +89,8 @@ public sealed class ChangeOriginNames : IDisposable
 			&& name.GetString() is { Length: > 0 } named)
 			return named;
 
-		return data.TryGetProperty("entity_id", out JsonElement entity) && entity.GetString() is { Length: > 0 } entityId
+		return data.TryGetProperty("entity_id", out JsonElement entity) && entity.ValueKind == JsonValueKind.String
+			&& entity.GetString() is { Length: > 0 } entityId
 			? _ha.AttrString(entityId, FriendlyNameAttribute) ?? entityId
 			: null;
 	}

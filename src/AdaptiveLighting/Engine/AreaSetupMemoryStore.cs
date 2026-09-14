@@ -66,7 +66,7 @@ public sealed class AreaSetupMemoryDocument
 // The configuration document's directory is the only one on a Home Assistant box that survives a redeploy.
 // Every failure degrades to "notify": an unreadable file, a failed write and a missing directory all report the
 // standing problems as unreported, so the cost is a repeated card and never a silence.
-public sealed class AreaSetupMemoryStore : IAreaSetupMemory
+internal sealed class AreaSetupMemoryStore : IAreaSetupMemory
 {
 	private const string NameSuffix = ".setup-faults.json";
 	private const string BackupSuffix = ".bak";
@@ -160,7 +160,7 @@ public sealed class AreaSetupMemoryStore : IAreaSetupMemory
 			if (document?.Rooms is not { Count: > 0 } rooms)
 				return recalled;
 
-			// Rebuilt rather than used as deserialised: the comparer does not survive deserialisation.
+			// Copied into a new dictionary: the comparer does not survive deserialisation.
 			foreach (KeyValuePair<string, string> pair in rooms)
 				if (pair.Key is { Length: > 0 } && pair.Value is not null)
 					recalled[pair.Key] = pair.Value;

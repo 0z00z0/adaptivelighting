@@ -54,7 +54,7 @@ public sealed record HouseState(
 	/// <summary>The raw house-mode option string, or <c>null</c> when unconfigured, unknown or unavailable.</summary>
 	public string? ModeValue { get; init; }
 
-	/// <summary>The active option's <c>scene.*</c> when its kind is Away or Guest and it names one.</summary>
+	/// <summary>The active option's <c>scene.*</c> when it names one, whatever its kind.</summary>
 	public string? ActiveScene { get; init; }
 
 	/// <summary>What is forcing <see cref="ActiveKind"/>, or <c>null</c> when the select's own value is the answer.</summary>
@@ -65,7 +65,7 @@ public sealed record HouseState(
 	/// <summary>The state the engine starts in, before presence and mode have reported.</summary>
 	public static readonly HouseState Initial = new(true, ModeKind.Normal, false);
 
-	/// <summary>The mode, in precedence order: Away, then Sleep, then Guest.</summary>
+	/// <summary>The mode <see cref="ActiveKind"/> maps to, one to one.</summary>
 	// The house-mode select is the whole answer. IsAnyoneHome is published so a person can see the trackers
 	// working and is never composed in, so a phone left on a worktop cannot hold a house away.
 	public HouseMode Mode =>

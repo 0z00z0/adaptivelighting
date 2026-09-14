@@ -51,8 +51,8 @@ public sealed class ModeMonitor : IDisposable
 	// Null when no period select is configured. Which direction it grants is its own to say.
 	private readonly PeriodSelectReader? _periodSelect;
 
-	// This engine replaced a running one on settings somebody just saved, rather than coming up from nothing. The
-	// note on disk cannot tell the two apart, and a save is not a boundary that went by.
+	// This engine replaced a running one on a save. The note on disk cannot tell that from a cold start, and a save
+	// is not a boundary that went by.
 	private readonly bool _afterSave;
 
 	// Wakes this monitor at the boundary itself, so a period's SetsModeId and the period mirror do not wait out a
@@ -79,8 +79,8 @@ public sealed class ModeMonitor : IDisposable
 	// Reset fires from several subscriptions; the "no Normal target" warning must not spam the log every tick.
 	private int _warnedNoNormal;
 
-	// The last value the select actually reported, and whether it has stopped answering. A blind read holds the
-	// former rather than asserting Normal.
+	// The last value the select reported, and whether it has stopped answering. A blind read holds the former and
+	// never asserts Normal.
 	private string? _lastKnownMode;
 	private bool _selectIsBlind;
 
@@ -199,7 +199,7 @@ public sealed class ModeMonitor : IDisposable
 	}
 
 	/// <summary>When the select last moved, which is when the mode standing now was chosen.</summary>
-	// Falls back to the start instant, which is what this used to be unconditionally.
+	// Falls back to the start instant.
 	private DateTimeOffset ModeSetAt(DateTimeOffset now) =>
 		_global.HouseMode?.Entity is { Length: > 0 } entityId
 			? ChangedAt(_ha.GetState(entityId), now) ?? now
@@ -239,24 +239,21 @@ public sealed class ModeMonitor : IDisposable
 	public IObservable<Unit> Changed => _changed;
 
 	/// <summary>Whether the engine is currently forbidden from commanding anything.</summary>
-	public bool KillSwitchActive
+	public bool KillSwitchActive =>
+		_global.EffectiveKillSwitchEntity is { Length: > 0 } entityId && KillSwitchPauses(_global, _ha.GetState(entityId));
+
+	/// <summary>Whether the master switch reading <paramref name="state"/> pauses the engine.</summary>
+	// The one copy of the rule; pages call this too. Unavailable or unknown pauses nothing, whichever polarity.
+	// A defaulted switch is always an enabled flag (off pauses); KillSwitchActiveWhenOff governs an explicit one.
+	public static bool KillSwitchPauses(GlobalConfig global, EntityState? state)
 	{
-		get
-		{
-			if (_global.EffectiveKillSwitchEntity is not { Length: > 0 } entityId)
-				return false;
+		ArgumentNullException.ThrowIfNull(global);
 
-			EntityState? state = _ha.GetState(entityId);
+		if (state?.State is null)
+			return false;
 
-			// An unreadable state is "not killed" whichever polarity is configured.
-			if (state?.State is null)
-				return false;
-
-			// With the built-in switch defaulted in, polarity is forced to the enabled-flag reading (off means
-			// muzzled); KillSwitchActiveWhenOff governs an explicit entity only. ModeService.GetToggles mirrors it.
-			bool enabledFlag = _global.KillSwitchIsDefaulted || _global.KillSwitchActiveWhenOff;
-			return enabledFlag ? state.IsOff() : state.IsOn();
-		}
+		bool enabledFlag = global.KillSwitchIsDefaulted || global.KillSwitchActiveWhenOff;
+		return enabledFlag ? state.IsOff() : state.IsOn();
 	}
 
 	/// <summary>The house-mode option string, or <c>null</c> when the select is unconfigured or has never answered.</summary>
@@ -954,7 +951,7 @@ public sealed class ModeMonitor : IDisposable
 	/// <summary>The one place the house-mode select is written, so no rule can forget the master switch.</summary>
 	// The muzzle covers this as much as it covers a light: the mode decides the leaving sweep, the away scene and
 	// the sleep ceiling, so an engine writing it while paused is still driving the house. Nothing is queued, and
-	// every rule that reaches here is asked again — the inactivity rule on its next tick, a reset on its next
+	// every rule that reaches here is asked again: the inactivity rule on its next tick, a reset on its next
 	// trigger, a period's mode switch at its next boundary.
 	private bool WriteMode(string wanted, Action<string> announce, bool actAtOnce = false)
 	{
@@ -1334,10 +1331,8 @@ public sealed class ModeMonitor : IDisposable
 			return;
 		}
 
-		// The one write the house acts on before Home Assistant echoes it. A reset is the arrival direction —
-		// somebody has walked in, or the waking period has come round — and waiting for the echo means the first
-		// movement is refused and only the second lights the room. Every other write still waits, so a departure
-		// the select never took simply does not happen, rather than happening and then coming undone.
+		// The one write the house acts on before the echo. A reset is an arrival, and waiting for the echo refuses the
+		// first movement. Every other write waits, so a departure the select never took does not happen at all.
 		WriteMode(
 			normal,
 			entity => _logger.LogInformation("Resetting {Select} to '{Normal}' ({Trigger}).", entity, normal, trigger),
