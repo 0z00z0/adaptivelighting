@@ -140,11 +140,12 @@ These belong to one room and have no house-wide baseline. They live on the room'
 | The **×** on a found chip | Leaves one entity out of this room — a fridge's own light sensor, a hallway lamp filed under the wrong room. Listed afterwards so you can put it back. | `ExcludeEntities` |
 | **Don't switch on while** | While any of these is on, the lights won't come on by themselves. A projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Offered from the whole house, since a blocker often belongs to no room. | `IgnoreWhenOn` |
 | **Don't switch off while** | While any of these is on, the room won't turn its own lights off: the countdown, the warning dim and the leaving sweep all leave it alone. It never turns anything *on*, and switching off by hand still works. | `KeepLitWhenOn` |
+| **Other automations count as manual changes** | This room's own answer to the house setting of the same name under *Fine tuning*. *Yes*: a change another Home Assistant automation makes to these lights holds the way a hand at the switch does. *No*: the room leaves the change alone and carries on by itself. Left unset, the room follows the house, and the row says *house setting*. | `TreatAutomationsAsManual` |
 | **Run a scene instead, on movement** | Movement runs this scene rather than setting the room's own brightness and warmth, and the room is left alone afterwards. | `SceneOnMotion` |
 | **Run a scene instead, when empty** | When the room has been empty long enough to go off it runs this scene and stays there. | `SceneWhenEmpty` |
 | The room's switch, in its header | Whether the engine commands this room at all. A switched-off room is still watched and still reported. | `Enabled` |
 
-The two lists and the two scenes close the *Movement & timing* section under **All settings**,
+The two lists, the two scenes and the automations row close the *Movement & timing* section under **All settings**,
 beside the timings they work with.
 
 **Both lists can be turned round.** Tick *while these are off instead* under either one and the rule
@@ -312,7 +313,7 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 | **NetDaemon user id** | The Home Assistant user id owning this host's token. Optional; it sharpens "was that change us, or a person?". | none | `NetDaemonUserId` |
 | **Re-check the rooms every** | How often each room re-checks the time of day and the light outside. | 60 s | `CircadianTickSeconds` |
 | **Recognise own changes for** | How long the app's own commands are recognised as its own rather than as a person at a switch. | 8 s | `SelfEchoWindowSeconds` |
-| **Other automations count as manual changes** | Whether a change made by another automation counts as a manual change. On means your other automations win. | on | `TreatAutomationsAsManual` |
+| **Other automations count as manual changes** | Whether a change made by another automation counts as a manual change. On means your other automations win. A room can answer this for itself on its own page; every room that does not follows this. | on | `TreatAutomationsAsManual` |
 
 ---
 

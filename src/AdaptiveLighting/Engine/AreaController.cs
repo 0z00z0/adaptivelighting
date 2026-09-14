@@ -202,7 +202,7 @@ public sealed class AreaController : IDisposable
 		_luxBrightness = new LuxBrightnessCurve(
 			area.Settings,
 			new LuxReader(ha, daylightSensors, staleAfter, () => _scheduler.Now, lastSeen).Read);
-		_detector = new OverrideDetector(global, scheduler);
+		_detector = new OverrideDetector(global, scheduler, area.TreatAutomationsAsManual);
 
 		foreach (string entry in area.Lights)
 			foreach (string leaf in LeavesOf(entry))

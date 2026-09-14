@@ -593,6 +593,7 @@ public sealed class AreaSetupServiceTests
 		+ (area.SceneOnMotion is { Length: > 0 } ? 1 : 0)
 		+ (area.SceneWhenEmpty is { Length: > 0 } ? 1 : 0)
 		+ (area.DaylightSensor is { Length: > 0 } ? 1 : 0)
+		+ (area.TreatAutomationsAsManual is not null ? 1 : 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	/// <summary>Property names that are the room's identity or its entity lists, not one of its settings.</summary>
@@ -620,6 +621,9 @@ public sealed class AreaSetupServiceTests
 		nameof(AreaConfig.SceneOnMotion),
 		nameof(AreaConfig.SceneWhenEmpty),
 		nameof(AreaConfig.DaylightSensor),
+
+		// Inherits from Global, not from AreaSettings, so it is outside the settings denominator.
+		nameof(AreaConfig.TreatAutomationsAsManual),
 
 		// Survives the rebuild, so it is never one of the losses.
 		nameof(AreaConfig.Enabled),

@@ -12,6 +12,10 @@ against each other.
 
 ## [Unreleased]
 
+### Added
+
+- **A room can decide for itself whether another automation's change counts as a manual one.** The house setting *Other automations count as manual changes* stays as it was, and every room follows it until its own page says otherwise under *Movement & timing*, where the row shows the house's answer while it follows. A bathroom can keep holding the level its hair-dryer automation sets while a hall ignores the level its own automation sets. In the file the room's answer is `TreatAutomationsAsManual`; a document that never names it behaves exactly as before.
+
 ## [2026.9.13] - 2026-09-14
 
 ### Added

@@ -122,7 +122,8 @@ public sealed class AreaControllerTests
 		bool withMotionSensor = true,
 		string? sceneOnMotion = null,
 		IReadOnlyList<string>? lights = null,
-		IReadOnlyDictionary<string, IReadOnlySet<string>>? leavesOfEntry = null)
+		IReadOnlyDictionary<string, IReadOnlySet<string>>? leavesOfEntry = null,
+		bool? treatAutomationsAsManual = null)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -163,7 +164,8 @@ public sealed class AreaControllerTests
 			"Test", settings, lights ?? [Light], withMotionSensor ? [Motion] : [], [Lux], ignoreWhenOn ?? [])
 		{
 			SceneOnMotion = sceneOnMotion,
-			LeavesOfEntry = leavesOfEntry ?? new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+			LeavesOfEntry = leavesOfEntry ?? new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal),
+			TreatAutomationsAsManual = treatAutomationsAsManual
 		};
 		var actuator = new FakeLightActuator();
 		var publisher = new FakeStatePublisher();
@@ -780,6 +782,27 @@ public sealed class AreaControllerTests
 		t.Ha.Trigger(Light, "off", null, new Context { Id = "x", UserId = "u", ParentId = "automation" });
 
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "the knob must actually do something");
+	}
+
+	// A hall told to ignore automations must not take the bathroom's hair-dryer automation with it, and a room can
+	// hold an automation's change in a house that ignores them.
+	[TestMethod]
+	public void An_Automation_Ignored_In_One_Room_Still_Holds_In_A_Room_That_Follows_The_House()
+	{
+		Fixture follows = Build();
+		Fixture ignores = Build(treatAutomationsAsManual: false);
+		Fixture holds = Build(tweakGlobal: g => g.TreatAutomationsAsManual = false, treatAutomationsAsManual: true);
+
+		foreach (Fixture room in new[] { follows, ignores, holds })
+		{
+			room.Ha.Trigger(Motion, "on");
+			Advance(room, TimeSpan.FromSeconds(30));
+			room.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, new Context { Id = "run", ParentId = "trigger" });
+		}
+
+		Assert.AreEqual(AreaState.OverriddenOn, follows.Area.State, "a room stating nothing follows a house that holds automations");
+		Assert.AreEqual(AreaState.AutoActive, ignores.Area.State, "a room saying no leaves the automation's change alone");
+		Assert.AreEqual(AreaState.OverriddenOn, holds.Area.State, "a room saying yes holds it in a house that says no");
 	}
 
 	// ===================== kill switch =====================

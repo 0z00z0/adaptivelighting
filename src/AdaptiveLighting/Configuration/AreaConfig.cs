@@ -64,6 +64,10 @@ public class AreaConfig
 	/// <remarks>Filters discovery only. An explicit <see cref="Lights"/> or <see cref="MotionSensors"/> list is untouched.</remarks>
 	public List<string>? ExcludeEntities { get; set; }
 
+	/// <summary>Whether a change another automation makes counts as a manual change in this room.</summary>
+	/// <remarks><c>null</c> follows <see cref="GlobalConfig.TreatAutomationsAsManual"/>; no twin in <see cref="AreaSettings"/>, so the house keeps one value.</remarks>
+	public bool? TreatAutomationsAsManual { get; set; }
+
 	/// <inheritdoc cref="AreaSettings.VacancyTimeoutSeconds"/>
 	public int? VacancyTimeoutSeconds { get; set; }
 

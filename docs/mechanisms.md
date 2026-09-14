@@ -878,6 +878,20 @@ restart on the wrong option. A remembered "already asked" latch would make both 
   `unavailable` with a context carrying neither user nor parent, which is exactly `PhysicalDevice`. Without
   that guard a Zigbee hiccup pins the area in `SuppressedOff` and the reconnect pins it in `OverriddenOn`.
 
+### Whether an automation's change is manual is a room's answer
+
+`GlobalConfig.TreatAutomationsAsManual` is the house's answer and `AreaConfig.TreatAutomationsAsManual` a
+room's own. A room stating nothing follows the house, and the fallback is taken in `OverrideDetector.IsManual`
+at the moment a change is classified.
+
+- The answer moves `Automation` and nothing else. A wall switch, a device report and a person in the app are
+  manual in every room.
+- There is no twin in `AreaSettings`. A copy under `Defaults` would be a second house value beside `Global`'s,
+  and two house values for one question drift. The cost is that the room's answer is not one of the "N of 23"
+  its page counts, and its row names the house's *Fine tuning* setting instead.
+- A rebuild destroys it, so `AreaSetupService.PinnedEntityCount` counts it with the other per-room choices that
+  have no house default.
+
 ### A bulb leaving or rejoining its group is not a hand
 
 A light group reads on or off from the members still answering. When lit bulbs drop off the network and the

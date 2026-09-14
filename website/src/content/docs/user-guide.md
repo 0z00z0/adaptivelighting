@@ -188,6 +188,12 @@ The page has:
   while one of those is on, the room will not turn itself off. Either list can be turned round with
   *while these are off instead*, for a switch you turn **off** to mean the same thing.
 
+  *Other automations count as manual changes* answers, for this room alone, whether a change another
+  Home Assistant automation makes to its lights holds like a hand at the switch. A bathroom whose
+  automation turns the light up for the hair dryer wants **Yes**; a hall whose automation sets a
+  level the room should replace wants **No**. Left alone, the room follows the house's answer under
+  *Fine tuning* and the row says *house setting*.
+
   The two scene rows swap one moment for a scene of yours. *Run a scene instead, on movement*
   replaces switching on; *Run a scene instead, when empty* replaces switching off. Set one, both or
   neither. Everything that could refuse to light the room still refuses; a scene changes *what*

@@ -422,6 +422,24 @@ else
 										}
 									</SettingRow>
 
+									@* Inherits from the house's Fine tuning, not from the house default settings, so it is not one of the N of M. *@
+									<SettingRow Label="Other automations count as manual changes"
+												Help="Yes: when another Home Assistant automation changes these lights, the room stands back exactly as it does for somebody at the switch, for as long as Manual changes hold. No: the room leaves the change alone and carries on by itself, so its next re-check or movement sets its own level again. Unless set here, the room follows the house setting under House → Fine tuning."
+												IsOwn="@(room.TreatAutomationsAsManual is not null)"
+												HouseText="@(_document.Global.TreatAutomationsAsManual ? "yes" : "no")"
+												Reverted="@(() => Set(() => room.TreatAutomationsAsManual = null))">
+										<div class="seg" role="group" aria-label="Other automations count as manual changes">
+											<button type="button"
+													class="@(AutomationsCountAsManual ? "cur" : null)"
+													aria-pressed="@(AutomationsCountAsManual ? "true" : "false")"
+													@onclick="() => Set(() => room.TreatAutomationsAsManual = true)">Yes</button>
+											<button type="button"
+													class="@(AutomationsCountAsManual ? null : "cur")"
+													aria-pressed="@(AutomationsCountAsManual ? "false" : "true")"
+													@onclick="() => Set(() => room.TreatAutomationsAsManual = false)">No</button>
+										</div>
+									</SettingRow>
+
 									<SettingRow Label="Run a scene instead, on movement"
 												Help="When movement would light this room, it runs this scene instead of setting its own brightness and warmth, and leaves it alone afterwards. Everything that can refuse to light the room still refuses — the master switch, this room's switch, an away house, sleep, too much daylight, a blocker above. A scene is what happens instead of switching on, never a reason to.">
 										<EntityPicker Value="@room.SceneOnMotion"
@@ -1238,6 +1256,9 @@ else
 
 	/// <summary>The room's settings with its inheritance resolved.</summary>
 	private AreaSettings Effective => _room is { } room ? room.Effective(_document.Defaults) : _document.Defaults;
+
+	/// <summary>The room's own answer on automations, or the house's while it states none.</summary>
+	private bool AutomationsCountAsManual => _room?.TreatAutomationsAsManual ?? _document.Global.TreatAutomationsAsManual;
 
 	// Not a light switch, and the wording says so: switching it off changes nothing about the lamps right now.
 	private string SwitchTitle => IsEnabled

@@ -33,16 +33,19 @@ public sealed class OverrideDetector
 {
 	private readonly GlobalConfig _global;
 	private readonly IScheduler _scheduler;
+	private readonly bool? _roomTreatsAutomationsAsManual;
 	private readonly Dictionary<string, Expectation> _expectations = new(StringComparer.OrdinalIgnoreCase);
 
 	// Scenes and member dropouts, whose effect on a light cannot be read in advance: either polarity is expected.
 	private readonly Dictionary<string, DateTimeOffset> _eitherWay = new(StringComparer.OrdinalIgnoreCase);
 	private readonly object _gate = new();
 
-	public OverrideDetector(GlobalConfig global, IScheduler scheduler)
+	// roomTreatsAutomationsAsManual is the room's own answer; null follows the house.
+	public OverrideDetector(GlobalConfig global, IScheduler scheduler, bool? roomTreatsAutomationsAsManual = null)
 	{
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
+		_roomTreatsAutomationsAsManual = roomTreatsAutomationsAsManual;
 	}
 
 	/// <summary>Declares a command about to be sent to <paramref name="entityId"/>.</summary>
@@ -108,7 +111,8 @@ public sealed class OverrideDetector
 	public bool IsManual(ChangeOrigin origin) => origin switch
 	{
 		ChangeOrigin.PhysicalDevice or ChangeOrigin.HaUser => true,
-		ChangeOrigin.Automation => _global.TreatAutomationsAsManual,
+		// Read at the call, not copied at construction: the house value is the live document's.
+		ChangeOrigin.Automation => _roomTreatsAutomationsAsManual ?? _global.TreatAutomationsAsManual,
 		_ => false
 	};
 

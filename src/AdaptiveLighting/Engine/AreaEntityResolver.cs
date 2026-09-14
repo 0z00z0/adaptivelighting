@@ -38,6 +38,9 @@ public sealed record ResolvedArea(
 	// house when the house changes its mind.
 	public string? DaylightSensor { get; init; }
 
+	/// <summary>The room's own answer to whether an automation's change is manual, or <c>null</c> to follow the house.</summary>
+	public bool? TreatAutomationsAsManual { get; init; }
+
 	/// <summary>Whether any of the area's lights offers colour of any kind, or <c>null</c> when none answered.</summary>
 	// False is the brightness-only room, which is a different fact from LightsSupportColorTemp being null: that
 	// one covers both "nobody answered" and "nobody has colour", and only this separates them.
@@ -278,7 +281,8 @@ public sealed class AreaEntityResolver
 			KeepLitWhenOnInverted = area.KeepLitWhenOnInverted == true,
 			SceneOnMotion = Trimmed(area.SceneOnMotion),
 			SceneWhenEmpty = Trimmed(area.SceneWhenEmpty),
-			DaylightSensor = Trimmed(area.DaylightSensor)
+			DaylightSensor = Trimmed(area.DaylightSensor),
+			TreatAutomationsAsManual = area.TreatAutomationsAsManual
 		};
 
 		return true;

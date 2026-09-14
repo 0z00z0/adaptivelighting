@@ -181,6 +181,7 @@ public static class AreaSetupService
 		+ (area.KeepLitWhenOnInverted is not null ? 1 : 0)
 		+ (area.SceneOnMotion is { Length: > 0 } ? 1 : 0)
 		+ (area.SceneWhenEmpty is { Length: > 0 } ? 1 : 0)
+		+ (area.TreatAutomationsAsManual is not null ? 1 : 0)
 		+ (area.ExcludeEntities?.Count ?? 0);
 
 	// The only copy of this count, pinned against the model by a reflection test. Enabled and Levels are absent
