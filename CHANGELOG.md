@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.13] - 2026-09-14
+
 ### Added
 
 - **A room says when some of its lights stop responding.** While Home Assistant reports any light in a room unavailable, including a bulb inside a light group, the room's page says how many, such as "4 of 8 lights are not responding", and explains that a bulb that dropped out while lit may still be on. The dashboard marks that room with a warning sign, and the room's tooltip carries the same sentence. The count is published with every room report as `lights_not_responding` and `light_count`.
