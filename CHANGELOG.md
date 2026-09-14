@@ -21,6 +21,26 @@ against each other.
 ### Changed
 
 - **"Warning dim level" is now "Dim light level", and "Warning dim lasts" is now "Dim light lasts".** The two settings now set both the dim light shortly before a room switches off and the dim light a lead-in shows, and their explanations say so. The keys in the file, `PreOffBrightnessFactor` and `PreOffSeconds`, are unchanged, so no document needs touching.
+- **Home Assistant notification ids start with `adaptive_lighting_`.** A notification card already open from before the upgrade is not replaced, so it shows once more.
+- **Types only the engine uses are no longer public.** `OverrideDetector`, `LuxReader`, `LastPeriodStore`, `AreaSetupMemoryStore`, `AreaAutoDiscovery`, `HouseModeAutoDetect`, `HaLightActuator`, `HaNotifier`, `InvalidDocument`, `ConfigWriteResult` and `StableKeyMigration` in `AdaptiveLighting`, and `DurableDirectory`, `DurableLogFile`, `DurableLogFormatter`, `LogFailureReport` and `LoggedValue` in `AdaptiveLighting.NetDaemon`, are internal. `LightingConfigStore.Save` is internal too, so `LightingEngineHost.Save` is the only way to write the settings file, and the light match tolerances left `GlobalConfig`.
+- The packages declare `en-GB` as their neutral language, and builds in CI normalise the source paths in the embedded symbols.
+- The getting-started sample installs the current release.
+
+### Fixed
+
+- Saving settings no longer lets the replaced engine switch a light or write the house mode for a moment afterwards.
+- A reset of the house mode on arrival is no longer occasionally lost, so the first movement after coming home lights the room.
+- An unavailable master switch shows Running, as the engine treats it, instead of Paused.
+- Room names in the setup-failure notification are HTML-encoded.
+- A save whose settings file does not read back is reported as failed, never as a blank page.
+- The settings file is flushed to disk before it replaces the previous version.
+- The outdoor light sensor warning no longer appears for a house that uses the sensor only for the daylight curve.
+- The house page's name, re-check interval, own-change window, automations box and light-level device class can be saved again; the save bar now appears after editing them.
+- Leaving the house page with unsaved changes asks before discarding them.
+- Remove buttons are named for screen readers, and the remove and help buttons are easier to hit.
+- Clicking a field's label on the house page focuses the field.
+- The room page no longer shows internal state names or announces a save twice.
+- A lead-in report for a room that stayed dark names what held it dark, such as the house being asleep, instead of saying the room was lit.
 
 ## [2026.9.13] - 2026-09-14
 
