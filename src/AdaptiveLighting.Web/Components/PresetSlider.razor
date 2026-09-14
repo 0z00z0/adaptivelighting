@@ -3,13 +3,13 @@
 @inject ILogger<PresetSlider> Logger
 @implements IAsyncDisposable
 
-@* Fixed stops on a rail, so a value is dragged rather than hunted for in a list. The leftmost stop is not a
+@* Fixed stops on a rail, so a value is dragged instead of hunted for in a list. The leftmost stop is not a
    number: where Inheritable is set it means "state nothing here". It sits in a recessed pocket at the left end
-   of the rail, and psl-home is the graduation mark on the rail where the real scale starts — drag left past the
+   of the rail, and psl-home is the graduation mark on the rail where the real scale starts; drag left past the
    mark and the thumb lands in the pocket. The hollow thumb marks the pocket is where the thumb currently sits.
 
    A stored value the ladder does not carry gets a position of its own, never the nearest stop. Opening the
-   page has to leave a hand-edited document exactly as it was.
+   page has to leave a hand-edited document as it was.
 
    Rail and readout share one line, the number after the rail: a settings row on a phone is read left to right,
    and a readout on a line of its own doubles the height of every row on the page.
@@ -89,7 +89,7 @@
 	[Parameter]
 	public double Value { get; set; }
 
-	/// <summary>Whether <see cref="Value"/> is borrowed from above rather than stated on this surface.</summary>
+	/// <summary>Whether <see cref="Value"/> is borrowed from above, not stated on this surface.</summary>
 	[Parameter]
 	public bool AtDefault { get; set; }
 
@@ -190,7 +190,7 @@
 		catch (Exception exception) when (IsSurvivable(exception))
 		{
 			// An exception out of OnAfterRenderAsync tears the circuit down. A missing script costs only the fine
-			// handle; the coarse rail still works exactly as it did before this control existed.
+			// handle; the coarse rail works as it would without this control.
 			Logger.LogDebug(exception, "The brightness satellite could not attach its pointer handler; it stays coarse-only.");
 		}
 	}
@@ -255,11 +255,11 @@
 	/// <summary>The byte the value in force is stored as.</summary>
 	private int Raw => RawBrightnessStep.FromPercent(Value);
 
-	private static string Invariant(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+	private static string Invariant(double value) => InvariantNumber.Format(value, 2);
 
 	// Five decimals, not two: at seventeen stops a fraction rounded to 0.06 moves the zero mark a pixel off the
 	// seam on a wide rail, which is the one thing this number exists to get right.
-	private static string Fraction(double value) => value.ToString("0.#####", CultureInfo.InvariantCulture);
+	private static string Fraction(double value) => InvariantNumber.Format(value, 5);
 
 	private static bool Matches(double left, double right) => Math.Abs(left - right) < 0.001;
 

@@ -37,7 +37,7 @@ public static class SleepSteps
 
 	/// <summary>What a stored pair of flags means as a step.</summary>
 	// Blocking auto-on wins alone: a file holding the block without the clamp has no lower step that covers it,
-	// so the control offers the nearest one. Clause reports that pair precisely; this does not.
+	// so the control offers the nearest one. Clause reports that pair in full; this does not.
 	public static SleepStep Of(bool respectSleepMode, bool sleepBlocksAutoOn) =>
 		sleepBlocksAutoOn ? SleepStep.DimsAndStaysOff
 		: respectSleepMode ? SleepStep.Dims

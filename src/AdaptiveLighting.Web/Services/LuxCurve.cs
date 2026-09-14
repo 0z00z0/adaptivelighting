@@ -267,7 +267,7 @@ public static class LuxCurve
 		"height:", Num((PlotHeight + (2 * GrabMargin)) / ViewHeight * 100), "%;");
 
 	// Invariant: under nb-NO a bare double renders 7,4 and the browser reads no length at all.
-	public static string Num(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+	public static string Num(double value) => InvariantNumber.Format(value, 3);
 
 	public static string Lux(double lux) => TokenFormat.Number(Math.Round(lux), "lx");
 }

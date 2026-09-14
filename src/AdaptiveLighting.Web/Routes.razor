@@ -3,7 +3,7 @@
 @inject IServiceProvider Services
 
 @* Every page a house sees ships in the RCL. AdditionalRoutes is registered by the developer host alone, and
-   without it the router resolves exactly the pages it always did. *@
+   without it the router resolves only this library's own pages. *@
 <Router AppAssembly="@typeof(Routes).Assembly" AdditionalAssemblies="@Extra">
 	<Found Context="routeData">
 		<RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />

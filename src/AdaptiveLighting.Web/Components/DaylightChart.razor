@@ -185,7 +185,7 @@
 
 	private static double Y(TimeOnly time) => (time.Hour + (time.Minute / 60.0)) * 10.0;
 
-	private static string Num(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+	private static string Num(double value) => InvariantNumber.Format(value, 1);
 
 	private static string Point(double x, double y) => $"{Num(x)},{Num(y)}";
 

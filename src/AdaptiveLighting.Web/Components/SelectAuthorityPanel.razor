@@ -3,15 +3,16 @@
 
 <div class="field">
 	<div class="field-head">
-		<label class="field-label">@Label
+		<span class="field-label"><label for="@EntityInputId">@Label</label>
 			@if (LabelHelp is not null)
 			{
 				<InfoPopover Label="@Label">@LabelHelp</InfoPopover>
 			}
-		</label>
+		</span>
 	</div>
 	<div class="field-control">
-		<EntityPicker Value="@Entity"
+		<EntityPicker Id="@EntityInputId"
+					  Value="@Entity"
 					  ValueChanged="@EntityChanged"
 					  Options="@Entities"
 					  NameResolver="@NameResolver"
@@ -30,7 +31,7 @@
 {
 	<div class="field">
 		<div class="field-head">
-			<span class="field-label">@AuthorityLabel
+			<span class="field-label"><span id="@AuthorityLabelId">@AuthorityLabel</span>
 				@if (AuthorityHelp is not null)
 				{
 					<InfoPopover Label="@AuthorityLabel">@AuthorityHelp</InfoPopover>
@@ -38,7 +39,7 @@
 			</span>
 		</div>
 		@* Renaming a periodselect-* class breaks the house mode too. *@
-		<div class="field-control periodselect-authority">
+		<div class="field-control periodselect-authority" role="radiogroup" aria-labelledby="@AuthorityLabelId">
 			<label class="periodselect-choice">
 				<input type="radio" name="@Group" checked="@HomeAssistant"
 					   @onchange="@(() => SetAuthority(true))" />
@@ -110,6 +111,10 @@
 	/// <summary>The radio group's name; two panels sharing one would make a single pair of radios.</summary>
 	[Parameter, EditorRequired]
 	public string Group { get; set; } = "";
+
+	private string EntityInputId => $"{Group}-entity";
+
+	private string AuthorityLabelId => $"{Group}-label";
 
 	[Parameter]
 	public string AuthorityLabel { get; set; } = "Set by:";

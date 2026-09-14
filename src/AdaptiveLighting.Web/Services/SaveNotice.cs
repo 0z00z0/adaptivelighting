@@ -5,7 +5,7 @@ namespace AdaptiveLighting.Web.Services;
 ///     last one, or nothing at all.
 /// </summary>
 /// <remarks>
-///     One line rather than a line and a floating bar. Anything pinned to the viewport covers whatever body text
+///     One line, not a line and a floating bar. Anything pinned to the viewport covers whatever body text
 ///     is under it, and the daylight curve's caption is what it covered.
 /// </remarks>
 /// <param name="Text">What the line says. Empty when there is nothing to say.</param>

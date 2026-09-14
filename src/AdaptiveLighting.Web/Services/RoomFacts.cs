@@ -205,8 +205,8 @@ public static class RoomFacts
 
 	/// <summary>The period a running level test is showing, or <c>null</c> once its deadline has passed.</summary>
 	/// <remarks>
-	///     Read off the report alone, so a page that just loaded or navigated back — carrying no local memory of
-	///     which button was pressed — redraws the same countdown a page that has been open throughout would show.
+	///     Read off the report alone, so a page that just loaded or navigated back (carrying no local memory of
+	///     which button was pressed) redraws the same countdown a page that has been open throughout would show.
 	/// </remarks>
 	public static string? TestingPeriod(AreaSnapshot snapshot, DateTimeOffset now)
 	{

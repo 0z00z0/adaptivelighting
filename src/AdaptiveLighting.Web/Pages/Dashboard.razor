@@ -610,7 +610,7 @@ else
 
 	// Invariant, always. Under nb-NO a double renders 62,5 and "left: 62,5%" is not a length, so the
 	// declaration is dropped and every block on the board stacks at the left edge.
-	private static string Pct(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+	private static string Pct(double value) => InvariantNumber.Format(value, 3);
 
 	private static string Clock(DateTimeOffset at) =>
 		at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);

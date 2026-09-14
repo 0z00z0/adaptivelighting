@@ -14,7 +14,7 @@
 				<li class="chip @(Known(entityId) ? "" : "chip-bad")">
 					<span class="chip-name">@NameOf(entityId)</span>
 					<code class="chip-id">@entityId</code>
-					<button type="button" class="chip-remove" title="Remove" @onclick="() => Remove(entityId)">&times;</button>
+					<button type="button" class="chip-remove" title="Remove" aria-label="@($"Remove {NameOf(entityId)}")" @onclick="() => Remove(entityId)">&times;</button>
 				</li>
 			}
 		</ul>
@@ -24,6 +24,7 @@
 		@if (_manual || !HasOptions)
 		{
 			<input type="text"
+				   id="@Id"
 				   class="picker-text"
 				   placeholder="@Placeholder"
 				   value="@_typed"
@@ -34,7 +35,7 @@
 		{
 			@* An optgroup and not a disabled option, so the browser renders it as a heading a keyboard cannot
 			   land on. *@
-			<select class="picker-select" @bind:get="string.Empty" @bind:set="OnPicked">
+			<select id="@Id" class="picker-select" @bind:get="string.Empty" @bind:set="OnPicked">
 				<option value="">@AddLabel</option>
 				@foreach (EntityOption option in Available)
 				{
@@ -65,6 +66,10 @@
 
 @code {
 	/// <summary>The configured ids, in order; never <c>null</c>.</summary>
+	/// <summary>The id of the add box or list, for a label's for attribute.</summary>
+	[Parameter]
+	public string? Id { get; set; }
+
 	[Parameter]
 	public IReadOnlyList<string> Value { get; set; } = [];
 

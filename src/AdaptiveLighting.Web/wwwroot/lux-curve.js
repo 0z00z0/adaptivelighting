@@ -7,7 +7,7 @@
 
 	  · setPointerCapture, so a drag that leaves the plot keeps steering it instead of stopping at the edge;
 	  · touch-action: none plus preventDefault, or a touch drag scrolls the page and the chart never moves;
-	  · one pointer API for mouse, pen and finger, so there is one code path rather than three.
+	  · one pointer API for mouse, pen and finger, so there is one code path, not three.
 
 	It also holds the circuit's backpressure. Every report is a round trip over a Blazor Server connection, and a
 	pointer stream is sixty a second: sent unthrottled they queue, and the curve then follows the hand several
@@ -15,13 +15,13 @@
 	whichever move was waiting, so the server always gets the newest position and never a backlog of stale ones.
 
 	Like theme.js, this refuses to take the page down: a browser without pointer events, or an element that has
-	not been laid out yet, simply gets no drag — the numbers under the chart still set every value it sets.
+	not been laid out yet, simply gets no drag; the numbers under the chart still set every value it sets.
 */
 window.adaptiveLightingCurve = (function () {
 	const watched = new WeakMap();
 
-	// The pointer as a fraction of the surface's own box. Null while the element has no box — during a render, or
-	// while the chart is inside a collapsed fold — because dividing by zero would report the top-left corner and
+	// The pointer as a fraction of the surface's own box. Null while the element has no box (during a render, or
+	// while the chart is inside a collapsed fold), because dividing by zero would report the top-left corner and
 	// silently drag the handle there.
 	function at(surface, event) {
 		const box = surface.getBoundingClientRect();
@@ -60,7 +60,7 @@ window.adaptiveLightingCurve = (function () {
 
 			owner.invokeMethodAsync(method, point.x, point.y)
 				.catch(function () {
-					// The circuit went away, or the component was disposed mid-gesture. Stop steering rather than
+					// The circuit went away, or the component was disposed mid-gesture. Stop steering instead of
 					// retrying into a connection that is not there.
 					dragging = false;
 					pending = null;

@@ -2,7 +2,7 @@ namespace AdaptiveLighting.Web.Services;
 
 /// <summary>Builds the prefilled "new issue" link the Configuration page's feedback button opens.</summary>
 /// <remarks>
-///     Nothing is ever submitted from inside the app — this composes a GitHub <c>issues/new</c> URL and nothing
+///     Nothing is ever submitted from inside the app: this composes a GitHub <c>issues/new</c> URL and nothing
 ///     else. Every value goes through <see cref="Uri.EscapeDataString"/> so a version string (or anything else
 ///     added to the body later) cannot introduce a stray <c>&amp;</c> or <c>=</c> and corrupt the query string.
 /// </remarks>

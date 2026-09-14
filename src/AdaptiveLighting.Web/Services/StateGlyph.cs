@@ -31,7 +31,7 @@ public static class StateGlyph
 		// No shape: the engine is watching and commanding nothing.
 		AreaState.AutoVacant => new StateMark(null, "state-idle", "watching", false),
 		AreaState.Away => new StateMark(null, "state-idle", "house away", false),
-		_ => new StateMark(null, "state-idle", state.ToString(), false)
+		_ => new StateMark(null, "state-idle", "unknown", false)
 	};
 
 	/// <summary>Whether this state's colour follows the light's actual warmth; only a room the engine holds lit has a commanded Kelvin.</summary>
