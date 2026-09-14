@@ -125,7 +125,8 @@ public sealed class AreaControllerTests
 		IReadOnlyList<string>? lights = null,
 		IReadOnlyDictionary<string, IReadOnlySet<string>>? leavesOfEntry = null,
 		bool? treatAutomationsAsManual = null,
-		IReadOnlyList<string>? leadIn = null)
+		IReadOnlyList<string>? leadIn = null,
+		bool nameOrigins = false)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -178,7 +179,8 @@ public sealed class AreaControllerTests
 			ha, wrapScheduler?.Invoke(scheduler) ?? scheduler, area, global, table,
 			new CircadianCalculator(table, global, () => sun?.Times ?? SunTimes.Unknown, levels, zone: TimeZoneInfo.Utc),
 			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area",
-			sunMoved: watchSun ? sun?.Moved : null);
+			sunMoved: watchSun ? sun?.Moved : null,
+			originNames: nameOrigins ? new ChangeOriginNames(ha, NullLogger.Instance) : null);
 
 		// The orchestrator composes and publishes the opening house state before it starts any room, so that is
 		// what the controller reads off the stream the moment it subscribes.
@@ -864,6 +866,27 @@ public sealed class AreaControllerTests
 		Assert.AreEqual(AreaState.OverriddenOn, follows.Area.State, "a room stating nothing follows a house that holds automations");
 		Assert.AreEqual(AreaState.AutoActive, ignores.Area.State, "a room saying no leaves the automation's change alone");
 		Assert.AreEqual(AreaState.OverriddenOn, holds.Area.State, "a room saying yes holds it in a house that says no");
+	}
+
+	// A hall that ignores its automation still says which automation it ignored, once per run.
+	[TestMethod]
+	public void An_Automation_Change_Left_Alone_Is_Reported_Once_With_The_Automations_Name()
+	{
+		Fixture t = Build(treatAutomationsAsManual: false, nameOrigins: true);
+		t.Ha.Trigger(Motion, "on");
+		Advance(t, TimeSpan.FromSeconds(30));
+		t.Publisher.Snapshots.Clear();
+
+		Context run = new() { Id = "run", ParentId = "trigger" };
+		t.Ha.RaiseEvent(ChangeOriginNames.AutomationTriggeredEvent, new { name = "Evening lights" }, new Context { Id = "run" });
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 13 }, run);
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 14 }, run);
+
+		AreaSnapshot[] reported = [.. t.Publisher.Snapshots.Where(snapshot => snapshot.Reason == TransitionReason.AutomationIgnored)];
+
+		Assert.AreEqual(1, reported.Length, "one automation run is one row, however many updates it sends");
+		Assert.AreEqual("By automation: Evening lights", reported[0].ChangedBy);
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
 
 	// ===================== kill switch =====================

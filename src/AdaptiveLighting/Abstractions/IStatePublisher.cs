@@ -41,14 +41,16 @@ public sealed record AreaSnapshot(
 	string? TestingLightId = null,
 	IReadOnlyList<string>? LightsMoved = null,
 	int? LightsNotResponding = null,
-	int? LightCount = null)
+	int? LightCount = null,
+	string? ChangedBy = null,
+	DateTimeOffset? ChangedAt = null)
 {
 	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
 	///     Not record equality: <c>==</c> compares the "as of" fields, every one of which moves on every tick, so
 	///     diffing on it would suppress nothing. Timestamps, <see cref="Reason"/>, <see cref="DarknessDetail"/>,
-	///     <see cref="AutoOnBlockedBy"/> and <see cref="HeldLitBy"/> date or describe the snapshot; they say nothing
-	///     about the area. <see cref="TestingPeriodId"/> and <see cref="TestEndsAt"/> are compared, unlike those:
+	///     <see cref="AutoOnBlockedBy"/>, <see cref="HeldLitBy"/>, <see cref="ChangedBy"/> and <see cref="ChangedAt"/> date
+	///     or describe the snapshot; they say nothing about the area. <see cref="TestingPeriodId"/> and <see cref="TestEndsAt"/> are compared, unlike those:
 	///     a level test starting or ending is real news, and it is the only news a snapshot carries while nothing
 	///     else about the area moves — a suppressed publish would leave a fresh page load with nothing to redraw.
 	/// </remarks>

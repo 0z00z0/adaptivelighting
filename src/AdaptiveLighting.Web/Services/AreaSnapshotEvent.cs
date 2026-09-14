@@ -157,6 +157,14 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("light_count")]
 	public int? LightCount { get; init; }
 
+	/// <summary>Who made the newest change somebody else made to the room's lights, in the log's words, or <c>null</c>.</summary>
+	[JsonPropertyName("changed_by")]
+	public string? ChangedBy { get; init; }
+
+	/// <summary>When that change was seen, or <c>null</c> when none has been.</summary>
+	[JsonPropertyName("changed_at")]
+	public DateTimeOffset? ChangedAt { get; init; }
+
 	/// <summary>
 	///     Rebuilds an <see cref="AreaSnapshot"/>, or <c>null</c> when the payload names no area. An unparseable
 	///     enum name degrades to its zero value; nothing throws.
@@ -204,7 +212,9 @@ public sealed record AreaSnapshotEvent
 			TestingLightId: TestingLightId,
 			LightsMoved: LightsMoved is { Count: > 0 } moved ? moved : null,
 			LightsNotResponding: LightsNotResponding,
-			LightCount: LightCount);
+			LightCount: LightCount,
+			ChangedBy: ChangedBy,
+			ChangedAt: ChangedAt);
 	}
 }
 

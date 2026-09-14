@@ -229,6 +229,11 @@ how many lines switching it off takes away, and the eight add up to what the pag
 
 > Too bright to switch on · lux 86, dark below 40
 
+A manual change says who made it, the way Home Assistant's own logbook does: *By automation: Evening
+lights*, *By Alex* for somebody using Home Assistant, or *At the device or wall switch*. A change an
+automation made that the room leaves alone gets a row of its own, so a light that did not stay where
+an automation put it can be traced. Where no name can be found, the row simply says what happened.
+
 New entries are counted as they arrive but are not inserted under you; a button adds them when you
 are ready.
 

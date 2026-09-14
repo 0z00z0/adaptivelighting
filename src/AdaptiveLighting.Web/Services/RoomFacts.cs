@@ -71,9 +71,7 @@ public static class RoomFacts
 			? new RoomFact("Last movement", Stamp(motion, now), $"Movement was last seen at {Clock(motion)}.")
 			: new RoomFact("Last movement", "none seen", "No movement has been reported since the engine started."));
 
-		facts.Add(snapshot.LastCommandAt is { } command
-			? new RoomFact("Last changed", Stamp(command, now), $"The engine last changed these lights at {Clock(command)}.")
-			: new RoomFact("Last changed", "not yet", "The engine has not changed these lights since it started."));
+		facts.Add(LastChange(snapshot, now));
 
 		facts.Add(new RoomFact(
 			"Time of day",
@@ -81,6 +79,21 @@ public static class RoomFacts
 			"The schedule period this room is in. It sets brightness and warmth."));
 
 		return facts;
+	}
+
+	// The newer of the engine's own last command and the last change somebody else made, with who made it.
+	private static RoomFact LastChange(AreaSnapshot snapshot, DateTimeOffset now)
+	{
+		if (snapshot.ChangedAt is { } changed && (snapshot.LastCommandAt is not { } commanded || changed > commanded))
+		{
+			return snapshot.ChangedBy is { Length: > 0 } by
+				? new RoomFact("Last changed", Stamp(changed, now), $"These lights were last changed at {Clock(changed)}.", by)
+				: new RoomFact("Last changed", Stamp(changed, now), $"These lights were last changed at {Clock(changed)}, by something the engine could not name.");
+		}
+
+		return snapshot.LastCommandAt is { } command
+			? new RoomFact("Last changed", Stamp(command, now), $"The engine last changed these lights at {Clock(command)}.", ChangeOriginNames.ByTheEngine)
+			: new RoomFact("Last changed", "not yet", "The engine has not changed these lights since it started.");
 	}
 
 	// An older engine reports the hold without naming it, so the copy stays true with nothing to name.

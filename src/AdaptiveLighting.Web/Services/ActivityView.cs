@@ -123,7 +123,7 @@ public static class ActivityView
 		new(ActivityCategory.Illumination, "Darkness",
 			"How dark the room measured, against the level it counts as dark."),
 		new(ActivityCategory.ManualChange, "Manual changes",
-			"Somebody set or switched the lights themselves, and what happened when that ran out."),
+			"Somebody or another automation set or switched the lights, and what happened when that ran out."),
 		new(ActivityCategory.Declined, "Nothing happened",
 			"The engine could have lit the room and did not — with the reason."),
 		new(ActivityCategory.Mode, "Mode changes", "The house moved to a different mode."),
@@ -155,6 +155,10 @@ public static class ActivityView
 			return new ActivityLine(
 				Headline(snapshot),
 				"Nobody has come in yet. Movement in the room brings the lights up; without it they go off when the dim light runs out.");
+
+		// Who made it, as Home Assistant's logbook words it. Unnamed, the row reads as it did before names existed.
+		if (snapshot.Reason is TransitionReason.ManualOn or TransitionReason.ManualOff or TransitionReason.AutomationIgnored)
+			return new ActivityLine(Headline(snapshot), snapshot.ChangedBy is { Length: > 0 } by ? by : Condition(snapshot));
 
 		// A quiet re-check that found the darkness verdict had moved. That verdict is the news, so it leads.
 		if (snapshot is { Reason: TransitionReason.CircadianTick, State: AreaState.AutoVacant, IsDark: { } dark })
@@ -293,7 +297,8 @@ public static class ActivityView
 		if (snapshot.Reason is TransitionReason.ManualOn
 			or TransitionReason.ManualOff
 			or TransitionReason.OverrideExpired
-			or TransitionReason.SuppressionLifted)
+			or TransitionReason.SuppressionLifted
+			or TransitionReason.AutomationIgnored)
 			return ActivityCategory.ManualChange;
 
 		// Ahead of the light change and the darkness verdict: a room the engine could have lit and did not is
@@ -410,7 +415,8 @@ public static class ActivityView
 			or TransitionReason.ManualOff
 			or TransitionReason.SuppressionLifted
 			or TransitionReason.EnablementChanged
-			or TransitionReason.LightAvailability => false,
+			or TransitionReason.LightAvailability
+			or TransitionReason.AutomationIgnored => false,
 
 		// What is left commands where it left the room lit and aimed. That is what AutoActive means.
 		_ => snapshot.State is AreaState.AutoActive
@@ -680,6 +686,7 @@ public static class ActivityView
 		TransitionReason.PreOffElapsed => "Dim warning unanswered — lights off",
 		TransitionReason.LeadIn => Lit("Movement nearby — lit dimly", snapshot),
 		TransitionReason.LeadInUnanswered => "Nobody came in — lights off",
+		TransitionReason.AutomationIgnored => "An automation changed the lights — not treated as a manual change",
 		TransitionReason.ManualOn => "Lights set manually",
 		TransitionReason.ManualOff => "Lights switched off manually",
 		TransitionReason.OverrideExpired => "The manual change ran its course",

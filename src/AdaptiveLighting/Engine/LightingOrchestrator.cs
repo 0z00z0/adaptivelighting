@@ -75,6 +75,9 @@ public sealed class LightingOrchestrator : IDisposable
 	// disagree about whether a period that waits for movement has begun.
 	private MotionPeriodLatch? _motionPeriods;
 
+	// One subscription to automation runs for the house, handed to every room so each can name who changed a light.
+	private ChangeOriginNames? _originNames;
+
 	private bool _started;
 
 	// Nothing is wired until Start.
@@ -145,6 +148,8 @@ public sealed class LightingOrchestrator : IDisposable
 
 		// Also before the areas: their calculators leave a held period out of the table until this says it began.
 		_motionPeriods = MotionPeriodLatch.For(_config.Periods, _config.Global);
+
+		_originNames = new ChangeOriginNames(_ha, _loggerFactory.CreateLogger<ChangeOriginNames>());
 
 		HaAreaRegistry registry = new(_registry);
 		AreaEntityResolver resolver = new(
@@ -293,7 +298,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_ha, _scheduler, resolved, _config.Global, _config.Periods, circadian,
 			_actuator, _publisher, _house, _loggerFactory, config.AreaId, _lastSeen,
 			SunMoved(resolved.Settings.SunEntity),
-			LightCalculators(resolved, config));
+			LightCalculators(resolved, config),
+			_originNames);
 	}
 
 	/// <summary>One calculator per light that states levels of its own, on that light's rows merged onto the room's.</summary>
@@ -489,6 +495,7 @@ public sealed class LightingOrchestrator : IDisposable
 			area.Dispose();
 
 		_areas.Clear();
+		_originNames?.Dispose();
 		_presence?.Dispose();
 		_modes?.Dispose();
 		_house.Dispose();

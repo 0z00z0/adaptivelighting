@@ -128,6 +128,16 @@ public sealed class AreaController : IDisposable
 	// never outlive the dim light it describes.
 	private bool _leadIn;
 
+	// Names who caused a change for the log. Null names nobody, and the rows read as they did before names existed.
+	private readonly ChangeOriginNames? _originNames;
+
+	// The newest change somebody else made to these lights, manual or left alone, and when it was seen.
+	private string? _changedBy;
+	private DateTimeOffset? _changedAt;
+
+	// The automation run whose change was last reported as left alone, so one run's burst of updates is one row.
+	private string? _ignoredContextId;
+
 	// The scene the area is sitting on, or null. Set by ApplyScene and cleared by Send: any light command is the
 	// engine aiming the room itself, which the scene no longer describes.
 	private string? _standingScene;
@@ -157,11 +167,13 @@ public sealed class AreaController : IDisposable
 		string? areaId = null,
 		IEntityLastSeen? lastSeen = null,
 		IObservable<Unit>? sunMoved = null,
-		IReadOnlyDictionary<string, CircadianCalculator>? lightCalculators = null)
+		IReadOnlyDictionary<string, CircadianCalculator>? lightCalculators = null,
+		ChangeOriginNames? originNames = null)
 	{
 		ArgumentNullException.ThrowIfNull(loggerFactory);
 
 		_sunMoved = sunMoved;
+		_originNames = originNames;
 
 		_lightCalculators = lightCalculators is { Count: > 0 } stated
 			? stated
@@ -613,12 +625,19 @@ public sealed class AreaController : IDisposable
 				return;
 
 			ChangeOrigin origin = _detector.Classify(change);
-			if (!_detector.IsManual(origin))
+			bool manual = _detector.IsManual(origin);
+
+			// While disabled, away or holding a scene there is nothing to override, and nothing to report.
+			if ((!manual && origin != ChangeOrigin.Automation) || _state is AreaState.Disabled or AreaState.Away or AreaState.SceneHold)
 				return;
 
-			// While disabled, away or holding a scene there is nothing to override.
-			if (_state is AreaState.Disabled or AreaState.Away or AreaState.SceneHold)
+			Context? context = change.New?.Context;
+
+			if (!manual)
+			{
+				ReportAutomationLeftAlone(change, context);
 				return;
+			}
 
 			// A hand at the switch is the newest word on these levels, so a running test's return is dropped
 			// rather than sent ten seconds later over the top of it.
@@ -626,8 +645,11 @@ public sealed class AreaController : IDisposable
 
 			bool turnedOn = change.TurnedOn();
 
-			_logger.LogInformation("{Area}: manual change on {EntityId} attributed to {Origin}; light is now {State}.",
-				Name, change.New?.EntityId, origin, turnedOn ? "on" : "off");
+			_changedBy = _originNames?.Describe(origin, context);
+			_changedAt = _scheduler.Now;
+
+			_logger.LogInformation("{Area}: manual change on {EntityId} attributed to {Origin} ({By}); light is now {State}.",
+				Name, change.New?.EntityId, origin, _changedBy ?? "not named", turnedOn ? "on" : "off");
 
 			if (turnedOn)
 			{
@@ -646,6 +668,25 @@ public sealed class AreaController : IDisposable
 			RestartSuppressionTimer();
 			Publish(TransitionReason.ManualOff);
 		}
+	}
+
+	/// <summary>Reports an automation's change this room leaves alone, once per automation run.</summary>
+	// Bypasses Publish's guard as ReportDeclinedMotion does: nothing the snapshot compares has moved.
+	private void ReportAutomationLeftAlone(StateChange change, Context? context)
+	{
+		if (context?.Id is { Length: > 0 } run && string.Equals(run, _ignoredContextId, StringComparison.Ordinal))
+			return;
+
+		_ignoredContextId = context?.Id;
+		_changedBy = _originNames?.Describe(ChangeOrigin.Automation, context);
+		_changedAt = _scheduler.Now;
+
+		_logger.LogInformation("{Area}: change on {EntityId} made by an automation ({By}) is left alone.",
+			Name, change.New?.EntityId, _changedBy ?? "not named");
+
+		AreaSnapshot snapshot = Snapshot(TransitionReason.AutomationIgnored);
+		_lastPublished = snapshot;
+		_publisher.Publish(snapshot);
 	}
 
 	/// <summary>Whether the change could have been a person at a switch at all, before anyone asks who caused it.</summary>
@@ -1898,7 +1939,9 @@ public sealed class AreaController : IDisposable
 			_testingLightId,
 			_lightsMoved,
 			_notResponding.Count,
-			_leaves.Count);
+			_leaves.Count,
+			_changedBy,
+			_changedAt);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>

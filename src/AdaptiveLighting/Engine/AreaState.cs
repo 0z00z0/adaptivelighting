@@ -76,7 +76,10 @@ public enum TransitionReason
 	LeadIn,
 
 	/// <summary>Nobody came in while a lead-in held the dim light, so the room went off.</summary>
-	LeadInUnanswered
+	LeadInUnanswered,
+
+	/// <summary>An automation changed the lights and this room does not count that as manual. Nothing the area decides on moved.</summary>
+	AutomationIgnored
 }
 
 /// <summary>Which gate is refusing to switch an area's lights on for movement.</summary>

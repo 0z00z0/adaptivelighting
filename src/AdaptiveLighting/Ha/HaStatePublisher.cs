@@ -66,6 +66,8 @@ public sealed class HaStatePublisher : IStatePublisher
 				lights_moved = snapshot.LightsMoved,
 				lights_not_responding = snapshot.LightsNotResponding,
 				light_count = snapshot.LightCount,
+				changed_by = snapshot.ChangedBy,
+				changed_at = snapshot.ChangedAt,
 				levels_from_room = snapshot.LevelsFromRoom?.ToString(),
 				// Flat fields, so an automation trigger can read one without walking an object.
 				is_anyone_home = snapshot.IsAnyoneHome,
