@@ -130,7 +130,7 @@ public sealed class HaAdapterTests
 		Assert.AreEqual("create", call.Service);
 
 		var data = DataOf(call);
-		StringAssert.StartsWith((string)data["notification_id"], "laget_lighting_",
+		StringAssert.StartsWith((string)data["notification_id"], "adaptive_lighting_",
 			"a stable id replaces the previous notification instead of stacking a new one every restart");
 		Assert.IsTrue(data.ContainsKey("title"));
 		Assert.IsTrue(data.ContainsKey("message"));

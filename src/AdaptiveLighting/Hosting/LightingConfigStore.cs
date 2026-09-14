@@ -117,12 +117,12 @@ public sealed class LightingConfigStore
 
 	/// <summary>Normalises <paramref name="config"/>, validates it, and writes it, keeping one backup of what was there.</summary>
 	/// <remarks>
-	///     The only write path, so no caller has to remember to normalise or validate first. <paramref name="onInvalid"/>
-	///     is what a document the engine cannot run costs: a person's save is refused, while the host's own writes go
-	///     out and carry their errors back. Warnings and area errors never affect a write.
+	///     Only <see cref="LightingEngineHost"/> calls this, because its save re-reads the file and rebuilds every area.
+	///     <paramref name="onInvalid"/> refuses a person's save of a document the engine cannot run, while the host's
+	///     own writes go out and carry their errors back. Warnings and area errors never affect a write.
 	/// </remarks>
 	/// <exception cref="LightingConfigException">The file could not be written.</exception>
-	public ConfigWriteResult Save(AdaptiveLightingConfig config, InvalidDocument onInvalid)
+	internal ConfigWriteResult Save(AdaptiveLightingConfig config, InvalidDocument onInvalid)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 

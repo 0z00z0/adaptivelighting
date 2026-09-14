@@ -1850,8 +1850,8 @@ public sealed class AreaController : IDisposable
 
 	private static bool TargetsMatch(LightTarget left, LightTarget? right) =>
 		right is not null &&
-		Math.Abs(left.BrightnessPct - right.BrightnessPct) < GlobalConfig.BrightnessTolerancePct &&
-		Math.Abs(left.ColorTempKelvin - right.ColorTempKelvin) < GlobalConfig.ColorTempToleranceKelvin;
+		Math.Abs(left.BrightnessPct - right.BrightnessPct) < LightTolerance.BrightnessPct &&
+		Math.Abs(left.ColorTempKelvin - right.ColorTempKelvin) < LightTolerance.ColorTempKelvin;
 
 	// The tick re-applies when any one of them has moved, so a light on its own levels crosses its own boundary
 	// without waiting for the room to cross one.

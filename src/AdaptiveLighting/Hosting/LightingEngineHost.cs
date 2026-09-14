@@ -525,7 +525,26 @@ public sealed class LightingEngineHost : IDisposable
 
 			// Re-read, never the in-memory object: a save is reported successful only once the bytes on disk parse
 			// back into a document the engine accepts, which is what matters after a restart.
-			return ApplyCore(_store.Load(), EngineNoticeKind.SettingsSaved);
+			AdaptiveLightingConfig written;
+
+			try
+			{
+				written = _store.Load();
+			}
+			catch (LightingConfigException exception)
+			{
+				StopCore();
+				Fault = $"The settings file was written but does not read back, so nothing is running. {exception.Message}";
+				_logger.LogError(exception, "The lighting configuration at {Path} does not read back after the write.", _store.FilePath);
+
+				ValidationResult unreadable = new();
+				unreadable.AddError(exception.Message);
+				LastValidation = unreadable;
+
+				return new SaveResult(SaveStatus.Failed, unreadable, "The file was written but does not read back, so nothing is running.");
+			}
+
+			return ApplyCore(written, EngineNoticeKind.SettingsSaved);
 		}
 	}
 
@@ -615,7 +634,7 @@ public sealed class LightingEngineHost : IDisposable
 				_registry,
 				_scheduler,
 				config,
-				new HaLightActuator(_ha, config.Global, _loggerFactory.CreateLogger<HaLightActuator>()),
+				new HaLightActuator(_ha, _loggerFactory.CreateLogger<HaLightActuator>()),
 				new HaStatePublisher(_ha, _loggerFactory.CreateLogger<HaStatePublisher>()),
 				new HaNotifier(_ha, _loggerFactory.CreateLogger<HaNotifier>()),
 				_loggerFactory,

@@ -39,13 +39,11 @@ public sealed class HaLightActuator : ILightActuator
 	private const int EqualChannelValue = 255;
 
 	private readonly IHaContext _ha;
-	private readonly GlobalConfig _global;
 	private readonly ILogger _logger;
 
-	public HaLightActuator(IHaContext ha, GlobalConfig global, ILogger logger)
+	public HaLightActuator(IHaContext ha, ILogger logger)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
-		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
 	}
 
@@ -135,7 +133,7 @@ public sealed class HaLightActuator : ILightActuator
 			if (currentRaw is null)
 				return false;
 
-			if (Math.Abs((currentRaw.Value / MaxRawBrightness * 100) - wantedBrightness) > GlobalConfig.BrightnessTolerancePct)
+			if (Math.Abs((currentRaw.Value / MaxRawBrightness * 100) - wantedBrightness) > LightTolerance.BrightnessPct)
 				return false;
 		}
 
@@ -144,7 +142,7 @@ public sealed class HaLightActuator : ILightActuator
 			double? currentKelvin = state.AttrDouble(ColorTempAttribute);
 
 			// A light with no colour temperature cannot drift from one; only a mismatch counts.
-			if (currentKelvin is { } kelvin && Math.Abs(kelvin - wantedKelvin) > GlobalConfig.ColorTempToleranceKelvin)
+			if (currentKelvin is { } kelvin && Math.Abs(kelvin - wantedKelvin) > LightTolerance.ColorTempKelvin)
 				return false;
 		}
 

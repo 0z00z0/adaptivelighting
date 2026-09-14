@@ -168,12 +168,6 @@ public class GlobalConfig
 	///     never be generalised to it. Zero or less switches the rule off.
 	/// </remarks>
 	public int LuxSensorStaleAfterMinutes { get; set; } = 120;
-
-	/// <summary>Brightness difference below which a light counts as already at target, so no command is sent.</summary>
-	/// <remarks>HA reports brightness as a 0-255 integer and this app thinks in per cent, so a round trip lands about a per cent off.</remarks>
-	public const double BrightnessTolerancePct = 2;
-
-	public const int ColorTempToleranceKelvin = 50;
 }
 
 /// <summary>

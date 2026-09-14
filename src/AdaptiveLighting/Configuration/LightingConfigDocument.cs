@@ -115,22 +115,17 @@ public static class LightingConfigDocument
 	private const string Header =
 		"""
 		# ============================================================================
-		#  Adaptive lighting — managed by the lighting web UI.
+		#  Adaptive lighting settings.
 		# ============================================================================
 		#
-		#  This file is written by the Configuration page of the lighting web UI. It
-		#  is still a perfectly ordinary YAML file and hand-editing it works — but the
-		#  next save from the browser rewrites it from scratch, and any comments you
-		#  add here are lost at that moment. YamlDotNet cannot round-trip comments.
+		#  This file may be edited by hand. Saving from the lighting web UI rewrites
+		#  it, and any comments added here are lost at that save.
 		#
-		#  What every setting means, and a worked example, are documented at:
+		#  What every setting means, with a worked example:
 		#
 		#      https://adaptivelighting.netlify.app
 		#
-		#  Everything here is also editable in the browser — this file is written
-		#  by the app, so a hand edit is overwritten on the next save.
-		#
-		#  The top-level key MUST stay the fully qualified config class name.
+		#  The top-level key must stay the fully qualified config class name.
 		# ============================================================================
 
 		""";

@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
 	<PropertyGroup>
-		<TargetFramework>net10.0</TargetFramework>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
 		<RootNamespace>AdaptiveLighting.Web</RootNamespace>
 		<PackageId>AdaptiveLighting.Web</PackageId>
 		<Description>Blazor dashboard and configuration UI for the AdaptiveLighting NetDaemon library. Live per-room state, house modes and who's home, plus a full editor for areas, the circadian schedule and defaults that writes the YAML and rebuilds the running engine in place. Ships as a Razor Class Library; LAN-only and unauthenticated by design - read the security notes before exposing it.</Description>

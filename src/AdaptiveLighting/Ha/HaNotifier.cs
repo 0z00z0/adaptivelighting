@@ -9,7 +9,7 @@ namespace AdaptiveLighting.Ha;
 /// </remarks>
 public sealed class HaNotifier : INotifier
 {
-	private const string NotificationIdPrefix = "laget_lighting_";
+	private const string NotificationIdPrefix = "adaptive_lighting_";
 
 	private readonly IHaContext _ha;
 	private readonly ILogger _logger;
