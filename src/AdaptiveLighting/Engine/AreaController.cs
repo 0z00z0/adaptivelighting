@@ -516,6 +516,9 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
+			if (_disposed)
+				return;
+
 			_lastMotionAt = _scheduler.Now;
 
 			switch (_state)
@@ -584,6 +587,9 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
+			if (_disposed)
+				return;
+
 			if (_state == AreaState.PreOff && _leadIn)
 			{
 				ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_area.Settings.PreOffSeconds), OnPreOffElapsed);
@@ -618,6 +624,9 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
+			if (_disposed)
+				return;
+
 			NoteAvailability(change);
 
 			// A radio, not a hand. See IsHandAtTheSwitch.
@@ -703,7 +712,8 @@ public sealed class AreaController : IDisposable
 	private void OnMemberChanged(StateChange change)
 	{
 		lock (_gate)
-			NoteAvailability(change);
+			if (!_disposed)
+				NoteAvailability(change);
 	}
 
 	// Must run before the group's own change is classified. Home Assistant writes the group while handling the
@@ -729,6 +739,9 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
+			if (_disposed)
+				return;
+
 			HouseState previous = _house;
 			_house = house;
 
@@ -834,15 +847,16 @@ public sealed class AreaController : IDisposable
 		// corrected all re-arm within one tick. Under the gate: the arm reads the calculator, which the sun's own
 		// subscription can be inside on another thread.
 		lock (_gate)
-			_boundary.Arm();
+			if (!_disposed)
+				_boundary.Arm();
 	}
 
 	private void Evaluate()
 	{
 		lock (_gate)
 		{
-			// A discarded controller still holds live timers for a moment, and its replacement is already running
-			// against the saved configuration. Commanding anything from here would be the old table talking.
+			// Every callback checks this: a timer or event already on its way still arrives after Dispose, and the
+			// replacement is running on the saved configuration.
 			if (_disposed)
 				return;
 
@@ -875,7 +889,8 @@ public sealed class AreaController : IDisposable
 	private void OnVacancyTimeout()
 	{
 		lock (_gate)
-			VacancyTimedOut();
+			if (!_disposed)
+				VacancyTimedOut();
 	}
 
 	private void VacancyTimedOut()
@@ -921,7 +936,8 @@ public sealed class AreaController : IDisposable
 	private void OnPreOffElapsed()
 	{
 		lock (_gate)
-			PreOffElapsed();
+			if (!_disposed)
+				PreOffElapsed();
 	}
 
 	private void PreOffElapsed()
@@ -949,7 +965,7 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
-			if (_state != AreaState.OverriddenOn)
+			if (_disposed || _state != AreaState.OverriddenOn)
 				return;
 
 			_nextChangeAt = null;
@@ -981,7 +997,7 @@ public sealed class AreaController : IDisposable
 	{
 		lock (_gate)
 		{
-			if (_state != AreaState.SuppressedOff)
+			if (_disposed || _state != AreaState.SuppressedOff)
 				return;
 
 			_nextChangeAt = null;

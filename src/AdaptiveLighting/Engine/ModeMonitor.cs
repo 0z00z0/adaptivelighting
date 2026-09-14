@@ -88,11 +88,15 @@ public sealed class ModeMonitor : IDisposable
 	// by the select moving at all, and by the first tick that finds the select has not taken it.
 	private string? _assumedMode;
 
+	// Moves whenever _assumedMode is set or cleared, so the tick clears only the assumption it checked.
+	private int _assumedGeneration;
+
 	private DateTimeOffset _activatedAt;
 	private DateTimeOffset _lastMotionAt;
 	private bool _inactivityLatched;
 	private string? _previousPeriodId;
 	private bool _started;
+	private bool _disposed;
 
 	// The option the no-motion rule last wrote, so a mode the engine set can be told from the same mode a person
 	// chose. Cleared the moment the select stops reading it, and never persisted: after a restart nobody knows why
@@ -455,7 +459,7 @@ public sealed class ModeMonitor : IDisposable
 							ArmGraceExpiryCheck();
 						}
 
-						_changed.OnNext(Unit.Default);
+						RaiseChanged();
 					},
 					_logger));
 		}
@@ -513,12 +517,16 @@ public sealed class ModeMonitor : IDisposable
 	{
 		lock (_gate)
 		{
+			if (_disposed)
+				return;
+
 			_activatedAt = _scheduler.Now;
 
 			// The select has moved, so whatever it now reads is newer than anything the engine assumed about it.
 			// This is also where the echo of the engine's own write lands, and clearing it there costs nothing:
 			// the value is the same one, so the republish below says nothing new.
 			_assumedMode = null;
+			_assumedGeneration++;
 
 			// Anything that moves the select away takes ownership back from the no-motion rule, so a later move
 			// onto the same option is somebody else's doing.
@@ -531,7 +539,7 @@ public sealed class ModeMonitor : IDisposable
 		ArmGraceExpiryCheck();
 
 		AnnounceForcedMode();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	/// <summary>The period select moved, so the period may have changed without the clock crossing anything.</summary>
@@ -541,7 +549,7 @@ public sealed class ModeMonitor : IDisposable
 	private void OnPeriodSelectChanged()
 	{
 		OnTick();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	/// <summary>Says so, once at start-up, when the document leaves every away behaviour out of reach.</summary>
@@ -685,7 +693,7 @@ public sealed class ModeMonitor : IDisposable
 	private void OnActivationSensorChanged()
 	{
 		AnnounceForcedMode();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	/// <summary>Writes one line naming what is forcing the house mode, and one when nothing is any more.</summary>
@@ -756,6 +764,9 @@ public sealed class ModeMonitor : IDisposable
 
 	private void OnMotion(string sensor)
 	{
+		if (IsDisposed)
+			return;
+
 		MarkMotion();
 		StartPeriodOnMotion(sensor, _scheduler.Now);
 	}
@@ -818,7 +829,7 @@ public sealed class ModeMonitor : IDisposable
 		RememberPeriod(periodKey);
 
 		OnPeriodEntered(periodKey!, activeOption);
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	// Under _gate; reads configuration settled in the constructor and nothing else.
@@ -947,6 +958,9 @@ public sealed class ModeMonitor : IDisposable
 	// trigger, a period's mode switch at its next boundary.
 	private bool WriteMode(string wanted, Action<string> announce, bool actAtOnce = false)
 	{
+		if (IsDisposed)
+			return false;
+
 		if (KillSwitchActive)
 		{
 			_logger.LogDebug("The master switch is on, so {Select} is left where it stands.", _modeSelect.Entity);
@@ -962,11 +976,12 @@ public sealed class ModeMonitor : IDisposable
 		lock (_gate)
 		{
 			_assumedMode = wanted.Trim();
+			_assumedGeneration++;
 			_lastKnownMode = _assumedMode;
 		}
 
 		AnnounceForcedMode();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 		return true;
 	}
 
@@ -976,21 +991,31 @@ public sealed class ModeMonitor : IDisposable
 	private void ExpireAssumedMode()
 	{
 		string? assumed;
+		int generation;
 		lock (_gate)
+		{
 			assumed = _assumedMode;
+			generation = _assumedGeneration;
+		}
 
 		if (assumed is null || _modeSelect.AlreadyShows(assumed))
 			return;
 
+		// A reset or a select change landing since the read above is newer than this verdict.
 		lock (_gate)
+		{
+			if (_assumedGeneration != generation)
+				return;
+
 			_assumedMode = null;
+		}
 
 		_logger.LogInformation(
 			"{Select} did not take '{Mode}'; the house goes back to the mode the select itself reads.",
 			_modeSelect.Entity, assumed);
 
 		AnnounceForcedMode();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	private static bool IsArrival(StateChange change) =>
@@ -1001,7 +1026,7 @@ public sealed class ModeMonitor : IDisposable
 	// has expired, so walking out the door does not cancel the mode just set.
 	private void OnPresenceReset(HouseModeOptionConfig option, string sensor)
 	{
-		if (!ReferenceEquals(CurrentOption, option))
+		if (IsDisposed || !ReferenceEquals(CurrentOption, option))
 			return;
 
 		DateTimeOffset activatedAt;
@@ -1051,7 +1076,7 @@ public sealed class ModeMonitor : IDisposable
 	// rule, so the next arming cancels itself and nothing repeats.
 	private void OnGraceExpired(HouseModeOptionConfig option)
 	{
-		if (!ReferenceEquals(CurrentOption, option))
+		if (IsDisposed || !ReferenceEquals(CurrentOption, option))
 			return;
 
 		if (PresenceSensorsFor(option).FirstOrDefault(sensor => !IsPresenceTracker(sensor) && IsOn(sensor))
@@ -1068,6 +1093,9 @@ public sealed class ModeMonitor : IDisposable
 	// entry and regresses _previousPeriodId. The read is a state-cache lookup plus a sort and cannot re-enter.
 	private void OnTick()
 	{
+		if (IsDisposed)
+			return;
+
 		DateTimeOffset now = _scheduler.Now;
 
 		// First, so everything below reads a mode the select has either taken or been shown not to have taken.
@@ -1211,7 +1239,7 @@ public sealed class ModeMonitor : IDisposable
 	// separately, because an option the select does not offer is rejected and correctly retried on every tick.
 	private void MirrorPeriodSelect(string? periodKey)
 	{
-		if (_periodSelect?.OptionForPeriod is not { } optionFor || periodKey is not { Length: > 0 })
+		if (IsDisposed || _periodSelect?.OptionForPeriod is not { } optionFor || periodKey is not { Length: > 0 })
 			return;
 
 		if (optionFor(periodKey) is not { Length: > 0 } wanted)
@@ -1316,9 +1344,33 @@ public sealed class ModeMonitor : IDisposable
 			actAtOnce: true);
 	}
 
+	// A save disposes this monitor while a handler or timer can still be running on another thread.
+	private bool IsDisposed
+	{
+		get { lock (_gate) return _disposed; }
+	}
+
+	private void RaiseChanged()
+	{
+		if (IsDisposed)
+			return;
+
+		try
+		{
+			_changed.OnNext(Unit.Default);
+		}
+		catch (ObjectDisposedException)
+		{
+			// Disposed between the check and the call.
+		}
+	}
+
 	/// <inheritdoc/>
 	public void Dispose()
 	{
+		lock (_gate)
+			_disposed = true;
+
 		_graceEnds.Dispose();
 		_boundary.Dispose();
 		_subscriptions.Dispose();
