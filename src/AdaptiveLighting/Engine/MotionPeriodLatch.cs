@@ -30,7 +30,7 @@ public sealed class MotionPeriodLatch
 	private readonly Dictionary<string, Begun> _begunOn = new(StringComparer.OrdinalIgnoreCase);
 
 	// At is null where the start was seeded from the note on disk: the run that began the period is gone and its
-	// instant with it, so the blend falls back to the clock boundary rather than restarting at the restart.
+	// instant with it, so the blend falls back to the clock boundary and does not start again at the restart.
 	private readonly record struct Begun(DateOnly Day, DateTimeOffset? At);
 
 	public MotionPeriodLatch(IEnumerable<string>? heldPeriods = null)

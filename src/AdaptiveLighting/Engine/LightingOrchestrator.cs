@@ -1,3 +1,4 @@
+using System.Net;
 using System.Reactive;
 using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
@@ -42,7 +43,7 @@ public sealed class LightingOrchestrator : IDisposable
 	// Passed to the mode brain so a period boundary crossed during a restart is not lost.
 	private readonly ILastPeriodStore? _lastPeriod;
 
-	// Keeps the setup notification to once per problem. Null notifies on every start, as it did before there was one.
+	// Keeps the setup notification to once per problem. Null notifies on every start.
 	private readonly IAreaSetupMemory? _setupMemory;
 
 	// This engine replaced a running one on settings somebody just saved. The mode brain treats that differently
@@ -199,13 +200,13 @@ public sealed class LightingOrchestrator : IDisposable
 
 			// An option resetting on presence with no explicit sensor list resets on any of these. Must be complete
 			// before StartHouseMonitors builds the mode monitor.
-			_motionSensorUnion.UnionWith(resolved!.MotionSensors);
+			_motionSensorUnion.UnionWith(resolved.MotionSensors);
 
 			if (areaConfig.AreaId is { Length: > 0 } areaId && areaId.Trim() is { Length: > 0 } trimmed)
-				_motionSensorsByArea[trimmed] = resolved!.MotionSensors;
+				_motionSensorsByArea[trimmed] = resolved.MotionSensors;
 
-			running.Add(resolved!);
-			_areas.Add(BuildArea(resolved!, areaConfig));
+			running.Add(resolved);
+			_areas.Add(BuildArea(resolved, areaConfig));
 		}
 
 		ReportSharedLights(running, resolver, registry);
@@ -304,7 +305,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 	/// <summary>One calculator per light that states levels of its own, on that light's rows merged onto the room's.</summary>
 	// The calculator is untouched: its blend already interpolates through whatever rows it is handed, so a light
-	// blends between its own two levels. Drops are not reported again — the room's calculator reads the same table.
+	// blends between its own two levels. Drops are not reported again: the room's calculator reads the same table.
 	private IReadOnlyDictionary<string, CircadianCalculator>? LightCalculators(ResolvedArea resolved, AreaConfig config)
 	{
 		if (resolved.LightLevels.Count == 0)
@@ -438,7 +439,9 @@ public sealed class LightingOrchestrator : IDisposable
 		if (unreported.Count == 0)
 			return;
 
-		string body = string.Join("", failures.Select(failure => $"<li>{failure.Area}: {failure.Problem}</li>"));
+		// Room names and resolver messages come from Home Assistant, and the notification renders HTML.
+		string body = string.Join("", failures.Select(failure =>
+			$"<li>{WebUtility.HtmlEncode(failure.Area)}: {WebUtility.HtmlEncode(failure.Problem)}</li>"));
 		_notifier.Notify(
 			SetupFailureTitle,
 			$"{failures.Count} of {_config.ManagedAreaCount} rooms are switched on but could not be set up, so they are "

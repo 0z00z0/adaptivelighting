@@ -8,7 +8,7 @@ namespace AdaptiveLighting.Engine;
 // The single implementation of "what is the light level here", shared by the darkness gate and the daylight
 // curve, which read different sensors and must not average them differently. Free of side effects, so reading
 // the number cannot disturb what a caller last decided.
-public sealed class LuxReader
+internal sealed class LuxReader
 {
 	private readonly IHaContext _ha;
 	private readonly IReadOnlyList<string> _entityIds;

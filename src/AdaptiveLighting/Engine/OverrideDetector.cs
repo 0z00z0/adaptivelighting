@@ -29,7 +29,7 @@ public enum ChangeOrigin
 // IHaContext.CallService is fire-and-forget and hands back no context id, so two heuristics are combined: an
 // expectation declared before each command, and EntityState.Context. They fail in the safe direction, reading a
 // human change within seconds of a command as the engine's own echo.
-public sealed class OverrideDetector
+internal sealed class OverrideDetector
 {
 	private readonly GlobalConfig _global;
 	private readonly IScheduler _scheduler;

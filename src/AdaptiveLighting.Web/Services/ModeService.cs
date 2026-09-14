@@ -168,8 +168,7 @@ public sealed class ModeService
 			var defaulted = global.KillSwitchIsDefaulted;
 			var enabledFlag = defaulted || global.KillSwitchActiveWhenOff;
 
-			var isOn = IsOn(killSwitch);
-			var engineEnabled = enabledFlag ? isOn : !isOn;
+			bool engineEnabled = !ModeMonitor.KillSwitchPauses(global, TryGetState(killSwitch));
 
 			toggles.Add(Build(
 				"Adaptive lighting",
@@ -196,9 +195,7 @@ public sealed class ModeService
 		if (toggle is null)
 			return null;
 
-		GlobalConfig global = Config.Global;
-		var enabledFlag = global.KillSwitchIsDefaulted || global.KillSwitchActiveWhenOff;
-		var commanding = enabledFlag ? toggle.IsOn : !toggle.IsOn;
+		bool commanding = !ModeMonitor.KillSwitchPauses(Config.Global, TryGetState(toggle.EntityId));
 
 		return new MasterSwitchView(toggle, commanding, toggle.IsAvailable, IsHomeAssistantReady);
 	}

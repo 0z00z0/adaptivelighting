@@ -5,7 +5,7 @@ namespace AdaptiveLighting.Engine;
 
 /// <summary>Proposes a starting set of areas from the rooms the area registry says could plausibly be lit.</summary>
 // Only AreaId and Enabled are written; everything else resolves at run time, so a proposal survives a rename.
-public static class AreaAutoDiscovery
+internal static class AreaAutoDiscovery
 {
 	public static IReadOnlyList<AreaConfig> Propose(IAreaRegistry registry, AreaEntityResolver resolver)
 	{

@@ -66,7 +66,7 @@ public sealed class LastPeriodDocument
 // Writes go to a uniquely named temp file and are moved into place with the previous version kept as .bak.
 // Written on every change and never batched: the write a flush timer would delay is the one a restart is about
 // to need. Nothing here throws; every failure is a warning and an answer of "unknown".
-public sealed class LastPeriodStore : ILastPeriodStore
+internal sealed class LastPeriodStore : ILastPeriodStore
 {
 	private const string NameSuffix = ".last-period.json";
 	private const string BackupSuffix = ".bak";

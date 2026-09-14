@@ -51,8 +51,8 @@ public sealed class ModeMonitor : IDisposable
 	// Null when no period select is configured. Which direction it grants is its own to say.
 	private readonly PeriodSelectReader? _periodSelect;
 
-	// This engine replaced a running one on settings somebody just saved, rather than coming up from nothing. The
-	// note on disk cannot tell the two apart, and a save is not a boundary that went by.
+	// This engine replaced a running one on a save. The note on disk cannot tell that from a cold start, and a save
+	// is not a boundary that went by.
 	private readonly bool _afterSave;
 
 	// Wakes this monitor at the boundary itself, so a period's SetsModeId and the period mirror do not wait out a
@@ -79,8 +79,8 @@ public sealed class ModeMonitor : IDisposable
 	// Reset fires from several subscriptions; the "no Normal target" warning must not spam the log every tick.
 	private int _warnedNoNormal;
 
-	// The last value the select actually reported, and whether it has stopped answering. A blind read holds the
-	// former rather than asserting Normal.
+	// The last value the select reported, and whether it has stopped answering. A blind read holds the former and
+	// never asserts Normal.
 	private string? _lastKnownMode;
 	private bool _selectIsBlind;
 
@@ -88,11 +88,15 @@ public sealed class ModeMonitor : IDisposable
 	// by the select moving at all, and by the first tick that finds the select has not taken it.
 	private string? _assumedMode;
 
+	// Moves whenever _assumedMode is set or cleared, so the tick clears only the assumption it checked.
+	private int _assumedGeneration;
+
 	private DateTimeOffset _activatedAt;
 	private DateTimeOffset _lastMotionAt;
 	private bool _inactivityLatched;
 	private string? _previousPeriodId;
 	private bool _started;
+	private bool _disposed;
 
 	// The option the no-motion rule last wrote, so a mode the engine set can be told from the same mode a person
 	// chose. Cleared the moment the select stops reading it, and never persisted: after a restart nobody knows why
@@ -195,7 +199,7 @@ public sealed class ModeMonitor : IDisposable
 	}
 
 	/// <summary>When the select last moved, which is when the mode standing now was chosen.</summary>
-	// Falls back to the start instant, which is what this used to be unconditionally.
+	// Falls back to the start instant.
 	private DateTimeOffset ModeSetAt(DateTimeOffset now) =>
 		_global.HouseMode?.Entity is { Length: > 0 } entityId
 			? ChangedAt(_ha.GetState(entityId), now) ?? now
@@ -235,24 +239,21 @@ public sealed class ModeMonitor : IDisposable
 	public IObservable<Unit> Changed => _changed;
 
 	/// <summary>Whether the engine is currently forbidden from commanding anything.</summary>
-	public bool KillSwitchActive
+	public bool KillSwitchActive =>
+		_global.EffectiveKillSwitchEntity is { Length: > 0 } entityId && KillSwitchPauses(_global, _ha.GetState(entityId));
+
+	/// <summary>Whether the master switch reading <paramref name="state"/> pauses the engine.</summary>
+	// The one copy of the rule; pages call this too. Unavailable or unknown pauses nothing, whichever polarity.
+	// A defaulted switch is always an enabled flag (off pauses); KillSwitchActiveWhenOff governs an explicit one.
+	public static bool KillSwitchPauses(GlobalConfig global, EntityState? state)
 	{
-		get
-		{
-			if (_global.EffectiveKillSwitchEntity is not { Length: > 0 } entityId)
-				return false;
+		ArgumentNullException.ThrowIfNull(global);
 
-			EntityState? state = _ha.GetState(entityId);
+		if (state?.State is null)
+			return false;
 
-			// An unreadable state is "not killed" whichever polarity is configured.
-			if (state?.State is null)
-				return false;
-
-			// With the built-in switch defaulted in, polarity is forced to the enabled-flag reading (off means
-			// muzzled); KillSwitchActiveWhenOff governs an explicit entity only. ModeService.GetToggles mirrors it.
-			bool enabledFlag = _global.KillSwitchIsDefaulted || _global.KillSwitchActiveWhenOff;
-			return enabledFlag ? state.IsOff() : state.IsOn();
-		}
+		bool enabledFlag = global.KillSwitchIsDefaulted || global.KillSwitchActiveWhenOff;
+		return enabledFlag ? state.IsOff() : state.IsOn();
 	}
 
 	/// <summary>The house-mode option string, or <c>null</c> when the select is unconfigured or has never answered.</summary>
@@ -455,7 +456,7 @@ public sealed class ModeMonitor : IDisposable
 							ArmGraceExpiryCheck();
 						}
 
-						_changed.OnNext(Unit.Default);
+						RaiseChanged();
 					},
 					_logger));
 		}
@@ -513,12 +514,16 @@ public sealed class ModeMonitor : IDisposable
 	{
 		lock (_gate)
 		{
+			if (_disposed)
+				return;
+
 			_activatedAt = _scheduler.Now;
 
 			// The select has moved, so whatever it now reads is newer than anything the engine assumed about it.
 			// This is also where the echo of the engine's own write lands, and clearing it there costs nothing:
 			// the value is the same one, so the republish below says nothing new.
 			_assumedMode = null;
+			_assumedGeneration++;
 
 			// Anything that moves the select away takes ownership back from the no-motion rule, so a later move
 			// onto the same option is somebody else's doing.
@@ -531,7 +536,7 @@ public sealed class ModeMonitor : IDisposable
 		ArmGraceExpiryCheck();
 
 		AnnounceForcedMode();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	/// <summary>The period select moved, so the period may have changed without the clock crossing anything.</summary>
@@ -541,7 +546,7 @@ public sealed class ModeMonitor : IDisposable
 	private void OnPeriodSelectChanged()
 	{
 		OnTick();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	/// <summary>Says so, once at start-up, when the document leaves every away behaviour out of reach.</summary>
@@ -685,7 +690,7 @@ public sealed class ModeMonitor : IDisposable
 	private void OnActivationSensorChanged()
 	{
 		AnnounceForcedMode();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	/// <summary>Writes one line naming what is forcing the house mode, and one when nothing is any more.</summary>
@@ -756,6 +761,9 @@ public sealed class ModeMonitor : IDisposable
 
 	private void OnMotion(string sensor)
 	{
+		if (IsDisposed)
+			return;
+
 		MarkMotion();
 		StartPeriodOnMotion(sensor, _scheduler.Now);
 	}
@@ -818,7 +826,7 @@ public sealed class ModeMonitor : IDisposable
 		RememberPeriod(periodKey);
 
 		OnPeriodEntered(periodKey!, activeOption);
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	// Under _gate; reads configuration settled in the constructor and nothing else.
@@ -943,10 +951,13 @@ public sealed class ModeMonitor : IDisposable
 	/// <summary>The one place the house-mode select is written, so no rule can forget the master switch.</summary>
 	// The muzzle covers this as much as it covers a light: the mode decides the leaving sweep, the away scene and
 	// the sleep ceiling, so an engine writing it while paused is still driving the house. Nothing is queued, and
-	// every rule that reaches here is asked again — the inactivity rule on its next tick, a reset on its next
+	// every rule that reaches here is asked again: the inactivity rule on its next tick, a reset on its next
 	// trigger, a period's mode switch at its next boundary.
 	private bool WriteMode(string wanted, Action<string> announce, bool actAtOnce = false)
 	{
+		if (IsDisposed)
+			return false;
+
 		if (KillSwitchActive)
 		{
 			_logger.LogDebug("The master switch is on, so {Select} is left where it stands.", _modeSelect.Entity);
@@ -962,11 +973,12 @@ public sealed class ModeMonitor : IDisposable
 		lock (_gate)
 		{
 			_assumedMode = wanted.Trim();
+			_assumedGeneration++;
 			_lastKnownMode = _assumedMode;
 		}
 
 		AnnounceForcedMode();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 		return true;
 	}
 
@@ -976,21 +988,31 @@ public sealed class ModeMonitor : IDisposable
 	private void ExpireAssumedMode()
 	{
 		string? assumed;
+		int generation;
 		lock (_gate)
+		{
 			assumed = _assumedMode;
+			generation = _assumedGeneration;
+		}
 
 		if (assumed is null || _modeSelect.AlreadyShows(assumed))
 			return;
 
+		// A reset or a select change landing since the read above is newer than this verdict.
 		lock (_gate)
+		{
+			if (_assumedGeneration != generation)
+				return;
+
 			_assumedMode = null;
+		}
 
 		_logger.LogInformation(
 			"{Select} did not take '{Mode}'; the house goes back to the mode the select itself reads.",
 			_modeSelect.Entity, assumed);
 
 		AnnounceForcedMode();
-		_changed.OnNext(Unit.Default);
+		RaiseChanged();
 	}
 
 	private static bool IsArrival(StateChange change) =>
@@ -1001,7 +1023,7 @@ public sealed class ModeMonitor : IDisposable
 	// has expired, so walking out the door does not cancel the mode just set.
 	private void OnPresenceReset(HouseModeOptionConfig option, string sensor)
 	{
-		if (!ReferenceEquals(CurrentOption, option))
+		if (IsDisposed || !ReferenceEquals(CurrentOption, option))
 			return;
 
 		DateTimeOffset activatedAt;
@@ -1051,7 +1073,7 @@ public sealed class ModeMonitor : IDisposable
 	// rule, so the next arming cancels itself and nothing repeats.
 	private void OnGraceExpired(HouseModeOptionConfig option)
 	{
-		if (!ReferenceEquals(CurrentOption, option))
+		if (IsDisposed || !ReferenceEquals(CurrentOption, option))
 			return;
 
 		if (PresenceSensorsFor(option).FirstOrDefault(sensor => !IsPresenceTracker(sensor) && IsOn(sensor))
@@ -1068,6 +1090,9 @@ public sealed class ModeMonitor : IDisposable
 	// entry and regresses _previousPeriodId. The read is a state-cache lookup plus a sort and cannot re-enter.
 	private void OnTick()
 	{
+		if (IsDisposed)
+			return;
+
 		DateTimeOffset now = _scheduler.Now;
 
 		// First, so everything below reads a mode the select has either taken or been shown not to have taken.
@@ -1211,7 +1236,7 @@ public sealed class ModeMonitor : IDisposable
 	// separately, because an option the select does not offer is rejected and correctly retried on every tick.
 	private void MirrorPeriodSelect(string? periodKey)
 	{
-		if (_periodSelect?.OptionForPeriod is not { } optionFor || periodKey is not { Length: > 0 })
+		if (IsDisposed || _periodSelect?.OptionForPeriod is not { } optionFor || periodKey is not { Length: > 0 })
 			return;
 
 		if (optionFor(periodKey) is not { Length: > 0 } wanted)
@@ -1306,19 +1331,41 @@ public sealed class ModeMonitor : IDisposable
 			return;
 		}
 
-		// The one write the house acts on before Home Assistant echoes it. A reset is the arrival direction —
-		// somebody has walked in, or the waking period has come round — and waiting for the echo means the first
-		// movement is refused and only the second lights the room. Every other write still waits, so a departure
-		// the select never took simply does not happen, rather than happening and then coming undone.
+		// The one write the house acts on before the echo. A reset is an arrival, and waiting for the echo refuses the
+		// first movement. Every other write waits, so a departure the select never took does not happen at all.
 		WriteMode(
 			normal,
 			entity => _logger.LogInformation("Resetting {Select} to '{Normal}' ({Trigger}).", entity, normal, trigger),
 			actAtOnce: true);
 	}
 
+	// A save disposes this monitor while a handler or timer can still be running on another thread.
+	private bool IsDisposed
+	{
+		get { lock (_gate) return _disposed; }
+	}
+
+	private void RaiseChanged()
+	{
+		if (IsDisposed)
+			return;
+
+		try
+		{
+			_changed.OnNext(Unit.Default);
+		}
+		catch (ObjectDisposedException)
+		{
+			// Disposed between the check and the call.
+		}
+	}
+
 	/// <inheritdoc/>
 	public void Dispose()
 	{
+		lock (_gate)
+			_disposed = true;
+
 		_graceEnds.Dispose();
 		_boundary.Dispose();
 		_subscriptions.Dispose();
