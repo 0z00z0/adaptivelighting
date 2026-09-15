@@ -135,30 +135,9 @@ else
 		</div>
 
 		<ol class="log">
-			@foreach (ActivityRow row in day.Rows)
+			@foreach (Services.ActivityRow row in day.Rows)
 			{
-				<li class="log-row family-@row.Family" @key="row.Sequence">
-					<div class="log-when">
-						<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)"
-							  title="@Full(row.At)">@Clock(row.At)</time>
-						@if (row.IsAboutTheHouse)
-						{
-							@* Every switched-on room published this one change, so the row names none of them. *@
-							<span class="log-room log-room-house" title="@ActivityView.ReportedBy(row)">@HouseLabel(row)</span>
-						}
-						else
-						{
-							<span class="log-room">@row.Room</span>
-						}
-					</div>
-					<div class="log-body">
-						<span class="log-what">@row.Line.What</span>
-						@if (row.Line.Why is { Length: > 0 } why)
-						{
-							<span class="log-why">@why</span>
-						}
-					</div>
-				</li>
+				<ActivityRow @key="row.Sequence" Row="row" />
 			}
 		</ol>
 	}
@@ -173,7 +152,7 @@ else
 
 	// What the timeline draws. Kept beside _visible, not replacing it: the counts and the hidden note are about
 	// reports, only the rendering is about rows.
-	private IReadOnlyList<ActivityRow> _rows = [];
+	private IReadOnlyList<Services.ActivityRow> _rows = [];
 
 	private IReadOnlyList<ActivityFilterChip> _chips = [];
 	private string _room = ActivityView.AllRooms;
@@ -227,10 +206,6 @@ else
 		_chips = ActivityView.Chips(_inRoom, _categories);
 	}
 
-	/// <summary>What stands where a room name would on a house-wide row.</summary>
-	private static string HouseLabel(ActivityRow row) =>
-		row.Rooms.Count > 1 ? $"House · {row.Rooms.Count} rooms" : "House";
-
 	private static string ChipClass(ActivityFilterChip chip) =>
 		$"log-cat{(chip.IsOn ? " on" : string.Empty)}{(chip.Count == 0 ? " empty" : string.Empty)}";
 
@@ -264,12 +239,6 @@ else
 				: $"Showing {shown}. Only the most recent {ActivityLog.Capacity} are kept; older ones have been dropped.";
 		}
 	}
-
-	private static string Clock(DateTimeOffset at) =>
-		at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);
-
-	private static string Full(DateTimeOffset at) =>
-		at.ToLocalTime().ToString("dddd d MMMM yyyy, HH:mm:ss", CultureInfo.CurrentCulture);
 
 	/// <inheritdoc/>
 	public void Dispose() => _subscription?.Dispose();

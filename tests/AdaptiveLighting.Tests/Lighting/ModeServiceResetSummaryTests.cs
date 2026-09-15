@@ -12,11 +12,6 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class ModeServiceResetSummaryTests
 {
-	private sealed class FakeAppConfig(AdaptiveLightingConfig value) : IAppConfig<AdaptiveLightingConfig>
-	{
-		public AdaptiveLightingConfig Value { get; } = value;
-	}
-
 	private const string Select = "input_select.husmodus";
 
 	private static AdaptiveLightingConfig ConfigWith(HouseModeAuthority authority) => new()

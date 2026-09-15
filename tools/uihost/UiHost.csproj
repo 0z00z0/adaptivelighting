@@ -13,19 +13,18 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<RootNamespace>UiHost</RootNamespace>
-		<!-- The test project brings MSTest in with the fakes; nothing here is a test. -->
-		<NoWarn>$(NoWarn);MSTEST0001</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\AdaptiveLighting.Web\AdaptiveLighting.Web.csproj" />
-		<!-- FakeHaContext and FakeHaRegistry already exist and are public; a second pair would drift. -->
-		<ProjectReference Include="..\..\tests\AdaptiveLighting.Tests\AdaptiveLighting.Tests.csproj" />
+		<!-- FakeHaContext and FakeHaRegistry already exist and are public; a second pair would drift. The fakes
+		     project carries no test framework, so this host stays free of MSTest. -->
+		<ProjectReference Include="..\..\tests\AdaptiveLighting.TestFakes\AdaptiveLighting.TestFakes.csproj" />
 	</ItemGroup>
 
 	<!--
 		Deliberately not in AdaptiveLighting.slnx. This is a developer tool, not something CI should build or
-		package, and it references the test project.
+		package.
 	-->
 	<ItemGroup>
 		<None Update="local.yaml" CopyToOutputDirectory="Never" />

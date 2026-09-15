@@ -10,11 +10,9 @@
 
   <ItemGroup>
     <!--
-      NetDaemon.HassModel carries the whole extension surface. NetDaemon.AppModel is here only for
-      AppConfigurationLocationSetting, which Persistence/StateRepository binds. No host project and no
-      generated entity types. Keep 26.36.0 in step with the rest of the graph (NU1605).
+      NetDaemon.HassModel carries the whole extension surface. No host project and no generated
+      entity types. Keep 26.36.0 in step with the rest of the graph (NU1605).
     -->
-    <PackageReference Include="NetDaemon.AppModel" Version="26.36.0" />
     <PackageReference Include="NetDaemon.HassModel" Version="26.36.0" />
   </ItemGroup>
 

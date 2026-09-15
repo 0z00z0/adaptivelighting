@@ -23,7 +23,7 @@ public static class EntityIdExtensions
 
 	/// <summary>The entity's domain as an <see cref="EntityDomain"/>, or <see cref="EntityDomain.unknown"/> when unrecognised.</summary>
 	public static EntityDomain DomainEnum(this Entity entity) =>
-		Enum.TryParse<EntityDomain>(entity.EntityId.Split('.').First(), out var domain) && Enum.IsDefined(domain)
+		Enum.TryParse<EntityDomain>(entity.EntityId.Split('.').First(), out EntityDomain domain) && Enum.IsDefined(domain)
 			? domain
 			: EntityDomain.unknown;
 }

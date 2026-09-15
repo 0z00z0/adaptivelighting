@@ -36,7 +36,7 @@ public sealed class LastSeenTrackerTests
 
 		public LastSeenOptions Options { get; }
 
-		public StampedHaContext Ha { get; } = new();
+		public FakeHaContext Ha { get; } = new();
 
 		public TestScheduler Scheduler { get; } = new();
 
@@ -720,7 +720,7 @@ public sealed class LastSeenTrackerTests
 	{
 		using Fixture fixture = new();
 		fixture.SeedHouse();
-		fixture.Ha.SetWithoutStamp("sensor.no_clock", "1");
+		fixture.Ha.SetState("sensor.no_clock", "1");
 
 		using LastSeenTracker tracker = fixture.Started();
 

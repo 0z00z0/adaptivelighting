@@ -1,0 +1,58 @@
+@* One row of an activity log. The dashboard summary, the activity timeline and a room's own card all draw it,
+   so the three logs cannot drift. *@
+
+<li class="log-row family-@Row.Family">
+	<div class="log-when">
+		@if (RoomCard)
+		{
+			<time class="log-time" datetime="@Row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(Row.At)</time>
+		}
+		else
+		{
+			<time class="log-time" datetime="@Row.At.ToString("o", CultureInfo.InvariantCulture)"
+				  title="@Full(Row.At)">@Clock(Row.At)</time>
+			@if (Row.IsAboutTheHouse)
+			{
+				@* Every switched-on room published this one change, so the row names none of them. *@
+				<span class="log-room log-room-house" title="@ActivityView.ReportedBy(Row)">@HouseLabel</span>
+			}
+			else if (LinkRoom && HouseView.RoomHref(Row.Snapshot?.AreaId) is { } href)
+			{
+				<a class="log-room log-room-link" href="@href">@Row.Room</a>
+			}
+			else
+			{
+				<span class="log-room">@Row.Room</span>
+			}
+		}
+	</div>
+	<div class="log-body">
+		<span class="log-what">@Row.Line.What</span>
+		@if (Row.Line.Why is { Length: > 0 } why)
+		{
+			<span class="log-why">@why</span>
+		}
+	</div>
+</li>
+
+@code {
+	[Parameter, EditorRequired]
+	public Services.ActivityRow Row { get; set; } = default!;
+
+	/// <summary>Whether a room's name links to the room's page. A room with no area id has no page to link.</summary>
+	[Parameter]
+	public bool LinkRoom { get; set; }
+
+	/// <summary>The form a room's own card uses: minutes only, and no room name, since the card is the room.</summary>
+	[Parameter]
+	public bool RoomCard { get; set; }
+
+	/// <summary>What stands where a room name would on a house-wide row.</summary>
+	private string HouseLabel => Row.Rooms.Count > 1 ? $"House · {Row.Rooms.Count} rooms" : "House";
+
+	private static string Clock(DateTimeOffset at) =>
+		at.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);
+
+	private static string Full(DateTimeOffset at) =>
+		at.ToLocalTime().ToString("dddd d MMMM yyyy, HH:mm:ss", CultureInfo.CurrentCulture);
+}

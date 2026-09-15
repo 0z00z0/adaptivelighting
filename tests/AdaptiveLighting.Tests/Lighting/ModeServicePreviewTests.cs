@@ -14,11 +14,6 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class ModeServicePreviewTests
 {
-	private sealed class FakeAppConfig(AdaptiveLightingConfig value) : IAppConfig<AdaptiveLightingConfig>
-	{
-		public AdaptiveLightingConfig Value { get; } = value;
-	}
-
 	private static DateTimeOffset At(int hour, int minute = 0) => new(2026, 1, 15, hour, minute, 0, TimeSpan.Zero);
 
 	private static readonly SunTimes NoSun = SunTimes.Unknown;

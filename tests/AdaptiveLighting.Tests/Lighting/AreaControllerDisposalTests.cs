@@ -2,8 +2,8 @@ using System.Reactive.Subjects;
 
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
 
 namespace AdaptiveLighting.Tests.Lighting;
@@ -12,9 +12,8 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class AreaControllerDisposalTests
 {
-	private const string Motion = "binary_sensor.area_motion";
-	private const string Light = "light.area";
-	private const string Lux = "sensor.area_lux";
+	private const string Motion = AreaTestBuilder.Motion;
+	private const string Lux = AreaTestBuilder.Lux;
 
 	private sealed record Fixture(
 		TestScheduler Scheduler,
@@ -27,49 +26,24 @@ public sealed class AreaControllerDisposalTests
 
 	private static Fixture Build()
 	{
-		TestScheduler scheduler = new();
-		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+		InterleavingHaContext? ha = null;
+		CapturingScheduler? timers = null;
 
-		FakeHaContext inner = new();
-		inner.SetState(Motion, "off");
-		inner.SetState(Light, "off");
-		inner.SetState(Lux, "5");
+		AreaFixture built = new AreaTestBuilder()
+			.WrapHa(inner =>
+			{
+				ha = new InterleavingHaContext(inner);
+				return ha;
+			})
+			.WrapScheduler(scheduler =>
+			{
+				timers = new CapturingScheduler(scheduler);
+				return timers;
+			})
+			.OpeningHouse(null)
+			.Build();
 
-		InterleavingHaContext ha = new(inner);
-		CapturingScheduler timers = new(scheduler);
-
-		AreaSettings settings = new()
-		{
-			VacancyTimeoutSeconds = 600,
-			PreOffSeconds = 30,
-			Darkness = DarknessSource.Lux,
-			OverrideDurationMinutes = 120,
-			OverrideUntilVacant = false,
-			VacancyResetMinutes = 10
-		};
-
-		GlobalConfig global = new() { SmoothTransitions = false, CircadianTickSeconds = 60 };
-
-		List<TimePeriodConfig> table =
-		[
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
-		];
-
-		ResolvedArea area = new("Test", settings, [Light], [Motion], [Lux], []);
-		FakeLightActuator actuator = new();
-		FakeStatePublisher publisher = new();
-		BehaviorSubject<HouseState> house = new(HouseState.Initial);
-
-		AreaController controller = new(
-			ha, timers, area, global, table,
-			new CircadianCalculator(table, global, () => SunTimes.Unknown, null, zone: TimeZoneInfo.Utc),
-			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area");
-
-		controller.Start();
-
-		return new Fixture(scheduler, ha, timers, actuator, publisher, house, controller);
+		return new Fixture(built.Scheduler, ha!, timers!, built.Actuator, built.Publisher, built.House, built.Area);
 	}
 
 	// The delivery runs on its own thread and is already waiting on the controller's lock when Dispose runs. The

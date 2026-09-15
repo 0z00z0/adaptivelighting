@@ -1,8 +1,8 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Reactive.Testing;
+using Fixture = AdaptiveLighting.Tests.Common.OrchestratorFixture;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -22,15 +22,6 @@ public sealed class ConfiguredAwayTests
 
 	private static readonly TimeSpan Quiet = TimeSpan.FromMinutes(60);
 	private static readonly TimeSpan Grace = TimeSpan.FromMinutes(15);
-
-	private sealed record Fixture(
-		TestScheduler Scheduler,
-		FakeHaContext Ha,
-		FakeLightActuator Actuator,
-		LightingOrchestrator Orchestrator)
-	{
-		public AreaController Room => Orchestrator.Areas[0];
-	}
 
 	/// <summary>The away option the report describes: an hour of quiet puts the house there, a sensor brings it back.</summary>
 	private static HouseModeConfig ConfiguredAway() => new()
@@ -56,16 +47,6 @@ public sealed class ConfiguredAwayTests
 		Action<AreaConfig>? tweakArea = null,
 		string personState = "home")
 	{
-		TestScheduler scheduler = new();
-		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
-
-		FakeHaContext ha = new();
-		ha.SetState(Person, personState);
-		ha.SetState(Light, "off");
-		ha.SetState(Motion, "off");
-		ha.SetState(Blocker, "off");
-		ha.SetState(Select, NormalOption);
-
 		GlobalConfig global = new()
 		{
 			Persons = [Person],
@@ -92,15 +73,16 @@ public sealed class ConfiguredAwayTests
 			Areas = [area]
 		};
 
-		FakeLightActuator actuator = new();
-
-		LightingOrchestrator orchestrator = new(
-			ha, new FakeHaRegistry(), scheduler, config,
-			actuator, new FakeStatePublisher(), new FakeNotifier(), NullLoggerFactory.Instance);
-
-		orchestrator.Start();
-
-		return new Fixture(scheduler, ha, actuator, orchestrator);
+		return new AreaTestBuilder()
+			.States(ha =>
+			{
+				ha.SetState(Person, personState);
+				ha.SetState(Light, "off");
+				ha.SetState(Motion, "off");
+				ha.SetState(Blocker, "off");
+				ha.SetState(Select, NormalOption);
+			})
+			.StartOrchestrator(config);
 	}
 
 	private static void Advance(Fixture t, TimeSpan by) => t.Scheduler.AdvanceBy(by.Ticks);
@@ -115,7 +97,7 @@ public sealed class ConfiguredAwayTests
 		t.Ha.Calls.Count(call =>
 			call.Domain == "input_select"
 			&& call.Service == "select_option"
-			&& call.Data?.GetType().GetProperty("option")?.GetValue(call.Data) as string == option);
+			&& call.Option() == option);
 
 	/// <summary>Lets the configured quiet time run out and echoes the selector Home Assistant would echo.</summary>
 	private static void GoQuietUntilAway(Fixture t)

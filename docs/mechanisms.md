@@ -1235,6 +1235,15 @@ repeated card and never a silence.
 The trap: the notification id is derived from the card's title, so changing the title leaves a card raised under
 the old one standing until Home Assistant restarts.
 
+### The two notes beside the document share one write
+
+The last-period note and the setup-fault note are written through one helper, `Persistence/JsonNoteFile`. A
+write goes to a temporary file with a random name in the same directory and is moved into place with
+`File.Replace`, which keeps the previous note as `.bak` in one call. A fixed temporary name would let two writers
+truncate each other, and copying to `.bak` first would leave a moment where the backup is the only copy. A
+failed write deletes its temporary file and reports the failure; the store logs its own warning and answers
+"unknown".
+
 ### Entity resolution
 
 One selection pass settles lights, motion and illuminance, because a one-level comparison of a group against
@@ -1319,6 +1328,15 @@ reconciles. Where a page needs the answer it reads the snapshot, or calls the sa
 
 There is **no Razor render-test harness** in this repository. The judgement lives in pure functions and the markup holds only their arrangement. Any behaviour question about a
 page is answerable in the test project, not in the markup.
+
+### One owner per page question
+
+Whether a room is lit is `AreaSnapshot.IsLit`. A room's snapshot is found with `AreaSnapshotCache.Find`, by area
+id then name. The document a page only reads comes from `DocumentCache`, which parses once per write for the
+whole circuit; an editor still loads its own copy. Whether Home Assistant is responding is
+`HaCatalog.IsHomeAssistantResponding`: an area, a light-level sensor or a switch came back and no read threw. It
+reads the registry, so pages take it when they load their lists, never per render. Activity rows are drawn by
+`ActivityRow` on all three logs.
 
 ### Which period is in force is one question, asked in one place
 
@@ -1753,12 +1771,24 @@ test file.
 A whole class is named with `~` and a trailing dot, so a test added to it or renamed inside it stays in. Every
 other entry is an exact name, and **a filter never fails on a name that matches nothing**: a renamed or moved
 test silently leaves the core set. An entry names the class the method is declared in, which is not always the
-file's name; `LevelsEditorTests` is declared in `PresetSliderTests.cs`.
+file's name; `AreaControllerTests` is declared across one partial file per section.
 
 After renaming a test, list what the set selects and check each entry still appears. A data-driven test lists
 once per case.
 
 `dotnet test AdaptiveLighting.slnx --settings tests/core.runsettings --list-tests`
+
+### Shared test setup
+
+The fakes live in the non-packable project `tests/AdaptiveLighting.TestFakes`, which `tools/uihost` references
+instead of the test project. `tests/AdaptiveLighting.Tests/GlobalUsings.cs` brings them into every test file, so
+a new test file needs no `using` for them.
+
+Area tests build a started controller through `tests/AdaptiveLighting.Tests/Common/AreaTestBuilder.cs`. Its
+defaults are the ones the state-machine tests rely on: 2026-01-15 20:00 UTC, inside "evening"; motion off, light
+off, lux 5; vacancy 600 s, dim warning 30 s, a fixed override hold of 120 min; the house published as home
+before the area starts. A test that needs another value sets it on the builder. Changing a default moves every
+test that does not set it: changing the lux reading to 5000 turned tests in four files red.
 
 ---
 

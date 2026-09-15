@@ -12,6 +12,23 @@ against each other.
 
 ## [Unreleased]
 
+### Added
+
+- `AreaSnapshot.IsLit`, `AreaSnapshotCache.Find` and `KeyOf`, `HaCatalog.IsHomeAssistantResponding` and `FriendlyNameOrId`, the `DocumentCache` service with a `ModeService` constructor that takes it, and the `ActivityRow` component. `IsLit` is not part of the room report sent to Home Assistant.
+
+### Changed
+
+- The warnings from the last-period and setup-fault notes are logged under `AdaptiveLighting.Persistence.LastPeriodStore` and `AdaptiveLighting.Persistence.AreaSetupMemoryStore` instead of `AdaptiveLighting.Engine`. A log filter naming the old category needs the new one. The note files and their backups are unchanged.
+- `AdaptiveLighting.Extensions` no longer depends on `NetDaemon.AppModel`.
+
+### Removed
+
+- From `AdaptiveLighting.Extensions`: `AddStateRepository` with `IPersistState<T>`, `PersistState<T>`, `IStateRepository` and `StateRepository`; `TurnsOn` and `TurnsOff` on `Entity`, where `WhenTurnsOn` and `WhenTurnsOff` stay; `RunScript`, `SetInputBoolean`, `GetEntitiesInAreaByDomain` and `GetEntityIdsInAreaByDomain` on `IHaContext`.
+
+### Fixed
+
+- The room page no longer says it is waiting for Home Assistant when Home Assistant returns light-level sensors or switches but no areas. The room page and the house page use the same test.
+
 ## [2026.9.14] - 2026-09-14
 
 ### Added

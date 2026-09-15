@@ -230,7 +230,7 @@
 	private static string Counts(CommissioningRow row) =>
 		$"{row.LightCount} {(row.LightCount == 1 ? "light" : "lights")} · {row.MotionCount} motion";
 
-	private string Name(string entityId) => Catalog.FriendlyNameOf(entityId) ?? entityId;
+	private string Name(string entityId) => Catalog.FriendlyNameOrId(entityId);
 
 	/// <summary>A room's discovered hardware, each kind with the chip modifier that colours it.</summary>
 	private static (string Modifier, IReadOnlyList<string> Ids)[] Gear(ResolvedArea resolved) =>

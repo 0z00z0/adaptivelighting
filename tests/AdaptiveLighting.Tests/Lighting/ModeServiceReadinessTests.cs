@@ -38,11 +38,6 @@ public sealed class ModeServiceReadinessTests
 		public void SendEvent(string eventType, object? data) { }
 	}
 
-	private sealed class FakeAppConfig(AdaptiveLightingConfig value) : IAppConfig<AdaptiveLightingConfig>
-	{
-		public AdaptiveLightingConfig Value { get; } = value;
-	}
-
 	[TestMethod]
 	public void A_House_Mode_Only_Setup_With_HA_Down_Still_Reports_Not_Connected()
 	{

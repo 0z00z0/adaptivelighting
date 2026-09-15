@@ -48,21 +48,6 @@ public sealed class MotionPeriodTests
 		new() { Name = "night", Start = "23:00", SetsModeId = "Sover", BrightnessPct = 10, ColorTempKelvin = 2200 }
 	];
 
-	/// <summary>The note recording which period the last run ended in, where <c>null</c> is a first run or a lost note.</summary>
-	private sealed class FakeLastPeriodStore(string? recalled = null) : ILastPeriodStore
-	{
-		/// <summary>Every period written, in order.</summary>
-		public List<string> Saved { get; } = [];
-
-		public string? Load() => recalled;
-
-		public bool TrySave(string periodName)
-		{
-			Saved.Add(periodName);
-			return true;
-		}
-	}
-
 	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor, CircadianCalculator Rooms);
 
 	private static Rig Started(
@@ -116,7 +101,7 @@ public sealed class MotionPeriodTests
 	private static int SelectCalls(FakeHaContext ha, string option) =>
 		ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"
 			&& c.Target?.EntityIds?.Contains(Select) == true
-			&& c.Data?.GetType().GetProperty("option")?.GetValue(c.Data) as string == option);
+			&& c.Option() == option);
 
 	// ---- the clock does not start it ---------------------------------------------------------------
 
