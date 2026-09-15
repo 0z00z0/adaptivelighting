@@ -97,7 +97,7 @@ public sealed class ConfiguredAwayTests
 		t.Ha.Calls.Count(call =>
 			call.Domain == "input_select"
 			&& call.Service == "select_option"
-			&& call.Data?.GetType().GetProperty("option")?.GetValue(call.Data) as string == option);
+			&& call.Option() == option);
 
 	/// <summary>Lets the configured quiet time run out and echoes the selector Home Assistant would echo.</summary>
 	private static void GoQuietUntilAway(Fixture t)
