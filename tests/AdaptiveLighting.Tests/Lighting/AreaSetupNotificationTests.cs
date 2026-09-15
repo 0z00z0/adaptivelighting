@@ -1,5 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Persistence;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;

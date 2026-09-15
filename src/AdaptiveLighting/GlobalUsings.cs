@@ -9,3 +9,4 @@ global using NetDaemon.AppModel;
 global using NetDaemon.HassModel;
 
 global using AdaptiveLighting.Extensions;
+global using AdaptiveLighting.Persistence;

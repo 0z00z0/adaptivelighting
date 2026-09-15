@@ -1,4 +1,5 @@
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Persistence;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -116,6 +117,33 @@ public sealed class LastPeriodStoreTests
 		store.TrySave("night");
 		Assert.IsTrue(File.Exists(store.FilePath + ".bak"));
 		StringAssert.Contains(File.ReadAllText(store.FilePath + ".bak"), "evening");
+	}
+
+	// Written to a temporary file and moved into place, so no temporary file may outlive the write.
+	[TestMethod]
+	public void A_Write_Leaves_Only_The_Note_And_Its_Backup()
+	{
+		using TempDirectory temp = new();
+		LastPeriodStore store = temp.Store();
+
+		Assert.IsTrue(store.TrySave("evening"));
+		Assert.IsTrue(store.TrySave("night"));
+
+		string?[] names = [.. Directory.GetFiles(temp.Path).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal)];
+		CollectionAssert.AreEqual(new[] { "b1.last-period.json", "b1.last-period.json.bak" }, names);
+	}
+
+	[TestMethod]
+	public void A_Failed_Write_Removes_Its_Temporary_File()
+	{
+		using TempDirectory temp = new();
+		LastPeriodStore store = temp.Store();
+
+		// A directory where the note belongs makes the final move fail after the temporary file is written.
+		Directory.CreateDirectory(store.FilePath);
+
+		Assert.IsFalse(store.TrySave("night"), "the failure is reported, not thrown");
+		Assert.AreEqual(0, Directory.GetFiles(temp.Path).Length, "and no temporary file is left beside the configuration");
 	}
 
 	[TestMethod]

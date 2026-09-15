@@ -1,4 +1,5 @@
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Persistence;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -119,6 +120,50 @@ public sealed class AreaSetupMemoryStoreTests
 
 		File.WriteAllText(store.FilePath, """{ "version": 1 }""");
 		Assert.AreEqual(1, temp.Store().Record([NoLights()]).Count, "and so is a file that names no rooms");
+	}
+
+	[TestMethod]
+	public void A_Rewrite_Keeps_The_Previous_Note_As_A_Backup_Until_Every_Room_Resolves()
+	{
+		using TempDirectory temp = new();
+		AreaSetupMemoryStore store = temp.Store();
+
+		store.Record([NoLights()]);
+		Assert.IsFalse(File.Exists(store.FilePath + ".bak"), "nothing to back up on the first write");
+
+		store.Record([NoSuchArea()]);
+		Assert.IsTrue(File.Exists(store.FilePath + ".bak"));
+		StringAssert.Contains(File.ReadAllText(store.FilePath + ".bak"), "No lights discovered");
+
+		store.Record([]);
+		Assert.IsFalse(File.Exists(store.FilePath + ".bak"), "the backup goes with the note once nothing is wrong");
+	}
+
+	// Written to a temporary file and moved into place, so no temporary file may outlive the write.
+	[TestMethod]
+	public void A_Write_Leaves_Only_The_Note_And_Its_Backup()
+	{
+		using TempDirectory temp = new();
+		AreaSetupMemoryStore store = temp.Store();
+
+		store.Record([NoLights()]);
+		store.Record([NoSuchArea()]);
+
+		string?[] names = [.. Directory.GetFiles(temp.Path).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal)];
+		CollectionAssert.AreEqual(new[] { "b1.setup-faults.json", "b1.setup-faults.json.bak" }, names);
+	}
+
+	[TestMethod]
+	public void A_Failed_Write_Removes_Its_Temporary_File_And_Still_Reports()
+	{
+		using TempDirectory temp = new();
+		AreaSetupMemoryStore store = temp.Store();
+
+		// A directory where the note belongs makes the final move fail after the temporary file is written.
+		Directory.CreateDirectory(store.FilePath);
+
+		Assert.AreEqual(1, store.Record([NoLights()]).Count, "a failed write degrades to reporting, never to silence");
+		Assert.AreEqual(0, Directory.GetFiles(temp.Path).Length, "and no temporary file is left beside the configuration");
 	}
 
 	[TestMethod]
