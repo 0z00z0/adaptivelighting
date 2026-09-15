@@ -54,8 +54,9 @@ public static class LightingConfigDocument
 	///     Deleting this is silent data loss: <see cref="Deserialize"/> binds with <c>IgnoreUnmatchedProperties</c>, so
 	///     an unknown key is silence and not an error, and a document still saying <c>Zones:</c> would load as zero
 	///     areas. The rename only moves the value across; <see cref="StableKeyMigration"/> turns a name into an id.
+	///     Internal so a test can guard it against a future property sharing one of these names.
 	/// </remarks>
-	private static readonly Dictionary<string, string> LegacyKeys = new(StringComparer.OrdinalIgnoreCase)
+	internal static readonly Dictionary<string, string> LegacyKeys = new(StringComparer.OrdinalIgnoreCase)
 	{
 		["Zones"] = nameof(AdaptiveLightingConfig.Areas),
 		["ZonesAutoDiscovered"] = nameof(GlobalConfig.AreasAutoDiscovered),
@@ -68,9 +69,11 @@ public static class LightingConfigDocument
 	/// <summary>Retired values a document may still carry, and what each becomes.</summary>
 	/// <remarks>
 	///     An unknown key is silence, but an unknown enum value is a parse failure, so a retired value has to be
-	///     translated, not ignored.
+	///     translated, not ignored. Internal so a test can guard its keys the same way as <see cref="LegacyKeys"/>
+	///     and <see cref="RetiredKeys"/>: a property named <see cref="AreaSettings.Darkness"/> is the one that is
+	///     meant to collide here, because it is translated by value, not by key rename.
 	/// </remarks>
-	private static readonly Dictionary<string, Dictionary<string, string>> LegacyValues =
+	internal static readonly Dictionary<string, Dictionary<string, string>> LegacyValues =
 		new(StringComparer.Ordinal)
 		{
 			[nameof(AreaSettings.Darkness)] = new(StringComparer.OrdinalIgnoreCase)
