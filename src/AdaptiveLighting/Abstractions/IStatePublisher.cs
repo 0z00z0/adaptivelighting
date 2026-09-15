@@ -48,6 +48,12 @@ public sealed record AreaSnapshot(
 	DateTimeOffset? ChangedAt = null,
 	bool? IsLeadIn = null)
 {
+	/// <summary>Whether the room's lights are on: lit by the engine, dimming before off, or held on by hand, at a
+	/// brightness above zero.</summary>
+	/// <remarks>Computed, never published: the event carries the state and the brightness it is read from.</remarks>
+	public bool IsLit =>
+		(State is AreaState.AutoActive or AreaState.PreOff or AreaState.OverriddenOn) && BrightnessPct > 0;
+
 	/// <summary>Whether <paramref name="other"/> carries the same news about the area as this snapshot does.</summary>
 	/// <remarks>
 	///     Not record equality: <c>==</c> compares the "as of" fields, every one of which moves on every tick, so

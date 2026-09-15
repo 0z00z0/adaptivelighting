@@ -43,7 +43,7 @@ else
 	<div class="room-top">
 		<div class="room-lead">
 			<header class="room-head">
-				<span class="room-glow @(IsLit ? "room-glow-lit" : null)" style="@GlowStyle" aria-hidden="true">
+				<span class="room-glow @(_snapshot is { IsLit: true } ? "room-glow-lit" : null)" style="@GlowStyle" aria-hidden="true">
 					@if (Countdown is { } remaining)
 					{
 						<span class="room-ring" style="@RingStyle" title="@CountdownTitle"></span>
@@ -750,20 +750,9 @@ else
 			{
 				@* Through ActivityView.Rows, so this card collapses runs the same way the timeline does. *@
 				<ol class="log room-log">
-					@foreach (ActivityRow row in rows)
+					@foreach (Services.ActivityRow row in rows)
 					{
-						<li class="log-row family-@row.Family" @key="row.Sequence">
-							<div class="log-when">
-								<time class="log-time" datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(row.At)</time>
-							</div>
-							<div class="log-body">
-								<span class="log-what">@row.Line.What</span>
-								@if (row.Line.Why is { Length: > 0 } why)
-								{
-									<span class="log-why">@why</span>
-								}
-							</div>
-						</li>
+						<ActivityRow @key="row.Sequence" Row="row" RoomCard="true" />
 					}
 				</ol>
 				<p class="room-card-foot">@LogFoot</p>
@@ -848,6 +837,7 @@ else
 	// Everything Home Assistant has, read once per document load. The pickers' fallback, not what they show.
 	private IReadOnlyList<AreaOption> _areas = [];
 	private IReadOnlyList<EntityOption> _lights = [];
+	private bool _homeAssistantAnswers;
 	private IReadOnlyList<EntityOption> _motionSensors = [];
 	private IReadOnlyList<EntityOption> _luxSensors = [];
 	private IReadOnlyList<EntityOption> _blockers = [];
@@ -952,6 +942,7 @@ else
 		_motionSensors = Catalog.EntitiesWithDeviceClass("binary_sensor", [.. _document.Global.EffectiveMotionDeviceClasses]);
 		_luxSensors = Catalog.EntitiesWithDeviceClass("sensor", [_document.Global.IlluminanceDeviceClass]);
 		_lights = Catalog.EntitiesInDomains("light");
+		_homeAssistantAnswers = Catalog.IsHomeAssistantResponding(_document.Global);
 	}
 
 	/// <summary>Re-derives everything that follows from the document: the validator's verdict, what discovery
@@ -1066,10 +1057,7 @@ else
 		if (_room is not { } room)
 			return;
 
-		_snapshot = Cache.Snapshots.FirstOrDefault(snapshot =>
-				snapshot.AreaId is { Length: > 0 } areaId && string.Equals(areaId, room.AreaId, StringComparison.Ordinal))
-			?? Cache.Snapshots.FirstOrDefault(snapshot =>
-				string.Equals(snapshot.AreaName, RoomName, StringComparison.OrdinalIgnoreCase));
+		_snapshot = Cache.Find(room.AreaId, RoomName);
 
 		// Resolved here and never taken from the snapshot's PeriodName: the levels table has to be right for a
 		// room that has never reported, and a stale snapshot would leave the now badge on last night's period.
@@ -1284,15 +1272,13 @@ else
 		? "On — this app runs the lighting in this room. Switching it off leaves the lamps exactly as they are."
 		: "Off — this room is watched, but its lamps are never changed. Its settings are kept and take effect the moment it is enabled again.";
 
-	private bool IsLit => _snapshot is { State: AreaState.AutoActive or AreaState.PreOff or AreaState.OverriddenOn, BrightnessPct: > 0 };
-
 	/// <summary>The header lamp, glowing in the warmth the room was commanded to.</summary>
 	/// <remarks>A hand-held room has levels the engine never chose, so it glows violet.</remarks>
 	private string GlowStyle
 	{
 		get
 		{
-			if (_snapshot is not { } snapshot || !IsLit)
+			if (_snapshot is not { IsLit: true } snapshot)
 				return string.Empty;
 
 			string colour = snapshot.State == AreaState.OverriddenOn || snapshot.ColorTempKelvin is null
@@ -1499,7 +1485,7 @@ else
 			return;
 		}
 
-		Nav.NavigateTo($"room/{Uri.EscapeDataString(areaId)}");
+		Nav.NavigateTo(HouseView.RoomHref(areaId)!);
 	}
 
 	private async Task ToggleEnabled()
@@ -1673,7 +1659,7 @@ else
 
 	private string SaveClass => Save.Class;
 
-	private bool HomeAssistantIsAnswering => Catalog.IsHomeAssistantReady && _areas.Count > 0;
+	private bool HomeAssistantIsAnswering => _homeAssistantAnswers;
 
 	private IReadOnlyCollection<string> SetupScope =>
 		_room?.AreaId is { Length: > 0 } areaId ? [areaId] : [];
@@ -1722,7 +1708,7 @@ else
 			_removing = false;
 	}
 
-	private string Name(string entityId) => Catalog.FriendlyNameOf(entityId) ?? entityId;
+	private string Name(string entityId) => Catalog.FriendlyNameOrId(entityId);
 
 	private string AreaName(string areaId) =>
 		_areas.FirstOrDefault(area => string.Equals(area.Id, areaId, StringComparison.Ordinal))?.Name ?? areaId;
@@ -1756,7 +1742,7 @@ else
 	private IReadOnlyList<ActivityEntry> RoomReports =>
 		_room is null ? [] : ActivityView.Shown(ActivityView.InRoom(Log.Entries, RoomName));
 
-	private IReadOnlyList<ActivityRow> RoomLog => ActivityView.Rows(RoomReports, LogRows);
+	private IReadOnlyList<Services.ActivityRow> RoomLog => ActivityView.Rows(RoomReports, LogRows);
 
 	private string LogFoot
 	{

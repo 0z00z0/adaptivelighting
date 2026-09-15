@@ -124,6 +124,26 @@ public sealed class HaCatalog
 	/// </remarks>
 	public bool IsHomeAssistantReady { get; private set; } = true;
 
+	/// <summary>Whether Home Assistant is answering, as opposed to merely not throwing.</summary>
+	/// <remarks>
+	///     The registry answers an empty list where it has nothing, so something has to come back: an area, a
+	///     light-level sensor of the configured class, or a switch. All three are read, so a throw in any of them
+	///     counts. Reads the registry and every state: call it per load, never per render.
+	/// </remarks>
+	public bool IsHomeAssistantResponding(GlobalConfig global)
+	{
+		ArgumentNullException.ThrowIfNull(global);
+
+		int areas = Areas(global).Count;
+		int lightLevelSensors = EntitiesWithDeviceClass("sensor", [global.IlluminanceDeviceClass]).Count;
+		int switches = EntitiesInDomains("input_boolean", "switch").Count;
+
+		return IsHomeAssistantReady && areas + lightLevelSensors + switches > 0;
+	}
+
+	/// <summary>An entity's friendly name, or its id where Home Assistant gives none.</summary>
+	public string FriendlyNameOrId(string entityId) => FriendlyNameOf(entityId) ?? entityId;
+
 	/// <summary>Every area the registry knows, each labelled with what a room there would resolve to.</summary>
 	/// <returns>The areas, ordered by display name. Empty when Home Assistant has not answered.</returns>
 	public IReadOnlyList<AreaOption> Areas(GlobalConfig global)
@@ -245,7 +265,7 @@ public sealed class HaCatalog
 			return RoomLights.None;
 
 		IReadOnlyList<LightUnderReview> commanded =
-			[.. resolved.Lights.Select(entityId => new LightUnderReview(entityId, FriendlyNameOf(entityId) ?? entityId))];
+			[.. resolved.Lights.Select(entityId => new LightUnderReview(entityId, FriendlyNameOrId(entityId)))];
 
 		// Unioned, never replaced: a room with explicit lights and no area id has no registry listing to read, and
 		// the set must never be narrower than the commanded list.

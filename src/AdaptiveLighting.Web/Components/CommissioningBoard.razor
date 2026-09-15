@@ -1,4 +1,5 @@
 @inject LightingEngineHost Engine
+@inject DocumentCache Documents
 @inject HaCatalog Catalog
 @inject ILogger<CommissioningBoard> Logger
 
@@ -192,7 +193,6 @@
 	private readonly CommissioningDraft _draft = new();
 
 	private AdaptiveLightingConfig _config = new();
-	private DateTimeOffset? _stamp;
 	private bool _loaded;
 
 	private IReadOnlyList<CommissioningRow> _rows = [];
@@ -215,29 +215,14 @@
 	protected override void OnParametersSet() => ReadDocument();
 
 	// Rebuilt only when the file changed: the dashboard's one-second ticker re-renders this, and each rebuild
-	// is a full AreaEntityResolver run per room. Guarded on the store's last-write time it costs a stat a tick.
+	// is a full AreaEntityResolver run per room. The cache hands back the same instance until the file moves.
 	private void ReadDocument()
 	{
-		if (!Engine.Store.Exists)
+		if (Documents.Read() is not { } document || _loaded && ReferenceEquals(document, _config))
 			return;
 
-		DateTimeOffset? stamp = Engine.Store.LastWrittenUtc;
-
-		if (_loaded && stamp == _stamp)
-			return;
-
-		try
-		{
-			_config = Engine.Store.Load();
-			_stamp = stamp;
-			_loaded = true;
-		}
-		catch (LightingConfigException exception)
-		{
-			// Keep the last good copy; do not blank the board mid-save.
-			Logger.LogDebug(exception, "Could not re-read the lighting configuration for the commissioning board.");
-			return;
-		}
+		_config = document;
+		_loaded = true;
 
 		Build();
 	}
@@ -297,7 +282,7 @@
 		_modes = HouseSentences.Modes(_config.Global.HouseMode, _config.Periods);
 		_houseModeEntity = _config.Global.HouseMode?.Entity;
 		_houseModeName = _houseModeEntity is { Length: > 0 } entity
-			? Catalog.FriendlyNameOf(entity) ?? entity
+			? Catalog.FriendlyNameOrId(entity)
 			: null;
 
 		_noSensor = CommissioningVerdicts.NoSensorLine(noSensor);
