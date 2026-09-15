@@ -1,13 +1,14 @@
 using System.Globalization;
-using System.Reactive.Subjects;
 
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
 
 using NetDaemon.HassModel;
+
+using Fixture = AdaptiveLighting.Tests.Common.AreaFixture;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -26,8 +27,6 @@ public sealed class ZeroBrightnessTests
 	private const string Second = "light.stue_tak_2";
 	private const string Lamp = "light.stue_leselampe";
 
-	private sealed record Fixture(TestScheduler Scheduler, FakeHaContext Ha, FakeLightActuator Actuator, AreaController Area);
-
 	private static List<TimePeriodConfig> Schedule() =>
 	[
 		new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
@@ -40,76 +39,40 @@ public sealed class ZeroBrightnessTests
 		IReadOnlyList<RoomLevelOverride>? roomLevels = null,
 		IReadOnlyList<LightLevelOverride>? lightLevels = null,
 		double preOffFactor = 0.5,
-		int vacancySeconds = 10800)
-	{
-		TestScheduler scheduler = new();
-		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
-
-		FakeHaContext ha = new();
-		ha.SetState(Motion, "off");
-		ha.SetState(Lux, "5");
-		ha.SetState(Group, "off", new Dictionary<string, object> { ["entity_id"] = new[] { First, Second } });
-		ha.SetState(First, "off");
-		ha.SetState(Second, "off");
-		ha.SetState(Lamp, "off");
-
-		AreaSettings settings = new()
-		{
-			VacancyTimeoutSeconds = vacancySeconds,
-			PreOffSeconds = 30,
-			PreOffBrightnessFactor = preOffFactor,
-			Darkness = DarknessSource.Lux,
-			OverrideUntilVacant = false,
-			OverrideDurationMinutes = 120,
-			VacancyResetMinutes = 10
-		};
-
-		GlobalConfig global = new() { SmoothTransitions = false, CircadianTickSeconds = 60 };
-		List<TimePeriodConfig> table = Schedule();
-
-		Dictionary<string, IReadOnlySet<string>> leaves = new(StringComparer.Ordinal)
-		{
-			[Group] = new HashSet<string>(StringComparer.Ordinal) { First, Second },
-			[Lamp] = new HashSet<string>(StringComparer.Ordinal) { Lamp }
-		};
-
-		Dictionary<string, IReadOnlyList<RoomLevelOverride>> stated = new(StringComparer.OrdinalIgnoreCase);
-		foreach (LightLevelOverride light in lightLevels ?? [])
-			stated[light.EntityId] = light.Levels;
-
-		ResolvedArea area = new("Stue", settings, [Group, Lamp], [Motion], [Lux], [])
-		{
-			LeavesOfEntry = leaves,
-			LightLevels = stated
-		};
-
-		Dictionary<string, CircadianCalculator> perLight = new(StringComparer.OrdinalIgnoreCase);
-		foreach ((string leaf, IReadOnlyList<RoomLevelOverride> rows) in stated)
-			perLight[leaf] = new CircadianCalculator(
-				table, global, () => SunTimes.Unknown, LightLevelMerge.MergeOnto(roomLevels, rows), zone: TimeZoneInfo.Utc);
-
-		FakeLightActuator actuator = new();
-		BehaviorSubject<HouseState> house = new(HouseState.Initial);
-
-		AreaController controller = new(
-			ha,
-			scheduler,
-			area,
-			global,
-			table,
-			new CircadianCalculator(table, global, () => SunTimes.Unknown, roomLevels, zone: TimeZoneInfo.Utc),
-			actuator,
-			new FakeStatePublisher(),
-			house,
-			NullLoggerFactory.Instance,
-			areaId: "stue",
-			lightCalculators: perLight.Count > 0 ? perLight : null);
-
-		controller.Start();
-		house.OnNext(new HouseState(true, ModeKind.Normal, false));
-
-		return new Fixture(scheduler, ha, actuator, controller);
-	}
+		int vacancySeconds = 10800) =>
+		new AreaTestBuilder()
+			.States(ha =>
+			{
+				ha.SetState(Motion, "off");
+				ha.SetState(Lux, "5");
+				ha.SetState(Group, "off", new Dictionary<string, object> { ["entity_id"] = new[] { First, Second } });
+				ha.SetState(First, "off");
+				ha.SetState(Second, "off");
+				ha.SetState(Lamp, "off");
+			})
+			.Settings(settings =>
+			{
+				settings.VacancyTimeoutSeconds = vacancySeconds;
+				settings.PreOffBrightnessFactor = preOffFactor;
+			})
+			.Periods(Schedule())
+			.Named("Stue", "stue")
+			.Lights([Group, Lamp])
+			.MotionSensors([Motion])
+			.LuxSensors([Lux])
+			.Shape(area => area with
+			{
+				LeavesOfEntry = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+				{
+					[Group] = new HashSet<string>(StringComparer.Ordinal) { First, Second },
+					[Lamp] = new HashSet<string>(StringComparer.Ordinal) { Lamp }
+				}
+			})
+			.RoomLevels(roomLevels)
+			.LightLevels(lightLevels)
+			.OpeningHouse(null)
+			.HouseAfterStart(new HouseState(true, ModeKind.Normal, false))
+			.Build();
 
 	/// <summary>What Home Assistant attaches to a change the engine's own service call caused: a user, no parent.</summary>
 	private static Context EngineCall() => new() { Id = "engine-call", UserId = "engine-token-user" };

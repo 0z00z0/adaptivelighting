@@ -1,14 +1,11 @@
-using System.Reactive.Subjects;
-
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
-
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Reactive.Testing;
+using AdaptiveLighting.Tests.Common;
 
 using NetDaemon.HassModel;
-using NetDaemon.HassModel.Entities;
+
+using Fixture = AdaptiveLighting.Tests.Common.AreaFixture;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -17,9 +14,9 @@ namespace AdaptiveLighting.Tests.Lighting;
 [TestClass]
 public sealed class HoldLitTests
 {
-	private const string Motion = "binary_sensor.area_motion";
-	private const string Light = "light.area";
-	private const string Lux = "sensor.area_lux";
+	private const string Motion = AreaTestBuilder.Motion;
+	private const string Light = AreaTestBuilder.Light;
+	private const string Lux = AreaTestBuilder.Lux;
 	private const string Holder = "input_boolean.meeting";
 	private const string Blocker = "binary_sensor.projector";
 
@@ -27,68 +24,31 @@ public sealed class HoldLitTests
 	private const int PreOffSeconds = 30;
 	private static readonly TimeSpan OneTick = TimeSpan.FromSeconds(60);
 
-	private sealed record Fixture(
-		TestScheduler Scheduler,
-		FakeHaContext Ha,
-		FakeLightActuator Actuator,
-		FakeStatePublisher Publisher,
-		BehaviorSubject<HouseState> House,
-		AreaController Area);
-
 	/// <summary>Builds a started area at 20:00, inside "evening", lux 5 so the darkness gate is open.</summary>
 	private static Fixture Build(
 		IReadOnlyList<string>? keepLitWhenOn = null,
 		bool keepLitInverted = false,
 		IReadOnlyList<string>? ignoreWhenOn = null,
 		bool ignoreInverted = false,
-		Action<FakeHaContext>? seed = null)
-	{
-		TestScheduler scheduler = new();
-		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
-
-		FakeHaContext ha = new();
-		ha.SetState(Motion, "off");
-		ha.SetState(Light, "off");
-		ha.SetState(Lux, "5");
-		seed?.Invoke(ha);
-
-		AreaSettings settings = new()
-		{
-			VacancyTimeoutSeconds = VacancySeconds,
-			PreOffSeconds = PreOffSeconds,
-			Darkness = DarknessSource.Lux,
-			OverrideDurationMinutes = 120,
-			VacancyResetMinutes = 10
-		};
-
-		GlobalConfig global = new() { SmoothTransitions = false, CircadianTickSeconds = 60 };
-
-		List<TimePeriodConfig> table =
-		[
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
-		];
-
-		ResolvedArea area = new("Test", settings, [Light], [Motion], [Lux], [.. ignoreWhenOn ?? []])
-		{
-			KeepLitWhenOn = [.. keepLitWhenOn ?? []],
-			IgnoreWhenOnInverted = ignoreInverted,
-			KeepLitWhenOnInverted = keepLitInverted
-		};
-
-		FakeLightActuator actuator = new();
-		FakeStatePublisher publisher = new();
-		BehaviorSubject<HouseState> house = new(HouseState.Initial);
-
-		AreaController controller = new(
-			ha, scheduler, area, global, table,
-			new CircadianCalculator(table, global, () => SunTimes.Unknown),
-			actuator, publisher, house, NullLoggerFactory.Instance, areaId: "test_area");
-
-		controller.Start();
-		return new Fixture(scheduler, ha, actuator, publisher, house, controller);
-	}
+		Action<FakeHaContext>? seed = null) =>
+		new AreaTestBuilder()
+			.Seed(seed)
+			.Settings(settings =>
+			{
+				settings.VacancyTimeoutSeconds = VacancySeconds;
+				settings.PreOffSeconds = PreOffSeconds;
+				settings.OverrideUntilVacant = new AreaSettings().OverrideUntilVacant;
+			})
+			.IgnoreWhenOn([.. ignoreWhenOn ?? []])
+			.Shape(area => area with
+			{
+				KeepLitWhenOn = [.. keepLitWhenOn ?? []],
+				IgnoreWhenOnInverted = ignoreInverted,
+				KeepLitWhenOnInverted = keepLitInverted
+			})
+			.Zone(TimeZoneInfo.Local)
+			.OpeningHouse(null)
+			.Build();
 
 	private static void Advance(Fixture fixture, TimeSpan by) => fixture.Scheduler.AdvanceBy(by.Ticks);
 

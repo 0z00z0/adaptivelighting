@@ -1,13 +1,14 @@
 using System.Globalization;
-using System.Reactive.Subjects;
 
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
 
 using NetDaemon.HassModel;
+
+using Fixture = AdaptiveLighting.Tests.Common.AreaFixture;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -29,20 +30,6 @@ public sealed class PerLightLevelsTests
 	/// <summary>Comfortably past the eight-second echo window plus the fifteen-second night fade.</summary>
 	private static readonly TimeSpan PastTheEcho = TimeSpan.FromSeconds(40);
 
-	private sealed record Fixture(
-		TestScheduler Scheduler,
-		FakeHaContext Ha,
-		FakeLightActuator Actuator,
-		AreaController Area);
-
-	/// <summary>The house's schedule, shared by the room and by every light that states levels of its own.</summary>
-	private static List<TimePeriodConfig> Schedule() =>
-	[
-		new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-		new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
-	];
-
 	private static LightLevelOverride Pins(string entityId, string periodId, int? brightness = null, int? kelvin = null, bool curve = false) =>
 		new()
 		{
@@ -62,31 +49,6 @@ public sealed class PerLightLevelsTests
 		IReadOnlyList<LightLevelOverride>? lightLevels = null,
 		IReadOnlyList<string>? lights = null)
 	{
-		TestScheduler scheduler = new();
-		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
-
-		FakeHaContext ha = new();
-		ha.SetState(Motion, "off");
-		ha.SetState(Lux, "5");
-		ha.SetState(Group, "off", new Dictionary<string, object> { ["entity_id"] = new[] { First, Second } });
-		ha.SetState(First, "off");
-		ha.SetState(Second, "off");
-		ha.SetState(Lamp, "off");
-
-		AreaSettings settings = new()
-		{
-			// Long enough for the room to cross the 22:30 boundary while it is still lit.
-			VacancyTimeoutSeconds = 10800,
-			PreOffSeconds = 30,
-			Darkness = DarknessSource.Lux,
-			OverrideUntilVacant = false,
-			OverrideDurationMinutes = 120,
-			VacancyResetMinutes = 10
-		};
-
-		GlobalConfig global = new() { SmoothTransitions = false, CircadianTickSeconds = 60 };
-		List<TimePeriodConfig> table = Schedule();
-
 		IReadOnlyList<string> entries = lights ?? [Group, Lamp];
 
 		Dictionary<string, IReadOnlySet<string>> leaves = new(StringComparer.Ordinal);
@@ -95,43 +57,28 @@ public sealed class PerLightLevelsTests
 				? new HashSet<string>(StringComparer.Ordinal) { First, Second }
 				: new HashSet<string>(StringComparer.Ordinal) { entry };
 
-		Dictionary<string, IReadOnlyList<RoomLevelOverride>> stated = new(StringComparer.OrdinalIgnoreCase);
-		foreach (LightLevelOverride light in lightLevels ?? [])
-			stated[light.EntityId] = light.Levels;
-
-		ResolvedArea area = new("Stue", settings, entries, [Motion], [Lux], [])
-		{
-			LeavesOfEntry = leaves,
-			LightLevels = stated
-		};
-
-		Dictionary<string, CircadianCalculator> perLight = new(StringComparer.OrdinalIgnoreCase);
-		foreach ((string leaf, IReadOnlyList<RoomLevelOverride> rows) in stated)
-			perLight[leaf] = new CircadianCalculator(
-				table, global, () => SunTimes.Unknown, LightLevelMerge.MergeOnto(roomLevels, rows), zone: TimeZoneInfo.Utc);
-
-		FakeLightActuator actuator = new();
-		FakeStatePublisher publisher = new();
-		BehaviorSubject<HouseState> house = new(HouseState.Initial);
-
-		AreaController controller = new(
-			ha,
-			scheduler,
-			area,
-			global,
-			table,
-			new CircadianCalculator(table, global, () => SunTimes.Unknown, roomLevels, zone: TimeZoneInfo.Utc),
-			actuator,
-			publisher,
-			house,
-			NullLoggerFactory.Instance,
-			areaId: "stue",
-			lightCalculators: perLight.Count > 0 ? perLight : null);
-
-		controller.Start();
-		house.OnNext(new HouseState(true, ModeKind.Normal, false));
-
-		return new Fixture(scheduler, ha, actuator, controller);
+		return new AreaTestBuilder()
+			.States(ha =>
+			{
+				ha.SetState(Motion, "off");
+				ha.SetState(Lux, "5");
+				ha.SetState(Group, "off", new Dictionary<string, object> { ["entity_id"] = new[] { First, Second } });
+				ha.SetState(First, "off");
+				ha.SetState(Second, "off");
+				ha.SetState(Lamp, "off");
+			})
+			// Long enough for the room to cross the 22:30 boundary while it is still lit.
+			.Settings(settings => settings.VacancyTimeoutSeconds = 10800)
+			.Named("Stue", "stue")
+			.Lights(entries)
+			.MotionSensors([Motion])
+			.LuxSensors([Lux])
+			.Shape(area => area with { LeavesOfEntry = leaves })
+			.RoomLevels(roomLevels)
+			.LightLevels(lightLevels)
+			.OpeningHouse(null)
+			.HouseAfterStart(new HouseState(true, ModeKind.Normal, false))
+			.Build();
 	}
 
 	private static void Advance(Fixture fixture, TimeSpan by) => fixture.Scheduler.AdvanceBy(by.Ticks);
