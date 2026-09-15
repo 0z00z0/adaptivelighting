@@ -1,7 +1,7 @@
 using NetDaemon.HassModel;
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Tests.Lighting;
+namespace AdaptiveLighting.TestFakes;
 
 /// <summary>A do-nothing <see cref="IHaRegistry"/>: every collection is empty and every lookup is <c>null</c>.</summary>
 /// <remarks>Enough to construct the orchestrator without HassModel's Area and EntityRegistration, whose constructors are not public.</remarks>

@@ -6,6 +6,7 @@
     <Project Path="src/AdaptiveLighting/AdaptiveLighting.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/AdaptiveLighting.TestFakes/AdaptiveLighting.TestFakes.csproj" />
     <Project Path="tests/AdaptiveLighting.Tests/AdaptiveLighting.Tests.csproj" />
   </Folder>
 </Solution>

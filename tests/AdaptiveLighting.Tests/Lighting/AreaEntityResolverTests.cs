@@ -1516,29 +1516,4 @@ public sealed class AreaEntityResolverTests
 		Assert.AreEqual(0, found.MotionSensors.Count);
 		Assert.AreEqual(0, found.LuxSensors.Count);
 	}
-
-	/// <summary>Captures warnings: "and it warns" is half of each cross-area and overlap contract.</summary>
-	private sealed class RecordingLogger : ILogger
-	{
-		private readonly List<string> _warnings = [];
-
-		public IReadOnlyList<string> Warnings => _warnings;
-
-		public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-		public bool IsEnabled(LogLevel logLevel) => true;
-
-		public void Log<TState>(
-			LogLevel logLevel,
-			EventId eventId,
-			TState state,
-			Exception? exception,
-			Func<TState, Exception?, string> formatter)
-		{
-			ArgumentNullException.ThrowIfNull(formatter);
-
-			if (logLevel >= LogLevel.Warning)
-				_warnings.Add(formatter(state, exception));
-		}
-	}
 }

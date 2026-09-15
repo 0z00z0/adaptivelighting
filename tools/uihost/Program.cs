@@ -3,7 +3,7 @@ using System.Globalization;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Extensions;
 using AdaptiveLighting.Hosting;
-using AdaptiveLighting.Tests.Lighting;
+using AdaptiveLighting.TestFakes;
 using AdaptiveLighting.Web;
 using AdaptiveLighting.Web.Services;
 

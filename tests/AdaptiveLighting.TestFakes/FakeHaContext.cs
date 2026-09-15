@@ -1,10 +1,12 @@
 using System.Reactive.Subjects;
 using System.Text.Json;
 
+using AdaptiveLighting.Extensions;
+
 using NetDaemon.HassModel;
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Tests.Lighting;
+namespace AdaptiveLighting.TestFakes;
 
 /// <summary>One recorded <see cref="IHaContext.CallService"/>, kept so a test can assert on the wire format.</summary>
 public sealed record ServiceCall(string Domain, string Service, ServiceTarget? Target, object? Data);
@@ -47,6 +49,25 @@ public sealed class FakeHaContext : IHaContext
 	/// <summary>Sets a state Home Assistant last heard about at <paramref name="lastUpdated"/>, which only the staleness rule reads.</summary>
 	public void SetStateReportedAt(string entityId, string state, DateTimeOffset lastUpdated, Dictionary<string, object>? attributes = null) =>
 		_states[entityId] = Build(entityId, state, attributes, context: null, lastUpdated);
+
+	/// <summary>Sets a state Home Assistant reported at <paramref name="lastUpdated"/>, optionally with a device class.</summary>
+	public void Set(string entityId, string state, DateTimeOffset lastUpdated, string? deviceClass = null) =>
+		SetStateReportedAt(entityId, state, lastUpdated, deviceClass is null ? null : new Dictionary<string, object> { ["device_class"] = deviceClass });
+
+	/// <summary>Removes an entity, as if Home Assistant no longer reports it.</summary>
+	public void Remove(string entityId) => _states.Remove(entityId);
+
+	/// <summary>Moves every entity's timestamp to one instant, which is what a Home Assistant restart does.</summary>
+	public void RestartHomeAssistant(DateTimeOffset startedAt)
+	{
+		foreach (string entityId in _states.Keys.ToList())
+			Set(entityId, _states[entityId].State ?? "on", startedAt, DeviceClassOf(entityId));
+	}
+
+	/// <summary>The device class attribute of an entity, or null if it has none or is unknown.</summary>
+	public string? DeviceClassOf(string entityId) => _states.TryGetValue(entityId, out EntityState? state)
+		? state.AttrString("device_class")
+		: null;
 
 	/// <summary>Sets a state and pushes the change, as Home Assistant would.</summary>
 	public void Trigger(string entityId, string newState, Dictionary<string, object>? attributes = null, Context? context = null)
@@ -120,4 +141,7 @@ public sealed class FakeHaContext : IHaContext
 	/// <summary>Delivers an event, as Home Assistant would. Not the other end of <see cref="SendEvent"/>.</summary>
 	public void RaiseEvent(string eventType, object? data, Context? context = null) =>
 		_events.OnNext(new Event { EventType = eventType, DataElement = JsonSerializer.SerializeToElement(data), Context = context });
+
+	/// <summary>Delivers an event with no data, as <c>FireEvent</c> on the old restart-only fake did.</summary>
+	public void FireEvent(string eventType) => RaiseEvent(eventType, data: null);
 }
