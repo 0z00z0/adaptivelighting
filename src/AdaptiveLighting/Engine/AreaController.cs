@@ -57,8 +57,12 @@ public sealed class AreaController : IDisposable
 	private readonly SerialDisposable _overrideTimer = new();
 	private readonly SerialDisposable _suppressionTimer = new();
 
-	// The return a level test owes the room. Serial, so a second press leaves one return, ten seconds after it.
-	private readonly SerialDisposable _levelTest = new();
+	// The one level test this room may be running, and the return it owes. Never a state of the machine: the
+	// test changes nothing the area decides on, so every timer, hold and gate carries on around it.
+	private readonly LevelTest _levelTest;
+
+	// The entity gate, read only where it is asked. Kept as one function so a snapshot does not allocate one.
+	private readonly Func<string?> _blockingEntity;
 
 	// Wakes the area at the boundary itself, so a lit room reaches the new period's levels then and not up to a
 	// whole CircadianTickSeconds later. The periodic tick below is the safety net and still runs.
@@ -96,23 +100,6 @@ public sealed class AreaController : IDisposable
 	// ReportDeclinedMotion. Both are cleared the moment the area actually lights.
 	private AutoOnBlock? _reportedDecline;
 	private string? _reportedDeclineEntity;
-
-	// Whether a level test is holding the fixtures. Never a state of the machine: the test changes nothing the
-	// area decides on, so every timer, hold and gate carries on around it.
-	private bool _levelTesting;
-
-	// The period a running test shows and when it ends. Set and cleared with _levelTesting; the snapshot carries
-	// them so a page reloaded mid-test can redraw the countdown.
-	private string? _testingPeriodId;
-	private DateTimeOffset? _testEndsAt;
-
-	// The lights a running test shows on their own, or null for a whole-room test. The return covers only these.
-	private HashSet<string>? _testedLights;
-	private string? _testingLightId;
-
-	// The fixtures before a test, for levels the engine did not choose; null while the engine owns them. Taken once
-	// per test and cleared when spent, so a second press or a second return cannot reuse it.
-	private IReadOnlyList<(string Light, LightCommand Command)>? _capturedLevels;
 
 	// A hold-lit entity refused the engine's own off after the countdown that would have sent it had already fired.
 	// Nothing else would ever run it again, so OnTick settles it once the hold releases.
@@ -226,6 +213,8 @@ public sealed class AreaController : IDisposable
 		_leaves = AllLeaves();
 
 		_boundary = new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
+		_levelTest = new LevelTest(_scheduler, TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
+		_blockingEntity = () => FirstThatApplies(_area.IgnoreWhenOn, _area.IgnoreWhenOnInverted);
 	}
 
 	/// <summary>How long a level test holds the room before the engine takes it back.</summary>
@@ -245,7 +234,7 @@ public sealed class AreaController : IDisposable
 	/// <summary>Whether a level test is holding this room's fixtures right now.</summary>
 	public bool IsTestingLevels
 	{
-		get { lock (_gate) return _levelTesting; }
+		get { lock (_gate) return _levelTest.IsRunning; }
 	}
 
 	/// <summary>Why a level test cannot run here, or <c>null</c> when one can.</summary>
@@ -281,7 +270,7 @@ public sealed class AreaController : IDisposable
 
 			// A lamp tested alone is owed a narrower return than a room test gives, so it is settled first and this
 			// test starts from the room as it stood.
-			if (_levelTesting && _testedLights is not null)
+			if (_levelTest.IsLightTest)
 				EndLevelTest();
 
 			RefreshDarkness();
@@ -289,8 +278,8 @@ public sealed class AreaController : IDisposable
 			// Give the levels back to whoever owns them: the engine is asked for its own when the test ends, and a
 			// person's cannot be derived, so they are read now. Not on a second press, which would read the first
 			// test's levels as if they were somebody's.
-			if (!_levelTesting)
-				_capturedLevels = LevelsAreSomebodyElses() ? CaptureLights(_area.Lights) : null;
+			if (_levelTest.Start(periodKey, lightId: null))
+				_levelTest.Capture(LevelsAreSomebodyElses() ? CaptureLights(_area.Lights) : null);
 
 			// The engine's own answer for that period, curve included, so the room shows what it would really do
 			// and no second reading of the settings can drift from this one. Resolved per light too, or a test
@@ -298,8 +287,6 @@ public sealed class AreaController : IDisposable
 			SendUnrecorded(
 				TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0),
 				LightCommandsFor(periodKey));
-
-			StartLevelTest(periodKey, lightId: null);
 
 			_logger.LogInformation("{Area}: testing period '{Period}' for {Seconds}s.", Name, target.PeriodName, LevelTestSeconds);
 
@@ -339,20 +326,15 @@ public sealed class AreaController : IDisposable
 
 			RefreshDarkness();
 
-			if (!_levelTesting)
-			{
-				_testedLights = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { lightEntityId };
-				_capturedLevels = LevelsAreSomebodyElses() ? CaptureLights([lightEntityId]) : null;
-			}
-			else if (_testedLights is not null && _testedLights.Add(lightEntityId) && _capturedLevels is not null)
+			if (_levelTest.Start(periodKey, lightEntityId))
+				_levelTest.Capture(LevelsAreSomebodyElses() ? CaptureLights([lightEntityId]) : null);
+			else if (_levelTest.AddLight(lightEntityId))
 			{
 				// Read before this light is moved, so its return is what it showed and not the test's level.
-				_capturedLevels = [.. _capturedLevels, .. CaptureLights([lightEntityId])];
+				_levelTest.Append(CaptureLights([lightEntityId]));
 			}
 
 			SendToLight(lightEntityId, TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0));
-
-			StartLevelTest(periodKey, lightEntityId);
 
 			_logger.LogInformation("{Area}: testing period '{Period}' on {Light} for {Seconds}s.",
 				Name, target.PeriodName, lightEntityId, LevelTestSeconds);
@@ -1105,35 +1087,36 @@ public sealed class AreaController : IDisposable
 	}
 
 	/// <summary>Which gate would refuse to light this area for movement right now, judged against <paramref name="dark"/>.</summary>
-	// The single place the auto-on gates are written. CanAutoOn asks it before acting and Snapshot asks it to fill
+	// The single place the auto-on gates are decided. CanAutoOn asks it before acting and Snapshot asks it to fill
 	// AreaSnapshot.AutoOnBlockedBy, so a reader is told the verdict the engine acted on; a second copy in the
-	// publisher or a page would drift. dark is passed in so the caller decides which reading applies.
-	private AutoOnBlock AutoOnBlockNow(bool dark, out string? blocker)
-	{
-		blocker = null;
-
-		if (!IsEngineAllowed())
-			return _house.KillSwitchActive ? AutoOnBlock.KillSwitch : AutoOnBlock.Disabled;
-
-		if (_house.Mode == HouseMode.Away)
-			return AutoOnBlock.Away;
-
-		// Named here, not left to fall through to the darkness gate: a scene-held area reporting "not dark
-		// enough" would send somebody to the lux sensor over a mode they set themselves.
-		if (_house.Mode == HouseMode.Guest && _house.ActiveScene is { Length: > 0 })
-			return AutoOnBlock.SceneHold;
-
-		if (_area.Settings.SleepBlocksAutoOn && _house.Mode == HouseMode.Sleep)
-			return AutoOnBlock.Sleep;
-
-		if (FirstThatApplies(_area.IgnoreWhenOn, _area.IgnoreWhenOnInverted) is { } blocking)
+	// publisher or a page would drift. dark is passed in so the caller decides which reading applies. The rebuilt
+	// gate is skipped: movement reaching a replaced controller is judged on the gates alone.
+	private AutoOnBlock AutoOnBlockNow(bool dark, out string? blocker) =>
+		HouseGates.FirstClosed(GateState(dark), HouseGate.KillSwitch, HouseGate.NotDark, out blocker) switch
 		{
-			blocker = blocking;
-			return AutoOnBlock.EntityOn;
-		}
+			HouseGate.KillSwitch => AutoOnBlock.KillSwitch,
+			HouseGate.Disabled => AutoOnBlock.Disabled,
+			HouseGate.Away => AutoOnBlock.Away,
+			// Named here, not left to fall through to the darkness gate: a scene-held area reporting "not dark
+			// enough" would send somebody to the lux sensor over a mode they set themselves.
+			HouseGate.SceneHold => AutoOnBlock.SceneHold,
+			HouseGate.Sleep => AutoOnBlock.Sleep,
+			HouseGate.EntityOn => AutoOnBlock.EntityOn,
+			HouseGate.NotDark => AutoOnBlock.NotDark,
+			_ => AutoOnBlock.None
+		};
 
-		return dark ? AutoOnBlock.None : AutoOnBlock.NotDark;
-	}
+	/// <summary>The house-wide gates as they stand, for <see cref="HouseGates"/> to walk.</summary>
+	// dark only decides the last gate, so a caller that stops before it passes nothing.
+	private HouseGateState GateState(bool dark = false) => new(
+		Rebuilding: _disposed,
+		KillSwitchActive: _house.KillSwitchActive,
+		Enabled: _area.Settings.Enabled,
+		Mode: _house.Mode,
+		ActiveScene: _house.ActiveScene,
+		SleepBlocksAutoOn: _area.Settings.SleepBlocksAutoOn,
+		BlockingEntity: _blockingEntity,
+		Dark: dark);
 
 	/// <summary>The first of <paramref name="entities"/> whose state applies, or <c>null</c> when none does.</summary>
 	// IsOff differs from !IsOn: both are false for an absent, unavailable or unknown entity, so one that cannot
@@ -1563,51 +1546,36 @@ public sealed class AreaController : IDisposable
 	}
 
 	/// <summary>Why a level test cannot run here, or <c>null</c> when one can.</summary>
-	// The single place a test's gates are written, so the reason a button carries and the refusal a press would
-	// actually get are one answer. A second copy in the web project would drift, as AutoOnBlockNow's would.
-	private string? RefuseLevelTest()
-	{
-		if (_disposed)
-			return "This room is being rebuilt on the settings that were just saved. Try again in a moment.";
-
-		if (_house.KillSwitchActive)
-			return "The master switch is on, so nothing may command a light.";
-
-		if (!_area.Settings.Enabled)
-			return "Automatic lighting is switched off for this room, so its lights are not the engine's to move.";
-
-		// A test here has nothing to give the room back: an away room's levels are the sweep's or the away
-		// scene's, and neither is captured, so the return would hand it back by sweeping it dark. A guest scene
-		// is not refused: those levels are read off the fixtures and put back.
-		if (_house.Mode == HouseMode.Away)
-			return "The house is set to away, so its lights are not being moved for a test.";
-
-		return null;
-	}
+	// The reason a button carries and the refusal a press would actually get are one answer, because both come
+	// from the one ladder. A second copy in the web project would drift, as AutoOnBlockNow's would. The ladder
+	// stops at Away: a guest scene is not refused, because those levels are read off the fixtures and put back,
+	// and sleep, a blocking entity and darkness never refused a test.
+	private string? RefuseLevelTest() =>
+		HouseGates.FirstClosed(GateState(), HouseGate.Rebuilt, HouseGate.Away) switch
+		{
+			HouseGate.Rebuilt => HouseGates.BeingRebuilt,
+			HouseGate.KillSwitch => "The master switch is on, so nothing may command a light.",
+			HouseGate.Disabled => "Automatic lighting is switched off for this room, so its lights are not the engine's to move.",
+			// A test here has nothing to give the room back: an away room's levels are the sweep's or the away
+			// scene's, and neither is captured, so the return would hand it back by sweeping it dark.
+			HouseGate.Away => "The house is set to away, so its lights are not being moved for a test.",
+			_ => null
+		};
 
 	/// <summary>Why <see cref="LightNow"/> would refuse, or <c>null</c> when it would light the room.</summary>
 	// The gates a press does not defeat: either the engine may command nothing here at all, or the house carries
-	// a standing instruction this room is not free to ignore. Darkness, sleep and a blocking entity are absent,
-	// because overriding those is what the button is for.
-	private string? RefuseLightNow()
-	{
-		if (_disposed)
-			return "This room is being rebuilt on the settings that were just saved. Try again in a moment.";
-
-		if (_house.KillSwitchActive)
-			return "The master switch is on, so nothing may command a light.";
-
-		if (!_area.Settings.Enabled)
-			return "This room is not enabled, so its lights are not this app's to switch on.";
-
-		if (_house.Mode == HouseMode.Away)
-			return "The house is set to away, so nothing here is switched on.";
-
-		if (_house.Mode == HouseMode.Guest && _house.ActiveScene is { Length: > 0 } scene)
-			return $"A guest scene ({scene}) is holding this room.";
-
-		return null;
-	}
+	// a standing instruction this room is not free to ignore. The ladder stops at the guest scene, so darkness,
+	// sleep and a blocking entity are left out, because overriding those is what the button is for.
+	private string? RefuseLightNow() =>
+		HouseGates.FirstClosed(GateState(), HouseGate.Rebuilt, HouseGate.SceneHold) switch
+		{
+			HouseGate.Rebuilt => HouseGates.BeingRebuilt,
+			HouseGate.KillSwitch => "The master switch is on, so nothing may command a light.",
+			HouseGate.Disabled => "This room is not enabled, so its lights are not this app's to switch on.",
+			HouseGate.Away => "The house is set to away, so nothing here is switched on.",
+			HouseGate.SceneHold when _house.ActiveScene is { } scene => $"A guest scene ({scene}) is holding this room.",
+			_ => null
+		};
 
 	// The two states whose levels the engine did not choose and cannot resolve again: a hand at the switch, and a
 	// house scene. EnterSceneHold clears _standingScene, so ReassertLights would take a scene-held room to dark.
@@ -1658,28 +1626,10 @@ public sealed class AreaController : IDisposable
 		return null;
 	}
 
-	private void StartLevelTest(string periodKey, string? lightId)
-	{
-		_levelTesting = true;
-		_testingPeriodId = periodKey;
-		_testingLightId = lightId;
-		_testEndsAt = _scheduler.Now + TimeSpan.FromSeconds(LevelTestSeconds);
-		_levelTest.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
-	}
-
 	/// <summary>Drops a running test's return, leaving the fixtures where they are.</summary>
 	// For a hand at the switch mid-test: the person has just said what these lights are, so the capture is stale
 	// and the return would arrive ten seconds later over the top of it.
-	private void AbandonLevelTest()
-	{
-		_levelTest.Disposable = Disposable.Empty;
-		_levelTesting = false;
-		_capturedLevels = null;
-		_testingPeriodId = null;
-		_testEndsAt = null;
-		_testedLights = null;
-		_testingLightId = null;
-	}
+	private void AbandonLevelTest() => _levelTest.Take();
 
 	private void OnLevelTestElapsed()
 	{
@@ -1695,25 +1645,15 @@ public sealed class AreaController : IDisposable
 	/// <summary>Ends a running level test by giving the levels back to whoever owns them.</summary>
 	private void EndLevelTest()
 	{
-		_levelTest.Disposable = Disposable.Empty;
-
-		if (!_levelTesting)
+		// Taken before any of it is used, so a second return cannot apply the same capture twice.
+		if (_levelTest.Take() is not { } finished)
 			return;
 
-		_levelTesting = false;
-		_testingPeriodId = null;
-		_testEndsAt = null;
-
-		HashSet<string>? tested = _testedLights;
-		_testedLights = null;
-		_testingLightId = null;
+		HashSet<string>? tested = finished.Lights;
 
 		// Same rule, two owners: the engine resolves its own levels afresh, and a person's are the ones read
-		// before the test. Taken before it is used, so a second return cannot apply the same capture twice.
-		IReadOnlyList<(string Light, LightCommand Command)>? captured = _capturedLevels;
-		_capturedLevels = null;
-
-		if (captured is null)
+		// before the test.
+		if (finished.Levels is not { } captured)
 		{
 			if (tested is null)
 				ReassertLights();
@@ -1945,10 +1885,10 @@ public sealed class AreaController : IDisposable
 			IsHeldLit: heldLitBy is not null,
 			HeldLitBy: heldLitBy,
 			SceneApplied: _standingScene,
-			TestingPeriodId: _testingPeriodId,
-			TestEndsAt: _testEndsAt,
+			TestingPeriodId: _levelTest.PeriodId,
+			TestEndsAt: _levelTest.EndsAt,
 			LightLevels: standing is not null ? LightStandings() : null,
-			TestingLightId: _testingLightId,
+			TestingLightId: _levelTest.LightId,
 			LightsMoved: _lightsMoved,
 			LightsNotResponding: _notResponding.Count,
 			LightCount: _leaves.Count,
