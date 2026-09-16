@@ -76,14 +76,13 @@ public sealed class MotionPeriodTests
 
 		ModeMonitor monitor = new(
 			ha, global, NullLogger.Instance, scheduler, periods, () => SunTimes.Unknown,
-			[Gang, Kjokken], lastPeriod,
+			[Gang, Kjokken], latch, lastPeriod,
 			periodSelect,
 			areas ?? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
 			{
 				[GangArea] = [Gang],
 				[KjokkenArea] = [Kjokken]
-			},
-			latch);
+			});
 
 		CircadianCalculator rooms = new(
 			periods, global, () => SunTimes.Unknown, null, periodSelect?.ReadPeriod, latch.StateOf);
