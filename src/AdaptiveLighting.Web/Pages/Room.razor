@@ -750,7 +750,7 @@ else
 			{
 				@* Through ActivityView.Rows, so this card collapses runs the same way the timeline does. *@
 				<ol class="log room-log">
-					@foreach (Services.ActivityRow row in rows)
+					@foreach (Presentation.ActivityRow row in rows)
 					{
 						<ActivityRow @key="row.Sequence" Row="row" RoomCard="true" />
 					}
@@ -1742,7 +1742,7 @@ else
 	private IReadOnlyList<ActivityEntry> RoomReports =>
 		_room is null ? [] : ActivityView.Shown(ActivityView.InRoom(Log.Entries, RoomName));
 
-	private IReadOnlyList<Services.ActivityRow> RoomLog => ActivityView.Rows(RoomReports, LogRows);
+	private IReadOnlyList<Presentation.ActivityRow> RoomLog => ActivityView.Rows(RoomReports, LogRows);
 
 	private string LogFoot
 	{
