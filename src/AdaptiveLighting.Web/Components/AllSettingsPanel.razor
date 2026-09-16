@@ -1,0 +1,202 @@
+@* The all-settings folds, drawn once for the house and for a room. Everything it needs is prepared by the
+   caller, so a second design mounts it without working anything out again. *@
+
+<div class="room-groups">
+	@foreach (Group group in Settings.Groups)
+	{
+		Group current = group;
+
+		<div class="sgroup @(current.Open ? "sgroup-open" : null)">
+			<button type="button"
+					class="sgroup-head"
+					aria-expanded="@(current.Open ? "true" : "false")"
+					@onclick="() => Toggled.InvokeAsync(current.Source)">
+				<span class="sgroup-title">@current.Source.Title</span>
+				@if (current.OwnCount > 0)
+				{
+					<span class="sgroup-count" title="Settings this room states for itself">@current.OwnCount</span>
+				}
+				<span class="sgroup-note">@current.Source.Note</span>
+				<span class="area-chevron" aria-hidden="true"></span>
+			</button>
+
+			@if (current.Open)
+			{
+				<div class="sgroup-body">
+					@foreach (Item entry in current.Items)
+					{
+						Item item = entry;
+						RoomSetting setting = item.Source;
+
+						<SettingRow Label="@setting.Label"
+									Help="@setting.Help"
+									IsOwn="@item.IsOwn"
+									HouseText="@item.HouseText"
+									Reverted="@(() => Reverted.InvokeAsync(setting))">
+							@switch (setting.Control)
+							{
+								case RoomControl.Steps:
+									<div class="steps" role="group" aria-label="@setting.Label">
+										@foreach (TokenChoice option in SleepSteps.Options)
+										{
+											TokenChoice step = option;
+											bool chosen = string.Equals(step.Value, item.StepValue, StringComparison.Ordinal);
+											<button type="button"
+													class="@(chosen ? "cur" : null)"
+													aria-pressed="@(chosen ? "true" : "false")"
+													@onclick="() => Set.InvokeAsync(Change.OfText(setting, step.Value))">@step.Text</button>
+										}
+									</div>
+									break;
+
+								case RoomControl.Flag:
+									<button type="button"
+											class="switch @(item.Flag ? "on" : null)"
+											role="switch"
+											aria-checked="@(item.Flag ? "true" : "false")"
+											aria-label="@setting.Label"
+											@onclick="() => Set.InvokeAsync(Change.OfFlag(setting, !item.Flag))">
+										<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+									</button>
+									break;
+
+								case RoomControl.Choice:
+									<div class="seg" role="group" aria-label="@setting.Label">
+										@foreach (TokenChoice option in RoomSettings.ChoicesFor(setting.Key))
+										{
+											TokenChoice choice = option;
+											bool chosen = string.Equals(item.ChoiceValue, choice.Value, StringComparison.Ordinal);
+											<button type="button"
+													class="@(chosen ? "cur" : null)"
+													aria-pressed="@(chosen ? "true" : "false")"
+													@onclick="() => Set.InvokeAsync(Change.OfText(setting, choice.Value))">@choice.Text</button>
+										}
+									</div>
+									break;
+
+								case RoomControl.Entity:
+									<EntityPicker Value="@item.Text"
+												  ValueChanged="@(value => Set.InvokeAsync(Change.OfText(setting, value)))"
+												  Options="@item.Picker.Options"
+												  Lookup="@item.Picker.Lookup"
+												  NoneLabel="@item.Picker.NoneLabel"
+												  EmptyNote="@item.Picker.EmptyNote"
+												  Placeholder="@item.Picker.Placeholder" />
+									break;
+
+								default:
+									<Stepper Value="@item.Number"
+											 Text="@item.Text"
+											 Label="@setting.Label"
+											 Step="@setting.Step"
+											 Min="@setting.Min"
+											 Max="@setting.Max"
+											 IsOwn="@item.ValueIsOwn"
+											 ValueChanged="@(value => Set.InvokeAsync(Change.OfNumber(setting, value)))" />
+
+									@* The one stepper whose number is a curve, so the shape is drawn beside it. *@
+									@if (string.Equals(setting.Key, nameof(AreaSettings.LuxBrightnessGamma), StringComparison.Ordinal))
+									{
+										<CurveGlyph Exponent="@item.Number" Label="@CurvePath.Describe(item.Number)" />
+									}
+									break;
+							}
+						</SettingRow>
+					}
+
+					@GroupExtra?.Invoke(current.Source)
+				</div>
+			}
+		</div>
+	}
+
+	@Extra
+</div>
+
+@code {
+	/// <summary>What a picker in an entity row offers, and how it words having nothing to offer.</summary>
+	public sealed record PickerField
+	{
+		public IReadOnlyList<EntityOption> Options { get; init; } = [];
+
+		public EntityLookup? Lookup { get; init; }
+
+		public string NoneLabel { get; init; } = "(none)";
+
+		public string EmptyNote { get; init; } = EntityPicker.DefaultEmptyNote;
+
+		public string Placeholder { get; init; } = "domain.entity_id";
+	}
+
+	/// <summary>One setting and what it currently reads, so the panel works nothing out for itself.</summary>
+	/// <remarks>
+	///     Only one of the value members is drawn, decided by the setting's control. <see cref="Text"/> carries
+	///     the entity id as well as the stepper's wording, because the two never share a row.
+	/// </remarks>
+	public sealed record Item(RoomSetting Source)
+	{
+		/// <summary>The stepper's wording, or the entity row's configured id.</summary>
+		public string? Text { get; init; }
+
+		public double Number { get; init; }
+
+		public bool Flag { get; init; }
+
+		/// <summary>The step the steps row stands on, as <see cref="SleepSteps.Options"/> values it.</summary>
+		public string? StepValue { get; init; }
+
+		public string? ChoiceValue { get; init; }
+
+		public PickerField Picker { get; init; } = new();
+
+		/// <summary>Whether this setting is stated here rather than inherited, which paints the row's dot and
+		/// offers the road back.</summary>
+		public bool IsOwn { get; init; }
+
+		/// <summary>Whether the number shown is stated here. It differs from <see cref="IsOwn"/> where a setting
+		/// folds in more than one schema key.</summary>
+		public bool ValueIsOwn { get; init; }
+
+		/// <summary>What the level above says, or <c>null</c> where there is nothing above this setting.</summary>
+		public string? HouseText { get; init; }
+	}
+
+	/// <summary>One fold: its settings, whether it is open, and how many of them are stated here.</summary>
+	public sealed record Group(RoomSettingGroup Source, bool Open, int OwnCount, IReadOnlyList<Item> Items);
+
+	/// <summary>Everything the panel draws.</summary>
+	public sealed record Input(IReadOnlyList<Group> Groups);
+
+	/// <summary>One edit the panel made. The setting's control says which member carries it.</summary>
+	public sealed record Change(RoomSetting Setting, string? Text, bool Flag, double Number)
+	{
+		/// <summary>A step, a choice or an entity id.</summary>
+		public static Change OfText(RoomSetting setting, string? value) => new(setting, value, false, 0);
+
+		public static Change OfFlag(RoomSetting setting, bool value) => new(setting, null, value, 0);
+
+		public static Change OfNumber(RoomSetting setting, double value) => new(setting, null, false, value);
+	}
+
+	[Parameter, EditorRequired]
+	public Input Settings { get; set; } = new([]);
+
+	/// <summary>Raised with the fold that was clicked; the caller owns which folds are open.</summary>
+	[Parameter]
+	public EventCallback<RoomSettingGroup> Toggled { get; set; }
+
+	[Parameter]
+	public EventCallback<Change> Set { get; set; }
+
+	/// <summary>Raised when a row's road back is taken; the caller clears the setting.</summary>
+	[Parameter]
+	public EventCallback<RoomSetting> Reverted { get; set; }
+
+	/// <summary>Drawn at the foot of every open fold, for rows a caller has that the model does not.</summary>
+	[Parameter]
+	public RenderFragment<RoomSettingGroup>? GroupExtra { get; set; }
+
+	/// <summary>Drawn after the last fold, for a fold a caller has of its own.</summary>
+	[Parameter]
+	public RenderFragment? Extra { get; set; }
+}

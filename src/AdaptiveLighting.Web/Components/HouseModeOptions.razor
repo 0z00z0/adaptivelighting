@@ -109,8 +109,7 @@
 					<EntityPicker Value="@(Find(current)?.Scene)"
 								  ValueChanged="@(v => SetScene(current, v))"
 								  Options="@Scenes"
-								  NameResolver="@NameResolver"
-								  KnownResolver="@KnownResolver"
+								  Lookup="@Lookup"
 								  NoneLabel="@SceneNoneLabel(kind)"
 								  EmptyNote="@EmptyNote("No scenes yet — create one in Home Assistant, or type an id.")"
 								  Placeholder="scene.kveldslys" />
@@ -158,8 +157,7 @@
 							<EntityListPicker Value="@boundOption.ActivateWhileOn"
 											  ValueChanged="@(v => SetField(boundOption, () => boundOption.ActivateWhileOn = [.. v]))"
 											  Options="@ActivationEntities"
-											  NameResolver="@NameResolver"
-											  KnownResolver="@KnownResolver"
+											  Lookup="@Lookup"
 											  EmptyLabel="(none — only the dropdown activates this mode)"
 											  AddLabel="Add a switch or sensor…"
 											  EmptyNote="@EmptyNote("No switches, toggles or binary sensors found — type an id.")"
@@ -262,8 +260,7 @@
 										<EntityListPicker Value="@boundOption.ResetPresenceSensors"
 														  ValueChanged="@(v => SetField(boundOption, () => boundOption.ResetPresenceSensors = [.. v]))"
 														  Options="@PresenceSensors"
-														  NameResolver="@NameResolver"
-														  KnownResolver="@KnownResolver"
+														  Lookup="@Lookup"
 														  EmptyLabel="(default — every room's motion sensors)"
 														  AddLabel="Add a sensor…"
 														  EmptyNote="@EmptyNote("No motion sensors found — type an id.")"
@@ -319,11 +316,9 @@
 	[Parameter]
 	public IReadOnlyList<EntityOption> ActivationEntities { get; set; } = [];
 
+	/// <summary>What an id is called and whether Home Assistant knows it, handed on to every picker here.</summary>
 	[Parameter]
-	public Func<string, string>? NameResolver { get; set; }
-
-	[Parameter]
-	public Func<string, bool>? KnownResolver { get; set; }
+	public EntityLookup? Lookup { get; set; }
 
 	/// <summary>Whether Home Assistant is answering, so an empty list can say which of the two it is.</summary>
 	[Parameter]
