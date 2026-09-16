@@ -61,9 +61,11 @@ public sealed class ModeMonitorRaceTests
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 }
 		];
 
+		GlobalConfig global = new() { CircadianTickSeconds = 60, HouseMode = mode };
+
 		ModeMonitor monitor = new(
-			ha, new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode }, NullLogger.Instance, timers,
-			periods, () => SunTimes.Unknown, [], zone: TimeZoneInfo.Utc);
+			ha, global, NullLogger.Instance, timers,
+			periods, () => SunTimes.Unknown, [], MotionPeriodLatch.For(periods, global), zone: TimeZoneInfo.Utc);
 
 		monitor.Start();
 		return new Rig(scheduler, ha, timers, monitor);

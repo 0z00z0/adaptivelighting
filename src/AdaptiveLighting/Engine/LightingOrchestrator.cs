@@ -356,12 +356,12 @@ public sealed class LightingOrchestrator : IDisposable
 			_config.Periods,
 			() => ReadSunTimes(_config.Defaults.SunEntity),
 			_motionSensorUnion,
+			// The same latch the calculators got, so the rooms and the mode brain agree on whether a period has begun.
+			_motionPeriods!,
 			_lastPeriod,
-			// The same reader the calculators got, so the mode brain acts on the boundary the rooms are lit for.
+			// The same reader, so the mode brain acts on the boundary the rooms are lit for.
 			_periodSelect,
 			_motionSensorsByArea,
-			// The same latch, for the same reason.
-			_motionPeriods,
 			sunMoved: SunMoved(_config.Defaults.SunEntity),
 			afterSave: _afterSave);
 

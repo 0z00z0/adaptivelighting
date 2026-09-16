@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Reactive;
 using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
@@ -11,49 +10,27 @@ using NetDaemon.HassModel.Entities;
 namespace AdaptiveLighting.Engine;
 
 /// <summary>The mode brain: reads the house-mode select, derives the active kind and scene, and owns the set, retain and reset lifecycle.</summary>
-// A mode set by hand or by a period's SetsModeId is retained until a reset trigger fires, and every reset returns
-// the select to the single Normal option. HouseState is never mutated here: every mode change is an
-// input_select.select_option that flows back through Home Assistant and the normal Changed path, like a hand on
-// the dial. Its only clock is the injected IScheduler.
+// The front of two rule sets that share one lock and one motion latch: HouseModeRules holds the select read, the
+// forcing, the resets, the presence grace and auto-away; PeriodTracker holds period entry, the restart note, the
+// period select mirror and motion starts. This class owns the gate, the subscriptions, the clock and the tick that
+// fans out to both. HouseState is never mutated here: every mode change is an input_select.select_option that flows
+// back through Home Assistant and the normal Changed path, like a hand on the dial.
 public sealed class ModeMonitor : IDisposable
 {
-	private const string PersonDomain = "person";
-	private const string DeviceTrackerDomain = "device_tracker";
-	private const string HomeState = "home";
-
 	private readonly IHaContext _ha;
 	private readonly GlobalConfig _global;
 	private readonly ILogger _logger;
 	private readonly IScheduler _scheduler;
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
 	private readonly CircadianCalculator _circadian;
-	private readonly Func<SunTimes> _sunTimes;
-	private readonly TimeZoneInfo _zone;
-
-	// The two selects this engine may drive. Same mechanics, different rules: the rules stay below, the ownership
-	// test and the call live in SelectMirror.
-	private readonly SelectMirror _modeSelect;
-	private readonly SelectMirror _periodMirror;
 	private readonly IReadOnlyCollection<string> _areaMotionSensors;
 
-	// Which sensors may start each held period. A null value means any watched sensor; an empty set is a period
-	// naming rooms none of whose sensors resolved, which can never fire.
-	private readonly Dictionary<string, IReadOnlySet<string>?> _motionStartPeriods = new(StringComparer.OrdinalIgnoreCase);
-
-	// Shared with every area's calculator: which periods wait for movement, and which have begun today. The only
-	// writer, and the reason the rooms and this monitor cannot disagree about whether a period has started.
+	// Shared with every area's calculator and with PeriodTracker, which is the only writer. The rooms and this
+	// monitor cannot disagree about whether a held period has begun.
 	private readonly MotionPeriodLatch _motionPeriods;
-
-	// Where the period the engine is running in is written down, so the next start can tell whether a boundary
-	// went by while it was stopped. Null reads as unknown.
-	private readonly ILastPeriodStore? _lastPeriod;
 
 	// Null when no period select is configured. Which direction it grants is its own to say.
 	private readonly PeriodSelectReader? _periodSelect;
-
-	// This engine replaced a running one on a save. The note on disk cannot tell that from a cold start, and a save
-	// is not a boundary that went by.
-	private readonly bool _afterSave;
 
 	// Wakes this monitor at the boundary itself, so a period's SetsModeId and the period mirror do not wait out a
 	// whole CircadianTickSeconds. The tick below is the safety net and still runs.
@@ -65,68 +42,21 @@ public sealed class ModeMonitor : IDisposable
 	private readonly Subject<Unit> _changed = new();
 	private readonly CompositeDisposable _subscriptions = [];
 
-	// The one-shot that looks again when a presence grace runs out. Serial, so re-arming on a mode change cancels the
-	// check belonging to the mode that has gone.
-	private readonly SerialDisposable _graceEnds = new();
-
-	// Guards every mutable field below except _warnedValues and _warnedNoNormal, which carry their own atomics.
-	// Nothing that calls Home Assistant runs under it.
+	// The one lock both halves take. Nothing that calls Home Assistant runs under it.
 	private readonly object _gate = new();
 
-	// CurrentModeValue is read from several Rx subscriptions, so TryAdd is the atomic bit; the value is unused.
-	private readonly ConcurrentDictionary<string, byte> _warnedValues = new(StringComparer.OrdinalIgnoreCase);
+	private readonly HouseModeRules _modes;
+	private readonly PeriodTracker _periodTracker;
 
-	// Reset fires from several subscriptions; the "no Normal target" warning must not spam the log every tick.
-	private int _warnedNoNormal;
-
-	// The last value the select reported, and whether it has stopped answering. A blind read holds the former and
-	// never asserts Normal.
-	private string? _lastKnownMode;
-	private bool _selectIsBlind;
-
-	// What a reset has just written and the house is already acting on, before Home Assistant echoes it. Cleared
-	// by the select moving at all, and by the first tick that finds the select has not taken it.
-	private string? _assumedMode;
-
-	// Moves whenever _assumedMode is set or cleared, so the tick clears only the assumption it checked.
-	private int _assumedGeneration;
-
-	private DateTimeOffset _activatedAt;
-	private DateTimeOffset _lastMotionAt;
-	private bool _inactivityLatched;
-	private string? _previousPeriodId;
 	private bool _started;
 	private bool _disposed;
 
-	// The option the no-motion rule last wrote, so a mode the engine set can be told from the same mode a person
-	// chose. Cleared the moment the select stops reading it, and never persisted: after a restart nobody knows why
-	// the select stands where it does.
-	private string? _inactivityActivated;
-
-	// The last sentence AnnounceForcedMode wrote. Empty means nothing was being forced at the previous read.
-	private string _announcedForce = "";
-
-	// Bounds the mirror log line only. The call itself compares against what the select actually reads, so a
-	// select that never echoes is asked again.
-	private string? _mirroredPeriodOption;
-
-	// Armed by Start, spent on the first tick that can read the select. Held open until the select answers,
-	// because an input_select can be unavailable for a while after a Home Assistant restart.
-	private bool _startPeriodModePending;
-
-	// What the previous run left on disk, read once in Start. Null is unknown, which differs from knowing a
-	// boundary was crossed.
-	private string? _periodAtLastRun;
-
-	// What this run believes is on disk now, so the file is written on a period change and not on every tick.
-	private string? _persistedPeriodId;
-
 	// areaMotionSensors is the union across every area, and an option with an empty ResetPresenceSensors resets on
 	// any of them; motionSensorsByArea is that same union split by area id, which is what StartsOnMotionAreas
-	// names. Without a lastPeriod the monitor never learns that a boundary was crossed during an outage.
-	// motionPeriods must be the same instance every area's calculator was built with, or the rooms and this
-	// monitor answer differently about whether a held period has begun. sunMoved is the sun entity behind
-	// sunTimes announcing that its rising or setting moved; omitting it leaves the boundaries to the tick alone.
+	// names. motionPeriods must be the same instance every area's calculator was built with, which is why it is
+	// required. Without a lastPeriod the monitor never learns that a boundary was crossed during an outage.
+	// sunMoved is the sun entity behind sunTimes announcing that its rising or setting moved; omitting it leaves
+	// the boundaries to the tick alone.
 	public ModeMonitor(
 		IHaContext ha,
 		GlobalConfig global,
@@ -135,273 +65,65 @@ public sealed class ModeMonitor : IDisposable
 		IReadOnlyList<TimePeriodConfig> periods,
 		Func<SunTimes> sunTimes,
 		IReadOnlyCollection<string> areaMotionSensors,
+		MotionPeriodLatch motionPeriods,
 		ILastPeriodStore? lastPeriod = null,
 		PeriodSelectReader? periodSelect = null,
 		IReadOnlyDictionary<string, IReadOnlyList<string>>? motionSensorsByArea = null,
-		MotionPeriodLatch? motionPeriods = null,
 		TimeZoneInfo? zone = null,
 		IObservable<Unit>? sunMoved = null,
 		bool afterSave = false)
 	{
-		_afterSave = afterSave;
-		_zone = zone ?? TimeZoneInfo.Local;
 		_sunMoved = sunMoved;
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
 		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
-		_sunTimes = sunTimes ?? throw new ArgumentNullException(nameof(sunTimes));
+		ArgumentNullException.ThrowIfNull(sunTimes);
 		_areaMotionSensors = areaMotionSensors ?? throw new ArgumentNullException(nameof(areaMotionSensors));
-		_lastPeriod = lastPeriod;
+		_motionPeriods = motionPeriods ?? throw new ArgumentNullException(nameof(motionPeriods));
+
 		_periodSelect = periodSelect;
 
-		_modeSelect = new SelectMirror(ha, global.HouseMode?.Entity, !HouseModeIsHomeAssistants);
-
-		// OptionForPeriod is non-null on the one authority that permits a write; PeriodSelectReader is where that
-		// branch is decided, and it is decided once.
-		_periodMirror = new SelectMirror(ha, periodSelect?.Entity, periodSelect?.OptionForPeriod is not null);
-
-		_motionPeriods = motionPeriods ?? MotionPeriodLatch.For(periods, global);
+		TimeZoneInfo resolvedZone = zone ?? TimeZoneInfo.Local;
 
 		_circadian = new CircadianCalculator(
-			periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod, _motionPeriods.StateOf, _zone);
+			periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod, _motionPeriods.StateOf, resolvedZone);
+
+		_modes = new HouseModeRules(
+			_ha, _global, _logger, _scheduler, _areaMotionSensors, _gate, _subscriptions, () => IsDisposed, RaiseChanged);
+
+		_periodTracker = new PeriodTracker(
+			_ha, _logger, _periods, sunTimes, resolvedZone, _circadian, _motionPeriods, lastPeriod, periodSelect,
+			motionSensorsByArea, _modes, _gate, () => IsDisposed, RaiseChanged, afterSave);
 
 		_boundary = new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
-
-		BuildMotionStartPeriods(motionSensorsByArea);
-	}
-
-	// Only periods the latch holds. That is where the authority branch lives, so a dropdown-owned house builds no
-	// rows here and motion starts nothing.
-	private void BuildMotionStartPeriods(IReadOnlyDictionary<string, IReadOnlyList<string>>? motionSensorsByArea)
-	{
-		foreach (TimePeriodConfig period in _periods)
-		{
-			if (!_motionPeriods.Holds(period.Key))
-				continue;
-
-			if (period.StartsOnMotionAreas is not { Count: > 0 })
-			{
-				_motionStartPeriods[period.Key] = null;
-				continue;
-			}
-
-			HashSet<string> sensors = new(StringComparer.OrdinalIgnoreCase);
-
-			foreach (string areaId in period.StartsOnMotionAreas)
-				if (motionSensorsByArea?.TryGetValue(areaId.Trim(), out IReadOnlyList<string>? found) == true)
-					sensors.UnionWith(found);
-
-			// Kept even when empty: a named room that resolved nothing must never read as "any room".
-			_motionStartPeriods[period.Key] = sensors;
-		}
-	}
-
-	/// <summary>When the select last moved, which is when the mode standing now was chosen.</summary>
-	// Falls back to the start instant.
-	private DateTimeOffset ModeSetAt(DateTimeOffset now) =>
-		_global.HouseMode?.Entity is { Length: > 0 } entityId
-			? ChangedAt(_ha.GetState(entityId), now) ?? now
-			: now;
-
-	/// <summary>The newest edge any watched motion sensor reports, or the start instant when none does.</summary>
-	private DateTimeOffset LastMotionAt(DateTimeOffset now)
-	{
-		DateTimeOffset? newest = null;
-
-		foreach (string sensor in _areaMotionSensors)
-			if (ChangedAt(_ha.GetState(sensor), now) is { } stamp && (newest is null || stamp > newest))
-				newest = stamp;
-
-		return newest ?? now;
-	}
-
-	/// <summary>An entity's <c>last_changed</c> as an instant, never later than <paramref name="now"/>.</summary>
-	// Home Assistant publishes UTC; a kindless value lost its label in the JSON reader and is never local time.
-	// The clamp covers a Home Assistant host whose clock runs ahead of this one.
-	private static DateTimeOffset? ChangedAt(EntityState? state, DateTimeOffset now)
-	{
-		if (state?.LastChanged is not { } raw)
-			return null;
-
-		DateTimeOffset stamp = raw.Kind switch
-		{
-			DateTimeKind.Utc => new DateTimeOffset(raw, TimeSpan.Zero),
-			DateTimeKind.Local => new DateTimeOffset(raw).ToUniversalTime(),
-			_ => new DateTimeOffset(DateTime.SpecifyKind(raw, DateTimeKind.Utc), TimeSpan.Zero)
-		};
-
-		return stamp > now ? now : stamp;
 	}
 
 	/// <summary>Fires whenever the kill switch or the house-mode select changes state.</summary>
 	public IObservable<Unit> Changed => _changed;
 
 	/// <summary>Whether the engine is currently forbidden from commanding anything.</summary>
-	public bool KillSwitchActive =>
-		_global.EffectiveKillSwitchEntity is { Length: > 0 } entityId && KillSwitchPauses(_global, _ha.GetState(entityId));
+	public bool KillSwitchActive => _modes.KillSwitchActive;
 
 	/// <summary>Whether the master switch reading <paramref name="state"/> pauses the engine.</summary>
-	// The one copy of the rule; pages call this too. Unavailable or unknown pauses nothing, whichever polarity.
-	// A defaulted switch is always an enabled flag (off pauses); KillSwitchActiveWhenOff governs an explicit one.
-	public static bool KillSwitchPauses(GlobalConfig global, EntityState? state)
-	{
-		ArgumentNullException.ThrowIfNull(global);
-
-		if (state?.State is null)
-			return false;
-
-		bool enabledFlag = global.KillSwitchIsDefaulted || global.KillSwitchActiveWhenOff;
-		return enabledFlag ? state.IsOff() : state.IsOn();
-	}
+	// The one copy of the rule; pages call this too.
+	public static bool KillSwitchPauses(GlobalConfig global, EntityState? state) =>
+		HouseModeRules.KillSwitchPauses(global, state);
 
 	/// <summary>The house-mode option string, or <c>null</c> when the select is unconfigured or has never answered.</summary>
-	// Warns once per distinct value no option classifies, which is the tripwire for a rename in Home Assistant.
-	// An unreadable select holds the mode it last reported; see HoldLastKnownMode.
-	public string? CurrentModeValue
-	{
-		get
-		{
-			if (_global.HouseMode?.Entity is not { Length: > 0 } entityId)
-				return null;
-
-			// A reset the engine has just written counts as done. The select has not moved since, so nothing it
-			// reads is newer than this.
-			lock (_gate)
-				if (_assumedMode is { Length: > 0 } assumed)
-					return assumed;
-
-			if (_ha.GetState(entityId).AsUsableState() is not { } value)
-				return HoldLastKnownMode(entityId);
-
-			if (_global.HouseMode.OptionFor(value) is null && _warnedValues.TryAdd(value, 0))
-				_logger.LogWarning(
-					"House-mode select {Entity} reports '{Value}', which no option classifies; treating it as Normal.",
-					entityId, value);
-
-			return RememberMode(entityId, value);
-		}
-	}
-
-	/// <summary>Records the value the select reported, and says so when it had stopped answering.</summary>
-	private string RememberMode(string entityId, string value)
-	{
-		bool wasBlind;
-
-		lock (_gate)
-		{
-			wasBlind = _selectIsBlind;
-			_selectIsBlind = false;
-			_lastKnownMode = value;
-		}
-
-		if (wasBlind)
-			_logger.LogInformation(
-				"House-mode select {Entity} is readable again and reports '{Value}'.", entityId, value);
-
-		return value;
-	}
-
-	/// <summary>What a blind read answers: the mode the select last reported, or <c>null</c> when it never has.</summary>
-	// Unavailable and unknown are the select not answering, which is not the same as it answering Normal. Falling
-	// through to Normal takes a house out of away for as long as the helper is missing, and nothing puts it back.
-	// The period select has carried this guard since it was written; this is the same one.
-	private string? HoldLastKnownMode(string entityId)
-	{
-		string? held;
-		bool firstOfTheSpell;
-
-		lock (_gate)
-		{
-			held = _lastKnownMode;
-			firstOfTheSpell = !_selectIsBlind;
-			_selectIsBlind = true;
-		}
-
-		if (firstOfTheSpell)
-			_logger.LogWarning(
-				"House-mode select {Entity} is not answering. The house holds the mode it last read ({Mode}) until it does.",
-				entityId, held ?? "none yet");
-
-		return held;
-	}
-
-	// What the select's current value classifies to. The set, retain and reset lifecycle acts on this option,
-	// because every reset writes the select itself back to Normal.
-	private HouseModeOptionConfig? CurrentOption => _global.HouseMode?.OptionFor(CurrentModeValue);
-
-	// Home Assistant owns the select. Every write of it is gated on this, and so is every engine rule that would
-	// decide the mode: the dropdown is then the only thing that moves the house.
-	private bool HouseModeIsHomeAssistants => _global.HouseMode?.HomeAssistantDecides ?? false;
-
-	// The first option in list order any of whose ActivateWhileOn entities is on, with that entity, or null. Such
-	// an option forces the effective house mode whatever the select reads, and the select is never written from
-	// here, so there is no loop. The only read of which entity holds a mode on: a second one could name a
-	// different entity from the one the engine acted on.
-	private (HouseModeOptionConfig Option, string EntityId)? ActivatedNow
-	{
-		get
-		{
-			// Forcing a mode is this engine deciding one, which is what standing down means.
-			if (HouseModeIsHomeAssistants || _global.HouseMode is not { } houseMode)
-				return null;
-
-			foreach (HouseModeOptionConfig option in houseMode.Options)
-				if (option.ActivateWhileOn.FirstOrDefault(IsOn) is { Length: > 0 } entityId)
-					return (option, entityId);
-
-			return null;
-		}
-	}
+	public string? CurrentModeValue => _modes.CurrentModeValue;
 
 	/// <summary>What is forcing the effective mode, or <c>null</c> when the select's own value is the whole story.</summary>
-	// Read live, in the order the engine decides in: the ActivateWhileOn overlay wins over the select, so it is
-	// asked first. Every kind is reported, not only Away.
-	public ForcedMode? Forced
-	{
-		get
-		{
-			if (ActivatedNow is { } activated)
-				return new ForcedMode(
-					activated.Option.Kind,
-					activated.Option.Value?.Trim() ?? "",
-					ModeForceSource.WhileEntityOn,
-					activated.EntityId,
-					_ha.GetState(activated.EntityId).AsUsableState());
-
-			string? claimed;
-			lock (_gate)
-				claimed = _inactivityActivated;
-
-			if (claimed is not { Length: > 0 })
-				return null;
-
-			// The claim holds only while the value the engine wrote is still what the select reads.
-			if (!string.Equals(CurrentModeValue, claimed, StringComparison.OrdinalIgnoreCase)
-				|| _global.HouseMode?.OptionFor(claimed) is not { } option)
-				return null;
-
-			return new ForcedMode(option.Kind, claimed, ModeForceSource.NoMotionTimeout);
-		}
-	}
-
-	// The option the engine acts on: an ActivateWhileOn override wins over the select's value, and empty
-	// ActivateWhileOn lists leave this equal to the select-standing option.
-	private HouseModeOptionConfig? EffectiveOption => ActivatedNow?.Option ?? CurrentOption;
+	public ForcedMode? Forced => _modes.Forced;
 
 	/// <summary>The kind of the effective option; <see cref="ModeKind.Normal"/> when nothing classifies.</summary>
-	public ModeKind ActiveKind => EffectiveOption?.Kind ?? ModeKind.Normal;
+	public ModeKind ActiveKind => _modes.ActiveKind;
 
 	/// <summary>The effective option's <c>scene.*</c> when it names one, whatever its kind.</summary>
 	// Applied once on entry by the orchestrator. On Away and Guest the scene stands because they pause the
 	// engine; on Normal and Sleep it is a one-shot the ordinary commands may override.
-	public string? ActiveScene =>
-		EffectiveOption is { Scene: { Length: > 0 } scene } ? scene : null;
-
-	// An unreadable state is "not on", so a vanished sensor stops forcing its mode instead of pinning it.
-	private bool IsOn(string entityId) =>
-		!string.IsNullOrWhiteSpace(entityId) && (_ha.GetState(entityId)?.IsOn() ?? false);
+	public string? ActiveScene => _modes.ActiveScene;
 
 	/// <summary>Subscribes and starts the evaluation tick.</summary>
 	public void Start()
@@ -415,27 +137,9 @@ public sealed class ModeMonitor : IDisposable
 
 			_started = true;
 
-			// A restart is neither a mode being set nor somebody moving. Stamping both with now restarts the
-			// presence grace over a mode chosen hours ago and hands the quiet-time rule a fresh window every time
-			// a save rebuilds the engine. Home Assistant's own timestamps outlive both. Reads under _gate for the
-			// reason below: nothing else is running yet.
-			_activatedAt = ModeSetAt(_scheduler.Now);
-			_lastMotionAt = LastMotionAt(_scheduler.Now);
-
-			// A save rebuilds this monitor, and an edit to the schedule can put a different period in force than
-			// the note names. That reads as a boundary the engine slept through, which it is not: the engine was
-			// running the whole time. Only a start from nothing may spend the note.
-			_startPeriodModePending = !_afterSave;
-
-			// Read once: the answer is about the run that ended, and a later read finds what this run wrote over
-			// it. A file read under _gate is safe only here, before the subscriptions and the tick exist.
-			_periodAtLastRun = ReadPeriodAtLastRun();
-			_persistedPeriodId = _periodAtLastRun;
-
-			// Before ActivePeriodName: seeding may put a held period back in the table.
-			SeedPeriodLatch(_scheduler.Now);
-			_previousPeriodId = _circadian.ActivePeriodId(_scheduler.Now);
-			startingPeriod = _previousPeriodId;
+			// Both halves seed under the one gate. A file read is safe here only because nothing else is running yet.
+			_modes.StampStart(_scheduler.Now);
+			startingPeriod = _periodTracker.BeginRun(_scheduler.Now);
 		}
 
 		if (_global.EffectiveKillSwitchEntity is { Length: > 0 } killSwitch)
@@ -450,10 +154,10 @@ public sealed class ModeMonitor : IDisposable
 						// helper and it would read the period paused in until the next tick.
 						if (!KillSwitchActive)
 						{
-							MirrorPeriodSelect(_circadian.ActivePeriodId(_scheduler.Now));
+							_periodTracker.MirrorPeriodSelect(_circadian.ActivePeriodId(_scheduler.Now));
 
 							// A grace that ran out while the engine was muzzled wrote nothing and left nothing armed.
-							ArmGraceExpiryCheck();
+							_modes.ArmGraceExpiryCheck();
 						}
 
 						RaiseChanged();
@@ -461,13 +165,7 @@ public sealed class ModeMonitor : IDisposable
 					_logger));
 		}
 
-		if (_global.HouseMode?.Entity is { Length: > 0 } select)
-		{
-			_logger.LogInformation("Watching house-mode select {EntityId}.", select);
-			_subscriptions.Add(_ha.Entity(select)
-				.StateChanges()
-				.SubscribeSafe(OnSelectChanged, _logger));
-		}
+		_modes.Subscribe();
 
 		// Watched in either direction. Under Home Assistant authority a flip is a boundary the clock did not cross,
 		// and waiting for the tick would delay a SetsMode by a whole CircadianTickSeconds. Under the engine's own
@@ -480,22 +178,23 @@ public sealed class ModeMonitor : IDisposable
 				.SubscribeSafe(_ => OnPeriodSelectChanged(), _logger));
 		}
 
-		AnnounceUnreachableAway();
-		AnnounceDormantModeRules();
-		AnnounceHeldPeriods();
-		SubscribePresenceResets();
-		ArmGraceExpiryCheck();
-		SubscribeActivationSensors();
+		ModeStartupReporter.AnnounceUnreachableAway(_logger, _global);
+		ModeStartupReporter.AnnounceDormantModeRules(_logger, _global, _periods, _modes.HouseModeIsHomeAssistants);
+		ModeStartupReporter.AnnounceHeldPeriods(_logger, _periods, _motionPeriods);
+
+		_modes.SubscribePresenceResets();
+		_modes.ArmGraceExpiryCheck();
+		_modes.SubscribeActivationSensors();
 		SubscribeMotion();
 
 		// An entity already on before start forces the mode from the first instant and raises no edge, so a house
 		// booting into a forced mode would otherwise say nothing until somebody toggled the entity.
-		AnnounceForcedMode();
+		_modes.AnnounceForcedMode();
 
 		// SchedulePeriodic's first callback is a whole CircadianTickSeconds away, so without this a restart inside a
 		// period leaves the select naming the period before it: at 300 s that is five minutes of a dashboard
 		// reading the wrong time of day. A no-op under Home Assistant's authority, and when it already reads right.
-		MirrorPeriodSelect(startingPeriod);
+		_periodTracker.MirrorPeriodSelect(startingPeriod);
 
 		// A moved sun time can put a boundary in the past as easily as the future, so this evaluates before it re-arms.
 		if (_sunMoved is { } sunMoved)
@@ -508,37 +207,6 @@ public sealed class ModeMonitor : IDisposable
 		_boundary.Arm();
 	}
 
-	// The select moving, for any reason, restarts the activation clock and republishes house state. Nothing else
-	// ever clears a mode, so retention is free.
-	private void OnSelectChanged(StateChange change)
-	{
-		lock (_gate)
-		{
-			if (_disposed)
-				return;
-
-			_activatedAt = _scheduler.Now;
-
-			// The select has moved, so whatever it now reads is newer than anything the engine assumed about it.
-			// This is also where the echo of the engine's own write lands, and clearing it there costs nothing:
-			// the value is the same one, so the republish below says nothing new.
-			_assumedMode = null;
-			_assumedGeneration++;
-
-			// Anything that moves the select away takes ownership back from the no-motion rule, so a later move
-			// onto the same option is somebody else's doing.
-			if (_inactivityActivated is { Length: > 0 } claimed
-				&& !(change.New?.State).SameName(claimed))
-				_inactivityActivated = null;
-		}
-
-		// After the stamp above, so the new mode's grace is measured from when it was set.
-		ArmGraceExpiryCheck();
-
-		AnnounceForcedMode();
-		RaiseChanged();
-	}
-
 	/// <summary>The period select moved, so the period may have changed without the clock crossing anything.</summary>
 	// Runs the whole tick body, which is idempotent: period entry is edge-triggered on a name change, the
 	// inactivity rule is latched, and the mirror write compares against what the select reads. The rooms are not
@@ -549,208 +217,23 @@ public sealed class ModeMonitor : IDisposable
 		RaiseChanged();
 	}
 
-	/// <summary>Says so, once at start-up, when the document leaves every away behaviour out of reach.</summary>
-	// The commissioning sheet still offers the two room settings, and the validator warns on a save; a household
-	// that never opens either would otherwise have no way to find out why leaving does nothing.
-	private void AnnounceUnreachableAway()
-	{
-		if (_global.HouseMode is not { Options.Count: > 0 } houseMode || houseMode.HasAwayOption)
-			return;
-
-		_logger.LogWarning(
-			"No house-mode option is marked Away, so this house can never be away: the leaving sweep never runs, "
-			+ "an away scene never fires, and every room's 'stays on when the house goes away' and 'lights up when "
-			+ "the house leaves away mode' setting is inert.");
-	}
-
-	/// <summary>Names, once at start-up, every mode rule Home Assistant's authority has stood down.</summary>
-	// Silence here sends somebody hunting an automation that is working as configured, so each dormant rule gets
-	// its own line, and only when the document actually carries that rule.
-	private void AnnounceDormantModeRules()
-	{
-		if (!HouseModeIsHomeAssistants || _global.HouseMode is not { } houseMode)
-			return;
-
-		_logger.LogInformation(
-			"House mode: Home Assistant decides. The engine reads {Select} and never writes it.", houseMode.EntityId);
-
-		if (_periods.Any(period => period.SetsModeId is { Length: > 0 }))
-			_logger.LogInformation(
-				"A period switching the house mode is dormant while Home Assistant decides it; the schedule will not move {Select}.",
-				houseMode.EntityId);
-
-		if (houseMode.Options.Any(option => option.Kind != ModeKind.Normal && option.ActivateAfterNoMotionMinutes is > 0))
-			_logger.LogInformation(
-				"The no-motion auto-away rule is dormant while Home Assistant decides the house mode.");
-
-		if (houseMode.Options.Any(option => option.ActivateWhileOn.Count > 0))
-			_logger.LogInformation(
-				"ActivateWhileOn is dormant while Home Assistant decides the house mode; the select's own value is the whole story.");
-
-		// Kind-filtered, as SubscribePresenceResets and OnPeriodEntered both are: a Normal option's reset never
-		// fired under either authority, so naming it here reports a rule that was not switched off.
-		if (houseMode.Options.Any(option => option.Kind != ModeKind.Normal && option.HasResetTrigger))
-			_logger.LogInformation(
-				"The mode resets are dormant while Home Assistant decides the house mode; nothing here returns {Select} to Normal.",
-				houseMode.EntityId);
-	}
-
-	/// <summary>Names the periods that will not begin on the clock, and says so when the rule is stood down.</summary>
-	private void AnnounceHeldPeriods()
-	{
-		if (!_periods.Any(period => period.StartsOnMotion))
-			return;
-
-		if (_motionPeriods.HeldPeriods.Count == 0)
-		{
-			_logger.LogInformation(
-				"StartsOnMotion is dormant while Home Assistant decides the time of day; the period select is the only "
-				+ "boundary and movement does not start a period.");
-			return;
-		}
-
-		foreach (string periodKey in _motionPeriods.HeldPeriods)
-			_logger.LogInformation(
-				"Period '{Period}' does not begin at its Start; the period before it keeps running until somebody moves, "
-				+ "and the next period's Start overtakes it if nobody does.",
-				DisplayName(periodKey));
-	}
-
-	private void SubscribePresenceResets()
-	{
-		// A reset writes the select, so it stands down with the rest of them.
-		if (HouseModeIsHomeAssistants || _global.HouseMode is not { } houseMode)
-			return;
-
-		foreach (HouseModeOptionConfig? option in houseMode.Options.Where(o => o.Kind != ModeKind.Normal && o.ResetOnPresence))
-		{
-			List<string> sensors = PresenceSensorsFor(option);
-
-			if (sensors.Count == 0)
-			{
-				_logger.LogWarning(
-					"Option '{Option}' resets on presence but no sensors resolve (empty list and no area motion sensors); it will never reset on presence.",
-					option.Value);
-				continue;
-			}
-
-			foreach (string sensor in sensors)
-			{
-				HouseModeOptionConfig captured = option;
-
-				// person.* and device_tracker.* report presence as their state going to "home", never as an on/off
-				// edge, so they cannot take the turn-on branch. A binary_sensor arms on its turn-on.
-				if (IsPresenceTracker(sensor))
-					_subscriptions.Add(_ha.Entity(sensor)
-						.StateChanges()
-						.Where(IsArrival)
-						.SubscribeSafe(_ => OnPresenceReset(captured, sensor), _logger));
-				else
-					_subscriptions.Add(_ha.Entity(sensor)
-						.WhenTurnsOn(_ => OnPresenceReset(captured, sensor), _logger));
-			}
-		}
-	}
-
-	/// <summary>The sensors whose presence resets this option: the ones it lists, or the whole area motion union.</summary>
-	// One definition, because the subscriptions and the grace-expiry check must watch the same set.
-	private List<string> PresenceSensorsFor(HouseModeOptionConfig option) =>
-		option.ResetPresenceSensors.Count > 0 ? option.ResetPresenceSensors : [.. _areaMotionSensors];
-
-	// person.* and device_tracker.* say where somebody is, not whether a room is occupied, so only their arrival
-	// counts. A tracker sitting at "home" is the resting state of a phone that never left, and holding the reset
-	// open on it would stop the house ever staying away.
-	private static bool IsPresenceTracker(string sensor) =>
-		sensor.HasDomain(PersonDomain) || sensor.HasDomain(DeviceTrackerDomain);
-
-	// The ActivateWhileOn overlay. The select is never written; EffectiveOption reads these live, so this only
-	// republishes house state.
-	private void SubscribeActivationSensors()
-	{
-		if (HouseModeIsHomeAssistants || _global.HouseMode is not { } houseMode)
-			return;
-
-		IEnumerable<string> sensors = houseMode.Options
-			.SelectMany(option => option.ActivateWhileOn)
-			.Where(sensor => !string.IsNullOrWhiteSpace(sensor))
-			.Select(sensor => sensor.Trim())
-			.Distinct(StringComparer.OrdinalIgnoreCase);
-
-		foreach (string sensor in sensors)
-		{
-			_logger.LogInformation("Watching mode-activation sensor {EntityId}.", sensor);
-			_subscriptions.Add(_ha.Entity(sensor)
-				.StateChanges()
-				.SubscribeSafe(_ => OnActivationSensorChanged(), _logger));
-		}
-	}
-
-	// Announced before the state is republished: nothing writes the select here, so this is the one mode change
-	// with no visible cause.
-	private void OnActivationSensorChanged()
-	{
-		AnnounceForcedMode();
-		RaiseChanged();
-	}
-
-	/// <summary>Writes one line naming what is forcing the house mode, and one when nothing is any more.</summary>
-	// Deduplicated on the sentence and never on the entity, so an entity that stays on says it once while a
-	// different entity taking over gets its own line. Every kind is announced, not only Away.
-	private void AnnounceForcedMode()
-	{
-		ForcedMode? forced = Forced;
-		string sentence = forced?.Describe() ?? "";
-
-		lock (_gate)
-		{
-			if (string.Equals(_announcedForce, sentence, StringComparison.Ordinal))
-				return;
-
-			_announcedForce = sentence;
-		}
-
-		if (forced is null)
-		{
-			_logger.LogInformation("Nothing is forcing the house mode any more; the select's own value decides again.");
-			return;
-		}
-
-		// Passed as a property and never concatenated, so a structured sink keeps the sentence whole.
-		_logger.LogInformation(
-			"{ForcedMode} The house-mode select reads '{Select}' and is being overridden; this is not a presence departure.",
-			sentence, CurrentModeValue ?? "(nothing)");
-	}
-
 	// Subscribes the motion union once, for the two rules that read it: auto-away by inactivity, and a period that
 	// starts on motion.
 	private void SubscribeMotion()
 	{
-		bool autoAway = !HouseModeIsHomeAssistants
-			&& _global.HouseMode is { } houseMode
-			&& houseMode.Options.Any(option => option.Kind != ModeKind.Normal && option.ActivateAfterNoMotionMinutes is > 0);
-
-		bool startsPeriods = _motionStartPeriods.Count > 0;
+		bool autoAway = _modes.HasAutoAwayRule;
+		bool startsPeriods = _periodTracker.StartsPeriodsOnMotion;
 
 		if (!autoAway && !startsPeriods)
 			return;
 
 		if (_areaMotionSensors.Count == 0)
 		{
-			if (autoAway)
-				_logger.LogWarning("An option activates on no motion, but no area motion sensors resolve; it can never fire.");
-
-			if (startsPeriods)
-				_logger.LogWarning("A period starts on motion, but no area motion sensors resolve; it can never fire.");
-
+			ModeStartupReporter.AnnounceMotionCannotFire(_logger, autoAway, startsPeriods);
 			return;
 		}
 
-		foreach (KeyValuePair<string, IReadOnlySet<string>?> row in _motionStartPeriods)
-			if (row.Value is { Count: 0 })
-				_logger.LogWarning(
-					"Period '{Period}' starts on motion in named rooms, but none of those rooms has a motion sensor the "
-					+ "engine watches; it can never start on motion.",
-					DisplayName(row.Key));
+		ModeStartupReporter.AnnounceEmptyMotionRooms(_logger, _periods, _periodTracker.MotionStartPeriods);
 
 		foreach (string sensor in _areaMotionSensors)
 		{
@@ -764,330 +247,11 @@ public sealed class ModeMonitor : IDisposable
 		if (IsDisposed)
 			return;
 
-		MarkMotion();
-		StartPeriodOnMotion(sensor, _scheduler.Now);
+		_modes.MarkMotion();
+		_periodTracker.StartPeriodOnMotion(sensor, _scheduler.Now);
 	}
 
-	private void MarkMotion()
-	{
-		lock (_gate)
-		{
-			_lastMotionAt = _scheduler.Now;
-			_inactivityLatched = false;
-		}
-	}
-
-	/// <summary>Offers the movement to the period it is allowed to start, and enters that period if it may.</summary>
-	// Under _gate for the reason OnTick gives: this runs on Home Assistant's thread, and a transition read but not
-	// claimed is entered twice. Asked of the schedule and never of what is in force, because the period movement
-	// may start is the one the calculators hold out of the table. Two bounds are load-bearing: a period is never
-	// placed before its own Start, so night still running at 02:00 cannot let the 06:30 period fire on a trip to
-	// the kitchen; and once per local day, so walking back in at lunch does not re-fire SetsModeId over a mode
-	// somebody chose since.
-	private void StartPeriodOnMotion(string sensor, DateTimeOffset now)
-	{
-		if (_motionStartPeriods.Count == 0)
-			return;
-
-		// Before the lock: this consults Home Assistant.
-		HouseModeOptionConfig? activeOption = CurrentOption;
-
-		// The household's day, as the circadian table reads it. The two must agree or a period's mode switch is
-		// filed against a different day from the one the table placed it on.
-		DateOnly today = now.DayIn(_zone);
-
-		string? periodKey;
-		bool start;
-
-		lock (_gate)
-		{
-			periodKey = _circadian.ScheduledPeriodId(now);
-
-			// TryBegin last: it claims the day, so nothing after it may refuse the start.
-			start = periodKey is { Length: > 0 }
-				&& MotionMayStart(periodKey, sensor)
-				&& StartHasPassed(periodKey, now)
-				&& _motionPeriods.TryBegin(periodKey, today, now);
-
-			if (start)
-			{
-				_previousPeriodId = periodKey;
-				_startPeriodModePending = false;
-			}
-		}
-
-		if (!start)
-			return;
-
-		_logger.LogInformation("Motion on {Sensor} started period '{Period}'.", sensor, DisplayName(periodKey));
-
-		// Written now, because the latch is in memory and a config save rebuilds the engine: the note is the only
-		// thing that tells the rebuilt monitor this period had already begun.
-		RememberPeriod(periodKey);
-
-		OnPeriodEntered(periodKey!, activeOption);
-		RaiseChanged();
-	}
-
-	// Under _gate; reads configuration settled in the constructor and nothing else.
-	private bool MotionMayStart(string periodKey, string sensor) =>
-		_motionStartPeriods.TryGetValue(periodKey, out IReadOnlySet<string>? rooms)
-		&& (rooms is null || rooms.Contains(sensor));
-
-	// A period whose Start has not come round today cannot be started by motion. This is what keeps the wrapped
-	// period (night, still running at 02:00) from re-entering on the far side of midnight.
-	private bool StartHasPassed(string periodKey, DateTimeOffset now)
-	{
-		if (PeriodWithKey(periodKey) is not { } period || !PeriodStart.TryParse(period.Start, out PeriodStart? start))
-			return false;
-
-		return start!.Resolve(_sunTimes()) is { } resolved && resolved <= now.TimeIn(_zone);
-	}
-
-	/// <summary>Seeds the latch, under _gate, so the period the clock places now counts as begun for this run.</summary>
-	// Restarting inside a period is no entry, so a later movement must not re-fire its SetsModeId or its
-	// period-start reset over a mode a person chose. A period that waits for movement is seeded only when the note
-	// on disk says the last run was already inside it; without the note there is no evidence it ever began.
-	private void SeedPeriodLatch(DateTimeOffset now)
-	{
-		if (_circadian.ScheduledPeriodId(now) is not { Length: > 0 } scheduled)
-			return;
-
-		if (_motionPeriods.Holds(scheduled)
-			&& !string.Equals(_periodAtLastRun, scheduled, StringComparison.OrdinalIgnoreCase))
-			return;
-
-		_motionPeriods.MarkBegun(scheduled, InstanceDay(scheduled, now));
-	}
-
-	// The local day the running instance of this period began on. A Start still ahead of now belongs to yesterday's
-	// instance, which is the one the table's wrap puts in force.
-	private DateOnly InstanceDay(string periodKey, DateTimeOffset now)
-	{
-		DateOnly today = now.DayIn(_zone);
-		return StartHasPassed(periodKey, now) ? today : today.AddDays(-1);
-	}
-
-	private static bool BoundaryWentByWhileDown(string? previousRun, string periodKey) =>
-		previousRun is { Length: > 0 } && !string.Equals(previousRun, periodKey, StringComparison.OrdinalIgnoreCase);
-
-	private TimePeriodConfig? PeriodWithKey(string periodKey) => _periods.ByKey(periodKey);
-
-	// Every log line names the period a person would recognise, never the id the engine resolved by.
-	private string DisplayName(string? periodKey) =>
-		periodKey is { Length: > 0 } && PeriodWithKey(periodKey)?.Name is { Length: > 0 } name ? name : periodKey ?? "";
-
-	private bool AnyMotionOn() => _areaMotionSensors.Any(IsOn);
-
-	/// <summary>Switches the select to an option once the whole house has been motion-free for its configured span.</summary>
-	// Polled on the tick. First qualifying option in list order wins, one activation per tick. It writes the
-	// select, so the option's reset triggers arm through OnSelectChanged as a manual switch would.
-	private void EvaluateInactivityActivation(DateTimeOffset now)
-	{
-		// Stood down under Home Assistant's authority; AnnounceDormantModeRules has already said so.
-		if (HouseModeIsHomeAssistants || _global.HouseMode is not { Entity: { Length: > 0 } select } houseMode)
-			return;
-
-		// With nothing watching for movement there is no quiet spell to measure, only a clock nothing ever
-		// restarts, which reads as quiet from the first tick. SubscribeMotion warns that the rule can never fire.
-		if (_areaMotionSensors.Count == 0)
-			return;
-
-		// Motion in progress keeps the clock at now and re-arms, so "no motion for X" counts only quiet time.
-		if (AnyMotionOn())
-		{
-			lock (_gate)
-			{
-				_lastMotionAt = now;
-				_inactivityLatched = false;
-			}
-			return;
-		}
-
-		DateTimeOffset lastMotionAt;
-		bool latched;
-		lock (_gate)
-		{
-			lastMotionAt = _lastMotionAt;
-			latched = _inactivityLatched;
-		}
-
-		// Once per idle spell. The latch clears only when motion resumes; without it the switch repeats every tick
-		// until Home Assistant echoes back, and re-fires against a person who switches away while the house is quiet.
-		if (latched)
-			return;
-
-		foreach (HouseModeOptionConfig option in houseMode.Options
-			.Where(candidate => candidate.Kind != ModeKind.Normal && candidate.ActivateAfterNoMotionMinutes is > 0))
-		{
-			if (_modeSelect.AlreadyShows(option.Value))
-				continue;   // already standing on this mode
-
-			if (now - lastMotionAt < TimeSpan.FromMinutes(option.ActivateAfterNoMotionMinutes!.Value))
-				continue;
-
-			// A write that never went out sets nothing, so nothing is claimed and the next tick asks again.
-			if (!WriteMode(option.Value, entity => _logger.LogInformation(
-				"No motion for {Minutes} min; setting {Select} to '{Mode}'.",
-				option.ActivateAfterNoMotionMinutes, entity, option.Value)))
-				return;
-
-			lock (_gate)
-			{
-				// So this mode reports as the engine's doing and never as a presence departure. Survives only as
-				// long as the select keeps reading it; see OnSelectChanged.
-				_inactivityActivated = option.Value.Trim();
-
-				// Movement arriving while the write was out ends the quiet spell that triggered it, and MarkMotion
-				// has already cleared the latch. Setting it here would discard that movement and refuse for ever.
-				if (_lastMotionAt == lastMotionAt)
-					_inactivityLatched = true;
-			}
-
-			return;
-		}
-	}
-
-	/// <summary>The one place the house-mode select is written, so no rule can forget the master switch.</summary>
-	// The muzzle covers this as much as it covers a light: the mode decides the leaving sweep, the away scene and
-	// the sleep ceiling, so an engine writing it while paused is still driving the house. Nothing is queued, and
-	// every rule that reaches here is asked again: the inactivity rule on its next tick, a reset on its next
-	// trigger, a period's mode switch at its next boundary.
-	private bool WriteMode(string wanted, Action<string> announce, bool actAtOnce = false)
-	{
-		if (IsDisposed)
-			return false;
-
-		if (KillSwitchActive)
-		{
-			_logger.LogDebug("The master switch is on, so {Select} is left where it stands.", _modeSelect.Entity);
-			return false;
-		}
-
-		if (!_modeSelect.Ensure(wanted, announce))
-			return false;
-
-		if (!actAtOnce)
-			return true;
-
-		lock (_gate)
-		{
-			_assumedMode = wanted.Trim();
-			_assumedGeneration++;
-			_lastKnownMode = _assumedMode;
-		}
-
-		AnnounceForcedMode();
-		RaiseChanged();
-		return true;
-	}
-
-	/// <summary>Drops an assumed mode the select has not taken, so its own value decides again.</summary>
-	// From the tick, which is the first moment a lost write can be told from an echo still on its way. Home
-	// Assistant's echo does not reach here: the select moving raises a state change, and OnSelectChanged clears it.
-	private void ExpireAssumedMode()
-	{
-		string? assumed;
-		int generation;
-		lock (_gate)
-		{
-			assumed = _assumedMode;
-			generation = _assumedGeneration;
-		}
-
-		if (assumed is null || _modeSelect.AlreadyShows(assumed))
-			return;
-
-		// A reset or a select change landing since the read above is newer than this verdict.
-		lock (_gate)
-		{
-			if (_assumedGeneration != generation)
-				return;
-
-			_assumedMode = null;
-		}
-
-		_logger.LogInformation(
-			"{Select} did not take '{Mode}'; the house goes back to the mode the select itself reads.",
-			_modeSelect.Entity, assumed);
-
-		AnnounceForcedMode();
-		RaiseChanged();
-	}
-
-	private static bool IsArrival(StateChange change) =>
-		string.Equals(change.New?.State, HomeState, StringComparison.OrdinalIgnoreCase)
-		&& !string.Equals(change.Old?.State, HomeState, StringComparison.OrdinalIgnoreCase);
-
-	// Edge-triggered on a fresh turn-on or arrival. Resets only when this option is active and the grace window
-	// has expired, so walking out the door does not cancel the mode just set.
-	private void OnPresenceReset(HouseModeOptionConfig option, string sensor)
-	{
-		if (IsDisposed || !ReferenceEquals(CurrentOption, option))
-			return;
-
-		DateTimeOffset activatedAt;
-		lock (_gate)
-			activatedAt = _activatedAt;
-
-		TimeSpan grace = TimeSpan.FromMinutes(Math.Max(0, option.ResetPresenceGraceMinutes));
-		if (_scheduler.Now - activatedAt < grace)
-		{
-			_logger.LogDebug("Presence on {Sensor} within the {Grace}-minute grace of '{Option}'; ignored.",
-				sensor, option.ResetPresenceGraceMinutes, option.Value);
-			return;
-		}
-
-		Reset($"presence on {sensor}");
-	}
-
-	/// <summary>Schedules the one look at the reset sensors that a grace running out is owed.</summary>
-	// A state-change stream reports a sensor once, when it changes. A sensor that comes on inside the grace and stays
-	// on is therefore never reported again, and without this the mode it should have cancelled is held for the whole
-	// of the occupant's stay. Armed from the instant the mode was set, so it is one look per mode and not per event.
-	private void ArmGraceExpiryCheck()
-	{
-		_graceEnds.Disposable = Disposable.Empty;
-
-		if (HouseModeIsHomeAssistants || KillSwitchActive)
-			return;
-
-		if (CurrentOption is not { Kind: not ModeKind.Normal, ResetOnPresence: true } option)
-			return;
-
-		DateTimeOffset activatedAt;
-		lock (_gate)
-			activatedAt = _activatedAt;
-
-		TimeSpan grace = TimeSpan.FromMinutes(Math.Max(0, option.ResetPresenceGraceMinutes));
-		TimeSpan wait = activatedAt + grace - _scheduler.Now;
-
-		_graceEnds.Disposable = _scheduler.Schedule(
-			wait > TimeSpan.Zero ? wait : TimeSpan.Zero,
-			() => OnGraceExpired(option));
-	}
-
-	/// <summary>Resets when a reset sensor is still reading on at the moment the grace runs out.</summary>
-	// Only the on/off sources are read: IsOn answers false for unavailable and unknown, so a sensor that has stopped
-	// answering holds nothing. Once the reset lands the select stands on Normal, which is not an option carrying this
-	// rule, so the next arming cancels itself and nothing repeats.
-	private void OnGraceExpired(HouseModeOptionConfig option)
-	{
-		if (IsDisposed || !ReferenceEquals(CurrentOption, option))
-			return;
-
-		if (PresenceSensorsFor(option).FirstOrDefault(sensor => !IsPresenceTracker(sensor) && IsOn(sensor))
-			is not { Length: > 0 } held)
-			return;
-
-		Reset($"{held} still reading presence as the grace ran out");
-	}
-
-	/// <summary>One evaluation of the clock's news: period entry, the across-restart catch-up, the mirror and the auto-away timer.</summary>
-	// Under _gate, because reading the period and claiming the transition must be one step: a period-select flip
-	// runs this from Home Assistant's thread, and a transition read but not claimed is acted on twice. The read
-	// is inside the gate too; with only the claim under the lock, a thread holding a stale name fires a backwards
-	// entry and regresses _previousPeriodId. The read is a state-cache lookup plus a sort and cannot re-enter.
+	/// <summary>One evaluation of the clock's news, handed to both halves in the order the engine decides in.</summary>
 	private void OnTick()
 	{
 		if (IsDisposed)
@@ -1096,247 +260,19 @@ public sealed class ModeMonitor : IDisposable
 		DateTimeOffset now = _scheduler.Now;
 
 		// First, so everything below reads a mode the select has either taken or been shown not to have taken.
-		ExpireAssumedMode();
+		_modes.ExpireAssumedMode();
 
-		// Before the lock: these consult Home Assistant, and _gate is for this object's own fields.
-		HouseModeOptionConfig? activeOption = CurrentOption;
-		bool modeIsReadable = CurrentModeValue is { Length: > 0 };
+		// Before the period work: these consult Home Assistant, and the gate is for this engine's own fields.
+		HouseModeOptionConfig? activeOption = _modes.CurrentOption;
+		bool modeIsReadable = _modes.CurrentModeValue is { Length: > 0 };
 
-		// A period select that cannot be read is no period change. Under Home Assistant authority the period falls
-		// through to the clock while the helper is unavailable, and that answer is indistinguishable from a real
-		// one: a household holding "day" at 23:30 would have night's SetsMode latch the house asleep, and nothing
-		// puts it back when the helper returns.
-		bool overrideIsBlind = _periodSelect is { ReadPeriod: not null } reader && reader.CurrentValue() is null;
+		_periodTracker.Tick(now, activeOption, modeIsReadable);
 
-		string? currentPeriodId;
-		bool entered;
-		bool applyOnStart;
-
-		lock (_gate)
-		{
-			currentPeriodId = _circadian.ActivePeriodId(now);
-
-			entered = !overrideIsBlind
-				&& currentPeriodId is { Length: > 0 }
-				&& _previousPeriodId is { Length: > 0 }
-				&& !string.Equals(currentPeriodId, _previousPeriodId, StringComparison.OrdinalIgnoreCase);
-
-			applyOnStart = !entered
-				&& !overrideIsBlind
-				&& _startPeriodModePending
-				&& currentPeriodId is { Length: > 0 }
-				&& modeIsReadable;
-
-			// A blind read is no evidence about which period is running, and recording the clock's guess would
-			// make the helper's recovery look like a fresh entry.
-			if (!overrideIsBlind)
-				_previousPeriodId = currentPeriodId;
-
-			// The one restart chance is spent by an entry or by using it. A tick that could read neither the
-			// period nor the select leaves it armed.
-			if (entered || applyOnStart)
-				_startPeriodModePending = false;
-
-			// Nothing latches a period here: the clock can only enter one the latch already lets through, and
-			// Start seeded whichever period this run came up inside.
-		}
-
-		if (entered)
-			OnPeriodEntered(currentPeriodId!, activeOption);
-		else if (applyOnStart)
-			ApplyPeriodModeOnStart(currentPeriodId!);
-
-		// After the decision above, never before it. The note is the only evidence that a boundary went by while
-		// the engine was down, and writing first erases it if the process dies between the two.
-		RememberPeriod(currentPeriodId);
-
-		// The period select as an output, reading the same answer the two rules above did. No-op unless this
-		// application owns the select.
-		MirrorPeriodSelect(currentPeriodId);
-
-		EvaluateInactivityActivation(now);
+		_modes.EvaluateInactivityActivation(now);
 
 		// Re-asked every evaluation, so a sun time that has moved, a table a save rebuilt or a clock the box
 		// corrected all re-arm within one tick.
 		_boundary.Arm();
-	}
-
-	private void OnPeriodEntered(string periodKey, HouseModeOptionConfig? activeOption)
-	{
-		TimePeriodConfig? period = PeriodWithKey(periodKey);
-
-		bool resets = activeOption is { Kind: not ModeKind.Normal, ResetOnPeriodStartId: { Length: > 0 } resetPeriod }
-			&& resetPeriod.SameName(periodKey);
-
-		// Once, at entry, so a human override mid-period stands. A boundary the engine was not running for never
-		// reaches here; ApplyPeriodModeOnStart handles that from the note on disk.
-		if (period?.SetsModeId is { Length: > 0 } setsMode
-			&& _global.HouseMode?.OptionValueFor(setsMode) is { Length: > 0 } wanted)
-		{
-			WriteMode(wanted, entity => _logger.LogInformation(
-				"Period '{Period}' started; setting {Select} to '{Mode}'.", DisplayName(periodKey), entity, wanted));
-
-			// One boundary is one instruction. A reset landing after this writes the same select a second time,
-			// the later write wins, and both log lines claim to have set the mode.
-			if (resets)
-				_logger.LogInformation(
-					"'{Option}' also resets when period '{Period}' starts, but that period sets the mode itself, so the reset is skipped.",
-					activeOption!.Value, DisplayName(periodKey));
-
-			return;
-		}
-
-		if (resets)
-			Reset($"period '{DisplayName(periodKey)}' started");
-	}
-
-	/// <summary>Applies the current period's <see cref="TimePeriodConfig.SetsModeId"/> once, on the first tick after <see cref="Start"/>.</summary>
-	// The question is whether a boundary went by, never whether the engine restarted: restarting inside the same
-	// period is no event, while restarting across a boundary is the event the schedule exists to act on. A null
-	// _periodAtLastRun is unknown and does nothing, because guessing the other way overwrites a mode on no
-	// evidence, on a path a corrupt file could trigger every start. Kept separate from OnPeriodEntered because
-	// that path also fires the period-start reset, which would cancel a retained Away or Guest mode.
-	private void ApplyPeriodModeOnStart(string periodKey)
-	{
-		string? previousRun;
-		lock (_gate)
-			previousRun = _periodAtLastRun;
-
-		if (previousRun is not { Length: > 0 })
-		{
-			_logger.LogDebug(
-				"Started inside period '{Period}', but there is no note of which period the last run ended in; "
-				+ "assuming nothing and leaving the house mode alone.",
-				DisplayName(periodKey));
-			return;
-		}
-
-		if (!BoundaryWentByWhileDown(previousRun, periodKey))
-			return;   // the same period the last run ended in: no boundary went by, so nothing to apply
-
-		if (HouseModeIsHomeAssistants)
-			return;
-
-		TimePeriodConfig? period = PeriodWithKey(periodKey);
-
-		if (period?.SetsModeId is not { Length: > 0 } setsMode
-			|| _global.HouseMode?.OptionValueFor(setsMode) is not { Length: > 0 } wanted)
-			return;
-
-		WriteMode(wanted, entity => _logger.LogInformation(
-			"Period '{Period}' began while the engine was stopped (it was last running in '{Previous}'); setting {Select} to '{Mode}'.",
-			DisplayName(periodKey), DisplayName(previousRun), entity, wanted));
-	}
-
-	/// <summary>Points the period select at the period the engine's own schedule resolved.</summary>
-	// A no-op under PeriodAuthority.HomeAssistant, where the reader hands out no OptionForPeriod, so the two
-	// directions are exclusive by construction and never by a flag this method could get wrong. Triggered by
-	// comparison, never by memory: a select moved by hand, or one back from a Home Assistant restart on the wrong
-	// option, is put right, where an already-asked latch would make both permanent. The log line is bounded
-	// separately, because an option the select does not offer is rejected and correctly retried on every tick.
-	private void MirrorPeriodSelect(string? periodKey)
-	{
-		if (IsDisposed || _periodSelect?.OptionForPeriod is not { } optionFor || periodKey is not { Length: > 0 })
-			return;
-
-		if (optionFor(periodKey) is not { Length: > 0 } wanted)
-			return;   // no row maps this period; the validator has already said so if it matters
-
-		_periodMirror.Ensure(wanted, entity =>
-		{
-			// Info the first time a value is asked for, Debug on every retry: an option the select does not offer
-			// is rejected and correctly re-asked on every tick, and that must not fill the log.
-			bool firstTime;
-			lock (_gate)
-			{
-				firstTime = !string.Equals(_mirroredPeriodOption, wanted, StringComparison.OrdinalIgnoreCase);
-				_mirroredPeriodOption = wanted;
-			}
-
-			if (firstTime)
-				_logger.LogInformation("Period '{Period}' is in force; setting {Select} to '{Option}'.",
-					DisplayName(periodKey), entity, wanted);
-			else
-				_logger.LogDebug("Period select {Select} still does not read '{Option}'; asking again.", entity, wanted);
-		});
-	}
-
-	/// <summary>Reads the previous run's period, treating any failure as unknown.</summary>
-	// LastPeriodStore promises never to throw, and this catches anyway: the store is an interface a host
-	// supplies, and this runs inside Start, where a throw takes the engine down. A note written before periods
-	// had ids holds a name, and without translating it a start compares a name against a key and reads a
-	// boundary crossing that never happened.
-	private string? ReadPeriodAtLastRun()
-	{
-		if (_lastPeriod is null)
-			return null;
-
-		try
-		{
-			if (_lastPeriod.Load() is not { Length: > 0 } stored)
-				return null;
-
-			if (PeriodWithKey(stored) is not null)
-				return stored;
-
-			return _periods.ByName(stored)?.Key ?? stored;
-		}
-		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
-		{
-			_logger.LogWarning(exception, "Could not read which period the last run ended in; assuming nothing.");
-			return null;
-		}
-	}
-
-	/// <summary>Writes the period now current, when it has changed since the last write.</summary>
-	// Only on a change: a handful of writes a day, and the file is read once per process. A null period, from a
-	// table with no placeable boundary, is left unwritten, or a good note is replaced by a worse one.
-	private void RememberPeriod(string? periodKey)
-	{
-		if (_lastPeriod is null || periodKey is not { Length: > 0 })
-			return;
-
-		lock (_gate)
-		{
-			if (string.Equals(_persistedPeriodId, periodKey, StringComparison.OrdinalIgnoreCase))
-				return;
-
-			// Recorded as attempted even when the write fails, or a persistent fault warns once a minute.
-			_persistedPeriodId = periodKey;
-		}
-
-		try
-		{
-			_lastPeriod.TrySave(periodKey);
-		}
-		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
-		{
-			// Losing the note costs one re-application after the next restart, never the tick it is written from.
-			_logger.LogWarning(exception, "Could not record that the engine is now in period '{Period}'.", DisplayName(periodKey));
-		}
-	}
-
-	/// <summary>Returns the select to the single Normal option, logging which trigger fired.</summary>
-	private void Reset(string trigger)
-	{
-		// Under Home Assistant's authority nothing here writes the select, resets included.
-		if (HouseModeIsHomeAssistants || _global.HouseMode is not { Entity: { Length: > 0 } select } houseMode)
-			return;
-
-		// No Normal option means nothing to reset to: a no-op, never a clobber onto a tagged option.
-		if (houseMode.NormalOption?.Value is not { Length: > 0 } normal)
-		{
-			if (System.Threading.Interlocked.Exchange(ref _warnedNoNormal, 1) == 0)
-				_logger.LogWarning("A reset fired ({Trigger}) but no Normal option resolves; leaving the mode unchanged (this warns once).", trigger);
-			return;
-		}
-
-		// The one write the house acts on before the echo. A reset is an arrival, and waiting for the echo refuses the
-		// first movement. Every other write waits, so a departure the select never took does not happen at all.
-		WriteMode(
-			normal,
-			entity => _logger.LogInformation("Resetting {Select} to '{Normal}' ({Trigger}).", entity, normal, trigger),
-			actAtOnce: true);
 	}
 
 	// A save disposes this monitor while a handler or timer can still be running on another thread.
@@ -1366,7 +302,7 @@ public sealed class ModeMonitor : IDisposable
 		lock (_gate)
 			_disposed = true;
 
-		_graceEnds.Dispose();
+		_modes.Dispose();
 		_boundary.Dispose();
 		_subscriptions.Dispose();
 		_changed.Dispose();

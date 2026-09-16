@@ -42,6 +42,10 @@ public sealed class ModeMonitorTests
 		new() { Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsModeId = "Sover" }
 	];
 
+	/// <summary>The latch the orchestrator would build for this schedule, which the monitor now requires.</summary>
+	private static MotionPeriodLatch Latch(List<TimePeriodConfig>? periods = null, GlobalConfig? global = null) =>
+		MotionPeriodLatch.For(periods ?? Periods(), global);
+
 	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor, FakeLastPeriodStore LastPeriod);
 
 	/// <summary>A note that throws on both operations.</summary>
@@ -91,11 +95,13 @@ public sealed class ModeMonitorTests
 
 		var note = lastPeriod as FakeLastPeriodStore ?? new FakeLastPeriodStore();
 
+		List<TimePeriodConfig> schedule = periods ?? Periods();
+
 		// The rig's instants are at +00:00, so the household is UTC here too; otherwise every boundary assertion
 		// would mean a different hour on each box and on CI.
 		var monitor = new ModeMonitor(
 			ha, global, NullLogger.Instance, scheduler,
-			periods ?? Periods(), () => sun?.Times ?? SunTimes.Unknown, motion ?? [], lastPeriod ?? note,
+			schedule, () => sun?.Times ?? SunTimes.Unknown, motion ?? [], Latch(schedule, global), lastPeriod ?? note,
 			PeriodSelectReader.For(ha, global, NullLogger.Instance), zone: TimeZoneInfo.Utc,
 			sunMoved: watchSun ? sun?.Moved : null, afterSave: afterSave);
 
@@ -171,7 +177,7 @@ public sealed class ModeMonitorTests
 		var ha = new FakeHaContext();
 
 		using var unconfigured = new ModeMonitor(ha, new GlobalConfig(), NullLogger.Instance,
-			new TestScheduler(), [], () => SunTimes.Unknown, []);
+			new TestScheduler(), [], () => SunTimes.Unknown, [], Latch([]));
 		Assert.IsNull(unconfigured.CurrentModeValue);
 
 		var rig = Build();
@@ -209,7 +215,7 @@ public sealed class ModeMonitorTests
 		var ha = new FakeHaContext();
 		var logger = new CountingLogger();
 		using var monitor = new ModeMonitor(ha, new GlobalConfig { HouseMode = Mode() }, logger,
-			new TestScheduler(), Periods(), () => SunTimes.Unknown, []);
+			new TestScheduler(), Periods(), () => SunTimes.Unknown, [], Latch());
 
 		ha.SetState(Select, "Borte");
 		_ = monitor.ActiveKind;
@@ -240,7 +246,7 @@ public sealed class ModeMonitorTests
 
 		var logger = new CountingLogger();
 		using var monitor = new ModeMonitor(ha, new GlobalConfig { CircadianTickSeconds = 60, HouseMode = mode },
-			logger, scheduler, Periods(), () => SunTimes.Unknown, [], zone: TimeZoneInfo.Utc);
+			logger, scheduler, Periods(), () => SunTimes.Unknown, [], Latch(), zone: TimeZoneInfo.Utc);
 
 		monitor.Start();
 		return logger.Warnings;
@@ -264,7 +270,7 @@ public sealed class ModeMonitorTests
 		var ha = new FakeHaContext();
 		var logger = new CountingLogger();
 		var monitor = new ModeMonitor(ha, new GlobalConfig { HouseMode = Mode() }, logger,
-			new TestScheduler(), Periods(), () => SunTimes.Unknown, []);
+			new TestScheduler(), Periods(), () => SunTimes.Unknown, [], Latch());
 
 		ha.SetState(Select, "Natt");   // a live value nothing classifies
 
