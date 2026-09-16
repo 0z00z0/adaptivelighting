@@ -66,6 +66,9 @@ public sealed class LightingEngineHost : IDisposable
 	// subscribed by then. One is enough: nothing but the engine's own start can precede a browser being open.
 	private readonly ReplaySubject<EngineNotice> _notices = new(bufferSize: 1);
 
+	// Runs behind the same gate, because its scan writes the document and rebuilds the engine on the result.
+	private readonly AreaDiscoveryScheduler _discovery;
+
 	private IHaContext? _ha;
 	private IHaRegistry? _registry;
 	private IScheduler? _scheduler;
@@ -84,6 +87,8 @@ public sealed class LightingEngineHost : IDisposable
 		// The store validates every write, this class's own two included. It cannot ask Home Assistant on its
 		// own, so it is handed the check that can.
 		_store.ValidateWith(Validate);
+
+		_discovery = new AreaDiscoveryScheduler(_gate, _store, _loggerFactory, WriteDiscoveredAreas, AdoptDiscoveredAreas);
 
 		try
 		{
@@ -134,6 +139,14 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>The running engine's latch for periods that wait for movement, or <c>null</c> while it is not running.</summary>
 	// Never cache it: a save rebuilds the orchestrator, and a stale latch answers "not begun" for every held period.
 	public MotionPeriodLatch? MotionPeriods => _orchestrator?.MotionPeriods;
+
+	/// <summary>The document as last validated, or <c>null</c> before anything has been read or written.</summary>
+	public ValidationResult? LastValidation { get; private set; }
+
+	/// <summary>Why nothing is running, or <c>null</c> while it is.</summary>
+	public string? Fault { get; private set; }
+
+	public DateTimeOffset? LastStartedUtc { get; private set; }
 
 	/// <summary>Why a level test cannot run in <paramref name="areaId"/> right now, or <c>null</c> when one can.</summary>
 	/// <remarks>Asked before a press so the button can carry its own reason; the press asks again, under the lock.</remarks>
@@ -188,12 +201,6 @@ public sealed class LightingEngineHost : IDisposable
 			? "Nothing is running, so no light can be commanded."
 			: "This room is not running: no lights resolved for it, so there is nothing to command.";
 
-	public ValidationResult? LastValidation { get; private set; }
-
-	public string? Fault { get; private set; }
-
-	public DateTimeOffset? LastStartedUtc { get; private set; }
-
 	/// <summary>Hands this host the Home Assistant connection it rebuilds against, once, from the house's <c>[NetDaemonApp]</c>.</summary>
 	/// <remarks><c>defaultKillSwitchEntity</c> comes from <see cref="NetDaemonAppSwitch"/> and is never written to YAML.</remarks>
 	public void Attach(IHaContext ha, IHaRegistry registry, IScheduler scheduler, string? defaultKillSwitchEntity = null)
@@ -212,11 +219,13 @@ public sealed class LightingEngineHost : IDisposable
 	}
 
 	/// <summary>Stops the engine and gives back the Home Assistant connection, which dies with the bootstrap app.</summary>
+	/// <remarks>Discovery is forgotten here, so switching the app off and on again is how a house asks for another scan.</remarks>
 	public void Detach()
 	{
 		lock (_gate)
 		{
 			StopCore();
+			_discovery.Cancel();
 			_ha = null;
 			_registry = null;
 			_scheduler = null;
@@ -257,7 +266,7 @@ public sealed class LightingEngineHost : IDisposable
 			if (read.NeedsMigratingWrite)
 				RewriteInCurrentSchema(config);
 
-			ScheduleAreaDiscoveryIfNeeded(config);
+			_discovery.ArmIfNeeded(config, _ha, _registry, _scheduler);
 
 			return ApplyCore(config, EngineNoticeKind.Started);
 		}
@@ -290,147 +299,6 @@ public sealed class LightingEngineHost : IDisposable
 				exception,
 				"Could not rewrite {Path} in the current schema. The engine is running on it either way; the migration will be run again on the next start.",
 				_store.FilePath);
-		}
-	}
-
-	/// <summary>How long to let Home Assistant's state cache fill before discovering areas.</summary>
-	/// <remarks>
-	///     Discovery must not run inline in <see cref="Reload"/>: the reload follows <see cref="Attach"/> at once while
-	///     NetDaemon's state cache is still filling, and the resolver drops any entity without a state, so an early scan
-	///     proposes a partial set of rooms and the once-only flag locks that in.
-	/// </remarks>
-	private static readonly TimeSpan DiscoverySettle = TimeSpan.FromSeconds(30);
-
-	private IDisposable? _discovery;
-	private bool _discoveryScheduled;
-
-	/// <summary>Arms the one-time area discovery: only when the document has no areas and has never been scanned.</summary>
-	/// <remarks>
-	///     Does nothing before <see cref="Attach"/>, since the registry is the whole input. Once-only, so a household
-	///     that removes every area does not find them grown back after a restart.
-	/// </remarks>
-	private void ScheduleAreaDiscoveryIfNeeded(AdaptiveLightingConfig config)
-	{
-		if (_discoveryScheduled || config.Global.AreasAutoDiscovered || config.Areas.Count > 0)
-			return;
-
-		if (_ha is null || _registry is null || _scheduler is null)
-			return;
-
-		_discoveryScheduled = true;
-		_logger.LogInformation(
-			"No areas configured yet — discovering from the Home Assistant area registry in {Seconds}s, once the state cache has filled.",
-			DiscoverySettle.TotalSeconds);
-
-		_discovery = _scheduler.Schedule(DiscoverySettle, RunAreaDiscovery);
-	}
-
-	/// <summary>The scheduled callback. Exists to stop anything thrown by discovery reaching the scheduler.</summary>
-	/// <remarks>
-	///     Runs on a timer thread with no caller to catch anything, and on a thread-pool scheduler an unobserved
-	///     exception ends the whole host. Reachable: NetDaemon's registry throws <see cref="InvalidOperationException"/>
-	///     until its first connection completes, which the settle delay only guesses at.
-	/// </remarks>
-	private void RunAreaDiscovery()
-	{
-		try
-		{
-			RunAreaDiscoveryCore();
-		}
-		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
-		{
-			_logger.LogWarning(
-				exception,
-				"Area discovery failed and was abandoned; the configuration is unchanged and the rooms will be proposed again on the next start.");
-		}
-	}
-
-	/// <summary>Proposes areas from the area registry, saves them, and rebuilds on the result.</summary>
-	/// <remarks>The rules live in <see cref="AreaSetupService"/>, so a first run and "Set up rooms again" share them. What is here is the once-only part.</remarks>
-	private void RunAreaDiscoveryCore()
-	{
-		lock (_gate)
-		{
-			if (_ha is null || _registry is null)
-				return;
-
-			// Re-read, never the document captured when this was armed: half a minute is plenty of time for somebody
-			// to have added a room from the UI.
-			AdaptiveLightingConfig config;
-			try
-			{
-				config = _store.Load();
-			}
-			catch (LightingConfigException exception)
-			{
-				_logger.LogWarning(exception, "Could not read the configuration for area discovery.");
-				return;
-			}
-
-			if (config.Global.AreasAutoDiscovered || config.Areas.Count > 0)
-				return;
-
-			HaAreaRegistry areas = new(_registry);
-			AreaEntityResolver resolver = new(
-				_ha, areas, config.Global, _loggerFactory.CreateLogger<AreaEntityResolver>());
-
-			// Empty scope: this path only runs on a document with no areas, so the plan is entirely NewAreas.
-			SetupPlan plan = AreaSetupService.Plan(config, areas, resolver, []);
-
-			if (plan.NewAreas.Count == 0)
-			{
-				// The flag stays unset: finding nothing usually means the scan was too early.
-				_logger.LogInformation(
-					"No Home Assistant area has both a light and a motion sensor yet. Add rooms under Configuration → Areas, or restart to look again.");
-				return;
-			}
-
-			AreaSetupService.Apply(config, plan);
-			config.Global.AreasAutoDiscovered = true;
-
-			// First setup only, never a re-run: an emptied list must stay empty next start.
-			IReadOnlyList<string> seeded = AreaSetupService.SeedPersons(config, _ha);
-
-			// Never overwrites a select the household has already chosen.
-			if (config.Global.HouseMode?.Entity is not { Length: > 0 })
-				config.Global.HouseMode = HouseModeAutoDetect.Detect(_ha, _loggerFactory.CreateLogger(typeof(HouseModeAutoDetect)));
-
-			ConfigWriteResult write;
-
-			try
-			{
-				write = _store.Save(config, InvalidDocument.WriteAnyway);
-			}
-			catch (LightingConfigException exception)
-			{
-				// Areas was empty on the way in, so clearing restores what was loaded. Persons is cleared only when
-				// this run filled it, or a document that already named somebody would come out having forgotten them.
-				config.Areas.Clear();
-
-				if (seeded.Count > 0)
-					config.Global.Persons.Clear();
-
-				config.Global.AreasAutoDiscovered = false;
-				_logger.LogWarning(exception, "Could not save the discovered areas; they will be proposed again on the next start.");
-				return;
-			}
-
-			_logger.LogInformation(
-				"Discovered {Count} rooms from the area registry ({Areas}), all switched off. Choose which to switch on "
-				+ "under Configuration → Areas — no lights will change until you do.",
-				plan.NewAreas.Count, string.Join(", ", plan.NewAreas.Select(area => area.AreaId)));
-
-			if (seeded.Count > 0)
-				_logger.LogInformation(
-					"The dashboard will show who is home from {Count} people ({Persons}); the house-mode dropdown is what "
-					+ "decides whether the house is away. Change who under Configuration → House.",
-					seeded.Count, string.Join(", ", seeded));
-
-			ReportForcedWrite(write.Validation,
-				"The rooms discovery found were written, but the document that now holds them has errors.");
-
-			// Discovery rewrote the document during start-up; nobody saved anything.
-			ApplyCore(config, EngineNoticeKind.Started);
 		}
 	}
 
@@ -512,23 +380,48 @@ public sealed class LightingEngineHost : IDisposable
 		// sees when the document leaves KillSwitchEntity unset. Never written back.
 		config.Global.DefaultKillSwitchEntity = _defaultKillSwitchEntity;
 
-		// The two selects are different helpers, so their live options are read separately.
+		HouseFacts facts = HouseFacts.Read(_ha, _registry, config);
+
 		return ConfigValidator.Validate(
 			config,
-			KnownEntityIds(),
-			KnownAreaIds(),
-			LiveSelectOptions(config.Global.HouseMode?.Entity),
-			LabelsInUse(),
-			LiveSelectOptions(config.Global.PeriodSelect?.EntityId));
+			facts.EntityIds,
+			facts.AreaIds,
+			facts.HouseModeOptions,
+			facts.LabelsInUse,
+			facts.PeriodSelectOptions);
+	}
+
+	/// <summary>The discovery scan's write. Runs behind the gate, because its caller holds it.</summary>
+	/// <returns><c>null</c> when the write failed, which tells the scan to put the document back as it found it.</returns>
+	private ConfigWriteResult? WriteDiscoveredAreas(AdaptiveLightingConfig config)
+	{
+		try
+		{
+			return _store.Save(config, InvalidDocument.WriteAnyway);
+		}
+		catch (LightingConfigException exception)
+		{
+			_logger.LogWarning(exception, "Could not save the discovered areas; they will be proposed again on the next start.");
+
+			return null;
+		}
+	}
+
+	/// <summary>Reports whatever the discovered document carries, then rebuilds on it.</summary>
+	// Discovery rewrote the document during start-up; nobody saved anything, so the notice is a start.
+	private void AdoptDiscoveredAreas(AdaptiveLightingConfig config, ValidationResult validation)
+	{
+		ReportForcedWrite(validation,
+			"The rooms discovery found were written, but the document that now holds them has errors.");
+
+		ApplyCore(config, EngineNoticeKind.Started);
 	}
 
 	public void Dispose()
 	{
 		lock (_gate)
 		{
-			// An armed discovery holds the scheduler and would resurrect work after shutdown.
-			_discovery?.Dispose();
-			_discovery = null;
+			_discovery.Dispose();
 
 			StopCore();
 			_ha = null;
@@ -658,90 +551,6 @@ public sealed class LightingEngineHost : IDisposable
 		{
 			// No live connection. Reporting the config problem must not become a second problem.
 			_logger.LogWarning(exception, "Could not post the invalid-configuration notification to Home Assistant.");
-		}
-	}
-
-	/// <summary>
-	///     Every entity id Home Assistant knows, or <c>null</c> when it cannot be asked. The validator reads
-	///     <c>null</c> as "skip the referential checks", not as "nothing exists".
-	/// </summary>
-	private IReadOnlyCollection<string>? KnownEntityIds()
-	{
-		if (_ha is null)
-			return null;
-
-		try
-		{
-			return [.. _ha.GetAllEntities().Select(entity => entity.EntityId)];
-		}
-		catch (InvalidOperationException)
-		{
-			// NetDaemon's state cache throws until its first connection to HA completes.
-			return null;
-		}
-	}
-
-	private IReadOnlyCollection<string>? KnownAreaIds()
-	{
-		if (_registry is null)
-			return null;
-
-		try
-		{
-			return _registry.AreaIds();
-		}
-		catch (InvalidOperationException)
-		{
-			return null;
-		}
-	}
-
-	/// <summary>Every label at least one entity carries, by id and by name, or <c>null</c> when the registry cannot be read.</summary>
-	/// <remarks>
-	///     Both forms, because <see cref="AdaptiveLighting.Extensions.RegistryExtensions.LabelsOf"/> matches either
-	///     way. Labels nobody carries are left out: one on no entity filters every light out as thoroughly as a typo.
-	/// </remarks>
-	private IReadOnlyCollection<string>? LabelsInUse()
-	{
-		if (_registry is null)
-			return null;
-
-		try
-		{
-			return
-			[
-				.. _registry.Labels
-					.Where(label => label.Entities.Any())
-					.SelectMany(label => new[] { label.Id, label.Name })
-					.OfType<string>()
-					.Where(value => value.Length > 0)
-			];
-		}
-		catch (InvalidOperationException)
-		{
-			// NetDaemon's registry throws until its first connection to HA completes.
-			return null;
-		}
-	}
-
-	/// <summary>
-	///     The live <c>options</c> of a select, or <c>null</c> when there is no select, no connection, or the
-	///     attribute cannot be read. The validator reads <c>null</c> as "skip the live-option warnings".
-	/// </summary>
-	private IReadOnlyCollection<string>? LiveSelectOptions(string? entityId)
-	{
-		if (_ha is null || entityId is not { Length: > 0 })
-			return null;
-
-		try
-		{
-			IReadOnlyList<string> options = _ha.GetState(entityId).AttrStringList("options");
-			return options.Count > 0 ? options : null;
-		}
-		catch (InvalidOperationException)
-		{
-			// NetDaemon's state cache throws until its first connection to HA completes.
-			return null;
 		}
 	}
 }

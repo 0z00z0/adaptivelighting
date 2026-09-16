@@ -4,17 +4,10 @@ namespace AdaptiveLighting.Configuration;
 /// <remarks>Runs on write only, before validation. The load path must never rewrite a hand-edited file.</remarks>
 public static class ConfigNormalizer
 {
-	// Counted on the calling thread, so one parallel test cannot see another's passes. Every write is synchronous
-	// on its caller's thread.
-	[ThreadStatic]
-	internal static int Passes;
-
 	/// <summary>Mutates and returns <paramref name="config"/> in place; the drops are the intended change.</summary>
 	public static AdaptiveLightingConfig Normalize(AdaptiveLightingConfig config)
 	{
 		ArgumentNullException.ThrowIfNull(config);
-
-		Passes++;
 
 		GlobalConfig global = config.Global;
 
