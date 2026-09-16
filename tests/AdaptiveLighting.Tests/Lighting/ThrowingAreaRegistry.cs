@@ -1,4 +1,5 @@
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Extensions;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -13,9 +14,11 @@ public sealed class ThrowingAreaRegistry : IAreaRegistry
 
 	public IReadOnlyList<string> EntitiesInArea(string areaId) => throw new InvalidOperationException("The registry is not connected.");
 
-	public IReadOnlyList<string> LabelsOf(string entityId) => throw new InvalidOperationException("The registry is not connected.");
+	public IReadOnlyList<RegistryLabel> KnownLabels => throw new InvalidOperationException("The registry is not connected.");
 
-	public IReadOnlyList<string> LabelsOfArea(string areaId) => throw new InvalidOperationException("The registry is not connected.");
+	public IReadOnlyList<RegistryLabel> LabelsOf(string entityId) => throw new InvalidOperationException("The registry is not connected.");
+
+	public IReadOnlyList<RegistryLabel> LabelsOfArea(string areaId) => throw new InvalidOperationException("The registry is not connected.");
 
 	public string? DeviceOf(string entityId) => throw new InvalidOperationException("The registry is not connected.");
 

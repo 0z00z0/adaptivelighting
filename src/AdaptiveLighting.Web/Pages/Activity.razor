@@ -27,9 +27,9 @@
 				<span class="log-filter-label">Room</span>
 				<select class="cell wide" @bind="_room" @bind:after="ApplyFilter">
 					<option value="@ActivityView.AllRooms">All rooms</option>
-					@foreach (string room in ActivityView.Rooms(_entries))
+					@foreach (ActivityRoomOption room in ActivityView.RoomOptions(_entries))
 					{
-						<option value="@room">@room</option>
+						<option value="@room.Key">@room.Name</option>
 					}
 				</select>
 			</label>
@@ -106,7 +106,7 @@ else if (_inRoom.Count == 0)
 {
 	@* The room has nothing left in the buffer at all, which is not the same as the categories hiding it. *@
 	<div class="empty">
-		<strong>Nothing from @_room is still being held.</strong>
+		<strong>Nothing from @RoomName is still being held.</strong>
 		<p>Its older reports may have been dropped to make room. The rest of the house is still here.</p>
 		<p><button type="button" class="log-reset" @onclick="ShowEverything">Show everything</button></p>
 	</div>
@@ -118,7 +118,7 @@ else if (_visible.Count == 0)
 		<p>
 			@(_inRoom.Count == 1
 				? "1 report is being held"
-				: $"{_inRoom.Count} reports are being held")@(string.IsNullOrEmpty(_room) ? "" : $" from {_room}"),
+				: $"{_inRoom.Count} reports are being held")@(string.IsNullOrEmpty(_room) ? "" : $" from {RoomName}"),
 			and none of them falls into the categories that are switched on.
 		</p>
 		<p><button type="button" class="log-reset" @onclick="ShowEverything">Show everything</button></p>
@@ -155,7 +155,9 @@ else
 	private IReadOnlyList<Presentation.ActivityRow> _rows = [];
 
 	private IReadOnlyList<ActivityFilterChip> _chips = [];
+	/// <summary>The chosen room, held as its area id so a rename in Home Assistant does not clear the filter.</summary>
 	private string _room = ActivityView.AllRooms;
+
 	private ActivityCategory _categories = ActivityView.DefaultCategories;
 
 	// What the buffer held at the last read, before non-events were sifted out. Only the footer reads it, to say
@@ -182,6 +184,11 @@ else
 
 	private string PendingWord => Pending == 1 ? "1 new report — show it" : $"{Pending} new reports — show them";
 
+	/// <summary>What to call the chosen room in a sentence: the name it reported most recently.</summary>
+	private string RoomName =>
+		ActivityView.RoomOptions(_entries).FirstOrDefault(option => string.Equals(option.Key, _room, StringComparison.OrdinalIgnoreCase))?.Name
+		?? _room;
+
 	/// <summary>Draws everything the log is holding and moves the read mark to the newest report.</summary>
 	/// <remarks>One <see cref="ActivityLog.Read"/>, never the two properties in turn: a report landing between
 	/// two separately locked reads would be marked shown while absent from the list that was shown.</remarks>
@@ -200,7 +207,7 @@ else
 	/// <remarks>Room narrows first; the chips then count within that room.</remarks>
 	private void ApplyFilter()
 	{
-		_inRoom = ActivityView.InRoom(_entries, _room);
+		_inRoom = ActivityView.InRoomByKey(_entries, _room);
 		_visible = ActivityView.InCategories(_inRoom, _categories);
 		_rows = ActivityView.Rows(_visible);
 		_chips = ActivityView.Chips(_inRoom, _categories);

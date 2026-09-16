@@ -1,6 +1,6 @@
-@* Stored as the label's name: the registry matches either name or id, and the shipped default
-   "adaptive-exclude" is already a name, so storing ids would rewrite every document. A stored value that
-   matches no live label stays selected, since Home Assistant can be briefly unreadable. *@
+@* Stores the label's id and shows its name, because Home Assistant keeps the id through a rename. A stored
+   value matching no live label stays selected, since Home Assistant can be briefly unreadable and a typed
+   value may name a label that does not exist yet. *@
 
 <div class="picker">
 	@if (_manual || !HasOptions)
@@ -18,12 +18,12 @@
 			<option value="">@NoneLabel</option>
 			@foreach (LabelOption option in Options)
 			{
-				<option value="@option.Name">@option.Name</option>
+				<option value="@option.Id">@option.Name</option>
 			}
-			@if (IsUnlisted)
+			@if (NeedsOwnOption)
 			{
 				@* Never dropped: the stored value is the one thing this field must not lose. *@
-				<option value="@Value">@Value</option>
+				<option value="@Value">@StoredText</option>
 			}
 		</select>
 	}
@@ -76,8 +76,21 @@
 
 	private bool HasOptions => Options.Count > 0;
 
-	private bool IsUnlisted =>
-		Value is { Length: > 0 } && !Options.Any(option => string.Equals(option.Name, Value, StringComparison.OrdinalIgnoreCase));
+	/// <summary>The label the stored value names, when it is a name rather than an id.</summary>
+	// A document written before ids were stored still holds a name, and it keeps working until the start-up
+	// write translates it.
+	private LabelOption? ByName =>
+		Value is { Length: > 0 }
+			? Options.FirstOrDefault(option => string.Equals(option.Name, Value, StringComparison.OrdinalIgnoreCase))
+			: null;
+
+	// The list's values are ids, so anything else needs an option of its own or the field would show as empty.
+	private bool NeedsOwnOption =>
+		Value is { Length: > 0 } && !Options.Any(option => string.Equals(option.Id, Value, StringComparison.Ordinal));
+
+	private string StoredText => ByName?.Name ?? Value ?? string.Empty;
+
+	private bool IsUnlisted => NeedsOwnOption && ByName is null;
 
 	private Task OnPicked(string picked) => Commit(picked);
 

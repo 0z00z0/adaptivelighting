@@ -28,25 +28,32 @@ public static class RegistryExtensions
 	/// <remarks>Floors are optional in Home Assistant, so <c>null</c> is an ordinary answer.</remarks>
 	public static Floor? FloorOf(this IHaRegistry registry, string areaId) => registry.GetArea(areaId)?.Floor;
 
-	/// <summary>The labels on <paramref name="entityId"/>, both ids and names in one list.</summary>
-	public static IReadOnlyList<string> LabelsOf(this IHaRegistry registry, string entityId) =>
-		registry.GetEntityRegistration(entityId)?.Labels is { } labels
-			? [.. labels.SelectMany(label => new[] { label.Id, label.Name }).OfType<string>()]
-			: [];
+	/// <summary>Every label the house has, id and name, whether or not anything carries it.</summary>
+	public static IReadOnlyList<RegistryLabel> KnownLabels(this IHaRegistry registry) => Pairs(registry.Labels);
 
-	/// <summary>Whether <paramref name="entityId"/> carries <paramref name="label"/> (id or name, ordinal-ignore-case).</summary>
+	/// <summary>The labels on <paramref name="entityId"/>, each in both forms.</summary>
+	public static IReadOnlyList<RegistryLabel> LabelsOf(this IHaRegistry registry, string entityId) =>
+		Pairs(registry.GetEntityRegistration(entityId)?.Labels);
+
+	/// <summary>Whether <paramref name="entityId"/> carries <paramref name="label"/>, by id when the house knows that id.</summary>
 	public static bool HasLabel(this IHaRegistry registry, string entityId, string label) =>
-		registry.LabelsOf(entityId).Contains(label, StringComparer.OrdinalIgnoreCase);
+		LabelMatch.Carries(registry.LabelsOf(entityId), registry.KnownLabels(), label);
 
-	/// <summary>The labels on area <paramref name="areaId"/> itself, both ids and names.</summary>
-	public static IReadOnlyList<string> LabelsOfArea(this IHaRegistry registry, string areaId) =>
-		registry.GetArea(areaId)?.Labels is { } labels
-			? [.. labels.SelectMany(label => new[] { label.Id, label.Name }).OfType<string>()]
-			: [];
+	/// <summary>The labels on area <paramref name="areaId"/> itself, each in both forms.</summary>
+	public static IReadOnlyList<RegistryLabel> LabelsOfArea(this IHaRegistry registry, string areaId) =>
+		Pairs(registry.GetArea(areaId)?.Labels);
 
-	/// <summary>Whether area <paramref name="areaId"/> carries <paramref name="label"/> (id or name, ordinal-ignore-case).</summary>
+	/// <summary>Whether area <paramref name="areaId"/> carries <paramref name="label"/>, by id when the house knows that id.</summary>
 	public static bool AreaHasLabel(this IHaRegistry registry, string areaId, string label) =>
-		registry.LabelsOfArea(areaId).Contains(label, StringComparer.OrdinalIgnoreCase);
+		LabelMatch.Carries(registry.LabelsOfArea(areaId), registry.KnownLabels(), label);
+
+	// A label with no id cannot be matched or translated, so it is dropped. An unnamed one reads as its own id.
+	private static IReadOnlyList<RegistryLabel> Pairs(IEnumerable<Label>? labels) =>
+		labels is null
+			? []
+			: [.. labels
+				.Where(label => label.Id is { Length: > 0 })
+				.Select(label => new RegistryLabel(label.Id!, label.Name is { Length: > 0 } name ? name : label.Id!))];
 
 	/// <summary>The id of the device <paramref name="entityId"/> belongs to, or <c>null</c> when it belongs to none.</summary>
 	/// <remarks>

@@ -1,6 +1,7 @@
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Extensions;
 using AdaptiveLighting.Ha;
 
 using NetDaemon.HassModel.Entities;
@@ -48,7 +49,8 @@ public sealed record EntityOption(string EntityId, string FriendlyName, string? 
 		: $"{FriendlyName} ({EntityId})";
 }
 
-/// <param name="Name">The display name, and the value a label field stores. Labels are stored by name, not by id.</param>
+/// <param name="Id">The value a label field stores, since Home Assistant keeps the id through a rename.</param>
+/// <param name="Name">The display name, which is all a person ever sees.</param>
 public sealed record LabelOption(string Id, string Name);
 
 /// <param name="Error">Why discovery fails, in the resolver's own words.</param>
@@ -209,7 +211,7 @@ public sealed class HaCatalog
 		bool Offered(string entityId) =>
 			!labelledOnly
 			|| global.IncludeLabel is not { Length: > 0 } include
-			|| _areas.LabelsOf(entityId).Contains(include, StringComparer.OrdinalIgnoreCase);
+			|| LabelMatch.Carries(_areas.LabelsOf(entityId), _areas.KnownLabels, include);
 
 		IReadOnlyList<EntityOption> Rest(IReadOnlyList<string> claimed, Func<string, bool> qualifies)
 		{
