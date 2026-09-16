@@ -1,0 +1,60 @@
+@* The house page's schedule, as today's design arranges it. *@
+
+<header class="section-head">
+	<h2><Icon Name="@Glyph.Schedule" Class="ic-head" />Schedule</h2>
+	<p class="lede">
+		How bright and how warm the lights are through the day. One schedule for the whole house.
+	</p>
+</header>
+
+<section class="panel room-card house-card">
+	<div class="room-card-head">
+		<span class="room-card-title">Through the day</span>
+		<span class="room-card-note">one rhythm for the whole house</span>
+	</div>
+
+	<div class="house-chart">
+		<DaylightChart Periods="@Model.Periods" HouseMode="@Model.HouseMode" Location="@Model.HomeCoordinates" />
+	</div>
+
+	@* One token and not a switch beside a number: blending off and blending over nothing are the
+	   same instruction. *@
+	<div class="room-sentences">
+		<SentenceView Sentences="@Model.BlendSentence"
+					  Edited="@Model.OnGlobalEdited"
+					  Note="@HousePageModel.TokenNote"
+					  ShowLegend="false" />
+	</div>
+</section>
+
+<PeriodsEditor Periods="@Model.Periods"
+			   Changed="@Model.Revalidate"
+			   Areas="@Model.Areas"
+			   HouseModeOptions="@Model.HouseModeOptionValues"
+			   HouseMode="@Model.HouseMode"
+			   Global="@Model.Global"
+			   PeriodHold="@Model.PeriodHoldRule" />
+
+@* Open only when already in use: then it is what decides what the table above means. *@
+<GroupFold Title="Connect a dropdown helper from Home Assistant"
+		   Description="@Model.PeriodSelectSummary"
+		   Open="@Model.PeriodSelectConnected">
+	<PeriodSelectPanel Global="@Model.Global"
+					   Periods="@Model.Periods"
+					   InputSelects="@Model.InputSelects"
+					   LiveOptions="@Model.LivePeriodSelectOptions"
+					   ActiveValue="@Model.ActivePeriodValue"
+					   IsAvailable="@Model.PeriodSelectIsAvailable"
+					   IsReady="@Model.HomeAssistantIsAnswering"
+					   EmptyNote="@Model.PeriodSelectEmptyNote"
+					   Lookup="@Model.Lookup"
+					   EntityChanged="@Model.SetPeriodSelectEntity"
+					   Changed="@Model.Revalidate" />
+</GroupFold>
+
+@code {
+	/// <summary>The page model this section draws.</summary>
+	[Parameter]
+	[EditorRequired]
+	public HousePageModel Model { get; set; } = null!;
+}
