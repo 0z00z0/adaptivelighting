@@ -1,6 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Web.Components;
-using AdaptiveLighting.Web.Services;
+using AdaptiveLighting.Web.Presentation;
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
