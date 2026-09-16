@@ -21,6 +21,8 @@ against each other.
 - `AdaptiveLighting.Web.Presentation.RoomPageModel`, with `RoomSaveState` and `RoomGlow` beside it, and the `RoomHeader`, `RoomGearCard` and `RoomLogCard` components. The model holds the room page's document, its report subscription, its one-second clock, its actions and every derivation; the components are today's design's composition of them.
 - `AdaptiveLighting.Web.Presentation.HousePageModel` and `HouseSection`, with the `HouseRoomsSection`, `HouseScheduleSection`, `HouseModesSection` and `HouseFoldsSection` components. The model holds the house page's document, its dirty comparison, its conflict check, its confirmation clock, every sentence and the section model.
 - `AdaptiveLighting.Web.Presentation.DisplayRounding.Whole`, the rounding a number gets before it is shown. It sits with the interface that shows it.
+- `AdaptiveLighting.Web.Presentation.TransientMessage` and `IPageClock`, the `TickRegion` component, `AdaptiveLighting.Web.Presentation.DashboardPageModel`, `RoomPageModel.SaveConfirmation`, `HousePageModel.SaveConfirmation` and `Now`, and `DashboardPageModel.ModeConfirmation`.
+- `RegistryLabel` and `LabelMatch` in `AdaptiveLighting.Extensions`, `LabelTranslation` in `AdaptiveLighting.Configuration`, `ActivityRoomOption` in `AdaptiveLighting.Web.Presentation`, `IAreaRegistry.KnownLabels`, and `ActivityView.RoomOptions` and `InRoomByKey`. `ActivityView.Rooms` and `InRoom` are unchanged.
 
 ### Changed
 
@@ -35,16 +37,30 @@ against each other.
 - The room page's and the house page's rules live in one place each. State, edits, saves and every sentence moved out of the two pages and into `RoomPageModel` and `HousePageModel`, so a second design shows the same rooms and the same house without a second copy of the rules. Neither page looks or behaves differently.
 - One step normalises, validates and writes the settings file, and all three writers go through it: the start-up rewrite, the discovery scan and a person's save. The store underneath writes bytes and keeps one backup.
 - A command reaching Home Assistant and the expectation that explains it are decided in two named places: `TargetResolver` shapes the target, `CommandFanOut` declares each fixture before it commands it. Both are internal to the engine.
+- Areas are wired through one house-scoped record rather than fifteen constructor arguments, so a room built on the wrong actuator, publisher or house-state stream is now a compile error.
+- The duplicate house-mode enum is removed and the mode kind is used throughout. The word "Home" is unchanged in the event sent to Home Assistant, in the event read back and in the log.
+- **A label renamed in Home Assistant keeps working.** Label rules match by label id, and stored label names are turned into ids on the first start with a readable registry. A label stored under a name nothing answers to is left as written, still matches by name, and raises one validator warning naming it.
+- **A new label reusing an old label's name no longer matches a rule stored under that old label.** Reusing a name used to hand one label's rules to another.
+- The default labels are `adaptive_exclude` and `adaptive_motion`, previously `adaptive-exclude` and `adaptive-motion`. Only a document that sets neither value gets the new defaults; an existing document is untouched.
+- The activity page's room filter keys on the area id, so a renamed room is offered once instead of twice.
+- The room page and the dashboard redraw only the parts the clock changes. Editors, sliders and pickers are left alone while a page sits open, and the screen shows the same thing.
+- Confirmations on all three pages are one type carrying its text and its expiry, read where it is drawn. They stay up for the same time as before: 3.5 seconds on the room and house pages, 6 on the dashboard.
+- `IAreaRegistry.LabelsOf` and `LabelsOfArea` return `RegistryLabel` pairs instead of a flat list, and `ConfigValidator.Validate` takes a trailing optional list of known label ids.
+- `HousePageModel.SaveConfirmation` answers with the message rather than a string.
 
 ### Removed
 
 - From `AdaptiveLighting.Extensions`: `AddStateRepository` with `IPersistState<T>`, `PersistState<T>`, `IStateRepository` and `StateRepository`; `TurnsOn` and `TurnsOff` on `Entity`, where `WhenTurnsOn` and `WhenTurnsOff` stay; `RunScript`, `SetInputBoolean`, `GetEntitiesInAreaByDomain` and `GetEntityIdsInAreaByDomain` on `IHaContext`.
 - `LightingConfigStore.ValidateWith`. The store is handed no validator and holds no opinion about what it is given; `LightingEngineHost.Save` is still the only write path.
 - `ConfigNormalizer.Whole`, replaced by `AdaptiveLighting.Web.Presentation.DisplayRounding.Whole`.
+- The house-mode enum. `ModeKind` is used everywhere it was, and `HouseState.Mode` gives way to `ActiveKind`.
+- `SaveNotice`, with its `Class` member and its four `room-save-` class constants, replaced by `TransientMessage`.
 
 ### Fixed
 
 - The room page no longer says it is waiting for Home Assistant when Home Assistant returns light-level sensors or switches but no areas. The room page and the house page use the same test.
+- The last-seen cache files a motion sensor whose label is stored as an id. It matched the name only, so a label stored by id filed nothing.
+- The information line for a room left out of the engine names the label as Home Assistant shows it, rather than the id the settings file now holds.
 
 ## [2026.9.14] - 2026-09-14
 

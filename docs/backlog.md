@@ -102,6 +102,12 @@ An item with no number is one this file records before the tracker has minted on
   Whether the core set should carry either class, or a named test from each, is an open choice; the set stands
   unchanged until it is made.
 
+- **A red-first check can rest on a fixture that pins nothing.** The refactor plan's verification for package
+  4.1 named four expected events pinning the word "Home" in `HaStatePublisherTests`. They are input fixtures
+  for the read-back path, so mapping the everyday kind to another word left all twelve tests green; nothing
+  covered the outgoing word until that package added a test for it. Worth checking whether other packages'
+  red-first checks rest on the same assumption.
+
 - **The two label placeholders in the house settings still read the old hyphenated defaults.**
   `Components/HouseFoldsSection.razor` lines 103 and 125 show `adaptive-exclude` and `adaptive-motion` as
   the greyed-out example text, while the shipped defaults are now `adaptive_exclude` and `adaptive_motion`.

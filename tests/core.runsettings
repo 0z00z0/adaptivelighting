@@ -194,6 +194,15 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.GlobalConfigTests.EffectiveKillSwitchEntity_PrefersExplicit_ElseDefault_ElseNull
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.NetDaemonAppSwitchTests.EntityIdForTypeName_MatchesNetDaemonStateManagerSlug
 
+			<!-- The word the engine sends for the everyday house mode. Home Assistant automations match on it. -->
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.HaStatePublisherTests.The_Everyday_Kind_Is_Published_As_Home_And_Read_Back_As_Itself
+
+			<!-- Which lights a label rule reaches after the label is renamed in Home Assistant. -->
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.LabelIdentityTests.
+
+			<!-- How long a confirmation stays on the screen: three values that must not move. -->
+			| FullyQualifiedName~AdaptiveLighting.Tests.Web.PageConfirmationTests.
+
 			<!-- The last-seen cache files entities by the engine's own defaults. A copy creeping back here would
 				file a house's sensors one way while the engine discovers them another, silently. -->
 			| FullyQualifiedName~AdaptiveLighting.Tests.LastSeen.LastSeenOptionsTests.
