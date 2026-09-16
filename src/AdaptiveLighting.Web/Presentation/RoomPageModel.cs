@@ -40,7 +40,7 @@ public readonly record struct RoomGlow(bool HandHeld, int? Kelvin, int Spread);
 ///     names meanings and never class names or custom properties; turning a meaning into a colour or a class is
 ///     the design's half.
 /// </remarks>
-public sealed class RoomPageModel : IDisposable
+public sealed class RoomPageModel : IPageClock, IDisposable
 {
 	/// <summary>How long the page waits for the hand to settle before writing.</summary>
 	/// <remarks>A save rebuilds every area controller in the house, so a write per press would restart every
@@ -85,7 +85,7 @@ public sealed class RoomPageModel : IDisposable
 	// carried separately.
 	private bool _removed;
 
-	private DateTimeOffset? _savedAt;
+	private TransientMessage _saved = TransientMessage.None;
 	private CancellationTokenSource? _saveCts;
 
 	// Per-visit, never persisted: the note is advice about this house right now.
@@ -132,8 +132,14 @@ public sealed class RoomPageModel : IDisposable
 		_dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
 	}
 
-	/// <summary>Raised when something moved that nothing on screen asked for: a report, a tick, a delayed write.</summary>
+	/// <summary>Raised when a value the still parts of the page show has moved: a report, a delayed write, a
+	/// refusal the engine changed its mind about.</summary>
+	/// <remarks>Not raised by the clock alone. A page that redrew its editors every second would hand a changed
+	/// parameter to every slider and picker for nothing.</remarks>
 	public event Action? Changed;
+
+	/// <inheritdoc/>
+	public event Action? Tick;
 
 	/// <summary>Raised with the address the page should move to. The interface performs the navigation.</summary>
 	public event Action<string>? Navigated;
@@ -144,20 +150,23 @@ public sealed class RoomPageModel : IDisposable
 		// Sampled: a house waking up pushes a burst of transitions, and the page redraws a lot of markup.
 		_subscription = _cache.Changes
 			.Sample(TimeSpan.FromMilliseconds(400))
-			.SubscribeSafe(_ => OnRenderThread(ReadLiveState), _logger);
+			.SubscribeSafe(_ => OnRenderThread(() => ReadLiveState()), _logger);
 
-		// Once a second, because the relative times and the countdown ring are only honest while they move. Safe
-		// only because every control here is a button; the one text box holds what was typed because its bound
-		// value does not change under it.
+		// Once a second, because the relative times and the countdown ring are only honest while they move. The
+		// beat alone redraws only what listens to it; the rest of the page waits for a value to actually move.
 		_ticker = Observable.Interval(TimeSpan.FromSeconds(1))
-			.SubscribeSafe(
-				_ => OnRenderThread(() =>
-				{
-					Now = DateTimeOffset.Now;
-					ReadLiveState();
-				}),
-				_logger);
+			.SubscribeSafe(beat => Beat(), _logger);
 	}
+
+	private void Beat() => _ = _dispatch(() =>
+	{
+		Now = DateTimeOffset.Now;
+
+		if (ReadLiveState())
+			Changed?.Invoke();
+
+		Tick?.Invoke();
+	});
 
 	/// <summary>Points the model at a room, reloading only when the route names a different one.</summary>
 	/// <remarks>Blazor re-runs its parameter step for reasons unrelated to the URL, and re-reading the document
@@ -352,20 +361,29 @@ public sealed class RoomPageModel : IDisposable
 	public bool Dirty { get; private set; }
 
 	/// <summary>Everything this page has to say about saving, in one line.</summary>
-	/// <remarks>The confirmation clears on the one-second clock, with no timer of its own, since every read of
-	/// this property happens in a render that clock drives.</remarks>
-	public string SaveLine => Notice.Text;
-
-	/// <summary>The same answer as a meaning, for a design to paint how it likes.</summary>
-	public RoomSaveState SaveState => Notice.Class switch
+	/// <remarks>The confirmation clears against the page's own clock, with no timer of its own, since the line is
+	/// drawn again on every beat of it.</remarks>
+	public string SaveLine => SaveState switch
 	{
-		SaveNotice.Failed => RoomSaveState.Refused,
-		SaveNotice.Pending => RoomSaveState.Waiting,
-		SaveNotice.Done => RoomSaveState.Saved,
-		_ => RoomSaveState.Settled
+		RoomSaveState.Refused => "not saved",
+		RoomSaveState.Waiting => "saving in a moment…",
+		RoomSaveState.Saved => _saved.Text,
+		_ => string.Empty
 	};
 
-	private SaveNotice Notice => SaveNotice.Of(Failure is not null, Dirty, _savedAt, Now, ConfirmationLingers);
+	/// <summary>The confirmation of the last write, and the moment it stops being made.</summary>
+	/// <remarks>The save line resolves it against <see cref="Now"/>; this is the message itself, for a design
+	/// that wants to place it elsewhere.</remarks>
+	public TransientMessage SaveConfirmation => _saved;
+
+	/// <summary>The same answer as a meaning, for a design to paint how it likes.</summary>
+	// Order is the ranking: a refusal stands until it is resolved, and a fresh edit outranks the confirmation of
+	// the one before it.
+	public RoomSaveState SaveState =>
+		Failure is not null ? RoomSaveState.Refused
+		: Dirty ? RoomSaveState.Waiting
+		: _saved.IsShownAt(Now) ? RoomSaveState.Saved
+		: RoomSaveState.Settled;
 
 	/// <summary>Whether an edit is on screen that the file does not have.</summary>
 	public bool HasRefusedEdit => Dirty && Failure is not null;
@@ -447,14 +465,19 @@ public sealed class RoomPageModel : IDisposable
 
 			if (result.Written)
 			{
+				DateTimeOffset saved = DateTimeOffset.Now;
+
 				Dirty = false;
-				_savedAt = DateTimeOffset.Now;
+				_saved = TransientMessage.For(
+					$"Saved {saved.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)}",
+					saved,
+					ConfirmationLingers);
 				Failure = null;
 			}
 			else
 			{
 				// Drops any lingering confirmation, so a refusal never stands beside a stale "Saved".
-				_savedAt = null;
+				_saved = TransientMessage.None;
 				Failure = result;
 			}
 		}
@@ -1133,7 +1156,7 @@ public sealed class RoomPageModel : IDisposable
 		_loadedFor = _areaId;
 		Failure = null;
 		Dirty = false;
-		_savedAt = null;
+		_saved = TransientMessage.None;
 		SetupOpen = false;
 		Removing = false;
 		_removed = false;
@@ -1241,10 +1264,14 @@ public sealed class RoomPageModel : IDisposable
 
 	/// <summary>This room's newest report, by area id first and display name second, which is the same join the
 	/// snapshot cache and the settings list use.</summary>
-	private void ReadLiveState()
+	/// <returns>Whether anything drawn outside the clock's reach has moved, so the page is redrawn only when it
+	/// would come out different.</returns>
+	private bool ReadLiveState()
 	{
 		if (Area is not { } room)
-			return;
+			return false;
+
+		StillState before = Still;
 
 		Snapshot = _cache.Find(room.AreaId, RoomName);
 
@@ -1276,7 +1303,30 @@ public sealed class RoomPageModel : IDisposable
 		// the page sits open has its Test buttons closed within the second.
 		TestRefusal = _engine.LevelTestRefusal(room.AreaId);
 		LightOnRefusal = _engine.LightNowRefusal(room.AreaId);
+
+		return Still != before;
 	}
+
+	/// <summary>Everything the levels table, the curve and the pickers draw that the clock can change under them.</summary>
+	// The header, the save line and the log are on the clock and redraw themselves, so nothing they alone show
+	// belongs here.
+	private StillState Still => new(
+		Snapshot,
+		ActivePeriodId,
+		_daylightLux,
+		TestRefusal,
+		TestingPeriod,
+		TestSecondsLeft,
+		TestingLight);
+
+	private readonly record struct StillState(
+		AreaSnapshot? Snapshot,
+		string? ActivePeriodId,
+		double? DaylightLux,
+		string? TestRefusal,
+		string? TestingPeriod,
+		int TestSecondsLeft,
+		string? TestingLight);
 
 	/// <summary>Which sensor the curve reads here: this room's own, or the house's outdoor one.</summary>
 	private string? DaylightSensorId =>

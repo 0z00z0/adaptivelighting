@@ -1,5 +1,3 @@
-using System.Threading;
-
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
@@ -24,7 +22,7 @@ public enum HouseSection
 /// left in a razor file is a rule that design writes again. The interface keeps markup, styling and the wiring
 /// of events to these methods, and nothing else. No member here names a stylesheet class or a custom
 /// property.</remarks>
-public sealed class HousePageModel : IDisposable
+public sealed class HousePageModel : IPageClock, IDisposable
 {
 	/// <summary>How long a success confirmation stays on screen.</summary>
 	private static readonly TimeSpan ConfirmationLife = TimeSpan.FromSeconds(3.5);
@@ -60,7 +58,10 @@ public sealed class HousePageModel : IDisposable
 	private bool _dirty;
 	private string? _cleanDocument;
 
-	private CancellationTokenSource? _confirmationCts;
+	// The confirmation and the beat that clears it. The beat runs only while there is something to clear: this
+	// page has nothing else that moves on its own, so a standing clock would redraw for nothing.
+	private TransientMessage _confirmation = TransientMessage.None;
+	private IDisposable? _clock;
 
 	// Read once per page load, not once per area: the lists are identical for every area.
 	private IReadOnlyList<AreaOption> _areas = [];
@@ -104,8 +105,14 @@ public sealed class HousePageModel : IDisposable
 	}
 
 	/// <summary>Raised whenever anything the interface draws has moved.</summary>
-	/// <remarks>The confirmation clock raises it off the render thread, so a design marshals it itself.</remarks>
+	/// <remarks>Raised from whatever thread did the moving, so a design marshals it itself.</remarks>
 	public event Action? Changed;
+
+	/// <inheritdoc/>
+	public event Action? Tick;
+
+	/// <inheritdoc/>
+	public DateTimeOffset Now { get; private set; } = DateTimeOffset.Now;
 
 	/// <summary>Reads the document and opens the section a <c>?section=</c> value names.</summary>
 	public void Start(string? sectionQuery)
@@ -140,7 +147,9 @@ public sealed class HousePageModel : IDisposable
 
 	public SaveResult? Result { get; private set; }
 
-	public string? SaveConfirmation { get; private set; }
+	/// <summary>The success confirmation and the moment it stops being made.</summary>
+	/// <remarks>Read against <see cref="Now"/> where it is drawn, so it clears itself with no timer behind it.</remarks>
+	public TransientMessage SaveConfirmation => _confirmation;
 
 	public bool IsBusy { get; private set; }
 
@@ -151,7 +160,7 @@ public sealed class HousePageModel : IDisposable
 	public bool ShowSaveBar =>
 		_dirty
 		|| !string.IsNullOrWhiteSpace(UserIdInput)
-		|| SaveConfirmation is { Length: > 0 }
+		|| _confirmation.IsShownAt(Now)
 		|| Result is { Written: false };
 
 	public bool HasUnsavedEdits => _dirty || !string.IsNullOrWhiteSpace(UserIdInput);
@@ -214,8 +223,7 @@ public sealed class HousePageModel : IDisposable
 		IsBusy = true;
 
 		// Drop any lingering success toast, so a refused save is never shown next to a stale confirmation.
-		_confirmationCts?.Cancel();
-		SaveConfirmation = null;
+		ClearConfirmation();
 
 		try
 		{
@@ -280,42 +288,44 @@ public sealed class HousePageModel : IDisposable
 		}
 	}
 
-	/// <summary>Shows the success confirmation, then clears it after a few seconds.</summary>
-	/// <remarks>A fresh token supersedes any in-flight timer, so rapid saves cannot clear a later
-	/// confirmation.</remarks>
+	/// <summary>Shows the success confirmation and starts the beat that clears it.</summary>
+	/// <remarks>The first beat falls exactly where the confirmation runs out, so it stays up for the same time
+	/// however long the save took. A later save restarts the beat, so rapid saves cannot clear one another.</remarks>
 	private void ShowSaveConfirmation(string message)
 	{
-		SaveConfirmation = message;
+		Now = DateTimeOffset.Now;
+		_confirmation = TransientMessage.For(message, Now, ConfirmationLife);
 
-		_confirmationCts?.Cancel();
-		_confirmationCts?.Dispose();
-		_confirmationCts = new CancellationTokenSource();
-
-		_ = DismissConfirmationAfterDelay(_confirmationCts.Token);
+		_clock?.Dispose();
+		_clock = Observable.Timer(ConfirmationLife, TimeSpan.FromSeconds(1))
+			.SubscribeSafe(_ => Beat(), _logger);
 	}
 
-	private async Task DismissConfirmationAfterDelay(CancellationToken token)
+	private void Beat()
 	{
-		try
+		Now = DateTimeOffset.Now;
+
+		// Nothing else on this page moves on its own, so the beat stops with the message it was started for.
+		if (!_confirmation.IsShownAt(Now))
 		{
-			await Task.Delay(ConfirmationLife, token).ConfigureAwait(false);
-		}
-		catch (TaskCanceledException)
-		{
-			return;
+			_confirmation = TransientMessage.None;
+			_clock?.Dispose();
+			_clock = null;
+			Notify();
 		}
 
-		SaveConfirmation = null;
-		Notify();
+		Tick?.Invoke();
+	}
+
+	private void ClearConfirmation()
+	{
+		_confirmation = TransientMessage.None;
+		_clock?.Dispose();
+		_clock = null;
 	}
 
 	/// <inheritdoc/>
-	public void Dispose()
-	{
-		_confirmationCts?.Cancel();
-		_confirmationCts?.Dispose();
-		_confirmationCts = null;
-	}
+	public void Dispose() => ClearConfirmation();
 
 	private void Notify() => Changed?.Invoke();
 
