@@ -292,13 +292,25 @@ public sealed class AreaTestBuilder
 		FakeStatePublisher publisher = new();
 		BehaviorSubject<HouseState> house = new(HouseState.Initial);
 
+		HouseWiring wiring = new(
+			_wrapHa(ha),
+			_wrapScheduler(scheduler),
+			global,
+			table,
+			actuator,
+			publisher,
+			house,
+			NullLoggerFactory.Instance,
+			LastSeen: null,
+			OriginNames: _nameOrigins ? new ChangeOriginNames(ha, NullLogger.Instance) : null);
+
 		AreaController controller = new(
-			_wrapHa(ha), _wrapScheduler(scheduler), area, global, table,
+			wiring,
+			area,
 			new CircadianCalculator(table, global, _sun, _roomLevels, zone: _zone),
-			actuator, publisher, house, NullLoggerFactory.Instance, areaId: _areaId,
+			areaId: _areaId,
 			sunMoved: _sunMoved,
-			lightCalculators: perLight.Count > 0 ? perLight : null,
-			originNames: _nameOrigins ? new ChangeOriginNames(ha, NullLogger.Instance) : null);
+			lightCalculators: perLight.Count > 0 ? perLight : null);
 
 		if (_houseBeforeStart is not null)
 			house.OnNext(_houseBeforeStart);

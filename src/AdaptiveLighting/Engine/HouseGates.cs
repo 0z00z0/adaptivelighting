@@ -1,3 +1,5 @@
+using AdaptiveLighting.Configuration;
+
 namespace AdaptiveLighting.Engine;
 
 /// <summary>The house-wide and room-wide gates, in the order they are asked.</summary>
@@ -40,7 +42,7 @@ internal readonly record struct HouseGateState(
 	bool Rebuilding,
 	bool KillSwitchActive,
 	bool Enabled,
-	HouseMode Mode,
+	ModeKind Mode,
 	string? ActiveScene,
 	bool SleepBlocksAutoOn,
 	Func<string?> BlockingEntity,
@@ -78,13 +80,13 @@ internal static class HouseGates
 		if (Asked(HouseGate.Disabled) && !state.Enabled)
 			return HouseGate.Disabled;
 
-		if (Asked(HouseGate.Away) && state.Mode == HouseMode.Away)
+		if (Asked(HouseGate.Away) && state.Mode == ModeKind.Away)
 			return HouseGate.Away;
 
-		if (Asked(HouseGate.SceneHold) && state.Mode == HouseMode.Guest && state.ActiveScene is { Length: > 0 })
+		if (Asked(HouseGate.SceneHold) && state.Mode == ModeKind.Guest && state.ActiveScene is { Length: > 0 })
 			return HouseGate.SceneHold;
 
-		if (Asked(HouseGate.Sleep) && state.SleepBlocksAutoOn && state.Mode == HouseMode.Sleep)
+		if (Asked(HouseGate.Sleep) && state.SleepBlocksAutoOn && state.Mode == ModeKind.Sleep)
 			return HouseGate.Sleep;
 
 		if (Asked(HouseGate.EntityOn) && state.BlockingEntity() is { } blocking)

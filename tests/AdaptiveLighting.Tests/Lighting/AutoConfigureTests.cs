@@ -124,9 +124,10 @@ public sealed class AutoConfigureTests
 			detected.Options.Any(option => option.Kind != ModeKind.Normal),
 			"an all-Normal select cannot be adopted, so adoption can never be inert");
 
-		// And the kind is not decoration: it is what every area reads as the state of the house.
+		// And the kind is not decoration: it is what every area reads as the state of the house, and the word the
+		// house goes out under.
 		Assert.AreEqual(
-			HouseMode.Away, new HouseState(true, ModeKind.Away, false).Mode,
+			"Away", HouseModeName.Of(new HouseState(true, ModeKind.Away, false).ActiveKind),
 			"a full house standing on an adopted Away option is read as an empty one");
 
 		// The half that does hold, and the reason adoption is still worth doing.

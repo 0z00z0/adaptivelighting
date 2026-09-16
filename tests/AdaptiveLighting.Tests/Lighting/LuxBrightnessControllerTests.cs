@@ -370,10 +370,12 @@ public sealed class LuxBrightnessControllerTests
 		ResolvedArea area = new("Hallway", settings, [Light], [Motion], [], []);
 		FakeLightActuator actuator = new();
 
-		AreaController controller = new(
-			ha, scheduler, area, global, table, circadian,
-			actuator, new FakeStatePublisher(), new BehaviorSubject<HouseState>(HouseState.Initial),
-			NullLoggerFactory.Instance, areaId: "hallway");
+		HouseWiring wiring = new(
+			ha, scheduler, global, table, actuator, new FakeStatePublisher(),
+			new BehaviorSubject<HouseState>(HouseState.Initial), NullLoggerFactory.Instance,
+			LastSeen: null, OriginNames: null);
+
+		AreaController controller = new(wiring, area, circadian, areaId: "hallway");
 
 		controller.Start();
 		ha.Trigger(Motion, "on");

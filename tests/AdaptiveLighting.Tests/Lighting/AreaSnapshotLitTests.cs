@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
 
@@ -69,7 +70,7 @@ public sealed class AreaSnapshotLitTests
 	}
 
 	private static AreaSnapshot Snapshot(AreaState state, double? brightness) => new(
-		"Room", state, TransitionReason.Motion, HouseMode.Home,
+		"Room", state, TransitionReason.Motion, ModeKind.Normal,
 		KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: brightness, ColorTempKelvin: 2700,
 		Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 		NextChangeFrom: null);

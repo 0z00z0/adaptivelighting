@@ -158,7 +158,7 @@ internal sealed class TargetResolver
 	{
 		LightTarget adjusted = _luxBrightness.Apply(target);
 
-		return house.Mode == HouseMode.Sleep && _area.Settings.RespectSleepMode
+		return house.ActiveKind == ModeKind.Sleep && _area.Settings.RespectSleepMode
 			? ClampToSleepCaps(adjusted, house)
 			: adjusted;
 	}
