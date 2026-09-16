@@ -207,7 +207,7 @@
 
 	// Brightness is stored as a byte, so most values sit between two whole percentages; the rail and every ordinary
 	// readout show the whole one, and the satellite handle above is where the byte itself is read and set.
-	private double Shown => ConfigNormalizer.Whole(Value);
+	private double Shown => DisplayRounding.Whole(Value);
 
 	private int Offset => Inheritable ? 1 : 0;
 

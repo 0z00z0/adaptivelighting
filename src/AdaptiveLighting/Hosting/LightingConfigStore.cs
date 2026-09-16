@@ -4,27 +4,13 @@ using AdaptiveLighting.Configuration;
 
 namespace AdaptiveLighting.Hosting;
 
-/// <summary>What a write does with a document the engine cannot run.</summary>
-internal enum InvalidDocument
-{
-	/// <summary>Refuse the write and leave the file as it was.</summary>
-	Refuse,
-
-	/// <summary>Write it, and hand the errors back to be reported.</summary>
-	WriteAnyway
-}
-
-/// <summary>What one call to <see cref="LightingConfigStore.Save"/> did.</summary>
-/// <param name="Written">Whether the bytes reached the disk.</param>
-/// <param name="Validation">The document as validated after normalisation, whether or not it was written.</param>
-internal sealed record ConfigWriteResult(bool Written, ValidationResult Validation);
-
 /// <summary>The one file the lighting UI is allowed to write, and the only way it writes it.</summary>
 /// <remarks>
 ///     The path is resolved once, server-side, and is immutable. Nothing on the write path takes a path or a
 ///     fragment of one from a request. Writes go to a temp file and are moved into place, so a process death
 ///     mid-write cannot leave a half-written config; one previous generation is kept as <c>.bak</c>.
-///     Every write is normalised and validated here, so no caller can skip either.
+///     Bytes only: normalising and validating belong to <see cref="LightingEngineHost"/>, which is the only caller
+///     of <see cref="Write"/>.
 /// </remarks>
 public sealed class LightingConfigStore
 {
@@ -35,9 +21,6 @@ public sealed class LightingConfigStore
 	// Only about the bytes on disk. The engine rebuild that follows a save is guarded separately, in
 	// LightingEngineHost.
 	private readonly Lock _gate = new();
-
-	// A store on its own has no Home Assistant to ask, and the document-level rules need none.
-	private Func<AdaptiveLightingConfig, ValidationResult> _validate = config => ConfigValidator.Validate(config);
 
 	/// <summary>Creates a store over one fixed file. The host resolves <c>filePath</c> server-side.</summary>
 	public LightingConfigStore(string filePath, ILogger<LightingConfigStore> logger)
@@ -53,7 +36,7 @@ public sealed class LightingConfigStore
 	/// <summary>The document's absolute path. A path, not a secret: safe to show in the UI.</summary>
 	public string FilePath { get; }
 
-	/// <summary>Where <see cref="Save"/> leaves the previous version.</summary>
+	/// <summary>Where <see cref="Write"/> leaves the previous version.</summary>
 	public string BackupPath { get; }
 
 	/// <summary>Whether the document exists yet.</summary>
@@ -64,14 +47,6 @@ public sealed class LightingConfigStore
 
 	/// <summary>When the document was last written, or <c>null</c> when it does not exist.</summary>
 	public DateTimeOffset? LastWrittenUtc => Exists ? File.GetLastWriteTimeUtc(FilePath) : null;
-
-	/// <summary>Widens the check every write is put through to one that can also see Home Assistant. Called once, by the owning host.</summary>
-	public void ValidateWith(Func<AdaptiveLightingConfig, ValidationResult> validate)
-	{
-		ArgumentNullException.ThrowIfNull(validate);
-
-		_validate = validate;
-	}
 
 	/// <exception cref="LightingConfigException">The file is missing, unreadable, or not a valid document.</exception>
 	public AdaptiveLightingConfig Load() => Read().Config;
@@ -115,24 +90,15 @@ public sealed class LightingConfigStore
 		}
 	}
 
-	/// <summary>Normalises <paramref name="config"/>, validates it, and writes it, keeping one backup of what was there.</summary>
+	/// <summary>Writes <paramref name="config"/>, keeping one backup of what was there.</summary>
 	/// <remarks>
-	///     Only <see cref="LightingEngineHost"/> calls this, because its save re-reads the file and rebuilds every area.
-	///     <paramref name="onInvalid"/> refuses a person's save of a document the engine cannot run, while the host's
-	///     own writes go out and carry their errors back. Warnings and area errors never affect a write.
+	///     Whoever calls this has already normalised and validated: that is the host's one write step, and it is the
+	///     only caller, because a save re-reads the file and rebuilds every area afterwards.
 	/// </remarks>
 	/// <exception cref="LightingConfigException">The file could not be written.</exception>
-	internal ConfigWriteResult Save(AdaptiveLightingConfig config, InvalidDocument onInvalid)
+	internal void Write(AdaptiveLightingConfig config)
 	{
 		ArgumentNullException.ThrowIfNull(config);
-
-		// Outside the gate: both are work on the caller's own object, and the validator calls back out of here.
-		config = ConfigNormalizer.Normalize(config);
-
-		ValidationResult validation = _validate(config);
-
-		if (!validation.IsValid && onInvalid is InvalidDocument.Refuse)
-			return new ConfigWriteResult(Written: false, validation);
 
 		string yaml = LightingConfigDocument.Serialize(config);
 
@@ -172,8 +138,6 @@ public sealed class LightingConfigStore
 				throw new LightingConfigException($"Could not write '{FilePath}': {exception.Message}", exception);
 			}
 		}
-
-		return new ConfigWriteResult(Written: true, validation);
 	}
 
 	private void TryDelete(string path)

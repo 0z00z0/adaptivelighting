@@ -18,6 +18,9 @@ against each other.
 - `AdaptiveLighting.Hosting.EngineServiceCollectionExtensions.AddLightingEngine`, which registers the configuration path, the store, the engine host and the last-seen cache in the order they have always been registered in. A host that wants the engine without the interface no longer copies the web package's wiring. `AddLightingWeb` keeps its name and its behaviour, and calls it.
 - `GlobalConfig.DefaultExcludeLabel`, `DefaultMotionLabel` and `DefaultIlluminanceDeviceClass`. The last-seen cache reads these instead of holding its own copies, so it can no longer file a house's sensors under one rule while the engine discovers them under another. The values themselves are unchanged.
 - The `AllSettingsPanel` component, with its nested `Input`, `Group`, `Item`, `PickerField` and `Change` records; the `EntityLookup` and `SelectAuthorityCopy` records in `AdaptiveLighting.Web.Components`; and `EntityPicker.DefaultEmptyNote`.
+- `AdaptiveLighting.Web.Presentation.RoomPageModel`, with `RoomSaveState` and `RoomGlow` beside it, and the `RoomHeader`, `RoomGearCard` and `RoomLogCard` components. The model holds the room page's document, its report subscription, its one-second clock, its actions and every derivation; the components are today's design's composition of them.
+- `AdaptiveLighting.Web.Presentation.HousePageModel` and `HouseSection`, with the `HouseRoomsSection`, `HouseScheduleSection`, `HouseModesSection` and `HouseFoldsSection` components. The model holds the house page's document, its dirty comparison, its conflict check, its confirmation clock, every sentence and the section model.
+- `AdaptiveLighting.Web.Presentation.DisplayRounding.Whole`, the rounding a number gets before it is shown. It sits with the interface that shows it.
 
 ### Changed
 
@@ -28,10 +31,16 @@ against each other.
 - 41 view-helper types move from `AdaptiveLighting.Web.Services` to `AdaptiveLighting.Web.Presentation`, in the same assembly: ActivityView, AdditionalRoutes, AppTheme, AppVersion, AreaSentences, AreaView, BoardView, CommissioningDraft, CommissioningVerdicts, CurvePath, DaylightCurveMode, DaylightLabels, FeedbackUrl, FloorGrouping, Glyph, HelperOptions, HouseModeSync, HouseSentences, HouseView, IdentitySentence, InvariantNumber, KelvinColour, LightLevels, LightReadout, LuxCurve, PeriodStartText, Presets, RawBrightnessStep, RoomFacts, RoomLevels, RoomSettings, SaveNotice, Schedule, SentenceBuilder, SentenceModel, SetupWarning, SleepSteps, SolarCalendar, StateGlyph, SwitchOnWarning and TokenFormat, together with the further public types declared in those files, of which ActivityRow, ActivityLine, ActivityCategory and HiddenRoomsNote are the ones other code names. `Web.Services` keeps the eleven types that are services in the container sense.
 - The selection-authority panel, entity picker, entity list picker, house-mode options, periods editor and period-select panel take one `EntityLookup` parameter instead of separate `NameResolver` and `KnownResolver` parameters. The selection-authority panel's wording moves into a `SelectAuthorityCopy` parameter, replacing `Label`, `LabelHelp`, `Note`, `NoneLabel`, `Placeholder`, `EmptyNote`, `AuthorityLabel`, `AuthorityHelp`, `AuthorityNote` and `UnavailableNote`. The periods editor takes a `PeriodHold` parameter and no longer injects the engine host.
 - The level test a room runs is held as one value rather than a flag beside six fields, and the house-wide gates are decided in one ordered place. Refusal wording and behaviour are unchanged.
+- **Area discovery is armed again after the lighting app is switched off in Home Assistant and on again.** A first scan that ran while Home Assistant's state cache was still filling used to be the only one a house ever got.
+- The room page's and the house page's rules live in one place each. State, edits, saves and every sentence moved out of the two pages and into `RoomPageModel` and `HousePageModel`, so a second design shows the same rooms and the same house without a second copy of the rules. Neither page looks or behaves differently.
+- One step normalises, validates and writes the settings file, and all three writers go through it: the start-up rewrite, the discovery scan and a person's save. The store underneath writes bytes and keeps one backup.
+- A command reaching Home Assistant and the expectation that explains it are decided in two named places: `TargetResolver` shapes the target, `CommandFanOut` declares each fixture before it commands it. Both are internal to the engine.
 
 ### Removed
 
 - From `AdaptiveLighting.Extensions`: `AddStateRepository` with `IPersistState<T>`, `PersistState<T>`, `IStateRepository` and `StateRepository`; `TurnsOn` and `TurnsOff` on `Entity`, where `WhenTurnsOn` and `WhenTurnsOff` stay; `RunScript`, `SetInputBoolean`, `GetEntitiesInAreaByDomain` and `GetEntityIdsInAreaByDomain` on `IHaContext`.
+- `LightingConfigStore.ValidateWith`. The store is handed no validator and holds no opinion about what it is given; `LightingEngineHost.Save` is still the only write path.
+- `ConfigNormalizer.Whole`, replaced by `AdaptiveLighting.Web.Presentation.DisplayRounding.Whole`.
 
 ### Fixed
 

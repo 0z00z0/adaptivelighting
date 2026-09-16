@@ -10,10 +10,6 @@ using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Engine;
 
-/// <summary>What an area is aiming at now: the room's own answer, and one per light that states its own.</summary>
-// Lights is empty for a room with no per-light levels, so SendUnrecorded commands its entries as a whole.
-internal sealed record AreaTargets(LightTarget Room, IReadOnlyDictionary<string, LightTarget> Lights);
-
 /// <summary>One area's state machine.</summary>
 // Every timer runs on the injected IScheduler and every "now" is IScheduler.Now. Rx and scheduler callbacks
 // interleave on whatever thread each arrives on, so every read and write of the machine's state happens under
@@ -26,28 +22,19 @@ public sealed class AreaController : IDisposable
 	private readonly ResolvedArea _area;
 	private readonly string? _areaId;
 	private readonly GlobalConfig _global;
-	private readonly IReadOnlyList<TimePeriodConfig> _periods;
-	private readonly CircadianCalculator _circadian;
-
-	// One per light that states levels of its own, built on that light's rows merged onto the room's. Empty for
-	// every room that states nothing per light, which is the whole of the safety property.
-	private readonly IReadOnlyDictionary<string, CircadianCalculator> _lightCalculators;
 
 	private readonly IlluminanceGate _gateSensor;
-	private readonly LuxBrightnessCurve _luxBrightness;
 	private readonly OverrideDetector _detector;
-	private readonly ILightActuator _actuator;
 	private readonly IStatePublisher _publisher;
 	private readonly IObservable<HouseState> _houseChanged;
 	private readonly ILogger _logger;
 
-	// Every light beneath a group entry, and the entries it sits under. Read off the resolved area, never Home
-	// Assistant, so it is settled before Start.
-	private readonly Dictionary<string, List<string>> _entriesOfMember = new(StringComparer.OrdinalIgnoreCase);
+	// Where a level becomes a command, and where a command reaches the fixtures. Both are asked from inside
+	// _gate and keep no state of their own.
+	private readonly TargetResolver _targets;
+	private readonly CommandFanOut _fanOut;
 
-	// Every light the room commands, groups followed down, and those not answering. Kept from the subscriptions, so
-	// a snapshot never reads state to count them.
-	private readonly HashSet<string> _leaves;
+	// The lights not answering. Kept from the subscriptions, so a snapshot never reads state to count them.
 	private readonly HashSet<string> _notResponding = new(StringComparer.OrdinalIgnoreCase);
 
 	private readonly object _gate = new();
@@ -153,7 +140,7 @@ public sealed class AreaController : IDisposable
 		_sunMoved = sunMoved;
 		_originNames = originNames;
 
-		_lightCalculators = lightCalculators is { Count: > 0 } stated
+		IReadOnlyDictionary<string, CircadianCalculator> calculators = lightCalculators is { Count: > 0 } stated
 			? stated
 			: new Dictionary<string, CircadianCalculator>(StringComparer.OrdinalIgnoreCase);
 
@@ -161,9 +148,9 @@ public sealed class AreaController : IDisposable
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
 		_area = area ?? throw new ArgumentNullException(nameof(area));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
-		_periods = periods ?? throw new ArgumentNullException(nameof(periods));
-		_circadian = circadian ?? throw new ArgumentNullException(nameof(circadian));
-		_actuator = actuator ?? throw new ArgumentNullException(nameof(actuator));
+		IReadOnlyList<TimePeriodConfig> schedule = periods ?? throw new ArgumentNullException(nameof(periods));
+		CircadianCalculator calculator = circadian ?? throw new ArgumentNullException(nameof(circadian));
+		ILightActuator lights = actuator ?? throw new ArgumentNullException(nameof(actuator));
 		_publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
 		_houseChanged = houseChanged ?? throw new ArgumentNullException(nameof(houseChanged));
 		_areaId = areaId is { Length: > 0 } ? areaId : null;
@@ -193,26 +180,24 @@ public sealed class AreaController : IDisposable
 			: global.OutdoorLuxSensor is { Length: > 0 } house ? [house]
 			: [];
 
-		_luxBrightness = new LuxBrightnessCurve(
+		LuxBrightnessCurve luxBrightness = new(
 			area.Settings,
 			new LuxReader(ha, daylightSensors, staleAfter, () => _scheduler.Now, lastSeen).Read);
+
 		_detector = new OverrideDetector(global, scheduler, area.TreatAutomationsAsManual);
+		_fanOut = new CommandFanOut(_area, _ha, _detector, lights);
 
-		foreach (string entry in area.Lights)
-			foreach (string leaf in LeavesOf(entry))
-			{
-				if (string.Equals(leaf, entry, StringComparison.OrdinalIgnoreCase))
-					continue;
+		_targets = new TargetResolver(
+			_area,
+			_global,
+			schedule,
+			calculator,
+			calculators,
+			luxBrightness,
+			TransitionSeconds,
+			_logger);
 
-				if (!_entriesOfMember.TryGetValue(leaf, out List<string>? entries))
-					_entriesOfMember[leaf] = entries = [];
-
-				entries.Add(entry);
-			}
-
-		_leaves = AllLeaves();
-
-		_boundary = new BoundaryTimer(_scheduler, () => _circadian.NextBoundary(_scheduler.Now), OnTick, _logger);
+		_boundary = new BoundaryTimer(_scheduler, () => _targets.NextBoundary(_scheduler.Now), OnTick, _logger);
 		_levelTest = new LevelTest(_scheduler, TimeSpan.FromSeconds(LevelTestSeconds), OnLevelTestElapsed);
 		_blockingEntity = () => FirstThatApplies(_area.IgnoreWhenOn, _area.IgnoreWhenOnInverted);
 	}
@@ -265,7 +250,7 @@ public sealed class AreaController : IDisposable
 			if (RefuseLevelTest() is { } refusal)
 				return refusal;
 
-			if (_circadian.GetPeriodTarget(periodKey) is not { } target)
+			if (_targets.PeriodTarget(periodKey) is not { } target)
 				return "That period is no longer in the schedule.";
 
 			// A lamp tested alone is owed a narrower return than a room test gives, so it is settled first and this
@@ -284,9 +269,7 @@ public sealed class AreaController : IDisposable
 			// The engine's own answer for that period, curve included, so the room shows what it would really do
 			// and no second reading of the settings can drift from this one. Resolved per light too, or a test
 			// would show every lamp at the room's level and the room would look wrong when the engine took over.
-			SendUnrecorded(
-				TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0),
-				LightCommandsFor(periodKey));
+			_fanOut.Send(_targets.PeriodCommand(target), _targets.LightCommandsFor(periodKey));
 
 			_logger.LogInformation("{Area}: testing period '{Period}' for {Seconds}s.", Name, target.PeriodName, LevelTestSeconds);
 
@@ -314,14 +297,10 @@ public sealed class AreaController : IDisposable
 			if (RefuseLevelTest() is { } refusal)
 				return refusal;
 
-			if (!_leaves.Contains(lightEntityId))
+			if (!_fanOut.Leaves.Contains(lightEntityId))
 				return "This room does not command that light.";
 
-			CircadianCalculator calculator = _lightCalculators.TryGetValue(lightEntityId, out CircadianCalculator? own)
-				? own
-				: _circadian;
-
-			if (calculator.GetPeriodTarget(periodKey) is not { } target)
+			if (_targets.PeriodTarget(lightEntityId, periodKey) is not { } target)
 				return "That period is no longer in the schedule.";
 
 			RefreshDarkness();
@@ -334,7 +313,7 @@ public sealed class AreaController : IDisposable
 				_levelTest.Append(CaptureLights([lightEntityId]));
 			}
 
-			SendToLight(lightEntityId, TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0));
+			_fanOut.SendToLight(lightEntityId, _targets.PeriodCommand(target));
 
 			_logger.LogInformation("{Area}: testing period '{Period}' on {Light} for {Seconds}s.",
 				Name, target.PeriodName, lightEntityId, LevelTestSeconds);
@@ -391,7 +370,7 @@ public sealed class AreaController : IDisposable
 	public void ExpectHouseScene()
 	{
 		lock (_gate)
-			ExpectSceneOnEveryLight();
+			_fanOut.ExpectSceneOnEveryLight(TransitionSeconds());
 	}
 
 	/// <summary>Subscribes and publishes the opening snapshot, leaving the lights as found.</summary>
@@ -413,7 +392,7 @@ public sealed class AreaController : IDisposable
 				.SubscribeSafe(OnLightChanged, _logger));
 
 		// A member that is also an entry is already heard through OnLightChanged.
-		foreach (string member in _entriesOfMember.Keys)
+		foreach (string member in _fanOut.GroupMembers)
 			if (!_area.Lights.Contains(member, StringComparer.OrdinalIgnoreCase))
 				_subscriptions.Add(_ha.Entity(member)
 					.StateAllChanges()
@@ -431,7 +410,7 @@ public sealed class AreaController : IDisposable
 
 		lock (_gate)
 		{
-			foreach (string leaf in _leaves)
+			foreach (string leaf in _fanOut.Leaves)
 				if (!IsOnOrOff(_ha.GetState(leaf)))
 					_notResponding.Add(leaf);
 
@@ -684,12 +663,10 @@ public sealed class AreaController : IDisposable
 		if (IsOnOrOff(change.Old) == IsOnOrOff(change.New) || change.EntityId() is not { } entityId)
 			return;
 
-		if (_entriesOfMember.TryGetValue(entityId, out List<string>? entries))
-			foreach (string entry in entries)
-				_detector.ExpectMemberAvailabilityChange(entry);
+		_fanOut.ExpectMemberAvailability(entityId);
 
 		// A group entity going unavailable is counted through its members, never as a bulb of its own.
-		if (!_leaves.Contains(entityId))
+		if (!_fanOut.Leaves.Contains(entityId))
 			return;
 
 		if (IsOnOrOff(change.New) ? _notResponding.Remove(entityId) : _notResponding.Add(entityId))
@@ -1191,83 +1168,14 @@ public sealed class AreaController : IDisposable
 
 	private string? MotionStillOn() => FirstThatApplies(_area.MotionSensors, inverted: false);
 
-	/// <summary>The area's target now: the shared table, the daylight curve, then the sleep clamp where it applies.</summary>
-	// The daylight curve lives here so OnTick sees it; inside ApplyTarget alone it would set the level on the
-	// next motion event and never before. It runs before the sleep clamp, so a bright reading during an
-	// afternoon nap cannot lift the room past the night rules.
-	private LightTarget? ResolveTarget()
-	{
-		LightTarget? target = _circadian.GetTarget(_scheduler.Now);
-		CacheResolvedPeriod(_scheduler.Now, target);
-		if (target is null)
-		{
-			_logger.LogWarning("{Area}: no circadian period resolves at {Now}; commanding nothing.", Name, _scheduler.Now);
-			return null;
-		}
-
-		return Shape(target);
-	}
-
-	/// <summary>The room's target and one for every light that states levels of its own.</summary>
-	// Each light is passed through the daylight curve and the sleep clamp as the room's is, so no light
-	// can climb past the night rules by stating a level.
+	/// <summary>This instant's targets, keeping the period they resolved from for the snapshot.</summary>
+	// Resolved on the tick as well as on a command, so a level the daylight curve moves is set at the tick and
+	// not only on the next motion event.
 	private AreaTargets? ResolveTargets()
 	{
-		if (ResolveTarget() is not { } room)
-			return null;
-
-		if (_lightCalculators.Count == 0)
-			return new AreaTargets(room, NoLightTargets);
-
-		Dictionary<string, LightTarget> lights = new(StringComparer.OrdinalIgnoreCase);
-
-		foreach ((string light, CircadianCalculator calculator) in _lightCalculators)
-			if (calculator.GetTarget(_scheduler.Now) is { } own)
-				lights[light] = Shape(own);
-
-		return new AreaTargets(room, lights);
-	}
-
-	private static readonly IReadOnlyDictionary<string, LightTarget> NoLightTargets =
-		new Dictionary<string, LightTarget>(StringComparer.OrdinalIgnoreCase);
-
-	// The daylight curve, then the sleep clamp where it applies. The order matters: a bright reading during an
-	// afternoon nap must not lift anything past the night rules.
-	private LightTarget Shape(LightTarget target)
-	{
-		LightTarget adjusted = _luxBrightness.Apply(target);
-
-		return _house.Mode == HouseMode.Sleep && _area.Settings.RespectSleepMode
-			? ClampToSleepCaps(adjusted)
-			: adjusted;
-	}
-
-	/// <summary>Holds <paramref name="target"/> to the level of the sleep period the active sleep option names.</summary>
-	// Somebody up at 03:00 is in the same night as the sleep-clamp period whether or not the clock has rolled
-	// over to morning.
-	private LightTarget ClampToSleepCaps(LightTarget target)
-	{
-		// The option actually in force, which an overlay entity can set without the select moving at all. Reading
-		// the select's own value instead resolves a different option's clamp chain, and resolves nothing when the
-		// select is unavailable, which leaves a bedroom on the evening's level all night.
-		string? inForce = _house.Forced?.OptionValue is { Length: > 0 } forced ? forced : _house.ModeValue;
-
-		HouseModeOptionConfig? option = _global.HouseMode?.OptionFor(inForce);
-		TimePeriodConfig? clampPeriod = option is not null ? HouseModeConfig.SleepClampPeriodFor(option, _periods) : null;
-		LightTarget? sleepPeriod = clampPeriod is not null ? _circadian.GetPeriodTarget(clampPeriod.Key) : null;
-		if (sleepPeriod is null)
-		{
-			_logger.LogWarning("{Area} respects sleep mode but no clamp period resolves ('{Period}'); leaving the target alone.",
-				Name, clampPeriod?.Name ?? "(none)");
-			return target;
-		}
-
-		// The clamp period's own brightness is the ceiling, and where that period runs the curve the curve owns
-		// the number. Reading it unresolved makes the stored percentage, inert everywhere else, the night's cap.
-		// The clamp still runs last, on a target the curve has already set; only what it reads for the cap moved.
-		double ceiling = _luxBrightness.Apply(sleepPeriod).BrightnessPct;
-
-		return target with { BrightnessPct = target.Clamp(Math.Min(target.BrightnessPct, ceiling)) };
+		AreaTargets? targets = _targets.Resolve(_scheduler.Now, _house, out LightTarget? period);
+		CacheResolvedPeriod(_scheduler.Now, period);
+		return targets;
 	}
 
 	private void ApplyTarget(TransitionReason reason, double brightnessFactor = 1.0)
@@ -1282,7 +1190,7 @@ public sealed class AreaController : IDisposable
 		// Before every command: it picks the fade length and it is what the snapshot reports.
 		RefreshDarkness();
 
-		Send(TargetCommand(targets.Room, brightnessFactor), LightCommands(targets, brightnessFactor));
+		Send(_targets.TargetCommand(targets.Room, brightnessFactor), _targets.LightCommands(targets, brightnessFactor));
 
 		_lightsMoved = reason is TransitionReason.CircadianTick ? LightsMovedAlone(targets, previous) : null;
 		Publish(reason);
@@ -1304,63 +1212,6 @@ public sealed class AreaController : IDisposable
 		];
 
 		return moved.Count > 0 ? moved : null;
-	}
-
-	/// <summary>What each light that states its own levels is told to be, or <c>null</c> when none does.</summary>
-	private IReadOnlyDictionary<string, LightCommand>? LightCommands(AreaTargets targets, double brightnessFactor)
-	{
-		if (targets.Lights.Count == 0)
-			return null;
-
-		Dictionary<string, LightCommand> commands = new(StringComparer.OrdinalIgnoreCase);
-
-		foreach ((string light, LightTarget target) in targets.Lights)
-			commands[light] = TargetCommand(target, brightnessFactor);
-
-		return commands;
-	}
-
-	/// <summary>The same, for a period named by hand instead of the one in force.</summary>
-	// The sleep clamp is left out on purpose: a test is somebody asking what a period looks like, and the room's
-	// own answer above is resolved the same way.
-	private IReadOnlyDictionary<string, LightCommand>? LightCommandsFor(string periodKey)
-	{
-		if (_lightCalculators.Count == 0)
-			return null;
-
-		Dictionary<string, LightCommand> commands = new(StringComparer.OrdinalIgnoreCase);
-
-		foreach ((string light, CircadianCalculator calculator) in _lightCalculators)
-			if (calculator.GetPeriodTarget(periodKey) is { } target)
-				commands[light] = TargetCommand(_luxBrightness.Apply(target), brightnessFactor: 1.0);
-
-		return commands.Count > 0 ? commands : null;
-	}
-
-	/// <summary>What this area's fixtures are told to be for <paramref name="target"/>, an off where it is nothing.</summary>
-	// Composed here, not per service call: the fixtures were read once when the area resolved. A room whose
-	// lights offer no colour at all takes neither field, so it is commanded on brightness alone. Reads the
-	// darkness verdict through TransitionSeconds, so the caller refreshes it first. The single place a level is
-	// turned into a command, room and light alike, and the last one: the curve, the warning dim and the sleep cap
-	// have all had their say by the time it runs.
-	private LightCommand TargetCommand(LightTarget target, double brightnessFactor)
-	{
-		double brightness = target.Clamp(target.BrightnessPct * brightnessFactor);
-
-		// A level landing on raw 0 goes out as an off. Home Assistant carries out a turn-on at nothing as a
-		// turn-off, so an on-expectation would go unmatched and the area would read its own work as a hand at
-		// the switch.
-		if (RawBrightness.FromPercent(brightness) <= 0)
-			return LightCommand.TurnOff(TransitionSeconds());
-
-		bool equalChannels = _area.CommandsColour && _area.EffectiveColorControl is ColorControl.EqualChannels;
-
-		return new(
-			true,
-			brightness,
-			_area.CommandsKelvin ? target.ColorTempKelvin : null,
-			TransitionSeconds(),
-			equalChannels);
 	}
 
 	/// <summary>Lights the area for movement: its scene when it names one, otherwise the period's levels.</summary>
@@ -1393,7 +1244,7 @@ public sealed class AreaController : IDisposable
 	private void ApplyScene(string sceneId, TransitionReason reason)
 	{
 		RefreshDarkness();
-		RunScene(sceneId);
+		_fanOut.RunScene(sceneId, TransitionSeconds());
 
 		_standingScene = sceneId;
 		_lastTargets = null;
@@ -1402,20 +1253,6 @@ public sealed class AreaController : IDisposable
 		_lastCommandAt = _scheduler.Now;
 
 		Publish(reason);
-	}
-
-	// Declared before the call, as a command would be: the scene's own light changes carry neither a user nor a
-	// parent, which the detector reads as a hand at the switch.
-	private void RunScene(string sceneId)
-	{
-		ExpectSceneOnEveryLight();
-		_actuator.ActivateScene(sceneId);
-	}
-
-	private void ExpectSceneOnEveryLight()
-	{
-		foreach (string light in _area.Lights)
-			_detector.ExpectScene(light, TransitionSeconds());
 	}
 
 	private void TurnOff(TransitionReason reason)
@@ -1430,119 +1267,12 @@ public sealed class AreaController : IDisposable
 	private void Send(LightCommand command, IReadOnlyDictionary<string, LightCommand>? lightCommands = null)
 	{
 		_standingScene = null;
-		SendUnrecorded(command, lightCommands);
+		_fanOut.Send(command, lightCommands);
 
 		// The standing command, so a republish keeps the levels that are actually holding instead of blanking them.
 		_lastCommand = command;
 		_lastLightCommands = lightCommands;
 		_lastCommandAt = _scheduler.Now;
-	}
-
-	/// <summary>Puts <paramref name="command"/> on the area's lights, recording nothing about the area.</summary>
-	// Always declared before sending: a command reaching HA before the expectation that explains it defeats the
-	// detector's primary heuristic, and the area reads its own work as a hand at the switch.
-	private void SendUnrecorded(LightCommand command, IReadOnlyDictionary<string, LightCommand>? lightCommands = null)
-	{
-		// Nothing in this room states a level of its own, so membership is not consulted and every entry gets the
-		// room's command. This branch is the safety property.
-		if (lightCommands is not { Count: > 0 } stated)
-		{
-			foreach (string light in _area.Lights)
-			{
-				_detector.ExpectCommand(light, command);
-				_actuator.Apply(light, command);
-			}
-
-			return;
-		}
-
-		HashSet<string> sent = new(StringComparer.OrdinalIgnoreCase);
-
-		foreach (string entry in _area.Lights)
-		{
-			IReadOnlySet<string> leaves = LeavesOf(entry);
-
-			if (!leaves.Any(stated.ContainsKey))
-			{
-				// An explicit Lights list can hold a group and one of its own members, so a leaf already commanded
-				// under another entry is not commanded again.
-				if (leaves.All(sent.Contains))
-					continue;
-
-				_detector.ExpectCommand(entry, command);
-				_actuator.Apply(entry, command);
-				sent.UnionWith(leaves);
-				continue;
-			}
-
-			// The entry itself is not commanded, and the expectation on it is still load-bearing: a group entity
-			// re-publishes a member's change under the group's id, and an echo nothing explains classifies as a
-			// hand at the switch. The detector matches polarity only, so the entry is expected on while anything
-			// beneath it is being switched on, and off when every light under it is going out.
-			bool anyLeafOn = leaves.Any(leaf => CommandForLeaf(leaf, stated, command).On);
-
-			_detector.ExpectCommand(entry, anyLeafOn == command.On ? command : command with { On = anyLeafOn });
-
-			foreach (string leaf in leaves.Order(StringComparer.Ordinal))
-			{
-				if (!sent.Add(leaf))
-					continue;
-
-				LightCommand own = CommandForLeaf(leaf, stated, command);
-				_detector.ExpectCommand(leaf, own);
-				_actuator.Apply(leaf, own);
-			}
-		}
-	}
-
-	/// <summary>What one light under an entry is told to be: its own command where it has one, the room's where not.</summary>
-	private static LightCommand CommandForLeaf(
-		string leaf,
-		IReadOnlyDictionary<string, LightCommand> stated,
-		LightCommand room) =>
-		stated.TryGetValue(leaf, out LightCommand? own) ? own : room;
-
-	/// <summary>The lights beneath one of the area's entries; the entry itself when it groups nothing.</summary>
-	private IReadOnlySet<string> LeavesOf(string entry) =>
-		_area.LeavesOfEntry.TryGetValue(entry, out IReadOnlySet<string>? leaves) && leaves.Count > 0
-			? leaves
-			: new HashSet<string>(StringComparer.Ordinal) { entry };
-
-	/// <summary>Every light the room commands, groups followed to the bottom.</summary>
-	private HashSet<string> AllLeaves()
-	{
-		HashSet<string> leaves = new(StringComparer.OrdinalIgnoreCase);
-
-		foreach (string entry in _area.Lights)
-			leaves.UnionWith(LeavesOf(entry));
-
-		return leaves;
-	}
-
-	/// <summary>Commands one light alone, declaring an expectation on it and on every entry that reaches it.</summary>
-	// A group re-publishes a member's change under its own id and the room subscribes to the group, so without the
-	// entry's expectation the echo reads as a hand at the switch. Polarity only: the group stays on while any light
-	// under it is on.
-	private void SendToLight(string light, LightCommand command)
-	{
-		foreach (string entry in _area.Lights)
-		{
-			if (string.Equals(entry, light, StringComparison.OrdinalIgnoreCase))
-				continue;
-
-			IReadOnlySet<string> leaves = LeavesOf(entry);
-
-			if (!leaves.Contains(light))
-				continue;
-
-			bool groupOn = command.On
-				|| leaves.Any(other => !string.Equals(other, light, StringComparison.OrdinalIgnoreCase) && _ha.IsOn(other));
-
-			_detector.ExpectCommand(entry, groupOn == command.On ? command : command with { On = groupOn });
-		}
-
-		_detector.ExpectCommand(light, command);
-		_actuator.Apply(light, command);
 	}
 
 	/// <summary>Why a level test cannot run here, or <c>null</c> when one can.</summary>
@@ -1669,12 +1399,11 @@ public sealed class AreaController : IDisposable
 		{
 			if (tested is not null)
 			{
-				SendToLight(light, command);
+				_fanOut.SendToLight(light, command);
 				continue;
 			}
 
-			_detector.ExpectCommand(light, command);
-			_actuator.Apply(light, command);
+			_fanOut.SendAlone(light, command);
 		}
 	}
 
@@ -1689,7 +1418,7 @@ public sealed class AreaController : IDisposable
 		// Standing scene first: the room's look is that scene, and no level command describes it.
 		if (_standingScene is { Length: > 0 } scene)
 		{
-			RunScene(scene);
+			_fanOut.RunScene(scene, TransitionSeconds());
 			_lastCommandAt = _scheduler.Now;
 			return;
 		}
@@ -1700,7 +1429,7 @@ public sealed class AreaController : IDisposable
 			_lastTargets = targets;
 
 			double factor = _state is AreaState.PreOff ? _area.Settings.PreOffBrightnessFactor : 1.0;
-			Send(TargetCommand(targets.Room, factor), LightCommands(targets, factor));
+			Send(_targets.TargetCommand(targets.Room, factor), _targets.LightCommands(targets, factor));
 			return;
 		}
 
@@ -1725,16 +1454,18 @@ public sealed class AreaController : IDisposable
 		if ((_state is AreaState.AutoActive or AreaState.PreOff) && ResolveTargets() is { } targets)
 		{
 			double factor = _state is AreaState.PreOff ? _area.Settings.PreOffBrightnessFactor : 1.0;
-			LightCommand room = TargetCommand(targets.Room, factor);
+			LightCommand room = _targets.TargetCommand(targets.Room, factor);
 
 			foreach (string light in ordered)
-				SendToLight(light, targets.Lights.TryGetValue(light, out LightTarget? own) ? TargetCommand(own, factor) : room);
+				_fanOut.SendToLight(
+					light,
+					targets.Lights.TryGetValue(light, out LightTarget? own) ? _targets.TargetCommand(own, factor) : room);
 
 			return;
 		}
 
 		foreach (string light in ordered)
-			SendToLight(light, LightCommand.TurnOff(TransitionSeconds()));
+			_fanOut.SendToLight(light, LightCommand.TurnOff(TransitionSeconds()));
 	}
 
 	// The fade length, picked by darkness and never by the period name: what matters is whether the eyes receiving
@@ -1891,7 +1622,7 @@ public sealed class AreaController : IDisposable
 			TestingLightId: _levelTest.LightId,
 			LightsMoved: _lightsMoved,
 			LightsNotResponding: _notResponding.Count,
-			LightCount: _leaves.Count,
+			LightCount: _fanOut.Leaves.Count,
 			ChangedBy: _changedBy,
 			ChangedAt: _changedAt,
 			// Enter clears _leadIn on leaving PreOff.
@@ -1915,7 +1646,7 @@ public sealed class AreaController : IDisposable
 	private void ResolvePeriodAt(DateTimeOffset now)
 	{
 		if (_resolvedPeriodAt != now)
-			CacheResolvedPeriod(now, _circadian.GetTarget(now));
+			CacheResolvedPeriod(now, _targets.PeriodAt(now));
 	}
 
 	// The name and the room-levels flag are cached together because they are one answer from one resolution.

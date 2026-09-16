@@ -31,6 +31,12 @@ public sealed class DocumentWriteTests
 	private LightingConfigStore BuildStore() =>
 		new(_path, NullLogger<LightingConfigStore>.Instance);
 
+	// The store writes bytes and nothing else, so a test that puts a document on disk normalises it first, exactly as
+	// the host's write step does. Without that the file carries no period ids, and every load mints fresh ones, which
+	// no stamp can survive.
+	private static void Write(LightingConfigStore store, AdaptiveLightingConfig config) =>
+		store.Write(ConfigNormalizer.Normalize(config));
+
 	private static AdaptiveLightingConfig House() => new()
 	{
 		ConfigName = "Adaptive lighting [test]",
@@ -42,7 +48,7 @@ public sealed class DocumentWriteTests
 	public void ChangedUnderneath_WhenNothingHasBeenWrittenSince_IsFalse()
 	{
 		LightingConfigStore store = BuildStore();
-		store.Save(House(), InvalidDocument.Refuse);
+		Write(store, House());
 
 		string stamp = ConfigStamp.OfDocument(store.Load());
 
@@ -54,13 +60,13 @@ public sealed class DocumentWriteTests
 	public void ChangedUnderneath_WhenAnotherWriterAddedARoom_IsTrue()
 	{
 		LightingConfigStore store = BuildStore();
-		store.Save(House(), InvalidDocument.Refuse);
+		Write(store, House());
 
 		string stamp = ConfigStamp.OfDocument(store.Load());
 
 		AdaptiveLightingConfig other = store.Load();
 		other.Areas.Add(new AreaConfig { AreaId = "kjokken" });
-		store.Save(other, InvalidDocument.Refuse);
+		Write(store, other);
 
 		Assert.IsTrue(DocumentWrite.ChangedUnderneath(store, stamp));
 	}

@@ -1,0 +1,142 @@
+@* The room page's head: the lamp, the name, what the engine last said, and the two things a press changes. *@
+
+<div class="room-top">
+	<div class="room-lead">
+		<header class="room-head">
+			<span class="room-glow @(Model.Snapshot is { IsLit: true } ? "room-glow-lit" : null)" style="@GlowStyle" aria-hidden="true">
+				@if (Model.Countdown is not null)
+				{
+					<span class="room-ring" style="@RingStyle" title="@CountdownTitle"></span>
+				}
+				<span class="room-core"></span>
+			</span>
+
+			<h1 class="room-name">@Model.RoomName</h1>
+
+			@if (Model.Snapshot is { } live)
+			{
+				<StateChip State="@live.State" Kelvin="@live.ColorTempKelvin" IsLeadIn="@(live.IsLeadIn ?? false)" />
+				<span class="room-since">@Model.Since</span>
+			}
+			else
+			{
+				<span class="badge">no report yet</span>
+			}
+
+			@* Two different kinds of thing, so they are drawn as two different kinds of thing: an action that
+			   happens on the press, and a setting that says whether this app runs the room at all. *@
+			<div class="room-head-actions">
+				<button type="button"
+						class="room-lighton"
+						disabled="@(Model.LightOnRefusal is { Length: > 0 })"
+						aria-label="@($"Switch the lights on in {Model.RoomName}")"
+						title="@Model.LightOnTitle"
+						@onclick="Model.LightOn">Light on</button>
+
+				@* Writes an explicit true or false, never an absent key, and saves like every other edit here. *@
+				<button type="button"
+						class="room-enable @(Model.IsEnabled ? "on" : null)"
+						role="switch"
+						aria-checked="@(Model.IsEnabled ? "true" : "false")"
+						aria-label="@($"Enable adaptive lighting in {Model.RoomName}")"
+						title="@Model.SwitchTitle"
+						@onclick="Model.ToggleEnabled">
+					<span class="room-enable-lamp" aria-hidden="true"></span>
+					<span class="room-enable-label">Adaptive lighting</span>
+					<span class="room-enable-word">@(Model.IsEnabled ? "On" : "Off")</span>
+				</button>
+			</div>
+		</header>
+
+		@* Raised by the press itself and cleared by the next one, so a refusal never outlives what caused it. *@
+		@if (Model.LightOnRefused is { Length: > 0 } refused)
+		{
+			<div class="notice warn room-lighton-refused">
+				<strong>Not switched on.</strong> @refused
+			</div>
+		}
+
+		@if (Model.HasReport)
+		{
+			<p class="room-says">@Model.Headline</p>
+
+			@if (Model.NextLine is { Length: > 0 } next)
+			{
+				<p class="room-next @(Model.IsOverdue ? "room-overdue" : null)">@next</p>
+			}
+
+			@if (Model.NotResponding is { Length: > 0 } dropped)
+			{
+				<div class="notice warn room-not-responding" role="status">
+					<strong>@dropped</strong> The room reads on or off from the lights that still answer, so a light
+					that dropped out while it was lit may still be on.
+				</div>
+			}
+		}
+		@* Nothing said when there is no report: the header already carries a "no report yet" badge. *@
+
+		@if (!Model.IsEnabled)
+		{
+			<div class="notice">
+				<strong>This room is not enabled.</strong> Nothing below is commanded and the lamps are left
+				exactly as they are &mdash; the settings are kept, and take effect the moment the room is enabled.
+			</div>
+		}
+
+		@* Raised by the switch above, and not raised again for this room while the page is open. *@
+		@if (Model.SwitchOnNote is { } switchOn)
+		{
+			<SwitchOnNoteView Note="@switchOn" AdviceHref="config?section=house" Dismissed="@Model.DismissSwitchOnNote" />
+		}
+	</div>
+
+	<aside class="panel room-facts">
+		<div class="room-card-head">
+			<span class="room-card-title">Right now &mdash; what the engine saw</span>
+		</div>
+
+		@if (Model.HasReport)
+		{
+			<table class="room-fact-table">
+				<tbody>
+					@foreach (RoomFact fact in Model.Facts)
+					{
+						<tr>
+							<th scope="row">@fact.Label</th>
+							<td title="@fact.Title" class="@(fact.IsProse ? "fact-prose" : null)">
+								@fact.Value
+								@if (fact.Detail is { Length: > 0 } detail)
+								{
+									<span class="fact-detail">@detail</span>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+		else
+		{
+			<p class="room-fact-empty">Nothing measured yet.</p>
+		}
+	</aside>
+</div>
+
+@code {
+	/// <summary>The room page's model. This component reads it and calls it; it holds no state of its own.</summary>
+	[Parameter]
+	[EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+
+	/// <summary>The lamp's own style, composed by the design from the model's reading.</summary>
+	[Parameter]
+	public string? GlowStyle { get; set; }
+
+	/// <summary>The countdown ring's style, likewise.</summary>
+	[Parameter]
+	public string? RingStyle { get; set; }
+
+	/// <summary>What the ring says on hover.</summary>
+	[Parameter]
+	public string? CountdownTitle { get; set; }
+}

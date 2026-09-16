@@ -157,10 +157,10 @@ binaries is the documented rollback and restores the percentage document with th
 The daylight curve endpoints and the pre-off dim factor stay in percent. Neither is a level a lamp is commanded
 to directly, and neither is a value the fine handle reaches.
 
-### The store normalises and validates, so every writer gets both
+### One step normalises, validates and writes, so every writer gets all three
 
-`LightingConfigStore.Save` normalises the document, validates it, and only then writes. Three writers reach
-it, and none of them can skip either step:
+`LightingEngineHost.NormaliseValidateAndWrite` normalises the document, validates it, and only then writes.
+Three writers reach it, and none of them can skip a step:
 
 | Writer | When | What an unrunnable document costs |
 | --- | --- | --- |
@@ -179,9 +179,12 @@ looking at the page, so refusing it tells them.
 Only `ValidationResult.Errors` are consulted. Warnings and area errors never block or alter a write, in
 either direction — a dangling levels row still warns and survives.
 
-The store cannot ask Home Assistant anything, so the host hands it `Validate` through
-`LightingConfigStore.ValidateWith` in its constructor. A store built without a host falls back to the pure
-document rules, which is the same check without the referential ones.
+The store underneath the step writes bytes and keeps one backup; it holds no validator and no opinion about
+what it is given. Only the host can ask Home Assistant anything, which is why the referential rules live with
+the step and not with the store.
+
+A document written without going through the step carries no minted ids, and every load of it mints fresh
+ones, so nothing that compares two loads can hold.
 
 The rebuild that follows a save is total, so **every settings save
 re-asserts the house mode and re-runs every area's startup path.** A mode being forced by an entity is
@@ -738,6 +741,19 @@ own value there resolved a different option's clamp chain — and resolved nothi
 unavailable, which left a bedroom on the evening's level all night. The forced report already carries the
 option's own value, so both paths ask the same chain.
 
+### Where a command is decided and where it is sent
+
+An area's command passes through two classes before it reaches Home Assistant. `TargetResolver` turns the
+instant and the house state into levels: the schedule's own answer, then the daylight curve, then the sleep
+clamp where the room respects it, and finally `TargetCommand`, the single place a level becomes a command for
+a room and for a light alike. `CommandFanOut` then puts that command on the fixtures, declaring each one to
+`OverrideDetector` before it applies it, because a command reaching Home Assistant before the expectation that
+explains it is read back as a hand at the switch. Neither class holds state of the area's own, and both are
+called only from inside `AreaController`'s lock.
+
+A room that states no per-light levels is commanded entry by entry and membership is never consulted. That
+branch is the safety property: a light can only be singled out where the document says something about it.
+
 ### A level belongs to one light, never to a group
 
 `AreaConfig.LightLevels` keys a light's own period rows on the leaf entity id. A group is only a way of
@@ -1220,6 +1236,12 @@ The timer callback swallows everything, because the registry throws until the fi
 an unobserved exception on a thread-pool scheduler ends the process. Discovery finding nothing is logged and
 retried on the next start, with the flag left clear.
 
+Discovery is armed once per attached connection, not once per process. `AreaDiscoveryScheduler` holds the
+settle delay, the once-only flag, the scan and the rollback when the write fails; `Detach` cancels anything
+pending and clears the armed flag, so switching the app off in Home Assistant and on again is how a house asks
+for another scan. Before that, a first scan run while the state cache was still filling was the only one a
+house ever got.
+
 #### Membership is lights alone
 
 A room qualifies on having lights. A movement sensor is not part of the test, so a room with lights and no
@@ -1381,6 +1403,30 @@ whole circuit; an editor still loads its own copy. Whether Home Assistant is res
 `HaCatalog.IsHomeAssistantResponding`: an area, a light-level sensor or a switch came back and no read threw. It
 reads the registry, so pages take it when they load their lists, never per render. Activity rows are drawn by
 `ActivityRow` on all three logs.
+
+### The room page is a model plus markup
+
+`RoomPageModel` holds the room page's document, its report subscription, its one-second clock, its write token
+and every derivation; `Room.razor` holds layout, styling and the wiring of presses to the model. The model
+takes a dispatcher rather than a component, so its timers marshal onto whatever thread the interface renders
+on and a test can run the same work inline. It raises `Navigated` with an address instead of navigating, and
+answers the save line's state as a meaning — settled, waiting, saved, refused — that the design paints. This
+is the shape every page moves to, so one set of rules serves more than one design.
+
+`Document`, `Area`, `Periods` and `Defaults` stay public on the model because `LevelsEditor`,
+`SetupAgainPanel` and `AreaSentences.ForArea` still require them. Every mutation goes through a named model
+method, so no markup assigns to the document.
+
+### The house page is a view model and a markup tree
+
+`HousePageModel` owns the document the page edits, the dirty comparison against a serialised snapshot, the
+whole-document conflict check, the 3.5 s save confirmation and its clock, every sentence, and the section
+model: which sections exist, their query aliases, and which one is open. `ConfigEditor.razor` and the four
+`House*Section` components hold markup, styling and event wiring.
+
+The model raises `Changed` after anything it owns moves, and the page turns that into a render. Without it an
+edit made inside a section component would re-render only that component, and the save bar the page draws
+would never appear. The model answers whether a section is active and never which class paints it.
 
 ### Which period is in force is one question, asked in one place
 
@@ -1607,8 +1653,8 @@ per file, because its write is.
 Two consequences:
 
 - The room page does not reload after saving, so `RoomWrite` hands back a fresh token taken **from the file**,
-  not from the object it was given. The store normalises on the way out, so a token stamped off the caller's
-  object would be stale the moment it was taken and every edit after the first would be refused.
+  not from the object it was given. The write path normalises on the way out, so a token stamped off the
+  caller's object would be stale the moment it was taken and every edit after the first would be refused.
 - Retrying a conflicted save cannot clear it: the page's copy is still the old one. So the refusal names the
   room, and the page offers a reload where it otherwise offers a retry.
 
@@ -2092,7 +2138,7 @@ handle on the foot of the plot can cover is the drop less one line of type: 22 �
 against a `HandleReach` of 9. At 16 the clearance is 6 and the mark covers the label.
 
 **A brightness per cent is rounded away from zero, never to the even neighbour**, by
-`ConfigNormalizer.Whole`. The control, the collapsed summary and the file have to agree, and 62.5 reading 62
+`DisplayRounding.Whole`. The control, the collapsed summary and the file have to agree, and 62.5 reading 62
 on one surface and 63 on the one beside it is the disagreement the single helper exists to close. Away from
 zero is also what reads as correct: 62.5 % becomes 63 %. The save pass stores the whole number, so the
 document settles on what both surfaces already show.
@@ -2127,7 +2173,7 @@ document settles on what both surfaces already show.
 | 16 | `LuxCurve.HandleInset` | at the handle's own desktop reach of 9 a focused mark at 0 % and 1 lx measures 1.5 px outside the plot, 0.1 px clear of "0 %", at 390 px; at 16 it is 2.0 px inside with a 4.9 px gap |
 | 14 | `LuxCurve.GrabMargin` | `PlotTop`, the largest margin that cannot spill out of the drawing; it puts the drag surface's left edge 37.6 px clear of a handle sitting on 1 lx |
 | 22 | `LuxCurve.LuxLabelDrop` | the drop less one line of type is what a handle can cover: 22 − 10 = 12, against a reach of 9. At 16 the clearance is 6 |
-| away from zero | `ConfigNormalizer.Whole` | the control, the summary and the file must show one number, and 62.5 has to land somewhere; 63 is what reads as correct, and to-even would give 62 |
+| away from zero | `DisplayRounding.Whole` | the control, the summary and the file must show one number, and 62.5 has to land somewhere; 63 is what reads as correct, and to-even would give 62 |
 | away from zero | `RawBrightness.FromPercent` | not a preference: it is Home Assistant's own arithmetic on `brightness_pct`, so a document written in percent lands its lamps on the byte it always landed on. To-even breaks that at 1 %, where floor sends 3 to 2 |
 | 255 | `RawBrightness.Max` | Home Assistant's own protocol, not something this codebase chooses |
 | 4 MiB | `DurableLogFile.MaxFileBytes` | a day's logging at the measured 111 kB/h is about 2.7 MB, so an ordinary day is one file and a hard-logging one rolls within itself rather than spilling the whole budget |

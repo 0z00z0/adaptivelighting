@@ -511,29 +511,42 @@ public sealed class LightingEngineHostTests
 	}
 
 	/// <summary>A writer that never heard of the normaliser or the validator gets both anyway.</summary>
+	// Both live in the host's one write step, so neither the person's save nor the migrating write can skip them.
 	[TestMethod]
-	public void TheStore_NormalisesAndValidatesWhoeverWrites()
+	public void TheWritePath_NormalisesAndValidatesWhoeverWrites()
 	{
-		LightingConfigStore store = new(_path, NullLogger<LightingConfigStore>.Instance);
+		LightingEngineHost host = BuildHost();
 
-		AdaptiveLightingConfig broken = Valid();
-		broken.Periods = [];
+		AdaptiveLightingConfig broken = WithAnEmptyLevelsRow();
 
-		ConfigNormalizer.Passes = 0;
+		SaveResult refused = host.Save(broken);
 
-		ConfigWriteResult refused = store.Save(broken, InvalidDocument.Refuse);
-
-		Assert.IsFalse(refused.Written);
+		Assert.AreEqual(SaveStatus.Rejected, refused.Status);
 		Assert.IsFalse(refused.Validation.IsValid);
 		Assert.IsFalse(File.Exists(_path), "a refused write reaches no byte of the disk");
-		Assert.AreEqual(1, ConfigNormalizer.Passes, "and it was normalised on the way to being refused");
+		Assert.AreEqual(0, broken.Areas.Single().Levels!.Count, "and it was normalised on the way to being refused");
 
-		ConfigWriteResult forced = store.Save(broken, InvalidDocument.WriteAnyway);
+		// The migrating write is the other writer, and it goes out over a document the engine cannot run.
+		File.WriteAllText(_path, LegacySchemaTheEngineCannotRun);
 
-		Assert.IsTrue(forced.Written);
+		SaveResult forced = host.Reload();
+
 		Assert.IsFalse(forced.Validation.IsValid, "written, and the errors come back with it to be reported");
-		Assert.IsTrue(File.Exists(_path));
-		Assert.AreEqual(2, ConfigNormalizer.Passes);
+		StringAssert.Contains(File.ReadAllText(_path), "Areas:", "the write happened");
+		Assert.IsFalse(string.IsNullOrWhiteSpace(host.Store.Load().Periods.Single().Id),
+			"and it was normalised too: the ids every later reference resolves by are minted on the way out");
+	}
+
+	/// <summary>A document the engine cannot run, carrying the one row the normaliser is certain to drop.</summary>
+	// A row that states nothing is what the settings page leaves behind when a value is cleared, so dropping it is
+	// the plainest sign that a write went through the normaliser.
+	private static AdaptiveLightingConfig WithAnEmptyLevelsRow()
+	{
+		AdaptiveLightingConfig config = Valid();
+		config.Periods = [];
+		config.Areas[0].Levels = [new RoomLevelOverride()];
+
+		return config;
 	}
 
 	/// <summary>A warning is no error at any level: the write goes ahead and the dangling row survives it.</summary>
@@ -626,39 +639,40 @@ public sealed class LightingEngineHostTests
 		host.Dispose();
 	}
 
-	/// <summary>One normalisation pass per write, made by the store and by nothing above it.</summary>
+	/// <summary>A person's save is normalised, so what reaches the disk is the tidied document and not what the page sent.</summary>
 	[TestMethod]
-	public void Save_NormalisesTheDocumentOncePerWrite()
+	public void Save_WritesTheNormalisedDocument()
 	{
 		LightingEngineHost host = BuildHost();
 
-		ConfigNormalizer.Passes = 0;
-		host.Save(Valid());
+		AdaptiveLightingConfig config = Valid();
+		config.Areas[0].Levels = [new RoomLevelOverride()];
 
-		Assert.AreEqual(1, ConfigNormalizer.Passes, "one write, one pass");
+		Assert.AreEqual(SaveStatus.Saved, host.Save(config).Status);
 
-		host.Save(Valid());
-
-		Assert.AreEqual(2, ConfigNormalizer.Passes, "and one more for the second write");
+		Assert.AreEqual(0, config.Areas.Single().Levels!.Count, "the row that states nothing is dropped on the way out");
+		Assert.AreEqual(0, host.Store.Load().Areas.Single().Levels?.Count ?? 0, "and the file holds no trace of it");
 	}
 
-	/// <summary>The migrating write is a write, so it is normalised, and once.</summary>
+	/// <summary>The migrating write is a write, so what lands on disk is the normalised document.</summary>
 	[TestMethod]
-	public void Reload_OfALegacyDocument_NormalisesTheMigratingWriteOnce()
+	public void Reload_OfALegacyDocument_WritesTheNormalisedDocument()
 	{
 		File.WriteAllText(_path, LegacySchema);
 
 		LightingEngineHost host = BuildHost();
 
-		ConfigNormalizer.Passes = 0;
 		host.Reload();
 
-		Assert.AreEqual(1, ConfigNormalizer.Passes);
+		Assert.IsFalse(string.IsNullOrWhiteSpace(host.Store.Load().Periods.Single().Id),
+			"the normaliser mints the ids every later reference resolves by");
+
+		string migrated = File.ReadAllText(_path);
 
 		// The document is current now, so there is no second migrating write and nothing left to normalise.
 		host.Reload();
 
-		Assert.AreEqual(1, ConfigNormalizer.Passes, "a reload that writes nothing normalises nothing");
+		Assert.AreEqual(migrated, File.ReadAllText(_path), "a reload that writes nothing normalises nothing");
 	}
 
 	/// <summary>A document in the current key names but written before periods had ids.</summary>
@@ -785,6 +799,90 @@ public sealed class LightingEngineHostTests
 			"and the once-only flag stays clear, so the rooms are proposed again on the next start");
 
 		host.Dispose();
+	}
+
+	/// <summary>A document with no rooms in it, which is the whole precondition for discovery.</summary>
+	private const string NoRoomsYet =
+		"""
+		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+		  Periods:
+		    - Name: day
+		      Start: "06:00"
+		      BrightnessPct: 80
+		      ColorTempKelvin: 3500
+		  Areas: []
+		""";
+
+	/// <summary>Switching the app off in Home Assistant and on again is a house's only way to ask for the rooms a first scan was too early to see.</summary>
+	// Discovery is once-only within one run, so the flag that says "already armed" has to be cleared by Detach.
+	[TestMethod]
+	public void AreaDiscovery_AfterTheAppIsSwitchedOffAndOnAgain_IsArmedAgain()
+	{
+		File.WriteAllText(_path, NoRoomsYet);
+
+		TestScheduler scheduler = new();
+		FakeHaContext ha = new();
+		CountsAreaScans registry = new();
+		LightingEngineHost host = BuildHost();
+
+		host.Attach(ha, registry, scheduler);
+		host.Reload();
+
+		int armed = registry.AreaScans;
+		scheduler.AdvanceBy(TimeSpan.FromMinutes(1).Ticks);
+
+		Assert.IsTrue(registry.AreaScans > armed, "the control: the first scan runs, so a second one is a real difference");
+
+		host.Detach();
+		host.Attach(ha, registry, scheduler);
+		host.Reload();
+
+		int rearmed = registry.AreaScans;
+		scheduler.AdvanceBy(TimeSpan.FromMinutes(1).Ticks);
+
+		Assert.IsTrue(registry.AreaScans > rearmed,
+			"the app was switched off and on again, so the registry is scanned again");
+
+		Assert.IsFalse(host.Store.Load().Global.AreasAutoDiscovered,
+			"a scan that found nothing leaves the once-only flag clear either way");
+
+		host.Dispose();
+	}
+
+	/// <summary>An empty registry that says how often the area list was walked.</summary>
+	// A fake cannot hand back areas: HassModel's Area has no public constructor. Counting the walk is what is
+	// left to see a scan by.
+	private sealed class CountsAreaScans : IHaRegistry
+	{
+		public int AreaScans { get; private set; }
+
+		public IReadOnlyCollection<EntityRegistration> Entities => [];
+
+		public IReadOnlyCollection<Device> Devices => [];
+
+		public IReadOnlyCollection<Area> Areas
+		{
+			get
+			{
+				AreaScans++;
+
+				return [];
+			}
+		}
+
+		public IReadOnlyCollection<Floor> Floors => [];
+
+		public IReadOnlyCollection<Label> Labels => [];
+
+		public EntityRegistration? GetEntityRegistration(string entityId) => null;
+
+		public Device? GetDevice(string deviceId) => null;
+
+		public Area? GetArea(string areaId) => null;
+
+		public Floor? GetFloor(string floorId) => null;
+
+		public Label? GetLabel(string labelId) => null;
 	}
 
 	/// <summary>An <see cref="IHaRegistry"/> behaving as NetDaemon's does before its first connection completes.</summary>

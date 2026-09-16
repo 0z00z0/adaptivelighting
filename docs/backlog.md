@@ -84,6 +84,24 @@ An item with no number is one this file records before the tracker has minted on
   see in the activity view: kill switch against a disabled room, away against a disabled room, a guest scene
   against a disabled room.
 
+- **A test cannot see whether a command was applied before or after its expectation was declared.** The fake
+  light actuator only records what it is handed, so the order of two synchronous calls inside one
+  `CommandFanOut` method is invisible to every test: measured 2026-09-16, moving the send ahead of the
+  expectation left the suite green, while removing the expectation altogether went red. The ordering rule is
+  therefore guarded by reading, not by a test. Making it testable means the fake echoing the state change back
+  through the fake context, which belongs with the test fakes.
+
+- **Three controls still require the document, the area or the periods, which is why `RoomPageModel` exposes
+  them.** `LevelsEditor` requires the periods, the area and the defaults, `SetupAgainPanel` requires the whole
+  document, and `AreaSentences.ForArea` takes the area and the defaults. Every mutation already goes through a
+  named model method, so no markup assigns to the document; closing the read side is the remaining half of the
+  rule that a control takes what it draws.
+
+- **The two page-model test classes are outside the core set.** `AdaptiveLighting.Tests.Web.RoomPageModelTests`
+  and `HousePageModelTests` hold the save-arming, conflict and refusal rules of the two pages with no renderer.
+  Whether the core set should carry either class, or a named test from each, is an open choice; the set stands
+  unchanged until it is made.
+
 ## Parked
 
 - #30 **The daylight chart is only 101 px tall on a phone, which caps its labels.** The corner and the label spread

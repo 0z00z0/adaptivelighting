@@ -1,0 +1,234 @@
+@* What discovery found in the room, the way back from each ×, and the hand-picked lists behind a fold. *@
+
+<section class="panel room-card">
+	<div class="room-card-head">
+		<span class="room-card-title">In this room</span>
+		<span class="room-card-note">found automatically from Home Assistant</span>
+	</div>
+
+	@if (Model.Resolved is { } resolved)
+	{
+		<div class="room-gear">
+			@foreach (string light in resolved.Lights)
+			{
+				string entityId = light;
+				<span class="gchip gchip-light">
+					<span class="chip-name">@Model.NameOf(entityId)</span><code class="chip-id">@entityId</code>
+					<button type="button" class="chip-remove" title="@($"Leave {Model.NameOf(entityId)} out of this room")" aria-label="@($"Leave {Model.NameOf(entityId)} out of this room")" @onclick="() => Model.Exclude(entityId)">&times;</button>
+				</span>
+			}
+			@foreach (string sensor in resolved.MotionSensors)
+			{
+				string entityId = sensor;
+				<span class="gchip gchip-motion">
+					<span class="chip-name">@Model.NameOf(entityId)</span><code class="chip-id">@entityId</code>
+					<button type="button" class="chip-remove" title="@($"Leave {Model.NameOf(entityId)} out of this room")" aria-label="@($"Leave {Model.NameOf(entityId)} out of this room")" @onclick="() => Model.Exclude(entityId)">&times;</button>
+				</span>
+			}
+			@foreach (string sensor in resolved.LuxSensors)
+			{
+				string entityId = sensor;
+				<span class="gchip gchip-lux">
+					<span class="chip-name">@Model.NameOf(entityId)</span><code class="chip-id">@entityId</code>
+					<button type="button" class="chip-remove" title="@($"Leave {Model.NameOf(entityId)} out of this room")" aria-label="@($"Leave {Model.NameOf(entityId)} out of this room")" @onclick="() => Model.Exclude(entityId)">&times;</button>
+				</span>
+			}
+		</div>
+
+		@if (resolved.MotionSensors.Count == 0)
+		{
+			<p class="room-card-foot">
+				Nothing here senses movement &mdash; the room never lights itself. Switching it on at the
+				wall lights it, and it goes off when that hold runs out.
+			</p>
+		}
+
+		@* The shared predicate and not the sensor count: a room judging by the sun, or with a hand-pinned
+		   sensor, is not counted as dark for want of one. The commissioning board reads the same rule. *@
+		@if (Model.CountsAsDarkForWantOfASensor)
+		{
+			<p class="room-card-foot">No light-level sensor here &mdash; the room counts as dark, so movement lights it.</p>
+		}
+		else if (resolved.LuxSensors.Count > 1)
+		{
+			<p class="room-card-foot">@resolved.LuxSensors.Count light-level sensors here &mdash; the room reads the average of whichever are still reporting.</p>
+		}
+	}
+	else
+	{
+		<div class="notice bad room-gear-error">@Model.PreviewError</div>
+	}
+
+	@* The exclusions are listed so the × is reversible from the page that performed it. *@
+	@if (Model.Excluded is { Count: > 0 } excluded)
+	{
+		<p class="room-card-foot">Left out of this room, by hand:</p>
+		<div class="room-gear">
+			@foreach (string entity in excluded)
+			{
+				string entityId = entity;
+				<span class="gchip gchip-out">
+					<span class="chip-name">@Model.NameOf(entityId)</span><code class="chip-id">@entityId</code>
+					<button type="button" class="chip-remove" title="@($"Let discovery find {Model.NameOf(entityId)} again")" aria-label="@($"Let discovery find {Model.NameOf(entityId)} again")" @onclick="() => Model.Include(entityId)">&times;</button>
+				</span>
+			}
+		</div>
+	}
+
+	<div class="sgroup @(Model.PickersOpen ? "sgroup-open" : null)">
+		<button type="button"
+				class="sgroup-head"
+				aria-expanded="@(Model.PickersOpen ? "true" : "false")"
+				@onclick="Model.TogglePickers">
+			<span class="sgroup-title">Not right? Pick by hand</span>
+			<span class="sgroup-note">@Model.PickedByHandNote</span>
+			<span class="area-chevron" aria-hidden="true"></span>
+		</button>
+
+		@if (Model.PickersOpen)
+		{
+			<div class="sgroup-body">
+				<p class="lede">
+					Each list you fill in <strong>replaces</strong> the automatic choice for that list only. Use it
+					when Home Assistant's room assignments don't match reality &mdash; a hallway sensor that
+					watches this room, a lamp filed under the wrong room. Fixing the room in Home Assistant is
+					usually better.
+				</p>
+
+				@* Each list is offered in two blocks: what the room resolves to now, then everything else
+				   it could use. Discovery prefers a light group over the bulbs inside it and keeps one
+				   entity per device, so without the second block a room reached through one group offers
+				   one light. Naming an entity by hand overrules the include label, which is why All must
+				   stay reachable. *@
+				@if (Model.AreaId is { Length: > 0 })
+				{
+					<div class="field">
+						<div class="field-control checks">
+							<label>
+								<input type="checkbox" @bind:get="Model.ShowAllEntities" @bind:set="OnShowAllChanged" />
+								offer entities from the whole house
+							</label>
+						</div>
+						<div class="field-help">@Model.ScopeNote</div>
+					</div>
+				}
+
+				@if (Model.LabelFilterApplies)
+				{
+					<div class="field">
+						<div class="field-control">
+							<div class="seg" role="group" aria-label="Which of this room's entities to offer">
+								<button type="button"
+										class="@(Model.LabelledOnly ? "cur" : null)"
+										aria-pressed="@(Model.LabelledOnly ? "true" : "false")"
+										@onclick="() => Model.SetLabelFilter(true)">Labelled &ldquo;@Model.IncludeLabelName&rdquo;</button>
+								<button type="button"
+										class="@(Model.LabelledOnly ? null : "cur")"
+										aria-pressed="@(Model.LabelledOnly ? "false" : "true")"
+										@onclick="() => Model.SetLabelFilter(false)">All</button>
+							</div>
+						</div>
+						<div class="field-help">@Model.LabelNote</div>
+					</div>
+				}
+
+				<SettingRow Label="Lights" Help="Empty means every light found in this room. Name any here and only those are managed — nothing else in the room is touched, whatever labels it carries.">
+					<EntityListPicker Value="@Model.Lights"
+									  ValueChanged="@Model.SetLights"
+									  Options="@Model.LightChoices"
+									  Others="@Model.LightOthers"
+									  OthersLabel="@RoomPageModel.OthersLabel"
+									  Lookup="@Model.Lookup"
+									  EmptyLabel="Found in this room."
+									  AddLabel="Add a light…"
+									  EmptyNote="@Model.EmptyNote("lights")"
+									  Placeholder="light.example" />
+				</SettingRow>
+
+				<SettingRow Label="Motion sensors" Help="Empty means every motion sensor found in this room. Name any here and only those wake the lights.">
+					<EntityListPicker Value="@Model.MotionSensors"
+									  ValueChanged="@Model.SetMotionSensors"
+									  Options="@Model.MotionChoices"
+									  Others="@Model.MotionOthers"
+									  OthersLabel="@RoomPageModel.OthersLabel"
+									  Lookup="@Model.Lookup"
+									  EmptyLabel="Found in this room."
+									  AddLabel="Add a motion sensor…"
+									  EmptyNote="@Model.EmptyNote("motion sensors")"
+									  Placeholder="binary_sensor.example" />
+				</SettingRow>
+
+				<SettingRow Label="Daylight sensor" Help="Which reading the daylight curve follows here. The house's outdoor sensor by default, because an indoor one measures this room's own lamps and the curve would chase itself. Any light-level sensor in the house can be picked.">
+					<EntityPicker Value="@Model.DaylightSensor"
+								  ValueChanged="@Model.SetDaylightSensor"
+								  Options="@Model.LuxSensorOptions"
+								  NoneLabel="@Model.OutdoorSensorLabel"
+								  EmptyNote="@Model.EmptyNote("light-level sensors")"
+								  Placeholder="sensor.example_illuminance" />
+				</SettingRow>
+
+				<SettingRow Label="Light-level sensor" Help="Which reading decides whether this room is dark. Only needed when the room has more than one — otherwise the one that is found is used.">
+					<EntityPicker Value="@Model.LuxSensor"
+								  ValueChanged="@Model.SetLuxSensor"
+								  Options="@Model.LuxChoices"
+								  Others="@Model.LuxOthers"
+								  OthersLabel="@RoomPageModel.OthersLabel"
+								  NoneLabel="(the one found in this room)"
+								  EmptyNote="@Model.EmptyNote("light-level sensors")"
+								  Placeholder="sensor.example_illuminance" />
+				</SettingRow>
+			</div>
+		}
+	</div>
+
+	@if (Model.SetupOpen)
+	{
+		<SetupAgainPanel Config="@Model.Document"
+						 PreTicked="@Model.SetupScope"
+						 PlanFor="@Model.PlanSetup"
+						 NameOf="@Model.AreaNameOf"
+						 Confirmed="@Model.ApplySetup"
+						 Cancelled="@Model.CancelSetup"
+						 CommitNote="The rebuild is saved as soon as you confirm, and cannot be undone from here." />
+	}
+	else if (Model.Removing)
+	{
+		<div class="notice warn">
+			<strong>Remove @Model.RoomName?</strong>
+			<p>
+				The room stops being managed and its settings are gone. Its lights and sensors stay exactly as
+				they are in Home Assistant &mdash; this app simply stops touching them. Setting the room up
+				again later starts from scratch.
+			</p>
+			<div class="panel-actions">
+				<button type="button" class="danger" @onclick="Model.Remove">Remove this room</button>
+				<button type="button" @onclick="Model.KeepRoom">Keep it</button>
+			</div>
+		</div>
+	}
+	else
+	{
+		<div class="panel-actions room-actions">
+			@if (Model.AreaId is { Length: > 0 })
+			{
+				<button type="button" @onclick="Model.OpenSetup" disabled="@(!Model.HomeAssistantIsAnswering)">Set this room up again</button>
+			}
+			<button type="button" class="danger" @onclick="Model.AskRemove">Remove this room</button>
+		</div>
+	}
+</section>
+
+@code {
+	/// <summary>The room page's model. This component reads it and calls it; it holds no state of its own.</summary>
+	[Parameter]
+	[EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+
+	// @bind:set wants something that returns a Task.
+	private Task OnShowAllChanged(bool showAll)
+	{
+		Model.SetShowAllEntities(showAll);
+
+		return Task.CompletedTask;
+	}
+}
