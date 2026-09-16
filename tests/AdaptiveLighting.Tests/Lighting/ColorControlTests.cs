@@ -445,11 +445,13 @@ public sealed class ColorControlTests
 
 		FakeLightActuator actuator = new();
 
+		HouseWiring wiring = new(
+			ha, scheduler, global, table, actuator, new FakeStatePublisher(),
+			new BehaviorSubject<HouseState>(HouseState.Initial), NullLoggerFactory.Instance,
+			LastSeen: null, OriginNames: null);
+
 		using AreaController controller = new(
-			ha, scheduler, area, global, table,
-			new CircadianCalculator(table, global, () => SunTimes.Unknown),
-			actuator, new FakeStatePublisher(), new BehaviorSubject<HouseState>(HouseState.Initial),
-			NullLoggerFactory.Instance);
+			wiring, area, new CircadianCalculator(table, global, () => SunTimes.Unknown));
 
 		controller.Start();
 		ha.Trigger(Motion, "on");

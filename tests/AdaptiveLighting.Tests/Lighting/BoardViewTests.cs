@@ -48,7 +48,7 @@ public sealed class BoardViewTests
 			name,
 			state,
 			TransitionReason.Motion,
-			HouseMode.Home,
+			ModeKind.Normal,
 			false,
 			null,
 			null,

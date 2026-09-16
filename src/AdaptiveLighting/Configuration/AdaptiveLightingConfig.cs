@@ -134,10 +134,12 @@ public class GlobalConfig
 	public int BlendMinutes { get; set; } = 30;
 
 	/// <summary>The exclude label a document gets when nothing says otherwise.</summary>
-	public const string DefaultExcludeLabel = "adaptive-exclude";
+	// Underscores, so the value can be the label id Home Assistant generates: it slugs a hyphen to an underscore,
+	// and a hyphenated default could only ever match by name.
+	public const string DefaultExcludeLabel = "adaptive_exclude";
 
 	/// <summary>The motion label a document gets when nothing says otherwise. Read by the last-seen cache too.</summary>
-	public const string DefaultMotionLabel = "adaptive-motion";
+	public const string DefaultMotionLabel = "adaptive_motion";
 
 	/// <summary>The illuminance device class a document gets when nothing says otherwise. Read by the last-seen cache too.</summary>
 	public const string DefaultIlluminanceDeviceClass = "illuminance";

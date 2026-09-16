@@ -1,4 +1,5 @@
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Web.Services;
 
@@ -16,7 +17,7 @@ public sealed class DashboardViewTests
 			name,
 			AreaState.AutoVacant,
 			TransitionReason.Startup,
-			HouseMode.Home,
+			ModeKind.Normal,
 			false,
 			null,
 			null,

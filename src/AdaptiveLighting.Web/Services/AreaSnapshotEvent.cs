@@ -35,7 +35,7 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("reason")]
 	public string? Reason { get; init; }
 
-	/// <summary>The <see cref="HouseMode"/> name.</summary>
+	/// <summary>The house mode's published word, which is "Home" for the everyday kind.</summary>
 	[JsonPropertyName("mode")]
 	public string? Mode { get; init; }
 
@@ -183,7 +183,7 @@ public sealed record AreaSnapshotEvent
 			Area,
 			Enum.TryParse<AreaState>(State, out AreaState state) ? state : default,
 			Enum.TryParse<TransitionReason>(Reason, out TransitionReason reason) ? reason : default,
-			Enum.TryParse<HouseMode>(Mode, out HouseMode mode) ? mode : default,
+			HouseModeName.Parse(Mode),
 			KillSwitchActive,
 			IsDark,
 			Period,

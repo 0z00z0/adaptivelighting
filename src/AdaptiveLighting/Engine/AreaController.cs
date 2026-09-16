@@ -119,54 +119,48 @@ public sealed class AreaController : IDisposable
 	// areaId goes on every snapshot so readers join live state to the document by id, never by name. Without
 	// sunMoved only the periodic tick re-arms the boundaries.
 	public AreaController(
-		IHaContext ha,
-		IScheduler scheduler,
+		HouseWiring house,
 		ResolvedArea area,
-		GlobalConfig global,
-		IReadOnlyList<TimePeriodConfig> periods,
 		CircadianCalculator circadian,
-		ILightActuator actuator,
-		IStatePublisher publisher,
-		IObservable<HouseState> houseChanged,
-		ILoggerFactory loggerFactory,
 		string? areaId = null,
-		IEntityLastSeen? lastSeen = null,
 		IObservable<Unit>? sunMoved = null,
-		IReadOnlyDictionary<string, CircadianCalculator>? lightCalculators = null,
-		ChangeOriginNames? originNames = null)
+		IReadOnlyDictionary<string, CircadianCalculator>? lightCalculators = null)
 	{
-		ArgumentNullException.ThrowIfNull(loggerFactory);
+		ArgumentNullException.ThrowIfNull(house);
+		ArgumentNullException.ThrowIfNull(house.LoggerFactory);
 
 		_sunMoved = sunMoved;
-		_originNames = originNames;
+		_originNames = house.OriginNames;
 
 		IReadOnlyDictionary<string, CircadianCalculator> calculators = lightCalculators is { Count: > 0 } stated
 			? stated
 			: new Dictionary<string, CircadianCalculator>(StringComparer.OrdinalIgnoreCase);
 
-		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
-		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
+		// The record's members are checked at its own construction site, not here.
+		_ha = house.Ha;
+		_scheduler = house.Scheduler;
 		_area = area ?? throw new ArgumentNullException(nameof(area));
-		_global = global ?? throw new ArgumentNullException(nameof(global));
-		IReadOnlyList<TimePeriodConfig> schedule = periods ?? throw new ArgumentNullException(nameof(periods));
+		_global = house.Global;
+		IReadOnlyList<TimePeriodConfig> schedule = house.Periods;
 		CircadianCalculator calculator = circadian ?? throw new ArgumentNullException(nameof(circadian));
-		ILightActuator lights = actuator ?? throw new ArgumentNullException(nameof(actuator));
-		_publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-		_houseChanged = houseChanged ?? throw new ArgumentNullException(nameof(houseChanged));
+		ILightActuator lights = house.Actuator;
+		_publisher = house.Publisher;
+		_houseChanged = house.HouseChanged;
 		_areaId = areaId is { Length: > 0 } ? areaId : null;
+		IEntityLastSeen? lastSeen = house.LastSeen;
 
-		_logger = loggerFactory.CreateLogger($"{typeof(AreaController).FullName}.{area.Name}");
+		_logger = house.LoggerFactory.CreateLogger($"{typeof(AreaController).FullName}.{area.Name}");
 
 		// Own sensors, averaged; otherwise the house's outdoor one only if the room asked. A room with neither has
 		// no reading at all, and IlluminanceGate treats that as dark.
 		IReadOnlyList<string> luxSensors = area.LuxSensors is { Count: > 0 } own ? own
-			: area.FollowOutdoorLux && global.OutdoorLuxSensor is { Length: > 0 } outdoor ? [outdoor]
+			: area.FollowOutdoorLux && _global.OutdoorLuxSensor is { Length: > 0 } outdoor ? [outdoor]
 			: [];
 
-		TimeSpan staleAfter = TimeSpan.FromMinutes(global.LuxSensorStaleAfterMinutes);
+		TimeSpan staleAfter = TimeSpan.FromMinutes(_global.LuxSensorStaleAfterMinutes);
 
 		_gateSensor = new IlluminanceGate(
-			ha,
+			_ha,
 			luxSensors,
 			area.Settings,
 			staleAfter,
@@ -177,14 +171,14 @@ public sealed class AreaController : IDisposable
 		// The house's outdoor reading unless the room named its own. Never the darkness sensor: an indoor one
 		// measures the lamps the curve is setting, so the curve would chase itself.
 		IReadOnlyList<string> daylightSensors = area.DaylightSensor is { Length: > 0 } chosen ? [chosen]
-			: global.OutdoorLuxSensor is { Length: > 0 } house ? [house]
+			: _global.OutdoorLuxSensor is { Length: > 0 } shared ? [shared]
 			: [];
 
 		LuxBrightnessCurve luxBrightness = new(
 			area.Settings,
-			new LuxReader(ha, daylightSensors, staleAfter, () => _scheduler.Now, lastSeen).Read);
+			new LuxReader(_ha, daylightSensors, staleAfter, () => _scheduler.Now, lastSeen).Read);
 
-		_detector = new OverrideDetector(global, scheduler, area.TreatAutomationsAsManual);
+		_detector = new OverrideDetector(_global, _scheduler, area.TreatAutomationsAsManual);
 		_fanOut = new CommandFanOut(_area, _ha, _detector, lights);
 
 		_targets = new TargetResolver(
@@ -714,7 +708,7 @@ public sealed class AreaController : IDisposable
 				Publish(TransitionReason.EnablementChanged);
 			}
 
-			if (house.Mode == HouseMode.Away)
+			if (house.ActiveKind == ModeKind.Away)
 			{
 				if (_state != AreaState.Away)
 					GoAway(opening);
@@ -724,7 +718,7 @@ public sealed class AreaController : IDisposable
 
 			// Before the was-Away recovery: entering a scene mode straight from Away must land in SceneHold, not
 			// run the welcome-home ApplyTarget that would clobber the scene.
-			if (house.Mode == HouseMode.Guest && house.ActiveScene is { Length: > 0 })
+			if (house.ActiveKind == ModeKind.Guest && house.ActiveScene is { Length: > 0 })
 			{
 				if (_state != AreaState.SceneHold)
 					EnterSceneHold();
@@ -1089,7 +1083,7 @@ public sealed class AreaController : IDisposable
 		Rebuilding: _disposed,
 		KillSwitchActive: _house.KillSwitchActive,
 		Enabled: _area.Settings.Enabled,
-		Mode: _house.Mode,
+		Mode: _house.ActiveKind,
 		ActiveScene: _house.ActiveScene,
 		SleepBlocksAutoOn: _area.Settings.SleepBlocksAutoOn,
 		BlockingEntity: _blockingEntity,
@@ -1594,7 +1588,7 @@ public sealed class AreaController : IDisposable
 			AreaName: Name,
 			State: _state,
 			Reason: reason,
-			Mode: _house.Mode,
+			Mode: _house.ActiveKind,
 			KillSwitchActive: _house.KillSwitchActive,
 			IsDark: _lastDarkVerdict,
 			PeriodName: _resolvedPeriodName,

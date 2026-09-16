@@ -96,7 +96,7 @@ public sealed class AreaAutoDiscoveryTests
 		ha.SetState("light.hytta_alt", "off");
 		ha.SetState("binary_sensor.hytta_motion", "off", new() { ["device_class"] = "motion" });
 		registry.Areas["hytta"] = ["light.hytta_alt", "binary_sensor.hytta_motion"];
-		registry.AreaLabels["hytta"] = ["adaptive-exclude"];
+		registry.AreaLabels["hytta"] = ["adaptive_exclude"];
 
 		var proposed = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry));
 

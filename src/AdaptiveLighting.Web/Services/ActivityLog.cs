@@ -38,6 +38,9 @@ public sealed record ActivityEntry
 
 	public string? AreaName => Snapshot?.AreaName;
 
+	/// <summary>The room's stable id, which the room filter keys on so a rename does not split one room in two.</summary>
+	public string? AreaId => Snapshot?.AreaId;
+
 	public DateTimeOffset At => Snapshot?.Timestamp ?? Notice!.At;
 }
 

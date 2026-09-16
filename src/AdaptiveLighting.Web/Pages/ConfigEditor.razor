@@ -90,7 +90,8 @@ else
 			<span class="savebar-note bad">@result.Message</span>
 		}
 
-		@if (Model.SaveConfirmation is { Length: > 0 } confirmation)
+		@* Read at render against the page's own clock, so nothing has to clear it. *@
+		@if (Model.SaveConfirmation.TextAt(Model.Now) is { Length: > 0 } confirmation)
 		{
 			<span class="savebar-note ok savebar-toast" role="status">@confirmation</span>
 		}

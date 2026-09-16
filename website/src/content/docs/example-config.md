@@ -110,9 +110,9 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     #                  filtering sensors too would make a half-labelled house
     #                  deaf. An explicit Lights list bypasses both labels.
     #   MotionLabel  — treat it as a motion source whatever its device class.
-    ExcludeLabel: adaptive-exclude
+    ExcludeLabel: adaptive_exclude
     # IncludeLabel: room-light
-    MotionLabel: adaptive-motion
+    MotionLabel: adaptive_motion
 
     # Which device classes qualify during discovery. MotionDeviceClasses is
     # empty by default, and empty means [motion, occupancy, presence]. Listing

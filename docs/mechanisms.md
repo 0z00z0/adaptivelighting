@@ -466,6 +466,25 @@ mode overwritten on no evidence, on a path a corrupt file could trigger at every
 After a Home Assistant restart an `input_select` reads `unavailable` for a while. Anything reading one has to
 survive that without acting on it.
 
+### The house mode has one name, and one place that produces it
+
+The mode kind is the only mode type the engine holds. `HouseModeName` is the single mapping between a kind
+and the word that leaves the house: `Of` produces it, `Parse` reads it back. The everyday kind is
+`ModeKind.Normal` and its word is "Home", because Home Assistant automations match on that text. Nothing else
+may produce or read a mode word.
+
+The word is pinned by a test that publishes a snapshot on the everyday kind and asserts both directions. The
+four `"mode": "Home"` blocks in the publisher's test file are input fixtures for the read-back path, so they
+pin nothing about what goes out.
+
+### One record wires every room
+
+`HouseWiring` carries the ten house-wide instances every area controller is built on: the Home Assistant
+context, the scheduler, the global settings, the periods, the actuator, the publisher, the house-state stream,
+the logger factory, the last-seen cache and the origin names. The orchestrator composes it once, before the
+first room, and hands the same object to every room, so no room can end up on a different actuator, publisher
+or house-state stream. No member carries a default, so a wiring that omits one does not compile.
+
 ### The mode brain is one front over two rule sets
 
 `ModeMonitor` stays the public front and keeps the gate, the subscriptions, the circadian calculator and the
@@ -1285,6 +1304,25 @@ truncate each other, and copying to `.bak` first would leave a moment where the 
 failed write deletes its temporary file and reports the failure; the store logs its own warning and answers
 "unknown".
 
+### Labels are matched by id
+
+Home Assistant keeps a label's `label_id` when the label is renamed, and gives a reused name to a new label
+under a fresh id. A rule stored by name therefore changes meaning on a rename, and a stored name can match two
+labels at once.
+
+A value the house knows as a label id matches that id alone. Any other value matches by name, which is what
+keeps a document written before this change working, and what lets a label created later start matching.
+
+Stored names are turned into ids by the start-up normalise-and-write step, the single path every writer goes
+through. A hand-edited document is changed only there. A value nothing is named is left exactly as written and
+raises one validator warning. It is a warning and never an error: a label stored by name still works, so it
+can never stop a save.
+
+The shipped defaults are `adaptive_exclude` and `adaptive_motion`. A slug turns a hyphen into an underscore,
+so the previous hyphenated defaults could only ever match by name.
+
+Anywhere a label is shown to a person it shows the label's name, resolved from the id.
+
 ### Entity resolution
 
 One selection pass settles lights, motion and illuminance, because a one-level comparison of a group against
@@ -1427,6 +1465,24 @@ model: which sections exist, their query aliases, and which one is open. `Config
 The model raises `Changed` after anything it owns moves, and the page turns that into a render. Without it an
 edit made inside a section component would re-render only that component, and the save bar the page draws
 would never appear. The model answers whether a section is active and never which class paints it.
+
+### What redraws, and when
+
+Each page model owns one per-second signal and publishes it; the design decides what listens. A page raises
+its own redraw only when a value the parts outside the clock's reach would show differently has moved,
+compared against a small record of exactly those values. Everything whose words are only honest while they
+move — the countdown ring, the relative times, the timeline — sits inside a tick region that redraws itself on
+the beat.
+
+Measured over ten idle seconds on the room page: the page, the levels editor and its eight sliders went from
+10, 10 and 80 renders to none, while the ring and the log card kept moving each second.
+
+### A confirmation carries its own expiry
+
+One type holds the words and the moment they stop being said, and it is read where it is drawn. Nothing clears
+a confirmation on a timer of its own. The house page has no standing clock, so showing one starts a beat whose
+first tick falls on the expiry and which stops when there is nothing transient left. The three durations are
+3.5 seconds on the room and house pages and 6 on the dashboard, pinned by `PageConfirmationTests`.
 
 ### Which period is in force is one question, asked in one place
 

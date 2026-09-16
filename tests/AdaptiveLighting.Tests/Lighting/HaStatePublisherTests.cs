@@ -21,7 +21,7 @@ public sealed class HaStatePublisherTests
 		var publisher = new HaStatePublisher(ha, NullLogger.Instance);
 
 		var snapshot = new AreaSnapshot(
-			"Stue", AreaState.AutoActive, TransitionReason.Motion, HouseMode.Sleep,
+			"Stue", AreaState.AutoActive, TransitionReason.Motion, ModeKind.Sleep,
 			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: 70, ColorTempKelvin: 2700,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null, HouseModeValue: "Sover");
@@ -50,7 +50,7 @@ public sealed class HaStatePublisherTests
 		var publisher = new HaStatePublisher(ha, NullLogger.Instance);
 
 		var snapshot = new AreaSnapshot(
-			"Stue", AreaState.AutoVacant, TransitionReason.Startup, HouseMode.Home,
+			"Stue", AreaState.AutoVacant, TransitionReason.Startup, ModeKind.Normal,
 			KillSwitchActive: false, IsDark: false, PeriodName: "day", BrightnessPct: null, ColorTempKelvin: null,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null, HouseModeValue: null);
@@ -72,7 +72,7 @@ public sealed class HaStatePublisherTests
 		HaStatePublisher publisher = new(ha, NullLogger.Instance);
 
 		AreaSnapshot snapshot = new(
-			"Living room", AreaState.AutoActive, TransitionReason.Motion, HouseMode.Home,
+			"Living room", AreaState.AutoActive, TransitionReason.Motion, ModeKind.Normal,
 			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: 70, ColorTempKelvin: 2700,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null, HouseModeValue: null, DarknessDetail: null, AreaId: "stue");
@@ -88,6 +88,29 @@ public sealed class HaStatePublisherTests
 		Assert.IsNotNull(rebuilt);
 		Assert.AreEqual("stue", rebuilt!.AreaId);
 		Assert.AreEqual("Living room", rebuilt.AreaName, "and the name it is joined to is unchanged");
+	}
+
+	// The word is the contract with Home Assistant: automations match on it, so the everyday kind must not start
+	// going out under its own name.
+	[TestMethod]
+	public void The_Everyday_Kind_Is_Published_As_Home_And_Read_Back_As_Itself()
+	{
+		FakeHaContext ha = new();
+		HaStatePublisher publisher = new(ha, NullLogger.Instance);
+
+		publisher.Publish(new AreaSnapshot(
+			"Stue", AreaState.AutoVacant, TransitionReason.Startup, ModeKind.Normal,
+			KillSwitchActive: false, IsDark: null, PeriodName: null, BrightnessPct: null, ColorTempKelvin: null,
+			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
+			NextChangeFrom: null));
+
+		string json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
+
+		StringAssert.Contains(json, "\"mode\":\"Home\"", "the everyday kind goes out as Home, never under its own name");
+
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(json)!.ToSnapshot();
+
+		Assert.AreEqual(ModeKind.Normal, rebuilt!.Mode, "and Home reads back as the kind it stands for");
 	}
 
 	// The field is additive: an event from a build that predates it still has to rebuild.
@@ -125,7 +148,7 @@ public sealed class HaStatePublisherTests
 		HaStatePublisher publisher = new(ha, NullLogger.Instance);
 
 		AreaSnapshot snapshot = new(
-			"Stue", AreaState.AutoVacant, TransitionReason.CircadianTick, HouseMode.Home,
+			"Stue", AreaState.AutoVacant, TransitionReason.CircadianTick, ModeKind.Normal,
 			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: null, ColorTempKelvin: null,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null, HouseModeValue: null, DarknessDetail: "lux 12, dark below 40", AreaId: "stue",
@@ -172,7 +195,7 @@ public sealed class HaStatePublisherTests
 		HaStatePublisher publisher = new(ha, NullLogger.Instance);
 
 		AreaSnapshot snapshot = new(
-			"Stue", AreaState.AutoVacant, TransitionReason.VacancyTimeout, HouseMode.Home,
+			"Stue", AreaState.AutoVacant, TransitionReason.VacancyTimeout, ModeKind.Normal,
 			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: null, ColorTempKelvin: null,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null, AreaId: "stue", SceneApplied: "scene.stue_natt");
@@ -196,7 +219,7 @@ public sealed class HaStatePublisherTests
 		DateTimeOffset ends = DateTimeOffset.UnixEpoch.AddSeconds(10);
 
 		AreaSnapshot snapshot = new(
-			"Stue", AreaState.AutoVacant, TransitionReason.LevelTestStarted, HouseMode.Home,
+			"Stue", AreaState.AutoVacant, TransitionReason.LevelTestStarted, ModeKind.Normal,
 			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: null, ColorTempKelvin: null,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null, AreaId: "stue", TestingPeriodId: "day", TestEndsAt: ends);
@@ -242,7 +265,7 @@ public sealed class HaStatePublisherTests
 		HaStatePublisher publisher = new(ha, NullLogger.Instance);
 
 		AreaSnapshot snapshot = new(
-			"Stue", AreaState.SceneHold, TransitionReason.HouseModeChanged, HouseMode.Away,
+			"Stue", AreaState.SceneHold, TransitionReason.HouseModeChanged, ModeKind.Away,
 			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: null, ColorTempKelvin: null,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null, AreaId: "stue", IsAnyoneHome: false,
@@ -295,7 +318,7 @@ public sealed class HaStatePublisherTests
 	{
 		FakeHaContext ha = new();
 		new HaStatePublisher(ha, NullLogger.Instance).Publish(new AreaSnapshot(
-			"Hand-built", AreaState.AutoVacant, TransitionReason.Startup, HouseMode.Home,
+			"Hand-built", AreaState.AutoVacant, TransitionReason.Startup, ModeKind.Normal,
 			KillSwitchActive: false, IsDark: null, PeriodName: null, BrightnessPct: null, ColorTempKelvin: null,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
 			NextChangeFrom: null));

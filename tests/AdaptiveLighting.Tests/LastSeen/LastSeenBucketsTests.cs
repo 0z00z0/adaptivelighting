@@ -16,7 +16,7 @@ public sealed class LastSeenBucketsTests
 	public void A_Light_Is_A_Light_By_Its_Domain_Alone()
 	{
 		Assert.AreEqual(LastSeenBuckets.Light, LastSeenBuckets.Classify("light.kitchen", null, null, Options));
-		Assert.AreEqual(LastSeenBuckets.Light, LastSeenBuckets.Classify("light.group_upstairs", "nonsense", ["adaptive-motion"], Options));
+		Assert.AreEqual(LastSeenBuckets.Light, LastSeenBuckets.Classify("light.group_upstairs", "nonsense", ["adaptive_motion"], Options));
 	}
 
 	[TestMethod]
@@ -33,8 +33,8 @@ public sealed class LastSeenBucketsTests
 	{
 		// mmWave hardware routinely reports another device class, so filing honours the label: the motion file
 		// holds what the household calls motion.
-		Assert.AreEqual(LastSeenBuckets.Motion, LastSeenBuckets.Classify("binary_sensor.mmwave", "vibration", ["adaptive-motion"], Options));
-		Assert.AreEqual(LastSeenBuckets.Motion, LastSeenBuckets.Classify("sensor.presence_score", null, ["Adaptive-Motion"], Options));
+		Assert.AreEqual(LastSeenBuckets.Motion, LastSeenBuckets.Classify("binary_sensor.mmwave", "vibration", ["adaptive_motion"], Options));
+		Assert.AreEqual(LastSeenBuckets.Motion, LastSeenBuckets.Classify("sensor.presence_score", null, ["Adaptive_Motion"], Options));
 	}
 
 	[TestMethod]
@@ -60,7 +60,7 @@ public sealed class LastSeenBucketsTests
 
 		// A renamed motion label does not rename the file: an entity declaring device_class "motion" is still filed by its class.
 		Assert.AreEqual("binary_sensor_motion", LastSeenBuckets.Classify("binary_sensor.hall", "motion", null, custom));
-		Assert.AreEqual("vibration", LastSeenBuckets.Classify("binary_sensor.hall", "vibration", ["adaptive-motion"], custom),
+		Assert.AreEqual("vibration", LastSeenBuckets.Classify("binary_sensor.hall", "vibration", ["adaptive_motion"], custom),
 			"a house with no motion label configured must not match every entity that happens to carry one");
 	}
 

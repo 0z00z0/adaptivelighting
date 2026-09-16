@@ -38,7 +38,10 @@ else
 {
 	<a class="room-back" href="">&lsaquo; Dashboard</a>
 
-	<RoomHeader Model="@_model" GlowStyle="@GlowStyle" RingStyle="@RingStyle" CountdownTitle="@CountdownTitle" />
+	@* On the clock: the ring drains, and the header's relative times are only honest while they move. *@
+	<TickRegion Clock="@_model">
+		<RoomHeader Model="@_model" GlowStyle="@GlowStyle" RingStyle="@RingStyle" CountdownTitle="@CountdownTitle" />
+	</TickRegion>
 
 	@* A refused save stays until it is resolved: until then the file on disk is not what is on screen. *@
 	@if (_model.Failure is { } failure)
@@ -77,11 +80,14 @@ else
 	<section class="panel room-card">
 		<div class="room-card-head">
 			<span class="room-card-title">How this room behaves</span>
-			<span class="room-save @SaveClass" role="status">@_model.SaveLine</span>
-			@if (_model.Dirty)
-			{
-				<button type="button" class="room-save-now" @onclick="_model.Commit">Save now</button>
-			}
+			@* On the clock, so the confirmation clears itself without redrawing the card under it. *@
+			<TickRegion Clock="@_model">
+				<span class="room-save @SaveClass" role="status">@_model.SaveLine</span>
+				@if (_model.Dirty)
+				{
+					<button type="button" class="room-save-now" @onclick="_model.Commit">Save now</button>
+				}
+			</TickRegion>
 		</div>
 
 		<div class="room-sentences">
@@ -100,7 +106,9 @@ else
 				<span class="sgroup-count" title="Periods this room sets for itself">@chosen</span>
 			}
 			@* The first card head already announces the save. *@
-			<span class="room-save @SaveClass" aria-hidden="true">@_model.SaveLine</span>
+			<TickRegion Clock="@_model">
+				<span class="room-save @SaveClass" aria-hidden="true">@_model.SaveLine</span>
+			</TickRegion>
 		</div>
 
 		<p class="room-card-foot lvl-lede">@_model.LevelsLede</p>
@@ -298,7 +306,10 @@ else
 
 	<div class="room-columns">
 		<RoomGearCard Model="@_model" />
-		<RoomLogCard Model="@_model" />
+		@* On the clock: every row in the log is dated relative to now. *@
+		<TickRegion Clock="@_model">
+			<RoomLogCard Model="@_model" />
+		</TickRegion>
 	</div>
 
 }
@@ -346,12 +357,13 @@ else
 	private string CountdownTitle =>
 		_model.NextChangeAt is { } due ? $"Next change {RoomFacts.In(due, _model.Now)}." : string.Empty;
 
+	// This design's names for the four meanings the model answers with.
 	private string SaveClass => _model.SaveState switch
 	{
-		RoomSaveState.Refused => SaveNotice.Failed,
-		RoomSaveState.Waiting => SaveNotice.Pending,
-		RoomSaveState.Saved => SaveNotice.Done,
-		_ => SaveNotice.Idle
+		RoomSaveState.Refused => "room-save-bad",
+		RoomSaveState.Waiting => "room-save-pending",
+		RoomSaveState.Saved => "room-save-done",
+		_ => "room-save-ok"
 	};
 
 	public void Dispose()

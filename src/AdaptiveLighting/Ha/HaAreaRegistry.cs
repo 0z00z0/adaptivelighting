@@ -1,4 +1,5 @@
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Extensions;
 
 namespace AdaptiveLighting.Ha;
 
@@ -22,10 +23,13 @@ public sealed class HaAreaRegistry : IAreaRegistry
 	public IReadOnlyList<string> EntitiesInArea(string areaId) => _registry.EntityIdsInArea(areaId);
 
 	/// <inheritdoc/>
-	public IReadOnlyList<string> LabelsOf(string entityId) => _registry.LabelsOf(entityId);
+	public IReadOnlyList<RegistryLabel> KnownLabels => _registry.KnownLabels();
 
 	/// <inheritdoc/>
-	public IReadOnlyList<string> LabelsOfArea(string areaId) => _registry.LabelsOfArea(areaId);
+	public IReadOnlyList<RegistryLabel> LabelsOf(string entityId) => _registry.LabelsOf(entityId);
+
+	/// <inheritdoc/>
+	public IReadOnlyList<RegistryLabel> LabelsOfArea(string areaId) => _registry.LabelsOfArea(areaId);
 
 	/// <inheritdoc/>
 	public string? DeviceOf(string entityId) => _registry.DeviceOf(entityId);
