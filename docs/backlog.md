@@ -77,6 +77,13 @@ An item with no number is one this file records before the tracker has minted on
 - #81 **Some rooms disappear from the board with no explanation.** A room that is not shown should either
   show, or carry a stated reason it is unavailable, rather than vanishing silently.
 
+- **Gate precedence is untested where two gates close together.** Every auto-on and refusal test arranges one
+  closed gate, so `HouseGates.FirstClosed` can have two of its rungs swapped without a test noticing. Measured
+  2026-09-16: swapping the kill switch and the disabled gate left all 167 `AreaController` tests green, while
+  swapping the entity gate and darkness turned one red. Worth one test per overlapping pair that a person would
+  see in the activity view: kill switch against a disabled room, away against a disabled room, a guest scene
+  against a disabled room.
+
 ## Parked
 
 - #30 **The daylight chart is only 101 px tall on a phone, which caps its labels.** The corner and the label spread

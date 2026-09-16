@@ -15,11 +15,19 @@ against each other.
 ### Added
 
 - `AreaSnapshot.IsLit`, `AreaSnapshotCache.Find` and `KeyOf`, `HaCatalog.IsHomeAssistantResponding` and `FriendlyNameOrId`, the `DocumentCache` service with a `ModeService` constructor that takes it, and the `ActivityRow` component. `IsLit` is not part of the room report sent to Home Assistant.
+- `AdaptiveLighting.Hosting.EngineServiceCollectionExtensions.AddLightingEngine`, which registers the configuration path, the store, the engine host and the last-seen cache in the order they have always been registered in. A host that wants the engine without the interface no longer copies the web package's wiring. `AddLightingWeb` keeps its name and its behaviour, and calls it.
+- `GlobalConfig.DefaultExcludeLabel`, `DefaultMotionLabel` and `DefaultIlluminanceDeviceClass`. The last-seen cache reads these instead of holding its own copies, so it can no longer file a house's sensors under one rule while the engine discovers them under another. The values themselves are unchanged.
+- The `AllSettingsPanel` component, with its nested `Input`, `Group`, `Item`, `PickerField` and `Change` records; the `EntityLookup` and `SelectAuthorityCopy` records in `AdaptiveLighting.Web.Components`; and `EntityPicker.DefaultEmptyNote`.
 
 ### Changed
 
 - The warnings from the last-period and setup-fault notes are logged under `AdaptiveLighting.Persistence.LastPeriodStore` and `AdaptiveLighting.Persistence.AreaSetupMemoryStore` instead of `AdaptiveLighting.Engine`. A log filter naming the old category needs the new one. The note files and their backups are unchanged.
 - `AdaptiveLighting.Extensions` no longer depends on `NetDaemon.AppModel`.
+- `ModeMonitor`'s constructor requires the motion latch as its eighth argument. The house-mode rules and the period tracking are separate classes behind the same front, sharing one lock and one latch. An engine wired without the latch used to build its own and answer differently from every room.
+- `LightingConfigPath`, `ConfigLocation` and `ConfigLocationSource` move from `AdaptiveLighting.Web.Services` in the web package to `AdaptiveLighting.Hosting` in the core package.
+- 41 view-helper types move from `AdaptiveLighting.Web.Services` to `AdaptiveLighting.Web.Presentation`, in the same assembly: ActivityView, AdditionalRoutes, AppTheme, AppVersion, AreaSentences, AreaView, BoardView, CommissioningDraft, CommissioningVerdicts, CurvePath, DaylightCurveMode, DaylightLabels, FeedbackUrl, FloorGrouping, Glyph, HelperOptions, HouseModeSync, HouseSentences, HouseView, IdentitySentence, InvariantNumber, KelvinColour, LightLevels, LightReadout, LuxCurve, PeriodStartText, Presets, RawBrightnessStep, RoomFacts, RoomLevels, RoomSettings, SaveNotice, Schedule, SentenceBuilder, SentenceModel, SetupWarning, SleepSteps, SolarCalendar, StateGlyph, SwitchOnWarning and TokenFormat, together with the further public types declared in those files, of which ActivityRow, ActivityLine, ActivityCategory and HiddenRoomsNote are the ones other code names. `Web.Services` keeps the eleven types that are services in the container sense.
+- The selection-authority panel, entity picker, entity list picker, house-mode options, periods editor and period-select panel take one `EntityLookup` parameter instead of separate `NameResolver` and `KnownResolver` parameters. The selection-authority panel's wording moves into a `SelectAuthorityCopy` parameter, replacing `Label`, `LabelHelp`, `Note`, `NoneLabel`, `Placeholder`, `EmptyNote`, `AuthorityLabel`, `AuthorityHelp`, `AuthorityNote` and `UnavailableNote`. The periods editor takes a `PeriodHold` parameter and no longer injects the engine host.
+- The level test a room runs is held as one value rather than a flag beside six fields, and the house-wide gates are decided in one ordered place. Refusal wording and behaviour are unchanged.
 
 ### Removed
 

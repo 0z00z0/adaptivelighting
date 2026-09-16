@@ -194,6 +194,10 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.GlobalConfigTests.EffectiveKillSwitchEntity_PrefersExplicit_ElseDefault_ElseNull
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.NetDaemonAppSwitchTests.EntityIdForTypeName_MatchesNetDaemonStateManagerSlug
 
+			<!-- The last-seen cache files entities by the engine's own defaults. A copy creeping back here would
+				file a house's sensors one way while the engine discovers them another, silently. -->
+			| FullyQualifiedName~AdaptiveLighting.Tests.LastSeen.LastSeenOptionsTests.
+
 			<!-- Pages that write a stored value back: it must come out as it went in, whatever the locale. -->
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LevelsEditorTests.Rendering_A_Room_Leaves_An_Off_Ladder_Level_Exactly_As_It_Was
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PeriodStartEditorTests.A_Start_Neither_Shape_Can_Express_Survives_A_Render_Untouched
