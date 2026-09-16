@@ -102,6 +102,12 @@ An item with no number is one this file records before the tracker has minted on
   Whether the core set should carry either class, or a named test from each, is an open choice; the set stands
   unchanged until it is made.
 
+- **The two label placeholders in the house settings still read the old hyphenated defaults.**
+  `Components/HouseFoldsSection.razor` lines 103 and 125 show `adaptive-exclude` and `adaptive-motion` as
+  the greyed-out example text, while the shipped defaults are now `adaptive_exclude` and `adaptive_motion`.
+  A hyphen can never equal a label id, so the example points at a value that cannot match. The file belongs
+  to package 5.1 of the refactor plan, which changes it next.
+
 ## Parked
 
 - #30 **The daylight chart is only 101 px tall on a phone, which caps its labels.** The corner and the label spread

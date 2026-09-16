@@ -187,9 +187,11 @@ public sealed class LightingOrchestrator : IDisposable
 				// and the choice is visible without DBG logging switched on.
 				if (resolver.IsExcludedArea(areaConfig.AreaId))
 				{
+					// The stored value is a label id once translated, so show the name the owner sees in HA.
 					_logger.LogInformation(
 						"Area {Area} carries the label '{Label}' in Home Assistant and is treated as not there.",
-						areaConfig.DisplayName, _config.Global.ExcludeLabel);
+						areaConfig.DisplayName,
+						LabelMatch.DisplayName(registry.KnownLabels, _config.Global.ExcludeLabel));
 					continue;
 				}
 
