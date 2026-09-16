@@ -2,7 +2,7 @@ using AdaptiveLighting.Configuration;
 
 using Microsoft.Extensions.Configuration;
 
-namespace AdaptiveLighting.Web.Services;
+namespace AdaptiveLighting.Hosting;
 
 /// <summary>Where a resolved configuration document came from, so the UI can say which file it is editing.</summary>
 public enum ConfigLocationSource
@@ -26,9 +26,9 @@ public sealed record ConfigLocation(string Path, ConfigLocationSource Source, st
 /// <remarks>
 ///     The editable document lives outside the publish tree, which the deploy script wipes and re-copies. Resolved
 ///     once at start-up and baked into the singleton <c>LightingConfigStore</c>, so no request, component or browser
-///     can influence it, which holds the UI's write surface to one file. The only type in the web UI that touches
-///     <see cref="IConfiguration"/>; the root configuration object carries <c>HomeAssistant:Token</c> and never
-///     leaves here.
+///     can influence it, which holds the UI's write surface to one file. The only type in the engine or the UI that
+///     touches <see cref="IConfiguration"/>; the root configuration object carries <c>HomeAssistant:Token</c> and
+///     never leaves here.
 /// </remarks>
 public static class LightingConfigPath
 {
@@ -50,7 +50,7 @@ public static class LightingConfigPath
 		ArgumentNullException.ThrowIfNull(logger);
 		ArgumentException.ThrowIfNullOrWhiteSpace(contentRootPath);
 
-		var inTree = InTreeExample(configuration, contentRootPath);
+		string inTree = InTreeExample(configuration, contentRootPath);
 
 		if (configuration[ConfigPathKey] is not { Length: > 0 } configured)
 		{
@@ -65,12 +65,12 @@ public static class LightingConfigPath
 				$"{ConfigPathKey} is not set in appsettings.json, so this host is editing the file inside its own deploy folder. The next deploy will overwrite it.");
 		}
 
-		var external = Path.GetFullPath(configured, contentRootPath);
+		string external = Path.GetFullPath(configured, contentRootPath);
 
 		if (File.Exists(external))
 			return new ConfigLocation(external, ConfigLocationSource.External, null);
 
-		var directory = Path.GetDirectoryName(external);
+		string? directory = Path.GetDirectoryName(external);
 
 		if (directory is null)
 			return Fallback(inTree, external, "it has no directory", logger);
@@ -118,11 +118,11 @@ public static class LightingConfigPath
 
 	private static string InTreeExample(IConfiguration configuration, string contentRootPath)
 	{
-		var appsFolder = Path.GetFullPath(
+		string appsFolder = Path.GetFullPath(
 			configuration[AppsFolderKey] is { Length: > 0 } folder ? folder : DefaultAppsFolder,
 			contentRootPath);
 
-		var conventional = Path.Combine(appsFolder, DefaultSubFolder, DocumentName);
+		string conventional = Path.Combine(appsFolder, DefaultSubFolder, DocumentName);
 
 		if (File.Exists(conventional))
 			return conventional;
