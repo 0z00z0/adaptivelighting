@@ -511,28 +511,30 @@ public sealed class LightingEngineHostTests
 	}
 
 	/// <summary>A writer that never heard of the normaliser or the validator gets both anyway.</summary>
+	// Both live in the host's one write step, so neither the person's save nor the migrating write can skip them.
 	[TestMethod]
-	public void TheStore_NormalisesAndValidatesWhoeverWrites()
+	public void TheWritePath_NormalisesAndValidatesWhoeverWrites()
 	{
-		LightingConfigStore store = new(_path, NullLogger<LightingConfigStore>.Instance);
+		LightingEngineHost host = BuildHost();
 
 		AdaptiveLightingConfig broken = WithAnEmptyLevelsRow();
 
-		ConfigWriteResult refused = store.Save(broken, InvalidDocument.Refuse);
+		SaveResult refused = host.Save(broken);
 
-		Assert.IsFalse(refused.Written);
+		Assert.AreEqual(SaveStatus.Rejected, refused.Status);
 		Assert.IsFalse(refused.Validation.IsValid);
 		Assert.IsFalse(File.Exists(_path), "a refused write reaches no byte of the disk");
 		Assert.AreEqual(0, broken.Areas.Single().Levels!.Count, "and it was normalised on the way to being refused");
 
-		AdaptiveLightingConfig forcing = WithAnEmptyLevelsRow();
+		// The migrating write is the other writer, and it goes out over a document the engine cannot run.
+		File.WriteAllText(_path, LegacySchemaTheEngineCannotRun);
 
-		ConfigWriteResult forced = store.Save(forcing, InvalidDocument.WriteAnyway);
+		SaveResult forced = host.Reload();
 
-		Assert.IsTrue(forced.Written);
 		Assert.IsFalse(forced.Validation.IsValid, "written, and the errors come back with it to be reported");
-		Assert.IsTrue(File.Exists(_path));
-		Assert.AreEqual(0, forcing.Areas.Single().Levels!.Count, "and this one was normalised too");
+		StringAssert.Contains(File.ReadAllText(_path), "Areas:", "the write happened");
+		Assert.IsFalse(string.IsNullOrWhiteSpace(host.Store.Load().Periods.Single().Id),
+			"and it was normalised too: the ids every later reference resolves by are minted on the way out");
 	}
 
 	/// <summary>A document the engine cannot run, carrying the one row the normaliser is certain to drop.</summary>

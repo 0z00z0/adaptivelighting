@@ -26,6 +26,21 @@ public enum SaveStatus
 	Failed
 }
 
+/// <summary>What the host's write step does with a document the engine cannot run.</summary>
+internal enum InvalidDocument
+{
+	/// <summary>Refuse the write and leave the file as it was.</summary>
+	Refuse,
+
+	/// <summary>Write it, and hand the errors back to be reported.</summary>
+	WriteAnyway
+}
+
+/// <summary>What one pass through the host's write step did.</summary>
+/// <param name="Written">Whether the bytes reached the disk.</param>
+/// <param name="Validation">The document as validated after normalisation, whether or not it was written.</param>
+internal sealed record ConfigWriteResult(bool Written, ValidationResult Validation);
+
 /// <summary>The outcome of a save. <c>Message</c> is one sentence for the operator.</summary>
 /// <remarks>A <see cref="SaveStatus.Saved"/> result may still carry area errors, which cost an area and not the save.</remarks>
 public sealed record SaveResult(SaveStatus Status, ValidationResult Validation, string Message)
@@ -83,10 +98,6 @@ public sealed class LightingEngineHost : IDisposable
 		_store = store ?? throw new ArgumentNullException(nameof(store));
 		_loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 		_logger = loggerFactory.CreateLogger<LightingEngineHost>();
-
-		// The store validates every write, this class's own two included. It cannot ask Home Assistant on its
-		// own, so it is handed the check that can.
-		_store.ValidateWith(Validate);
 
 		_discovery = new AreaDiscoveryScheduler(_gate, _store, _loggerFactory, WriteDiscoveredAreas, AdoptDiscoveredAreas);
 
@@ -275,7 +286,7 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>Writes a document that loaded through a superseded schema straight back out in the current one.</summary>
 	/// <remarks>
 	///     On first load, before the engine is built, so a house that never opens the web UI does not depend on the
-	///     translation tables for ever. The write goes through <see cref="LightingConfigStore.Save"/>, so the
+	///     translation tables for ever. The write goes through <see cref="NormaliseValidateAndWrite"/>, so the
 	///     pre-migration file survives at <see cref="LightingConfigStore.BackupPath"/>. Once only, because the store
 	///     keeps one backup slot. A document the engine cannot run is rewritten all the same, with the errors reported.
 	/// </remarks>
@@ -283,7 +294,7 @@ public sealed class LightingEngineHost : IDisposable
 	{
 		try
 		{
-			ConfigWriteResult write = _store.Save(config, InvalidDocument.WriteAnyway);
+			ConfigWriteResult write = NormaliseValidateAndWrite(config, InvalidDocument.WriteAnyway);
 
 			_logger.LogInformation(
 				"The configuration file was written against an older schema and has been rewritten in the current one. "
@@ -304,9 +315,9 @@ public sealed class LightingEngineHost : IDisposable
 
 	/// <summary>The person's write: refuse a document the engine cannot run, then re-read and rebuild every area.</summary>
 	/// <remarks>
-	///     Normalisation and validation belong to <see cref="LightingConfigStore.Save"/>, so all three writers get them.
-	///     What is here is the refusal: a document-level error costs the save and nothing reaches the disk, while
-	///     area-level errors do not refuse it.
+	///     Normalisation and validation belong to <see cref="NormaliseValidateAndWrite"/>, so all three writers get
+	///     them. What is here is what follows the refusal: a document-level error costs the save and nothing reaches
+	///     the disk, while area-level errors do not refuse it.
 	/// </remarks>
 	public SaveResult Save(AdaptiveLightingConfig config)
 	{
@@ -318,11 +329,12 @@ public sealed class LightingEngineHost : IDisposable
 
 			try
 			{
-				write = _store.Save(config, InvalidDocument.Refuse);
+				write = NormaliseValidateAndWrite(config, InvalidDocument.Refuse);
 			}
 			catch (LightingConfigException exception)
 			{
-				// The store validated before it wrote, so asking again is the way back to what it saw.
+				// Already normalised and validated before the write threw, so asking again is the way back to what
+				// the refusal check saw.
 				ValidationResult attempted = Validate(config);
 				LastValidation = attempted;
 				_logger.LogError(exception, "Could not write the lighting configuration.");
@@ -391,13 +403,35 @@ public sealed class LightingEngineHost : IDisposable
 			facts.PeriodSelectOptions);
 	}
 
+	/// <summary>The one way a document reaches the disk: normalise it, validate it, then refuse it or write it.</summary>
+	/// <remarks>
+	///     All three writers come through here, so none of them can skip either step. <paramref name="onInvalid"/>
+	///     refuses a person's save of a document the engine cannot run, while this class's own two writes go out and
+	///     carry their errors back. Warnings and area errors never affect a write.
+	/// </remarks>
+	/// <exception cref="LightingConfigException">The file could not be written.</exception>
+	private ConfigWriteResult NormaliseValidateAndWrite(AdaptiveLightingConfig config, InvalidDocument onInvalid)
+	{
+		// In place, so the caller's own object carries the drops: the page and the scan both look at it afterwards.
+		ConfigNormalizer.Normalize(config);
+
+		ValidationResult validation = Validate(config);
+
+		if (!validation.IsValid && onInvalid is InvalidDocument.Refuse)
+			return new ConfigWriteResult(Written: false, validation);
+
+		_store.Write(config);
+
+		return new ConfigWriteResult(Written: true, validation);
+	}
+
 	/// <summary>The discovery scan's write. Runs behind the gate, because its caller holds it.</summary>
 	/// <returns><c>null</c> when the write failed, which tells the scan to put the document back as it found it.</returns>
 	private ConfigWriteResult? WriteDiscoveredAreas(AdaptiveLightingConfig config)
 	{
 		try
 		{
-			return _store.Save(config, InvalidDocument.WriteAnyway);
+			return NormaliseValidateAndWrite(config, InvalidDocument.WriteAnyway);
 		}
 		catch (LightingConfigException exception)
 		{

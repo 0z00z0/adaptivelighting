@@ -125,12 +125,6 @@ public static class ConfigNormalizer
 		area.LightLevels = lights.Count > 0 ? lights : null;
 	}
 
-	/// <summary>A value as the whole number every ordinary readout shows.</summary>
-	// Away from zero, not to the even neighbour: the editor, the collapsed summary and the file have to agree,
-	// and 62.5 reading 62 in one place and 63 in another is the disagreement this exists to close.
-	public static double Whole(double value) =>
-		double.IsFinite(value) ? Math.Round(value, MidpointRounding.AwayFromZero) : value;
-
 	/// <summary>A row that carries nothing but its value: Normal kind, no scene, no clamp, no reset trigger, no activation list.</summary>
 	private static bool IsPureDefault(HouseModeOptionConfig option) =>
 		option.Kind == ModeKind.Normal
