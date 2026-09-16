@@ -12,10 +12,11 @@ internal sealed record HouseFacts(
 	IReadOnlyCollection<string>? AreaIds,
 	IReadOnlyCollection<string>? LabelsInUse,
 	IReadOnlyCollection<string>? HouseModeOptions,
-	IReadOnlyCollection<string>? PeriodSelectOptions)
+	IReadOnlyCollection<string>? PeriodSelectOptions,
+	IReadOnlyCollection<string>? LabelIds)
 {
 	/// <summary>Nothing is connected, so every referential check is skipped.</summary>
-	public static HouseFacts Unknown { get; } = new(null, null, null, null, null);
+	public static HouseFacts Unknown { get; } = new(null, null, null, null, null, null);
 
 	/// <summary>Reads everything the validator asks about, for the two selects <paramref name="config"/> names.</summary>
 	public static HouseFacts Read(IHaContext? ha, IHaRegistry? registry, AdaptiveLightingConfig config)
@@ -31,7 +32,25 @@ internal sealed record HouseFacts(
 			ReadAreaIds(registry),
 			ReadLabelsInUse(registry),
 			ReadSelectOptions(ha, config.Global.HouseMode?.Entity),
-			ReadSelectOptions(ha, config.Global.PeriodSelect?.EntityId));
+			ReadSelectOptions(ha, config.Global.PeriodSelect?.EntityId),
+			ReadLabelIds(registry));
+	}
+
+	/// <summary>Every label id the house has, carried or not.</summary>
+	/// <remarks>Apart from <see cref="LabelsInUse"/>, which mixes both forms: only an id set can tell a stored id from a stored name.</remarks>
+	private static IReadOnlyCollection<string>? ReadLabelIds(IHaRegistry? registry)
+	{
+		if (registry is null)
+			return null;
+
+		try
+		{
+			return [.. registry.KnownLabels().Select(label => label.Id)];
+		}
+		catch (InvalidOperationException)
+		{
+			return null;
+		}
 	}
 
 	private static IReadOnlyCollection<string>? ReadEntityIds(IHaContext? ha)

@@ -82,6 +82,10 @@ public sealed record ActivityFilterChip(
 /// <param name="Heading">What that date is called: <c>Today</c>, <c>Yesterday</c>, or the date.</param>
 public sealed record ActivityDay(DateOnly Day, string Heading, IReadOnlyList<ActivityRow> Rows);
 
+/// <summary>A room in the activity page's filter: the key it is chosen by, and the name it is shown under.</summary>
+/// <remarks>The key is the area id, which Home Assistant keeps through a rename. A room the document gives no area falls back to its name.</remarks>
+public sealed record ActivityRoomOption(string Key, string Name);
+
 /// <summary>
 ///     The activity page's decisions, in one testable place: what a report is called, which room it belongs to,
 ///     and which day it falls under.
@@ -197,8 +201,8 @@ public static class ActivityView
 		return entry.Snapshot is { } snapshot ? Describe(snapshot) : Describe(entry.Notice!);
 	}
 
-	// Ordinal on the display name, as Rooms and the verdict collapse in Rows are. If the three disagree about what
-	// "the same room" is, an option stops meaning a filter.
+	// Ordinal on the display name, as the verdict collapse in Rows is. The activity page's own filter goes through
+	// InRoomByKey instead; this one serves a caller that has a name and no id.
 	public static IReadOnlyList<ActivityEntry> InRoom(IEnumerable<ActivityEntry> entries, string? room)
 	{
 		ArgumentNullException.ThrowIfNull(entries);
@@ -227,6 +231,42 @@ public static class ActivityView
 				.OrderBy(name => name, StringComparer.CurrentCulture)
 		];
 	}
+
+	/// <summary>The entries reported by the room <paramref name="key"/> stands for.</summary>
+	/// <remarks>Keyed as <see cref="RoomOptions"/> keys, so a room renamed in Home Assistant stays one room and keeps its earlier entries.</remarks>
+	public static IReadOnlyList<ActivityEntry> InRoomByKey(IEnumerable<ActivityEntry> entries, string? key)
+	{
+		ArgumentNullException.ThrowIfNull(entries);
+
+		if (string.IsNullOrWhiteSpace(key))
+			return [.. entries];
+
+		return [.. entries.Where(entry => string.Equals(RoomKey(entry), key, StringComparison.OrdinalIgnoreCase))];
+	}
+
+	/// <summary>
+	///     The rooms that have reported, each as the key it is chosen by and the name it reported most recently.
+	///     Sorted by name under the culture.
+	/// </summary>
+	/// <remarks>The newest name wins, so a room renamed in Home Assistant is offered once, under the name a person sees there now.</remarks>
+	public static IReadOnlyList<ActivityRoomOption> RoomOptions(IEnumerable<ActivityEntry> entries)
+	{
+		ArgumentNullException.ThrowIfNull(entries);
+
+		Dictionary<string, ActivityRoomOption> byKey = new(StringComparer.OrdinalIgnoreCase);
+
+		// A house-wide notice names no room, and an option with no room is one the filter cannot mean.
+		foreach (ActivityEntry entry in entries.OrderBy(entry => entry.Sequence))
+			if (RoomKey(entry) is { Length: > 0 } key)
+				byKey[key] = new ActivityRoomOption(key, entry.AreaName is { Length: > 0 } name ? name : key);
+
+		return [.. byKey.Values.OrderBy(option => option.Name, StringComparer.CurrentCulture)];
+	}
+
+	// The area id where there is one. A room the document gives no area has only its name to be known by, as the
+	// snapshot cache and the fault memory already assume.
+	private static string? RoomKey(ActivityEntry entry) =>
+		entry.AreaId is { Length: > 0 } areaId ? areaId : entry.AreaName;
 
 	// ===================== what is not an event at all =====================
 
@@ -586,7 +626,8 @@ public static class ActivityView
 
 		void SwallowRepeatedVerdict(int from, ActivityLine line)
 		{
-			// Ordinal on the display name, as InRoom and the room filter are.
+			// Ordinal on the display name, as InRoom is. A rename splits a run of repeats, which is honest: the
+			// rows either side of it say different things.
 			string? room = ordered[from].AreaName;
 
 			for (int scan = from + 1; scan < ordered.Count; scan++)

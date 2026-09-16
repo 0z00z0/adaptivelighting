@@ -764,7 +764,7 @@ public sealed class AreaEntityResolverTests
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.keep", "light.skip", "binary_sensor.m"];
-		registry.Labels["light.skip"] = ["adaptive-exclude"];
+		registry.Labels["light.skip"] = ["adaptive_exclude"];
 		ha.SetState("light.keep", "off");
 		ha.SetState("light.skip", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
@@ -787,7 +787,7 @@ public sealed class AreaEntityResolverTests
 			"""
 			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 			  Global:
-			    ExcludeLabel: adaptive-exclude
+			    ExcludeLabel: adaptive_exclude
 			  Periods:
 			    - Name: day
 			      Start: "07:00"
@@ -838,7 +838,7 @@ public sealed class AreaEntityResolverTests
 		FakeHaContext ha = new();
 		FakeAreaRegistry registry = new();
 		registry.Areas["stue"] = ["light.both", "light.blessed", "binary_sensor.m"];
-		registry.Labels["light.both"] = ["adaptive", "adaptive-exclude"];
+		registry.Labels["light.both"] = ["adaptive", "adaptive_exclude"];
 		registry.Labels["light.blessed"] = ["adaptive"];
 		ha.SetState("light.both", "off");
 		ha.SetState("light.blessed", "off");
@@ -856,7 +856,7 @@ public sealed class AreaEntityResolverTests
 		FakeHaContext ha = new();
 		FakeAreaRegistry registry = new();
 		registry.Areas["stue"] = ["binary_sensor.m"];
-		registry.Labels["light.excluded"] = ["adaptive-exclude"];
+		registry.Labels["light.excluded"] = ["adaptive_exclude"];
 		ha.SetState("light.unlabelled", "off");
 		ha.SetState("light.excluded", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
@@ -950,7 +950,7 @@ public sealed class AreaEntityResolverTests
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.mmwave", "binary_sensor.door"];
-		registry.Labels["binary_sensor.mmwave"] = ["adaptive-motion"];
+		registry.Labels["binary_sensor.mmwave"] = ["adaptive_motion"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.mmwave", "off", new() { ["device_class"] = "sound" });
 		ha.SetState("binary_sensor.door", "off", new() { ["device_class"] = "door" });
@@ -1268,7 +1268,7 @@ public sealed class AreaEntityResolverTests
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.stue_group", "light.bulb_a", "light.bulb_b", "light.skip"];
-		registry.Labels["light.skip"] = ["adaptive-exclude"];
+		registry.Labels["light.skip"] = ["adaptive_exclude"];
 		ha.SetState("light.stue_group", "off", new() { ["entity_id"] = new[] { "light.bulb_a", "light.bulb_b" } });
 		ha.SetState("light.bulb_a", "off");
 		ha.SetState("light.bulb_b", "off");
@@ -1305,7 +1305,7 @@ public sealed class AreaEntityResolverTests
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["binary_sensor.mmwave", "binary_sensor.vibration", "binary_sensor.door"];
-		registry.Labels["binary_sensor.mmwave"] = ["adaptive-motion"];
+		registry.Labels["binary_sensor.mmwave"] = ["adaptive_motion"];
 		ha.SetState("binary_sensor.mmwave", "off", new() { ["device_class"] = "sound" });
 		ha.SetState("binary_sensor.vibration", "off", new() { ["device_class"] = "vibration" });
 		ha.SetState("binary_sensor.door", "off", new() { ["device_class"] = "door" });
@@ -1328,7 +1328,7 @@ public sealed class AreaEntityResolverTests
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 		registry.Areas["petterhaugen"] = ["light.alt", "binary_sensor.inne_bevegelse"];
-		registry.AreaLabels["petterhaugen"] = ["adaptive-exclude"];
+		registry.AreaLabels["petterhaugen"] = ["adaptive_exclude"];
 		ha.SetState("light.alt", "off");
 		ha.SetState("binary_sensor.inne_bevegelse", "off", new() { ["device_class"] = "motion" });
 
@@ -1336,7 +1336,7 @@ public sealed class AreaEntityResolverTests
 			new AreaConfig { AreaId = "petterhaugen" }, new AreaSettings(), out _, out var error);
 
 		Assert.IsFalse(ok, "an area labelled in HA is the owner's act, and the engine leaves it alone");
-		StringAssert.Contains(error, "adaptive-exclude", "the message must name the label so the fix is obvious");
+		StringAssert.Contains(error, "adaptive_exclude", "the message must name the label so the fix is obvious");
 	}
 
 	[TestMethod]
@@ -1347,7 +1347,7 @@ public sealed class AreaEntityResolverTests
 		registry.Areas["petterhaugen"] = ["light.alt_lys", "binary_sensor.inne_bevegelse"];
 		registry.Areas["stue"] = ["binary_sensor.stue_m"];
 		registry.Areas["kjokken"] = ["binary_sensor.kjokken_m"];
-		registry.AreaLabels["petterhaugen"] = ["adaptive-exclude"];
+		registry.AreaLabels["petterhaugen"] = ["adaptive_exclude"];
 
 		ha.SetState("light.alt_lys", "off");
 		ha.SetState("binary_sensor.inne_bevegelse", "off", new()
@@ -1374,7 +1374,7 @@ public sealed class AreaEntityResolverTests
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 		registry.Areas["hytta"] = ["light.l", "binary_sensor.m"];
-		registry.AreaLabels["hytta"] = ["adaptive-exclude"];
+		registry.AreaLabels["hytta"] = ["adaptive_exclude"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
@@ -1392,7 +1392,7 @@ public sealed class AreaEntityResolverTests
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 		registry.Areas["hytta"] = ["light.l", "binary_sensor.m"];
-		registry.AreaLabels["hytta"] = ["Adaptive-Exclude"];
+		registry.AreaLabels["hytta"] = ["Adaptive_Exclude"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
@@ -1407,7 +1407,7 @@ public sealed class AreaEntityResolverTests
 		var ha = new FakeHaContext();
 		var registry = new FakeAreaRegistry();
 		registry.Areas["hytta"] = ["light.l", "binary_sensor.m"];
-		registry.AreaLabels["hytta"] = ["adaptive-exclude"];
+		registry.AreaLabels["hytta"] = ["adaptive_exclude"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 

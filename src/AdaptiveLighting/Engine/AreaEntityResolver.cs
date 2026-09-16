@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Extensions;
 using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Engine;
@@ -148,7 +149,7 @@ public sealed class AreaEntityResolver
 			return "no longer exists in Home Assistant.";
 
 		if (IsExcludedArea(areaId))
-			return $"carries the label '{_global.ExcludeLabel}' in Home Assistant, so the engine treats it as not there.";
+			return $"carries the label '{LabelText(_global.ExcludeLabel)}' in Home Assistant, so the engine treats it as not there.";
 
 		List<string> lightsHere = [.. _registry.EntitiesInArea(areaId).Where(id => id.HasDomain(LightDomain))];
 
@@ -158,14 +159,14 @@ public sealed class AreaEntityResolver
 		List<string> notExcluded = [.. lightsHere.Where(id => !IsExcluded(id))];
 
 		if (notExcluded.Count == 0)
-			return $"has {Plural(lightsHere.Count, "light")} here, all carrying the label '{_global.ExcludeLabel}'.";
+			return $"has {Plural(lightsHere.Count, "light")} here, all carrying the label '{LabelText(_global.ExcludeLabel)}'.";
 
 		if (_global.IncludeLabel is { Length: > 0 } include)
 		{
 			List<string> included = [.. notExcluded.Where(IsIncluded)];
 
 			if (included.Count == 0)
-				return $"has {Plural(notExcluded.Count, "light")} here, but none carries the label '{include}' that Home Assistant is set to require.";
+				return $"has {Plural(notExcluded.Count, "light")} here, but none carries the label '{LabelText(include)}' that Home Assistant is set to require.";
 
 			notExcluded = included;
 		}
@@ -215,7 +216,7 @@ public sealed class AreaEntityResolver
 			// Before any discovery, so a labelled area logs no group-settling warnings on the way to being skipped.
 			if (IsExcludedArea(configuredArea))
 			{
-				error = $"Area '{configuredArea}' carries the label '{_global.ExcludeLabel}' in Home Assistant, so the engine treats it as not there. Remove the label to run it.";
+				error = $"Area '{configuredArea}' carries the label '{LabelText(_global.ExcludeLabel)}' in Home Assistant, so the engine treats it as not there. Remove the label to run it.";
 				return false;
 			}
 
@@ -854,8 +855,7 @@ public sealed class AreaEntityResolver
 	/// <summary>Whether the area's own registration carries the exclude label, which reads as the area not existing.</summary>
 	public bool IsExcludedArea(string? areaId) =>
 		areaId is { Length: > 0 }
-		&& _global.ExcludeLabel is { Length: > 0 } label
-		&& _registry.LabelsOfArea(areaId).Contains(label, StringComparer.OrdinalIgnoreCase);
+		&& LabelMatch.Carries(_registry.LabelsOfArea(areaId), _registry.KnownLabels, _global.ExcludeLabel);
 
 	// No label configured means everything passes. Checked after the exclusion, never instead of it, so a light
 	// carrying both labels stays out.
@@ -863,5 +863,9 @@ public sealed class AreaEntityResolver
 		_global.IncludeLabel is not { Length: > 0 } include || HasLabel(entityId, include);
 
 	private bool HasLabel(string entityId, string label) =>
-		_registry.LabelsOf(entityId).Contains(label, StringComparer.OrdinalIgnoreCase);
+		LabelMatch.Carries(_registry.LabelsOf(entityId), _registry.KnownLabels, label);
+
+	/// <summary>What to call <paramref name="label"/> in a sentence a person reads.</summary>
+	// The document stores an id once it has been translated, and an id is not what the house sees in HA.
+	private string LabelText(string label) => LabelMatch.DisplayName(_registry.KnownLabels, label);
 }

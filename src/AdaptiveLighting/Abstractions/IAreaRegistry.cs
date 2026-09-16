@@ -1,3 +1,5 @@
+using AdaptiveLighting.Extensions;
+
 namespace AdaptiveLighting.Abstractions;
 
 /// <summary>A floor as the engine and UI need it: identity, display name, and stacking order.</summary>
@@ -21,14 +23,18 @@ public interface IAreaRegistry
 	/// <summary>The entity ids assigned to <paramref name="areaId"/>, directly or through a device.</summary>
 	IReadOnlyList<string> EntitiesInArea(string areaId);
 
-	/// <summary>The registry labels on <paramref name="entityId"/>, by id and by name, since HA accepts either.</summary>
-	IReadOnlyList<string> LabelsOf(string entityId);
+	/// <summary>Every label the house has, whether or not anything carries it.</summary>
+	/// <remarks>What decides whether a stored value is an id or a name. Empty while the registry is unreadable.</remarks>
+	IReadOnlyList<RegistryLabel> KnownLabels { get; }
+
+	/// <summary>The registry labels on <paramref name="entityId"/>.</summary>
+	IReadOnlyList<RegistryLabel> LabelsOf(string entityId);
 
 	/// <summary>
-	///     The registry labels on the area itself, by id and by name. Distinct from <see cref="LabelsOf"/>: labelling
-	///     an area does not label the entities in it.
+	///     The registry labels on the area itself. Distinct from <see cref="LabelsOf"/>: labelling an area does not
+	///     label the entities in it.
 	/// </summary>
-	IReadOnlyList<string> LabelsOfArea(string areaId);
+	IReadOnlyList<RegistryLabel> LabelsOfArea(string areaId);
 
 	/// <summary>
 	///     The device <paramref name="entityId"/> belongs to, or <c>null</c> for a group helper, a template entity

@@ -27,7 +27,7 @@ public sealed class HaCatalogLabelTests
 	{
 		LabelOption option = new("label_abc123", "adaptive");
 
-		Assert.AreEqual("label_abc123", option.Id);
-		Assert.AreEqual("adaptive", option.Name, "the name is what a label field stores and what LabelsOf matches");
+		Assert.AreEqual("label_abc123", option.Id, "the id is what a label field stores, because Home Assistant keeps it through a rename");
+		Assert.AreEqual("adaptive", option.Name, "the name is all a person sees");
 	}
 }

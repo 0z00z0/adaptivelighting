@@ -30,13 +30,15 @@ public static class ConfigValidator
 		IReadOnlyCollection<string>? knownAreaIds = null,
 		IReadOnlyCollection<string>? liveSelectOptions = null,
 		IReadOnlyCollection<string>? labelsInUse = null,
-		IReadOnlyCollection<string>? livePeriodSelectOptions = null)
+		IReadOnlyCollection<string>? livePeriodSelectOptions = null,
+		IReadOnlyCollection<string>? knownLabelIds = null)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
 		ValidationResult result = new();
 
 		ValidateGlobal(config.Global, knownEntityIds, labelsInUse, result);
+		ValidateLabelsAreIds(config.Global, knownLabelIds, result);
 		ValidatePeriods(config.Periods, result);
 		ValidateStartsOnMotion(config, result);
 		ValidateHouseMode(config, knownEntityIds, liveSelectOptions, result);
@@ -256,6 +258,19 @@ public static class ConfigValidator
 			else if (!knownEntityIds.Contains(outdoorLux))
 				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not known to Home Assistant; the rooms that follow it count as dark until it appears.");
 		}
+	}
+
+	/// <summary>A label setting still holding a name, which the start-up write could not turn into a label id.</summary>
+	/// <remarks>It keeps working, by name, until the label is renamed in Home Assistant. Saying so is the only warning there is about it.</remarks>
+	private static void ValidateLabelsAreIds(
+		GlobalConfig global,
+		IReadOnlyCollection<string>? knownLabelIds,
+		ValidationResult result)
+	{
+		foreach ((string setting, string value) in LabelTranslation.NotIds(global, knownLabelIds))
+			result.AddWarning(
+				$"Global.{setting} is '{value}', which Home Assistant does not know as a label id. It still matches by name, "
+				+ "but it stops matching if that label is renamed. Pick the label again on the settings page to store its id.");
 	}
 
 	/// <summary>The include label, when nothing in Home Assistant carries it.</summary>

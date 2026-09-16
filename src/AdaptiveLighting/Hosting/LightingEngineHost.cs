@@ -4,6 +4,7 @@ using System.Reactive.Subjects;
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Extensions;
 using AdaptiveLighting.Ha;
 using AdaptiveLighting.LastSeen;
 
@@ -274,8 +275,12 @@ public sealed class LightingEngineHost : IDisposable
 
 			AdaptiveLightingConfig config = read.Config;
 
-			if (read.NeedsMigratingWrite)
-				RewriteInCurrentSchema(config);
+			// Both reasons take the same write. Translation runs first, so one rewrite covers a document that needs
+			// both, and its result is what decides whether a document in the current schema is written at all.
+			bool translated = LabelTranslation.Apply(config.Global, KnownLabels());
+
+			if (read.NeedsMigratingWrite || translated)
+				RewriteInCurrentSchema(config, read.NeedsMigratingWrite);
 
 			_discovery.ArmIfNeeded(config, _ha, _registry, _scheduler);
 
@@ -283,22 +288,22 @@ public sealed class LightingEngineHost : IDisposable
 		}
 	}
 
-	/// <summary>Writes a document that loaded through a superseded schema straight back out in the current one.</summary>
+	/// <summary>Writes a document that loaded through a superseded schema, or that still stores label names, back out.</summary>
 	/// <remarks>
 	///     On first load, before the engine is built, so a house that never opens the web UI does not depend on the
 	///     translation tables for ever. The write goes through <see cref="NormaliseValidateAndWrite"/>, so the
 	///     pre-migration file survives at <see cref="LightingConfigStore.BackupPath"/>. Once only, because the store
 	///     keeps one backup slot. A document the engine cannot run is rewritten all the same, with the errors reported.
 	/// </remarks>
-	private void RewriteInCurrentSchema(AdaptiveLightingConfig config)
+	private void RewriteInCurrentSchema(AdaptiveLightingConfig config, bool olderSchema)
 	{
 		try
 		{
 			ConfigWriteResult write = NormaliseValidateAndWrite(config, InvalidDocument.WriteAnyway);
 
 			_logger.LogInformation(
-				"The configuration file was written against an older schema and has been rewritten in the current one. "
-				+ "The file as it was is at {Backup}.",
+				"The configuration file has been rewritten: {Reason}. The file as it was is at {Backup}.",
+				olderSchema ? "it was written against an older schema" : "it stored label names, which are now stored as label ids",
 				_store.BackupPath);
 
 			ReportForcedWrite(write.Validation,
@@ -400,7 +405,27 @@ public sealed class LightingEngineHost : IDisposable
 			facts.AreaIds,
 			facts.HouseModeOptions,
 			facts.LabelsInUse,
-			facts.PeriodSelectOptions);
+			facts.PeriodSelectOptions,
+			facts.LabelIds);
+	}
+
+	/// <summary>Every label the house has, or <c>null</c> while the registry cannot be asked.</summary>
+	// Null and empty mean different things here: null leaves stored values alone, empty would too, but only null
+	// says the question was never put.
+	private IReadOnlyList<RegistryLabel>? KnownLabels()
+	{
+		if (_registry is null)
+			return null;
+
+		try
+		{
+			return _registry.KnownLabels();
+		}
+		catch (InvalidOperationException)
+		{
+			// NetDaemon's registry throws until its first connection to HA completes.
+			return null;
+		}
 	}
 
 	/// <summary>The one way a document reaches the disk: normalise it, validate it, then refuse it or write it.</summary>
@@ -414,6 +439,7 @@ public sealed class LightingEngineHost : IDisposable
 	{
 		// In place, so the caller's own object carries the drops: the page and the scan both look at it afterwards.
 		ConfigNormalizer.Normalize(config);
+		LabelTranslation.Apply(config.Global, KnownLabels());
 
 		ValidationResult validation = Validate(config);
 

@@ -38,7 +38,10 @@ public static class LastSeenBuckets
 	public static bool IsCurated(string? bucket) => bucket is not null && CuratedSet.Contains(bucket);
 
 	/// <summary>Works out which bucket <paramref name="entityId"/> belongs in; never throws, never returns empty.</summary>
-	/// <remarks>The motion label is checked before the motion device class: the label exists for hardware whose class is wrong.</remarks>
+	/// <remarks>
+	///     The motion label is checked before the motion device class: the label exists for hardware whose class is
+	///     wrong. <paramref name="labels"/> carries each label by id and by name, so a document storing either files.
+	/// </remarks>
 	public static string Classify(
 		string? entityId,
 		string? deviceClass,
