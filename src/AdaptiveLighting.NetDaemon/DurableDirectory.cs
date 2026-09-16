@@ -1,4 +1,4 @@
-using AdaptiveLighting.Web.Services;
+using AdaptiveLighting.Hosting;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;

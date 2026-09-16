@@ -133,8 +133,17 @@ public class GlobalConfig
 
 	public int BlendMinutes { get; set; } = 30;
 
+	/// <summary>The exclude label a document gets when nothing says otherwise.</summary>
+	public const string DefaultExcludeLabel = "adaptive-exclude";
+
+	/// <summary>The motion label a document gets when nothing says otherwise. Read by the last-seen cache too.</summary>
+	public const string DefaultMotionLabel = "adaptive-motion";
+
+	/// <summary>The illuminance device class a document gets when nothing says otherwise. Read by the last-seen cache too.</summary>
+	public const string DefaultIlluminanceDeviceClass = "illuminance";
+
 	/// <summary>Registry label marking an entity the engine must never touch.</summary>
-	public string ExcludeLabel { get; set; } = "adaptive-exclude";
+	public string ExcludeLabel { get; set; } = DefaultExcludeLabel;
 
 	/// <summary>
 	///     Registry label a light must carry to be managed; <c>null</c> manages every light discovery finds. Applied to
@@ -143,7 +152,7 @@ public class GlobalConfig
 	public string? IncludeLabel { get; set; }
 
 	/// <summary>Registry label marking an entity as a motion source regardless of its device class.</summary>
-	public string MotionLabel { get; set; } = "adaptive-motion";
+	public string MotionLabel { get; set; } = DefaultMotionLabel;
 
 	public static readonly IReadOnlyList<string> DefaultMotionDeviceClasses = ["motion", "occupancy", "presence"];
 
@@ -160,7 +169,7 @@ public class GlobalConfig
 	public IReadOnlyList<string> EffectiveMotionDeviceClasses =>
 		MotionDeviceClasses.Count > 0 ? MotionDeviceClasses : DefaultMotionDeviceClasses;
 
-	public string IlluminanceDeviceClass { get; set; } = "illuminance";
+	public string IlluminanceDeviceClass { get; set; } = DefaultIlluminanceDeviceClass;
 
 	/// <summary>How long a light-level sensor may go without reporting before the engine stops believing it.</summary>
 	/// <remarks>
