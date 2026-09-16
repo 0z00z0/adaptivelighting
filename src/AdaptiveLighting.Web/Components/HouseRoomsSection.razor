@@ -1,0 +1,162 @@
+@* The house page's rooms list, as today's design arranges it. Every value and every action comes from the page
+   model, so a second design draws its own arrangement over the same rules. *@
+
+<header class="section-head">
+	<h2><Icon Name="@Glyph.Areas" Class="ic-head" />Areas</h2>
+	<p class="lede">
+		Rooms not listed here are never touched. Lights and sensors are found automatically from Home
+		Assistant's areas &mdash; open a room to see what was found and to change how it behaves.
+		What every room starts with, and which lights count as a room's, are under
+		<button type="button" class="thread" @onclick="() => Model.Show(HouseSection.House)">House</button>.
+	</p>
+</header>
+
+<div class="panel-actions">
+	<button type="button" @onclick="Model.ToggleAddRoom" disabled="@(Model.SetupScope is not null)">
+		@(Model.AddingRoom ? "Cancel" : "Add a room")
+	</button>
+	<button type="button" @onclick="Model.OpenSetupForEveryRoom" disabled="@(!Model.CanSetUpAgain)">Set up rooms again</button>
+</div>
+
+@if (!Model.HomeAssistantIsAnswering)
+{
+	<p class="hint">
+		Setting rooms up again needs Home Assistant &mdash; each room is rebuilt from what the registry
+		says right now.
+	</p>
+}
+
+@if (Model.AddingRoom)
+{
+	<div class="panel house-add">
+		<div class="field">
+			<div class="field-head"><label class="field-label" for="add-room-area">Which room?</label></div>
+			<div class="field-control">
+				<AreaPicker Id="add-room-area"
+							Value="@Model.AddAreaId"
+							ValueChanged="@Model.AddRoom"
+							Areas="@Model.AddableAreas"
+							NoneLabel="(pick a room)"
+							EmptyNote="@Model.AddEmptyNote" />
+			</div>
+			<div class="field-help">
+				It arrives switched off, so nothing in it changes until you switch it on.
+			</div>
+		</div>
+	</div>
+}
+
+@if (Model.SetupNote is { Length: > 0 } setupNote)
+{
+	<div class="notice ok">@setupNote</div>
+}
+
+@if (Model.SetupScope is { } scope)
+{
+	<SetupAgainPanel Config="@Model.Config"
+					 PreTicked="@scope"
+					 PlanFor="@Model.PlanSetup"
+					 NameOf="@Model.AreaName"
+					 Confirmed="@Model.ApplySetup"
+					 Cancelled="@Model.CloseSetup" />
+}
+
+@* Through the shared grouping helper, so this list and the board's lanes cannot disagree about
+   which room is upstairs. *@
+@foreach (FloorGroup<AreaConfig> group in Model.AreaGroups)
+{
+	FloorGroup<AreaConfig> floor = group;
+
+	@if (Model.ShowsFloorHeader(floor))
+	{
+		<div class="floor-head">
+			<span class="floor-name">@HousePageModel.FloorTitle(floor)</span>
+			<button type="button" class="floor-bulk" @onclick="() => Model.SwitchFloor(floor)">@Model.FloorAction(floor)</button>
+		</div>
+	}
+
+	<div class="room-rows">
+		@foreach (AreaConfig area in floor.Items)
+		{
+			AreaConfig current = area;
+			bool enabled = Model.IsEnabled(current);
+
+			<div class="room-row @AreaView.EdgeClass(enabled, Model.LiveStateOf(current))" @key="current">
+				@* Outside the link: a control inside an anchor is invalid markup and cannot be tapped
+				   without also navigating. *@
+				<button type="button"
+						class="switch @(enabled ? "on" : null)"
+						role="switch"
+						aria-checked="@(enabled ? "true" : "false")"
+						aria-label="@Model.ToggleLabel(current)"
+						title="@HousePageModel.ToggleTitle(enabled)"
+						@onclick="() => Model.ToggleEnabled(current)">
+					<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+					<span class="switch-word">@(enabled ? "on" : "off")</span>
+				</button>
+
+				@if (Model.RoomLink(current) is { Length: > 0 } href)
+				{
+					<a class="room-open" href="@href">
+						<span class="area-title">@Model.RoomName(current)</span>
+						<code class="area-slug">@current.AreaId</code>
+						<span class="area-summary-hint">@HousePageModel.RoomSummary(current)</span>
+						<span class="room-open-chevron" aria-hidden="true"></span>
+					</a>
+				}
+				else
+				{
+					@* No page to open: the room names no area, or names one but is unsaved, and the
+					   room page reads the file and not this document. *@
+					<span class="room-open room-open-shut">
+						<span class="area-title">@Model.RoomName(current)</span>
+						@if (current.AreaId is { Length: > 0 } pending)
+						{
+							<code class="area-slug">@pending</code>
+							<span class="area-summary-hint">save to open this room</span>
+						}
+						else
+						{
+							@* Only a hand-edited document reaches this state: every path that proposes a
+							   room gives it an area id. The picker is the way back. *@
+							<span class="badge bad">no area</span>
+							<span class="area-summary-hint">@HousePageModel.RoomSummary(current)</span>
+							<span class="room-adopt">
+								<AreaPicker Value="@current.AreaId"
+											ValueChanged="@(areaId => Model.AdoptArea(current, areaId))"
+											Areas="@Model.AddableAreas"
+											NoneLabel="(pick this room's area)"
+											EmptyNote="@Model.AddEmptyNote" />
+							</span>
+							<button type="button" class="danger room-drop" @onclick="() => Model.RemoveArea(current)">Remove</button>
+						}
+					</span>
+				}
+			</div>
+
+			@* A sibling of the row and not a child: the row is a switch beside a link, and a block
+			   of chips inside it breaks both. *@
+			@if (Model.SwitchOnNoteFor(current) is { } switchOn)
+			{
+				<SwitchOnNoteView Note="@switchOn" Dismissed="@(() => Model.DismissSwitchOnNote(current))" />
+			}
+		}
+	</div>
+}
+
+@if (Model.HasNoRooms)
+{
+	<div class="empty">No rooms yet. Add one to get started.</div>
+}
+
+@if (Model.SwitchedOffLine is { Length: > 0 } switchedOff)
+{
+	<p class="rooms-off">@switchedOff</p>
+}
+
+@code {
+	/// <summary>The page model this section draws.</summary>
+	[Parameter]
+	[EditorRequired]
+	public HousePageModel Model { get; set; } = null!;
+}

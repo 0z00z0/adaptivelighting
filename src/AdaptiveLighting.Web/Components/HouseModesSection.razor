@@ -1,0 +1,160 @@
+@* The house page's modes, as today's design arranges it. The three help bodies below are markup, so they live
+   here and not in the model; every word that is not markup comes from the model's copy record. *@
+
+<header class="section-head">
+	<h2><Icon Name="@Glyph.Modes" Class="ic-head" />House modes</h2>
+	<p class="lede">
+		The house mode lives in a Home Assistant dropdown helper. Pick the helper, then say what each
+		of its options means &mdash; Normal, Sleep, Away or Guest. You switch modes on the
+		<a href="/">dashboard</a>.
+	</p>
+</header>
+
+<div class="panel">
+	@* The same picker and direction switch the period select carries: which side owns the dropdown
+	   decides what everything under it means. *@
+	<SelectAuthorityPanel Copy="@Copy"
+						  Entity="@Model.HouseModeEntity"
+						  EntityChanged="@Model.SetHouseModeEntity"
+						  Entities="@Model.InputSelects"
+						  Lookup="@Model.Lookup"
+						  Group="housemode-authority"
+						  HomeAssistant="@Model.HouseModeAuthorityIsHomeAssistant"
+						  HomeAssistantChanged="@Model.SetHouseModeAuthority"
+						  IsAvailable="@Model.HouseModeEntityIsAvailable"
+						  IsReady="@Model.HomeAssistantIsAnswering"
+						  LiveOptions="@Model.LiveSelectOptions">
+		<Body Context="state">
+			@* All three states render, including the two that ask for nothing: an unreachable Home
+			   Assistant cannot tell an empty helper from no answer, so it must say so. *@
+			@if (Model.HelperDiff.Differs)
+			{
+				<p class="hint">
+					@* The entity leads the sentence: a <code> chip's padding floats a trailing full stop
+					   a space away from it. *@
+					<code>@Model.HouseModeEntityId</code> and this list have drifted apart. @Model.HelperDriftText
+				</p>
+			}
+			else if (Model.HelperDiff.Matches)
+			{
+				<p class="hint"><code>@Model.HouseModeEntityId</code> offers exactly these options.</p>
+			}
+			else
+			{
+				<p class="hint">
+					Home Assistant hasn't said which options <code>@Model.HouseModeEntityId</code> has, so this list
+					can't be compared with it. Nothing here is out of date &mdash; it simply can't be
+					checked until the connection is back.
+				</p>
+			}
+
+			@* Named and not merely counted: the controls for these live on three different cards. *@
+			@if (Model.DormantRules.Any)
+			{
+				<div class="notice warn mode-dormant-rules">
+					<strong>These are set up but not firing while Home Assistant decides:</strong>
+					<ul>
+						@foreach (string rule in Model.DormantRules.Names)
+						{
+							<li>@rule</li>
+						}
+					</ul>
+					<span>
+						They are kept as they are and start working again the moment you hand the house
+						mode back to adaptive lighting.
+					</span>
+				</div>
+			}
+		</Body>
+	</SelectAuthorityPanel>
+</div>
+
+@if (Model.ModeLines.Count > 0)
+{
+	<section class="panel room-card house-card">
+		<div class="room-card-head">
+			<span class="room-card-title">What each mode does</span>
+			<span class="room-card-note">@Model.HouseModeEntity</span>
+		</div>
+
+		<div class="house-rules">
+			@foreach (ModeLine line in Model.ModeLines)
+			{
+				ModeLine mode = line;
+
+				<div class="house-rule">
+					<b class="house-rule-name">@mode.Name</b>
+					<SentenceView Sentences="@mode.Sentences"
+								  Edited="@Model.OnModeEdited"
+								  Note="@HousePageModel.TokenNote"
+								  ShowLegend="false" />
+					@if (Model.IsActiveMode(mode))
+					{
+						<span class="house-rule-now">active now</span>
+					}
+				</div>
+			}
+		</div>
+	</section>
+}
+
+@* At section level, not inside a .field-control, so the cards stretch to full width. *@
+@if (Model.HasHouseModeEntity)
+{
+	<header class="section-head subsection">
+		<h3>Mode options
+			<InfoPopover Label="Mode options">
+				Each option means one thing: Normal, Sleep, Away or Guest. Picking a kind shows only that
+				kind's settings. Exactly one option should be Normal — it's what the house returns to.
+			</InfoPopover>
+		</h3>
+	</header>
+
+	<HouseModeOptions HouseMode="@Model.HouseMode"
+					  LiveOptions="@Model.LiveSelectOptions"
+					  ActiveValue="@Model.ActiveModeValue"
+					  Periods="@Model.Periods"
+					  Scenes="@Model.Scenes"
+					  PresenceSensors="@Model.PresenceEntities"
+					  DateTimes="@Model.DateTimes"
+					  ActivationEntities="@Model.ActivationEntities"
+					  Lookup="@Model.Lookup"
+					  IsReady="@Model.HomeAssistantIsAnswering"
+					  HomeAssistantDecides="@Model.HouseModeIsHomeAssistants"
+					  Changed="@Model.OnHouseModeOptionsChanged" />
+}
+
+@code {
+	/// <summary>The page model this section draws.</summary>
+	[Parameter]
+	[EditorRequired]
+	public HousePageModel Model { get; set; } = null!;
+
+	/// <summary>The panel's copy, with this design's three help bodies filled in.</summary>
+	private SelectAuthorityCopy Copy => Model.HouseModePanelCopy with
+	{
+		LabelHelp = HelperHelp,
+		Note = NoHelperNote,
+		AuthorityHelp = DirectionHelp
+	};
+
+	private RenderFragment HelperHelp => @<text>
+		Which dropdown helper holds this house's modes. Its options appear in the cards below &mdash;
+		say what each one means. Anything you set for an option this helper doesn't offer is kept
+		and shown, so you can move it across or remove it.
+		No helper yet? Make one in Home Assistant under <strong>Settings → Devices &amp; services →
+		Helpers → Create helper → Dropdown</strong>, add your options, then pick it here.
+	</text>;
+
+	private RenderFragment NoHelperNote => @<text>
+		Without one the house is always in everyday lighting. Say below what each option means.
+	</text>;
+
+	private RenderFragment DirectionHelp => @<text>
+		<strong>Home Assistant</strong> means the dropdown is the only thing that moves the house:
+		the engine reads it, applies whatever the option means, and never writes it back.
+		<strong>Adaptive lighting</strong> means the engine may set the mode itself &mdash; from a
+		period, from a switch you name, or after a long enough quiet spell &mdash; and keeps the
+		dropdown pointing at the answer.
+	</text>;
+}
