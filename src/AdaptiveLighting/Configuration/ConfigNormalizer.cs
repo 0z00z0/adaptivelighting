@@ -4,17 +4,10 @@ namespace AdaptiveLighting.Configuration;
 /// <remarks>Runs on write only, before validation. The load path must never rewrite a hand-edited file.</remarks>
 public static class ConfigNormalizer
 {
-	// Counted on the calling thread, so one parallel test cannot see another's passes. Every write is synchronous
-	// on its caller's thread.
-	[ThreadStatic]
-	internal static int Passes;
-
 	/// <summary>Mutates and returns <paramref name="config"/> in place; the drops are the intended change.</summary>
 	public static AdaptiveLightingConfig Normalize(AdaptiveLightingConfig config)
 	{
 		ArgumentNullException.ThrowIfNull(config);
-
-		Passes++;
 
 		GlobalConfig global = config.Global;
 
@@ -131,12 +124,6 @@ public static class ConfigNormalizer
 
 		area.LightLevels = lights.Count > 0 ? lights : null;
 	}
-
-	/// <summary>A value as the whole number every ordinary readout shows.</summary>
-	// Away from zero, not to the even neighbour: the editor, the collapsed summary and the file have to agree,
-	// and 62.5 reading 62 in one place and 63 in another is the disagreement this exists to close.
-	public static double Whole(double value) =>
-		double.IsFinite(value) ? Math.Round(value, MidpointRounding.AwayFromZero) : value;
 
 	/// <summary>A row that carries nothing but its value: Normal kind, no scene, no clamp, no reset trigger, no activation list.</summary>
 	private static bool IsPureDefault(HouseModeOptionConfig option) =>

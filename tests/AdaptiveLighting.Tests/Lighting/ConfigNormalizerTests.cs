@@ -1,4 +1,5 @@
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Web.Presentation;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -322,7 +323,7 @@ public sealed class ConfigNormalizerTests
 
 		// 62.5 % is the one shape that can read as a different whole number after the snap: it sits between two
 		// bytes, and 159 is 62.35 %. Every whole percent keeps its reading, which is what a document can hold.
-		Assert.AreEqual(62, ConfigNormalizer.Whole(config.Periods[0].BrightnessPct));
+		Assert.AreEqual(62, DisplayRounding.Whole(config.Periods[0].BrightnessPct));
 	}
 
 	[TestMethod]
@@ -342,11 +343,11 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void A_Half_Rounds_Up_And_Not_To_The_Even_Neighbour()
 	{
-		Assert.AreEqual(63, ConfigNormalizer.Whole(62.5));
-		Assert.AreEqual(64, ConfigNormalizer.Whole(63.5));
-		Assert.AreEqual(62, ConfigNormalizer.Whole(62.4));
-		Assert.AreEqual(0, ConfigNormalizer.Whole(0.4));
-		Assert.AreEqual(100, ConfigNormalizer.Whole(100));
+		Assert.AreEqual(63, DisplayRounding.Whole(62.5));
+		Assert.AreEqual(64, DisplayRounding.Whole(63.5));
+		Assert.AreEqual(62, DisplayRounding.Whole(62.4));
+		Assert.AreEqual(0, DisplayRounding.Whole(0.4));
+		Assert.AreEqual(100, DisplayRounding.Whole(100));
 	}
 
 	[TestMethod]

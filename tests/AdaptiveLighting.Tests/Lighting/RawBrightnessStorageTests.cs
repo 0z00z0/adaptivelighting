@@ -2,6 +2,7 @@ using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
+using AdaptiveLighting.Web.Presentation;
 using AdaptiveLighting.Web.Services;
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -135,7 +136,7 @@ public sealed class RawBrightnessStorageTests
 
 			ConfigNormalizer.Normalize(config);
 
-			Assert.AreEqual((double)percent, ConfigNormalizer.Whole(config.Periods[0].BrightnessPct),
+			Assert.AreEqual((double)percent, DisplayRounding.Whole(config.Periods[0].BrightnessPct),
 				$"{percent} % has to still read as {percent} % after the save");
 		}
 	}
@@ -196,12 +197,12 @@ public sealed class RawBrightnessStorageTests
 	[TestMethod]
 	public void A_Byte_Reads_As_The_Whole_Percent_It_Is_Nearest()
 	{
-		Assert.AreEqual(0d, ConfigNormalizer.Whole(RawBrightness.ToPercent(0)));
-		Assert.AreEqual(0d, ConfigNormalizer.Whole(RawBrightness.ToPercent(1)));
-		Assert.AreEqual(1d, ConfigNormalizer.Whole(RawBrightness.ToPercent(2)));
-		Assert.AreEqual(50d, ConfigNormalizer.Whole(RawBrightness.ToPercent(128)));
-		Assert.AreEqual(100d, ConfigNormalizer.Whole(RawBrightness.ToPercent(254)));
-		Assert.AreEqual(100d, ConfigNormalizer.Whole(RawBrightness.ToPercent(255)));
+		Assert.AreEqual(0d, DisplayRounding.Whole(RawBrightness.ToPercent(0)));
+		Assert.AreEqual(0d, DisplayRounding.Whole(RawBrightness.ToPercent(1)));
+		Assert.AreEqual(1d, DisplayRounding.Whole(RawBrightness.ToPercent(2)));
+		Assert.AreEqual(50d, DisplayRounding.Whole(RawBrightness.ToPercent(128)));
+		Assert.AreEqual(100d, DisplayRounding.Whole(RawBrightness.ToPercent(254)));
+		Assert.AreEqual(100d, DisplayRounding.Whole(RawBrightness.ToPercent(255)));
 	}
 
 	// ---- documents nobody meant to write --------------------------------------------------------------------
