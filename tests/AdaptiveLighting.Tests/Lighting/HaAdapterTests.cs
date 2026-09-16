@@ -142,7 +142,7 @@ public sealed class HaAdapterTests
 		var ha = new FakeHaContext();
 		var when = new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
 		var snapshot = new AreaSnapshot(
-			"Stue", AreaState.AutoActive, TransitionReason.Motion, HouseMode.Home,
+			"Stue", AreaState.AutoActive, TransitionReason.Motion, ModeKind.Normal,
 			false, true, "evening", 70, 2700, when,
 			when, when, when + TimeSpan.FromMinutes(10), when);
 

@@ -1,4 +1,5 @@
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Engine;
 
 namespace AdaptiveLighting.Ha;
 
@@ -23,7 +24,7 @@ public sealed class HaStatePublisher : IStatePublisher
 
 		_logger.LogInformation(
 			"Area {Area} is {State} ({Reason}); house {Mode}, dark {IsDark}, period {Period}, brightness {Brightness}, kelvin {Kelvin}.",
-			snapshot.AreaName, snapshot.State, snapshot.Reason, snapshot.Mode, snapshot.IsDark,
+			snapshot.AreaName, snapshot.State, snapshot.Reason, HouseModeName.Of(snapshot.Mode), snapshot.IsDark,
 			snapshot.PeriodName, snapshot.BrightnessPct, snapshot.ColorTempKelvin);
 
 		// Called from inside an area's lock, so a throw here takes the area's thread with it.
@@ -36,7 +37,8 @@ public sealed class HaStatePublisher : IStatePublisher
 				area_id = snapshot.AreaId,
 				state = snapshot.State.ToString(),
 				reason = snapshot.Reason.ToString(),
-				mode = snapshot.Mode.ToString(),
+				// "Home" for the everyday kind. Consumers match on this word, so only HouseModeName writes it.
+				mode = HouseModeName.Of(snapshot.Mode),
 				house_mode_value = snapshot.HouseModeValue,
 				kill_switch_active = snapshot.KillSwitchActive,
 				is_dark = snapshot.IsDark,

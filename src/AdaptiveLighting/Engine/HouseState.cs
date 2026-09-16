@@ -2,16 +2,21 @@ using AdaptiveLighting.Configuration;
 
 namespace AdaptiveLighting.Engine;
 
-/// <summary>The house-wide mode an area reacts to.</summary>
-// Derived from the flags on HouseState, never set independently, so the two cannot disagree.
-public enum HouseMode
+/// <summary>The word a house mode is published and logged under.</summary>
+// ModeKind.Normal goes out as "Home". Home Assistant automations match on this text, so nothing else may
+// produce or read a mode word.
+public static class HouseModeName
 {
-	Home,
-	Away,
-	Sleep,
+	/// <summary>What the everyday kind is called outside the engine.</summary>
+	public const string Home = "Home";
 
-	/// <summary>A guest option carrying a scene drives the areas into SceneHold; without one it is a flag only.</summary>
-	Guest
+	/// <summary>The word <paramref name="kind"/> is published under.</summary>
+	public static string Of(ModeKind kind) =>
+		kind == ModeKind.Normal ? Home : kind.ToString();
+
+	/// <summary>The kind <paramref name="name"/> stands for, or <see cref="ModeKind.Normal"/> for anything else.</summary>
+	public static ModeKind Parse(string? name) =>
+		Enum.TryParse(name, out ModeKind kind) ? kind : ModeKind.Normal;
 }
 
 /// <summary>Which of the engine's own activation rules put the house on its mode, as opposed to a person choosing it.</summary>
@@ -45,7 +50,9 @@ public sealed record ForcedMode(
 
 /// <summary>An immutable snapshot of everything house-wide an area needs.</summary>
 // The orchestrator owns the stream of these; areas only read them. ActiveKind is the kind of the option the
-// select stands on, Normal when unconfigured. KillSwitchActive forbids the engine from commanding anything.
+// select stands on, Normal when unconfigured, and is the whole answer on which mode the house is in.
+// KillSwitchActive forbids the engine from commanding anything. IsAnyoneHome is published so a person can see
+// the trackers working and is never composed in, so a phone left on a worktop cannot hold a house away.
 public sealed record HouseState(
 	bool IsAnyoneHome,
 	ModeKind ActiveKind,
@@ -64,13 +71,4 @@ public sealed record HouseState(
 
 	/// <summary>The state the engine starts in, before presence and mode have reported.</summary>
 	public static readonly HouseState Initial = new(true, ModeKind.Normal, false);
-
-	/// <summary>The mode <see cref="ActiveKind"/> maps to, one to one.</summary>
-	// The house-mode select is the whole answer. IsAnyoneHome is published so a person can see the trackers
-	// working and is never composed in, so a phone left on a worktop cannot hold a house away.
-	public HouseMode Mode =>
-		ActiveKind == ModeKind.Away ? HouseMode.Away
-		: ActiveKind == ModeKind.Sleep ? HouseMode.Sleep
-		: ActiveKind == ModeKind.Guest ? HouseMode.Guest
-		: HouseMode.Home;
 }

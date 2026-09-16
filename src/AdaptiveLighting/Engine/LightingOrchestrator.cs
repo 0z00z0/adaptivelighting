@@ -79,6 +79,9 @@ public sealed class LightingOrchestrator : IDisposable
 	// One subscription to automation runs for the house, handed to every room so each can name who changed a light.
 	private ChangeOriginNames? _originNames;
 
+	// The house-wide instances every room is built on, composed once in Start. Null until then.
+	private HouseWiring? _wiring;
+
 	private bool _started;
 
 	// Nothing is wired until Start.
@@ -151,6 +154,20 @@ public sealed class LightingOrchestrator : IDisposable
 		_motionPeriods = MotionPeriodLatch.For(_config.Periods, _config.Global);
 
 		_originNames = new ChangeOriginNames(_ha, _loggerFactory.CreateLogger<ChangeOriginNames>());
+
+		// Composed once, before the first room. Every room is built on this one object, so none of them can end up
+		// on a different actuator, publisher or house-state stream.
+		_wiring = new HouseWiring(
+			_ha,
+			_scheduler,
+			_config.Global,
+			_config.Periods,
+			_actuator,
+			_publisher,
+			_house,
+			_loggerFactory,
+			_lastSeen,
+			_originNames);
 
 		HaAreaRegistry registry = new(_registry);
 		AreaEntityResolver resolver = new(
@@ -296,11 +313,12 @@ public sealed class LightingOrchestrator : IDisposable
 			LogDroppedPeriod(resolved.Name, drop);
 
 		return new AreaController(
-			_ha, _scheduler, resolved, _config.Global, _config.Periods, circadian,
-			_actuator, _publisher, _house, _loggerFactory, config.AreaId, _lastSeen,
+			_wiring!,
+			resolved,
+			circadian,
+			config.AreaId,
 			SunMoved(resolved.Settings.SunEntity),
-			LightCalculators(resolved, config),
-			_originNames);
+			LightCalculators(resolved, config));
 	}
 
 	/// <summary>One calculator per light that states levels of its own, on that light's rows merged onto the room's.</summary>
@@ -407,7 +425,8 @@ public sealed class LightingOrchestrator : IDisposable
 		{
 			if (state.KillSwitchActive)
 				_logger.LogInformation(
-					"The master switch is on, so the {Mode} scene {Scene} is not applied.", state.Mode, scene);
+					"The master switch is on, so the {Mode} scene {Scene} is not applied.",
+					HouseModeName.Of(state.ActiveKind), scene);
 			else
 			{
 				// Every room: the scene's contents are unreadable, and a room left out reads the echo as a hand.
@@ -419,12 +438,14 @@ public sealed class LightingOrchestrator : IDisposable
 		}
 
 		// The forcing clause repeats ModeMonitor's, because this is the line that says the house went Away.
+		string mode = HouseModeName.Of(state.ActiveKind);
+
 		if (state.Forced is { } forced)
 			_logger.LogInformation("House is now {Mode} (kill switch {KillSwitch}). {ForcedMode}",
-				state.Mode, state.KillSwitchActive ? "active" : "inactive", forced.Describe());
+				mode, state.KillSwitchActive ? "active" : "inactive", forced.Describe());
 		else
 			_logger.LogInformation("House is now {Mode} (kill switch {KillSwitch}).",
-				state.Mode, state.KillSwitchActive ? "active" : "inactive");
+				mode, state.KillSwitchActive ? "active" : "inactive");
 
 		_house.OnNext(state);
 	}

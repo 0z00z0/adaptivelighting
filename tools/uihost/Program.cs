@@ -236,7 +236,7 @@ static void SeedSnapshots(FakeHaContext ha, LightingConfigStore store)
 		AreaSnapshot snapshot = new(
 			name, lit ? AreaState.AutoActive : manualChange ? AreaState.OverriddenOn : AreaState.AutoVacant,
 			manualChange ? TransitionReason.ManualOn : testing ? TransitionReason.LevelTestStarted : TransitionReason.Motion,
-			HouseMode.Home,
+			ModeKind.Normal,
 			KillSwitchActive: false,
 			IsDark: true,
 			PeriodName: "Kveld",

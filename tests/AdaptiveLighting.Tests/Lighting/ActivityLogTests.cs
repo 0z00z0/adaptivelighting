@@ -22,7 +22,7 @@ public sealed class ActivityLogTests
 		bool killSwitch = false,
 		double? brightness = null,
 		int? kelvin = null,
-		HouseMode mode = HouseMode.Home,
+		ModeKind mode = ModeKind.Normal,
 		string? houseModeValue = null,
 		AutoOnBlock? autoOnBlockedBy = null,
 		string? autoOnBlockingEntity = null,
@@ -357,7 +357,7 @@ public sealed class ActivityLogTests
 			TransitionReason.CircadianTick,
 			isDark: true,
 			darknessDetail: "lux 12, dark below 40",
-			mode: HouseMode.Sleep,
+			mode: ModeKind.Sleep,
 			autoOnBlockedBy: AutoOnBlock.Sleep));
 
 		Assert.AreEqual(
@@ -475,7 +475,7 @@ public sealed class ActivityLogTests
 				AreaState.AutoVacant,
 				TransitionReason.HouseModeChanged,
 				isDark: true,
-				mode: HouseMode.Sleep,
+				mode: ModeKind.Sleep,
 				houseModeValue: "Sover")).What);
 	}
 
@@ -577,7 +577,7 @@ public sealed class ActivityLogTests
 			"Stue",
 			AreaState.Away,
 			TransitionReason.HouseModeChanged,
-			mode: HouseMode.Away,
+			mode: ModeKind.Away,
 			houseModeValue: "Hjemme",
 			isAnyoneHome: true,
 			forced: forced));
@@ -595,7 +595,7 @@ public sealed class ActivityLogTests
 
 		AreaSnapshot Publisher(string area, AreaState state) => Report(
 			area, state, TransitionReason.HouseModeChanged,
-			mode: HouseMode.Away, houseModeValue: "Hjemme", isAnyoneHome: true, forced: forced);
+			mode: ModeKind.Away, houseModeValue: "Hjemme", isAnyoneHome: true, forced: forced);
 
 		// Two rooms in different states, as a real house is when the mode moves under it.
 		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(
@@ -936,7 +936,7 @@ public sealed class ActivityLogTests
 	{
 		AreaSnapshot swept = Report(
 			"Stue", AreaState.Away, TransitionReason.Startup,
-			mode: HouseMode.Away, houseModeValue: "Borte", isAnyoneHome: true, forced: ForcedAway());
+			mode: ModeKind.Away, houseModeValue: "Borte", isAnyoneHome: true, forced: ForcedAway());
 
 		ActivityLine line = ActivityView.Describe(swept);
 
@@ -1028,7 +1028,7 @@ public sealed class ActivityLogTests
 			AreaSnapshot asleep = Report(
 				"Soverom", AreaState.AutoVacant, reason,
 				isDark: true, darknessDetail: "lux 12, dark below 40",
-				mode: HouseMode.Sleep, autoOnBlockedBy: AutoOnBlock.Sleep);
+				mode: ModeKind.Sleep, autoOnBlockedBy: AutoOnBlock.Sleep);
 
 			// Start-up refused nothing; it only read the room. Every other reason files the row under a chip
 			// that is showing when the page opens, so the reason a light did not come on is never hidden.

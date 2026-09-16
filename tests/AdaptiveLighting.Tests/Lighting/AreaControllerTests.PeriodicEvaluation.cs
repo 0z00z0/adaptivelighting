@@ -74,7 +74,7 @@ public sealed partial class AreaControllerTests
 		t.House.OnNext(House(kind: ModeKind.Sleep));
 		Advance(t, TimeSpan.FromMinutes(1));
 
-		Assert.IsTrue(t.Publisher.Snapshots.Any(s => s.Mode == HouseMode.Sleep),
+		Assert.IsTrue(t.Publisher.Snapshots.Any(s => s.Mode == ModeKind.Sleep),
 			"the card must not keep saying 'somebody home' at a sleeping house");
 	}
 

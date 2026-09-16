@@ -38,7 +38,7 @@ public sealed class RoomFactsTests
 			"Stue",
 			state,
 			TransitionReason.CircadianTick,
-			HouseMode.Home,
+			ModeKind.Normal,
 			killSwitch,
 			isDark,
 			"evening",

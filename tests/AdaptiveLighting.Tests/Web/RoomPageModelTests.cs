@@ -219,7 +219,7 @@ public sealed class RoomPageModelTests
 		"Living room",
 		AreaState.AutoVacant,
 		TransitionReason.LevelTestStarted,
-		HouseMode.Home,
+		ModeKind.Normal,
 		KillSwitchActive: false,
 		IsDark: true,
 		PeriodName: "evening",

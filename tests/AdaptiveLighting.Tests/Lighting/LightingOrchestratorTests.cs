@@ -308,7 +308,7 @@ public sealed class LightingOrchestratorTests
 		Assert.AreEqual(AreaState.Away, engine.Areas[0].State);
 		Assert.IsFalse(publisher.Snapshots.Any(snapshot => snapshot.State == AreaState.AutoActive),
 			"the house was away before the first room started, so no room ever adopted");
-		Assert.IsFalse(publisher.Snapshots.Any(snapshot => snapshot.Mode != HouseMode.Away),
+		Assert.IsFalse(publisher.Snapshots.Any(snapshot => snapshot.Mode != ModeKind.Away),
 			"and no snapshot says the house is home");
 
 		engine.Dispose();
