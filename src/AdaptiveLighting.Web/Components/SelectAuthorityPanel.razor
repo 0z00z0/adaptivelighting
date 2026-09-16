@@ -3,10 +3,10 @@
 
 <div class="field">
 	<div class="field-head">
-		<span class="field-label"><label for="@EntityInputId">@Label</label>
-			@if (LabelHelp is not null)
+		<span class="field-label"><label for="@EntityInputId">@Copy.Label</label>
+			@if (Copy.LabelHelp is not null)
 			{
-				<InfoPopover Label="@Label">@LabelHelp</InfoPopover>
+				<InfoPopover Label="@Copy.Label">@Copy.LabelHelp</InfoPopover>
 			}
 		</span>
 	</div>
@@ -15,15 +15,14 @@
 					  Value="@Entity"
 					  ValueChanged="@EntityChanged"
 					  Options="@Entities"
-					  NameResolver="@NameResolver"
-					  KnownResolver="@KnownResolver"
-					  NoneLabel="@NoneLabel"
-					  EmptyNote="@EmptyNote"
-					  Placeholder="@Placeholder" />
+					  Lookup="@Lookup"
+					  NoneLabel="@Copy.NoneLabel"
+					  EmptyNote="@Copy.EmptyNote"
+					  Placeholder="@Copy.Placeholder" />
 	</div>
-	@if (Note is not null)
+	@if (Copy.Note is not null)
 	{
-		<div class="field-help">@Note</div>
+		<div class="field-help">@Copy.Note</div>
 	}
 </div>
 
@@ -31,10 +30,10 @@
 {
 	<div class="field">
 		<div class="field-head">
-			<span class="field-label"><span id="@AuthorityLabelId">@AuthorityLabel</span>
-				@if (AuthorityHelp is not null)
+			<span class="field-label"><span id="@AuthorityLabelId">@Copy.AuthorityLabel</span>
+				@if (Copy.AuthorityHelp is not null)
 				{
-					<InfoPopover Label="@AuthorityLabel">@AuthorityHelp</InfoPopover>
+					<InfoPopover Label="@Copy.AuthorityLabel">@Copy.AuthorityHelp</InfoPopover>
 				}
 			</span>
 		</div>
@@ -51,14 +50,14 @@
 				Adaptive lighting
 			</label>
 		</div>
-		<div class="field-help">@AuthorityNote</div>
+		<div class="field-help">@Copy.AuthorityNote</div>
 	</div>
 
 	@if (ShowsUnavailable)
 	{
 		<div class="notice bad periodselect-warning">
 			<strong>Home Assistant doesn't know <code>@EntityId</code>.</strong>
-			<span>@UnavailableNote</span>
+			<span>@Copy.UnavailableNote</span>
 		</div>
 	}
 
@@ -69,16 +68,9 @@
 	/// <summary>What the shared markup has settled before the consumer's own body renders.</summary>
 	public sealed record State(IReadOnlyList<string> LiveValues, bool IsReady, bool ShowsUnavailable);
 
+	/// <summary>Everything the panel says: the labels, the two help popovers and the notes under each control.</summary>
 	[Parameter, EditorRequired]
-	public string Label { get; set; } = "";
-
-	/// <summary>The picker label's popover body. <c>null</c> leaves the label bare.</summary>
-	[Parameter]
-	public RenderFragment? LabelHelp { get; set; }
-
-	/// <summary>The help line under the picker, saying what having no helper at all means.</summary>
-	[Parameter]
-	public RenderFragment? Note { get; set; }
+	public SelectAuthorityCopy Copy { get; set; } = new();
 
 	/// <summary>The configured entity as stored, untrimmed, so a hand-edited value shows as it is on disk.</summary>
 	[Parameter]
@@ -93,20 +85,9 @@
 	[Parameter]
 	public IReadOnlyList<EntityOption> Entities { get; set; } = [];
 
+	/// <summary>What an id is called and whether Home Assistant knows it, handed on to the picker.</summary>
 	[Parameter]
-	public string NoneLabel { get; set; } = "(none)";
-
-	[Parameter]
-	public string Placeholder { get; set; } = "input_select.helper";
-
-	[Parameter]
-	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
-
-	[Parameter]
-	public Func<string, string>? NameResolver { get; set; }
-
-	[Parameter]
-	public Func<string, bool>? KnownResolver { get; set; }
+	public EntityLookup? Lookup { get; set; }
 
 	/// <summary>The radio group's name; two panels sharing one would make a single pair of radios.</summary>
 	[Parameter, EditorRequired]
@@ -116,12 +97,6 @@
 
 	private string AuthorityLabelId => $"{Group}-label";
 
-	[Parameter]
-	public string AuthorityLabel { get; set; } = "Set by:";
-
-	[Parameter]
-	public RenderFragment? AuthorityHelp { get; set; }
-
 	/// <summary>Whether Home Assistant currently owns this dropdown.</summary>
 	[Parameter]
 	public bool HomeAssistant { get; set; }
@@ -129,14 +104,6 @@
 	/// <summary>Raised with the chosen direction; the consumer owns the enum.</summary>
 	[Parameter]
 	public EventCallback<bool> HomeAssistantChanged { get; set; }
-
-	/// <summary>The help line under the radios, worded for the direction in force.</summary>
-	[Parameter]
-	public string AuthorityNote { get; set; } = "";
-
-	/// <summary>What an entity Home Assistant does not know costs, which differs by direction.</summary>
-	[Parameter]
-	public string UnavailableNote { get; set; } = "";
 
 	[Parameter]
 	public bool IsAvailable { get; set; }

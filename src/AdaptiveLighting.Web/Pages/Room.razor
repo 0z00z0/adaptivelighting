@@ -279,243 +279,142 @@ else
 
 		@if (_showAll)
 		{
-			<div class="room-groups">
-				@foreach (RoomSettingGroup group in RoomSettings.Groups)
-				{
-					RoomSettingGroup current = group;
-					bool open = IsOpen(current);
+			<AllSettingsPanel Settings="@SettingsInput"
+							  Toggled="@Toggle"
+							  Set="@SetSetting"
+							  Reverted="@(setting => Revert(setting.Key))">
+				<GroupExtra Context="group">
+					@* Not overridable, so these have no twin in the defaults and cannot be rows above,
+					   but they are movement rules and belong in this section. *@
+					@if (string.Equals(group.Title, RoomSettings.MovementSection, StringComparison.Ordinal))
+					{
+						<SettingRow Label="Light dimly when these see movement"
+									Help="Sensors outside this room: the front steps, the room next door. When one of them sees movement while this room is dark, empty and running by itself, the room lights at Dim light level of its usual level for Dim light lasts. Movement in the room then brings the lights up to their usual level; if nobody comes in, they go off again. Everything that stops movement lighting the room stops this too: daylight, away, sleep, Don't switch on while. A room already lit, or set or switched off by hand, takes no notice. Offered from the whole house.">
+							<EntityListPicker Value="@(room.LeadInSensors ?? [])"
+											  ValueChanged="@(value => SetList(value, list => room.LeadInSensors = list))"
+											  Options="@_leadInSensors"
+											  Lookup="@Lookup"
+											  EmptyLabel="Nothing outside lights this room ahead of time."
+											  AddLabel="Add a sensor…"
+											  Placeholder="binary_sensor.front_steps_motion" />
+						</SettingRow>
 
-					<div class="sgroup @(open ? "sgroup-open" : null)">
+						<SettingRow Label="Don't switch on while"
+									Help="The room won't light itself while any of these is on: a projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Tick the box for the opposite, so it holds while they are off — for a “lighting allowed” switch you turn off. Offered from the whole house, since a blocker often belongs to no room.">
+							<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
+											  ValueChanged="@(value => SetList(value, list => room.IgnoreWhenOn = list))"
+											  Options="@_blockers"
+											  Lookup="@Lookup"
+											  EmptyLabel="Nothing blocks this room."
+											  AddLabel="Add a blocker…"
+											  Placeholder="binary_sensor.projector_is_on" />
+
+							@if (room.IgnoreWhenOn is { Count: > 0 })
+							{
+								<label class="gate-invert">
+									<input type="checkbox"
+										   checked="@(room.IgnoreWhenOnInverted is true)"
+										   @onchange="args => SetInvert(args.Value is true, value => room.IgnoreWhenOnInverted = value)" />
+									while these are off instead
+								</label>
+							}
+						</SettingRow>
+
+						<SettingRow Label="Don't switch off while"
+									Help="The room won't turn its own lights off while any of these is on, so the countdown, the dim light before switching off and the leaving sweep leave it alone: a meeting light, a guest switch. It never turns anything on, and switching off by hand still works. Tick the box for the opposite, so it holds while they are off.">
+							<EntityListPicker Value="@(room.KeepLitWhenOn ?? [])"
+											  ValueChanged="@(value => SetList(value, list => room.KeepLitWhenOn = list))"
+											  Options="@_blockers"
+											  Lookup="@Lookup"
+											  EmptyLabel="Nothing holds this room's lights on."
+											  AddLabel="Add one…"
+											  Placeholder="input_boolean.meeting" />
+
+							@if (room.KeepLitWhenOn is { Count: > 0 })
+							{
+								<label class="gate-invert">
+									<input type="checkbox"
+										   checked="@(room.KeepLitWhenOnInverted is true)"
+										   @onchange="args => SetInvert(args.Value is true, value => room.KeepLitWhenOnInverted = value)" />
+									while these are off instead
+								</label>
+							}
+						</SettingRow>
+
+						@* Inherits from the house's Fine tuning, not from the house default settings, so it is not one of the N of M. *@
+						<SettingRow Label="Other automations count as manual changes"
+									Help="Yes: when another Home Assistant automation changes these lights, the room stands back exactly as it does for somebody at the switch, for as long as Manual changes hold. No: the room leaves the change alone and carries on by itself, so its next re-check or movement sets its own level again. Unless set here, the room follows the house setting under House → Fine tuning."
+									IsOwn="@(room.TreatAutomationsAsManual is not null)"
+									HouseText="@(_document.Global.TreatAutomationsAsManual ? "yes" : "no")"
+									Reverted="@(() => Set(() => room.TreatAutomationsAsManual = null))">
+							<div class="seg" role="group" aria-label="Other automations count as manual changes">
+								<button type="button"
+										class="@(AutomationsCountAsManual ? "cur" : null)"
+										aria-pressed="@(AutomationsCountAsManual ? "true" : "false")"
+										@onclick="() => Set(() => room.TreatAutomationsAsManual = true)">Yes</button>
+								<button type="button"
+										class="@(AutomationsCountAsManual ? null : "cur")"
+										aria-pressed="@(AutomationsCountAsManual ? "false" : "true")"
+										@onclick="() => Set(() => room.TreatAutomationsAsManual = false)">No</button>
+							</div>
+						</SettingRow>
+
+						<SettingRow Label="Run a scene instead, on movement"
+									Help="When movement would light this room, it runs this scene instead of setting its own brightness and warmth, and leaves it alone afterwards. Everything that can refuse to light the room still refuses — the master switch, this room's switch, an away house, sleep, too much daylight, a blocker above. A scene is what happens instead of switching on, never a reason to.">
+							<EntityPicker Value="@room.SceneOnMotion"
+										  ValueChanged="@(value => Set(() => room.SceneOnMotion = value))"
+										  Options="@_scenes"
+										  Lookup="@Lookup"
+										  NoneLabel="(this room's own brightness and warmth)"
+										  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+										  Placeholder="scene.stue_kveld" />
+						</SettingRow>
+
+						<SettingRow Label="Run a scene instead, when empty"
+									Help="When the room has been empty long enough to go off, it runs this scene and stays there — atmospheric lighting rather than darkness. The dim light before switching off does not run, since nothing is about to go off. Leaving the house still switches the room off, and switching it off by hand still works.">
+							<EntityPicker Value="@room.SceneWhenEmpty"
+										  ValueChanged="@(value => Set(() => room.SceneWhenEmpty = value))"
+										  Options="@_scenes"
+										  Lookup="@Lookup"
+										  NoneLabel="(switch the lights off)"
+										  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+										  Placeholder="scene.stue_natt" />
+						</SettingRow>
+					}
+				</GroupExtra>
+
+				<Extra>
+					@* Not overridable: these are what the room is, not how it behaves. *@
+					<div class="sgroup @(_identityOpen ? "sgroup-open" : null)">
 						<button type="button"
 								class="sgroup-head"
-								aria-expanded="@(open ? "true" : "false")"
-								@onclick="() => Toggle(current)">
-							<span class="sgroup-title">@current.Title</span>
-							@if (OwnCountIn(current) is > 0 and int changed)
-							{
-								<span class="sgroup-count" title="Settings this room states for itself">@changed</span>
-							}
-							<span class="sgroup-note">@current.Note</span>
+								aria-expanded="@(_identityOpen ? "true" : "false")"
+								@onclick="() => _identityOpen = !_identityOpen">
+							<span class="sgroup-title">Room identity</span>
+							<span class="sgroup-note">What this room is called, and which Home Assistant area it is</span>
 							<span class="area-chevron" aria-hidden="true"></span>
 						</button>
 
-						@if (open)
+						@if (_identityOpen)
 						{
 							<div class="sgroup-body">
-								@foreach (RoomSetting setting in current.Settings.Where(item => item.AppliesTo(Effective)))
-								{
-									RoomSetting item = setting;
+								<SettingRow Label="Name" Help="What this room is called everywhere here. Leave it empty and it follows the Home Assistant area's name, so renaming it there renames it here.">
+									<input type="text"
+										   class="cell wide"
+										   value="@room.Name"
+										   placeholder="@RoomName"
+										   aria-label="Name"
+										   @onchange="OnNameChanged" />
+								</SettingRow>
 
-									<SettingRow Label="@item.Label"
-												Help="@item.Help"
-												IsOwn="@RoomSettings.IsOwn(room, item)"
-												HouseText="@RoomSettings.Describe(null, _document.Defaults, item.Key)"
-												Reverted="@(() => Revert(item.Key))">
-										@switch (item.Control)
-										{
-											case RoomControl.Steps:
-												<div class="steps" role="group" aria-label="@item.Label">
-													@foreach (TokenChoice option in SleepSteps.Options)
-													{
-														TokenChoice step = option;
-														bool current = string.Equals(step.Value, SleepSteps.Of(room, _document.Defaults).ToString(), StringComparison.Ordinal);
-														<button type="button"
-																class="@(current ? "cur" : null)"
-																aria-pressed="@(current ? "true" : "false")"
-																@onclick="() => SetStep(step.Value)">@step.Text</button>
-													}
-												</div>
-												break;
-
-											case RoomControl.Flag:
-												<button type="button"
-														class="switch @(RoomSettings.Flag(room, _document.Defaults, item.Key) ? "on" : null)"
-														role="switch"
-														aria-checked="@(RoomSettings.Flag(room, _document.Defaults, item.Key) ? "true" : "false")"
-														aria-label="@item.Label"
-														@onclick="() => SetFlag(item.Key, !RoomSettings.Flag(room, _document.Defaults, item.Key))">
-													<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-												</button>
-												break;
-
-											case RoomControl.Choice:
-												<div class="seg" role="group" aria-label="@item.Label">
-													@foreach (TokenChoice option in RoomSettings.ChoicesFor(item.Key))
-													{
-														TokenChoice choice = option;
-														<button type="button"
-																class="@(IsCurrentChoice(item.Key, choice) ? "cur" : null)"
-																aria-pressed="@(IsCurrentChoice(item.Key, choice) ? "true" : "false")"
-																@onclick="() => SetChoice(item.Key, choice.Value)">@choice.Text</button>
-													}
-												</div>
-												break;
-
-											case RoomControl.Entity:
-												<EntityPicker Value="@RoomSettings.Entity(room, _document.Defaults, item.Key)"
-															  ValueChanged="@(value => SetEntity(item.Key, value))"
-															  Options="@_sunEntities"
-															  NoneLabel="(the house's sun entity)"
-															  Placeholder="sun.sun" />
-												break;
-
-											default:
-												<Stepper Value="@RoomSettings.Shown(room, _document.Defaults, item.Key)"
-														 Text="@RoomSettings.Describe(room, _document.Defaults, item.Key)"
-														 Label="@item.Label"
-														 Step="@item.Step"
-														 Min="@item.Min"
-														 Max="@item.Max"
-														 IsOwn="@RoomSettings.IsOwn(room, item.Key)"
-														 ValueChanged="@(value => SetNumber(item.Key, value))" />
-
-												@if (string.Equals(item.Key, nameof(AreaSettings.LuxBrightnessGamma), StringComparison.Ordinal))
-												{
-													<CurveGlyph Exponent="@RoomSettings.Shown(room, _document.Defaults, item.Key)"
-																Label="@CurvePath.Describe(RoomSettings.Shown(room, _document.Defaults, item.Key))" />
-												}
-												break;
-										}
-									</SettingRow>
-								}
-
-								@* Not overridable, so these have no twin in the defaults and cannot be rows above,
-								   but they are movement rules and belong in this section. *@
-								@if (string.Equals(current.Title, RoomSettings.MovementSection, StringComparison.Ordinal))
-								{
-									<SettingRow Label="Light dimly when these see movement"
-												Help="Sensors outside this room: the front steps, the room next door. When one of them sees movement while this room is dark, empty and running by itself, the room lights at Dim light level of its usual level for Dim light lasts. Movement in the room then brings the lights up to their usual level; if nobody comes in, they go off again. Everything that stops movement lighting the room stops this too: daylight, away, sleep, Don't switch on while. A room already lit, or set or switched off by hand, takes no notice. Offered from the whole house.">
-										<EntityListPicker Value="@(room.LeadInSensors ?? [])"
-														  ValueChanged="@(value => SetList(value, list => room.LeadInSensors = list))"
-														  Options="@_leadInSensors"
-														  NameResolver="@Name"
-														  KnownResolver="@Catalog.Knows"
-														  EmptyLabel="Nothing outside lights this room ahead of time."
-														  AddLabel="Add a sensor…"
-														  Placeholder="binary_sensor.front_steps_motion" />
-									</SettingRow>
-
-									<SettingRow Label="Don't switch on while"
-												Help="The room won't light itself while any of these is on: a projector, a do-not-disturb switch. Movement is still noticed, and lights already on are left alone. Tick the box for the opposite, so it holds while they are off — for a “lighting allowed” switch you turn off. Offered from the whole house, since a blocker often belongs to no room.">
-										<EntityListPicker Value="@(room.IgnoreWhenOn ?? [])"
-														  ValueChanged="@(value => SetList(value, list => room.IgnoreWhenOn = list))"
-														  Options="@_blockers"
-														  NameResolver="@Name"
-														  KnownResolver="@Catalog.Knows"
-														  EmptyLabel="Nothing blocks this room."
-														  AddLabel="Add a blocker…"
-														  Placeholder="binary_sensor.projector_is_on" />
-
-										@if (room.IgnoreWhenOn is { Count: > 0 })
-										{
-											<label class="gate-invert">
-												<input type="checkbox"
-													   checked="@(room.IgnoreWhenOnInverted is true)"
-													   @onchange="args => SetInvert(args.Value is true, value => room.IgnoreWhenOnInverted = value)" />
-												while these are off instead
-											</label>
-										}
-									</SettingRow>
-
-									<SettingRow Label="Don't switch off while"
-												Help="The room won't turn its own lights off while any of these is on, so the countdown, the dim light before switching off and the leaving sweep leave it alone: a meeting light, a guest switch. It never turns anything on, and switching off by hand still works. Tick the box for the opposite, so it holds while they are off.">
-										<EntityListPicker Value="@(room.KeepLitWhenOn ?? [])"
-														  ValueChanged="@(value => SetList(value, list => room.KeepLitWhenOn = list))"
-														  Options="@_blockers"
-														  NameResolver="@Name"
-														  KnownResolver="@Catalog.Knows"
-														  EmptyLabel="Nothing holds this room's lights on."
-														  AddLabel="Add one…"
-														  Placeholder="input_boolean.meeting" />
-
-										@if (room.KeepLitWhenOn is { Count: > 0 })
-										{
-											<label class="gate-invert">
-												<input type="checkbox"
-													   checked="@(room.KeepLitWhenOnInverted is true)"
-													   @onchange="args => SetInvert(args.Value is true, value => room.KeepLitWhenOnInverted = value)" />
-												while these are off instead
-											</label>
-										}
-									</SettingRow>
-
-									@* Inherits from the house's Fine tuning, not from the house default settings, so it is not one of the N of M. *@
-									<SettingRow Label="Other automations count as manual changes"
-												Help="Yes: when another Home Assistant automation changes these lights, the room stands back exactly as it does for somebody at the switch, for as long as Manual changes hold. No: the room leaves the change alone and carries on by itself, so its next re-check or movement sets its own level again. Unless set here, the room follows the house setting under House → Fine tuning."
-												IsOwn="@(room.TreatAutomationsAsManual is not null)"
-												HouseText="@(_document.Global.TreatAutomationsAsManual ? "yes" : "no")"
-												Reverted="@(() => Set(() => room.TreatAutomationsAsManual = null))">
-										<div class="seg" role="group" aria-label="Other automations count as manual changes">
-											<button type="button"
-													class="@(AutomationsCountAsManual ? "cur" : null)"
-													aria-pressed="@(AutomationsCountAsManual ? "true" : "false")"
-													@onclick="() => Set(() => room.TreatAutomationsAsManual = true)">Yes</button>
-											<button type="button"
-													class="@(AutomationsCountAsManual ? null : "cur")"
-													aria-pressed="@(AutomationsCountAsManual ? "false" : "true")"
-													@onclick="() => Set(() => room.TreatAutomationsAsManual = false)">No</button>
-										</div>
-									</SettingRow>
-
-									<SettingRow Label="Run a scene instead, on movement"
-												Help="When movement would light this room, it runs this scene instead of setting its own brightness and warmth, and leaves it alone afterwards. Everything that can refuse to light the room still refuses — the master switch, this room's switch, an away house, sleep, too much daylight, a blocker above. A scene is what happens instead of switching on, never a reason to.">
-										<EntityPicker Value="@room.SceneOnMotion"
-													  ValueChanged="@(value => Set(() => room.SceneOnMotion = value))"
-													  Options="@_scenes"
-													  NameResolver="@Name"
-													  KnownResolver="@Catalog.Knows"
-													  NoneLabel="(this room's own brightness and warmth)"
-													  EmptyNote="No scenes in Home Assistant yet — type an id instead."
-													  Placeholder="scene.stue_kveld" />
-									</SettingRow>
-
-									<SettingRow Label="Run a scene instead, when empty"
-												Help="When the room has been empty long enough to go off, it runs this scene and stays there — atmospheric lighting rather than darkness. The dim light before switching off does not run, since nothing is about to go off. Leaving the house still switches the room off, and switching it off by hand still works.">
-										<EntityPicker Value="@room.SceneWhenEmpty"
-													  ValueChanged="@(value => Set(() => room.SceneWhenEmpty = value))"
-													  Options="@_scenes"
-													  NameResolver="@Name"
-													  KnownResolver="@Catalog.Knows"
-													  NoneLabel="(switch the lights off)"
-													  EmptyNote="No scenes in Home Assistant yet — type an id instead."
-													  Placeholder="scene.stue_natt" />
-									</SettingRow>
-								}
+								<SettingRow Label="Home Assistant area" Help="Which area this room is. Changing it looks for lights and sensors again, so what is found below changes with it, and this page moves to the new address.">
+									<AreaPicker Value="@room.AreaId" ValueChanged="@OnAreaChanged" Areas="@_areas" />
+								</SettingRow>
 							</div>
 						}
 					</div>
-				}
-
-				@* Not overridable: these are what the room is, not how it behaves. *@
-				<div class="sgroup @(_identityOpen ? "sgroup-open" : null)">
-					<button type="button"
-							class="sgroup-head"
-							aria-expanded="@(_identityOpen ? "true" : "false")"
-							@onclick="() => _identityOpen = !_identityOpen">
-						<span class="sgroup-title">Room identity</span>
-						<span class="sgroup-note">What this room is called, and which Home Assistant area it is</span>
-						<span class="area-chevron" aria-hidden="true"></span>
-					</button>
-
-					@if (_identityOpen)
-					{
-						<div class="sgroup-body">
-							<SettingRow Label="Name" Help="What this room is called everywhere here. Leave it empty and it follows the Home Assistant area's name, so renaming it there renames it here.">
-								<input type="text"
-									   class="cell wide"
-									   value="@room.Name"
-									   placeholder="@RoomName"
-									   aria-label="Name"
-									   @onchange="OnNameChanged" />
-							</SettingRow>
-
-							<SettingRow Label="Home Assistant area" Help="Which area this room is. Changing it looks for lights and sensors again, so what is found below changes with it, and this page moves to the new address.">
-								<AreaPicker Value="@room.AreaId" ValueChanged="@OnAreaChanged" Areas="@_areas" />
-							</SettingRow>
-						</div>
-					}
-				</div>
-			</div>
+				</Extra>
+			</AllSettingsPanel>
 		}
 	</section>
 
@@ -641,7 +540,7 @@ else
 										<button type="button"
 												class="@(_labelledOnly ? "cur" : null)"
 												aria-pressed="@(_labelledOnly ? "true" : "false")"
-												@onclick="() => SetLabelFilter(true)">Labelled &ldquo;@IncludeLabel&rdquo;</button>
+												@onclick="() => SetLabelFilter(true)">Labelled &ldquo;@IncludeLabelName&rdquo;</button>
 										<button type="button"
 												class="@(_labelledOnly ? null : "cur")"
 												aria-pressed="@(_labelledOnly ? "false" : "true")"
@@ -658,8 +557,7 @@ else
 											  Options="@_lightChoices"
 											  Others="@_lightOthers"
 											  OthersLabel="@OthersLabel"
-											  NameResolver="@Name"
-											  KnownResolver="@Catalog.Knows"
+											  Lookup="@Lookup"
 											  EmptyLabel="Found in this room."
 											  AddLabel="Add a light…"
 											  EmptyNote="@EmptyNote("lights")"
@@ -672,8 +570,7 @@ else
 											  Options="@_motionChoices"
 											  Others="@_motionOthers"
 											  OthersLabel="@OthersLabel"
-											  NameResolver="@Name"
-											  KnownResolver="@Catalog.Knows"
+											  Lookup="@Lookup"
 											  EmptyLabel="Found in this room."
 											  AddLabel="Add a motion sensor…"
 											  EmptyNote="@EmptyNote("motion sensors")"
@@ -1025,8 +922,17 @@ else
 
 	private const string OthersLabel = "Everything else in this room";
 
-	/// <summary>The house's include label, or empty when it manages every light it finds.</summary>
+	/// <summary>The house's include label as stored, or empty when it manages every light it finds.</summary>
 	private string IncludeLabel => _document.Global.IncludeLabel ?? string.Empty;
+
+	/// <summary>The include label as a reader knows it: a stored label id shows the label's name.</summary>
+	// The document may hold an id or a name. A name is shown as it stands, so an unreadable registry changes
+	// nothing on screen.
+	private string IncludeLabelName =>
+		Catalog.LabelOptions().FirstOrDefault(label => string.Equals(label.Id, IncludeLabel, StringComparison.Ordinal))
+			is { } known
+			? known.Name
+			: IncludeLabel;
 
 	/// <summary>Whether the label filter is worth offering: with no include label both states of the control
 	/// show the same list.</summary>
@@ -1034,7 +940,7 @@ else
 
 	/// <summary>The line under the filter: what the second block of each list is holding right now.</summary>
 	private string LabelNote => _labelledOnly
-		? $"Everything else in this room that carries the “{IncludeLabel}” label — what adaptive lighting manages on its own."
+		? $"Everything else in this room that carries the “{IncludeLabelName}” label — what adaptive lighting manages on its own."
 		: "Everything else in this room, labelled or not. Naming one here manages it whatever labels it carries.";
 
 	/// <summary>Narrows or widens the second block; changes what is offered, never what is configured.</summary>
@@ -1344,8 +1250,63 @@ else
 			? group.Settings.SelectMany(setting => setting.AllKeys).Count(key => RoomSettings.IsOwn(room, key))
 			: 0;
 
-	private bool IsCurrentChoice(string key, TokenChoice choice) =>
-		string.Equals(RoomSettings.ChoiceName(_room, _document.Defaults, key), choice.Value, StringComparison.Ordinal);
+	/// <summary>The all-settings folds as the panel draws them: this room's values, each said to be its own or
+	/// the house's, with the house's wording for the road back.</summary>
+	private AllSettingsPanel.Input SettingsInput => new(
+	[
+		.. RoomSettings.Groups.Select(group => new AllSettingsPanel.Group(
+			group,
+			IsOpen(group),
+			OwnCountIn(group),
+			[
+				.. group.Settings
+					.Where(setting => setting.AppliesTo(Effective))
+					.Select(SettingItem)
+			]))
+	]);
+
+	// Read by the control that draws it and no other: Shown throws on a setting whose value is not a number.
+	private AllSettingsPanel.Item SettingItem(RoomSetting setting)
+	{
+		AllSettingsPanel.Item item = new(setting)
+		{
+			IsOwn = _room is { } row && RoomSettings.IsOwn(row, setting),
+			ValueIsOwn = _room is { } owner && RoomSettings.IsOwn(owner, setting.Key),
+			HouseText = RoomSettings.Describe(null, _document.Defaults, setting.Key)
+		};
+
+		return setting.Control switch
+		{
+			RoomControl.Steps => item with { StepValue = SleepSteps.Of(_room, _document.Defaults).ToString() },
+			RoomControl.Flag => item with { Flag = RoomSettings.Flag(_room, _document.Defaults, setting.Key) },
+			RoomControl.Choice => item with { ChoiceValue = RoomSettings.ChoiceName(_room, _document.Defaults, setting.Key) },
+			RoomControl.Entity => item with
+			{
+				Text = RoomSettings.Entity(_room, _document.Defaults, setting.Key),
+				Picker = new AllSettingsPanel.PickerField
+				{
+					Options = _sunEntities,
+					NoneLabel = "(the house's sun entity)",
+					Placeholder = "sun.sun"
+				}
+			},
+			_ => item with
+			{
+				Text = RoomSettings.Describe(_room, _document.Defaults, setting.Key),
+				Number = RoomSettings.Shown(_room, _document.Defaults, setting.Key)
+			}
+		};
+	}
+
+	/// <summary>Applies one edit from the all-settings panel, by the kind of control that made it.</summary>
+	private Task SetSetting(AllSettingsPanel.Change change) => change.Setting.Control switch
+	{
+		RoomControl.Steps => SetStep(change.Text ?? ""),
+		RoomControl.Flag => SetFlag(change.Setting.Key, change.Flag),
+		RoomControl.Choice => SetChoice(change.Setting.Key, change.Text ?? ""),
+		RoomControl.Entity => SetEntity(change.Setting.Key, change.Text),
+		_ => SetNumber(change.Setting.Key, change.Number)
+	};
 
 	// No default for this: only the page knows whether a pick waits behind a save bar or applies itself.
 	private const string TokenNote = "Applied about a second after you pick.";
@@ -1709,6 +1670,12 @@ else
 	}
 
 	private string Name(string entityId) => Catalog.FriendlyNameOrId(entityId);
+
+	/// <summary>What every picker on this page is told about an id it did not offer.</summary>
+	// Built once: a fresh pair each render would hand every picker a changed parameter on every tick.
+	private EntityLookup Lookup => _lookup ??= new EntityLookup(Name, Catalog.Knows);
+
+	private EntityLookup? _lookup;
 
 	private string AreaName(string areaId) =>
 		_areas.FirstOrDefault(area => string.Equals(area.Id, areaId, StringComparison.Ordinal))?.Name ?? areaId;
