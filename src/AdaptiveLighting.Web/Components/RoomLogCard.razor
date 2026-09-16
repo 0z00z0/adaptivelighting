@@ -1,0 +1,31 @@
+@* What this room has reported, newest first, with the rest on the Activity page. *@
+
+<section class="panel room-card">
+	<div class="room-card-head">
+		<span class="room-card-title">What happened here</span>
+		<span class="room-card-note">newest at top</span>
+	</div>
+
+	@if (Model.RoomLog is { Count: > 0 } rows)
+	{
+		@* Through ActivityView.Rows, so this card collapses runs the same way the timeline does. *@
+		<ol class="log room-log">
+			@foreach (Presentation.ActivityRow row in rows)
+			{
+				<ActivityRow @key="row.Sequence" Row="row" RoomCard="true" />
+			}
+		</ol>
+		<p class="room-card-foot">@Model.LogFoot</p>
+	}
+	else
+	{
+		<p class="room-card-foot">Nothing recorded here yet.</p>
+	}
+</section>
+
+@code {
+	/// <summary>The room page's model. This component reads it and calls it; it holds no state of its own.</summary>
+	[Parameter]
+	[EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+}
