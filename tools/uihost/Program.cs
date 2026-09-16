@@ -1,11 +1,15 @@
 using System.Globalization;
 
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
-using AdaptiveLighting.Extensions;
+using AdaptiveLighting.Engine;
+using AdaptiveLighting.Ha;
 using AdaptiveLighting.Hosting;
 using AdaptiveLighting.TestFakes;
 using AdaptiveLighting.Web;
 using AdaptiveLighting.Web.Services;
+
+using Microsoft.Extensions.Logging.Abstractions;
 
 using NetDaemon.AppModel;
 using NetDaemon.HassModel;
@@ -187,7 +191,16 @@ static void Lamp(FakeHaContext ha, string entityId, string name, IReadOnlyList<s
 static void SeedSnapshots(FakeHaContext ha, LightingConfigStore store)
 {
 	AdaptiveLightingConfig config = store.Load();
+
+	// Resolves group membership by the same rule the engine does, so this preview never keeps a second copy of
+	// that walk. The registry stays empty: every area below lists its lights explicitly, and LeavesOf never
+	// consults it.
+	AreaEntityResolver resolver = new(ha, new FakeAreaRegistry(), config.Global, NullLogger.Instance);
+	HaStatePublisher publisher = new(ha, NullLogger.Instance);
 	DateTimeOffset now = DateTimeOffset.Now;
+
+	// The room page only draws a running test when the id matches one of the document's own periods.
+	string? testPeriodId = config.Periods.LastOrDefault()?.Id;
 	int index = 0;
 
 	foreach (AreaConfig area in config.Areas)
@@ -200,6 +213,8 @@ static void SeedSnapshots(FakeHaContext ha, LightingConfigStore store)
 
 		// A scene nulls both levels, as the engine's own does: the page must read the scene, not invent a level.
 		bool lit = scene is not null || holder is not null || index % 3 != 0;
+		bool testing = !lit && index % 6 == 0 && testPeriodId is not null;
+		bool manualChange = !lit && !testing && index % 6 == 3;
 
 		// The catalog resolves these to friendly names on the page, so the fake house has to know them.
 		if (scene is not null)
@@ -208,62 +223,74 @@ static void SeedSnapshots(FakeHaContext ha, LightingConfigStore store)
 		if (holder is not null)
 			ha.SetState(holder, "playing", new() { ["friendly_name"] = Friendly(holder) });
 
-		(int missing, int total) = Availability(ha, area.Lights);
+		(int missing, int total) = Availability(ha, resolver, area.Lights);
 
-		ha.RaiseEvent("adaptive_lighting_area", new
-		{
-			area = name,
-			area_id = area.AreaId,
-			state = lit ? "AutoActive" : "AutoVacant",
-			reason = "MotionDetected",
-			mode = "Home",
-			house_mode_value = "Home",
-			kill_switch_active = false,
-			is_dark = true,
-			period = "Kveld",
-			brightness_pct = scene is null && lit ? 62.0 : (double?)null,
-			color_temp_kelvin = scene is null && lit ? 2700 : (int?)null,
-			timestamp = now.AddMinutes(-2),
-			last_command_at = now.AddMinutes(-2),
-			last_motion_at = lit ? now.AddMinutes(-2) : now.AddMinutes(-40),
-			next_change_at = lit && holder is null && scene is null ? now.AddMinutes(8) : (DateTimeOffset?)null,
-			next_change_from = lit && holder is null && scene is null ? now.AddMinutes(-2) : (DateTimeOffset?)null,
-			darkness_detail = "lux 18, dark below 40",
-			auto_on_blocked_by = "None",
-			is_held_lit = holder is not null,
-			held_lit_by = holder,
-			scene_applied = scene,
-			is_anyone_home = true,
-			lights_not_responding = total > 0 ? missing : (int?)null,
-			light_count = total > 0 ? total : (int?)null
-		});
+		IReadOnlyList<LightStanding>? levels = lit && scene is null && area.Lights is { Count: > 0 } lights
+			? [.. lights.Select((light, position) => new LightStanding(light, 62.0 + (position * 4), 2700 - (position * 100)))]
+			: null;
+
+		IReadOnlyList<string>? moved = lit && scene is null && area.Lights is { Count: > 0 } first
+			? [first[0]]
+			: null;
+
+		AreaSnapshot snapshot = new(
+			name, lit ? AreaState.AutoActive : manualChange ? AreaState.OverriddenOn : AreaState.AutoVacant,
+			manualChange ? TransitionReason.ManualOn : testing ? TransitionReason.LevelTestStarted : TransitionReason.Motion,
+			HouseMode.Home,
+			KillSwitchActive: false,
+			IsDark: true,
+			PeriodName: "Kveld",
+			BrightnessPct: scene is null && lit ? 62.0 : null,
+			ColorTempKelvin: scene is null && lit ? 2700 : null,
+			Timestamp: now.AddMinutes(-2),
+			LastCommandAt: now.AddMinutes(-2),
+			LastMotionAt: lit ? now.AddMinutes(-2) : now.AddMinutes(-40),
+			NextChangeAt: lit && holder is null && scene is null ? now.AddMinutes(8) : null,
+			NextChangeFrom: lit && holder is null && scene is null ? now.AddMinutes(-2) : null,
+			HouseModeValue: "Home",
+			DarknessDetail: "lux 18, dark below 40",
+			AreaId: area.AreaId,
+			AutoOnBlockedBy: AutoOnBlock.None,
+			IsHeldLit: holder is not null,
+			HeldLitBy: holder,
+			SceneApplied: scene,
+			IsAnyoneHome: true,
+			// Every fourth room previews the forced-mode badge, which is house-wide in a real report; varying it
+			// per room here is a preview convenience, not a claim about how one house behaves.
+			Forced: index % 4 == 2
+				? new ForcedMode(ModeKind.Guest, "Gjester", ModeForceSource.WhileEntityOn, "input_boolean.gjester", "on")
+				: null,
+			// Long enough that the countdown still reads as running by the time a screenshot is taken, well
+			// after the app started and this snapshot was built.
+			TestingPeriodId: testing ? testPeriodId : null,
+			TestEndsAt: testing ? now.AddMinutes(30) : null,
+			TestingLightId: testing && area.Lights is { Count: > 0 } tested ? tested[0] : null,
+			LightLevels: levels,
+			LightsMoved: moved,
+			LightsNotResponding: total > 0 ? missing : null,
+			LightCount: total > 0 ? total : null,
+			ChangedBy: manualChange ? "By hand" : null,
+			ChangedAt: manualChange ? now.AddMinutes(-1) : null);
+
+		publisher.Publish(snapshot);
+
+		// Publish only records the event for inspection; in a house, Home Assistant echoes the event back and
+		// that echo is what the dashboard's cache actually reads. Re-raising the same payload stands in for that
+		// echo, so the fake house delivers exactly what it recorded.
+		(string type, object? data) = ha.SentEvents[^1];
+		ha.RaiseEvent(type, data);
 
 		index++;
 	}
 }
 
-// The engine's count, taken the fake house's way: groups followed down their entity_id attribute.
-static (int Missing, int Total) Availability(FakeHaContext ha, IReadOnlyList<string>? lights)
+// The engine's own walk through group membership, so a second copy of it cannot drift from what a house sees.
+static (int Missing, int Total) Availability(FakeHaContext ha, AreaEntityResolver resolver, IReadOnlyList<string>? lights)
 {
 	HashSet<string> leaves = new(StringComparer.Ordinal);
-	HashSet<string> seen = new(StringComparer.Ordinal);
-	Stack<string> pending = new(lights ?? []);
 
-	while (pending.Count > 0)
-	{
-		string current = pending.Pop();
-
-		if (!seen.Add(current))
-			continue;
-
-		IReadOnlyList<string> members = ha.AttrStringList(current, "entity_id");
-
-		if (members.Count == 0)
-			leaves.Add(current);
-
-		foreach (string member in members)
-			pending.Push(member);
-	}
+	foreach (string light in lights ?? [])
+		leaves.UnionWith(resolver.LeavesOf(light));
 
 	int missing = leaves.Count(leaf => ha.GetState(leaf)?.State is not ("on" or "off"));
 

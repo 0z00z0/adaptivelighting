@@ -463,6 +463,20 @@ mode overwritten on no evidence, on a path a corrupt file could trigger at every
 After a Home Assistant restart an `input_select` reads `unavailable` for a while. Anything reading one has to
 survive that without acting on it.
 
+### The mode brain is one front over two rule sets
+
+`ModeMonitor` stays the public front and keeps the gate, the subscriptions, the circadian calculator and the
+boundary timer. Behind it, `HouseModeRules` owns the house-mode select: what it reads, what forces a mode over
+it, the resets, the presence grace and the auto-away timer, and it holds the one write path to the select.
+`PeriodTracker` owns which period is in force: entry, the note that tells the next start whether a boundary
+went by while the engine was down, the period select mirror, and the periods that begin on movement.
+`ModeStartupReporter` owns the start-up lines.
+
+They share one lock, because reading which period is in force and claiming that transition must be one step.
+They share one motion latch, because the rooms and the mode brain must not disagree about whether a held
+period has begun. That latch is a required constructor argument: an engine wired without it used to build its
+own and answer differently from every room.
+
 ### The house-mode select is the only thing that decides away
 
 **The rule.** `HouseState.Mode` is Away when, and only when, `ActiveKind` is `ModeKind.Away`. Phone and
@@ -1027,6 +1041,11 @@ instead of switching off. The check comes before the warning dim, so neither the
 
 `AreaController.AutoOnBlockNow` is the single place the auto-on gates are written. A second copy will drift.
 
+The gates themselves are one ordered ladder in `HouseGates`: rebuilt, kill switch, disabled, away, guest
+scene, sleep, blocking entity, darkness. A caller asks for the first closed gate between a `from` rung and an
+`until` rung, and turns it into its own sentence. The `until` bound is what keeps the entity and darkness
+reads off the two paths that never honoured them.
+
 Darkness gates **auto-on**, not adoption: lights already on when the engine starts are adopted whatever the
 light level, because the engine did not turn them on and switching them off is not its call.
 
@@ -1328,6 +1347,31 @@ reconciles. Where a page needs the answer it reads the snapshot, or calls the sa
 
 There is **no Razor render-test harness** in this repository. The judgement lives in pure functions and the markup holds only their arrangement. Any behaviour question about a
 page is answerable in the test project, not in the markup.
+
+### Services have a lifetime; presentation has none
+
+`Web/Services` holds the eleven types that are services in the container sense, each with a lifetime and a
+dependency on the engine or on Home Assistant. `Web/Presentation` holds the view helpers: pure decisions about
+how something is shown, with no state and nothing injected. The split is what keeps a view helper from quietly
+acquiring an injected dependency.
+
+Registration is layered the same way. `AdaptiveLighting.Hosting.AddLightingEngine` registers the configuration
+path, the store, the engine host and the last-seen cache; `AddLightingWeb` calls it and then adds its own.
+Registration order carries lifetime rules, so the order inside each call is not free to change.
+
+**A naming trap.** The activity row record and the row component share the name `ActivityRow`, and the
+component's namespace is in `_Imports.razor`. A file-level using beats the global one, so a razor file naming
+the record has to keep the `Presentation.` qualifier; dropping it binds the bare name to the component.
+
+### One component draws the all-settings panel
+
+`AllSettingsPanel` takes a prepared input record — the folds, their settings and what each setting currently
+reads — plus a set callback and a revert callback. It never takes the document, the store or the engine, so a
+second design mounts it without deriving anything.
+
+A page reads each setting's current value **through the control that draws it and no other**.
+`RoomSettings.Shown` throws on a setting whose value is not a number, so a builder that read every value for
+every row fails on the sun entity. Both page builders switch on the control kind for that reason.
 
 ### One owner per page question
 

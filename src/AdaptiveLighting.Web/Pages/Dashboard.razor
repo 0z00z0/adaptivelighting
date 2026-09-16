@@ -321,7 +321,7 @@ else
 	else
 	{
 		<ol class="log log-compact">
-			@foreach (Services.ActivityRow row in _logRows)
+			@foreach (Presentation.ActivityRow row in _logRows)
 			{
 				<ActivityRow @key="row.Sequence" Row="row" LinkRoom="true" />
 			}
@@ -340,7 +340,7 @@ else
 	// not the raw buffer, so the footer's "N reports on the Activity page" is a count that link can keep.
 	private int _kept;
 	private int _reachable;
-	private IReadOnlyList<Services.ActivityRow> _logRows = [];
+	private IReadOnlyList<Presentation.ActivityRow> _logRows = [];
 
 	private IReadOnlyList<BoardLane> _lanes = [];
 	private bool _hasMarks;

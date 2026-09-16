@@ -2,38 +2,17 @@
    offers is shown apart as the rename case, and can be moved onto a live option. *@
 
 <div class="periodselect">
-	<SelectAuthorityPanel Label="Dropdown helper"
+	<SelectAuthorityPanel Copy="@PanelCopy"
 						  Entity="@Select?.Entity"
 						  EntityChanged="@EntityChanged"
 						  Entities="@InputSelects"
-						  NameResolver="@NameResolver"
-						  KnownResolver="@KnownResolver"
-						  NoneLabel="(none — the schedule decides the time of day)"
-						  EmptyNote="@EmptyNote"
-						  Placeholder="input_select.tid_pa_dagnet"
+						  Lookup="@Lookup"
 						  Group="period-authority"
-						  AuthorityLabel="Changes to periods are set by:"
 						  HomeAssistant="@(Authority == PeriodAuthority.HomeAssistant)"
 						  HomeAssistantChanged="@SetAuthority"
-						  AuthorityNote="@AuthorityNote"
-						  UnavailableNote="@UnavailableNote"
 						  IsAvailable="@IsAvailable"
 						  IsReady="@IsReady"
 						  LiveOptions="@LiveOptions">
-		<LabelHelp>
-			Which <code>input_select</code> holds the time of day. No helper yet? Make one in Home Assistant
-			under <strong>Settings &rarr; Devices &amp; services &rarr; Helpers &rarr; Create helper &rarr;
-			Dropdown</strong>, give it one option per period, then pick it here.
-		</LabelHelp>
-		<Note>
-			Without one, periods change at the start times in the schedule above and nothing else is read or written.
-		</Note>
-		<AuthorityHelp>
-			<strong>Home Assistant</strong> means the engine follows this dropdown: whatever option it
-			stands on names the period every room runs, and the start times in the schedule stop
-			deciding anything. <strong>Adaptive lighting</strong> means the engine decides from its own
-			schedule and keeps the dropdown pointing at the answer, so the rest of your house can read it.
-		</AuthorityHelp>
 		<Body Context="state">
 			@if (!state.ShowsUnavailable && CurrentIsUnmapped)
 			{
@@ -171,11 +150,9 @@
 	[Parameter]
 	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
 
+	/// <summary>What an id is called and whether Home Assistant knows it, handed on to the picker.</summary>
 	[Parameter]
-	public Func<string, string>? NameResolver { get; set; }
-
-	[Parameter]
-	public Func<string, bool>? KnownResolver { get; set; }
+	public EntityLookup? Lookup { get; set; }
 
 	// The one field this component does not write itself: changing it changes which helper's live options the
 	// rows are drawn from, and only the page can re-read those.
@@ -253,6 +230,38 @@
 	// reset itself would leave the refusal with nothing on screen to explain it.
 	private bool IsDeadPeriod(string chosen) =>
 		chosen is { Length: > 0 } && Periods.ByKey(chosen) is null;
+
+	/// <summary>Everything the shared panel says here, rebuilt as the direction in force changes.</summary>
+	private SelectAuthorityCopy PanelCopy => new()
+	{
+		Label = "Dropdown helper",
+		LabelHelp = HelperHelp,
+		Note = NoHelperNote,
+		NoneLabel = "(none — the schedule decides the time of day)",
+		EmptyNote = EmptyNote,
+		Placeholder = "input_select.tid_pa_dagnet",
+		AuthorityLabel = "Changes to periods are set by:",
+		AuthorityHelp = DirectionHelp,
+		AuthorityNote = AuthorityNote,
+		UnavailableNote = UnavailableNote
+	};
+
+	private RenderFragment HelperHelp => @<text>
+		Which <code>input_select</code> holds the time of day. No helper yet? Make one in Home Assistant
+		under <strong>Settings &rarr; Devices &amp; services &rarr; Helpers &rarr; Create helper &rarr;
+		Dropdown</strong>, give it one option per period, then pick it here.
+	</text>;
+
+	private RenderFragment NoHelperNote => @<text>
+		Without one, periods change at the start times in the schedule above and nothing else is read or written.
+	</text>;
+
+	private RenderFragment DirectionHelp => @<text>
+		<strong>Home Assistant</strong> means the engine follows this dropdown: whatever option it
+		stands on names the period every room runs, and the start times in the schedule stop
+		deciding anything. <strong>Adaptive lighting</strong> means the engine decides from its own
+		schedule and keeps the dropdown pointing at the answer, so the rest of your house can read it.
+	</text>;
 
 	private string AuthorityNote => Authority is PeriodAuthority.HomeAssistant
 		? "The engine reads this helper and never writes it. Start times in the schedule above are kept, but they "

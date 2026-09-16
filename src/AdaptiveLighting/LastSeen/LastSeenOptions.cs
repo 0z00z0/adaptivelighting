@@ -1,3 +1,5 @@
+using AdaptiveLighting.Configuration;
+
 namespace AdaptiveLighting.LastSeen;
 
 /// <summary>The knobs behind <see cref="LastSeenTracker"/>, none of them exposed in the configuration document.</summary>
@@ -33,12 +35,15 @@ public sealed class LastSeenOptions
 	/// <remarks>Only absent entities count against it; dropping a present one would have the next census re-add it.</remarks>
 	public int MaxTracked { get; init; } = 5000;
 
-	/// <summary>The label that files an entity as motion, mirroring the engine's escape hatch for odd presence hardware.</summary>
-	public string MotionLabel { get; init; } = "adaptive-motion";
+	// The three below read the engine's own defaults. A second copy here would file entities under one rule while
+	// the engine discovers them under another, and nothing would report the drift.
 
-	/// <summary>The binary-sensor device classes filed as motion, mirroring the engine's discovery defaults.</summary>
-	public IReadOnlyList<string> MotionDeviceClasses { get; init; } = ["motion", "occupancy", "presence"];
+	/// <summary>The label that files an entity as motion, the engine's escape hatch for odd presence hardware.</summary>
+	public string MotionLabel { get; init; } = GlobalConfig.DefaultMotionLabel;
 
-	/// <summary>The sensor device class filed as illuminance, mirroring the engine's discovery default.</summary>
-	public string IlluminanceDeviceClass { get; init; } = "illuminance";
+	/// <summary>The binary-sensor device classes filed as motion.</summary>
+	public IReadOnlyList<string> MotionDeviceClasses { get; init; } = GlobalConfig.DefaultMotionDeviceClasses;
+
+	/// <summary>The sensor device class filed as illuminance.</summary>
+	public string IlluminanceDeviceClass { get; init; } = GlobalConfig.DefaultIlluminanceDeviceClass;
 }

@@ -350,7 +350,8 @@ else
 							   Areas="@_config.Areas"
 							   HouseModeOptions="@_houseModeOptionValues"
 							   HouseMode="@_config.Global.HouseMode"
-							   Global="@_config.Global" />
+							   Global="@_config.Global"
+							   PeriodHold="@Schedule.PeriodHoldRule(Engine)" />
 
 				@* Open only when already in use: then it is what decides what the table above means. *@
 				<GroupFold Title="Connect a dropdown helper from Home Assistant"
@@ -364,8 +365,7 @@ else
 									   IsAvailable="@Catalog.Knows(_config.Global.PeriodSelect?.EntityId)"
 									   IsReady="@HomeAssistantIsAnswering"
 									   EmptyNote="@EmptyNote("No dropdown helpers yet — make one in Home Assistant under Settings → Devices & services → Helpers, or type an id.")"
-									   NameResolver="@Name"
-									   KnownResolver="@Catalog.Knows"
+									   Lookup="@Lookup"
 									   EntityChanged="@SetPeriodSelectEntity"
 									   Changed="@Revalidate" />
 				</GroupFold>
@@ -384,41 +384,17 @@ else
 				<div class="panel">
 					@* The same picker and direction switch the period select carries: which side owns the dropdown
 					   decides what everything under it means. *@
-					<SelectAuthorityPanel Label="House mode"
+					<SelectAuthorityPanel Copy="@HouseModePanelCopy"
 										  Entity="@_config.Global.HouseMode?.Entity"
 										  EntityChanged="@SetHouseModeEntity"
 										  Entities="@_inputSelects"
-										  NameResolver="@Name"
-										  KnownResolver="@Catalog.Knows"
-										  NoneLabel="(none — the house has no modes)"
-										  EmptyNote="@EmptyNote("No dropdown helpers yet — make one in Home Assistant under Settings → Devices & services → Helpers, or type an id.")"
-										  Placeholder="input_select.husmodus"
+										  Lookup="@Lookup"
 										  Group="housemode-authority"
-										  AuthorityLabel="Changes to the house mode are set by:"
 										  HomeAssistant="@(_config.Global.HouseMode?.Authority == HouseModeAuthority.HomeAssistant)"
 										  HomeAssistantChanged="@SetHouseModeAuthority"
-										  AuthorityNote="@HouseModeAuthorityNote"
-										  UnavailableNote="@HouseModeUnavailableNote"
 										  IsAvailable="@Catalog.Knows(_config.Global.HouseMode?.EntityId)"
 										  IsReady="@HomeAssistantIsAnswering"
 										  LiveOptions="@_liveSelectOptions">
-						<LabelHelp>
-							Which dropdown helper holds this house's modes. Its options appear in the cards below &mdash;
-							say what each one means. Anything you set for an option this helper doesn't offer is kept
-							and shown, so you can move it across or remove it.
-							No helper yet? Make one in Home Assistant under <strong>Settings → Devices &amp; services →
-							Helpers → Create helper → Dropdown</strong>, add your options, then pick it here.
-						</LabelHelp>
-						<Note>
-							Without one the house is always in everyday lighting. Say below what each option means.
-						</Note>
-						<AuthorityHelp>
-							<strong>Home Assistant</strong> means the dropdown is the only thing that moves the house:
-							the engine reads it, applies whatever the option means, and never writes it back.
-							<strong>Adaptive lighting</strong> means the engine may set the mode itself &mdash; from a
-							period, from a switch you name, or after a long enough quiet spell &mdash; and keeps the
-							dropdown pointing at the answer.
-						</AuthorityHelp>
 						<Body Context="state">
 							@{
 								string modeEntity = _config.Global.HouseMode?.EntityId ?? "";
@@ -517,8 +493,7 @@ else
 									  PresenceSensors="@_presenceEntities"
 									  DateTimes="@_dateTimes"
 									  ActivationEntities="@_activationEntities"
-									  NameResolver="@Name"
-									  KnownResolver="@Catalog.Knows"
+									  Lookup="@Lookup"
 									  IsReady="@HomeAssistantIsAnswering"
 									  HomeAssistantDecides="@HouseModeIsHomeAssistants"
 									  Changed="@OnHouseModeOptionsChanged" />
@@ -561,105 +536,11 @@ else
 
 					@if (_showAllRooms)
 					{
-						<div class="room-groups">
-							@foreach (RoomSettingGroup group in RoomSettings.Groups)
-							{
-								RoomSettingGroup current = group;
-								bool open = IsOpen(current);
-
-								<div class="sgroup @(open ? "sgroup-open" : null)">
-									<button type="button"
-											class="sgroup-head"
-											aria-expanded="@(open ? "true" : "false")"
-											@onclick="() => Toggle(current)">
-										<span class="sgroup-title">@current.Title</span>
-										<span class="sgroup-note">@current.Note</span>
-										<span class="area-chevron" aria-hidden="true"></span>
-									</button>
-
-									@if (open)
-									{
-										<div class="sgroup-body">
-											@* These values are the house, so there is no inherit tag and no road back:
-											   a SettingRow with no house text renders neither. *@
-											@foreach (RoomSetting setting in current.Settings.Where(item => item.AppliesTo(_config.Defaults)))
-											{
-												RoomSetting item = setting;
-
-												<SettingRow Label="@item.Label" Help="@item.Help">
-													@switch (item.Control)
-													{
-														case RoomControl.Steps:
-															<div class="steps" role="group" aria-label="@item.Label">
-																@foreach (TokenChoice option in SleepSteps.Options)
-																{
-																	TokenChoice step = option;
-																	bool current = string.Equals(step.Value, SleepSteps.Of(_config.Defaults).ToString(), StringComparison.Ordinal);
-																	<button type="button"
-																			class="@(current ? "cur" : null)"
-																			aria-pressed="@(current ? "true" : "false")"
-																			@onclick="() => SetHouseStep(step.Value)">@step.Text</button>
-																}
-															</div>
-															break;
-
-														case RoomControl.Flag:
-															<button type="button"
-																	class="switch @(RoomSettings.Flag(null, _config.Defaults, item.Key) ? "on" : null)"
-																	role="switch"
-																	aria-checked="@(RoomSettings.Flag(null, _config.Defaults, item.Key) ? "true" : "false")"
-																	aria-label="@item.Label"
-																	@onclick="() => SetHouseFlag(item.Key, !RoomSettings.Flag(null, _config.Defaults, item.Key))">
-																<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-															</button>
-															break;
-
-														case RoomControl.Choice:
-															<div class="seg" role="group" aria-label="@item.Label">
-																@foreach (TokenChoice option in RoomSettings.ChoicesFor(item.Key))
-																{
-																	TokenChoice choice = option;
-																	<button type="button"
-																			class="@(IsCurrentChoice(item.Key, choice) ? "cur" : null)"
-																			aria-pressed="@(IsCurrentChoice(item.Key, choice) ? "true" : "false")"
-																			@onclick="() => SetHouseChoice(item.Key, choice.Value)">@choice.Text</button>
-																}
-															</div>
-															break;
-
-														case RoomControl.Entity:
-															<EntityPicker Value="@RoomSettings.Entity(null, _config.Defaults, item.Key)"
-																		  ValueChanged="@(value => SetHouseEntity(item.Key, value))"
-																		  Options="@_sunEntities"
-																		  NoneLabel="(none — the engine needs one)"
-																		  EmptyNote="@EmptyNote("No sun entity found — type an id (normally sun.sun).")"
-																		  Placeholder="sun.sun" />
-															break;
-
-														default:
-															<Stepper Value="@RoomSettings.Shown(null, _config.Defaults, item.Key)"
-																	 Text="@RoomSettings.Describe(null, _config.Defaults, item.Key)"
-																	 Label="@item.Label"
-																	 Step="@item.Step"
-																	 Min="@item.Min"
-																	 Max="@item.Max"
-																	 IsOwn="true"
-																	 ValueChanged="@(value => SetHouseNumber(item.Key, value))" />
-
-															@if (string.Equals(item.Key, nameof(AreaSettings.LuxBrightnessGamma), StringComparison.Ordinal))
-															{
-																<CurveGlyph Exponent="@RoomSettings.Shown(null, _config.Defaults, item.Key)"
-																			Label="@CurvePath.Describe(RoomSettings.Shown(null, _config.Defaults, item.Key))" />
-															}
-															break;
-													}
-												</SettingRow>
-											}
-										</div>
-									}
-								</div>
-							}
-						</div>
+						@* These values are the house, so there is no inherit tag and no road back: a row with no house
+						   text renders neither. *@
+						<AllSettingsPanel Settings="@HouseSettingsInput"
+										  Toggled="@Toggle"
+										  Set="@SetHouseSetting" />
 					}
 				</GroupFold>
 
@@ -864,8 +745,7 @@ else
 											  Value="@_config.Global.Persons"
 											  ValueChanged="@SetPersons"
 											  Options="@_persons"
-											  NameResolver="@Name"
-											  KnownResolver="@Catalog.Knows"
+											  Lookup="@Lookup"
 											  EmptyLabel="Empty — everyone Home Assistant knows, including people added later."
 											  AddLabel="Watch someone…"
 											  EmptyNote="@EmptyNote("No people found in Home Assistant — type an id.")"
@@ -1592,8 +1472,72 @@ else
 			_openedGroups.Add(group.Title);
 	}
 
-	private bool IsCurrentChoice(string key, TokenChoice choice) =>
-		string.Equals(RoomSettings.ChoiceName(null, _config.Defaults, key), choice.Value, StringComparison.Ordinal);
+	/// <summary>The all-settings folds as the panel draws them: the house's own values, with nothing above them
+	/// to inherit from and so no road back.</summary>
+	private AllSettingsPanel.Input HouseSettingsInput => new(
+	[
+		.. RoomSettings.Groups.Select(group => new AllSettingsPanel.Group(
+			group,
+			IsOpen(group),
+			OwnCount: 0,
+			[
+				.. group.Settings
+					.Where(setting => setting.AppliesTo(_config.Defaults))
+					.Select(HouseSettingItem)
+			]))
+	]);
+
+	// Read by the control that draws it and no other: Shown throws on a setting whose value is not a number.
+	private AllSettingsPanel.Item HouseSettingItem(RoomSetting setting)
+	{
+		AllSettingsPanel.Item item = new(setting) { ValueIsOwn = true };
+
+		return setting.Control switch
+		{
+			RoomControl.Steps => item with { StepValue = SleepSteps.Of(_config.Defaults).ToString() },
+			RoomControl.Flag => item with { Flag = RoomSettings.Flag(null, _config.Defaults, setting.Key) },
+			RoomControl.Choice => item with { ChoiceValue = RoomSettings.ChoiceName(null, _config.Defaults, setting.Key) },
+			RoomControl.Entity => item with
+			{
+				Text = RoomSettings.Entity(null, _config.Defaults, setting.Key),
+				Picker = new AllSettingsPanel.PickerField
+				{
+					Options = _sunEntities,
+					NoneLabel = "(none — the engine needs one)",
+					EmptyNote = EmptyNote("No sun entity found — type an id (normally sun.sun)."),
+					Placeholder = "sun.sun"
+				}
+			},
+			_ => item with
+			{
+				Text = RoomSettings.Describe(null, _config.Defaults, setting.Key),
+				Number = RoomSettings.Shown(null, _config.Defaults, setting.Key)
+			}
+		};
+	}
+
+	/// <summary>Applies one edit from the all-settings panel, by the kind of control that made it.</summary>
+	private void SetHouseSetting(AllSettingsPanel.Change change)
+	{
+		switch (change.Setting.Control)
+		{
+			case RoomControl.Steps:
+				SetHouseStep(change.Text ?? "");
+				break;
+			case RoomControl.Flag:
+				SetHouseFlag(change.Setting.Key, change.Flag);
+				break;
+			case RoomControl.Choice:
+				SetHouseChoice(change.Setting.Key, change.Text ?? "");
+				break;
+			case RoomControl.Entity:
+				SetHouseEntity(change.Setting.Key, change.Text);
+				break;
+			default:
+				SetHouseNumber(change.Setting.Key, change.Number);
+				break;
+		}
+	}
 
 	/// <summary>Applies one edit from the all-rooms sentences; a key it cannot apply means the sentence and the
 	/// page have drifted apart, so it is logged instead of silently ignored.</summary>
@@ -1967,6 +1911,41 @@ else
 		? "Until it appears, the house stays in everyday lighting and nothing can change the mode. Check the id for a typo."
 		: "Until it appears, the engine has nowhere to write the mode, so it stays in everyday lighting. Check the id for a typo.";
 
+	/// <summary>Everything the shared panel says here, rebuilt as the direction in force changes.</summary>
+	private SelectAuthorityCopy HouseModePanelCopy => new()
+	{
+		Label = "House mode",
+		LabelHelp = HouseModeHelperHelp,
+		Note = HouseModeNoHelperNote,
+		NoneLabel = "(none — the house has no modes)",
+		EmptyNote = EmptyNote("No dropdown helpers yet — make one in Home Assistant under Settings → Devices & services → Helpers, or type an id."),
+		Placeholder = "input_select.husmodus",
+		AuthorityLabel = "Changes to the house mode are set by:",
+		AuthorityHelp = HouseModeDirectionHelp,
+		AuthorityNote = HouseModeAuthorityNote,
+		UnavailableNote = HouseModeUnavailableNote
+	};
+
+	private RenderFragment HouseModeHelperHelp => @<text>
+		Which dropdown helper holds this house's modes. Its options appear in the cards below &mdash;
+		say what each one means. Anything you set for an option this helper doesn't offer is kept
+		and shown, so you can move it across or remove it.
+		No helper yet? Make one in Home Assistant under <strong>Settings → Devices &amp; services →
+		Helpers → Create helper → Dropdown</strong>, add your options, then pick it here.
+	</text>;
+
+	private RenderFragment HouseModeNoHelperNote => @<text>
+		Without one the house is always in everyday lighting. Say below what each option means.
+	</text>;
+
+	private RenderFragment HouseModeDirectionHelp => @<text>
+		<strong>Home Assistant</strong> means the dropdown is the only thing that moves the house:
+		the engine reads it, applies whatever the option means, and never writes it back.
+		<strong>Adaptive lighting</strong> means the engine may set the mode itself &mdash; from a
+		period, from a switch you name, or after a long enough quiet spell &mdash; and keeps the
+		dropdown pointing at the answer.
+	</text>;
+
 	/// <summary>Picks the helper that carries the time of day, and re-reads what that helper offers.</summary>
 	/// <remarks>The panel writes every other <c>PeriodSelect</c> field itself; this one is here because it
 	/// changes what the panel is drawn from, and only the page reads the catalog. The mappings are not rebuilt
@@ -2046,6 +2025,12 @@ else
 	}
 
 	private string Name(string entityId) => Catalog.FriendlyNameOrId(entityId);
+
+	/// <summary>What every picker on this page is told about an id it did not offer.</summary>
+	// Built once: a fresh pair each render would hand every picker a changed parameter on every tick.
+	private EntityLookup Lookup => _lookup ??= new EntityLookup(Name, Catalog.Knows);
+
+	private EntityLookup? _lookup;
 
 	/// <summary>The empty-picker note: this page knows why a list is empty and the component does not, so a
 	/// lost connection is not reported as an empty domain.</summary>

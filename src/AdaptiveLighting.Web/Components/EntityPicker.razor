@@ -80,17 +80,18 @@
 	[Parameter]
 	public string Placeholder { get; set; } = "domain.entity_id";
 
+	/// <summary>What a picker says when it has nothing to offer and the caller did not word it.</summary>
+	public const string DefaultEmptyNote = "Nothing to pick from yet — type an id instead.";
+
 	/// <summary>Why there is nothing to pick, worded by the caller: a Home Assistant that is down and a list
 	/// filtered to an area holding no such entity look the same here.</summary>
 	[Parameter]
-	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
+	public string EmptyNote { get; set; } = DefaultEmptyNote;
 
+	/// <summary>What an id is called and whether Home Assistant knows it, so an out-of-list value can read as
+	/// filtered out rather than unknown. Left unset, an id is its own name and is treated as unknown.</summary>
 	[Parameter]
-	public Func<string, string>? NameResolver { get; set; }
-
-	/// <summary>Whether Home Assistant knows an id, so an out-of-list value reads as filtered out, not unknown.</summary>
-	[Parameter]
-	public Func<string, bool>? KnownResolver { get; set; }
+	public EntityLookup? Lookup { get; set; }
 
 	private bool _manual;
 
@@ -101,13 +102,13 @@
 		&& !Options.Concat(Others).Any(option => string.Equals(option.EntityId, Value, StringComparison.Ordinal));
 
 	/// <summary>Whether an out-of-list value is unknown to Home Assistant, not merely filtered out of this domain.</summary>
-	private bool IsUnknown => IsUnlisted && !(KnownResolver?.Invoke(Value!) ?? false);
+	private bool IsUnknown => IsUnlisted && !(Lookup?.Knows(Value!) ?? false);
 
 	private string UnlistedLabel
 	{
 		get
 		{
-			string name = NameResolver?.Invoke(Value!) ?? Value!;
+			string name = Lookup?.Name(Value!) ?? Value!;
 			return IsUnknown ? $"{name} — not known to Home Assistant" : name;
 		}
 	}

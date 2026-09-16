@@ -135,7 +135,7 @@ else
 		</div>
 
 		<ol class="log">
-			@foreach (Services.ActivityRow row in day.Rows)
+			@foreach (Presentation.ActivityRow row in day.Rows)
 			{
 				<ActivityRow @key="row.Sequence" Row="row" />
 			}
@@ -152,7 +152,7 @@ else
 
 	// What the timeline draws. Kept beside _visible, not replacing it: the counts and the hidden note are about
 	// reports, only the rendering is about rows.
-	private IReadOnlyList<Services.ActivityRow> _rows = [];
+	private IReadOnlyList<Presentation.ActivityRow> _rows = [];
 
 	private IReadOnlyList<ActivityFilterChip> _chips = [];
 	private string _room = ActivityView.AllRooms;

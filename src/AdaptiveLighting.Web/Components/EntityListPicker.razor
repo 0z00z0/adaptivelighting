@@ -103,12 +103,10 @@
 	[Parameter]
 	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
 
+	/// <summary>What an id is called and whether Home Assistant knows it, which drives the "unknown" chip
+	/// styling. Left unset, an id is its own name and every id is taken on trust.</summary>
 	[Parameter]
-	public Func<string, string>? NameResolver { get; set; }
-
-	/// <summary>Whether Home Assistant knows an id, which drives the "unknown" chip styling.</summary>
-	[Parameter]
-	public Func<string, bool>? KnownResolver { get; set; }
+	public EntityLookup? Lookup { get; set; }
 
 	private string? _typed;
 	private bool _manual;
@@ -123,9 +121,9 @@
 	private IReadOnlyList<EntityOption> Unpicked(IReadOnlyList<EntityOption> options) =>
 		[.. options.Where(option => !Value.Contains(option.EntityId, StringComparer.Ordinal))];
 
-	private string NameOf(string entityId) => NameResolver?.Invoke(entityId) ?? entityId;
+	private string NameOf(string entityId) => Lookup?.Name(entityId) ?? entityId;
 
-	private bool Known(string entityId) => KnownResolver?.Invoke(entityId) ?? true;
+	private bool Known(string entityId) => Lookup?.Knows(entityId) ?? true;
 
 	private void ToggleMode() => _manual = !_manual;
 

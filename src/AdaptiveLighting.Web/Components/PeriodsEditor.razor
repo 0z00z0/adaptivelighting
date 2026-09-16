@@ -1,5 +1,4 @@
 @inject HaCatalog Catalog
-@inject LightingEngineHost Engine
 
 <div class="periods">
 	@* Said once for the table as a whole: without it the Start fields below look like Start fields that work. *@
@@ -102,8 +101,7 @@
 						<EntityListPicker Value="@MotionAreasOf(period)"
 										  ValueChanged="@(value => SetMotionAreas(period, value))"
 										  Options="@MotionAreaOptions"
-										  NameResolver="@AreaNameOf"
-										  KnownResolver="@IsRoomHere"
+										  Lookup="@RoomLookup"
 										  EmptyLabel="Any room the engine watches."
 										  AddLabel="Add a room…"
 										  Placeholder="area id, e.g. stue"
@@ -230,6 +228,12 @@
 	[Parameter]
 	public GlobalConfig? Global { get; set; }
 
+	/// <summary>Which held periods have begun today, as the engine's own latch answers it. <c>null</c> where the
+	/// engine is not running, and then no period that waits for movement has begun.</summary>
+	// Handed in rather than read from the engine: this editor draws what it is given and reaches for nothing.
+	[Parameter]
+	public Func<string, DateOnly, PeriodHold>? PeriodHold { get; set; }
+
 	private bool HasHouseMode => HouseMode?.Entity is { Length: > 0 };
 
 	// Under Home Assistant's period authority the Start fields decide nothing: the engine takes the period from
@@ -263,8 +267,7 @@
 		GlobalConfig global = Global ?? new GlobalConfig();
 		string? value = Global is null ? null : Catalog.CurrentStateOf(Global.PeriodSelect?.EntityId);
 
-		return Schedule.InForceNow(
-			Periods, global, sun, DateTimeOffset.Now, value, Schedule.PeriodHoldRule(Engine));
+		return Schedule.InForceNow(Periods, global, sun, DateTimeOffset.Now, value, PeriodHold);
 	}
 
 	private static string DisplayName(TimePeriodConfig period) =>
@@ -305,6 +308,9 @@
 			.Where(area => area.AreaId is { Length: > 0 })
 			.Select(area => new EntityOption(area.AreaId!, AreaNaming.DisplayName(area, Catalog.AreaRegistry), null))
 	];
+
+	/// <summary>The picker's view of a room id: the schedule's own rooms, named as the registry names them.</summary>
+	private EntityLookup RoomLookup => new(AreaNameOf, IsRoomHere);
 
 	private string AreaNameOf(string areaId) =>
 		RoomWithId(areaId) is { } room ? AreaNaming.DisplayName(room, Catalog.AreaRegistry) : areaId;
