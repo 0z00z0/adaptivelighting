@@ -65,6 +65,9 @@ public enum TransitionReason
 	/// <summary>A level test started on the room's real lights. Nothing the area decides on moved.</summary>
 	LevelTestStarted,
 
+	/// <summary>A level test ended, at its deadline or because it was stopped, and the lights went back.</summary>
+	LevelTestEnded,
+
 	/// <summary>Somebody asked for this room's lights from the app, and the room lit as movement would light it.</summary>
 	ManualLightOn,
 
@@ -82,7 +85,10 @@ public enum TransitionReason
 	AutomationIgnored,
 
 	/// <summary>A motion sensor's battery went low, changed level while low, or recovered. Nothing the area decides on moved.</summary>
-	SensorBattery
+	SensorBattery,
+
+	/// <summary>Somebody switched this room's lights off from the app, and movement is ignored as after a hand at the wall.</summary>
+	ManualLightOff
 }
 
 /// <summary>Which gate is refusing to switch an area's lights on for movement.</summary>

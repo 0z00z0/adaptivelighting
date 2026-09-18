@@ -135,6 +135,32 @@ public sealed class CarryOverOnSaveTests
 	}
 
 	[TestMethod]
+	public void ALevelTestRunningAtASave_KeepsItsCountdown_AndADarkRoomGoesBackToDarkAtTheEnd()
+	{
+		using House house = Running(lightState: "off");
+
+		Assert.IsNull(house.Host.RunningAreas[0].TestPeriod("day"));
+		house.Ha.SetState(Light, "on");
+		string? endsAt = Field(Latest(house.Ha), "test_ends_at");
+		Assert.IsNotNull(endsAt);
+
+		house.Advance(TimeSpan.FromSeconds(2));
+		int calls = house.Ha.Calls.Count;
+		house.Host.Save(Document(overrideMinutes: 45));
+
+		JsonElement after = Latest(house.Ha);
+		Assert.AreEqual("day", Field(after, "testing_period_id"), "the level row is still testing after the save");
+		Assert.AreEqual(endsAt, Field(after, "test_ends_at"), "on the same countdown");
+		Assert.AreEqual(nameof(AreaState.AutoVacant), Field(after, "state"), "a room lit only by the test is not taken as lit");
+		Assert.AreEqual(calls, house.Ha.Calls.Count, "the save sends the lights nowhere");
+
+		house.Advance(TimeSpan.FromSeconds(3));
+		Assert.IsTrue(house.Ha.Calls.Skip(calls).Any(call => call.Domain == "light" && call.Service == "turn_off"),
+			"the room goes back to dark at the test's own deadline");
+		Assert.IsNull(Field(Latest(house.Ha), "testing_period_id"));
+	}
+
+	[TestMethod]
 	public void AHoldCarriedOverASave_CountsFromWhenItStarted_UnderTheNewLength()
 	{
 		using House house = Running(lightState: "off", overrideMinutes: 60);

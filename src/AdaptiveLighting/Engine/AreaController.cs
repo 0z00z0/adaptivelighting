@@ -40,6 +40,10 @@ public sealed class AreaController : IDisposable
 	// The motion sensors whose battery is low, kept from the battery subscriptions the same way.
 	private IReadOnlyList<SensorBattery> _lowBatteries = [];
 
+	// The battery entities watched, and the lookup that finds one Home Assistant adds later. Null looks up nothing.
+	private IReadOnlyList<MotionBattery> _batteries;
+	private readonly Func<IReadOnlyList<MotionBattery>>? _findBatteries;
+
 	private readonly object _gate = new();
 	private readonly CompositeDisposable _subscriptions = [];
 	private readonly SerialDisposable _vacancyTimer = new();
@@ -111,6 +115,9 @@ public sealed class AreaController : IDisposable
 	// A hold handed over by the room this one replaced, taken up or dropped in Start.
 	private AreaHold? _carriedHold;
 
+	// A level test handed over the same way. Until Start settles it, the room's lit state is read from here.
+	private CarriedLevelTest? _carriedTest;
+
 	// The automation run whose change was last reported as left alone, so one run's burst of updates is one row.
 	private string? _ignoredContextId;
 
@@ -133,12 +140,14 @@ public sealed class AreaController : IDisposable
 		CircadianCalculator circadian,
 		string? areaId = null,
 		IObservable<Unit>? sunMoved = null,
-		IReadOnlyDictionary<string, CircadianCalculator>? lightCalculators = null)
+		IReadOnlyDictionary<string, CircadianCalculator>? lightCalculators = null,
+		Func<IReadOnlyList<MotionBattery>>? findBatteries = null)
 	{
 		ArgumentNullException.ThrowIfNull(house);
 		ArgumentNullException.ThrowIfNull(house.LoggerFactory);
 
 		_sunMoved = sunMoved;
+		_findBatteries = findBatteries;
 		_originNames = house.OriginNames;
 
 		IReadOnlyDictionary<string, CircadianCalculator> calculators = lightCalculators is { Count: > 0 } stated
@@ -149,6 +158,7 @@ public sealed class AreaController : IDisposable
 		_ha = house.Ha;
 		_scheduler = house.Scheduler;
 		_area = area ?? throw new ArgumentNullException(nameof(area));
+		_batteries = area.MotionBatteries;
 		_global = house.Global;
 		IReadOnlyList<TimePeriodConfig> schedule = house.Periods;
 		CircadianCalculator calculator = circadian ?? throw new ArgumentNullException(nameof(circadian));
@@ -206,7 +216,7 @@ public sealed class AreaController : IDisposable
 	}
 
 	/// <summary>How long a level test holds the room before the engine takes it back.</summary>
-	public const double LevelTestSeconds = 10;
+	public const double LevelTestSeconds = 5;
 
 	public string Name => _area.Name;
 
@@ -225,11 +235,35 @@ public sealed class AreaController : IDisposable
 		get { lock (_gate) return _levelTest.IsRunning; }
 	}
 
+	/// <summary>The level test running here, or <c>null</c> when none is.</summary>
+	public LevelTestNow? CurrentLevelTest
+	{
+		get
+		{
+			lock (_gate)
+				return _levelTest.Peek() is { } running ? new LevelTestNow(running.PeriodId, running.LightId, running.EndsAt) : null;
+		}
+	}
+
 	/// <summary>Why a level test cannot run here, or <c>null</c> when one can.</summary>
 	public string? LevelTestRefusal()
 	{
 		lock (_gate)
 			return RefuseLevelTest();
+	}
+
+	/// <summary>Ends a running level test now, putting back what the lights showed before it.</summary>
+	/// <remarks>Nothing happens when no test is running.</remarks>
+	public void EndTest()
+	{
+		lock (_gate)
+		{
+			if (_disposed || !_levelTest.IsRunning)
+				return;
+
+			EndLevelTest();
+			Publish(TransitionReason.LevelTestEnded);
+		}
 	}
 
 	/// <summary>
@@ -266,7 +300,7 @@ public sealed class AreaController : IDisposable
 			// Give the levels back to whoever owns them: the engine is asked for its own when the test ends, and a
 			// person's cannot be derived, so they are read now. Not on a second press, which would read the first
 			// test's levels as if they were somebody's.
-			if (_levelTest.Start(periodKey, lightId: null))
+			if (_levelTest.Start(periodKey, lightId: null, _area.Lights.Any(_ha.IsOn)))
 				_levelTest.Capture(LevelsAreSomebodyElses() ? CaptureLights(_area.Lights) : null);
 
 			// The engine's own answer for that period, curve included, so the room shows what it would really do
@@ -308,7 +342,7 @@ public sealed class AreaController : IDisposable
 
 			RefreshDarkness();
 
-			if (_levelTest.Start(periodKey, lightEntityId))
+			if (_levelTest.Start(periodKey, lightEntityId, _area.Lights.Any(_ha.IsOn)))
 				_levelTest.Capture(LevelsAreSomebodyElses() ? CaptureLights([lightEntityId]) : null);
 			else if (_levelTest.AddLight(lightEntityId))
 			{
@@ -349,7 +383,7 @@ public sealed class AreaController : IDisposable
 			if (RefuseLightNow() is { } refusal)
 				return refusal;
 
-			// The newest word on these levels, so a running test's return is dropped instead of landing ten
+			// The newest word on these levels, so a running test's return is dropped instead of landing
 			// seconds later over the top of what was just asked for.
 			AbandonLevelTest();
 
@@ -363,6 +397,37 @@ public sealed class AreaController : IDisposable
 			// Through LightUp and nothing else: it declares the detector's expectation per light, so the area
 			// cannot read its own command back as a person at the switch.
 			LightUp(TransitionReason.ManualLightOn);
+			return null;
+		}
+	}
+
+	/// <summary>Why this room cannot be switched off by hand right now, or <c>null</c> when it can.</summary>
+	public string? LightOffRefusal()
+	{
+		lock (_gate)
+			return RefuseLightOff();
+	}
+
+	/// <summary>Switches this room off the way a hand at the wall would, so movement is ignored for the same while.</summary>
+	/// <returns><c>null</c> once the room is off, or the sentence saying why it is not.</returns>
+	public string? LightOff()
+	{
+		lock (_gate)
+		{
+			if (RefuseLightOff() is { } refusal)
+				return refusal;
+
+			AbandonLevelTest();
+
+			CancelAllTimers();
+			ForgetDeclinedMotion();
+			Enter(AreaState.SuppressedOff, TransitionReason.ManualLightOff);
+			RestartSuppressionTimer();
+
+			_logger.LogInformation("{Area}: switched off by hand from the app; movement is ignored until the room is quiet.", Name);
+
+			// Through TurnOff, so the fan-out declares the detector's expectation before the command goes.
+			TurnOff(TransitionReason.ManualLightOff);
 			return null;
 		}
 	}
@@ -401,12 +466,13 @@ public sealed class AreaController : IDisposable
 					.StateAllChanges()
 					.SubscribeSafe(OnMemberChanged, _logger));
 
-		foreach (MotionBattery battery in _area.MotionBatteries)
-			foreach (string? entity in (string?[])[battery.LowEntity, battery.LevelEntity])
-				if (entity is not null)
-					_subscriptions.Add(_ha.Entity(entity)
-						.StateChanges()
-						.SubscribeSafe((StateChange _) => OnBatteryChanged(), _logger));
+		WatchBatteries(_batteries, []);
+
+		// A battery Home Assistant adds to a sensor's device after this room was built.
+		if (_findBatteries is not null && _area.MotionSensors.Count > 0)
+			_subscriptions.Add(_ha.StateAllChanges()
+				.Where(change => AreaEntityResolver.CouldBeBattery(change.New))
+				.SubscribeSafe(OnPossibleBattery, _logger));
 
 		_subscriptions.Add(_houseChanged.SubscribeSafe(OnHouseChanged, _logger));
 
@@ -428,9 +494,13 @@ public sealed class AreaController : IDisposable
 
 			// The last command cannot be known yet, so it stays null instead of being guessed.
 			RefreshDarkness();
-			Publish(ResumeCarriedHold() ? TransitionReason.Startup
+			TransitionReason opening = ResumeCarriedHold() ? TransitionReason.Startup
 				: AdoptIfLit() ? TransitionReason.AdoptedAtStartup
-				: TransitionReason.Startup);
+				: TransitionReason.Startup;
+
+			// After the hold and adoption, which read the room's lit state from the carried test.
+			TakeUpCarriedTest();
+			Publish(opening);
 
 			// Same gate as every other reach into the calculator: the tick above is already subscribed.
 			_boundary.Arm();
@@ -438,7 +508,11 @@ public sealed class AreaController : IDisposable
 	}
 
 	/// <summary>The history and hold a replacement for this room should take over.</summary>
-	public AreaCarryOver CarryOver()
+	/// <param name="handOnTest">
+	///     Whether a running level test goes with it. The test then leaves this room, which no longer returns it
+	///     when disposed.
+	/// </param>
+	public AreaCarryOver CarryOver(bool handOnTest = false)
 	{
 		lock (_gate)
 		{
@@ -446,7 +520,16 @@ public sealed class AreaController : IDisposable
 				? new AreaHold(_state, started)
 				: null;
 
-			return new AreaCarryOver(new AreaHistory(_lastMotionAt, _changedAt, _changedBy), hold);
+			CarriedLevelTest? test = handOnTest && _levelTest.Take() is { } running
+				? new CarriedLevelTest(running, _state switch
+				{
+					AreaState.AutoActive or AreaState.PreOff or AreaState.OverriddenOn => true,
+					AreaState.SuppressedOff => false,
+					_ => running.LitBefore
+				})
+				: null;
+
+			return new AreaCarryOver(new AreaHistory(_lastMotionAt, _changedAt, _changedBy), hold) { Test = test };
 		}
 	}
 
@@ -461,8 +544,38 @@ public sealed class AreaController : IDisposable
 			_changedAt = carried.History.ChangedAt;
 			_changedBy = carried.History.ChangedBy;
 			_carriedHold = carried.Hold;
+			_carriedTest = carried.Test;
 		}
 	}
+
+	// Taken up only where a test could start now, so a gate that forbids a test forbids its return as well and
+	// the fixtures stay as the test left them. A test the saved settings no longer fit returns at once.
+	private void TakeUpCarriedTest()
+	{
+		CarriedLevelTest? carried = _carriedTest;
+		_carriedTest = null;
+
+		if (carried is null || RefuseLevelTest() is not null)
+			return;
+
+		_levelTest.Resume(carried.Test);
+
+		if (!StillApplies(carried.Test))
+			EndLevelTest();
+	}
+
+	private bool StillApplies(RunningLevelTest test)
+	{
+		if (test.Lights is { } lights)
+			return lights.All(light => _fanOut.Leaves.Contains(light) && _targets.PeriodTarget(light, test.PeriodId) is not null);
+
+		return _targets.PeriodTarget(test.PeriodId) is not null
+			&& (test.Levels is not { } captured
+				|| captured.All(level => _area.Lights.Contains(level.Light, StringComparer.OrdinalIgnoreCase)));
+	}
+
+	// A carried test has lit the fixtures itself, so the room's own state comes with it.
+	private bool LitWithoutTest() => _carriedTest is { } carried ? carried.RoomLit : _area.Lights.Any(_ha.IsOn);
 
 	// Only from the resting state, as adoption: the opening house state may already have disabled or swept the room.
 	// The deadline counts from the hold's own start under the new length; one already passed fires at once.
@@ -475,7 +588,7 @@ public sealed class AreaController : IDisposable
 			return false;
 
 		// Dropped when the lights no longer say what the hold says.
-		bool lit = _area.Lights.Any(_ha.IsOn);
+		bool lit = LitWithoutTest();
 
 		switch (hold.State)
 		{
@@ -511,7 +624,7 @@ public sealed class AreaController : IDisposable
 		if (_state != AreaState.AutoVacant)
 			return false;
 
-		if (!_area.Lights.Any(_ha.IsOn))
+		if (!LitWithoutTest())
 			return false;
 
 		_logger.LogInformation(
@@ -756,9 +869,53 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	// Asked again on every change of a battery this room does not know, not only its first: Home Assistant can
+	// report the new entity's state before its registry entry names the device.
+	private void OnPossibleBattery(StateChange change)
+	{
+		lock (_gate)
+		{
+			if (_disposed || change.EntityId() is not { } entityId || _findBatteries is not { } find)
+				return;
+
+			if (_batteries.Any(battery => Names(battery, entityId)))
+				return;
+
+			IReadOnlyList<MotionBattery> found = find();
+			if (!found.Any(battery => Names(battery, entityId)))
+				return;
+
+			IReadOnlyList<MotionBattery> watched = _batteries;
+			_batteries = found;
+			WatchBatteries(found, watched);
+
+			_lowBatteries = LowBatteries();
+			Publish(TransitionReason.SensorBattery);
+		}
+
+		static bool Names(MotionBattery battery, string entityId) =>
+			string.Equals(battery.LowEntity, entityId, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(battery.LevelEntity, entityId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	/// <summary>Subscribes to each battery entity in <paramref name="batteries"/> not already in <paramref name="watched"/>.</summary>
+	private void WatchBatteries(IReadOnlyList<MotionBattery> batteries, IReadOnlyList<MotionBattery> watched)
+	{
+		HashSet<string> known = new(
+			watched.SelectMany(battery => (string?[])[battery.LowEntity, battery.LevelEntity]).OfType<string>(),
+			StringComparer.OrdinalIgnoreCase);
+
+		foreach (MotionBattery battery in batteries)
+			foreach (string? entity in (string?[])[battery.LowEntity, battery.LevelEntity])
+				if (entity is not null && known.Add(entity))
+					_subscriptions.Add(_ha.Entity(entity)
+						.StateChanges()
+						.SubscribeSafe((StateChange _) => OnBatteryChanged(), _logger));
+	}
+
 	private List<SensorBattery> LowBatteries() =>
 	[
-		.. _area.MotionBatteries
+		.. _batteries
 			.Select(battery => battery.LowFrom(StateOf(battery.LowEntity), StateOf(battery.LevelEntity)))
 			.OfType<SensorBattery>()
 	];
@@ -1041,7 +1198,7 @@ public sealed class AreaController : IDisposable
 	{
 		TransitionReason reason = ModeReason(opening);
 
-		// The leaving sweep, or the away scene, is the newest word on these lights. A test's return landing ten
+		// The leaving sweep, or the away scene, is the newest word on these lights. A test's return landing
 		// seconds later would sweep the room dark over the top of a standing away scene.
 		AbandonLevelTest();
 
@@ -1399,6 +1556,18 @@ public sealed class AreaController : IDisposable
 			_ => null
 		};
 
+	// The same ladder as RefuseLightNow, worded for off.
+	private string? RefuseLightOff() =>
+		HouseGates.FirstClosed(GateState(), HouseGate.Rebuilt, HouseGate.SceneHold) switch
+		{
+			HouseGate.Rebuilt => HouseGates.BeingRebuilt,
+			HouseGate.KillSwitch => "The master switch is on, so nothing may command a light.",
+			HouseGate.Disabled => "This room is not enabled, so its lights are not this app's to switch off.",
+			HouseGate.Away => "The house is set to away, so its lights are left to the away rules.",
+			HouseGate.SceneHold when _house.ActiveScene is { } scene => $"A guest scene ({scene}) is holding this room.",
+			_ => null
+		};
+
 	// The two states whose levels the engine did not choose and cannot resolve again: a hand at the switch, and a
 	// house scene. EnterSceneHold clears _standingScene, so ReassertLights would take a scene-held room to dark.
 	private bool LevelsAreSomebodyElses() =>
@@ -1450,7 +1619,7 @@ public sealed class AreaController : IDisposable
 
 	/// <summary>Drops a running test's return, leaving the fixtures where they are.</summary>
 	// For a hand at the switch mid-test: the person has just said what these lights are, so the capture is stale
-	// and the return would arrive ten seconds later over the top of it.
+	// and the return would arrive seconds later over the top of it.
 	private void AbandonLevelTest() => _levelTest.Take();
 
 	private void OnLevelTestElapsed()
@@ -1461,6 +1630,9 @@ public sealed class AreaController : IDisposable
 				return;
 
 			EndLevelTest();
+
+			// The report stops naming the test, so a page reading it does not wait on the clock.
+			Publish(TransitionReason.LevelTestEnded);
 		}
 	}
 
@@ -1500,7 +1672,7 @@ public sealed class AreaController : IDisposable
 	}
 
 	/// <summary>Re-sends what the engine wants this room to be right now, changing no state and arming no timer.</summary>
-	// Resolved at this instant and never captured before the test: ten seconds is long enough for movement, a
+	// Resolved at this instant and never captured before the test: a few seconds is long enough for movement, a
 	// boundary or a hand at a switch to have moved the answer, and the room has to end where it would have been
 	// had nobody pressed anything. Nothing is published, because none of it is news: the area decided nothing.
 	private void ReassertLights()

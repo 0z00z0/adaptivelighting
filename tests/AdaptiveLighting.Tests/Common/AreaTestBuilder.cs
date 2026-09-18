@@ -68,6 +68,7 @@ public sealed class AreaTestBuilder
 	private Func<FakeHaContext, IHaContext> _wrapHa = ha => ha;
 	private HouseState? _houseBeforeStart = new(true, ModeKind.Normal, false);
 	private HouseState? _houseAfterStart;
+	private Func<IReadOnlyList<MotionBattery>>? _findBatteries;
 
 	/// <summary>Day, evening and night, so 20:00 sits in "evening" at 70 % and 2700 K.</summary>
 	public static List<TimePeriodConfig> StandardPeriods() =>
@@ -240,6 +241,13 @@ public sealed class AreaTestBuilder
 		return this;
 	}
 
+	/// <summary>The lookup the controller asks when a battery entity it does not know reports.</summary>
+	public AreaTestBuilder FindBatteries(Func<IReadOnlyList<MotionBattery>> find)
+	{
+		_findBatteries = find;
+		return this;
+	}
+
 	/// <summary>The house state published before the area starts, as the orchestrator does; null publishes none.</summary>
 	public AreaTestBuilder OpeningHouse(HouseState? house)
 	{
@@ -311,7 +319,8 @@ public sealed class AreaTestBuilder
 			new CircadianCalculator(table, global, _sun, _roomLevels, zone: _zone),
 			areaId: _areaId,
 			sunMoved: _sunMoved,
-			lightCalculators: perLight.Count > 0 ? perLight : null);
+			lightCalculators: perLight.Count > 0 ? perLight : null,
+			findBatteries: _findBatteries);
 
 		if (_houseBeforeStart is not null)
 			house.OnNext(_houseBeforeStart);

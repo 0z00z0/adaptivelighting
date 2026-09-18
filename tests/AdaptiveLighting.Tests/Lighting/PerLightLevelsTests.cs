@@ -342,7 +342,7 @@ public sealed class PerLightLevelsTests
 		CollectionAssert.AreEqual(
 			new[] { "light.stue_tak_1 on 10.2% 2200K", "light.stue_tak_2 on 15% 2200K", "light.stue_leselampe on 15% 2200K" },
 			Recorded(room.Actuator).ToArray(),
-			"the ten-second test shows the room as it will really be lit, not every lamp at the room's level");
+			"the test shows the room as it will really be lit, not every lamp at the room's level");
 	}
 
 	// ===================== one light's own test =====================

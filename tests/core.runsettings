@@ -211,6 +211,10 @@
 				file a house's sensors one way while the engine discovers them another, silently. -->
 			| FullyQualifiedName~AdaptiveLighting.Tests.LastSeen.LastSeenOptionsTests.
 
+			<!-- The room and house pages without a renderer: when a save is armed, a conflict, a refusal. -->
+			| FullyQualifiedName~AdaptiveLighting.Tests.Web.RoomPageModelTests.
+			| FullyQualifiedName~AdaptiveLighting.Tests.Web.HousePageModelTests.
+
 			<!-- Pages that write a stored value back: it must come out as it went in, whatever the locale. -->
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LevelsEditorTests.Rendering_A_Room_Leaves_An_Off_Ladder_Level_Exactly_As_It_Was
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.PeriodStartEditorTests.A_Start_Neither_Shape_Can_Express_Survives_A_Render_Untouched

@@ -36,13 +36,6 @@ An item with no number is one this file records before the tracker has minted on
   replaces the automation that causes this for a hall; a house giving a room *No* under *Other automations count
   as manual changes* should switch off any automation that only lights that room.
 
-- **A room switched off by a level of 0 % reads "Lit at — level unknown." on its page.** Such a room stays
-  automatic and publishes no standing brightness, so `RoomFacts.Headline` takes the AutoActive arm and
-  `RoomFacts.Levels` renders the missing level as unknown. Nothing is unknown: the engine switched the room
-  off on purpose, and the panel beside the headline already reads "off". Measured on 2026-09-13 against the
-  UI host, room page and dashboard, 1280x900 and 390x844, both themes; the layout holds and only the wording
-  is wrong. The badge beside the room name reads "lit · auto" for the same reason.
-
 - #28 **The UI host seeds no activity, so the Activity page cannot be looked at.** Driving it means hand-editing
   `tools/uihost/Program.cs` to seed reports and reverting afterwards. A dozen seeded reports spread across the
   categories would make the page drivable as shipped.
@@ -77,30 +70,11 @@ An item with no number is one this file records before the tracker has minted on
 - #81 **Some rooms disappear from the board with no explanation.** A room that is not shown should either
   show, or carry a stated reason it is unavailable, rather than vanishing silently.
 
-- **Gate precedence is untested where two gates close together.** Every auto-on and refusal test arranges one
-  closed gate, so `HouseGates.FirstClosed` can have two of its rungs swapped without a test noticing. Measured
-  2026-09-16: swapping the kill switch and the disabled gate left all 167 `AreaController` tests green, while
-  swapping the entity gate and darkness turned one red. Worth one test per overlapping pair that a person would
-  see in the activity view: kill switch against a disabled room, away against a disabled room, a guest scene
-  against a disabled room.
-
-- **A test cannot see whether a command was applied before or after its expectation was declared.** The fake
-  light actuator only records what it is handed, so the order of two synchronous calls inside one
-  `CommandFanOut` method is invisible to every test: measured 2026-09-16, moving the send ahead of the
-  expectation left the suite green, while removing the expectation altogether went red. The ordering rule is
-  therefore guarded by reading, not by a test. Making it testable means the fake echoing the state change back
-  through the fake context, which belongs with the test fakes.
-
 - **Three controls still require the document, the area or the periods, which is why `RoomPageModel` exposes
   them.** `LevelsEditor` requires the periods, the area and the defaults, `SetupAgainPanel` requires the whole
   document, and `AreaSentences.ForArea` takes the area and the defaults. Every mutation already goes through a
   named model method, so no markup assigns to the document; closing the read side is the remaining half of the
   rule that a control takes what it draws.
-
-- **The two page-model test classes are outside the core set.** `AdaptiveLighting.Tests.Web.RoomPageModelTests`
-  and `HousePageModelTests` hold the save-arming, conflict and refusal rules of the two pages with no renderer.
-  Whether the core set should carry either class, or a named test from each, is an open choice; the set stands
-  unchanged until it is made.
 
 - **A red-first check can rest on a fixture that pins nothing.** The refactor plan's verification for package
   4.1 named four expected events pinning the word "Home" in `HaStatePublisherTests`. They are input fixtures

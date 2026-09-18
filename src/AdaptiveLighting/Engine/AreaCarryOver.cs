@@ -8,4 +8,8 @@ public sealed record AreaHold(AreaState State, DateTimeOffset StartedAt);
 
 /// <summary>What a rebuilt room takes over from the room it replaces when settings are saved.</summary>
 // In memory only. A hold must never outlive the engine: after downtime nobody knows what happened at the switch.
-public sealed record AreaCarryOver(AreaHistory History, AreaHold? Hold);
+public sealed record AreaCarryOver(AreaHistory History, AreaHold? Hold)
+{
+	/// <summary>A level test still running, handed on only when the saved document keeps the room.</summary>
+	internal CarriedLevelTest? Test { get; init; }
+}

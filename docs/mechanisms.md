@@ -195,9 +195,19 @@ disposed, each room gives its replacement (same area id, or same name) its last 
 change and who made it, and any hold made at the switch. The hold's deadline counts from when the
 hold last started, under the saved hold length, so a save neither lengthens nor restarts it; one
 already passed ends at once. A carried hold is dropped when the opening house state leaves the room
-anywhere but its resting state, or when the lights no longer match it. Countdowns, pre-off, lead-in,
-a running level test and the level row start afresh. Nothing is carried across a start or a reload:
-after downtime nobody knows what happened at the switch.
+anywhere but its resting state, or when the lights no longer match it. Countdowns, pre-off and lead-in
+start afresh. Nothing is carried across a start or a reload: after downtime nobody knows what happened
+at the switch.
+
+A running level test is handed over too, with its deadline and its return, but only to a room the saved
+document keeps enabled; any other test returns its lights as the old room is disposed. The replacement
+takes it up where a test could start now and the tested period and lights are still there; a test the
+house gates now refuse is dropped with the fixtures left as they are, and one the settings no longer fit
+returns at once. Because the test has lit the fixtures itself, the carried test also says whether the
+room was lit without it (from the old room's state, or the fixtures as the test found them), and the
+replacement's hold and adoption read that instead of the lamps. Without it a dark room under test would
+be adopted as lit after a save, and the return would light it to the period's levels instead of dark. A
+room in the document that then fails to resolve takes no test, and its fixtures stay on the test levels.
 
 ### The validator is one class per section, fed by one context
 
@@ -883,7 +893,7 @@ that changes a level, even where all the bulbs agree. The actuator's match check
 
 #### A light tested alone is returned alone, and its groups are still covered
 
-`AreaController.TestLight` commands one light and schedules the same ten-second return as the room's test, under
+`AreaController.TestLight` commands one light and schedules the same return as the room's test, under
 the same ownership rule: the engine re-resolves its own levels, and a person's are read off the fixture before the
 test. The return covers only the lights tested. `SendToLight` declares an expectation on the light and on every
 entry whose leaves hold it, on polarity alone: the group is expected on while any light under it will be.
@@ -1063,8 +1073,12 @@ lower is low. Unavailable or unknown reads as fine. A sensor with no device, suc
 no battery and no warning. The room follows those entities on the shared state stream, so the warning costs no
 requests, and publishes with reason `SensorBattery` when the set or a low sensor's level changes. The snapshot
 carries the low sensors in `LowBatteries`, sent as `motion_sensors_low_battery`; the dashboard timeline, the
-house page's room row and the room page show it. The lookup runs when rooms are built, so a battery entity
-added later is seen at the next save or restart.
+house page's room row and the room page show it. The lookup runs when rooms are built, and again whenever a
+battery-class entity the room does not know reports on the shared state stream, so one Home Assistant adds
+later is picked up without a save and followed from then on. It asks again on every report of an unknown
+battery rather than only its first, because Home Assistant can send the new entity's state before its registry
+entry names the device. The cost is one registry lookup per room for each report of a battery the room does
+not use; no timer and no request is added.
 
 ### What ends a manual hold
 
@@ -1197,10 +1211,10 @@ Two consequences that follow:
 null while it stands, because the engine commanded no levels and must not invent them. It is not the house's
 Guest scene, which `AreaState.SceneHold` reports.
 
-### Testing a period's levels holds the room for ten seconds and changes nothing else
+### Testing a period's levels holds the room for five seconds and changes nothing else
 
 `AreaController.TestPeriod` puts one period's levels on a room's real fixtures and hands the room back after
-`LevelTestSeconds`, which is **ten seconds** — long enough to judge a level standing in the room, short enough
+`LevelTestSeconds`, which is **five seconds** — long enough to judge a level standing in the room, short enough
 that nobody waits for it. Testing is a command surface, never a state of the machine: `_levelTesting` is a flag
 beside it, and every timer, hold and gate carries on around a test untouched.
 
@@ -1212,10 +1226,11 @@ to drift from the engine's.
 
 The return is scheduled on the engine's own scheduler, so it happens whether or not whoever pressed is still
 watching: a closed page cannot strand a room on test levels. `ReassertLights` **re-resolves at the instant it
-fires** and never replays an answer captured before the test, because ten seconds is long enough for movement,
+fires** and never replays an answer captured before the test, because a few seconds is long enough for movement,
 a boundary or a hand at a switch to have moved it, and the room has to end where it would have been had nobody
-pressed. `Dispose` runs the return immediately rather than leaving it pending: a save rebuilds every
-controller, and the replacement's first tick is `CircadianTickSeconds` away.
+pressed. A save hands a running test to the rebuilt room (see the carry-over under *One step normalises,
+validates and writes*); otherwise `Dispose` runs the return immediately rather than leaving it pending, because the
+replacement's first tick is `CircadianTickSeconds` away.
 
 Both directions go out through `SendUnrecorded`, which **declares the expectation to `OverrideDetector` for
 every light before the command reaches Home Assistant**. Without it the room reads its own work as a hand at
@@ -1233,7 +1248,7 @@ scene is deliberately not refused** — those levels are read off the fixtures a
 
 **A test the house overtakes is dropped.** `GoAway`, `EnterSceneHold` and the muzzled branch of
 `OnHouseChanged` all call `AbandonLevelTest`, because each of them is the house becoming the newest word on
-those lights: the return would otherwise land ten seconds later, sweeping the room dark over a standing away
+those lights: the return would otherwise land seconds later, sweeping the room dark over a standing away
 scene or commanding while the app said it was paused. Dropping it leaves the fixtures where they are, which
 under the muzzle is the promise being kept.
 
@@ -1248,11 +1263,22 @@ said what those levels are.
 `TestPeriod` publishes a snapshot carrying the tested period and the deadline, even though a test is "no news
 about the room" in every other sense — `_state` never moves. Without it, the countdown a room page draws is
 local component state alone, and Blazor drops that the instant the component is destroyed: navigating away and
-back inside the ten seconds redraws plain Test buttons while the engine's own return is still pending, because
+back inside the test redraws plain Test buttons while the engine's own return is still pending, because
 nothing told the fresh component a test was running. The published pair is cleared wherever `_levelTesting`
 turns false — `AbandonLevelTest` and `EndLevelTest` both — so a stale report never claims a test that is not
 running; and even without that, `RoomFacts.TestingPeriod` treats a deadline once passed as no test; either one
-alone is enough for a fresh page load to draw the right thing.
+alone is enough for a fresh page load to draw the right thing. The end of a test, at its deadline or stopped,
+publishes with reason `LevelTestEnded`.
+
+The room page reads the running test from the engine on its one-second clock and after every press, as it
+reads the refusal, and falls back to the report only while the engine does not run the room. A countdown
+kept by the page itself went on showing a test the engine had already ended — a hand at the switch, the house
+going away — until its own clock ran out.
+
+Editing any level of the period under test, in the room's row or a light's, ends the test at once through
+`AreaController.EndTest`: the lights go back and the test is not started again, so the new value is seen by
+pressing Test for it. A press with an edit still waiting on the page's save timer saves first; otherwise the
+test would show the level before the edit.
 
 ### Staleness culling is illuminance only, and generalising it would break the house
 
@@ -1987,7 +2013,7 @@ suite on request, or when something is wrong.
 
 ### The core set is chosen by hand
 
-About a tenth of the suite: **202 test methods, 209 cases, of 2020** (2026-09-13). A test earns a place when its
+About a tenth of the suite: **258 cases of 2115** (2026-09-18). A test earns a place when its
 failure would reach a person in a house, or when it guards a stored value that must never change: the auto-on
 gates, away and the house mode, vacancy and the warning dim, override detection, the sleep clamp, loading,
 validating and round-tripping the document (raw brightness bytes, retired keys, stable ids), and what a
@@ -2013,6 +2039,11 @@ once per case.
 The fakes live in the non-packable project `tests/AdaptiveLighting.TestFakes`, which `tools/uihost` references
 instead of the test project. `tests/AdaptiveLighting.Tests/GlobalUsings.cs` brings them into every test file, so
 a new test file needs no `using` for them.
+
+The fake light actuator only records a command unless `FakeLightActuator.EchoInto` is called, after which
+each command also comes back through the fake context as a state change before `Apply` returns, carrying the
+app's user as Home Assistant's echo would. That is what makes a command sent ahead of its expectation visible
+to a test; a test that arranges light states by hand leaves it off.
 
 Area tests build a started controller through `tests/AdaptiveLighting.Tests/Common/AreaTestBuilder.cs`. Its
 defaults are the ones the state-machine tests rely on: 2026-01-15 20:00 UTC, inside "evening"; motion off, light

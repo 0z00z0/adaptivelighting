@@ -206,4 +206,26 @@ public sealed partial class AreaControllerTests
 			"one answer to what this room looks like when it lights");
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
+
+	/// <summary>The Light switch pressed off: the wall switch's outcome, so a person standing in the room is not relit.</summary>
+	[TestMethod]
+	public void Switching_Off_By_Hand_Turns_The_Lights_Off_And_Ignores_Movement()
+	{
+		Fixture t = Build();
+		t.Area.LightNow();
+		t.Actuator.Clear();
+
+		Assert.IsNull(t.Area.LightOffRefusal());
+		Assert.IsNull(t.Area.LightOff());
+
+		Assert.IsTrue(t.Actuator.Last is { On: false }, "the press must reach the lights");
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State);
+		Assert.AreEqual(TransitionReason.ManualLightOff, t.Publisher.Snapshots[^1].Reason);
+
+		t.Actuator.Clear();
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.AreEqual(AreaState.SuppressedOff, t.Area.State, "movement straight after the press must not relight the room");
+		Assert.AreEqual(0, t.Actuator.Applied.Count);
+	}
 }
