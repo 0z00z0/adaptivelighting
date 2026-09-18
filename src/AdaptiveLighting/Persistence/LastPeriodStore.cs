@@ -2,52 +2,65 @@ using AdaptiveLighting.Engine;
 
 namespace AdaptiveLighting.Persistence;
 
-/// <summary><see cref="ILastPeriodStore"/> over a single small JSON file beside the configuration document.</summary>
+/// <summary><see cref="ILastPeriodStore"/> over one declared state file in the state folder.</summary>
 // Written on every change and never batched: the write a flush timer would delay is the one a restart is about
-// to need. Nothing here throws; every failure is a warning and an answer of "unknown".
+// to need. A failed write stays waiting, so the flusher writes it again. Nothing here throws; every failure is a
+// warning and an answer of "unknown".
 internal sealed class LastPeriodStore : ILastPeriodStore
 {
-	private const string NameSuffix = ".last-period.json";
+	public const string NameSuffix = ".last-period.json";
+
+	/// <summary>The declaration: the file, the version this build writes, and when it is written.</summary>
+	public static readonly StateStoreDeclaration<LastPeriodDocument> Declaration = new(
+		Name: "the period last run in",
+		NameSuffix: NameSuffix,
+		Version: LastPeriodDocument.CurrentVersion,
+		WritePolicy: StateWritePolicy.Immediate,
+		VersionOf: document => document.Version,
+		SavedAtOf: document => document.SavedAt);
 
 	private readonly ILogger<LastPeriodStore> _logger;
-	private readonly JsonNoteFile _file;
-	private readonly Lock _gate = new();
+	private readonly StateStore<LastPeriodDocument> _store;
+	private readonly Func<DateTimeOffset> _now;
 
-	/// <summary>Creates a store whose file sits beside <paramref name="configFilePath"/>.</summary>
+	/// <summary>Creates a store whose file sits in the state folder beside <paramref name="configFilePath"/>.</summary>
+	/// <remarks>Without a registry the note is still written and read the same way; only the shared flusher and the start report are missing.</remarks>
 	/// <exception cref="ArgumentException"><paramref name="configFilePath"/> is blank or has no directory.</exception>
-	public LastPeriodStore(string configFilePath, ILogger<LastPeriodStore> logger)
+	public LastPeriodStore(
+		string configFilePath,
+		ILogger<LastPeriodStore> logger,
+		StateStoreRegistry? registry = null,
+		Func<DateTimeOffset>? now = null)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(configFilePath);
 
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
-		_file = new JsonNoteFile(configFilePath, NameSuffix, _logger);
+		_now = now ?? (() => DateTimeOffset.UtcNow);
+
+		_store = registry is not null
+			? registry.Open(Declaration, LastPeriodDocument.SerializerOptions, _logger)
+			: new StateStore<LastPeriodDocument>(configFilePath, Declaration, LastPeriodDocument.SerializerOptions, _logger);
 	}
 
-	/// <summary>The directory the file lives in, which is the configuration document's own.</summary>
-	public string DirectoryPath => _file.DirectoryPath;
+	/// <summary>The directory the file lives in, which is the state folder beside the configuration document.</summary>
+	public string DirectoryPath => _store.DirectoryPath;
 
-	public string FilePath => _file.FilePath;
+	public string FilePath => _store.FilePath;
 
 	/// <inheritdoc/>
 	public string? Load()
 	{
-		lock (_gate)
-		{
-			if (!_file.TryRead(LastPeriodDocument.SerializerOptions, out LastPeriodDocument? document, out Exception? failure))
-			{
-				_logger.LogWarning(
-					failure,
-					"Could not read {Path}, so the engine does not know which period it was last running in. Nothing is "
-					+ "assumed from that: a period's house mode is left alone until the next boundary comes round with the "
-					+ "engine running, and the file is rewritten as soon as the period changes.",
-					FilePath);
+		LastPeriodDocument? document = _store.Restore(_now());
 
-				return null;
-			}
+		if (document is null && _store.LastRestore is { Outcome: StateRestore.Discarded })
+			_logger.LogWarning(
+				"The engine does not know which period it was last running in. Nothing is assumed from that: a period's "
+				+ "house mode is left alone until the next boundary comes round with the engine running, and {Path} is "
+				+ "rewritten as soon as the period changes.",
+				FilePath);
 
-			// No file is a first run, and not a boundary crossing.
-			return document?.Period is { Length: > 0 } period ? period.Trim() : null;
-		}
+		// No file is a first run, and not a boundary crossing.
+		return document?.Period is { Length: > 0 } period ? period.Trim() : null;
 	}
 
 	/// <inheritdoc/>
@@ -55,20 +68,8 @@ internal sealed class LastPeriodStore : ILastPeriodStore
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(periodKey);
 
-		LastPeriodDocument document = new() { SavedAt = DateTimeOffset.UtcNow, Period = periodKey.Trim() };
+		LastPeriodDocument document = new() { SavedAt = _now(), Period = periodKey.Trim() };
 
-		lock (_gate)
-		{
-			if (_file.TryWrite(document, LastPeriodDocument.SerializerOptions, out Exception? failure))
-				return true;
-
-			_logger.LogWarning(
-				failure,
-				"Could not write {Path}. The engine still knows which period it is in; the cost is only that the next "
-				+ "restart will not be able to tell whether a boundary went by while it was down.",
-				FilePath);
-
-			return false;
-		}
+		return _store.Write(document);
 	}
 }

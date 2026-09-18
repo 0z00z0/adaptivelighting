@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -17,38 +16,51 @@ internal sealed class JsonNoteFile
 	public const int VersionOrder = -1;
 	public const string SavedAtProperty = "savedAt";
 
-	public const string BackupSuffix = ".bak";
+	public const string BackupSuffix = AtomicJsonFile.BackupSuffix;
+
+	/// <summary>The subdirectory the notes live in, so the document's own folder holds the one hand-edited file.</summary>
+	public const string StateFolderName = "state";
 
 	private const string FallbackStem = "adaptive-lighting";
 
-	private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
-
 	private readonly ILogger _logger;
+	private readonly bool _keepsBackup;
 
-	// Only the path's directory and file name stem are used; the configuration document itself is never touched here.
-	/// <summary>Places the note beside <paramref name="configFilePath"/>, named after its stem.</summary>
+	/// <summary>Places the note under <paramref name="configFilePath"/>'s directory, named after its stem.</summary>
 	/// <exception cref="ArgumentException"><paramref name="configFilePath"/> is blank or has no directory.</exception>
-	public JsonNoteFile(string configFilePath, string nameSuffix, ILogger logger)
+	public JsonNoteFile(string configFilePath, string nameSuffix, ILogger logger, bool inStateFolder = false, bool keepsBackup = true)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(configFilePath);
 
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
+		_keepsBackup = keepsBackup;
 
 		string full = Path.GetFullPath(configFilePath);
 
-		DirectoryPath = Path.GetDirectoryName(full)
+		DocumentDirectoryPath = Path.GetDirectoryName(full)
 			?? throw new ArgumentException($"'{configFilePath}' has no directory to write beside.", nameof(configFilePath));
+
+		DirectoryPath = inStateFolder ? Path.Combine(DocumentDirectoryPath, StateFolderName) : DocumentDirectoryPath;
 
 		// The stem, so home.yaml gets home + suffix and two hosts sharing a directory cannot collide.
 		string stem = Path.GetFileNameWithoutExtension(full);
 		if (stem.Length == 0)
 			stem = FallbackStem;
 
-		FilePath = Path.Combine(DirectoryPath, stem + nameSuffix);
+		FileName = stem + nameSuffix;
+		FilePath = Path.Combine(DirectoryPath, FileName);
+
+		if (inStateFolder)
+			AdoptFileWrittenBesideTheDocument();
 	}
 
-	/// <summary>The directory the file lives in, which is the configuration document's own.</summary>
+	/// <summary>The configuration document's own directory.</summary>
+	public string DocumentDirectoryPath { get; }
+
+	/// <summary>The directory the note lives in, which is the state subfolder unless the note stays beside the document.</summary>
 	public string DirectoryPath { get; }
+
+	public string FileName { get; }
 
 	public string FilePath { get; }
 
@@ -64,89 +76,102 @@ internal sealed class JsonNoteFile
 		AllowTrailingCommas = true
 	};
 
-	/// <summary>Reads the note. A missing file succeeds with no document; an unreadable one fails with the reason.</summary>
-	public bool TryRead<TDocument>(JsonSerializerOptions options, out TDocument? document, [NotNullWhen(false)] out Exception? failure)
+	/// <summary>Reads the note, falling back to the backup. A missing pair succeeds with no document.</summary>
+	/// <remarks>
+	///     The backup is read when the main file is missing as well as when it will not parse: a kill between the two
+	///     steps of a replace leaves only the backup, measured at 1.5 % of kills on Windows.
+	/// </remarks>
+	public bool TryRead<TDocument>(
+		JsonSerializerOptions options,
+		out TDocument? document,
+		out bool fromBackup,
+		[NotNullWhen(false)] out Exception? failure)
 		where TDocument : class
 	{
-		document = null;
-		failure = null;
+		fromBackup = false;
 
-		try
+		bool readMain = AtomicJsonFile.TryRead(FilePath, options, out document, out Exception? mainFailure);
+
+		if (readMain && document is not null)
 		{
-			if (!File.Exists(FilePath))
-				return true;
-
-			document = JsonSerializer.Deserialize<TDocument>(File.ReadAllText(FilePath), options);
-			return true;
-		}
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
-		{
-			failure = exception;
-			return false;
-		}
-	}
-
-	/// <summary>Writes the note in one step, keeping the previous one as the backup.</summary>
-	public bool TryWrite<TDocument>(TDocument document, JsonSerializerOptions options, [NotNullWhen(false)] out Exception? failure)
-	{
-		// A random temp name, not a fixed ".tmp": two writers on a fixed name truncate each other.
-		string temporary = Path.Combine(DirectoryPath, $".{Path.GetFileName(FilePath)}.{Path.GetRandomFileName()}.tmp");
-
-		try
-		{
-			Directory.CreateDirectory(DirectoryPath);
-			File.WriteAllText(temporary, JsonSerializer.Serialize(document, options), Utf8NoBom);
-
-			if (File.Exists(FilePath))
-				// One call. Copying to .bak first leaves a window where the backup is the only copy.
-				File.Replace(temporary, FilePath, BackupPath, ignoreMetadataErrors: true);
-			else
-				File.Move(temporary, FilePath);
-
 			failure = null;
 			return true;
 		}
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
-		{
-			TryDeleteTemporary(temporary);
 
-			failure = exception;
-			return false;
+		if (_keepsBackup
+			&& AtomicJsonFile.TryRead(BackupPath, options, out TDocument? backup, out _)
+			&& backup is not null)
+		{
+			document = backup;
+			fromBackup = true;
+			failure = null;
+
+			_logger.LogWarning(
+				mainFailure,
+				"Read {Backup} because {Path} is missing or could not be parsed. The backup holds the last completed "
+				+ "write, so at most the newest change is lost.",
+				BackupPath, FilePath);
+
+			return true;
 		}
+
+		// Nothing anywhere is a first run, and not a fault.
+		failure = mainFailure;
+		return mainFailure is null;
 	}
+
+	/// <summary>Writes the note in one step, keeping the previous one as the backup.</summary>
+	public bool TryWrite<TDocument>(TDocument document, JsonSerializerOptions options, [NotNullWhen(false)] out Exception? failure) =>
+		AtomicJsonFile.TryWrite(FilePath, document, options, _keepsBackup, out failure);
 
 	/// <summary>Deletes the note and its backup.</summary>
 	public bool TryRemove([NotNullWhen(false)] out Exception? failure)
 	{
-		try
-		{
-			if (File.Exists(FilePath))
-				File.Delete(FilePath);
-
-			if (File.Exists(BackupPath))
-				File.Delete(BackupPath);
-
-			failure = null;
-			return true;
-		}
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-		{
-			failure = exception;
+		if (!AtomicJsonFile.TryRemove(FilePath, out failure))
 			return false;
-		}
+
+		return AtomicJsonFile.TryRemove(BackupPath, out failure);
 	}
 
-	private void TryDeleteTemporary(string path)
+	/// <summary>Moves a note an earlier build wrote beside the document into the state subfolder.</summary>
+	/// <remarks>Failures are ignored: giving up costs the note, which reads as unknown, and must never stop start-up.</remarks>
+	private void AdoptFileWrittenBesideTheDocument()
 	{
+		int moved = Adopt(FileName) + Adopt(FileName + BackupSuffix);
+
+		if (moved > 0)
+			_logger.LogInformation(
+				"Moved {Count} file(s) for the {Name} note into {Directory}. The configuration document and its backup "
+				+ "are what sit beside it now.",
+				moved, FileName, DirectoryPath);
+	}
+
+	private int Adopt(string name)
+	{
+		string stray = Path.Combine(DocumentDirectoryPath, name);
+		string destination = Path.Combine(DirectoryPath, name);
+
 		try
 		{
-			if (File.Exists(path))
-				File.Delete(path);
+			if (!File.Exists(stray))
+				return 0;
+
+			// The copy already in the state folder is the live one, so a stray beside the document is only ever stale.
+			if (File.Exists(destination))
+			{
+				File.Delete(stray);
+				return 1;
+			}
+
+			Directory.CreateDirectory(DirectoryPath);
+			File.Move(stray, destination);
+
+			return 1;
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
 		{
-			// Litter, not a failure. Must not mask the real write error.
-			_logger.LogDebug(exception, "Could not remove the temporary file {Path}.", path);
+			_logger.LogDebug(exception, "Could not move {Path} into {Directory}; the next start tries again.", stray, DirectoryPath);
+			return 0;
 		}
 	}
 }

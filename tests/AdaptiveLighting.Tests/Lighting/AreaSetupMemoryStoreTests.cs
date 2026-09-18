@@ -48,8 +48,8 @@ public sealed class AreaSetupMemoryStoreTests
 	{
 		using TempDirectory temp = new();
 
-		Assert.AreEqual(Path.Combine(temp.Path, "cabin.setup-faults.json"), temp.Store("cabin.yaml").FilePath);
-		Assert.AreEqual(Path.Combine(temp.Path, "b1.setup-faults.json"), temp.Store().FilePath);
+		Assert.AreEqual(Path.Combine(temp.Path, "state", "cabin.setup-faults.json"), temp.Store("cabin.yaml").FilePath);
+		Assert.AreEqual(Path.Combine(temp.Path, "state", "b1.setup-faults.json"), temp.Store().FilePath);
 	}
 
 	[TestMethod]
@@ -149,7 +149,7 @@ public sealed class AreaSetupMemoryStoreTests
 		store.Record([NoLights()]);
 		store.Record([NoSuchArea()]);
 
-		string?[] names = [.. Directory.GetFiles(temp.Path).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal)];
+		string?[] names = [.. Directory.GetFiles(store.DirectoryPath).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal)];
 		CollectionAssert.AreEqual(new[] { "b1.setup-faults.json", "b1.setup-faults.json.bak" }, names);
 	}
 
@@ -163,7 +163,7 @@ public sealed class AreaSetupMemoryStoreTests
 		Directory.CreateDirectory(store.FilePath);
 
 		Assert.AreEqual(1, store.Record([NoLights()]).Count, "a failed write degrades to reporting, never to silence");
-		Assert.AreEqual(0, Directory.GetFiles(temp.Path).Length, "and no temporary file is left beside the configuration");
+		Assert.AreEqual(0, Directory.GetFiles(store.DirectoryPath).Length, "and no temporary file is left in the state folder");
 	}
 
 	[TestMethod]
