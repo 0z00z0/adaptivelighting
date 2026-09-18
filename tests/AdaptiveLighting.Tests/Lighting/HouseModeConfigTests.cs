@@ -29,7 +29,7 @@ public sealed class HouseModeConfigTests
 	[TestMethod]
 	public void OptionFor_Does_Not_Throw_On_An_Option_With_A_Null_Value()
 	{
-		var config = Cabin();
+		HouseModeConfig config = Cabin();
 		config.Options.Add(new HouseModeOptionConfig { Value = null! });   // YAML bound `value:` to null
 
 		// The null-valued option must simply never match, not NullReferenceException while scanning.
@@ -48,7 +48,7 @@ public sealed class HouseModeConfigTests
 	[TestMethod]
 	public void NormalOption_IsNull_WhenNoOptionIsNormal_NeverATaggedOption()
 	{
-		var config = new HouseModeConfig
+		HouseModeConfig config = new HouseModeConfig
 		{
 			Entity = "input_select.husmodus",
 			Options = [new() { Value = "Borte", Kind = ModeKind.Away }, new() { Value = "Sover", Kind = ModeKind.Sleep }]
@@ -61,7 +61,7 @@ public sealed class HouseModeConfigTests
 	[TestMethod]
 	public void NormalOption_IsTheNormalOption_WhenOneIsMarked()
 	{
-		var config = new HouseModeConfig
+		HouseModeConfig config = new HouseModeConfig
 		{
 			Entity = "input_select.husmodus",
 			Options = [new() { Value = "Hjemme", Kind = ModeKind.Normal }, new() { Value = "Sover", Kind = ModeKind.Sleep }]
@@ -81,7 +81,7 @@ public sealed class HouseModeConfigTests
 	[TestMethod]
 	public void HasResetTrigger_Presence_RequiresTheToggle_NotJustAListedSensor()
 	{
-		var listedButOff = new HouseModeOptionConfig
+		HouseModeOptionConfig listedButOff = new HouseModeOptionConfig
 		{
 			Value = "Borte",
 			Kind = ModeKind.Away,
@@ -91,7 +91,7 @@ public sealed class HouseModeConfigTests
 		Assert.IsFalse(listedButOff.HasResetTrigger,
 			"sensors listed but ResetOnPresence off is inert everywhere — the toggle is authoritative");
 
-		var toggleOn = new HouseModeOptionConfig { Value = "Borte", Kind = ModeKind.Away, ResetOnPresence = true };
+		HouseModeOptionConfig toggleOn = new HouseModeOptionConfig { Value = "Borte", Kind = ModeKind.Away, ResetOnPresence = true };
 		Assert.IsTrue(toggleOn.HasResetTrigger, "the toggle alone arms the presence reset");
 	}
 
@@ -100,7 +100,7 @@ public sealed class HouseModeConfigTests
 	[TestMethod]
 	public void SleepClampPeriodFor_PrefersAnExplicitClampPeriod()
 	{
-		var option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep, ClampPeriodId = "evening" };
+		HouseModeOptionConfig option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep, ClampPeriodId = "evening" };
 
 		Assert.AreEqual("evening", HouseModeConfig.SleepClampPeriodFor(option, Periods())?.Name,
 			"an explicit ClampPeriodId wins the chain");
@@ -109,8 +109,8 @@ public sealed class HouseModeConfigTests
 	[TestMethod]
 	public void SleepClampPeriodFor_ThenAPeriodThatSetsThisMode()
 	{
-		var option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
-		var periods = Periods();
+		HouseModeOptionConfig option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
+		List<TimePeriodConfig> periods = Periods();
 		periods[0].SetsModeId = "Sover";   // day sets Sover
 
 		Assert.AreEqual("day", HouseModeConfig.SleepClampPeriodFor(option, periods)?.Name,
@@ -120,7 +120,7 @@ public sealed class HouseModeConfigTests
 	[TestMethod]
 	public void SleepClampPeriodFor_ThenAPeriodLiterallyNamedNight()
 	{
-		var option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
+		HouseModeOptionConfig option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
 
 		Assert.AreEqual("night", HouseModeConfig.SleepClampPeriodFor(option, Periods())?.Name,
 			"absent an explicit clamp and a SetsModeId period, a period named 'night' is the fallback");
@@ -129,8 +129,8 @@ public sealed class HouseModeConfigTests
 	[TestMethod]
 	public void SleepClampPeriodFor_IsNull_WhenNothingResolves()
 	{
-		var option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
-		var periods = new List<TimePeriodConfig> { new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" } };
+		HouseModeOptionConfig option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
+		List<TimePeriodConfig> periods = new List<TimePeriodConfig> { new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" } };
 
 		Assert.IsNull(HouseModeConfig.SleepClampPeriodFor(option, periods),
 			"no clamp, no SetsModeId period, no 'night' → nothing resolves");

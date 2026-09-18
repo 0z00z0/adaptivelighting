@@ -1,4 +1,6 @@
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -7,7 +9,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void An_Area_Found_Lit_Is_Adopted_And_Eventually_Turned_Off()
 	{
-		var t = BuildAlreadyLit();
+		AreaFixture t = BuildAlreadyLit();
 
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "a lit room is the engine's problem, not nobody's");
 
@@ -23,7 +25,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Adoption_Commands_Absolutely_Nothing()
 	{
-		var t = BuildAlreadyLit();
+		AreaFixture t = BuildAlreadyLit();
 
 		Assert.AreEqual(0, t.Actuator.Applied.Count,
 			"somebody walking past a restart must notice nothing at all");
@@ -37,7 +39,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Lit_Area_Is_Adopted_Even_When_It_Is_Too_Bright_To_Have_Been_Lit()
 	{
-		var t = BuildAlreadyLit(lux: "5000");
+		AreaFixture t = BuildAlreadyLit(lux: "5000");
 
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 		Assert.AreEqual(false, t.Publisher.Snapshots[^1].IsDark, "it is not dark, and the snapshot says so");
@@ -51,8 +53,8 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void An_Adopted_Area_Says_It_Was_Adopted_And_Claims_No_Levels()
 	{
-		var t = BuildAlreadyLit();
-		var opening = t.Publisher.Snapshots.Single();
+		AreaFixture t = BuildAlreadyLit();
+		AreaSnapshot opening = t.Publisher.Snapshots.Single();
 
 		Assert.AreEqual(TransitionReason.AdoptedAtStartup, opening.Reason);
 		Assert.AreEqual(AreaState.AutoActive, opening.State);
@@ -64,7 +66,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void An_Area_Found_Dark_Is_Not_Adopted()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 
 		Assert.AreEqual(AreaState.AutoVacant, t.Area.State);
 		Assert.AreEqual(TransitionReason.Startup, t.Publisher.Snapshots.Single().Reason);
@@ -74,7 +76,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Muzzled_Engine_Adopts_Nothing()
 	{
-		var t = BuildAlreadyLit(s => s.Enabled = false);
+		AreaFixture t = BuildAlreadyLit(s => s.Enabled = false);
 
 		// Start() declines to adopt, then the house subscription lands the area in Disabled.
 		Assert.AreEqual(AreaState.Disabled, t.Area.State);

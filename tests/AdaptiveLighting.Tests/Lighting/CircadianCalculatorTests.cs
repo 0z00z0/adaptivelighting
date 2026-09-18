@@ -35,7 +35,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void Clamp_Honours_The_Physical_Range_And_Nothing_Else()
 	{
-		var target = Stepped().GetTarget(At(23))!;
+		LightTarget target = Stepped().GetTarget(At(23))!;
 
 		Assert.AreEqual(100d, target.Clamp(140));
 		Assert.AreEqual(0d, target.Clamp(-5));
@@ -45,7 +45,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void The_Active_Period_Is_The_Last_Boundary_At_Or_Before_Now()
 	{
-		var calc = Stepped();
+		CircadianCalculator calc = Stepped();
 
 		Assert.AreEqual("day", calc.GetTarget(At(7))!.PeriodName, "a boundary is inclusive of its own instant");
 		Assert.AreEqual("day", calc.GetTarget(At(12))!.PeriodName);
@@ -79,7 +79,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void Before_The_First_Boundary_The_Table_Wraps_To_Yesterdays_Last_Period()
 	{
-		var calc = Stepped();
+		CircadianCalculator calc = Stepped();
 
 		Assert.AreEqual("night", calc.GetTarget(At(3))!.PeriodName, "03:00 is still last night, not an undefined hole");
 	}
@@ -87,7 +87,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Period_Reports_Its_Own_Levels()
 	{
-		var target = Stepped().GetTarget(At(20))!;
+		LightTarget target = Stepped().GetTarget(At(20))!;
 
 		Assert.AreEqual("evening", target.PeriodName);
 		Assert.AreEqual(70d, target.BrightnessPct);
@@ -106,7 +106,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Period_With_An_Unparseable_Start_Is_Dropped_And_The_Rest_Still_Cover_The_Day()
 	{
-		var table = new List<TimePeriodConfig>
+		List<TimePeriodConfig> table = new List<TimePeriodConfig>
 		{
 			new() { Name = "broken", Start = "half past tea", BrightnessPct = 1 },
 			new() { Name = "day", Start = "07:00", BrightnessPct = 90 }
@@ -120,13 +120,13 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Sun_Anchored_Boundary_Is_Placed_From_The_Days_Sun_Times()
 	{
-		var table = new List<TimePeriodConfig>
+		List<TimePeriodConfig> table = new List<TimePeriodConfig>
 		{
 			new() { Name = "day", Start = "sunrise", BrightnessPct = 90 },
 			new() { Name = "evening", Start = "sunset-01:00", BrightnessPct = 70 }
 		};
-		var sun = new SunTimes(new TimeOnly(9, 15), new TimeOnly(15, 45));
-		var calc = Stepped(table, sun);
+		SunTimes sun = new SunTimes(new TimeOnly(9, 15), new TimeOnly(15, 45));
+		CircadianCalculator calc = Stepped(table, sun);
 
 		Assert.AreEqual("evening", calc.GetTarget(At(14, 50))!.PeriodName, "an hour before a 15:45 sunset is 14:45");
 		Assert.AreEqual("day", calc.GetTarget(At(14, 40))!.PeriodName);
@@ -136,7 +136,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Sun_Boundary_That_Cannot_Be_Placed_Is_Dropped_Not_Guessed()
 	{
-		var table = new List<TimePeriodConfig>
+		List<TimePeriodConfig> table = new List<TimePeriodConfig>
 		{
 			new() { Name = "day", Start = "sunrise", BrightnessPct = 90 },
 			new() { Name = "night", Start = "22:30", BrightnessPct = 15 }
@@ -149,15 +149,15 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Dropped_Period_Is_Surfaced_With_Its_Reason_And_Only_Once()
 	{
-		var table = new List<TimePeriodConfig>
+		List<TimePeriodConfig> table = new List<TimePeriodConfig>
 		{
 			new() { Name = "broken", Start = "half past tea", BrightnessPct = 1 },
 			new() { Name = "dawn", Start = "sunrise", BrightnessPct = 90 },
 			new() { Name = "night", Start = "22:30", BrightnessPct = 15 }
 		};
 
-		var raised = new List<DroppedPeriod>();
-		var calc = new CircadianCalculator(table, new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown);
+		List<DroppedPeriod> raised = new List<DroppedPeriod>();
+		CircadianCalculator calc = new CircadianCalculator(table, new GlobalConfig { SmoothTransitions = false }, () => SunTimes.Unknown);
 		calc.PeriodDropped += raised.Add;
 
 		// An unparseable Start is known at construction, before any subscriber exists, so it surfaces on the
@@ -173,7 +173,7 @@ public sealed class CircadianCalculatorTests
 			new DroppedPeriod("dawn", "sunrise", PeriodDropReason.Unresolvable),
 			"a sun-anchored period with no sun data is surfaced once it is evaluated");
 
-		for (var i = 0; i < 1440; i++)
+		for (int i = 0; i < 1440; i++)
 			calc.GetTarget(At(12));
 
 		Assert.AreEqual(1, raised.Count(drop => drop.PeriodName == "dawn"),
@@ -183,7 +183,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void An_All_Sun_Table_During_Polar_Night_Resolves_Nothing()
 	{
-		var table = new List<TimePeriodConfig> { new() { Name = "day", Start = "sunrise" } };
+		List<TimePeriodConfig> table = new List<TimePeriodConfig> { new() { Name = "day", Start = "sunrise" } };
 
 		Assert.IsNull(Stepped(table, SunTimes.Unknown).GetTarget(At(12)),
 			"a caller that gets null must command nothing; guessing a target here would be worse than doing nothing");
@@ -199,7 +199,7 @@ public sealed class CircadianCalculatorTests
 	public void Halfway_Through_The_Blend_The_Target_Is_Halfway_Between_The_Periods()
 	{
 		// 18:15 is 15 of 30 blend minutes past the boundary: halfway from day (90/4500) to evening (70/2700).
-		var target = Blended().GetTarget(At(18, 15))!;
+		LightTarget target = Blended().GetTarget(At(18, 15))!;
 
 		Assert.AreEqual("evening", target.PeriodName, "the period being arrived at is the one that names the target");
 		Assert.AreEqual(80, target.BrightnessPct, 0.001);
@@ -209,7 +209,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void At_The_Boundary_The_Blend_Still_Reads_The_Previous_Periods_Levels()
 	{
-		var target = Blended().GetTarget(At(18))!;
+		LightTarget target = Blended().GetTarget(At(18))!;
 
 		Assert.AreEqual("evening", target.PeriodName);
 		Assert.AreEqual(90, target.BrightnessPct, 0.001, "the window trails the boundary rather than straddling it");
@@ -226,7 +226,7 @@ public sealed class CircadianCalculatorTests
 	public void A_Blend_Across_Midnight_Interpolates_From_The_Wrapped_Previous_Period()
 	{
 		// 07:00 arrives from night (15%). At 07:15 the blend is half of the way from 15 to day's 90.
-		var target = Blended().GetTarget(At(7, 15))!;
+		LightTarget target = Blended().GetTarget(At(7, 15))!;
 
 		Assert.AreEqual("day", target.PeriodName);
 		Assert.AreEqual(52.5, target.BrightnessPct, 0.001);
@@ -250,7 +250,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void GetPeriodTarget_Reaches_A_Period_By_Name_Ignoring_The_Clock()
 	{
-		var night = Stepped().GetPeriodTarget("night")!;
+		LightTarget night = Stepped().GetPeriodTarget("night")!;
 
 		Assert.AreEqual("night", night.PeriodName);
 		Assert.AreEqual(15d, night.BrightnessPct);
@@ -267,7 +267,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Room_With_No_Levels_Runs_The_Schedule_Untouched()
 	{
-		var target = Stepped(levels: []).GetTarget(At(20))!;
+		LightTarget target = Stepped(levels: []).GetTarget(At(20))!;
 
 		Assert.AreEqual(70d, target.BrightnessPct);
 		Assert.AreEqual(2700, target.ColorTempKelvin);
@@ -277,9 +277,9 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Room_Replacing_Only_Brightness_Keeps_Inheriting_The_Schedules_Colour()
 	{
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", BrightnessPct = 40 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", BrightnessPct = 40 } };
 
-		var target = Stepped(levels: levels).GetTarget(At(20))!;
+		LightTarget target = Stepped(levels: levels).GetTarget(At(20))!;
 
 		Assert.AreEqual(40d, target.BrightnessPct);
 		Assert.AreEqual(2700, target.ColorTempKelvin,
@@ -290,9 +290,9 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Room_Replacing_Only_Colour_Keeps_Inheriting_The_Schedules_Brightness()
 	{
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", ColorTempKelvin = 4000 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", ColorTempKelvin = 4000 } };
 
-		var target = Stepped(levels: levels).GetTarget(At(20))!;
+		LightTarget target = Stepped(levels: levels).GetTarget(At(20))!;
 
 		Assert.AreEqual(70d, target.BrightnessPct, "a workshop that cannot use 2700 K has said nothing about brightness");
 		Assert.AreEqual(4000, target.ColorTempKelvin);
@@ -302,9 +302,9 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Room_Replacing_Both_Reports_Both()
 	{
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", BrightnessPct = 40, ColorTempKelvin = 4000 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", BrightnessPct = 40, ColorTempKelvin = 4000 } };
 
-		var target = Stepped(levels: levels).GetTarget(At(20))!;
+		LightTarget target = Stepped(levels: levels).GetTarget(At(20))!;
 
 		Assert.AreEqual(40d, target.BrightnessPct);
 		Assert.AreEqual(4000, target.ColorTempKelvin);
@@ -314,7 +314,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Rooms_Levels_Match_Their_Period_By_Name_Ignoring_Case()
 	{
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "EVENING", BrightnessPct = 40 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "EVENING", BrightnessPct = 40 } };
 
 		Assert.AreEqual(40d, Stepped(levels: levels).GetTarget(At(20))!.BrightnessPct);
 	}
@@ -323,9 +323,9 @@ public sealed class CircadianCalculatorTests
 	public void A_Rooms_Levels_Naming_No_Period_Change_Nothing_And_Cost_Nothing()
 	{
 		// Almost always a renamed period. The validator warns; the engine never matches it.
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "kveld", BrightnessPct = 40 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "kveld", BrightnessPct = 40 } };
 
-		var target = Stepped(levels: levels).GetTarget(At(20))!;
+		LightTarget target = Stepped(levels: levels).GetTarget(At(20))!;
 
 		Assert.AreEqual(70d, target.BrightnessPct, "the schedule's, exactly as a room with no levels at all gets");
 		Assert.AreEqual(RoomLevelSource.None, target.FromRoom);
@@ -334,7 +334,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void The_First_Of_Two_Rows_For_One_Period_Wins()
 	{
-		var levels = new List<RoomLevelOverride>
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride>
 		{
 			new() { PeriodId = "evening", BrightnessPct = 40 },
 			new() { PeriodId = "evening", BrightnessPct = 90 }
@@ -347,7 +347,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void An_Empty_Row_Does_Not_Shadow_A_Later_Row_For_The_Same_Period()
 	{
-		var levels = new List<RoomLevelOverride>
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride>
 		{
 			new() { PeriodId = "evening" },
 			new() { PeriodId = "evening", BrightnessPct = 40 }
@@ -367,7 +367,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Rooms_Own_Row_Puts_The_Target_On_The_Curve()
 	{
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", FollowDaylightCurve = true } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", FollowDaylightCurve = true } };
 
 		Assert.IsTrue(Stepped(levels: levels).GetTarget(At(20))!.UsesDaylightCurve);
 	}
@@ -375,7 +375,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Rooms_Row_For_Another_Period_Does_Not_Put_This_One_On_The_Curve()
 	{
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "night", FollowDaylightCurve = true } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "night", FollowDaylightCurve = true } };
 
 		Assert.IsFalse(Stepped(levels: levels).GetTarget(At(20))!.UsesDaylightCurve, "evening is in force, not night");
 	}
@@ -383,7 +383,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void GetPeriodTarget_Reaches_The_Rooms_Curve_Opt_In_For_That_Period()
 	{
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "night", FollowDaylightCurve = true } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "night", FollowDaylightCurve = true } };
 
 		Assert.IsTrue(Stepped(levels: levels).GetPeriodTarget("night")!.UsesDaylightCurve);
 		Assert.IsFalse(Stepped(levels: levels).GetPeriodTarget("day")!.UsesDaylightCurve);
@@ -396,9 +396,9 @@ public sealed class CircadianCalculatorTests
 	public void A_Blend_Into_An_Overridden_Period_Arrives_At_The_Rooms_Level_Not_The_Houses()
 	{
 		// 18:15 is halfway through the 30-minute blend from day (90) into evening, which this room runs at 40.
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", BrightnessPct = 40 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", BrightnessPct = 40 } };
 
-		var target = Blended(levels: levels).GetTarget(At(18, 15))!;
+		LightTarget target = Blended(levels: levels).GetTarget(At(18, 15))!;
 
 		Assert.AreEqual("evening", target.PeriodName);
 		Assert.AreEqual(65, target.BrightnessPct, 0.001, "halfway from day's 90 to this room's 40");
@@ -409,9 +409,9 @@ public sealed class CircadianCalculatorTests
 	public void A_Blend_Out_Of_An_Overridden_Period_Departs_From_The_Rooms_Level()
 	{
 		// Day is this room's 30; evening is the house's 70. At 18:15 the blend is half of the way between them.
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "day", BrightnessPct = 30 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "day", BrightnessPct = 30 } };
 
-		var target = Blended(levels: levels).GetTarget(At(18, 15))!;
+		LightTarget target = Blended(levels: levels).GetTarget(At(18, 15))!;
 
 		Assert.AreEqual("evening", target.PeriodName);
 		Assert.AreEqual(50, target.BrightnessPct, 0.001, "halfway from this room's 30 to evening's 70");
@@ -422,9 +422,9 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void A_Blend_Interpolates_The_Two_Values_Independently()
 	{
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", BrightnessPct = 40 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "evening", BrightnessPct = 40 } };
 
-		var target = Blended(levels: levels).GetTarget(At(18, 15))!;
+		LightTarget target = Blended(levels: levels).GetTarget(At(18, 15))!;
 
 		Assert.AreEqual(3600, target.ColorTempKelvin, "halfway from 4500 to 2700, exactly as the house blends it");
 	}
@@ -433,7 +433,7 @@ public sealed class CircadianCalculatorTests
 	public void A_Blend_Across_Midnight_Departs_From_The_Rooms_Wrapped_Level()
 	{
 		// 07:15 arrives at day from the wrapped night period; this room runs that night at 5, not 15.
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "night", BrightnessPct = 5 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "night", BrightnessPct = 5 } };
 
 		Assert.AreEqual(47.5, Blended(levels: levels).GetTarget(At(7, 15))!.BrightnessPct, 0.001,
 			"halfway from this room's night of 5 to day's 90; the house's would be 52.5");
@@ -446,9 +446,9 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void GetPeriodTarget_Reaches_The_Rooms_Levels_For_That_Period()
 	{
-		var levels = new List<RoomLevelOverride> { new() { PeriodId = "night", BrightnessPct = 8 } };
+		List<RoomLevelOverride> levels = new List<RoomLevelOverride> { new() { PeriodId = "night", BrightnessPct = 8 } };
 
-		var night = Stepped(levels: levels).GetPeriodTarget("night")!;
+		LightTarget night = Stepped(levels: levels).GetPeriodTarget("night")!;
 
 		Assert.AreEqual(8d, night.BrightnessPct);
 		Assert.AreEqual(RoomLevelSource.Brightness, night.FromRoom);
@@ -459,7 +459,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void ActivePeriodName_NamesThePeriodActiveAtTheInstant()
 	{
-		var calc = Stepped();
+		CircadianCalculator calc = Stepped();
 
 		Assert.AreEqual("day", calc.ActivePeriodId(At(12)));
 		Assert.AreEqual("evening", calc.ActivePeriodId(At(20)));
@@ -477,12 +477,12 @@ public sealed class CircadianCalculatorTests
 	public void ActivePeriodName_IsNull_WhenNoPeriodResolves()
 	{
 		// An all-sun-anchored table with unknown sun times (polar night): nothing can be placed.
-		var polar = new List<TimePeriodConfig>
+		List<TimePeriodConfig> polar = new List<TimePeriodConfig>
 		{
 			new() { Name = "day", Start = "sunrise", BrightnessPct = 90 },
 			new() { Name = "night", Start = "sunset", BrightnessPct = 10 }
 		};
-		var calc = Stepped(polar, SunTimes.Unknown);
+		CircadianCalculator calc = Stepped(polar, SunTimes.Unknown);
 
 		Assert.IsNull(calc.ActivePeriodId(At(12)), "no boundary can be placed, so nothing is active");
 		Assert.IsNull(calc.GetTarget(At(12)), "and the target is null too — the caller must command nothing");

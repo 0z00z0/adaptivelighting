@@ -21,17 +21,17 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void Turn_On_Carries_HAs_Own_Key_Names_And_Nothing_Else()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Light, "off");
 
 		Actuator(ha).Apply(Light, new LightCommand(true, 70, 2700, 15));
 
-		var call = ha.Calls.Single();
+		ServiceCall call = ha.Calls.Single();
 		Assert.AreEqual("light", call.Domain);
 		Assert.AreEqual("turn_on", call.Service);
 		Assert.AreEqual(Light, call.Target!.EntityIds!.Single());
 
-		var data = DataOf(call);
+		Dictionary<string, object> data = DataOf(call);
 		Assert.AreEqual(70d, data["brightness_pct"]);
 		Assert.AreEqual(2700, data["color_temp_kelvin"]);
 		Assert.AreEqual(15d, data["transition"]);
@@ -41,7 +41,7 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void A_Command_That_Sets_Nothing_Sends_An_Empty_Payload_Rather_Than_Nulls()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Light, "off");
 
 		Actuator(ha).Apply(Light, new LightCommand(true));
@@ -52,7 +52,7 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void A_Light_Already_At_The_Target_Is_Left_Alone()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Light, "on", new() { ["brightness"] = 178.5, ["color_temp_kelvin"] = 2700 });
 
 		Actuator(ha).Apply(Light, new LightCommand(true, 70, 2700, 15));
@@ -63,7 +63,7 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void A_Light_Outside_The_Tolerance_Is_Commanded()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Light, "on", new() { ["brightness"] = 178.5, ["color_temp_kelvin"] = 2700 });
 
 		Actuator(ha).Apply(Light, new LightCommand(true, 20, 2700, 15));
@@ -74,7 +74,7 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void A_Light_That_Is_Off_Is_Always_Commanded_On()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Light, "off", new() { ["brightness"] = 178.5 });
 
 		Actuator(ha).Apply(Light, new LightCommand(true, 70, 2700, 15));
@@ -85,7 +85,7 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void A_Light_Already_Off_Is_Not_Turned_Off_Again()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Light, "off");
 
 		Actuator(ha).Apply(Light, LightCommand.TurnOff(2));
@@ -96,12 +96,12 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void Turn_Off_Carries_Only_The_Transition()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Light, "on");
 
 		Actuator(ha).Apply(Light, LightCommand.TurnOff(2));
 
-		var call = ha.Calls.Single();
+		ServiceCall call = ha.Calls.Single();
 		Assert.AreEqual("turn_off", call.Service);
 		Assert.AreEqual(2d, DataOf(call)["transition"]);
 		Assert.AreEqual(1, DataOf(call).Count);
@@ -110,7 +110,7 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void A_Light_With_No_Colour_Temperature_Cannot_Drift_From_One()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Light, "on", new() { ["brightness"] = 178.5 });
 
 		Actuator(ha).Apply(Light, new LightCommand(true, 70, 2700, 15));
@@ -121,15 +121,15 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void A_Notification_Is_A_Persistent_Notification_With_A_Stable_Id()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 
 		new HaNotifier(ha, NullLogger.Instance).Notify("Adaptive lighting: areas disabled", "<ul><li>x</li></ul>");
 
-		var call = ha.Calls.Single();
+		ServiceCall call = ha.Calls.Single();
 		Assert.AreEqual("persistent_notification", call.Domain);
 		Assert.AreEqual("create", call.Service);
 
-		var data = DataOf(call);
+		Dictionary<string, object> data = DataOf(call);
 		StringAssert.StartsWith((string)data["notification_id"], "adaptive_lighting_",
 			"a stable id replaces the previous notification instead of stacking a new one every restart");
 		Assert.IsTrue(data.ContainsKey("title"));
@@ -139,9 +139,9 @@ public sealed class HaAdapterTests
 	[TestMethod]
 	public void A_Snapshot_Is_Published_As_An_Event_The_UI_Can_Listen_For()
 	{
-		var ha = new FakeHaContext();
-		var when = new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
-		var snapshot = new AreaSnapshot(
+		FakeHaContext ha = new FakeHaContext();
+		DateTimeOffset when = new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
+		AreaSnapshot snapshot = new AreaSnapshot(
 			"Stue", AreaState.AutoActive, TransitionReason.Motion, ModeKind.Normal,
 			false, true, "evening", 70, 2700, when,
 			when, when, when + TimeSpan.FromMinutes(10), when);

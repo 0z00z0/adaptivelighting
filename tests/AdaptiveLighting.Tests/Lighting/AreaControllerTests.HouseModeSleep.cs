@@ -1,5 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -9,7 +10,7 @@ public sealed partial class AreaControllerTests
 	public void Sleep_NonRespectingArea_FollowsThePlainTable()
 	{
 		// A sleeping house, but this area does not respect sleep: it follows the one shared table, unclamped.
-		var t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
+		AreaFixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
 		t.Ha.Trigger(Motion, "on");
@@ -22,15 +23,15 @@ public sealed partial class AreaControllerTests
 	public void Sleep_RespectingArea_ClampsViaAnExplicitClampPeriod()
 	{
 		// The Sover option names its own clamp period explicitly, which beats the 'night' fallback.
-		var mode = SoverMode();
+		HouseModeConfig mode = SoverMode();
 		mode.OptionFor("Sover")!.ClampPeriodId = "dim";
-		var periods = new List<TimePeriodConfig>
+		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
 			new() { Name = "dim", Start = "22:00", BrightnessPct = 5, ColorTempKelvin = 2000 },
 			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
-		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
 		t.Ha.Trigger(Motion, "on");
@@ -43,12 +44,12 @@ public sealed partial class AreaControllerTests
 	public void Sleep_RespectingArea_WithNoResolvableClamp_LeavesTheTargetAlone()
 	{
 		// Sover has no ClampPeriodId, and there is no 'night' period nor one that SetsModeId Sover, so nothing resolves.
-		var periods = new List<TimePeriodConfig>
+		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
 			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
 		};
-		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode(), periods: periods);
+		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode(), periods: periods);
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
 		t.Ha.Trigger(Motion, "on");
@@ -79,7 +80,7 @@ public sealed partial class AreaControllerTests
 	public void Sleep_ForcedByAnEntity_ClampsThroughTheOptionInForce_NotTheSelectsValue()
 	{
 		(HouseModeConfig mode, List<TimePeriodConfig> periods) = SleepChainsThatDiffer();
-		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
 
 		// The overlay entity holds sleep. Nothing wrote the select, so it still reads Normal.
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Normal", forced: ForcedSleep()));
@@ -94,7 +95,7 @@ public sealed partial class AreaControllerTests
 	public void Sleep_ForcedWhileTheSelectIsUnreadable_StillClamps()
 	{
 		(HouseModeConfig mode, List<TimePeriodConfig> periods) = SleepChainsThatDiffer();
-		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
 
 		// The select is unavailable, so it names no option at all; the overlay is the whole answer.
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: null, forced: ForcedSleep()));
@@ -109,7 +110,7 @@ public sealed partial class AreaControllerTests
 	public void Sleep_WithNothingForcing_StillClampsThroughTheSelectsOwnValue()
 	{
 		(HouseModeConfig mode, List<TimePeriodConfig> periods) = SleepChainsThatDiffer();
-		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
+		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
 
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
@@ -124,12 +125,12 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Sleep_RespectingArea_ClampsToItsOwnNightLevelRatherThanTheHouses()
 	{
-		var periods = new List<TimePeriodConfig>
+		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
 			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
-		var t = Build(
+		AreaFixture t = Build(
 			s => s.RespectSleepMode = true,
 			g => g.HouseMode = SoverMode(),
 			periods: periods,

@@ -15,8 +15,8 @@ public sealed class AreaAutoDiscoveryTests
 	[TestMethod]
 	public void Any_Area_With_A_Light_Is_Proposed_And_One_Without_Is_Not()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 
 		// Lights and motion: the room that runs itself.
 		ha.SetState("light.gang_tak", "off");
@@ -35,7 +35,7 @@ public sealed class AreaAutoDiscoveryTests
 		ha.SetState("sensor.teknisk_temp", "21", new() { ["device_class"] = "temperature" });
 		registry.Areas["teknisk"] = ["sensor.teknisk_temp"];
 
-		var proposed = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry));
+		IReadOnlyList<AreaConfig> proposed = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry));
 
 		CollectionAssert.AreEquivalent(
 			new[] { "gang", "spisestue" },
@@ -63,13 +63,13 @@ public sealed class AreaAutoDiscoveryTests
 	[TestMethod]
 	public void A_Proposal_Names_Only_The_Area_And_Starts_Switched_Off()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		ha.SetState("light.bad_tak", "off");
 		ha.SetState("binary_sensor.bad_motion", "off", new() { ["device_class"] = "motion" });
 		registry.Areas["bad"] = ["light.bad_tak", "binary_sensor.bad_motion"];
 
-		var area = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry)).Single();
+		AreaConfig area = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry)).Single();
 
 		Assert.AreEqual("bad", area.AreaId);
 		Assert.IsNull(area.Name, "the display name follows the area until somebody types one");
@@ -86,8 +86,8 @@ public sealed class AreaAutoDiscoveryTests
 	[TestMethod]
 	public void An_Area_Whose_Registration_Carries_The_Exclude_Label_Is_Not_Proposed()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 
 		ha.SetState("light.gang_tak", "off");
 		ha.SetState("binary_sensor.gang_motion", "off", new() { ["device_class"] = "motion" });
@@ -98,7 +98,7 @@ public sealed class AreaAutoDiscoveryTests
 		registry.Areas["hytta"] = ["light.hytta_alt", "binary_sensor.hytta_motion"];
 		registry.AreaLabels["hytta"] = ["adaptive_exclude"];
 
-		var proposed = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry));
+		IReadOnlyList<AreaConfig> proposed = AreaAutoDiscovery.Propose(registry, Resolver(ha, registry));
 
 		CollectionAssert.AreEquivalent(new[] { "gang" }, proposed.Select(area => area.AreaId).ToArray(),
 			"a labelled area is treated as not there, so discovery must not propose it");
@@ -107,8 +107,8 @@ public sealed class AreaAutoDiscoveryTests
 	[TestMethod]
 	public void Nothing_Is_Proposed_When_No_Area_Qualifies()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 
 		Assert.AreEqual(0, AreaAutoDiscovery.Propose(registry, Resolver(ha, registry)).Count);
 	}

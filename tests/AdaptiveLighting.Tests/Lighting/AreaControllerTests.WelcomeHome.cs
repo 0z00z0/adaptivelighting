@@ -1,4 +1,5 @@
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -7,7 +8,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Leaving_Away_Lights_A_WelcomeHome_Area_When_It_Is_Dark()
 	{
-		var t = Build(s => s.WelcomeHome = true);
+		AreaFixture t = Build(s => s.WelcomeHome = true);
 		t.House.OnNext(AwayHouse());
 		t.Actuator.Clear();
 
@@ -20,7 +21,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Leaving_Away_Leaves_An_Ordinary_Area_Dark()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.House.OnNext(AwayHouse());
 		t.Actuator.Clear();
 
@@ -33,7 +34,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_WelcomeHome_Area_Stays_Dark_When_It_Is_Not_Dark()
 	{
-		var t = Build(s => s.WelcomeHome = true);
+		AreaFixture t = Build(s => s.WelcomeHome = true);
 		t.Ha.SetState(Lux, "5000");
 		t.House.OnNext(AwayHouse());
 		t.Actuator.Clear();

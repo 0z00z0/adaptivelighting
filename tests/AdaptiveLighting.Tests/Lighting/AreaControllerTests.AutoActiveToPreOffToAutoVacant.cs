@@ -1,4 +1,5 @@
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -7,7 +8,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Vacancy_Dims_To_PreOff_And_Then_Turns_Off()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Motion, "off");
 		t.Actuator.Clear();
@@ -28,7 +29,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Motion_During_The_PreOff_Grace_Restores_The_Area()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromMinutes(10));
@@ -47,7 +48,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Motion_Restarts_The_Vacancy_Timer()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromMinutes(9));
 

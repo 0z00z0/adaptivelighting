@@ -11,7 +11,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void AwayKind_SweepsImmediately_UnlessTheAreaOptsOut()
 	{
-		var swept = Build(tweakGlobal: g => g.HouseMode = SoverMode());
+		Fixture swept = Build(tweakGlobal: g => g.HouseMode = SoverMode());
 		swept.Ha.Trigger(Motion, "on");
 		swept.Actuator.Clear();
 
@@ -20,7 +20,7 @@ public sealed partial class AreaControllerTests
 		Assert.AreEqual(AreaState.Away, swept.Area.State);
 		Assert.IsTrue(swept.Actuator.Last is { On: false }, "an away-kind Borte sweeps a full house at once");
 
-		var optedOut = Build(s => s.SkipAwaySweep = true, g => g.HouseMode = SoverMode());
+		Fixture optedOut = Build(s => s.SkipAwaySweep = true, g => g.HouseMode = SoverMode());
 		optedOut.Ha.Trigger(Motion, "on");
 		optedOut.Actuator.Clear();
 
@@ -33,7 +33,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void AwayKind_MotionIgnored()
 	{
-		var t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
+		Fixture t = Build(tweakGlobal: g => g.HouseMode = SoverMode());
 		t.House.OnNext(House(kind: ModeKind.Away, modeValue: "Borte"));
 		t.Actuator.Clear();
 
@@ -47,9 +47,9 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Away_WithAScene_SkipsTheSweep()
 	{
-		var mode = SoverMode();
+		HouseModeConfig mode = SoverMode();
 		mode.OptionFor("Borte")!.Scene = "scene.borte";
-		var t = Build(tweakGlobal: g => g.HouseMode = mode);
+		Fixture t = Build(tweakGlobal: g => g.HouseMode = mode);
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
@@ -172,7 +172,7 @@ public sealed partial class AreaControllerTests
 	public void Migration_LiveCabin_NoHouseMode_UsesBaseline()
 	{
 		// No HouseMode, nobody asleep, no mode selected: the baseline evening period drives.
-		var t = Build(s => s.RespectSleepMode = true);
+		Fixture t = Build(s => s.RespectSleepMode = true);
 		t.House.OnNext(House(modeValue: null));
 
 		t.Ha.Trigger(Motion, "on");

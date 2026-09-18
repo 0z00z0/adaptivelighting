@@ -1,5 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -9,7 +10,7 @@ public sealed partial class AreaControllerTests
 	public void Returning_From_Away_Adopts_Lights_The_Sweep_Left_On()
 	{
 		// The room opted out of the leaving sweep, so it is still lit when the house comes back.
-		var t = Build(s => s.SkipAwaySweep = true, seed: ha =>
+		AreaFixture t = Build(s => s.SkipAwaySweep = true, seed: ha =>
 		{
 			ha.SetState(Light, "on", new() { ["brightness"] = 178.5 });
 			ha.SetState(Lux, "5");
@@ -33,7 +34,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Leaving_A_Guest_Scene_Adopts_Lights_The_Scene_Left_On()
 	{
-		var t = Build(seed: ha =>
+		AreaFixture t = Build(seed: ha =>
 		{
 			ha.SetState(Light, "on", new() { ["brightness"] = 178.5 });
 			ha.SetState(Lux, "5");

@@ -13,11 +13,11 @@ public sealed class PeriodStartTextTests
 	[TestMethod]
 	public void A_Clock_Boundary_Round_Trips_Through_The_Engines_Parser()
 	{
-		foreach (var (hour, minute) in new[] { (0, 0), (6, 30), (12, 0), (22, 30), (23, 59) })
+		foreach ((int hour, int minute) in new[] { (0, 0), (6, 30), (12, 0), (22, 30), (23, 59) })
 		{
-			var text = PeriodStartText.Clock(new TimeOnly(hour, minute));
+			string text = PeriodStartText.Clock(new TimeOnly(hour, minute));
 
-			Assert.IsTrue(PeriodStart.TryParse(text, out var parsed), $"'{text}' must parse");
+			Assert.IsTrue(PeriodStart.TryParse(text, out PeriodStart? parsed), $"'{text}' must parse");
 			Assert.AreEqual(new TimeOnly(hour, minute), parsed!.FixedTime);
 			Assert.AreEqual(SunEvent.None, parsed.SunEvent);
 		}
@@ -29,7 +29,7 @@ public sealed class PeriodStartTextTests
 		Assert.AreEqual("sunrise", PeriodStartText.Sun(SunEvent.Sunrise, 0));
 		Assert.AreEqual("sunset", PeriodStartText.Sun(SunEvent.Sunset, 0));
 
-		Assert.IsTrue(PeriodStart.TryParse("sunrise", out var parsed));
+		Assert.IsTrue(PeriodStart.TryParse("sunrise", out PeriodStart? parsed));
 		Assert.AreEqual(SunEvent.Sunrise, parsed!.SunEvent);
 		Assert.AreEqual(TimeSpan.Zero, parsed.Offset);
 	}
@@ -38,16 +38,16 @@ public sealed class PeriodStartTextTests
 	public void Every_Offset_The_Picker_Can_Produce_Round_Trips_Exactly()
 	{
 		// The control offers 0-720 minutes either side of either anchor, walked in the number input's steps.
-		foreach (var anchor in new[] { SunEvent.Sunrise, SunEvent.Sunset })
+		foreach (SunEvent anchor in new[] { SunEvent.Sunrise, SunEvent.Sunset })
 		{
-			foreach (var minutes in new[] { 1, 5, 15, 30, 45, 59, 60, 61, 90, 119, 120, 240, 719, 720 })
+			foreach (int minutes in new[] { 1, 5, 15, 30, 45, 59, 60, 61, 90, 119, 120, 240, 719, 720 })
 			{
-				foreach (var sign in new[] { 1, -1 })
+				foreach (int sign in new[] { 1, -1 })
 				{
-					var signed = sign * minutes;
-					var text = PeriodStartText.Sun(anchor, signed);
+					int signed = sign * minutes;
+					string text = PeriodStartText.Sun(anchor, signed);
 
-					Assert.IsTrue(PeriodStart.TryParse(text, out var parsed), $"'{text}' must parse");
+					Assert.IsTrue(PeriodStart.TryParse(text, out PeriodStart? parsed), $"'{text}' must parse");
 					Assert.AreEqual(anchor, parsed!.SunEvent, text);
 					Assert.AreEqual(TimeSpan.FromMinutes(signed), parsed.Offset, text);
 					Assert.IsNull(parsed.FixedTime, text);

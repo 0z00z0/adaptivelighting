@@ -12,9 +12,9 @@ public sealed class EntityObservableExtensionsTests
 	[TestMethod]
 	public void WhenTurnsOn_Fires_On_Off_To_On_And_Unavailable_To_On()
 	{
-		var ha = new FakeHaContext();
-		var count = 0;
-		using var sub = ha.Entity(Sensor).WhenTurnsOn(_ => count++, NullLogger.Instance);
+		FakeHaContext ha = new FakeHaContext();
+		int count = 0;
+		using IDisposable sub = ha.Entity(Sensor).WhenTurnsOn(_ => count++, NullLogger.Instance);
 
 		ha.Trigger(Sensor, "on");            // (unset) -> on : fires
 		ha.Trigger(Sensor, "off");           // on -> off      : no
@@ -27,10 +27,10 @@ public sealed class EntityObservableExtensionsTests
 	[TestMethod]
 	public void WhenTurnsOn_Ignores_An_Attribute_Only_Change()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Sensor, "on");
-		var count = 0;
-		using var sub = ha.Entity(Sensor).WhenTurnsOn(_ => count++, NullLogger.Instance);
+		int count = 0;
+		using IDisposable sub = ha.Entity(Sensor).WhenTurnsOn(_ => count++, NullLogger.Instance);
 
 		ha.Trigger(Sensor, "on", new() { ["x"] = 1 }); // on -> on: a value-only stream never emits
 
@@ -40,9 +40,9 @@ public sealed class EntityObservableExtensionsTests
 	[TestMethod]
 	public void WhenTurnsOff_Fires_On_On_To_Off()
 	{
-		var ha = new FakeHaContext();
-		var count = 0;
-		using var sub = ha.Entity(Sensor).WhenTurnsOff(_ => count++, NullLogger.Instance);
+		FakeHaContext ha = new FakeHaContext();
+		int count = 0;
+		using IDisposable sub = ha.Entity(Sensor).WhenTurnsOff(_ => count++, NullLogger.Instance);
 
 		ha.Trigger(Sensor, "on");
 		ha.Trigger(Sensor, "off");
@@ -53,9 +53,9 @@ public sealed class EntityObservableExtensionsTests
 	[TestMethod]
 	public void WhenStateBecomes_Fires_On_The_Named_State()
 	{
-		var ha = new FakeHaContext();
-		var count = 0;
-		using var sub = ha.Entity("media_player.tv").WhenStateBecomes("playing", _ => count++, NullLogger.Instance);
+		FakeHaContext ha = new FakeHaContext();
+		int count = 0;
+		using IDisposable sub = ha.Entity("media_player.tv").WhenStateBecomes("playing", _ => count++, NullLogger.Instance);
 
 		ha.Trigger("media_player.tv", "paused");
 		ha.Trigger("media_player.tv", "Playing");   // ordinal-ignore-case
@@ -66,9 +66,9 @@ public sealed class EntityObservableExtensionsTests
 	[TestMethod]
 	public void WhenTurnsOn_Survives_A_Throwing_Handler()
 	{
-		var ha = new FakeHaContext();
-		var count = 0;
-		using var sub = ha.Entity(Sensor).WhenTurnsOn(_ =>
+		FakeHaContext ha = new FakeHaContext();
+		int count = 0;
+		using IDisposable sub = ha.Entity(Sensor).WhenTurnsOn(_ =>
 		{
 			count++;
 			if (count == 1)

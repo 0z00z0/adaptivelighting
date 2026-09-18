@@ -72,8 +72,8 @@ public sealed class FakeHaContext : IHaContext
 	/// <summary>Sets a state and pushes the change, as Home Assistant would.</summary>
 	public void Trigger(string entityId, string newState, Dictionary<string, object>? attributes = null, Context? context = null)
 	{
-		_states.TryGetValue(entityId, out var old);
-		var updated = Build(entityId, newState, attributes, context);
+		_states.TryGetValue(entityId, out EntityState? old);
+		EntityState updated = Build(entityId, newState, attributes, context);
 		_states[entityId] = updated;
 		_changes.OnNext(new StateChange(new Entity(this, entityId), old, updated));
 	}
@@ -85,7 +85,7 @@ public sealed class FakeHaContext : IHaContext
 		Context? context,
 		DateTimeOffset? lastUpdated = null)
 	{
-		var json = JsonSerializer.SerializeToElement(new
+		JsonElement json = JsonSerializer.SerializeToElement(new
 		{
 			entity_id = entityId,
 			state,

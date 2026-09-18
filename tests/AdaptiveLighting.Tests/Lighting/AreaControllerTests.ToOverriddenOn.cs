@@ -1,4 +1,5 @@
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -7,7 +8,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Manual_On_Overrides_And_The_Engine_Backs_Off_Until_Expiry()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 		Advance(t, TimeSpan.FromSeconds(30));
@@ -22,7 +23,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Override_Expiring_While_Vacant_Turns_The_Area_Off()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromSeconds(30));
@@ -38,7 +39,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Override_Expiring_While_Occupied_Resumes_Control_Instead()
 	{
-		var t = Build(s => s.OverrideDurationMinutes = 5);
+		AreaFixture t = Build(s => s.OverrideDurationMinutes = 5);
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
@@ -57,7 +58,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Motion_Under_A_Fixed_Hold_Extends_Nothing()
 	{
-		var t = Build(s => s.OverrideDurationMinutes = 5);
+		AreaFixture t = Build(s => s.OverrideDurationMinutes = 5);
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
@@ -76,7 +77,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Motion_Under_A_Movement_Led_Hold_Restarts_It()
 	{
-		var t = Build(s =>
+		AreaFixture t = Build(s =>
 		{
 			s.OverrideUntilVacant = true;
 			s.VacancyTimeoutSeconds = 300;
@@ -107,7 +108,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Movement_Led_Hold_Ignores_The_Fixed_Duration()
 	{
-		var t = Build(s =>
+		AreaFixture t = Build(s =>
 		{
 			s.OverrideUntilVacant = true;
 			s.VacancyTimeoutSeconds = 600;
@@ -129,9 +130,9 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Movement_Led_Hold_Publishes_The_Vacancy_Timeout_As_Its_Expiry()
 	{
-		var start = new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
+		DateTimeOffset start = new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
 
-		var t = Build(s =>
+		AreaFixture t = Build(s =>
 		{
 			s.OverrideUntilVacant = true;
 			s.VacancyTimeoutSeconds = 300;

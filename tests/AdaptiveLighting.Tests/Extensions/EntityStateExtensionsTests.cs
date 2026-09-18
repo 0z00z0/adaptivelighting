@@ -12,7 +12,7 @@ public sealed class EntityStateExtensionsTests
 
 	private static EntityState? State(string state, Dictionary<string, object>? attributes = null)
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Entity, state, attributes);
 		return ha.GetState(Entity);
 	}
@@ -76,7 +76,7 @@ public sealed class EntityStateExtensionsTests
 	[TestMethod]
 	public void AttrDateTimeOffset_Parses_A_Utc_Timestamp()
 	{
-		var parsed = State("above_horizon", new() { ["next_rising"] = "2026-01-15T06:30:00+00:00" })
+		DateTimeOffset? parsed = State("above_horizon", new() { ["next_rising"] = "2026-01-15T06:30:00+00:00" })
 			.AttrDateTimeOffset("next_rising");
 
 		Assert.IsNotNull(parsed);
