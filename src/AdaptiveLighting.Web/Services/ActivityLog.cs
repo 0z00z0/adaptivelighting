@@ -1,6 +1,7 @@
 using System.Threading;
 
 using AdaptiveLighting.Abstractions;
+using AdaptiveLighting.Engine;
 
 namespace AdaptiveLighting.Web.Services;
 
@@ -61,10 +62,27 @@ public sealed class ActivityLog
 	/// <summary>How many reports the log keeps before the oldest falls off, about a day or two for a real house.</summary>
 	public const int Capacity = 500;
 
+	private readonly IActivityJournalStore? _journal;
 	private readonly Lock _gate = new();
 	private readonly Queue<ActivityEntry> _entries = new(Capacity);
 
 	private long _sequence;
+
+	/// <summary>Seeds the buffer from the journal, so a restart does not start the page empty.</summary>
+	/// <remarks>Without a journal (<c>null</c>) the log behaves exactly as before: in memory only, for the process.</remarks>
+	public ActivityLog(IActivityJournalStore? journal = null)
+	{
+		_journal = journal;
+
+		foreach (ActivityJournalRow row in journal?.Load() ?? [])
+		{
+			_entries.Enqueue(row.Snapshot is { } snapshot
+				? new ActivityEntry(row.Sequence, snapshot)
+				: new ActivityEntry(row.Sequence, row.Notice!));
+
+			_sequence = row.Sequence;
+		}
+	}
 
 	/// <summary>Every report the log still holds, newest first.</summary>
 	/// <remarks>
@@ -131,15 +149,27 @@ public sealed class ActivityLog
 
 	private ActivityEntry File(Func<long, ActivityEntry> build)
 	{
+		ActivityEntry entry;
+		ActivityEntry[] bounded;
+
 		lock (_gate)
 		{
-			ActivityEntry entry = build(++_sequence);
+			entry = build(++_sequence);
 			_entries.Enqueue(entry);
 
 			while (_entries.Count > Capacity)
 				_entries.Dequeue();
 
-			return entry;
+			bounded = [.. _entries];
 		}
+
+		// Outside the lock: the journal only marks itself dirty here, and the flusher writes it later, but neither
+		// step should hold up the lock a lighting decision is about to want.
+		if (_journal is not null)
+			_journal.TrySave([.. bounded.Select(ToRow)]);
+
+		return entry;
 	}
+
+	private static ActivityJournalRow ToRow(ActivityEntry entry) => new(entry.Sequence, entry.Snapshot, entry.Notice);
 }

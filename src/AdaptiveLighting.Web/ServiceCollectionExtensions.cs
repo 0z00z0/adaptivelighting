@@ -18,7 +18,8 @@ public static class ServiceCollectionExtensions
 		// each other. Everything below is the UI's own and must come after it.
 		services.AddLightingEngine();
 
-		// Before the cache that fills it.
+		// Before the cache that fills it, and before ActivityLog, which reads it back once at construction.
+		services.AddActivityJournal();
 		services.AddSingleton<ActivityLog>();
 
 		// Singleton so snapshots accumulate from process start, plus hosted so it subscribes once.
