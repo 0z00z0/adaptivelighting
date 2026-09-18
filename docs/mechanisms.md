@@ -1387,8 +1387,9 @@ constructor, but the engine host does not yet build one and pass it in — each 
 directly through `JsonNoteFile`, without the registry's shared flusher or its start-up report. `RoomHistoryStore`
 and `ActivityJournalStore` (below) each open their own private `StateStoreRegistry` instance instead of sharing
 one with the host, for the reasons given under each. So today there is no one registry per house: three
-independent write paths, none sharing the flusher the type exists to provide. See the backlog for wiring this
-into `LightingEngineHost` and `LightingOrchestrator`.
+independent write paths, none sharing the flusher the type exists to provide. See
+[issue #148](https://github.com/0z00z0/adaptivelighting/issues/148) for wiring this into
+`LightingEngineHost` and `LightingOrchestrator`.
 
 ### Room history is coalesced, not written on every event
 

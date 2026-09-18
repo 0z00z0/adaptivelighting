@@ -146,7 +146,7 @@ Nothing is hard-coded: it all lives in one YAML file, in four layers, each narro
 
 Most rooms are three lines, because of **discovery**: give an area an `AreaId` and its lights, motion sensors and lux sensor are found from the Home Assistant area registry.
 
-Full documentation — how it works, how to use it, the settings reference and a worked example — is at **[adaptivelighting.netlify.app](https://adaptivelighting.netlify.app)** (source in [`website/`](website/)). Working on the engine itself? [`docs/mechanisms.md`](docs/mechanisms.md) explains why each chosen number is that number; [`docs/backlog.md`](docs/backlog.md) is what's still open.
+Full documentation — how it works, how to use it, the settings reference and a worked example — is at **[adaptivelighting.netlify.app](https://adaptivelighting.netlify.app)** (source in [`website/`](website/)). Working on the engine itself? [`docs/mechanisms.md`](docs/mechanisms.md) explains why each chosen number is that number; [GitHub Issues](https://github.com/0z00z0/adaptivelighting/issues) is what's still open.
 
 ## Packages
 
