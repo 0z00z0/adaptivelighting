@@ -179,8 +179,8 @@ rule for every entry in `Lights`:
 
 The expectation on the entry is load-bearing. The room subscribes to its entries, not to leaves, and a
 group entity re-publishes a member's change under the group's id; without an expectation there, the
-echo falls through to the context heuristic, and without `NetDaemonUserId` set it classifies as a
-person at a switch. The detector matches polarity only, so the room's command is the right thing to
+echo falls through to the context heuristic, and until the engine has learned its own user it classifies
+as a person at a switch. The detector matches polarity only, so the room's command is the right thing to
 declare on the entry: it is on when the leaves are on.
 
 Off commands are unchanged: one off to every entry. Scenes are unchanged. A light row at brightness 0

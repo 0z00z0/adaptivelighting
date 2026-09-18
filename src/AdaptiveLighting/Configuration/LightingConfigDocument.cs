@@ -110,7 +110,10 @@ public static class LightingConfigDocument
 			+ "period. Turn it on from the room's page; the other lux brightness settings still shape the curve.",
 		["UseDaylightCurve"] =
 			"a period can no longer hand its whole brightness to the curve. Each room decides for itself, per "
-			+ "period, through that room's own Levels row — the FollowDaylightCurve field there does what this used to."
+			+ "period, through that room's own Levels row — the FollowDaylightCurve field there does what this used to.",
+		["NetDaemonUserId"] =
+			"the engine now learns its own Home Assistant user from the connection, so a change made as that "
+			+ "user is still recognised as the engine's own."
 	};
 
 	// One wording for the log and the browser. Two copies would drift, and the browser's is the one nobody reads

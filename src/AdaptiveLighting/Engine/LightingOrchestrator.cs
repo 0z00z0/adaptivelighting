@@ -82,6 +82,9 @@ public sealed class LightingOrchestrator : IDisposable
 	// One subscription to automation runs for the house, handed to every room so each can name who changed a light.
 	private ChangeOriginNames? _originNames;
 
+	// Learned afresh on every build, from the first snapshot that comes back.
+	private OwnUser? _ownUser;
+
 	// The house-wide instances every room is built on, composed once in Start. Null until then.
 	private HouseWiring? _wiring;
 
@@ -159,6 +162,8 @@ public sealed class LightingOrchestrator : IDisposable
 		_motionPeriods = MotionPeriodLatch.For(_config.Periods, _config.Global);
 
 		_originNames = new ChangeOriginNames(_ha, _loggerFactory.CreateLogger<ChangeOriginNames>());
+		_ownUser = new OwnUser(_ha, _publisher, _loggerFactory.CreateLogger<OwnUser>());
+		OwnUser ownUser = _ownUser;
 
 		// Composed once, before the first room. Every room is built on this one object, so none of them can end up
 		// on a different actuator, publisher or house-state stream.
@@ -168,11 +173,12 @@ public sealed class LightingOrchestrator : IDisposable
 			_config.Global,
 			_config.Periods,
 			_actuator,
-			_publisher,
+			ownUser,
 			_house,
 			_loggerFactory,
 			_lastSeen,
-			_originNames);
+			_originNames,
+			() => ownUser.UserId);
 
 		HaAreaRegistry registry = new(_registry);
 		AreaEntityResolver resolver = new(
@@ -528,6 +534,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 		_areas.Clear();
 		_originNames?.Dispose();
+		_ownUser?.Dispose();
 		_presence?.Dispose();
 		_modes?.Dispose();
 		_house.Dispose();

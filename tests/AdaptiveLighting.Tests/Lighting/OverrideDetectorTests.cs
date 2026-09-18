@@ -1,5 +1,7 @@
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Ha;
 
 using Microsoft.Reactive.Testing;
 
@@ -79,13 +81,26 @@ public sealed class OverrideDetectorTests
 	}
 
 	[TestMethod]
-	public void The_Configured_NetDaemon_User_Is_Always_Ourselves()
+	public void The_Own_User_Learned_From_The_First_Echoed_Snapshot_Is_Always_Ourselves()
 	{
-		var (detector, _, ha) = Build(g => g.NetDaemonUserId = "nd-user");
+		FakeHaContext ha = new();
+		using OwnUser ownUser = new(ha, new HaStatePublisher(ha, new RecordingLogger()), new RecordingLogger());
+		TestScheduler scheduler = new();
+		OverrideDetector detector = new(new GlobalConfig(), scheduler, ownUserId: () => ownUser.UserId);
+		Context ours = new() { Id = "c", UserId = "nd-user", ParentId = "p" };
 
-		var origin = detector.Classify(Change(ha, "on", new Context { Id = "c", UserId = "nd-user", ParentId = "p" }));
+		Assert.AreEqual(ChangeOrigin.Automation, detector.Classify(Change(ha, "on", ours)), "nothing has come back yet");
 
-		Assert.AreEqual(ChangeOrigin.Self, origin, "our own token beats every other reading, parent id included");
+		// Sub-second and off UTC, so the echo has to survive the round trip through JSON to match.
+		DateTimeOffset sentAt = new DateTimeOffset(2026, 1, 15, 20, 0, 0, 123, TimeSpan.FromHours(1)).AddTicks(4567);
+		ownUser.Publish(new AreaSnapshot(
+			"Area", AreaState.Disabled, TransitionReason.Startup, ModeKind.Normal, false, null, null, null, null,
+			sentAt, null, null, null, null));
+		(string type, object? data) = ha.SentEvents.Single();
+		ha.RaiseEvent(type, data, new Context { Id = "e", UserId = "nd-user" });
+
+		Assert.AreEqual("nd-user", ownUser.UserId);
+		Assert.AreEqual(ChangeOrigin.Self, detector.Classify(Change(ha, "on", ours)), "our own user beats every other reading, parent id included");
 	}
 
 	[TestMethod]

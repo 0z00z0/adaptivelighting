@@ -155,15 +155,12 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 	/// <summary>Whether the save bar has anything to say: an unsaved edit, an unresolved refusal, or a
 	/// confirmation still on screen.</summary>
-	/// <remarks><see cref="UserIdInput"/> is checked separately: it is not part of the document until the save
-	/// applies it, so a typed id leaves the document clean and would have no way to be written.</remarks>
 	public bool ShowSaveBar =>
 		_dirty
-		|| !string.IsNullOrWhiteSpace(UserIdInput)
 		|| _confirmation.IsShownAt(Now)
 		|| Result is { Written: false };
 
-	public bool HasUnsavedEdits => _dirty || !string.IsNullOrWhiteSpace(UserIdInput);
+	public bool HasUnsavedEdits => _dirty;
 
 	/// <summary>How many problems the save bar reports, or <c>null</c> when it reports none.</summary>
 	public string? SaveBarProblems => Validation is { IsValid: false } validation
@@ -177,7 +174,6 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	public void Reload()
 	{
 		Result = null;
-		UserIdInput = null;
 		CloseSetup();
 		CloseAdd();
 		_unsaved.Clear();
@@ -227,14 +223,6 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 		try
 		{
-			// Only if something was typed: an untouched box must leave the stored value alone, since the page
-			// never had it to give back.
-			if (!string.IsNullOrWhiteSpace(UserIdInput))
-			{
-				_config.Global.NetDaemonUserId = UserIdInput.Trim();
-				UserIdInput = null;
-			}
-
 			// Before anything is written: this page sends the whole document, so a file that has moved on since
 			// it was read would be overwritten and not edited.
 			if (DocumentWrite.ChangedUnderneath(_engine.Store, _documentStamp))
@@ -1386,29 +1374,6 @@ public sealed class HousePageModel : IPageClock, IDisposable
 			_config.ConfigName = value;
 			Revalidate();
 		}
-	}
-
-	/// <summary>Whether a NetDaemon user id is stored. The value itself is never read back out.</summary>
-	public bool HasUserId => !string.IsNullOrWhiteSpace(_config.Global.NetDaemonUserId);
-
-	/// <summary>What was typed into the write-only user-id box, applied on the next save.</summary>
-	/// <remarks>Not part of the document, so it arms the save bar on its own and has to say so.</remarks>
-	public string? UserIdInput
-	{
-		get => _userIdInput;
-		set
-		{
-			_userIdInput = value;
-			Notify();
-		}
-	}
-
-	private string? _userIdInput;
-
-	public void ClearUserId()
-	{
-		_config.Global.NetDaemonUserId = null;
-		Revalidate();
 	}
 
 	public int CircadianTickSeconds
