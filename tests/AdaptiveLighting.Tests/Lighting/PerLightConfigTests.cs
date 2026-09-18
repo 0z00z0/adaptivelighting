@@ -169,14 +169,14 @@ public sealed class PerLightConfigTests
 
 		Assert.AreEqual(
 			0,
-			read.Config.RetiredKeysInDocument.Count,
+			read.RetiredKeys.Count,
 			"neither LightLevels nor EntityId is a retired key, so the raw-text pre-pass leaves them alone");
 	}
 
 	// ===================== the validator =====================
 
 	private static ValidationResult Check(AdaptiveLightingConfig config, params string[] knownEntityIds) =>
-		ConfigValidator.Validate(config, knownEntityIds.Length > 0 ? knownEntityIds : null, knownAreaIds: ["stue"]);
+		ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = knownEntityIds.Length > 0 ? knownEntityIds : null, KnownAreaIds = ["stue"] });
 
 	[TestMethod]
 	public void A_Brightness_Outside_The_Byte_Is_An_Error_On_A_Light_Row_Too()
