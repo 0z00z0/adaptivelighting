@@ -12,7 +12,8 @@ namespace AdaptiveLighting.Engine;
 ///     on a different actuator, publisher, house-state stream or origin reader.
 /// </remarks>
 // No member has a default: a wiring that leaves one out does not compile, which is the whole point of the
-// record. LastSeen is null for a house with no cache, and OriginNames names nobody when null.
+// record. LastSeen is null for a house with no cache, and OriginNames names nobody when null. OwnUserId answers
+// null until the engine's first snapshot has come back.
 public sealed record HouseWiring(
 	IHaContext Ha,
 	IScheduler Scheduler,
@@ -23,4 +24,5 @@ public sealed record HouseWiring(
 	IObservable<HouseState> HouseChanged,
 	ILoggerFactory LoggerFactory,
 	IEntityLastSeen? LastSeen,
-	ChangeOriginNames? OriginNames);
+	ChangeOriginNames? OriginNames,
+	Func<string?> OwnUserId);

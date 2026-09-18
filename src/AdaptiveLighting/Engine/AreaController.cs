@@ -178,7 +178,7 @@ public sealed class AreaController : IDisposable
 			area.Settings,
 			new LuxReader(_ha, daylightSensors, staleAfter, () => _scheduler.Now, lastSeen).Read);
 
-		_detector = new OverrideDetector(_global, _scheduler, area.TreatAutomationsAsManual);
+		_detector = new OverrideDetector(_global, _scheduler, area.TreatAutomationsAsManual, house.OwnUserId);
 		_fanOut = new CommandFanOut(_area, _ha, _detector, lights);
 
 		_targets = new TargetResolver(

@@ -17,7 +17,6 @@ public sealed class LightingConfigDocumentTests
 			Persons = ["person.alex", "device_tracker.phone"],
 			KillSwitchEntity = "input_boolean.adaptive_lighting_enabled",
 			KillSwitchActiveWhenOff = false,
-			NetDaemonUserId = "abc123",
 			AwayDebounceMinutes = 7,
 			CircadianTickSeconds = 45,
 			SelfEchoWindowSeconds = 9,
@@ -109,7 +108,6 @@ public sealed class LightingConfigDocumentTests
 		CollectionAssert.AreEqual(expected.Persons, actual.Persons);
 		Assert.AreEqual(expected.KillSwitchEntity, actual.KillSwitchEntity);
 		Assert.AreEqual(expected.KillSwitchActiveWhenOff, actual.KillSwitchActiveWhenOff);
-		Assert.AreEqual(expected.NetDaemonUserId, actual.NetDaemonUserId);
 		Assert.AreEqual(expected.AwayDebounceMinutes, actual.AwayDebounceMinutes);
 		Assert.AreEqual(expected.CircadianTickSeconds, actual.CircadianTickSeconds);
 		Assert.AreEqual(expected.SelfEchoWindowSeconds, actual.SelfEchoWindowSeconds);
@@ -842,6 +840,25 @@ public sealed class LightingConfigDocumentTests
 
 		Assert.AreEqual(70d, read.Config.Periods.Single().BrightnessPct, "the period's own level is what runs now");
 		StringAssert.Contains(read.RetiredKeys.Single(), "UseDaylightCurve");
+	}
+
+	/// <summary>The engine learns its own user now: a document still naming one loads as before and says so once.</summary>
+	[TestMethod]
+	public void A_Document_Still_Carrying_NetDaemonUserId_Loads_With_A_Retired_Key_Warning()
+	{
+		const string yaml = """
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Global:
+			    NetDaemonUserId: abc123
+			    AwayDebounceMinutes: 7
+			""";
+		RecordingLogger logger = new();
+
+		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml, logger);
+
+		Assert.AreEqual(7, read.Config.Global.AwayDebounceMinutes, "the rest of the document loads as before");
+		StringAssert.Contains(read.RetiredKeys.Single(), "NetDaemonUserId");
+		Assert.AreEqual(read.RetiredKeys.Single(), logger.Warnings.Single());
 	}
 
 	[TestMethod]

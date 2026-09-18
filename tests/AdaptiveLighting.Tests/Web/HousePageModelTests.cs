@@ -49,17 +49,6 @@ public sealed class HousePageModelTests
 	}
 
 	[TestMethod]
-	public void A_Typed_User_Id_Arms_The_Save_Bar_On_Its_Own()
-	{
-		HousePageModel model = Model();
-		model.Start(null);
-
-		model.UserIdInput = "0123456789abcdef";
-
-		Assert.IsTrue(model.HasUnsavedEdits, "It is not part of the document, so only this check can arm the bar.");
-	}
-
-	[TestMethod]
 	public void A_Document_That_Moved_On_Disk_Is_Refused_As_A_Conflict()
 	{
 		HousePageModel model = Model();

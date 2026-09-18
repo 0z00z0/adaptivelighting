@@ -102,8 +102,6 @@ public class GlobalConfig
 	/// <remarks>Set on the first auto-populate and never reset, so an emptied list stays empty.</remarks>
 	public bool AreasAutoDiscovered { get; set; }
 
-	public string? NetDaemonUserId { get; set; }
-
 	public int AwayDebounceMinutes { get; set; } = 5;
 
 	/// <summary>How often an area re-evaluates darkness, period and house mode. A tick that finds nothing changed publishes nothing.</summary>

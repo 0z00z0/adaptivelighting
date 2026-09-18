@@ -34,18 +34,25 @@ internal sealed class OverrideDetector
 	private readonly GlobalConfig _global;
 	private readonly IScheduler _scheduler;
 	private readonly bool? _roomTreatsAutomationsAsManual;
+	private readonly Func<string?> _ownUserId;
 	private readonly Dictionary<string, Expectation> _expectations = new(StringComparer.OrdinalIgnoreCase);
 
 	// Scenes and member dropouts, whose effect on a light cannot be read in advance: either polarity is expected.
 	private readonly Dictionary<string, DateTimeOffset> _eitherWay = new(StringComparer.OrdinalIgnoreCase);
 	private readonly object _gate = new();
 
-	// roomTreatsAutomationsAsManual is the room's own answer; null follows the house.
-	public OverrideDetector(GlobalConfig global, IScheduler scheduler, bool? roomTreatsAutomationsAsManual = null)
+	// roomTreatsAutomationsAsManual is the room's own answer; null follows the house. ownUserId is read at each
+	// change, since the id is learned after the rooms start.
+	public OverrideDetector(
+		GlobalConfig global,
+		IScheduler scheduler,
+		bool? roomTreatsAutomationsAsManual = null,
+		Func<string?>? ownUserId = null)
 	{
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
 		_roomTreatsAutomationsAsManual = roomTreatsAutomationsAsManual;
+		_ownUserId = ownUserId ?? (() => null);
 	}
 
 	/// <summary>Declares a command about to be sent to <paramref name="entityId"/>.</summary>
@@ -95,7 +102,7 @@ internal sealed class OverrideDetector
 		if (context is null)
 			return ChangeOrigin.Unknown;
 
-		if (_global.NetDaemonUserId is { Length: > 0 } ourUserId &&
+		if (_ownUserId() is { Length: > 0 } ourUserId &&
 			string.Equals(context.UserId, ourUserId, StringComparison.Ordinal))
 			return ChangeOrigin.Self;
 
