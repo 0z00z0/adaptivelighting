@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reactive.Concurrency;
 
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
@@ -79,10 +80,10 @@ app.MapRazorComponents<App>()
 	.AddAdditionalAssemblies(typeof(Program).Assembly)
 	.AddInteractiveServerRenderMode();
 
-// Nothing starts the engine here, so the dashboard and every room page would sit on "hasn't reported yet".
-// After the cache has subscribed, one snapshot per area in the document, shaped by what that area is
-// configured to do. Absent a local.yaml the seed document holds no areas and this raises nothing.
-app.Lifetime.ApplicationStarted.Register(() => SeedSnapshots(ha, app.Services.GetRequiredService<LightingConfigStore>()));
+// Hands the engine the fake house and a handful of not-yet-committed rooms, so the commissioning board and
+// every room's light switch answer from a running engine instead of "nothing is running" — and files a dozen
+// activity reports across the record's own categories, so the Activity page is drivable as shipped.
+app.Lifetime.ApplicationStarted.Register(() => AttachEngineAndSeedActivity(ha, registry, app.Services));
 
 // Read after start, not from the port above: with --port 0 the requested port is 0 and only the server knows
 // which one it got.
@@ -171,6 +172,28 @@ static void SeedLights(FakeHaContext ha)
 	ha.SetState("light.stue_tak_2", "unavailable", new() { ["friendly_name"] = "Taklys 2" });
 	ha.SetState("binary_sensor.stue_bevegelse", "off", new() { ["device_class"] = "motion", ["friendly_name"] = "Stue bevegelse" });
 	ha.SetState("sensor.stue_lux", "18", new() { ["device_class"] = "illuminance", ["friendly_name"] = "Stue lysnivå" });
+
+	SeedMoreRooms(ha);
+}
+
+// The rest of the invented house: enough rooms with explicit lights for the commissioning board's findings strip
+// to count more than one room, and for the activity seed below to have somewhere to report from.
+static void SeedMoreRooms(FakeHaContext ha)
+{
+	Lamp(ha, "light.kjokken_tak", "Kjøkken tak");
+	Lamp(ha, "light.kjokken_benk", "Kjøkken benk");
+	ha.SetState("binary_sensor.kjokken_bevegelse", "off", new() { ["device_class"] = "motion", ["friendly_name"] = "Kjøkken bevegelse" });
+
+	Lamp(ha, "light.kontor_skrivebord", "Kontor skrivebord");
+	Lamp(ha, "light.kontor_tak", "Kontor tak");
+	ha.SetState("binary_sensor.kontor_bevegelse", "off", new() { ["device_class"] = "motion", ["friendly_name"] = "Kontor bevegelse" });
+	ha.SetState("sensor.kontor_lux", "6", new() { ["device_class"] = "illuminance", ["friendly_name"] = "Kontor lysnivå" });
+
+	Lamp(ha, "light.soverom_tak", "Soverom tak");
+	Lamp(ha, "light.soverom_nattbord", "Soverom nattbord");
+
+	Lamp(ha, "light.gjesterom_tak", "Gjesterom tak");
+	ha.SetState("scene.gjester_kos", "scening", new() { ["friendly_name"] = "Gjester kos" });
 }
 
 static void Lamp(FakeHaContext ha, string entityId, string name, IReadOnlyList<string>? members = null)
@@ -188,126 +211,127 @@ static void Lamp(FakeHaContext ha, string entityId, string name, IReadOnlyList<s
 	ha.SetState(entityId, "on", attributes);
 }
 
-static void SeedSnapshots(FakeHaContext ha, LightingConfigStore store)
+// Attaches the engine exactly as a house's own [NetDaemonApp] does (see samples/MinimalHost), then saves a
+// document holding a handful of discovered-but-not-yet-committed rooms. Saving (not Reload) is deliberate: it
+// writes the document, re-reads it and rebuilds the orchestrator in one step, without arming the discovery
+// scan, which this fake registry cannot answer.
+static void AttachEngineAndSeedActivity(FakeHaContext ha, FakeHaRegistry registry, IServiceProvider services)
 {
-	AdaptiveLightingConfig config = store.Load();
+	LightingEngineHost engine = services.GetRequiredService<LightingEngineHost>();
 
-	// Resolves group membership by the same rule the engine does, so this preview never keeps a second copy of
-	// that walk. The registry stays empty: every area below lists its lights explicitly, and LeavesOf never
-	// consults it.
-	AreaEntityResolver resolver = new(ha, new FakeAreaRegistry(), config.Global, NullLogger.Instance);
+	// DefaultScheduler stands in for the scheduler a house gets from NetDaemon's own bootstrap, which this host
+	// never starts. Without an attached engine, the commissioning board never renders — the dashboard's
+	// AwaitingRoomChoice needs IsAttached — and every room's light switch answers "nothing is running" instead
+	// of its own real reason.
+	engine.Attach(ha, registry, DefaultScheduler.Instance);
+
+	AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
+	config.Areas.AddRange(CommissioningRooms());
+
+	SaveResult result = engine.Save(config);
+
+	if (!result.Written)
+		Console.Error.WriteLine($"uihost: seed configuration was not accepted: {result.Message}");
+
+	SeedActivity(ha);
+}
+
+// A first-run house: rooms discovery would have found, none committed yet. Every light is named explicitly,
+// never by Home Assistant area, because FakeHaRegistry answers no area membership.
+static List<AreaConfig> CommissioningRooms() =>
+[
+	new()
+	{
+		Name = "Stue",
+		Lights = ["light.stue_taklys", "light.stue_leselampe", "light.stue_gulvlampe"],
+		MotionSensors = ["binary_sensor.stue_bevegelse"],
+		LuxSensor = "sensor.stue_lux",
+		Enabled = false
+	},
+	new() { Name = "Bad", Lights = ["light.bad_tak"], Enabled = false },
+	new()
+	{
+		Name = "Kjøkken",
+		Lights = ["light.kjokken_tak", "light.kjokken_benk"],
+		MotionSensors = ["binary_sensor.kjokken_bevegelse"],
+		Enabled = false
+	},
+	new()
+	{
+		Name = "Kontor",
+		Lights = ["light.kontor_skrivebord", "light.kontor_tak"],
+		MotionSensors = ["binary_sensor.kontor_bevegelse"],
+		LuxSensor = "sensor.kontor_lux",
+		Enabled = false
+	},
+	new() { Name = "Soverom", Lights = ["light.soverom_tak", "light.soverom_nattbord"], Enabled = false },
+	new() { Name = "Gjesterom", Lights = ["light.gjesterom_tak"], Enabled = false }
+];
+
+// A dozen reports spread across every chip the Activity page draws, so the page is drivable without hand-editing.
+// Reason and state are picked off ActivityView.Categorise, not guessed: each comment names the chip the report
+// lands in. The twelfth is free — Save above raises the engine's own "settings saved" notice, which is Background.
+static void SeedActivity(FakeHaContext ha)
+{
 	HaStatePublisher publisher = new(ha, NullLogger.Instance);
 	DateTimeOffset now = DateTimeOffset.Now;
+	int minute = 22;
 
-	// The room page only draws a running test when the id matches one of the document's own periods.
-	string? testPeriodId = config.Periods.LastOrDefault()?.Id;
-	int index = 0;
+	AreaSnapshot Base(string area, AreaState state, TransitionReason reason, bool isDark = true, string period = "Kveld") => new(
+		area, state, reason, ModeKind.Normal,
+		KillSwitchActive: false,
+		IsDark: isDark,
+		PeriodName: period,
+		BrightnessPct: null,
+		ColorTempKelvin: null,
+		Timestamp: now.AddMinutes(-minute),
+		LastCommandAt: now.AddMinutes(-minute),
+		LastMotionAt: now.AddMinutes(-minute),
+		NextChangeAt: null,
+		NextChangeFrom: null);
 
-	foreach (AreaConfig area in config.Areas)
+	void Report(AreaSnapshot snapshot)
 	{
-		// NonEmpty, not ??: a document with "scene_on_motion:" and nothing after it carries "", which is present
-		// to ?? and absent to everything the page does with it.
-		string name = NonEmpty(area.Name) ?? NonEmpty(area.AreaId) ?? $"Room {index}";
-		string? scene = NonEmpty(area.SceneOnMotion) ?? NonEmpty(area.SceneWhenEmpty);
-		string? holder = NonEmpty(area.KeepLitWhenOn?.FirstOrDefault());
-
-		// A scene nulls both levels, as the engine's own does: the page must read the scene, not invent a level.
-		bool lit = scene is not null || holder is not null || index % 3 != 0;
-		bool testing = !lit && index % 6 == 0 && testPeriodId is not null;
-		bool manualChange = !lit && !testing && index % 6 == 3;
-
-		// The catalog resolves these to friendly names on the page, so the fake house has to know them.
-		if (scene is not null)
-			ha.SetState(scene, "scening", new() { ["friendly_name"] = Friendly(scene) });
-
-		if (holder is not null)
-			ha.SetState(holder, "playing", new() { ["friendly_name"] = Friendly(holder) });
-
-		(int missing, int total) = Availability(ha, resolver, area.Lights);
-
-		IReadOnlyList<LightStanding>? levels = lit && scene is null && area.Lights is { Count: > 0 } lights
-			? [.. lights.Select((light, position) => new LightStanding(light, 62.0 + (position * 4), 2700 - (position * 100)))]
-			: null;
-
-		IReadOnlyList<string>? moved = lit && scene is null && area.Lights is { Count: > 0 } first
-			? [first[0]]
-			: null;
-
-		AreaSnapshot snapshot = new(
-			name, lit ? AreaState.AutoActive : manualChange ? AreaState.OverriddenOn : AreaState.AutoVacant,
-			manualChange ? TransitionReason.ManualOn : testing ? TransitionReason.LevelTestStarted : TransitionReason.Motion,
-			ModeKind.Normal,
-			KillSwitchActive: false,
-			IsDark: true,
-			PeriodName: "Kveld",
-			BrightnessPct: scene is null && lit ? 62.0 : null,
-			ColorTempKelvin: scene is null && lit ? 2700 : null,
-			Timestamp: now.AddMinutes(-2),
-			LastCommandAt: now.AddMinutes(-2),
-			LastMotionAt: lit ? now.AddMinutes(-2) : now.AddMinutes(-40),
-			NextChangeAt: lit && holder is null && scene is null ? now.AddMinutes(8) : null,
-			NextChangeFrom: lit && holder is null && scene is null ? now.AddMinutes(-2) : null,
-			HouseModeValue: "Home",
-			DarknessDetail: "lux 18, dark below 40",
-			AreaId: area.AreaId,
-			AutoOnBlockedBy: AutoOnBlock.None,
-			IsHeldLit: holder is not null,
-			HeldLitBy: holder,
-			SceneApplied: scene,
-			IsAnyoneHome: true,
-			// Every fourth room previews the forced-mode badge, which is house-wide in a real report; varying it
-			// per room here is a preview convenience, not a claim about how one house behaves.
-			Forced: index % 4 == 2
-				? new ForcedMode(ModeKind.Guest, "Gjester", ModeForceSource.WhileEntityOn, "input_boolean.gjester", "on")
-				: null,
-			// Long enough that the countdown still reads as running by the time a screenshot is taken, well
-			// after the app started and this snapshot was built.
-			TestingPeriodId: testing ? testPeriodId : null,
-			TestEndsAt: testing ? now.AddMinutes(30) : null,
-			TestingLightId: testing && area.Lights is { Count: > 0 } tested ? tested[0] : null,
-			LightLevels: levels,
-			LightsMoved: moved,
-			LightsNotResponding: total > 0 ? missing : null,
-			LightCount: total > 0 ? total : null,
-			ChangedBy: manualChange ? "By hand" : null,
-			ChangedAt: manualChange ? now.AddMinutes(-1) : null,
-			// Every third room from the second previews the low-battery warning on its first motion sensor.
-			LowBatteries: index % 3 == 1 && area.MotionSensors is { Count: > 0 } sensors
-				? [new SensorBattery(sensors[0], 12)]
-				: null);
-
 		publisher.Publish(snapshot);
 
 		// Publish only records the event for inspection; in a house, Home Assistant echoes the event back and
-		// that echo is what the dashboard's cache actually reads. Re-raising the same payload stands in for that
-		// echo, so the fake house delivers exactly what it recorded.
+		// that echo is what the dashboard's cache actually reads. Re-raising the same payload stands in for it.
 		(string type, object? data) = ha.SentEvents[^1];
 		ha.RaiseEvent(type, data);
 
-		index++;
+		minute -= 2;
 	}
-}
 
-// The engine's own walk through group membership, so a second copy of it cannot drift from what a house sees.
-static (int Missing, int Total) Availability(FakeHaContext ha, AreaEntityResolver resolver, IReadOnlyList<string>? lights)
-{
-	HashSet<string> leaves = new(StringComparer.Ordinal);
+	// Movement: a motion sensor reported.
+	Report(Base("Kjøkken", AreaState.AutoActive, TransitionReason.Motion, period: "Morgen") with { BrightnessPct = 70, ColorTempKelvin = 3000 });
+	Report(Base("Soverom", AreaState.AutoActive, TransitionReason.Motion, period: "Natt") with { BrightnessPct = 15, ColorTempKelvin = 2200 });
 
-	foreach (string light in lights ?? [])
-		leaves.UnionWith(resolver.LeavesOf(light));
+	// Light change: the engine commanded the lights on its own.
+	Report(Base("Stue", AreaState.PreOff, TransitionReason.VacancyTimeout) with { BrightnessPct = 20, ColorTempKelvin = 2200 });
+	Report(Base("Kontor", AreaState.AutoActive, TransitionReason.CircadianTick) with
+	{
+		BrightnessPct = 55,
+		ColorTempKelvin = 3500,
+		LightsMoved = ["light.kontor_tak"],
+		LightLevels = [new LightStanding("light.kontor_tak", 55, 3500)]
+	});
 
-	int missing = leaves.Count(leaf => ha.GetState(leaf)?.State is not ("on" or "off"));
+	// Manual changes: somebody set or switched the lights by hand.
+	Report(Base("Gjesterom", AreaState.OverriddenOn, TransitionReason.ManualOn) with { BrightnessPct = 80, ChangedBy = "By hand", ChangedAt = now.AddMinutes(-minute) });
+	Report(Base("Bad", AreaState.SuppressedOff, TransitionReason.ManualOff) with { ChangedBy = "By hand", ChangedAt = now.AddMinutes(-minute) });
 
-	return (missing, leaves.Count);
-}
+	// Nothing happened: the engine could have lit the room and did not.
+	Report(Base("Soverom", AreaState.AutoVacant, TransitionReason.CircadianTick, isDark: false) with { DarknessDetail = "lux 420, dark below 40" });
+	Report(Base("Kontor", AreaState.AutoVacant, TransitionReason.CircadianTick) with { AutoOnBlockedBy = AutoOnBlock.Sleep });
 
-static string? NonEmpty(string? value) => value is { Length: > 0 } text ? text : null;
+	// Darkness: the standing verdict a quiet re-check republishes.
+	Report(Base("Gjesterom", AreaState.AutoVacant, TransitionReason.CircadianTick) with { DarknessDetail = "lux 8, dark below 40" });
 
-static string Friendly(string entityId)
-{
-	string tail = entityId[(entityId.IndexOf('.', StringComparison.Ordinal) + 1)..].Replace('_', ' ');
+	// Mode: the house moved to a different mode.
+	Report(Base("Stue", AreaState.AutoVacant, TransitionReason.HouseModeChanged) with { HouseModeValue = "Home" });
 
-	return tail.Length == 0 ? entityId : string.Concat(char.ToUpperInvariant(tail[0]), tail[1..]);
+	// House: a guest scene has this room.
+	Report(Base("Gjesterom", AreaState.SceneHold, TransitionReason.SceneHold) with { SceneApplied = "scene.gjester_kos" });
 }
 
 internal sealed class SeedConfig : IAppConfig<AdaptiveLightingConfig>
