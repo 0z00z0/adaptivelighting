@@ -227,6 +227,21 @@ public sealed class LightingEngineHost : IDisposable
 			return RunningArea(areaId) is { } area ? area.LightNow() : NotRunningRefusal();
 	}
 
+	/// <summary>Why <paramref name="areaId"/> cannot be switched off by hand right now, or <c>null</c> when it can.</summary>
+	public string? LightOffRefusal(string? areaId)
+	{
+		lock (_gate)
+			return RunningArea(areaId) is { } area ? area.LightOffRefusal() : NotRunningRefusal();
+	}
+
+	/// <summary>Switches one room off the way a hand at the wall would.</summary>
+	/// <returns><c>null</c> once the room is off, or the sentence saying why it is not.</returns>
+	public string? LightOff(string? areaId)
+	{
+		lock (_gate)
+			return RunningArea(areaId) is { } area ? area.LightOff() : NotRunningRefusal();
+	}
+
 	private AreaController? RunningArea(string? areaId) =>
 		areaId is { Length: > 0 } wanted && _orchestrator is { } running
 			? running.Areas.FirstOrDefault(area => string.Equals(area.AreaId, wanted, StringComparison.OrdinalIgnoreCase))

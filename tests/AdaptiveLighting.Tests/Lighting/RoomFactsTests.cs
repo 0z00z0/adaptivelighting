@@ -456,6 +456,21 @@ public sealed class RoomFactsTests
 		StringAssert.DoesNotMatch(headline, new Regex("level unknown|watching for movement"));
 	}
 
+	/// <summary>A level that comes to 0 % goes out as an off, so the headline and the badge must say off, not lit.</summary>
+	[TestMethod]
+	public void A_Room_Switched_Off_By_A_Zero_Level_Reads_Off_In_The_Headline_And_The_Badge()
+	{
+		AreaSnapshot off = Report(AreaState.AutoActive, lastCommand: Now.AddMinutes(-3));
+
+		string headline = RoomFacts.Headline(off);
+		StringAssert.StartsWith(headline, "Off", StringComparison.Ordinal);
+		StringAssert.DoesNotMatch(headline, new Regex("level unknown|Lit at"));
+		Assert.AreEqual("off · auto", StateGlyph.For(off).Word);
+
+		// The same state with a level still reads lit.
+		Assert.AreEqual("lit · auto", StateGlyph.For(Report(AreaState.AutoActive, brightness: 40, lastCommand: Now.AddMinutes(-3))).Word);
+	}
+
 	/// <summary>The engine did not put the scene there once a hand has been at the switch, so it must not be named.</summary>
 	[TestMethod]
 	public void A_Standing_Scene_Does_Not_Displace_The_Manual_Override_Headline()

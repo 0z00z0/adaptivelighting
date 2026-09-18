@@ -28,6 +28,7 @@ against each other.
 - `AreaCarryOver`, `AreaHistory` and `AreaHold` records; `AreaController.CarryOver` and `Inherit`; `LightingOrchestrator.CarryOver` and an optional `carried` constructor parameter. The host's attach and detach calls are unchanged.
 - `AdaptiveLighting.Engine.IRoomHistoryStore` and `RoomHistoryDocument`. A room's last movement, last change and who changed it now survive a restart, written to a note in the state folder at most once a minute, plus on a settings save and on shutdown.
 - `AdaptiveLighting.Engine.IActivityJournalStore`, `ActivityJournalRow`, `ActivityJournalDocument`, and `AdaptiveLighting.Hosting.ActivityJournalServiceCollectionExtensions.AddActivityJournal`. The activity record now survives a restart, reading back its newest 500 rows from a journal in the state folder beside the configuration document.
+- The room page's light control switches off as well as on. It is a pill beside the Adaptive lighting switch that reads Light ON or Light OFF. Pressing it off does what the wall switch does: the lights go off and movement is ignored until the room has been quiet for the room's reset time. `AreaController.LightOff` and `LightOffRefusal`, `LightingEngineHost.LightOff` and `LightOffRefusal`, and the `TransitionReason.ManualLightOff` value. (#110)
 
 ### Changed
 
@@ -55,6 +56,8 @@ against each other.
 - `ConfigValidator.Validate` takes a `ValidationContext` in place of six optional collections. `GlobalConfig.EffectiveKillSwitchEntity` and `KillSwitchIsDefaulted` become methods that take the built-in kill switch, and `ModeMonitor.KillSwitchPauses` takes it too. `ModeMonitor` and `LightingOrchestrator` gain an optional `defaultKillSwitchEntity` constructor argument. The host's attach and detach calls are unchanged.
 - The engine learns its own Home Assistant user from its own snapshot event coming back after start, and treats light changes made as that user as its own. No setting is needed.
 - State notes move into a `state/` folder beside the settings file. They are now flushed to disk before being renamed into place, and a note that is missing or damaged is read back from its backup. A note dated ahead of the clock is discarded, with a log line saying why.
+- The list for *Light dimly when these see movement* offers only motion, occupancy and presence sensors, the same device classes the room's own motion sensor list uses. A sensor already chosen stays in the room's settings and on the page, whatever its class. (#109)
+- The On and Off word in the Adaptive lighting switch is the same size as its label, with more room around both.
 
 ### Removed
 
@@ -68,6 +71,7 @@ against each other.
 
 ### Fixed
 
+- A room switched off because its level for the time of day comes to 0 % reads off on its page and on the dashboard. The page said "Lit at — level unknown." and the badge said "lit · auto"; the badge now says "off · auto".
 - The room page no longer says it is waiting for Home Assistant when Home Assistant returns light-level sensors or switches but no areas. The room page and the house page use the same test.
 - The last-seen cache files a motion sensor whose label is stored as an id. It matched the name only, so a label stored by id filed nothing.
 - The information line for a room left out of the engine names the label as Home Assistant shows it, rather than the id the settings file now holds.
