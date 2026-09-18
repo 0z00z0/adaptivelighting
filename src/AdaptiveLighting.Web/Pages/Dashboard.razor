@@ -119,7 +119,7 @@ else
 		@foreach (AreaSnapshot area in _model.Exceptions)
 		{
 			<a class="tray-chip @TrayEdge(area.State)" href="@HouseView.RoomHref(area.AreaId)">
-				<StateChip State="area.State" Kelvin="area.ColorTempKelvin" Bare="true" IsLeadIn="@(area.IsLeadIn ?? false)" />
+				<StateChip State="area.State" Kelvin="area.ColorTempKelvin" Bare="true" IsLeadIn="@(area.IsLeadIn ?? false)" IsOff="@StateGlyph.IsOffByLevel(area)" />
 				<span class="tray-text"><b>@area.AreaName</b> &mdash; @_model.ExceptionLine(area)</span>
 			</a>
 		}
@@ -192,7 +192,7 @@ else
 						{
 							<a class="lane" href="@HouseView.RoomHref(lane.AreaId)" title="@_model.LaneTitle(lane)" @key="lane.Key">
 								<span class="lane-name">
-									<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" />
+									<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" IsOff="@StateGlyph.IsOffByLevel(lane.Latest)" />
 									<span class="lane-room">@lane.Name</span>
 									@if (DashboardPageModel.HasWarning(lane.Latest))
 									{
@@ -250,7 +250,7 @@ else
 						@foreach (BoardLane lane in resting)
 						{
 							<a class="quiet-chip" href="@HouseView.RoomHref(lane.AreaId)" title="@_model.LaneTitle(lane)" @key="lane.Key">
-								<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" />
+								<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" IsOff="@StateGlyph.IsOffByLevel(lane.Latest)" />
 								@lane.Name
 								@if (DashboardPageModel.HasWarning(lane.Latest))
 								{

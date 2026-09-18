@@ -29,6 +29,10 @@
 	[Parameter]
 	public bool IsLeadIn { get; set; }
 
+	/// <summary>Whether the engine holds the room active with its lights off; from <see cref="StateGlyph.IsOffByLevel"/>.</summary>
+	[Parameter]
+	public bool IsOff { get; set; }
+
 	/// <summary>The colour temperature the room was commanded to, ignored unless
 	/// <see cref="StateGlyph.TakesKelvinTint"/> says the state carries one.</summary>
 	[Parameter]
@@ -46,7 +50,7 @@
 	[Parameter]
 	public string? Title { get; set; }
 
-	private StateMark Mark => StateGlyph.For(State, IsLeadIn);
+	private StateMark Mark => StateGlyph.For(State, IsLeadIn, IsOff);
 
 	private bool ShowsWord => ShowWord && !Bare;
 

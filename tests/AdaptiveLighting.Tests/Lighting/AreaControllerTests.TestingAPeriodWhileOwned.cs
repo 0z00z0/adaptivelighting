@@ -102,7 +102,7 @@ public sealed partial class AreaControllerTests
 		Advance(t, TestRun);
 
 		// 1 h 59 min 59 s after the hand that armed the two-hour hold.
-		Advance(t, TimeSpan.FromMinutes(114) + TimeSpan.FromSeconds(49));
+		Advance(t, TimeSpan.FromMinutes(114) + TimeSpan.FromSeconds(59) - TestRun);
 		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State, "one second short of the two hours the hand bought");
 
 		Advance(t, TimeSpan.FromSeconds(1));
@@ -127,15 +127,15 @@ public sealed partial class AreaControllerTests
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 229.0 }, PhysicalDevice());
 		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 
-		// And the same for the return, nine seconds after that expectation has expired.
-		Advance(t, TimeSpan.FromSeconds(9));
+		// And the same for the return, a second after it, when the test command's expectation has expired.
+		Advance(t, TestRun);
 		t.Ha.Trigger(Light, "on", HandSetLevels(), PhysicalDevice());
 
 		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State,
 			"the return is the engine's own work, so the room must not read it as a person");
 
 		// Still 1 h 59 min 59 s after the hand, because neither command was one.
-		Advance(t, TimeSpan.FromMinutes(119) + TimeSpan.FromSeconds(49));
+		Advance(t, TimeSpan.FromMinutes(119) + TimeSpan.FromSeconds(58) - TestRun);
 		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 
 		Advance(t, TimeSpan.FromSeconds(1));
@@ -171,16 +171,16 @@ public sealed partial class AreaControllerTests
 		t.Area.TestPeriod("day");
 		ReportTestLevels(t);
 
-		Advance(t, TimeSpan.FromSeconds(6));
+		Advance(t, TimeSpan.FromSeconds(3));
 		t.Area.TestPeriod("night");
 		t.Actuator.Clear();
 
-		// The first press's ten seconds are up, and nothing happens: its return went with it.
-		Advance(t, TimeSpan.FromSeconds(4));
+		// The first press's time is up, and nothing happens: its return went with it.
+		Advance(t, TestRun - TimeSpan.FromSeconds(3));
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 
-		Advance(t, TimeSpan.FromSeconds(6));
-		Assert.AreEqual(1, t.Actuator.Applied.Count, "one return, ten seconds from the newest press");
+		Advance(t, TimeSpan.FromSeconds(3));
+		Assert.AreEqual(1, t.Actuator.Applied.Count, "one return, the test's length from the newest press");
 		AssertLevels(t.Actuator.Last, 80, 3000, "the person's levels, not the levels the first test was showing");
 	}
 
@@ -220,7 +220,7 @@ public sealed partial class AreaControllerTests
 		Advance(t, TestRun);
 
 		Assert.AreEqual(0, t.Actuator.Applied.Count,
-			"a ten-second-old capture must not overwrite what the person has just set");
+			"a capture from before the test must not overwrite what the person has just set");
 		Assert.IsFalse(t.Area.IsTestingLevels);
 		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
 	}

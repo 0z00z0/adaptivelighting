@@ -91,11 +91,10 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	// Per-visit, never persisted: the note is advice about this house right now.
 	private bool _switchOnDismissed;
 
-	// The level test running on the real lights, from this visit's own click. The engine owns the return, so
-	// these only draw it, and only until the snapshot carries the same news (see TestingPeriod).
-	private string? _testingPeriodId;
-	private string? _testingLightId;
-	private DateTimeOffset? _testEndsAt;
+	// The level test as the engine last answered, read on the ticker and after every press. _engineKnows is false
+	// while the engine does not run this room, and the report decides instead.
+	private LevelTestNow? _engineTest;
+	private bool _engineKnows;
 
 	private readonly HashSet<string> _openedGroups = new(StringComparer.Ordinal);
 
@@ -296,20 +295,39 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	public IReadOnlyList<RoomFact> Facts =>
 		Snapshot is { } snapshot ? RoomFacts.For(snapshot, Now, NameOf) : [];
 
-	/// <summary>Why the Light on button is closed, or <c>null</c> when it can be pressed.</summary>
+	/// <summary>Why switching on is closed, or <c>null</c> when it can be pressed.</summary>
 	public string? LightOnRefusal { get; private set; }
 
-	/// <summary>What the last press was actually told.</summary>
-	/// <remarks>Not the same question as <see cref="LightOnRefusal"/>: a room can pass the button's own check and
-	/// still be refused under the lock a moment later.</remarks>
-	public string? LightOnRefused { get; private set; }
+	/// <summary>Why switching off is closed, or <c>null</c> when it can be pressed.</summary>
+	public string? LightOffRefusal { get; private set; }
 
-	/// <summary>What the button promises, with this room's own timeout in it instead of a vague "for a while".</summary>
-	public string LightOnTitle =>
-		LightOnRefusal is { Length: > 0 } refusal
+	/// <summary>Whether the light switch reads on: lit by the engine, set by a hand, or showing the engine's scene.</summary>
+	// A hand's levels and a scene's are not the engine's command, so IsLit alone reads both as off.
+	public bool IsLightOn => Snapshot is { } snapshot
+		&& (snapshot.IsLit
+			|| snapshot.State is AreaState.OverriddenOn
+			|| snapshot is { State: AreaState.AutoActive, SceneApplied: { Length: > 0 } });
+
+	/// <summary>Why the light switch is closed for the press it would make, or <c>null</c> when it can be pressed.</summary>
+	public string? LightRefusal => IsLightOn ? LightOffRefusal : LightOnRefusal;
+
+	/// <summary>What the last press was actually told.</summary>
+	/// <remarks>Not the same question as <see cref="LightRefusal"/>: a room can pass the button's own check and
+	/// still be refused under the lock a moment later.</remarks>
+	public string? LightRefused { get; private set; }
+
+	/// <summary>Whether <see cref="LightRefused"/> answers a press to switch off.</summary>
+	public bool LightRefusedOff { get; private set; }
+
+	/// <summary>What the switch promises, with this room's own timings in it instead of a vague "for a while".</summary>
+	public string LightTitle =>
+		LightRefusal is { Length: > 0 } refusal
 			? refusal
-			: $"Switches these lights on now, at the levels this room would use anyway, and off again after "
-				+ $"{TokenFormat.Duration(Effective.VacancyTimeoutSeconds)} without movement — the same as walking in.";
+			: IsLightOn
+				? $"Switches these lights off now, the same as the wall switch: movement is ignored until the room has "
+					+ $"been quiet for {TokenFormat.DurationFromMinutes(Effective.VacancyResetMinutes)}."
+				: $"Switches these lights on now, at the levels this room would use anyway, and off again after "
+					+ $"{TokenFormat.Duration(Effective.VacancyTimeoutSeconds)} without movement — the same as walking in.";
 
 	// Not a light switch, and the wording says so: switching it off changes nothing about the lamps right now.
 	/// <summary>What the adaptive-lighting switch promises.</summary>
@@ -325,8 +343,32 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	/// vacancy countdown, so nothing here has to be undone when the page is closed.</remarks>
 	public void LightOn()
 	{
-		LightOnRefused = _engine.LightNow(Area?.AreaId);
-		LightOnRefusal = _engine.LightNowRefusal(Area?.AreaId);
+		LightRefusedOff = false;
+		LightRefused = _engine.LightNow(Area?.AreaId);
+		RefreshLightRefusals(Area?.AreaId);
+	}
+
+	/// <summary>Asks the engine to switch this room off by hand, as the wall switch would.</summary>
+	public void LightOff()
+	{
+		LightRefusedOff = true;
+		LightRefused = _engine.LightOff(Area?.AreaId);
+		RefreshLightRefusals(Area?.AreaId);
+	}
+
+	/// <summary>Presses the light switch the way it currently reads.</summary>
+	public void ToggleLight()
+	{
+		if (IsLightOn)
+			LightOff();
+		else
+			LightOn();
+	}
+
+	private void RefreshLightRefusals(string? areaId)
+	{
+		LightOnRefusal = _engine.LightNowRefusal(areaId);
+		LightOffRefusal = _engine.LightOffRefusal(areaId);
 	}
 
 	/// <summary>Turns adaptive lighting on or off for this room.</summary>
@@ -340,7 +382,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		room.Enabled = switchingOn;
 
 		// A refusal that named the disabled room would outlive the thing it named.
-		LightOnRefused = null;
+		LightRefused = null;
 
 		// After MarkDirty, never before: MarkDirty re-runs discovery, so the note is built from the same preview
 		// the gear card shows.
@@ -581,67 +623,70 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 	/// <summary>The period whose test is still holding the lights, or <c>null</c> when none is.</summary>
 	/// <remarks>
-	///     Local state first, for the click that just armed it: the report has not had time to reach the cache
-	///     yet. A fresh model carries none, so it falls back to the last snapshot, which the engine publishes the
-	///     moment a test starts; that is what redraws the countdown after a reload or a navigate-back instead of
-	///     showing plain Test buttons while the engine's own return is still pending.
+	///     The engine's own answer where it runs this room, so a test ended early by a hand at the switch or the
+	///     house going away stops counting here within the second. The report is the fallback, and what redraws
+	///     the countdown after a reload while the engine is not answering.
 	/// </remarks>
 	public string? TestingPeriod =>
-		_testEndsAt is { } ends && ends > Now ? _testingPeriodId
+		_engineKnows ? RunningTest()?.PeriodId
 		: Snapshot is { } snapshot ? RoomFacts.TestingPeriod(snapshot, Now)
 		: null;
 
 	/// <summary>How many seconds a running test has left.</summary>
 	public int TestSecondsLeft =>
-		_testEndsAt is { } ends && ends > Now ? Math.Max(0, (int)Math.Ceiling((ends - Now).TotalSeconds))
+		_engineKnows ? RunningTest() is { } test ? Math.Max(0, (int)Math.Ceiling((test.EndsAt - Now).TotalSeconds)) : 0
 		: Snapshot is { } snapshot ? RoomFacts.TestSecondsLeft(snapshot, Now)
 		: 0;
 
 	/// <summary>The light a running test is showing alone, read the same way as <see cref="TestingPeriod"/>.</summary>
 	public string? TestingLight =>
-		_testEndsAt is { } ends && ends > Now ? _testingLightId
+		_engineKnows ? RunningTest()?.LightId
 		: Snapshot is { } snapshot && RoomFacts.TestingPeriod(snapshot, Now) is not null ? snapshot.TestingLightId
 		: null;
+
+	private LevelTestNow? RunningTest() => _engineTest is { } test && test.EndsAt > Now ? test : null;
 
 	/// <summary>Asks the engine to put one period on this room's real lights for a few seconds.</summary>
 	/// <remarks>A press while one is already running moves the test to the new row: the engine drops the pending
 	/// return and schedules one return from the newest press, so the room is never owed two.</remarks>
 	public void TestPeriod(string periodId)
 	{
+		SaveBeforeTest();
 		TestRefusal = _engine.TestPeriod(Area?.AreaId, periodId);
-
-		if (TestRefusal is { Length: > 0 })
-		{
-			_testingPeriodId = null;
-			_testEndsAt = null;
-
-			return;
-		}
-
-		Now = DateTimeOffset.Now;
-		_testingPeriodId = periodId;
-		_testingLightId = null;
-		_testEndsAt = Now.AddSeconds(AreaController.LevelTestSeconds);
+		ReadLevelTest();
 	}
 
 	/// <summary>Asks the engine to put one period on one light of this room for a few seconds.</summary>
 	public void TestLight(LightTest test)
 	{
+		SaveBeforeTest();
 		TestRefusal = _engine.TestLight(Area?.AreaId, test.EntityId, test.PeriodId);
+		ReadLevelTest();
+	}
 
-		if (TestRefusal is { Length: > 0 })
-		{
-			_testingPeriodId = null;
-			_testingLightId = null;
-			_testEndsAt = null;
-
+	/// <summary>Ends a running test of <paramref name="periodId"/>, because a level of that period was just edited.</summary>
+	/// <remarks>The lights go back at once and the test is not started again: the new value is tested by pressing
+	/// Test for it.</remarks>
+	public void EndTestOf(string periodId)
+	{
+		if (!string.Equals(TestingPeriod, periodId, StringComparison.OrdinalIgnoreCase))
 			return;
-		}
 
+		_engine.EndLevelTest(Area?.AreaId);
+		ReadLevelTest();
+	}
+
+	// An edit still waiting on the save timer would otherwise be tested at its old value.
+	private void SaveBeforeTest()
+	{
+		if (Dirty)
+			Commit();
+	}
+
+	private void ReadLevelTest()
+	{
 		Now = DateTimeOffset.Now;
-		_testingPeriodId = test.PeriodId;
-		_testingLightId = test.EntityId;
-		_testEndsAt = Now.AddSeconds(AreaController.LevelTestSeconds);
+		_engineKnows = _engine.TryReadLevelTest(Area?.AreaId, out _engineTest);
 	}
 
 	/// <summary>The periods this room follows the daylight curve for, in schedule order.</summary>
@@ -772,7 +817,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	/// <summary>Sensors outside this room that light it ahead of time.</summary>
 	public IReadOnlyList<string> LeadInSensors => Area?.LeadInSensors ?? [];
 
-	/// <summary>Everything that could be one.</summary>
+	/// <summary>Every binary sensor whose device class counts as motion.</summary>
 	public IReadOnlyList<EntityOption> LeadInOptions { get; private set; } = [];
 
 	/// <summary>Sets the lead-in sensors.</summary>
@@ -1195,9 +1240,11 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		Areas = _catalog.Areas(Document.Global);
 		_sunEntities = _catalog.EntitiesInDomains("sun");
 		BlockerOptions = _catalog.EntitiesInDomains("binary_sensor", "input_boolean", "switch", "media_player");
-		LeadInOptions = _catalog.EntitiesInDomains("binary_sensor");
 		SceneOptions = _catalog.EntitiesInDomains("scene");
 		_motionSensors = _catalog.EntitiesWithDeviceClass("binary_sensor", [.. Document.Global.EffectiveMotionDeviceClasses]);
+
+		// Offered only; a saved sensor outside these classes still draws as a chip from the document.
+		LeadInOptions = _motionSensors;
 		LuxSensorOptions = _catalog.EntitiesWithDeviceClass("sensor", [Document.Global.IlluminanceDeviceClass]);
 		_lights = _catalog.EntitiesInDomains("light");
 		HomeAssistantIsAnswering = _catalog.IsHomeAssistantResponding(Document.Global);
@@ -1305,7 +1352,8 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		// Asked of the engine on the ticker, not composed here, so a room that falls under somebody's hand while
 		// the page sits open has its Test buttons closed within the second.
 		TestRefusal = _engine.LevelTestRefusal(room.AreaId);
-		LightOnRefusal = _engine.LightNowRefusal(room.AreaId);
+		RefreshLightRefusals(room.AreaId);
+		_engineKnows = _engine.TryReadLevelTest(room.AreaId, out _engineTest);
 
 		return Still != before;
 	}

@@ -139,7 +139,7 @@ public sealed partial class AreaControllerTests
 		Advance(t, TestRun);
 
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 70, ColorTempKelvin: 2700 },
-			"resolved at the instant the test ends, so movement or a boundary in those ten seconds is honoured");
+			"resolved at the instant the test ends, so movement or a boundary during the test is honoured");
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
 
@@ -155,7 +155,7 @@ public sealed partial class AreaControllerTests
 		Advance(t, TestRun);
 
 		// 9 min 59 s after the movement that armed the ten-minute timeout.
-		Advance(t, TimeSpan.FromSeconds(289));
+		Advance(t, TimeSpan.FromSeconds(599) - TimeSpan.FromMinutes(5) - TestRun);
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 
 		Advance(t, TimeSpan.FromSeconds(1));
@@ -169,19 +169,19 @@ public sealed partial class AreaControllerTests
 		Fixture t = Build();
 
 		t.Area.TestPeriod("day");
-		Advance(t, TimeSpan.FromSeconds(6));
+		Advance(t, TimeSpan.FromSeconds(3));
 
 		t.Area.TestPeriod("night");
 		Assert.IsTrue(t.Actuator.Last is { BrightnessPct: 15, ColorTempKelvin: 2200 });
 		t.Actuator.Clear();
 
-		// The first press's ten seconds are up, and nothing happens: its return went with it.
-		Advance(t, TimeSpan.FromSeconds(4));
+		// The first press's time is up, and nothing happens: its return went with it.
+		Advance(t, TestRun - TimeSpan.FromSeconds(3));
 		Assert.AreEqual(0, t.Actuator.Applied.Count);
 		Assert.IsTrue(t.Area.IsTestingLevels);
 
-		Advance(t, TimeSpan.FromSeconds(6));
-		Assert.AreEqual(1, t.Actuator.Applied.Count, "one return, ten seconds from the newest press");
+		Advance(t, TimeSpan.FromSeconds(3));
+		Assert.AreEqual(1, t.Actuator.Applied.Count, "one return, the test's length from the newest press");
 		Assert.IsTrue(t.Actuator.Last is { On: false });
 	}
 

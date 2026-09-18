@@ -46,7 +46,7 @@ public sealed partial class AreaControllerTests
 
 		Assert.IsFalse(t.Area.IsTestingLevels);
 		Assert.AreEqual(0, t.Actuator.Applied.Count,
-			"the return would sweep the room dark, over a standing away scene, ten seconds after the house left");
+			"the return would sweep the room dark, over a standing away scene, seconds after the house left");
 	}
 
 	[TestMethod]

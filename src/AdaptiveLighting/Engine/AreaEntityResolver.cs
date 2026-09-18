@@ -636,8 +636,15 @@ public sealed class AreaEntityResolver
 		return devices;
 	}
 
+	/// <summary>Whether a state could be a battery reading on some device, checked before any registry lookup.</summary>
+	internal static bool CouldBeBattery(EntityState? state) =>
+		state?.EntityId is { } entityId
+		&& (entityId.HasDomain(BinarySensorDomain) || entityId.HasDomain(SensorDomain))
+		&& string.Equals(state.AttrString(DeviceClassAttribute), BatteryDeviceClass, StringComparison.OrdinalIgnoreCase);
+
+	/// <summary>The battery entities on each sensor's own device, read from the registry as it stands now.</summary>
 	// A sensor with no device, a group or a template, has no battery and is left out.
-	private List<MotionBattery> BatteriesOf(IReadOnlyList<string> sensors)
+	internal List<MotionBattery> BatteriesOf(IReadOnlyList<string> sensors)
 	{
 		List<MotionBattery> batteries = [];
 
