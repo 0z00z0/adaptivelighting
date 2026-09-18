@@ -281,7 +281,7 @@ public sealed class ConfigValidatorTests
 		AdaptiveLightingConfig config = Minimal();
 		config.Global.IncludeLabel = "adpative";   // the typo this warning exists for
 
-		ValidationResult result = ConfigValidator.Validate(config, labelsInUse: ["adaptive", "adaptive-exclude"]);
+		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { LabelsInUse = ["adaptive", "adaptive-exclude"] });
 
 		Assert.IsTrue(result.IsValid, "an unmatched include label must never stop the document being saved");
 		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("adpative", StringComparison.Ordinal)),
@@ -294,7 +294,7 @@ public sealed class ConfigValidatorTests
 		AdaptiveLightingConfig config = Minimal();
 		config.Global.IncludeLabel = "adaptive";
 
-		ValidationResult result = ConfigValidator.Validate(config, labelsInUse: ["adaptive"]);
+		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { LabelsInUse = ["adaptive"] });
 
 		Assert.AreEqual(0, result.Warnings.Count);
 	}
@@ -302,7 +302,7 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void No_Include_Label_Is_Never_Warned_About()
 	{
-		ValidationResult result = ConfigValidator.Validate(Minimal(), labelsInUse: []);
+		ValidationResult result = ConfigValidator.Validate(Minimal(), new ValidationContext { LabelsInUse = [] });
 
 		Assert.AreEqual(0, result.Warnings.Count,
 			"saying nothing is the default, not an omission — a house with no labels must hear nothing about them");
@@ -352,7 +352,7 @@ public sealed class ConfigValidatorTests
 		AdaptiveLightingConfig config = Minimal();
 		config.Areas = [new() { Name = "Stue", AreaId = "stue", SceneOnMotion = "light.stue_tak" }];
 
-		ValidationResult result = ConfigValidator.Validate(config, knownEntityIds: ["light.stue_tak"]);
+		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["light.stue_tak"] });
 
 		Assert.IsTrue(result.IsValid);
 		Assert.AreEqual(0, result.AreaErrors.Count);
@@ -366,7 +366,7 @@ public sealed class ConfigValidatorTests
 		AdaptiveLightingConfig config = Minimal();
 		config.Areas = [new() { Name = "Stue", AreaId = "stue", SceneWhenEmpty = "scene.gone" }];
 
-		ValidationResult result = ConfigValidator.Validate(config, knownEntityIds: ["scene.still_here"]);
+		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["scene.still_here"] });
 
 		Assert.IsTrue(result.IsValid);
 		Assert.AreEqual(0, result.AreaErrors.Count, "a renamed scene costs the atmosphere, not the room");
@@ -389,7 +389,7 @@ public sealed class ConfigValidatorTests
 			}
 		];
 
-		ValidationResult result = ConfigValidator.Validate(config, knownEntityIds: ["scene.stue_kveld", "scene.stue_natt"]);
+		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["scene.stue_kveld", "scene.stue_natt"] });
 
 		Assert.IsTrue(result.IsValid);
 		Assert.AreEqual(0, result.Warnings.Count);
@@ -614,7 +614,7 @@ public sealed class ConfigValidatorTests
 		var config = Minimal();
 		config.Areas = [new() { Name = "Z", AreaId = "nope" }];
 
-		var result = ConfigValidator.Validate(config, knownEntityIds: [], knownAreaIds: ["stue"]);
+		var result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = [], KnownAreaIds = ["stue"] });
 
 		Assert.IsTrue(result.IsValid, "one renamed area must not take the whole house's lighting down");
 		Assert.AreEqual(1, result.AreaErrors.Count);
@@ -627,7 +627,7 @@ public sealed class ConfigValidatorTests
 		var config = Minimal();
 		config.Areas = [new() { Name = "Z", AreaId = "stue", Lights = ["light.ghost"] }];
 
-		var result = ConfigValidator.Validate(config, knownEntityIds: ["light.real"], knownAreaIds: ["stue"]);
+		var result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["light.real"], KnownAreaIds = ["stue"] });
 
 		Assert.IsTrue(result.IsValid);
 		Assert.AreEqual(1, result.AreaErrors.Count);
@@ -643,7 +643,7 @@ public sealed class ConfigValidatorTests
 			new() { Name = "Y", AreaId = "stue", KeepLitWhenOn = ["input_boolean.ghost"] }
 		];
 
-		var result = ConfigValidator.Validate(config, knownEntityIds: ["input_boolean.real"], knownAreaIds: ["stue"]);
+		var result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["input_boolean.real"], KnownAreaIds = ["stue"] });
 
 		Assert.IsTrue(result.IsValid, "neither list can take the house down");
 		Assert.AreEqual(2, result.AreaErrors.Count, "the room that holds its lights on is checked like the one that blocks them");
@@ -657,7 +657,7 @@ public sealed class ConfigValidatorTests
 		var config = Minimal();
 		config.Global.Persons = ["person.ghost"];
 
-		var result = ConfigValidator.Validate(config, knownEntityIds: ["input_boolean.real"], knownAreaIds: ["stue"]);
+		var result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["input_boolean.real"], KnownAreaIds = ["stue"] });
 
 		Assert.IsFalse(result.IsValid, "a watched person entity that does not exist is the house's problem, not one area's");
 	}
@@ -847,7 +847,7 @@ public sealed class ConfigValidatorTests
 		config.Periods.Add(new TimePeriodConfig { Name = "film", SetsModeId = "Film", Start = "20:00" });
 
 		// Requiring the option be tagged first would deadlock the save: tagging is itself a save.
-		Assert.IsTrue(ConfigValidator.Validate(config, liveSelectOptions: ["Film"]).IsValid,
+		Assert.IsTrue(ConfigValidator.Validate(config, new ValidationContext { LiveSelectOptions = ["Film"] }).IsValid,
 			"a SetsModeId naming a live select option is legitimate even before it is tagged a Kind");
 
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid, "unknown to both configured and live options → error");
@@ -890,12 +890,12 @@ public sealed class ConfigValidatorTests
 
 		var unknown = WithHouseMode();
 		unknown.Global.HouseMode!.OptionFor("Borte")!.Scene = "scene.ghost";
-		Assert.IsFalse(ConfigValidator.Validate(unknown, knownEntityIds: ["input_select.husmodus"]).IsValid,
+		Assert.IsFalse(ConfigValidator.Validate(unknown, new ValidationContext { KnownEntityIds = ["input_select.husmodus"] }).IsValid,
 			"a scene HA does not know is an error");
 
 		var known = WithHouseMode();
 		known.Global.HouseMode!.OptionFor("Borte")!.Scene = "scene.borte";
-		Assert.IsTrue(ConfigValidator.Validate(known, knownEntityIds: ["input_select.husmodus", "scene.borte"]).IsValid);
+		Assert.IsTrue(ConfigValidator.Validate(known, new ValidationContext { KnownEntityIds = ["input_select.husmodus", "scene.borte"] }).IsValid);
 	}
 
 	[TestMethod]
@@ -999,7 +999,7 @@ public sealed class ConfigValidatorTests
 
 		var unknown = WithHouseMode();
 		unknown.Global.HouseMode!.OptionFor("Borte")!.ActivateWhileOn = ["input_boolean.ghost"];
-		Assert.IsFalse(ConfigValidator.Validate(unknown, knownEntityIds: ["input_select.husmodus"]).IsValid,
+		Assert.IsFalse(ConfigValidator.Validate(unknown, new ValidationContext { KnownEntityIds = ["input_select.husmodus"] }).IsValid,
 			"an ActivateWhileOn entity HA does not know is an error");
 
 		var known = WithHouseMode();
@@ -1012,7 +1012,7 @@ public sealed class ConfigValidatorTests
 	{
 		var unknown = WithHouseMode();
 		unknown.Global.HouseMode!.OptionFor("Borte")!.ResetPresenceSensors = ["binary_sensor.ghost"];
-		Assert.IsFalse(ConfigValidator.Validate(unknown, knownEntityIds: ["input_select.husmodus"]).IsValid,
+		Assert.IsFalse(ConfigValidator.Validate(unknown, new ValidationContext { KnownEntityIds = ["input_select.husmodus"] }).IsValid,
 			"a reset presence sensor HA does not know is an error");
 
 		var negativeGrace = WithHouseMode();
@@ -1050,15 +1050,18 @@ public sealed class ConfigValidatorTests
 		// The engine fails open on a missing kill switch, so an unknown one never stops the document.
 		var explicitUnknown = Minimal();
 		explicitUnknown.Global.KillSwitchEntity = "input_boolean.ghost";
-		var explicitResult = ConfigValidator.Validate(explicitUnknown, knownEntityIds: ["input_boolean.real"]);
+		var explicitResult = ConfigValidator.Validate(explicitUnknown, new ValidationContext { KnownEntityIds = ["input_boolean.real"] });
 		Assert.IsTrue(explicitResult.IsValid, "an explicit kill switch HA does not know still saves — the engine fails open");
 		Assert.IsTrue(explicitResult.Warnings.Any(w => w.Contains("KillSwitchEntity", StringComparison.Ordinal)),
 			"but it warns, since it is a likely mistake");
 
 		var defaultedUnknown = Minimal();
 		defaultedUnknown.Global.KillSwitchEntity = null;
-		defaultedUnknown.Global.DefaultKillSwitchEntity = "input_boolean.netdaemon_builtin";
-		var result = ConfigValidator.Validate(defaultedUnknown, knownEntityIds: ["input_boolean.real"]);
+		var result = ConfigValidator.Validate(defaultedUnknown, new ValidationContext
+		{
+			KnownEntityIds = ["input_boolean.real"],
+			DefaultKillSwitchEntity = "input_boolean.netdaemon_builtin"
+		});
 		Assert.IsTrue(result.IsValid, "a defaulted built-in switch HA has not created yet is only a warning");
 		Assert.IsTrue(result.Warnings.Any(w => w.Contains("master switch", StringComparison.Ordinal)));
 	}
@@ -1083,7 +1086,7 @@ public sealed class ConfigValidatorTests
 		var config = WithHouseMode();
 
 		// HA offers Natt (unclassified) and no longer offers Sover (configured but gone).
-		var result = ConfigValidator.Validate(config, liveSelectOptions: ["Normal", "Borte", "Natt"]);
+		var result = ConfigValidator.Validate(config, new ValidationContext { LiveSelectOptions = ["Normal", "Borte", "Natt"] });
 
 		Assert.IsTrue(result.IsValid, "live-option mismatches are warnings, never errors");
 		Assert.IsTrue(result.Warnings.Count >= 2, "one for the orphaned Sover, one for the unclassified Natt");
@@ -1299,8 +1302,7 @@ public sealed class ConfigValidatorTests
 	public void PeriodSelect_ValueTheLiveSelectNoLongerOffers_IsAWarning()
 	{
 		ValidationResult result = ConfigValidator.Validate(
-			WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]),
-			livePeriodSelectOptions: ["Dag", "Kveld"]);
+			WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]), new ValidationContext { LivePeriodSelectOptions = ["Dag", "Kveld"] });
 
 		Assert.IsTrue(result.IsValid, "the row is inert, not dangerous");
 		Assert.IsTrue(result.Warnings.Any(w => w.Contains("Natt", StringComparison.Ordinal)));
@@ -1312,8 +1314,7 @@ public sealed class ConfigValidatorTests
 	public void A_Dropped_Option_Reads_The_Same_On_Both_Helpers()
 	{
 		string periodWarning = ConfigValidator.Validate(
-				WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]),
-				livePeriodSelectOptions: ["Dag"])
+				WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]), new ValidationContext { LivePeriodSelectOptions = ["Dag"] })
 			.Warnings.Single(w => w.StartsWith("PeriodSelect option", StringComparison.Ordinal));
 
 		AdaptiveLightingConfig house = Minimal();
@@ -1328,7 +1329,7 @@ public sealed class ConfigValidatorTests
 			]
 		};
 
-		string modeWarning = ConfigValidator.Validate(house, liveSelectOptions: ["Hjemme"])
+		string modeWarning = ConfigValidator.Validate(house, new ValidationContext { LiveSelectOptions = ["Hjemme"] })
 			.Warnings.Single(w => w.StartsWith("HouseMode option", StringComparison.Ordinal));
 
 		Assert.IsTrue(periodWarning.Contains(HelperOrphan.NoLongerOffered("Natt"), StringComparison.Ordinal), periodWarning);
@@ -1349,9 +1350,7 @@ public sealed class ConfigValidatorTests
 	{
 		// Two separate live lists. Reusing one for both reports every row of each as renamed.
 		ValidationResult result = ConfigValidator.Validate(
-			WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]),
-			liveSelectOptions: ["Hjemme", "Borte"],
-			livePeriodSelectOptions: ["Dag", "Natt"]);
+			WithPeriodSelect(options: [("Dag", "day"), ("Natt", "night")]), new ValidationContext { LiveSelectOptions = ["Hjemme", "Borte"], LivePeriodSelectOptions = ["Dag", "Natt"] });
 
 		Assert.AreEqual(0, result.Warnings.Count(w => w.Contains("PeriodSelect", StringComparison.Ordinal)));
 	}
@@ -1379,8 +1378,7 @@ public sealed class ConfigValidatorTests
 	public void PeriodSelect_EntityHomeAssistantDoesNotKnow_IsAWarning()
 	{
 		ValidationResult result = ConfigValidator.Validate(
-			WithPeriodSelect(options: [("Dag", "day")]),
-			knownEntityIds: ["input_select.husmodus"]);
+			WithPeriodSelect(options: [("Dag", "day")]), new ValidationContext { KnownEntityIds = ["input_select.husmodus"] });
 
 		Assert.IsTrue(result.IsValid);
 		Assert.IsTrue(result.Warnings.Any(w => w.Contains("tid_pa_dagen", StringComparison.Ordinal)));
@@ -1389,7 +1387,7 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void PeriodSelect_Absent_FiresNoRuleAtAll()
 	{
-		ValidationResult result = ConfigValidator.Validate(Minimal(), livePeriodSelectOptions: ["Dag"]);
+		ValidationResult result = ConfigValidator.Validate(Minimal(), new ValidationContext { LivePeriodSelectOptions = ["Dag"] });
 
 		Assert.IsTrue(result.IsValid);
 		Assert.AreEqual(0, result.Warnings.Count, "every document today has no period select and must notice nothing");
@@ -1405,7 +1403,7 @@ public sealed class ConfigValidatorTests
 	{
 		foreach (KeyValuePair<string, string> retired in LightingConfigDocument.RetiredKeys)
 		{
-			AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			DocumentReadResult read = LightingConfigDocument.Deserialize(
 				$"""
 				{LightingConfigDocument.RootKey}:
 				  Defaults:
@@ -1416,9 +1414,9 @@ public sealed class ConfigValidatorTests
 				  Areas:
 				    - Name: Stue
 				      AreaId: stue
-				""").Config;
+				""");
 
-			ValidationResult result = ConfigValidator.Validate(config);
+			ValidationResult result = ConfigValidator.Validate(read.Config, new ValidationContext { RetiredKeys = read.RetiredKeys });
 
 			Assert.IsTrue(
 				result.Warnings.Any(warning => warning.Contains(retired.Key, StringComparison.Ordinal)),
@@ -1430,13 +1428,12 @@ public sealed class ConfigValidatorTests
 	[TestMethod]
 	public void A_Retired_Key_Never_Refuses_The_Document()
 	{
-		AdaptiveLightingConfig config = Minimal();
-		config.RetiredKeysInDocument = ["'MaxBrightnessPct' is still set in the configuration, but it no longer does anything."];
+		IReadOnlyList<string> retired = ["'MaxBrightnessPct' is still set in the configuration, but it no longer does anything."];
 
-		ValidationResult result = ConfigValidator.Validate(config);
+		ValidationResult result = ConfigValidator.Validate(Minimal(), new ValidationContext { RetiredKeys = retired });
 
 		Assert.IsTrue(result.IsValid);
-		Assert.AreEqual(config.RetiredKeysInDocument.Single(), result.Warnings.Single(),
+		Assert.AreEqual(retired.Single(), result.Warnings.Single(),
 			"the sentence reaches the page as the reader wrote it, unwrapped and unreworded");
 	}
 

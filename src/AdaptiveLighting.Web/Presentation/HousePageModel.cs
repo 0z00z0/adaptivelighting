@@ -1360,7 +1360,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	/// <summary>Whether the app's own switch is in use, which is what hides the polarity dropdown.</summary>
 	public bool UsesBuiltInKillSwitch => string.IsNullOrWhiteSpace(_config.Global.KillSwitchEntity);
 
-	public string? EffectiveKillSwitchEntity => _config.Global.EffectiveKillSwitchEntity;
+	public string? EffectiveKillSwitchEntity => _config.Global.EffectiveKillSwitchEntity(_engine.DefaultKillSwitchEntity);
 
 	/// <summary>Which way round the master switch reads, as the segment the select stands on.</summary>
 	public string KillSwitchPolarityValue => _config.Global.KillSwitchActiveWhenOff ? "true" : "false";

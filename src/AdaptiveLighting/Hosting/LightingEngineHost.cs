@@ -91,6 +91,9 @@ public sealed class LightingEngineHost : IDisposable
 	private string? _defaultKillSwitchEntity;
 	private LightingOrchestrator? _orchestrator;
 
+	// The retired-key sentences of the file as last read. Swapped whole, so Validate outside the gate reads one list.
+	private IReadOnlyList<string> _retiredKeys = [];
+
 	/// <summary>Creates the host. Nothing runs until <see cref="Attach"/> and <see cref="Reload"/>.</summary>
 	/// <remarks>Without <c>lastSeen</c> the gates use Home Assistant's own timestamps, which reset on its restart.</remarks>
 	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen = null)
@@ -274,6 +277,7 @@ public sealed class LightingEngineHost : IDisposable
 			}
 
 			AdaptiveLightingConfig config = read.Config;
+			_retiredKeys = read.RetiredKeys;
 
 			// Both reasons take the same write. Translation runs first, so one rewrite covers a document that needs
 			// both, and its result is what decides whether a document in the current schema is written at all.
@@ -366,7 +370,9 @@ public sealed class LightingEngineHost : IDisposable
 
 			try
 			{
-				written = _store.Load();
+				DocumentReadResult reread = _store.Read();
+				written = reread.Config;
+				_retiredKeys = reread.RetiredKeys;
 			}
 			catch (LightingConfigException exception)
 			{
@@ -393,20 +399,19 @@ public sealed class LightingEngineHost : IDisposable
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
-		// Resolved in memory before validating, because it is what EffectiveKillSwitchEntity, and so the validator,
-		// sees when the document leaves KillSwitchEntity unset. Never written back.
-		config.Global.DefaultKillSwitchEntity = _defaultKillSwitchEntity;
-
 		HouseFacts facts = HouseFacts.Read(_ha, _registry, config);
 
-		return ConfigValidator.Validate(
-			config,
-			facts.EntityIds,
-			facts.AreaIds,
-			facts.HouseModeOptions,
-			facts.LabelsInUse,
-			facts.PeriodSelectOptions,
-			facts.LabelIds);
+		return ConfigValidator.Validate(config, new ValidationContext
+		{
+			KnownEntityIds = facts.EntityIds,
+			KnownAreaIds = facts.AreaIds,
+			LiveSelectOptions = facts.HouseModeOptions,
+			LabelsInUse = facts.LabelsInUse,
+			LivePeriodSelectOptions = facts.PeriodSelectOptions,
+			KnownLabelIds = facts.LabelIds,
+			DefaultKillSwitchEntity = _defaultKillSwitchEntity,
+			RetiredKeys = _retiredKeys
+		});
 	}
 
 	/// <summary>Every label the house has, or <c>null</c> while the registry cannot be asked.</summary>
@@ -548,7 +553,8 @@ public sealed class LightingEngineHost : IDisposable
 				_setupMemory,
 				// A save is not a boundary that went by while the engine was down; the note on disk cannot tell
 				// the two apart on its own.
-				afterSave: notice is EngineNoticeKind.SettingsSaved);
+				afterSave: notice is EngineNoticeKind.SettingsSaved,
+				defaultKillSwitchEntity: _defaultKillSwitchEntity);
 
 			orchestrator.Start();
 

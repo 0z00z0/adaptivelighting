@@ -69,12 +69,11 @@ public sealed class NetDaemonAppSwitchTests
 	public void EffectiveKillSwitch_PrefersExplicit_ElseDefault()
 	{
 		var global = new GlobalConfig();
-		Assert.IsNull(global.EffectiveKillSwitchEntity, "unset with no default resolves to nothing");
+		Assert.IsNull(global.EffectiveKillSwitchEntity(null), "unset with no default resolves to nothing");
 
-		global.DefaultKillSwitchEntity = "input_boolean.netdaemon_x";
-		Assert.AreEqual("input_boolean.netdaemon_x", global.EffectiveKillSwitchEntity, "the default fills in");
+		Assert.AreEqual("input_boolean.netdaemon_x", global.EffectiveKillSwitchEntity("input_boolean.netdaemon_x"), "the default fills in");
 
 		global.KillSwitchEntity = "switch.explicit";
-		Assert.AreEqual("switch.explicit", global.EffectiveKillSwitchEntity, "an explicit entity wins over the default");
+		Assert.AreEqual("switch.explicit", global.EffectiveKillSwitchEntity("input_boolean.netdaemon_x"), "an explicit entity wins over the default");
 	}
 }

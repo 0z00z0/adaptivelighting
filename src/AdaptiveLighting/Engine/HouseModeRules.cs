@@ -20,6 +20,7 @@ internal sealed class HouseModeRules : IDisposable
 
 	private readonly IHaContext _ha;
 	private readonly GlobalConfig _global;
+	private readonly string? _defaultKillSwitchEntity;
 	private readonly ILogger _logger;
 	private readonly IScheduler _scheduler;
 	private readonly IReadOnlyCollection<string> _areaMotionSensors;
@@ -71,6 +72,7 @@ internal sealed class HouseModeRules : IDisposable
 	internal HouseModeRules(
 		IHaContext ha,
 		GlobalConfig global,
+		string? defaultKillSwitchEntity,
 		ILogger logger,
 		IScheduler scheduler,
 		IReadOnlyCollection<string> areaMotionSensors,
@@ -81,6 +83,7 @@ internal sealed class HouseModeRules : IDisposable
 	{
 		_ha = ha;
 		_global = global;
+		_defaultKillSwitchEntity = defaultKillSwitchEntity;
 		_logger = logger;
 		_scheduler = scheduler;
 		_areaMotionSensors = areaMotionSensors;
@@ -94,19 +97,20 @@ internal sealed class HouseModeRules : IDisposable
 
 	/// <summary>Whether the engine is currently forbidden from commanding anything.</summary>
 	internal bool KillSwitchActive =>
-		_global.EffectiveKillSwitchEntity is { Length: > 0 } entityId && KillSwitchPauses(_global, _ha.GetState(entityId));
+		_global.EffectiveKillSwitchEntity(_defaultKillSwitchEntity) is { Length: > 0 } entityId
+		&& KillSwitchPauses(_global, _defaultKillSwitchEntity, _ha.GetState(entityId));
 
 	/// <summary>Whether the master switch reading <paramref name="state"/> pauses the engine.</summary>
 	// The one copy of the rule; pages call this too. Unavailable or unknown pauses nothing, whichever polarity.
 	// A defaulted switch is always an enabled flag (off pauses); KillSwitchActiveWhenOff governs an explicit one.
-	internal static bool KillSwitchPauses(GlobalConfig global, EntityState? state)
+	internal static bool KillSwitchPauses(GlobalConfig global, string? defaultKillSwitchEntity, EntityState? state)
 	{
 		ArgumentNullException.ThrowIfNull(global);
 
 		if (state?.State is null)
 			return false;
 
-		bool enabledFlag = global.KillSwitchIsDefaulted || global.KillSwitchActiveWhenOff;
+		bool enabledFlag = global.KillSwitchIsDefaulted(defaultKillSwitchEntity) || global.KillSwitchActiveWhenOff;
 		return enabledFlag ? state.IsOff() : state.IsOn();
 	}
 

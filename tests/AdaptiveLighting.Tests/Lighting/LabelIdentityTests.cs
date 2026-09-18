@@ -108,7 +108,7 @@ public sealed class LabelIdentityTests
 		config.Global.IncludeLabel = "adaptive";
 
 		ValidationResult result = ConfigValidator.Validate(
-			config, labelsInUse: ["adaptive"], knownLabelIds: ["other_label"]);
+			config, new ValidationContext { LabelsInUse = ["adaptive"], KnownLabelIds = ["other_label"] });
 
 		Assert.IsTrue(result.IsValid, "a label stored by name still works, so it can never stop a save");
 		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("adaptive", StringComparison.Ordinal)),

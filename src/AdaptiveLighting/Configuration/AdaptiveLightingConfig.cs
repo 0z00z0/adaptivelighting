@@ -25,15 +25,6 @@ public class AdaptiveLightingConfig
 	[YamlIgnore]
 	public int ManagedAreaCount => Areas.Count(area => area.Effective(Defaults).Enabled);
 
-	/// <summary>One sentence per retired setting the document still carries, as the reader found them.</summary>
-	/// <remarks>
-	///     Filled by <see cref="LightingConfigDocument.Deserialize"/> and in memory only: both binders drop an
-	///     unmatched key, so nothing downstream of the parse can see one. Empty on a config built in memory, and
-	///     empty again after a save, which writes the document without the key.
-	/// </remarks>
-	[YamlIgnore]
-	public List<string> RetiredKeysInDocument { get; set; } = [];
-
 	/// <summary>The document a fresh installation starts from.</summary>
 	/// <remarks>
 	///     Names no entities. The placeholder area id is one Home Assistant does not know, so a fresh install fails
@@ -75,23 +66,18 @@ public class GlobalConfig
 	/// <summary>When <c>true</c> the switch is an enabled flag, so <c>off</c> kills the engine.</summary>
 	public bool KillSwitchActiveWhenOff { get; set; } = true;
 
-	/// <summary>The app's built-in enable switch, set at start-up by the host. In memory only.</summary>
-	[YamlIgnore]
-	public string? DefaultKillSwitchEntity { get; set; }
-
-	/// <summary>The kill switch actually read. Every reader goes through this, not the two fields behind it.</summary>
-	[YamlIgnore]
-	public string? EffectiveKillSwitchEntity =>
-		KillSwitchEntity is { Length: > 0 } ? KillSwitchEntity : DefaultKillSwitchEntity;
+	/// <summary>The kill switch actually read: this document's own, else <paramref name="defaultKillSwitchEntity"/>.</summary>
+	// The default is the app's built-in switch, known only to the host, so it is passed in and never stored here.
+	public string? EffectiveKillSwitchEntity(string? defaultKillSwitchEntity) =>
+		KillSwitchEntity is { Length: > 0 } ? KillSwitchEntity : defaultKillSwitchEntity;
 
 	/// <summary>Whether the effective kill switch is the built-in default, not an operator's own entity.</summary>
 	/// <remarks>
 	///     While defaulted the switch is always an enabled flag, whatever <see cref="KillSwitchActiveWhenOff"/> says;
 	///     that flag governs an explicit entity only, and both mode readers consult this so their polarity agrees.
 	/// </remarks>
-	[YamlIgnore]
-	public bool KillSwitchIsDefaulted =>
-		string.IsNullOrWhiteSpace(KillSwitchEntity) && DefaultKillSwitchEntity is { Length: > 0 };
+	public bool KillSwitchIsDefaulted(string? defaultKillSwitchEntity) =>
+		string.IsNullOrWhiteSpace(KillSwitchEntity) && defaultKillSwitchEntity is { Length: > 0 };
 
 	/// <summary>The house-mode select and its option kinds. <c>null</c> when unconfigured.</summary>
 	public HouseModeConfig? HouseMode { get; set; }

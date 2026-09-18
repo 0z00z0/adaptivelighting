@@ -654,18 +654,20 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual("Sover", reloaded.Global.HouseMode.OptionValueFor(setsMode), "and still writes 'Sover' to the select");
 	}
 
-	// Both kill-switch views are in-memory only, so writing either back puts a resolved fallback in the file as if
-	// it had been chosen.
+	// The built-in switch is the host's, so validating against it must leave the document as it was: a resolved
+	// fallback written back would read as a switch somebody chose.
 	[TestMethod]
 	public void Serialize_DoesNotWriteTheDefaultedOrEffectiveKillSwitch()
 	{
-		var config = Populated();
-		config.Global.DefaultKillSwitchEntity = "input_boolean.netdaemon_builtin";
+		AdaptiveLightingConfig config = Populated();
+		config.Global.KillSwitchEntity = null;
 
-		var yaml = LightingConfigDocument.Serialize(config);
+		ConfigValidator.Validate(config, new ValidationContext { DefaultKillSwitchEntity = "input_boolean.netdaemon_builtin" });
+		string yaml = LightingConfigDocument.Serialize(config);
 
-		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(nameof(GlobalConfig.DefaultKillSwitchEntity)));
-		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(nameof(GlobalConfig.EffectiveKillSwitchEntity)));
+		Assert.IsNull(config.Global.KillSwitchEntity, "validating must not fill the document's own switch in");
+		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex("DefaultKillSwitchEntity"));
+		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex("EffectiveKillSwitchEntity"));
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex("netdaemon_builtin"));
 	}
 
@@ -839,7 +841,7 @@ public sealed class LightingConfigDocumentTests
 		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml);
 
 		Assert.AreEqual(70d, read.Config.Periods.Single().BrightnessPct, "the period's own level is what runs now");
-		StringAssert.Contains(read.Config.RetiredKeysInDocument.Single(), "UseDaylightCurve");
+		StringAssert.Contains(read.RetiredKeys.Single(), "UseDaylightCurve");
 	}
 
 	[TestMethod]
@@ -1312,7 +1314,7 @@ public sealed class LightingConfigDocumentTests
 		{
 			DocumentReadResult read = LightingConfigDocument.Deserialize(DocumentCarrying(retired.Key));
 
-			string sentence = read.Config.RetiredKeysInDocument.Single();
+			string sentence = read.RetiredKeys.Single();
 
 			StringAssert.Contains(sentence, retired.Key,
 				"the sentence must name the key, or nobody can find it in the file");
@@ -1332,7 +1334,7 @@ public sealed class LightingConfigDocumentTests
 
 		DocumentReadResult read = LightingConfigDocument.Deserialize(DocumentCarrying("MaxBrightnessPct"), logger);
 
-		Assert.AreEqual(read.Config.RetiredKeysInDocument.Single(), logger.Warnings.Single());
+		Assert.AreEqual(read.RetiredKeys.Single(), logger.Warnings.Single());
 	}
 
 	[TestMethod]
@@ -1356,7 +1358,7 @@ public sealed class LightingConfigDocumentTests
 			      MaxBrightnessPct: 30
 			""");
 
-		Assert.AreEqual(1, read.Config.RetiredKeysInDocument.Count,
+		Assert.AreEqual(1, read.RetiredKeys.Count,
 			"a setting retired on every period is one thing to fix, not four lines of the same sentence");
 	}
 
@@ -1365,7 +1367,7 @@ public sealed class LightingConfigDocumentTests
 	{
 		DocumentReadResult read = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(Populated()));
 
-		Assert.AreEqual(0, read.Config.RetiredKeysInDocument.Count);
+		Assert.AreEqual(0, read.RetiredKeys.Count);
 	}
 
 	/// <summary>What the sentence promises: saving once from the browser drops the key, and the sentence with it.</summary>
@@ -1377,20 +1379,20 @@ public sealed class LightingConfigDocumentTests
 		string saved = LightingConfigDocument.Serialize(read.Config);
 
 		Assert.IsFalse(saved.Contains("MaxBrightnessPct", StringComparison.Ordinal), "the save drops the key");
-		Assert.AreEqual(0, LightingConfigDocument.Deserialize(saved).Config.RetiredKeysInDocument.Count,
+		Assert.AreEqual(0, LightingConfigDocument.Deserialize(saved).RetiredKeys.Count,
 			"so the next read has nothing left to say about it");
 	}
 
-	/// <summary>Nothing carries the list into the file, on the precedent of the two kill-switch views beside it.</summary>
+	/// <summary>The sentences travel on the read result, so the model has nothing to carry into the file.</summary>
 	[TestMethod]
 	public void Serialize_DoesNotWriteTheRetiredKeysItFound()
 	{
 		AdaptiveLightingConfig config = Populated();
-		config.RetiredKeysInDocument = ["'MaxBrightnessPct' is still set in the configuration"];
 
 		string yaml = LightingConfigDocument.Serialize(config);
 
-		Assert.IsFalse(yaml.Contains(nameof(AdaptiveLightingConfig.RetiredKeysInDocument), StringComparison.Ordinal));
-		Assert.IsFalse(yaml.Contains("still set in the configuration", StringComparison.Ordinal));
+		Assert.IsFalse(yaml.Contains("RetiredKeys", StringComparison.Ordinal));
+		Assert.IsNull(typeof(AdaptiveLightingConfig).GetProperty("RetiredKeysInDocument"), "the list lives on DocumentReadResult");
+		Assert.IsNull(typeof(GlobalConfig).GetProperty("DefaultKillSwitchEntity"), "the built-in switch lives on the host");
 	}
 }

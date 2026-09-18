@@ -84,7 +84,8 @@ public sealed class ModeMonitorTests
 		ILastPeriodStore? lastPeriod = null,
 		MovableSun? sun = null,
 		bool watchSun = true,
-		bool afterSave = false)
+		bool afterSave = false,
+		string? defaultKillSwitch = null)
 	{
 		var scheduler = new TestScheduler();
 		scheduler.AdvanceTo((startAt ?? Evening).Ticks);
@@ -103,7 +104,7 @@ public sealed class ModeMonitorTests
 			ha, global, NullLogger.Instance, scheduler,
 			schedule, () => sun?.Times ?? SunTimes.Unknown, motion ?? [], Latch(schedule, global), lastPeriod ?? note,
 			PeriodSelectReader.For(ha, global, NullLogger.Instance), zone: TimeZoneInfo.Utc,
-			sunMoved: watchSun ? sun?.Moved : null, afterSave: afterSave);
+			sunMoved: watchSun ? sun?.Moved : null, afterSave: afterSave, defaultKillSwitchEntity: defaultKillSwitch);
 
 		return new Rig(ha, scheduler, monitor, note);
 	}
@@ -1528,10 +1529,9 @@ public sealed class ModeMonitorTests
 		var global = new GlobalConfig
 		{
 			KillSwitchEntity = null,
-			DefaultKillSwitchEntity = "input_boolean.enable",
 			HouseMode = Mode()
 		};
-		var rig = Build(global);
+		var rig = Build(global, defaultKillSwitch: "input_boolean.enable");
 
 		rig.Ha.SetState("input_boolean.enable", "off");
 		Assert.IsTrue(rig.Monitor.KillSwitchActive, "the defaulted enable switch off means the engine is muzzled");
@@ -1549,10 +1549,9 @@ public sealed class ModeMonitorTests
 		{
 			KillSwitchEntity = null,
 			KillSwitchActiveWhenOff = false,
-			DefaultKillSwitchEntity = "input_boolean.enable",
 			HouseMode = Mode()
 		};
-		var rig = Build(global);
+		var rig = Build(global, defaultKillSwitch: "input_boolean.enable");
 
 		rig.Ha.SetState("input_boolean.enable", "on");
 		Assert.IsFalse(rig.Monitor.KillSwitchActive, "the defaulted enable switch on means the engine is NOT killed");
