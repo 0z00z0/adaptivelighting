@@ -108,11 +108,36 @@ An item with no number is one this file records before the tracker has minted on
   covered the outgoing word until that package added a test for it. Worth checking whether other packages'
   red-first checks rest on the same assumption.
 
-- **The two label placeholders in the house settings still read the old hyphenated defaults.**
-  `Components/HouseFoldsSection.razor` lines 103 and 125 show `adaptive-exclude` and `adaptive-motion` as
-  the greyed-out example text, while the shipped defaults are now `adaptive_exclude` and `adaptive_motion`.
-  A hyphen can never equal a label id, so the example points at a value that cannot match. The file belongs
-  to package 5.1 of the refactor plan, which changes it next.
+- **`StateStoreRegistry` is not wired into `LightingEngineHost` or `LightingOrchestrator`.** Three of the four
+  engine-owned state files each open their own write path instead of sharing one registry on the engine's own
+  scheduler: `AreaSetupMemoryStore` and `LastPeriodStore` accept an optional registry but the host still builds
+  them without one, and `RoomHistoryStore` and `ActivityJournalStore` each construct a private
+  `StateStoreRegistry` instance of their own. On a house this means the notes and the cache get the write
+  hardening (flush before rename, backup read, future-dated refusal) but not the shared flusher's retry or one
+  start-up report naming every store. Wiring it in needs one registry built with the engine's scheduler, passed
+  to `AreaSetupMemoryStore`, `LastPeriodStore` and `LastSeenStore`, a start-up report call after the first load,
+  and disposal on shutdown.
+
+- **The activity journal holds its own registry instance rather than the shared one.** `ActivityJournalStore`
+  lives in the web layer, a separate assembly the registry's internal types cannot cross into, so it cannot take
+  the engine host's registry even once one exists. Only `IActivityJournalStore` crosses the assembly boundary.
+
+- **The level row on the room page is still reset by a settings save.** The save carry-over hands on history and
+  a manual hold; a running level test, pre-off, lead-in and the level row all start afresh, by design of package
+  5.6, but a person mid-test loses it on every save.
+
+- **A battery added to a device in Home Assistant is seen only after the next save or restart.** The battery
+  lookup runs once when a room's controller is built, on the shared state stream from then on; it does not
+  notice a battery entity that appears on a device later.
+
+- **The engine's own-user timestamp match is not measured against a real house.** `OwnUser` matches the learned
+  user id from the first `adaptive_lighting_area` event whose timestamp round-trips through the same
+  `System.Text.Json` serialisation the test uses; whether NetDaemon's own event serialisation and Home
+  Assistant's echo keep that timestamp comparable over the real path has not been checked on a house.
+
+- **A room removed from the document keeps its entry in the room-history note indefinitely.** Nothing prunes
+  it. Harmless — nothing reads a key that is not also in the current document — but grows the file slowly on a
+  house that renames or deletes rooms often.
 
 ## Parked
 

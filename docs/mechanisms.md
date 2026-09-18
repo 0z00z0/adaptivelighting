@@ -186,9 +186,28 @@ the step and not with the store.
 A document written without going through the step carries no minted ids, and every load of it mints fresh
 ones, so nothing that compares two loads can hold.
 
-The rebuild that follows a save is total, so **every settings save
-re-asserts the house mode and re-runs every area's startup path.** A mode being forced by an entity is
-therefore re-applied on every edit, so an away-kind force sweeps the house again on each save.
+The rebuild that follows a save is total, so **every settings save re-asserts the house mode and
+re-runs every area's startup path.** A mode being forced by an entity is therefore re-applied on
+every edit, so an away-kind force sweeps the house again on each save.
+
+What a room knows of its own recent past is handed over, not rebuilt. Before the old engine is
+disposed, each room gives its replacement (same area id, or same name) its last movement, last
+change and who made it, and any hold made at the switch. The hold's deadline counts from when the
+hold last started, under the saved hold length, so a save neither lengthens nor restarts it; one
+already passed ends at once. A carried hold is dropped when the opening house state leaves the room
+anywhere but its resting state, or when the lights no longer match it. Countdowns, pre-off, lead-in,
+a running level test and the level row start afresh. Nothing is carried across a start or a reload:
+after downtime nobody knows what happened at the switch.
+
+### The validator is one class per section, fed by one context
+
+Validator rules are one class per section under `Configuration/Validation/`: global settings, periods, house
+mode, period select and areas. The validator receives everything outside the document in one
+`ValidationContext` — known entity, area and label ids, the labels in use, the live options of both selects,
+the built-in kill switch and the retired-key sentences — rather than as separate optional collections.
+Validation does not write into the document: the built-in kill switch is known only to the host, and it
+reaches the validator through the context, the engine through a constructor argument, and the pages through
+the host. Retired-key sentences travel on `DocumentReadResult.RetiredKeys`, not on the model.
 
 ### A retired key parses but no longer behaves
 
@@ -810,8 +829,8 @@ ticking the curve box on a light do nothing at all.
 
 The expectation on the entry is load-bearing and is the trap this codebase has been bitten by before. The room
 subscribes to its entries and not to the leaves, and a group entity re-publishes a member's change under the
-group's own id. Without an expectation there the echo falls through to the context heuristic, and with no
-`NetDaemonUserId` set it classifies as a person at a switch — the room drops into `OverriddenOn` the moment it
+group's own id. Without an expectation there the echo falls through to the context heuristic, and
+until the engine has learned its own user it classifies as a person at a switch — the room drops into `OverriddenOn` the moment it
 lights itself. `OverrideDetector` matches polarity only, so the room's command is the right thing to declare
 on the entry: the group is on when its lights are.
 
@@ -927,6 +946,15 @@ restart on the wrong option. A remembered "already asked" latch would make both 
   `unavailable` with a context carrying neither user nor parent, which is exactly `PhysicalDevice`. Without
   that guard a Zigbee hiccup pins the area in `SuppressedOff` and the reconnect pins it in `OverriddenOn`.
 
+### The engine's own user
+
+Every snapshot goes out as an `adaptive_lighting_area` event on the same token as the service calls, so Home
+Assistant stamps both with one user. `OwnUser` remembers the timestamps of the last 64 snapshots sent and
+takes the user id from the first echo matching one of them; an event of that type from anything else is
+ignored. The id is learned again at every engine build, seconds after start. Until then only the recent-command
+check recognises the engine's echoes. Under the add-on the user is Supervisor, shared by every add-on, so
+another add-on's light change reads as the engine's own. `NetDaemonUserId` is a retired key.
+
 ### Whether an automation's change is manual is a room's answer
 
 `GlobalConfig.TreatAutomationsAsManual` is the house's answer and `AreaConfig.TreatAutomationsAsManual` a
@@ -1025,6 +1053,18 @@ it can see, and the four bulbs stay lit. Nothing about that is visible from the 
 - The activity log files `LightAvailability` under Background: it decided nothing, and a flapping radio would
   otherwise fill the default view.
 - A group entity that is itself unavailable is not counted: its members are.
+
+### Motion sensor batteries
+
+For each motion sensor a room uses, the resolver finds the battery entities on the sensor's own device through
+the registry: a `binary_sensor` with device class `battery` is the device's low flag, a `sensor` with that class
+is its level. Where the flag exists it decides, so the device says what low means; otherwise a level of 20 % or
+lower is low. Unavailable or unknown reads as fine. A sensor with no device, such as a group or a template, has
+no battery and no warning. The room follows those entities on the shared state stream, so the warning costs no
+requests, and publishes with reason `SensorBattery` when the set or a low sensor's level changes. The snapshot
+carries the low sensors in `LowBatteries`, sent as `motion_sensors_low_battery`; the dashboard timeline, the
+house page's room row and the room page show it. The lookup runs when rooms are built, so a battery entity
+added later is seen at the next save or restart.
 
 ### What ends a manual hold
 
@@ -1297,12 +1337,56 @@ the old one standing until Home Assistant restarts.
 
 ### The two notes beside the document share one write
 
-The last-period note and the setup-fault note are written through one helper, `Persistence/JsonNoteFile`. A
-write goes to a temporary file with a random name in the same directory and is moved into place with
-`File.Replace`, which keeps the previous note as `.bak` in one call. A fixed temporary name would let two writers
-truncate each other, and copying to `.bak` first would leave a moment where the backup is the only copy. A
-failed write deletes its temporary file and reports the failure; the store logs its own warning and answers
-"unknown".
+The last-period note and the setup-fault note are written through one helper, `Persistence/JsonNoteFile`, itself
+built on `Persistence/AtomicJsonFile`. A write goes to a temporary file with a random name in the same
+directory, is flushed to disk, and is moved into place with `File.Replace`, which keeps the previous note as
+`.bak` in one call. A fixed temporary name would let two writers truncate each other, and copying to `.bak`
+first would leave a moment where the backup is the only copy. A failed write deletes its temporary file and
+reports the failure; the store logs its own warning and answers "unknown".
+
+### State store registry
+
+Every engine-owned state file is declared once in `StateStoreRegistry`, with its name, version, write policy
+and a restore validator. The configuration document is not in the registry and keeps its own single write
+path. Every file is written through one path: a temporary file, flushed to disk, then renamed, with a `.bak`
+for the notes and none for the last-seen cache. A reader that cannot find or parse the main file reads the
+backup. This is needed because a kill between the two steps of a replace on Windows leaves only the backup,
+measured at 6 of 400 kills. A failed write stays dirty and is retried at the next flush; the transient Windows
+replace fault is about 0.5–1 % of writes. Each file kind has one writer lock. A note saved more than one minute
+ahead of the clock is discarded, and one minute is a chosen value. A file from a newer version is left alone.
+The notes live in `state/` beside the document, and are moved there at start from beside the document.
+
+`AreaSetupMemoryStore`, `LastPeriodStore` and `LastSeenStore` take an optional registry through their
+constructor, but the engine host does not yet build one and pass it in — each store still opens its own file
+directly through `JsonNoteFile`, without the registry's shared flusher or its start-up report. `RoomHistoryStore`
+and `ActivityJournalStore` (below) each open their own private `StateStoreRegistry` instance instead of sharing
+one with the host, for the reasons given under each. So today there is no one registry per house: three
+independent write paths, none sharing the flusher the type exists to provide. See the backlog for wiring this
+into `LightingEngineHost` and `LightingOrchestrator`.
+
+### Room history is coalesced, not written on every event
+
+Each room's `AreaHistory` (last movement, last change, who changed it — the same record the settings-save
+carry-over hands between rebuilt rooms in memory) is declared in `StateStoreRegistry` with
+`StateWritePolicy.Coalesced`. A publish marks the note dirty; the registry's own flusher writes it to disk at
+most once a minute, which is what keeps a burst of motion events at one write. A settings save and a shutdown
+both call `Flush()` directly, because neither can wait out the interval: a save is a rebuild a person is
+watching, and a shutdown has no next tick coming.
+
+A room with nothing in the note (no file yet, or a room the note has never seen) shows its motion sensor's own
+`last_changed` instead, read once at start and never written back — an approximation, not a fact the engine
+remembers, and it comes with no "changed by": nobody touched a light, a sensor merely saw movement at some
+point before the engine was watching. `RoomHistoryStore` opens its own `StateStoreRegistry` rather than sharing
+the host's, because its periodic flush has to run from construction, before the host has a scheduler of its own.
+
+### The activity journal
+
+The activity record's rows are written through the state-store registry, coalesced: a burst of appends between
+two flushes costs one write, not one per row. `ActivityJournalStore` owns its own registry instance rather than
+sharing the engine host's, because the record lives in the web layer, a separate assembly the registry's
+internal types cannot cross into; only the public `IActivityJournalStore` interface crosses. `TrySave` prunes
+to the newest 500 rows by sequence before writing, so the file never grows without end regardless of what the
+caller passes in.
 
 ### Labels are matched by id
 
@@ -2239,6 +2323,8 @@ document settles on what both surfaces already show.
 | 200 | `AreaEntityResolverTests.LoopBudget` | states read on a healthy resolve measure 27, 46 and 28, so the budget is wide enough not to fire on ordinary work and narrow enough to stop an unbounded walk in flight |
 | 10000 | `FakeHaContext.DefaultStateReadBudget` | the suite's busiest legitimate fixture use, a virtual-time simulation polling state every tick, tops out at 2821 reads; the default is on for every fixture and over 3x that widest measured use |
 | unpadded month | version format `YYYY.M.patch` | `2026.08.0` was the first calendar-versioned release, tagged with a zero-padded month for string sort order; the published NuGet packages came back as `2026.8.0` regardless, because NuGet strips a leading zero from each numeric segment on publish. From the next release on, the tag and the packages agree by not padding in the first place |
+| 64 | remembered snapshot timestamps, `OwnUser` | enough to cover every room's opening snapshot in one start |
+| 20 % | low battery level | warns with time to replace the battery before most sensors stop reporting; used only where the device has no low-battery flag of its own |
 
 ---
 

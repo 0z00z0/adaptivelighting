@@ -23,6 +23,11 @@ against each other.
 - `AdaptiveLighting.Web.Presentation.DisplayRounding.Whole`, the rounding a number gets before it is shown. It sits with the interface that shows it.
 - `AdaptiveLighting.Web.Presentation.TransientMessage` and `IPageClock`, the `TickRegion` component, `AdaptiveLighting.Web.Presentation.DashboardPageModel`, `RoomPageModel.SaveConfirmation`, `HousePageModel.SaveConfirmation` and `Now`, and `DashboardPageModel.ModeConfirmation`.
 - `RegistryLabel` and `LabelMatch` in `AdaptiveLighting.Extensions`, `LabelTranslation` in `AdaptiveLighting.Configuration`, `ActivityRoomOption` in `AdaptiveLighting.Web.Presentation`, `IAreaRegistry.KnownLabels`, and `ActivityView.RoomOptions` and `InRoomByKey`. `ActivityView.Rooms` and `InRoom` are unchanged.
+- A warning when a room's motion sensor battery is low: an exclamation mark on the room in the dashboard timeline and on its row on the house page, and a notice on the room page naming the sensor and its level. The device's own low-battery flag decides where it has one; otherwise 20 % or lower counts as low.
+- `AreaSnapshot.LowBatteries`, the `SensorBattery` record, the `TransitionReason.SensorBattery` value and the event field `motion_sensors_low_battery`. `IAreaRegistry.EntitiesOnDevice` and `RegistryExtensions.EntityIdsOnDevice`; anyone implementing `IAreaRegistry` outside this repository must add the member.
+- `AreaCarryOver`, `AreaHistory` and `AreaHold` records; `AreaController.CarryOver` and `Inherit`; `LightingOrchestrator.CarryOver` and an optional `carried` constructor parameter. The host's attach and detach calls are unchanged.
+- `AdaptiveLighting.Engine.IRoomHistoryStore` and `RoomHistoryDocument`. A room's last movement, last change and who changed it now survive a restart, written to a note in the state folder at most once a minute, plus on a settings save and on shutdown.
+- `AdaptiveLighting.Engine.IActivityJournalStore`, `ActivityJournalRow`, `ActivityJournalDocument`, and `AdaptiveLighting.Hosting.ActivityJournalServiceCollectionExtensions.AddActivityJournal`. The activity record now survives a restart, reading back its newest 500 rows from a journal in the state folder beside the configuration document.
 
 ### Changed
 
@@ -47,6 +52,9 @@ against each other.
 - Confirmations on all three pages are one type carrying its text and its expiry, read where it is drawn. They stay up for the same time as before: 3.5 seconds on the room and house pages, 6 on the dashboard.
 - `IAreaRegistry.LabelsOf` and `LabelsOfArea` return `RegistryLabel` pairs instead of a flat list, and `ConfigValidator.Validate` takes a trailing optional list of known label ids.
 - `HousePageModel.SaveConfirmation` answers with the message rather than a string.
+- `ConfigValidator.Validate` takes a `ValidationContext` in place of six optional collections. `GlobalConfig.EffectiveKillSwitchEntity` and `KillSwitchIsDefaulted` become methods that take the built-in kill switch, and `ModeMonitor.KillSwitchPauses` takes it too. `ModeMonitor` and `LightingOrchestrator` gain an optional `defaultKillSwitchEntity` constructor argument. The host's attach and detach calls are unchanged.
+- The engine learns its own Home Assistant user from its own snapshot event coming back after start, and treats light changes made as that user as its own. No setting is needed.
+- State notes move into a `state/` folder beside the settings file. They are now flushed to disk before being renamed into place, and a note that is missing or damaged is read back from its backup. A note dated ahead of the clock is discarded, with a log line saying why.
 
 ### Removed
 
@@ -55,12 +63,16 @@ against each other.
 - `ConfigNormalizer.Whole`, replaced by `AdaptiveLighting.Web.Presentation.DisplayRounding.Whole`.
 - The house-mode enum. `ModeKind` is used everywhere it was, and `HouseState.Mode` gives way to `ActiveKind`.
 - `SaveNotice`, with its `Class` member and its four `room-save-` class constants, replaced by `TransientMessage`.
+- `AdaptiveLightingConfig.RetiredKeysInDocument` is removed. Use `DocumentReadResult.RetiredKeys`. `GlobalConfig.DefaultKillSwitchEntity` is removed.
+- The `NetDaemonUserId` setting is retired. A configuration that still holds it loads as before with one warning until the next save, which drops it. The field is gone from the house page.
 
 ### Fixed
 
 - The room page no longer says it is waiting for Home Assistant when Home Assistant returns light-level sensors or switches but no areas. The room page and the house page use the same test.
 - The last-seen cache files a motion sensor whose label is stored as an id. It matched the name only, so a label stored by id filed nothing.
 - The information line for a room left out of the engine names the label as Home Assistant shows it, rather than the id the settings file now holds.
+- The label example text in the house settings shows the current defaults, `adaptive_exclude` and `adaptive_motion`, instead of the retired hyphenated forms.
+- A settings save no longer resets each room's last movement, last change and who made it, and no longer drops a hold made at the switch. A room switched off by hand stays off after a save, and movement does not light it. A carried hold ends when it would have ended, counted from when it began under the saved hold length. (#112)
 
 ## [2026.9.14] - 2026-09-14
 
