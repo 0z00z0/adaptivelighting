@@ -320,7 +320,7 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 	/// <summary>What a lane says on hover: the room, its state, its lights, any that dropped out, and low batteries.</summary>
 	public string LaneTitle(BoardLane lane)
 	{
-		string word = StateGlyph.For(lane.Latest.State, lane.Latest.IsLeadIn ?? false).Word;
+		string word = StateGlyph.For(lane.Latest).Word;
 		string title = LightReadout.Line(lane.Latest, _catalog.FriendlyNameOrId) is { } lights
 			? $"{lane.Name} — {word} — {lights}"
 			: $"{lane.Name} — {word}";

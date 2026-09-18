@@ -449,6 +449,7 @@ public static class ActivityView
 
 		// An override running out hands the room back by commanding it.
 		TransitionReason.OverrideExpired => true,
+		TransitionReason.ManualLightOff => true,
 
 		TransitionReason.Startup
 			or TransitionReason.AdoptedAtStartup
@@ -760,6 +761,7 @@ public static class ActivityView
 			? "A guest scene has this room"
 			: "The guest scene let this room go",
 		TransitionReason.ManualLightOn => Lit("Switched on from the app", snapshot),
+		TransitionReason.ManualLightOff => "Switched off from the app — movement is ignored for now",
 		TransitionReason.LightAvailability => RoomFacts.NotResponding(snapshot)?.TrimEnd('.') ?? "Every light is responding again",
 		TransitionReason.SensorBattery => snapshot.LowBatteries is { Count: > 0 }
 			? "A motion sensor's battery is low"

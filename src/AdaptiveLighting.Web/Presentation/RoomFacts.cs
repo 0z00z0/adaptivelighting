@@ -169,6 +169,8 @@ public static class RoomFacts
 
 		return snapshot.State switch
 		{
+			AreaState.AutoActive when countdown is not null && StateGlyph.IsOffByLevel(snapshot) =>
+				$"Counts as empty {countdown} unless someone moves.",
 			AreaState.AutoActive when countdown is not null => $"Starts dimming {countdown} unless someone moves.",
 			AreaState.PreOff when countdown is not null && snapshot.Reason is TransitionReason.LeadIn =>
 				$"Lights out {countdown} unless someone comes in.",
@@ -358,8 +360,16 @@ public static class RoomFacts
 
 	private static string Levels(string prefix, AreaSnapshot snapshot, string suffix = "")
 	{
+		// Null with no scene standing is TargetCommand's off for a level that came to 0 %.
 		if (snapshot.BrightnessPct is not { } brightness)
-			return $"{prefix.TrimEnd()} — level unknown{suffix}.";
+		{
+			if (snapshot.SceneApplied is { Length: > 0 })
+				return $"{prefix.TrimEnd()} — level unknown{suffix}.";
+
+			return snapshot.PeriodName is { Length: > 0 } period
+				? $"Off — the {period} level comes to 0 %, so the engine keeps these lights off."
+				: "Off — this room's level comes to 0 %, so the engine keeps these lights off.";
+		}
 
 		return snapshot.ColorTempKelvin is { } kelvin
 			? $"{prefix} {brightness:0} %{suffix} — {Warmth(kelvin)}, {kelvin} K."

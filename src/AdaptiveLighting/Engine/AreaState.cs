@@ -82,7 +82,10 @@ public enum TransitionReason
 	AutomationIgnored,
 
 	/// <summary>A motion sensor's battery went low, changed level while low, or recovered. Nothing the area decides on moved.</summary>
-	SensorBattery
+	SensorBattery,
+
+	/// <summary>Somebody switched this room's lights off from the app, and movement is ignored as after a hand at the wall.</summary>
+	ManualLightOff
 }
 
 /// <summary>Which gate is refusing to switch an area's lights on for movement.</summary>
