@@ -186,7 +186,7 @@ declare on the entry: it is on when the leaves are on.
 Off commands are unchanged: one off to every entry. Scenes are unchanged. A light row at brightness 0
 produces an off command for that leaf inside an otherwise-on send, and its expectation is off.
 
-**Level test.** `TestPeriod` resolves the named period per leaf too, so the ten-second test shows the
+**Level test.** `TestPeriod` resolves the named period per leaf too, so the test shows the
 room as it will really be lit. The capture-and-return path already works per entry and is untouched.
 
 **Snapshot, activity log, detector, subscriptions.** Unchanged in stage 1. The room's standing

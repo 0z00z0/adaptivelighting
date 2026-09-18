@@ -29,6 +29,7 @@ against each other.
 - `AdaptiveLighting.Engine.IRoomHistoryStore` and `RoomHistoryDocument`. A room's last movement, last change and who changed it now survive a restart, written to a note in the state folder at most once a minute, plus on a settings save and on shutdown.
 - `AdaptiveLighting.Engine.IActivityJournalStore`, `ActivityJournalRow`, `ActivityJournalDocument`, and `AdaptiveLighting.Hosting.ActivityJournalServiceCollectionExtensions.AddActivityJournal`. The activity record now survives a restart, reading back its newest 500 rows from a journal in the state folder beside the configuration document.
 - The room page's light control switches off as well as on. It is a pill beside the Adaptive lighting switch that reads Light ON or Light OFF. Pressing it off does what the wall switch does: the lights go off and movement is ignored until the room has been quiet for the room's reset time. `AreaController.LightOff` and `LightOffRefusal`, `LightingEngineHost.LightOff` and `LightOffRefusal`, and the `TransitionReason.ManualLightOff` value. (#110)
+- `LevelTestNow`, `AreaController.CurrentLevelTest` and `EndTest`, `LightingEngineHost.EndLevelTest` and `TryReadLevelTest`, the `TransitionReason.LevelTestEnded` value, and a `LevelEdited` parameter on `LevelsEditor` and `LightLevelsEditor`. `AreaController` takes an optional battery lookup as its last constructor argument, and `AreaController.CarryOver` and `LightingOrchestrator.CarryOver` an optional argument saying whether a running level test goes with the carry-over.
 
 ### Changed
 
@@ -58,6 +59,7 @@ against each other.
 - State notes move into a `state/` folder beside the settings file. They are now flushed to disk before being renamed into place, and a note that is missing or damaged is read back from its backup. A note dated ahead of the clock is discarded, with a log line saying why.
 - The list for *Light dimly when these see movement* offers only motion, occupancy and presence sensors, the same device classes the room's own motion sensor list uses. A sensor already chosen stays in the room's settings and on the page, whatever its class. (#109)
 - The On and Off word in the Adaptive lighting switch is the same size as its label, with more room around both.
+- A level test on the room page lasts five seconds instead of ten.
 
 ### Removed
 
@@ -77,6 +79,10 @@ against each other.
 - The information line for a room left out of the engine names the label as Home Assistant shows it, rather than the id the settings file now holds.
 - The label example text in the house settings shows the current defaults, `adaptive_exclude` and `adaptive_motion`, instead of the retired hyphenated forms.
 - A settings save no longer resets each room's last movement, last change and who made it, and no longer drops a hold made at the switch. A room switched off by hand stays off after a save, and movement does not light it. A carried hold ends when it would have ended, counted from when it began under the saved hold length. (#112)
+- A settings save no longer ends a level test in progress. The test keeps its countdown and gives the lights back at its own deadline, and a room that was dark before the test goes back to dark.
+- Changing a level of the period under test on the room page ends the test at once: the lights go back and the countdown stops. Pressing Test again shows the new value.
+- The room page's Test button: a press right after a level edit saves the edit first, so the test shows the new level; the countdown follows the engine, so a test ended early by a hand at the switch or the house going away stops counting within a second; and the room's report stops naming a test once it has ended.
+- A battery added in Home Assistant to a motion sensor a room already uses is noticed when it next reports, instead of at the next save or restart.
 
 ## [2026.9.14] - 2026-09-14
 

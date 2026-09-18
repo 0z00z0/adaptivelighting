@@ -769,6 +769,7 @@ public static class ActivityView
 		TransitionReason.LevelTestStarted => snapshot.TestingPeriodId is { Length: > 0 } tested
 			? $"Testing the '{tested}' period on the real lights"
 			: "Testing a period on the real lights",
+		TransitionReason.LevelTestEnded => "The test ended and the lights went back",
 		_ => snapshot.Reason.ToString()
 	};
 

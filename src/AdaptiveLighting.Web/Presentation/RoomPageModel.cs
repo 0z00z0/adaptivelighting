@@ -91,11 +91,10 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	// Per-visit, never persisted: the note is advice about this house right now.
 	private bool _switchOnDismissed;
 
-	// The level test running on the real lights, from this visit's own click. The engine owns the return, so
-	// these only draw it, and only until the snapshot carries the same news (see TestingPeriod).
-	private string? _testingPeriodId;
-	private string? _testingLightId;
-	private DateTimeOffset? _testEndsAt;
+	// The level test as the engine last answered, read on the ticker and after every press. _engineKnows is false
+	// while the engine does not run this room, and the report decides instead.
+	private LevelTestNow? _engineTest;
+	private bool _engineKnows;
 
 	private readonly HashSet<string> _openedGroups = new(StringComparer.Ordinal);
 
@@ -624,67 +623,70 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 	/// <summary>The period whose test is still holding the lights, or <c>null</c> when none is.</summary>
 	/// <remarks>
-	///     Local state first, for the click that just armed it: the report has not had time to reach the cache
-	///     yet. A fresh model carries none, so it falls back to the last snapshot, which the engine publishes the
-	///     moment a test starts; that is what redraws the countdown after a reload or a navigate-back instead of
-	///     showing plain Test buttons while the engine's own return is still pending.
+	///     The engine's own answer where it runs this room, so a test ended early by a hand at the switch or the
+	///     house going away stops counting here within the second. The report is the fallback, and what redraws
+	///     the countdown after a reload while the engine is not answering.
 	/// </remarks>
 	public string? TestingPeriod =>
-		_testEndsAt is { } ends && ends > Now ? _testingPeriodId
+		_engineKnows ? RunningTest()?.PeriodId
 		: Snapshot is { } snapshot ? RoomFacts.TestingPeriod(snapshot, Now)
 		: null;
 
 	/// <summary>How many seconds a running test has left.</summary>
 	public int TestSecondsLeft =>
-		_testEndsAt is { } ends && ends > Now ? Math.Max(0, (int)Math.Ceiling((ends - Now).TotalSeconds))
+		_engineKnows ? RunningTest() is { } test ? Math.Max(0, (int)Math.Ceiling((test.EndsAt - Now).TotalSeconds)) : 0
 		: Snapshot is { } snapshot ? RoomFacts.TestSecondsLeft(snapshot, Now)
 		: 0;
 
 	/// <summary>The light a running test is showing alone, read the same way as <see cref="TestingPeriod"/>.</summary>
 	public string? TestingLight =>
-		_testEndsAt is { } ends && ends > Now ? _testingLightId
+		_engineKnows ? RunningTest()?.LightId
 		: Snapshot is { } snapshot && RoomFacts.TestingPeriod(snapshot, Now) is not null ? snapshot.TestingLightId
 		: null;
+
+	private LevelTestNow? RunningTest() => _engineTest is { } test && test.EndsAt > Now ? test : null;
 
 	/// <summary>Asks the engine to put one period on this room's real lights for a few seconds.</summary>
 	/// <remarks>A press while one is already running moves the test to the new row: the engine drops the pending
 	/// return and schedules one return from the newest press, so the room is never owed two.</remarks>
 	public void TestPeriod(string periodId)
 	{
+		SaveBeforeTest();
 		TestRefusal = _engine.TestPeriod(Area?.AreaId, periodId);
-
-		if (TestRefusal is { Length: > 0 })
-		{
-			_testingPeriodId = null;
-			_testEndsAt = null;
-
-			return;
-		}
-
-		Now = DateTimeOffset.Now;
-		_testingPeriodId = periodId;
-		_testingLightId = null;
-		_testEndsAt = Now.AddSeconds(AreaController.LevelTestSeconds);
+		ReadLevelTest();
 	}
 
 	/// <summary>Asks the engine to put one period on one light of this room for a few seconds.</summary>
 	public void TestLight(LightTest test)
 	{
+		SaveBeforeTest();
 		TestRefusal = _engine.TestLight(Area?.AreaId, test.EntityId, test.PeriodId);
+		ReadLevelTest();
+	}
 
-		if (TestRefusal is { Length: > 0 })
-		{
-			_testingPeriodId = null;
-			_testingLightId = null;
-			_testEndsAt = null;
-
+	/// <summary>Ends a running test of <paramref name="periodId"/>, because a level of that period was just edited.</summary>
+	/// <remarks>The lights go back at once and the test is not started again: the new value is tested by pressing
+	/// Test for it.</remarks>
+	public void EndTestOf(string periodId)
+	{
+		if (!string.Equals(TestingPeriod, periodId, StringComparison.OrdinalIgnoreCase))
 			return;
-		}
 
+		_engine.EndLevelTest(Area?.AreaId);
+		ReadLevelTest();
+	}
+
+	// An edit still waiting on the save timer would otherwise be tested at its old value.
+	private void SaveBeforeTest()
+	{
+		if (Dirty)
+			Commit();
+	}
+
+	private void ReadLevelTest()
+	{
 		Now = DateTimeOffset.Now;
-		_testingPeriodId = test.PeriodId;
-		_testingLightId = test.EntityId;
-		_testEndsAt = Now.AddSeconds(AreaController.LevelTestSeconds);
+		_engineKnows = _engine.TryReadLevelTest(Area?.AreaId, out _engineTest);
 	}
 
 	/// <summary>The periods this room follows the daylight curve for, in schedule order.</summary>
@@ -1351,6 +1353,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		// the page sits open has its Test buttons closed within the second.
 		TestRefusal = _engine.LevelTestRefusal(room.AreaId);
 		RefreshLightRefusals(room.AreaId);
+		_engineKnows = _engine.TryReadLevelTest(room.AreaId, out _engineTest);
 
 		return Still != before;
 	}
