@@ -279,9 +279,9 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 	/// <summary>What a floor is called.</summary>
 	public static string FloorTitle(AreaFloor? floor) => AreaView.FloorTitle(floor);
 
-	/// <summary>Whether a lane's room has lights that stopped answering.</summary>
-	public static bool HasDropout(AreaSnapshot snapshot) =>
-		RoomFacts.NotResponding(snapshot) is { Length: > 0 };
+	/// <summary>Whether a lane's room has lights that stopped answering or a motion sensor with a low battery.</summary>
+	public static bool HasWarning(AreaSnapshot snapshot) =>
+		RoomFacts.NotResponding(snapshot) is { Length: > 0 } || snapshot.LowBatteries is { Count: > 0 };
 
 	/// <summary>Whether a band segment is named on screen.</summary>
 	public static bool IsLabelled(BandSegment segment) => BoardView.IsLabelled(segment);
@@ -317,7 +317,7 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 		? "The one report so far is routine."
 		: $"All {_reachable} reports so far are routine.";
 
-	/// <summary>What a lane says on hover: the room, its state, its lights, and any that dropped out.</summary>
+	/// <summary>What a lane says on hover: the room, its state, its lights, any that dropped out, and low batteries.</summary>
 	public string LaneTitle(BoardLane lane)
 	{
 		string word = StateGlyph.For(lane.Latest.State, lane.Latest.IsLeadIn ?? false).Word;
@@ -325,7 +325,13 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 			? $"{lane.Name} — {word} — {lights}"
 			: $"{lane.Name} — {word}";
 
-		return RoomFacts.NotResponding(lane.Latest) is { Length: > 0 } dropped ? $"{title} — {dropped}" : title;
+		if (RoomFacts.NotResponding(lane.Latest) is { Length: > 0 } dropped)
+			title = $"{title} — {dropped}";
+
+		foreach (string battery in RoomFacts.LowBatteries(lane.Latest, _catalog.FriendlyNameOrId))
+			title = $"{title} — {battery}";
+
+		return title;
 	}
 
 	/// <summary>What the page says about rooms that are switched off, when it says anything.</summary>

@@ -99,6 +99,10 @@
 				{
 					<a class="room-open" href="@href">
 						<span class="area-title">@Model.RoomName(current)</span>
+						@if (Model.LowBatteryTitle(current) is { Length: > 0 } battery)
+						{
+							<span class="lane-dropout" title="@battery" aria-label="@battery">!</span>
+						}
 						<code class="area-slug">@current.AreaId</code>
 						<span class="area-summary-hint">@HousePageModel.RoomSummary(current)</span>
 						<span class="room-open-chevron" aria-hidden="true"></span>

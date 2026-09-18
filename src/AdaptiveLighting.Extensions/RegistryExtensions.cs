@@ -63,6 +63,12 @@ public static class RegistryExtensions
 	public static string? DeviceOf(this IHaRegistry registry, string entityId) =>
 		registry.GetEntityRegistration(entityId)?.Device?.Id is { Length: > 0 } device ? device : null;
 
+	/// <summary>The entity ids on device <paramref name="deviceId"/>, empty when it is unknown.</summary>
+	public static IReadOnlyList<string> EntityIdsOnDevice(this IHaRegistry registry, string deviceId) =>
+		registry.GetDevice(deviceId) is { } device
+			? [.. device.Entities.Select(entity => entity.EntityId).Distinct(StringComparer.Ordinal)]
+			: [];
+
 	/// <summary>The entity ids in <paramref name="areaId"/> that are in <paramref name="domain"/>.</summary>
 	public static IReadOnlyList<string> EntityIdsInAreaByDomain(this IHaRegistry registry, string areaId, string domain) =>
 		[.. registry.EntityIdsInArea(areaId).Where(id => id.HasDomain(domain))];

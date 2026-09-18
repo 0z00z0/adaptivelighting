@@ -22,5 +22,7 @@ public sealed class ThrowingAreaRegistry : IAreaRegistry
 
 	public string? DeviceOf(string entityId) => throw new InvalidOperationException("The registry is not connected.");
 
+	public IReadOnlyList<string> EntitiesOnDevice(string deviceId) => throw new InvalidOperationException("The registry is not connected.");
+
 	public AreaFloor? FloorOf(string areaId) => throw new InvalidOperationException("The registry is not connected.");
 }

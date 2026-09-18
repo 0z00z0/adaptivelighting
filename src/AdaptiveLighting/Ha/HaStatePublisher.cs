@@ -69,6 +69,11 @@ public sealed class HaStatePublisher : IStatePublisher
 				lights_moved = snapshot.LightsMoved,
 				lights_not_responding = snapshot.LightsNotResponding,
 				light_count = snapshot.LightCount,
+				motion_sensors_low_battery = snapshot.LowBatteries?.Select(battery => new
+				{
+					entity_id = battery.SensorId,
+					level_pct = battery.LevelPct
+				}).ToArray(),
 				changed_by = snapshot.ChangedBy,
 				changed_at = snapshot.ChangedAt,
 				levels_from_room = snapshot.LevelsFromRoom?.ToString(),

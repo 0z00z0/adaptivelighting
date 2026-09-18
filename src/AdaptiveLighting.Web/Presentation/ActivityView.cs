@@ -350,7 +350,7 @@ public static class ActivityView
 
 		// After the refusal: a light dropping out decided nothing, and a flapping radio would otherwise fill the
 		// default view. The room page carries the warning while it lasts.
-		if (snapshot.Reason is TransitionReason.LightAvailability)
+		if (snapshot.Reason is TransitionReason.LightAvailability or TransitionReason.SensorBattery)
 			return ActivityCategory.Background;
 
 		if (CommandedTheLights(snapshot))
@@ -458,6 +458,7 @@ public static class ActivityView
 			or TransitionReason.SuppressionLifted
 			or TransitionReason.EnablementChanged
 			or TransitionReason.LightAvailability
+			or TransitionReason.SensorBattery
 			or TransitionReason.AutomationIgnored => false,
 
 		// What is left commands where it left the room lit and aimed. That is what AutoActive means.
@@ -760,6 +761,9 @@ public static class ActivityView
 			: "The guest scene let this room go",
 		TransitionReason.ManualLightOn => Lit("Switched on from the app", snapshot),
 		TransitionReason.LightAvailability => RoomFacts.NotResponding(snapshot)?.TrimEnd('.') ?? "Every light is responding again",
+		TransitionReason.SensorBattery => snapshot.LowBatteries is { Count: > 0 }
+			? "A motion sensor's battery is low"
+			: "Every motion sensor's battery is fine again",
 		TransitionReason.LevelTestStarted => snapshot.TestingPeriodId is { Length: > 0 } tested
 			? $"Testing the '{tested}' period on the real lights"
 			: "Testing a period on the real lights",

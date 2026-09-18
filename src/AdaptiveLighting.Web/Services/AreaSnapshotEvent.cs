@@ -162,6 +162,10 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("light_count")]
 	public int? LightCount { get; init; }
 
+	/// <summary>The room's motion sensors whose battery is low.</summary>
+	[JsonPropertyName("motion_sensors_low_battery")]
+	public List<SensorBatteryEvent>? MotionSensorsLowBattery { get; init; }
+
 	/// <summary>Who made the newest change somebody else made to the room's lights, in the log's words, or <c>null</c>.</summary>
 	[JsonPropertyName("changed_by")]
 	public string? ChangedBy { get; init; }
@@ -220,8 +224,21 @@ public sealed record AreaSnapshotEvent
 			LightCount: LightCount,
 			ChangedBy: ChangedBy,
 			ChangedAt: ChangedAt,
-			IsLeadIn: IsLeadIn);
+			IsLeadIn: IsLeadIn,
+			LowBatteries: MotionSensorsLowBattery is { Count: > 0 } low
+				? [.. low.Where(battery => battery.EntityId is { Length: > 0 }).Select(battery => new SensorBattery(battery.EntityId!, battery.LevelPct))]
+				: null);
 	}
+}
+
+/// <summary>One entry of <see cref="AreaSnapshotEvent.MotionSensorsLowBattery"/>, in the publisher's own names.</summary>
+public sealed record SensorBatteryEvent
+{
+	[JsonPropertyName("entity_id")]
+	public string? EntityId { get; init; }
+
+	[JsonPropertyName("level_pct")]
+	public double? LevelPct { get; init; }
 }
 
 /// <summary>One entry of <see cref="AreaSnapshotEvent.LightLevels"/>, in the publisher's own names.</summary>
