@@ -14,7 +14,17 @@ internal sealed record RunningLevelTest(string PeriodId, DateTimeOffset EndsAt)
 
 	/// <summary>The levels to put back, or null when the engine resolves its own again.</summary>
 	public IReadOnlyList<(string Light, LightCommand Command)>? Levels { get; set; }
+
+	/// <summary>Whether any of the room's lights was on when the test began.</summary>
+	public bool LitBefore { get; init; }
 }
+
+/// <summary>A running test handed to the room rebuilt by a save, and whether the room was lit without it.</summary>
+// RoomLit stands in for reading the fixtures, which the test itself has lit.
+internal sealed record CarriedLevelTest(RunningLevelTest Test, bool RoomLit);
+
+/// <summary>The level test a room is running, as a page shows it.</summary>
+public sealed record LevelTestNow(string PeriodId, string? LightId, DateTimeOffset EndsAt);
 
 /// <summary>The one level test a room may be running, and the return it owes.</summary>
 // Called only from inside AreaController's lock and never takes one of its own, so the room's state and the
@@ -60,7 +70,7 @@ internal sealed class LevelTest : IDisposable
 	///     running keeps the lights it covers and the levels it captured, so a second press cannot read the first
 	///     test's own levels back as somebody's.
 	/// </remarks>
-	public bool Start(string periodId, string? lightId)
+	public bool Start(string periodId, string? lightId, bool litBefore)
 	{
 		bool fresh = _running is null;
 
@@ -69,12 +79,25 @@ internal sealed class LevelTest : IDisposable
 			: new RunningLevelTest(periodId, Deadline())
 			{
 				LightId = lightId,
-				Lights = lightId is null ? null : new HashSet<string>(StringComparer.OrdinalIgnoreCase) { lightId }
+				Lights = lightId is null ? null : new HashSet<string>(StringComparer.OrdinalIgnoreCase) { lightId },
+				LitBefore = litBefore
 			};
 
 		_return.Disposable = _scheduler.Schedule(_length, _onElapsed);
 		return fresh;
 	}
+
+	/// <summary>Takes up a test another room started, keeping its deadline. One already past returns at once.</summary>
+	public void Resume(RunningLevelTest running)
+	{
+		_running = running ?? throw new ArgumentNullException(nameof(running));
+
+		TimeSpan left = running.EndsAt - _scheduler.Now;
+		_return.Disposable = _scheduler.Schedule(left > TimeSpan.Zero ? left : TimeSpan.Zero, _onElapsed);
+	}
+
+	/// <summary>The running test, left running.</summary>
+	public RunningLevelTest? Peek() => _running;
 
 	/// <summary>Keeps the levels the return puts back, or <c>null</c> to have the engine resolve its own.</summary>
 	public void Capture(IReadOnlyList<(string Light, LightCommand Command)>? levels)

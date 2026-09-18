@@ -267,7 +267,7 @@ public sealed class RoomFactsTests
 	//
 	// The room page's own local click state is not exercised here: these two functions are what a freshly
 	// created component falls back to, carrying none of it, the same as navigating away and back inside
-	// the ten seconds a test runs. Without AreaSnapshot's TestingPeriodId and TestEndsAt a fresh page has
+	// the seconds a test runs. Without AreaSnapshot's TestingPeriodId and TestEndsAt a fresh page has
 	// nothing to redraw the countdown from and shows plain Test buttons while the engine's return is still
 	// pending.
 

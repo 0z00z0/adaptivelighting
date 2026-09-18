@@ -142,14 +142,33 @@ public sealed class LightingOrchestrator : IDisposable
 	public MotionPeriodLatch? MotionPeriods => _motionPeriods;
 
 	/// <summary>What each running room hands to its replacement, by <see cref="CarryOverKey"/>.</summary>
-	public IReadOnlyDictionary<string, AreaCarryOver> CarryOver()
+	/// <param name="next">
+	///     The document the replacement will run. A running level test goes only to a room it keeps enabled; any
+	///     other test returns its lights when this engine stops.
+	/// </param>
+	public IReadOnlyDictionary<string, AreaCarryOver> CarryOver(AdaptiveLightingConfig? next = null)
 	{
 		Dictionary<string, AreaCarryOver> carried = new(StringComparer.OrdinalIgnoreCase);
+		HashSet<string> kept = next is null ? [] : KeptRooms(next);
 
 		foreach (AreaController area in _areas)
-			carried[CarryOverKey(area.AreaId, area.Name)] = area.CarryOver();
+		{
+			string key = CarryOverKey(area.AreaId, area.Name);
+			carried[key] = area.CarryOver(handOnTest: kept.Contains(key));
+		}
 
 		return carried;
+	}
+
+	private HashSet<string> KeptRooms(AdaptiveLightingConfig next)
+	{
+		HaAreaRegistry registry = new(_registry);
+
+		return new HashSet<string>(
+			next.Areas
+				.Where(area => area.Effective(next.Defaults).Enabled)
+				.Select(area => CarryOverKey(area.AreaId, AreaNaming.DisplayName(area, registry))),
+			StringComparer.OrdinalIgnoreCase);
 	}
 
 	// The area id where there is one, so a room renamed in the same save keeps its history.
@@ -255,7 +274,7 @@ public sealed class LightingOrchestrator : IDisposable
 				_motionSensorsByArea[trimmed] = resolved.MotionSensors;
 
 			running.Add(resolved);
-			_areas.Add(BuildArea(resolved, areaConfig));
+			_areas.Add(BuildArea(resolved, areaConfig, resolver));
 		}
 
 		ReportSharedLights(running, resolver, registry);
@@ -325,7 +344,7 @@ public sealed class LightingOrchestrator : IDisposable
 		return assigned;
 	}
 
-	private AreaController BuildArea(ResolvedArea resolved, AreaConfig config)
+	private AreaController BuildArea(ResolvedArea resolved, AreaConfig config, AreaEntityResolver resolver)
 	{
 		// One calculator per area: the periods are house-wide but the sun entity is an area setting, and the wrong
 		// sun places every boundary wrong.
@@ -350,7 +369,8 @@ public sealed class LightingOrchestrator : IDisposable
 			circadian,
 			config.AreaId,
 			SunMoved(resolved.Settings.SunEntity),
-			LightCalculators(resolved, config));
+			LightCalculators(resolved, config),
+			() => resolver.BatteriesOf(resolved.MotionSensors));
 
 		if (_carried is not null && _carried.TryGetValue(CarryOverKey(area.AreaId, area.Name), out AreaCarryOver? carried))
 			area.Inherit(carried);

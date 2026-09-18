@@ -211,6 +211,35 @@ public sealed class LightingEngineHost : IDisposable
 			return RunningArea(areaId) is { } area ? area.TestLight(lightEntityId, periodKey) : NotRunningRefusal();
 	}
 
+	/// <summary>Ends a running level test in <paramref name="areaId"/> now, putting back what the lights showed before it.</summary>
+	public void EndLevelTest(string? areaId)
+	{
+		lock (_gate)
+			RunningArea(areaId)?.EndTest();
+	}
+
+	/// <summary>Whether <paramref name="areaId"/> is running here, and the level test it is running if any.</summary>
+	/// <returns><c>false</c> when the room is not running, so the engine cannot say.</returns>
+	public bool TryReadLevelTest(string? areaId, out LevelTestNow? test)
+	{
+		lock (_gate)
+		{
+			AreaController? area = RunningArea(areaId);
+			test = area?.CurrentLevelTest;
+			return area is not null;
+		}
+	}
+
+	// For tests, which cannot build a room Home Assistant knows by area id.
+	internal IReadOnlyList<AreaController> RunningAreas
+	{
+		get
+		{
+			lock (_gate)
+				return _orchestrator?.Areas ?? [];
+		}
+	}
+
 	/// <summary>Why <paramref name="areaId"/> cannot be lit by hand right now, or <c>null</c> when it can.</summary>
 	/// <remarks>Asked before a press so the button can carry its own reason; the press asks again, under the lock.</remarks>
 	public string? LightNowRefusal(string? areaId)
@@ -569,7 +598,7 @@ public sealed class LightingEngineHost : IDisposable
 
 		if (notice is EngineNoticeKind.SettingsSaved)
 		{
-			carried = _orchestrator?.CarryOver();
+			carried = _orchestrator?.CarryOver(config);
 
 			if (carried is not null)
 				PersistRoomHistory(carried, flushNow: true);
