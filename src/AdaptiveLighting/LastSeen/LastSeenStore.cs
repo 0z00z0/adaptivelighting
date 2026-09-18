@@ -1,6 +1,3 @@
-using System.Text;
-using System.Text.Json;
-
 namespace AdaptiveLighting.LastSeen;
 
 /// <summary>One entity as it came off disk, with the bucket it was filed in and the file's own write time.</summary>
@@ -31,29 +28,47 @@ public sealed record LastSeenCacheLoad(
 ///     the names are not known in advance. They take their stem from the configuration document, whose directory is
 ///     the only path on a Home Assistant box that survives a redeploy.
 /// </remarks>
-public sealed class LastSeenStore
+public sealed class LastSeenStore : IStateStore
 {
 	private const string NameInfix = ".last-seen.";
 	private const string Extension = ".json";
-	private const string BackupSuffix = ".bak";
+	private const string BackupSuffix = AtomicJsonFile.BackupSuffix;
 
 	/// <summary>The subdirectory the cache lives in, so its files do not bury the hand-edited configuration document.</summary>
 	public const string FolderName = "last-seen";
 
-	private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+	/// <summary>The declaration: the cache's own folder, no backup, and the tracker's five-minute flush.</summary>
+	// One kind, many files: the bucket is a device class, so the declaration names the folder and not one file.
+	internal static readonly StateStoreDeclaration<LastSeenDocument> Declaration = new(
+		Name: "when each entity was last heard from",
+		NameSuffix: NameInfix,
+		Version: LastSeenDocument.CurrentVersion,
+		WritePolicy: StateWritePolicy.Coalesced,
+		VersionOf: document => document.Version,
+		SavedAtOf: document => document.SavedAt,
+		KeepsBackup: false,
+		InStateFolder: false);
 
 	private readonly ILogger<LastSeenStore> _logger;
 
 	// Everything before the bucket token, e.g. "b1.last-seen.". Two hosts sharing a directory cannot collide.
 	private readonly string _prefix;
 
-	// Serialises a flush against a load; they overlap only at start-up.
+	// Serialises a flush against a load; they overlap only at start-up. One writer lock for this kind of file.
 	private readonly Lock _gate = new();
+
+	private StateStoreRestoreReport? _lastRestore;
 
 	/// <summary>Creates a store whose files sit beside <paramref name="configFilePath"/>.</summary>
 	/// <remarks>Only the directory and stem of the path are used; the configuration file itself is never touched here.</remarks>
 	/// <exception cref="ArgumentException"><paramref name="configFilePath"/> is blank or has no directory.</exception>
 	public LastSeenStore(string configFilePath, ILogger<LastSeenStore> logger)
+		: this(configFilePath, logger, registry: null)
+	{
+	}
+
+	/// <summary>Creates the store and declares it in <paramref name="registry"/>, which then reports what it restored.</summary>
+	internal LastSeenStore(string configFilePath, ILogger<LastSeenStore> logger, StateStoreRegistry? registry)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(configFilePath);
 
@@ -85,7 +100,21 @@ public sealed class LastSeenStore
 		}
 
 		AdoptFilesWrittenBesideTheDocument(documentDirectory);
+
+		registry?.Add(this);
 	}
+
+	/// <summary>What the last <see cref="Load"/> found, for the start-up report.</summary>
+	StateStoreRestoreReport? IStateStore.LastRestore => _lastRestore;
+
+	StateStoreDeclaration IStateStore.Declaration => Declaration;
+
+	string IStateStore.Location => DirectoryPath;
+
+	// The dirty set and the retry live in the tracker, which flushes on its own five-minute interval and on dispose.
+	bool IStateStore.IsDirty => false;
+
+	bool IStateStore.Flush() => true;
 
 	/// <summary>Moves cache files written by an earlier build into the subfolder, and drops the <c>.bak</c> that build kept.</summary>
 	/// <remarks>Failures are ignored: giving up costs a bucket that starts again as unknown, and must never stop start-up.</remarks>
@@ -229,6 +258,12 @@ public sealed class LastSeenStore
 					+ "the next census re-files each one under its own device class, and the old file removes itself once it is empty.",
 					preSplit, LastSeenBuckets.Unclassified);
 
+			_lastRestore = read == 0
+				? new StateStoreRestoreReport(Declaration.Name, DirectoryPath, StateRestore.FirstRun, "no cache files yet")
+				: new StateStoreRestoreReport(
+					Declaration.Name, DirectoryPath, StateRestore.Restored,
+					$"{merged.Count} entities from {read} files, {unreadable} unreadable");
+
 			return new LastSeenCacheLoad(merged, started, read, unreadable, duplicates, preSplit);
 		}
 	}
@@ -249,32 +284,17 @@ public sealed class LastSeenStore
 			if (document.Entities.Count == 0)
 				return TryRemove(path);
 
-			// Random temp name, not a fixed ".tmp": on a fixed name a second writer truncates the first's file.
-			string temporary = Path.Combine(DirectoryPath, $".{Path.GetFileName(path)}.{Path.GetRandomFileName()}.tmp");
-
-			try
-			{
-				Directory.CreateDirectory(DirectoryPath);
-				File.WriteAllText(temporary, JsonSerializer.Serialize(document, LastSeenDocument.SerializerOptions), Utf8NoBom);
-
-				// No .bak: the move is atomic, so a torn file is unreachable, and the most a backup could buy back is
-				// history that degrades to unknown, never to dead.
-				File.Move(temporary, path, overwrite: true);
-
+			// No .bak: the most a backup could buy back is history that degrades to unknown, never to dead.
+			if (AtomicJsonFile.TryWrite(path, document, LastSeenDocument.SerializerOptions, keepBackup: false, out Exception? failure))
 				return true;
-			}
-			catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
-			{
-				TryDelete(temporary);
 
-				_logger.LogWarning(
-					exception,
-					"Could not write the last-seen cache file {Path}. The record is still correct in memory; it will be written "
-					+ "again at the next flush, and losing it costs only the history.",
-					path);
+			_logger.LogWarning(
+				failure,
+				"Could not write the last-seen cache file {Path}. The record is still correct in memory; it will be written "
+				+ "again at the next flush, and losing it costs only the history.",
+				path);
 
-				return false;
-			}
+			return false;
 		}
 	}
 
@@ -322,15 +342,23 @@ public sealed class LastSeenStore
 
 	private LastSeenDocument? TryRead(string path)
 	{
-		try
+		if (!AtomicJsonFile.TryRead(path, LastSeenDocument.SerializerOptions, out LastSeenDocument? document, out Exception? failure))
 		{
-			return JsonSerializer.Deserialize<LastSeenDocument>(File.ReadAllText(path), LastSeenDocument.SerializerOptions);
-		}
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
-		{
-			_logger.LogWarning(exception, "Could not read the last-seen cache file {Path}; its entities start again as unknown.", path);
+			_logger.LogWarning(failure, "Could not read the last-seen cache file {Path}; its entities start again as unknown.", path);
 			return null;
 		}
+
+		if (document is not null && document.Version > LastSeenDocument.CurrentVersion)
+		{
+			_logger.LogWarning(
+				"The last-seen cache file {Path} was written by version {Found} and this build reads up to {Known}, so it is "
+				+ "left alone and its entities start again as unknown.",
+				path, document.Version, LastSeenDocument.CurrentVersion);
+
+			return null;
+		}
+
+		return document;
 	}
 
 	/// <summary>Takes an emptied bucket's file away, and its backup with it; reports failure, never throws.</summary>
@@ -359,17 +387,5 @@ public sealed class LastSeenStore
 		}
 	}
 
-	private void TryDelete(string path)
-	{
-		try
-		{
-			if (File.Exists(path))
-				File.Delete(path);
-		}
-		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-		{
-			// A leftover temp file is litter, not a failure, and must not mask the real write error.
-			_logger.LogDebug(exception, "Could not remove the temporary file {Path}.", path);
-		}
-	}
+	private static void TryDelete(string path) => AtomicJsonFile.TryDelete(path);
 }
