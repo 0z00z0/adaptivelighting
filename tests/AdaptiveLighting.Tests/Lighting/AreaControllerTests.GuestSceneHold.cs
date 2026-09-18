@@ -1,5 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -7,7 +8,7 @@ public sealed partial class AreaControllerTests
 {
 	private static HouseModeConfig GuestSceneMode()
 	{
-		var mode = SoverMode();
+		HouseModeConfig mode = SoverMode();
 		mode.Options.Add(new HouseModeOptionConfig { Value = "Gjester", Kind = ModeKind.Guest, Scene = "scene.gjest" });
 		return mode;
 	}
@@ -15,7 +16,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Guest_WithAScene_HoldsTheArea_AndIgnoresMotionForCommanding()
 	{
-		var t = Build(tweakGlobal: g => g.HouseMode = GuestSceneMode());
+		AreaFixture t = Build(tweakGlobal: g => g.HouseMode = GuestSceneMode());
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
@@ -33,7 +34,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Guest_SceneResetToNormal_ExitsSceneHoldToAutoVacant()
 	{
-		var t = Build(tweakGlobal: g => g.HouseMode = GuestSceneMode());
+		AreaFixture t = Build(tweakGlobal: g => g.HouseMode = GuestSceneMode());
 		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
 		Assert.AreEqual(AreaState.SceneHold, t.Area.State);
 
@@ -45,7 +46,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void FromAway_IntoAGuestScene_EntersSceneHold_WithoutWelcomeHome()
 	{
-		var t = Build(tweak: s => s.WelcomeHome = true, tweakGlobal: g => g.HouseMode = GuestSceneMode());
+		AreaFixture t = Build(tweak: s => s.WelcomeHome = true, tweakGlobal: g => g.HouseMode = GuestSceneMode());
 
 		t.House.OnNext(AwayHouse());
 		Assert.AreEqual(AreaState.Away, t.Area.State);
@@ -62,9 +63,9 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Guest_WithoutAScene_DoesNotEnterSceneHold()
 	{
-		var mode = SoverMode();
+		HouseModeConfig mode = SoverMode();
 		mode.Options.Add(new HouseModeOptionConfig { Value = "Gjester", Kind = ModeKind.Guest });   // no scene
-		var t = Build(tweakGlobal: g => g.HouseMode = mode);
+		AreaFixture t = Build(tweakGlobal: g => g.HouseMode = mode);
 		t.Ha.Trigger(Motion, "on");
 
 		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester"));

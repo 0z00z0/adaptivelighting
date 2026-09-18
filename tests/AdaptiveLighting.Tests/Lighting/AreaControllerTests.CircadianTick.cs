@@ -11,7 +11,7 @@ public sealed partial class AreaControllerTests
 	public void The_Tick_Retargets_An_Active_Area_When_The_Period_Changes()
 	{
 		// A vacancy timeout long enough that the area is still AutoActive when the night boundary passes.
-		var t = Build(s => s.VacancyTimeoutSeconds = 60 * 60 * 5);
+		Fixture t = Build(s => s.VacancyTimeoutSeconds = 60 * 60 * 5);
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
@@ -26,12 +26,12 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void The_Period_Arrives_At_The_Boundary_Not_At_The_Next_Tick()
 	{
-		var periods = new List<TimePeriodConfig>
+		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
 			new() { Name = "night", Start = "20:03", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
-		var t = Build(s => s.VacancyTimeoutSeconds = 60 * 60 * 5, g => g.CircadianTickSeconds = 300, periods: periods);
+		Fixture t = Build(s => s.VacancyTimeoutSeconds = 60 * 60 * 5, g => g.CircadianTickSeconds = 300, periods: periods);
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
@@ -46,12 +46,12 @@ public sealed partial class AreaControllerTests
 	/// <summary>A table with one fixed boundary and one anchored to sunset, lit and quiet at 20:00.</summary>
 	private static Fixture SunAnchored(MovableSun sun, bool watchSun = true)
 	{
-		var periods = new List<TimePeriodConfig>
+		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
 			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
 			new() { Name = "night", Start = "sunset", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
-		var t = Build(
+		Fixture t = Build(
 			s => s.VacancyTimeoutSeconds = 60 * 60 * 5,
 			g => g.CircadianTickSeconds = 300,
 			periods: periods,
@@ -66,9 +66,9 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Sun_Time_That_Moves_Rearms_The_Boundary_Without_Waiting_For_A_Tick()
 	{
-		var sun = new MovableSun();
+		MovableSun sun = new MovableSun();
 		sun.SetQuietly(sunrise: new TimeOnly(8, 0), sunset: new TimeOnly(23, 0));
-		var t = SunAnchored(sun);
+		Fixture t = SunAnchored(sun);
 
 		sun.MoveTo(sunrise: new TimeOnly(8, 0), sunset: new TimeOnly(20, 2));
 
@@ -82,9 +82,9 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Sun_Time_That_Moves_Behind_Us_Is_Acted_On_At_Once()
 	{
-		var sun = new MovableSun();
+		MovableSun sun = new MovableSun();
 		sun.SetQuietly(sunrise: new TimeOnly(8, 0), sunset: new TimeOnly(22, 0));
-		var t = SunAnchored(sun);
+		Fixture t = SunAnchored(sun);
 
 		sun.MoveTo(sunrise: new TimeOnly(8, 0), sunset: new TimeOnly(19, 30));
 
@@ -96,9 +96,9 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void An_Unwatched_Sun_Waits_For_The_Tick()
 	{
-		var sun = new MovableSun();
+		MovableSun sun = new MovableSun();
 		sun.SetQuietly(sunrise: new TimeOnly(8, 0), sunset: new TimeOnly(23, 0));
-		var t = SunAnchored(sun, watchSun: false);
+		Fixture t = SunAnchored(sun, watchSun: false);
 
 		sun.MoveTo(sunrise: new TimeOnly(8, 0), sunset: new TimeOnly(20, 2));
 
@@ -113,9 +113,9 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Sun_That_Becomes_Unreadable_Leaves_The_Area_Running()
 	{
-		var sun = new MovableSun();
+		MovableSun sun = new MovableSun();
 		sun.SetQuietly(sunrise: new TimeOnly(8, 0), sunset: new TimeOnly(20, 2));
-		var t = SunAnchored(sun);
+		Fixture t = SunAnchored(sun);
 
 		sun.MoveTo(sunrise: null, sunset: null);
 
@@ -127,7 +127,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Tick_That_Changes_Nothing_Sends_Nothing()
 	{
-		var t = Build(s => s.VacancyTimeoutSeconds = 60 * 60 * 5);
+		Fixture t = Build(s => s.VacancyTimeoutSeconds = 60 * 60 * 5);
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
@@ -139,7 +139,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void The_Tick_Never_Retargets_An_Overridden_Area()
 	{
-		var t = Build(s =>
+		Fixture t = Build(s =>
 		{
 			s.VacancyTimeoutSeconds = 60 * 60 * 5;
 			s.OverrideDurationMinutes = 60 * 24;

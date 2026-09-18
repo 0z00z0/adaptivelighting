@@ -30,15 +30,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Area_Id_Is_Enough_To_Find_An_Areas_Entities()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.stue_tak", "light.stue_lampe", "binary_sensor.stue_motion", "sensor.stue_lux", "switch.noise"];
 		ha.SetState("light.stue_tak", "off");
 		ha.SetState("light.stue_lampe", "off");
 		ha.SetState("binary_sensor.stue_motion", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("sensor.stue_lux", "10", new() { ["device_class"] = "illuminance" });
 
-		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { Name = "Stue", AreaId = "stue" }, new AreaSettings(), out var area, out _);
+		bool ok = Resolver(ha, registry).TryResolve(new AreaConfig { Name = "Stue", AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		Assert.IsTrue(ok);
 		Assert.AreEqual(2, area!.Lights.Count);
@@ -51,21 +51,21 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void A_Rooms_Daylight_Sensor_Is_Carried_Through_And_Never_Discovered()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.stue_tak", "binary_sensor.stue_motion", "sensor.stue_lux"];
 		ha.SetState("light.stue_tak", "off");
 		ha.SetState("binary_sensor.stue_motion", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("sensor.stue_lux", "10", new() { ["device_class"] = "illuminance" });
 
 		AreaConfig plain = new() { Name = "Stue", AreaId = "stue" };
-		Assert.IsTrue(Resolver(ha, registry).TryResolve(plain, new AreaSettings(), out var untouched, out _));
+		Assert.IsTrue(Resolver(ha, registry).TryResolve(plain, new AreaSettings(), out ResolvedArea? untouched, out _));
 		Assert.IsNull(untouched!.DaylightSensor,
 			"a room that says nothing reads the house's outdoor sensor, which is decided at the controller");
 		CollectionAssert.AreEqual(new[] { "sensor.stue_lux" }, untouched.LuxSensors.ToArray());
 
 		AreaConfig chosen = new() { Name = "Stue", AreaId = "stue", DaylightSensor = " sensor.utelys " };
-		Assert.IsTrue(Resolver(ha, registry).TryResolve(chosen, new AreaSettings(), out var picked, out _));
+		Assert.IsTrue(Resolver(ha, registry).TryResolve(chosen, new AreaSettings(), out ResolvedArea? picked, out _));
 		Assert.AreEqual("sensor.utelys", picked!.DaylightSensor, "trimmed, and not required to be in this room");
 		CollectionAssert.AreEqual(new[] { "sensor.stue_lux" }, picked.LuxSensors.ToArray(),
 			"and the darkness sensors are untouched by the choice");
@@ -77,14 +77,14 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void A_Registry_Entry_With_No_State_Is_Not_A_Light()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["tilbygg"] = ["light.tilbygg_taklys", "light.router_socket_status_led", "binary_sensor.tilbygg_motion"];
 		ha.SetState("light.tilbygg_taklys", "off");
 		ha.SetState("binary_sensor.tilbygg_motion", "off", new() { ["device_class"] = "motion" });
 		// light.router_socket_status_led has no state at all: a disabled registry row.
 
-		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out var area, out _);
+		bool ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		Assert.IsTrue(ok);
 		CollectionAssert.AreEqual(new[] { "light.tilbygg_taklys" }, area!.Lights.ToArray(),
@@ -94,14 +94,14 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Unavailable_Light_Is_Not_Discovered()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["tilbygg"] = ["light.wiz", "light.tuya_offline", "binary_sensor.m"];
 		ha.SetState("light.wiz", "off");
 		ha.SetState("light.tuya_offline", "unavailable");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out var area, out _);
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEqual(new[] { "light.wiz" }, area!.Lights.ToArray(),
 			"a light the engine cannot reach is a light it cannot dim");
@@ -111,14 +111,14 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Unknown_Light_Is_Not_Discovered_Any_More_Than_An_Unavailable_One()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["tilbygg"] = ["light.wiz", "light.never_reported", "binary_sensor.m"];
 		ha.SetState("light.wiz", "off");
 		ha.SetState("light.never_reported", "unknown");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out var area, out _);
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEqual(new[] { "light.wiz" }, area!.Lights.ToArray(),
 			"a light that has never reported is as dead for discovery as an unavailable one");
@@ -127,14 +127,14 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Unavailable_Motion_Sensor_Is_Not_Discovered()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["a"] = ["light.l", "binary_sensor.dead", "binary_sensor.live"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.dead", "unavailable", new() { ["device_class"] = "motion" });
 		ha.SetState("binary_sensor.live", "off", new() { ["device_class"] = "motion" });
 
-		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "a" }, new AreaSettings(), out var area, out _);
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "a" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEqual(new[] { "binary_sensor.live" }, area!.MotionSensors.ToArray());
 	}
@@ -143,15 +143,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void A_Dead_Lux_Sensor_Does_Not_Make_The_Area_Ambiguous()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["tilbygg"] = ["light.l", "binary_sensor.m", "sensor.annex_illuminance", "sensor.shelly_luminosity"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("sensor.annex_illuminance", "0.0", new() { ["device_class"] = "illuminance" });
 		ha.SetState("sensor.shelly_luminosity", "unavailable", new() { ["device_class"] = "illuminance" });
 
-		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out var area, out var error);
+		bool ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "tilbygg" }, new AreaSettings(), out ResolvedArea? area, out string? error);
 
 		Assert.IsTrue(ok, error);
 		CollectionAssert.AreEqual(new[] { "sensor.annex_illuminance" }, area!.LuxSensors.ToArray());
@@ -161,13 +161,13 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Unnamed_Area_Falls_Back_To_The_Area_Id()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.m"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		Assert.AreEqual("stue", area!.Name);
 	}
@@ -176,14 +176,14 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Area_Is_Named_As_Home_Assistant_Names_It()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["kjeller_bad"] = ["light.l", "binary_sensor.m"];
 		registry.Names["kjeller_bad"] = "Kjeller - Bad";
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "kjeller_bad" }, new AreaSettings(), out var area, out _);
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "kjeller_bad" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		Assert.AreEqual("Kjeller - Bad", area!.Name);
 	}
@@ -191,15 +191,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void A_Configured_Name_Outranks_The_Registrys()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["kjeller_bad"] = ["light.l", "binary_sensor.m"];
 		registry.Names["kjeller_bad"] = "Kjeller - Bad";
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
 		Resolver(ha, registry)
-			.TryResolve(new AreaConfig { AreaId = "kjeller_bad", Name = "Kjellerbadet" }, new AreaSettings(), out var area, out _);
+			.TryResolve(new AreaConfig { AreaId = "kjeller_bad", Name = "Kjellerbadet" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		Assert.AreEqual("Kjellerbadet", area!.Name);
 	}
@@ -207,15 +207,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void Area_Overrides_Are_Merged_Onto_The_Document_Defaults()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.m"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		var defaults = new AreaSettings { VacancyTimeoutSeconds = 900, WelcomeHome = true };
+		AreaSettings defaults = new AreaSettings { VacancyTimeoutSeconds = 900, WelcomeHome = true };
 		Resolver(ha, registry).TryResolve(
-			new AreaConfig { AreaId = "stue", VacancyTimeoutSeconds = 60 }, defaults, out var area, out _);
+			new AreaConfig { AreaId = "stue", VacancyTimeoutSeconds = 60 }, defaults, out ResolvedArea? area, out _);
 
 		Assert.AreEqual(60, area!.Settings.VacancyTimeoutSeconds, "the area's own value wins");
 		Assert.IsTrue(area.Settings.WelcomeHome, "and everything it did not mention is inherited");
@@ -226,15 +226,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void A_Light_Group_Wins_Over_Its_Members()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.stue_group", "light.bulb_a", "light.bulb_b", "binary_sensor.m"];
 		ha.SetState("light.stue_group", "off", new() { ["entity_id"] = new[] { "light.bulb_a", "light.bulb_b" } });
 		ha.SetState("light.bulb_a", "off");
 		ha.SetState("light.bulb_b", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "occupancy" });
 
-		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEqual(new[] { "light.stue_group" }, area!.Lights.ToArray(),
 			"commanding a group and its members is the same bulbs twice");
@@ -761,15 +761,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void The_Exclude_Label_Drops_An_Entity()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.keep", "light.skip", "binary_sensor.m"];
 		registry.Labels["light.skip"] = ["adaptive_exclude"];
 		ha.SetState("light.keep", "off");
 		ha.SetState("light.skip", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEqual(new[] { "light.keep" }, area!.Lights.ToArray());
 	}
@@ -947,15 +947,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void The_Motion_Label_Rescues_A_Sensor_With_An_Odd_Device_Class()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.mmwave", "binary_sensor.door"];
 		registry.Labels["binary_sensor.mmwave"] = ["adaptive_motion"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.mmwave", "off", new() { ["device_class"] = "sound" });
 		ha.SetState("binary_sensor.door", "off", new() { ["device_class"] = "door" });
 
-		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEqual(new[] { "binary_sensor.mmwave" }, area!.MotionSensors.ToArray());
 		CollectionAssert.DoesNotContain(area.MotionSensors.ToArray(), "binary_sensor.door", "a door is not motion");
@@ -964,15 +964,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Explicit_List_Replaces_Discovery_For_Its_Own_Slot_Only()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.discovered", "binary_sensor.discovered"];
 		ha.SetState("light.discovered", "off");
 		ha.SetState("binary_sensor.discovered", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("light.explicit", "off");
 
 		Resolver(ha, registry).TryResolve(
-			new AreaConfig { AreaId = "stue", Lights = ["light.explicit"] }, new AreaSettings(), out var area, out _);
+			new AreaConfig { AreaId = "stue", Lights = ["light.explicit"] }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEqual(new[] { "light.explicit" }, area!.Lights.ToArray());
 		CollectionAssert.AreEqual(new[] { "binary_sensor.discovered" }, area.MotionSensors.ToArray(),
@@ -986,7 +986,7 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Empty_MotionDeviceClasses_Means_The_Built_In_Defaults()
 	{
-		var global = new GlobalConfig();
+		GlobalConfig global = new GlobalConfig();
 
 		Assert.AreEqual(0, global.MotionDeviceClasses.Count,
 			"the default must stay empty, or the binder will append the household's list to it");
@@ -998,7 +998,7 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void A_Configured_MotionDeviceClasses_Replaces_The_Defaults_Rather_Than_Adding_To_Them()
 	{
-		var global = new GlobalConfig { MotionDeviceClasses = ["vibration"] };
+		GlobalConfig global = new GlobalConfig { MotionDeviceClasses = ["vibration"] };
 
 		CollectionAssert.AreEqual(new[] { "vibration" }, global.EffectiveMotionDeviceClasses.ToArray(),
 			"what the YAML says is what the engine does — nothing more");
@@ -1007,8 +1007,8 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void Discovery_Uses_The_Built_In_Classes_When_None_Are_Configured()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.motion", "binary_sensor.occupancy", "binary_sensor.presence"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.motion", "off", new() { ["device_class"] = "motion" });
@@ -1016,7 +1016,7 @@ public sealed class AreaEntityResolverTests
 		ha.SetState("binary_sensor.presence", "off", new() { ["device_class"] = "presence" });
 
 		Resolver(ha, registry, new GlobalConfig()).TryResolve(
-			new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
+			new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		Assert.AreEqual(3, area!.MotionSensors.Count);
 	}
@@ -1024,15 +1024,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void Discovery_Uses_Only_The_Configured_Classes_When_They_Are_Set()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.motion", "binary_sensor.vibration"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.motion", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("binary_sensor.vibration", "off", new() { ["device_class"] = "vibration" });
 
-		var global = new GlobalConfig { MotionDeviceClasses = ["vibration"] };
-		Resolver(ha, registry, global).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
+		GlobalConfig global = new GlobalConfig { MotionDeviceClasses = ["vibration"] };
+		Resolver(ha, registry, global).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEqual(new[] { "binary_sensor.vibration" }, area!.MotionSensors.ToArray(),
 			"the built-in 'motion' must be gone, because the household replaced the list");
@@ -1043,12 +1043,12 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void A_Display_Name_Used_As_An_Area_Id_Is_Rejected_With_The_Real_Ids()
 	{
-		var registry = new FakeAreaRegistry();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = [];
 		registry.Areas["kjokken"] = [];
 
-		var ok = Resolver(new FakeHaContext(), registry)
-			.TryResolve(new AreaConfig { AreaId = "Stue" }, new AreaSettings(), out _, out var error);
+		bool ok = Resolver(new FakeHaContext(), registry)
+			.TryResolve(new AreaConfig { AreaId = "Stue" }, new AreaSettings(), out _, out string? error);
 
 		Assert.IsFalse(ok);
 		StringAssert.Contains(error!, "stue");
@@ -1058,11 +1058,11 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Area_With_No_Lights_Is_An_Area_Error()
 	{
-		var registry = new FakeAreaRegistry();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = [];
 
-		var ok = Resolver(new FakeHaContext(), registry)
-			.TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out _, out var error);
+		bool ok = Resolver(new FakeHaContext(), registry)
+			.TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out _, out string? error);
 
 		Assert.IsFalse(ok);
 		StringAssert.Contains(error!, "No lights");
@@ -1088,23 +1088,23 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void Two_Illuminance_Sensors_Are_Both_Kept_For_The_Area_To_Average()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.m", "sensor.lux_a", "sensor.lux_b"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("sensor.lux_a", "5", new() { ["device_class"] = "illuminance" });
 		ha.SetState("sensor.lux_b", "6", new() { ["device_class"] = "illuminance" });
 
-		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var ambiguous, out _);
+		bool ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? ambiguous, out _);
 
 		// Both survive and the gate averages them. Picking one would gate the room on a sensor with nothing to do with its daylight.
 		Assert.IsTrue(ok, "several lux sensors must not disable the room");
 		CollectionAssert.AreEquivalent(new[] { "sensor.lux_a", "sensor.lux_b" }, ambiguous!.LuxSensors.ToArray(),
 			"two plain sensors with no group and no shared device are two real instruments in one room");
 
-		var disambiguated = Resolver(ha, registry).TryResolve(
-			new AreaConfig { AreaId = "stue", LuxSensor = "sensor.lux_a" }, new AreaSettings(), out var area, out _);
+		bool disambiguated = Resolver(ha, registry).TryResolve(
+			new AreaConfig { AreaId = "stue", LuxSensor = "sensor.lux_a" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		Assert.IsTrue(disambiguated);
 		CollectionAssert.AreEqual(new[] { "sensor.lux_a" }, area!.LuxSensors.ToArray(),
@@ -1114,13 +1114,13 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void No_Illuminance_Sensor_Is_Not_An_Error()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.m"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
+		bool ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		Assert.IsTrue(ok, "an area may legitimately gate on the sun alone");
 		Assert.AreEqual(0, area!.LuxSensors.Count);
@@ -1129,8 +1129,8 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Area_With_Neither_An_Area_Id_Nor_A_Light_List_Cannot_Resolve()
 	{
-		var ok = Resolver(new FakeHaContext(), new FakeAreaRegistry())
-			.TryResolve(new AreaConfig { Name = "Nowhere" }, new AreaSettings(), out _, out var error);
+		bool ok = Resolver(new FakeHaContext(), new FakeAreaRegistry())
+			.TryResolve(new AreaConfig { Name = "Nowhere" }, new AreaSettings(), out _, out string? error);
 
 		Assert.IsFalse(ok);
 		StringAssert.Contains(error!, "No lights");
@@ -1144,17 +1144,17 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Excluded_Discovered_Entity_Is_Absent_From_The_Resolved_Room()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.keep", "light.drop", "binary_sensor.keep", "binary_sensor.drop"];
 		ha.SetState("light.keep", "off");
 		ha.SetState("light.drop", "off");
 		ha.SetState("binary_sensor.keep", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("binary_sensor.drop", "off", new() { ["device_class"] = "motion" });
 
-		var ok = Resolver(ha, registry).TryResolve(
+		bool ok = Resolver(ha, registry).TryResolve(
 			new AreaConfig { AreaId = "stue", ExcludeEntities = ["light.drop", "binary_sensor.drop"] },
-			new AreaSettings(), out var area, out var error);
+			new AreaSettings(), out ResolvedArea? area, out string? error);
 
 		Assert.IsTrue(ok, error);
 		CollectionAssert.AreEqual(new[] { "light.keep" }, area!.Lights.ToArray(),
@@ -1165,15 +1165,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Explicit_Lights_List_Is_Not_Filtered_By_ExcludeEntities()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["binary_sensor.m"];
 		ha.SetState("light.hand_picked", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		var ok = Resolver(ha, registry).TryResolve(
+		bool ok = Resolver(ha, registry).TryResolve(
 			new AreaConfig { AreaId = "stue", Lights = ["light.hand_picked"], ExcludeEntities = ["light.hand_picked"] },
-			new AreaSettings(), out var area, out var error);
+			new AreaSettings(), out ResolvedArea? area, out string? error);
 
 		Assert.IsTrue(ok, error);
 		CollectionAssert.AreEqual(new[] { "light.hand_picked" }, area!.Lights.ToArray(),
@@ -1183,16 +1183,16 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void Excluding_The_Only_Lux_Sensor_Leaves_The_Room_Resolving_Without_One()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["kjokken"] = ["light.l", "binary_sensor.m", "sensor.fridge_lux"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("sensor.fridge_lux", "3", new() { ["device_class"] = "illuminance" });
 
-		var ok = Resolver(ha, registry).TryResolve(
+		bool ok = Resolver(ha, registry).TryResolve(
 			new AreaConfig { AreaId = "kjokken", ExcludeEntities = ["sensor.fridge_lux"] },
-			new AreaSettings(), out var area, out var error);
+			new AreaSettings(), out ResolvedArea? area, out string? error);
 
 		Assert.IsTrue(ok, error);
 		Assert.AreEqual(0, area!.LuxSensors.Count,
@@ -1203,17 +1203,17 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void Excluding_One_Of_Two_Lux_Sensors_Chooses_The_Other()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["kjokken"] = ["light.l", "binary_sensor.m", "sensor.room_lux", "sensor.fridge_lux"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("sensor.room_lux", "40", new() { ["device_class"] = "illuminance" });
 		ha.SetState("sensor.fridge_lux", "3", new() { ["device_class"] = "illuminance" });
 
-		var ok = Resolver(ha, registry).TryResolve(
+		bool ok = Resolver(ha, registry).TryResolve(
 			new AreaConfig { AreaId = "kjokken", ExcludeEntities = ["sensor.fridge_lux"] },
-			new AreaSettings(), out var area, out var error);
+			new AreaSettings(), out ResolvedArea? area, out string? error);
 
 		Assert.IsTrue(ok, error);
 		CollectionAssert.AreEqual(new[] { "sensor.room_lux" }, area!.LuxSensors.ToArray(),
@@ -1228,8 +1228,8 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void DiscoverArea_Offers_Exactly_What_TryResolve_Would_Use()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.stue_tak", "light.stue_lampe", "binary_sensor.stue_motion", "sensor.stue_lux", "switch.noise"];
 		ha.SetState("light.stue_tak", "off");
 		ha.SetState("light.stue_lampe", "off");
@@ -1237,8 +1237,8 @@ public sealed class AreaEntityResolverTests
 		ha.SetState("sensor.stue_lux", "10", new() { ["device_class"] = "illuminance" });
 		ha.SetState("switch.noise", "off");
 
-		var found = Resolver(ha, registry).DiscoverArea("stue");
-		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out var area, out _);
+		AreaDiscovery found = Resolver(ha, registry).DiscoverArea("stue");
+		Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEquivalent(area!.Lights.ToArray(), found.Lights.ToArray(),
 			"the picker must offer the lights the engine will drive, and only those");
@@ -1249,14 +1249,14 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void DiscoverArea_Does_Not_Offer_A_Ghost_The_Engine_Would_Drop()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.stue_tak", "light.esp_lab_status_led", "light.offline_bulb"];
 		ha.SetState("light.stue_tak", "off");
 		ha.SetState("light.offline_bulb", "unavailable");
 		// light.esp_lab_status_led is a disabled registry row: no state at all.
 
-		var found = Resolver(ha, registry).DiscoverArea("stue");
+		AreaDiscovery found = Resolver(ha, registry).DiscoverArea("stue");
 
 		CollectionAssert.AreEqual(new[] { "light.stue_tak" }, found.Lights.ToArray(),
 			"offering an entity discovery excludes would be inviting somebody to configure a light that cannot work");
@@ -1265,8 +1265,8 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void DiscoverArea_Drops_Group_Members_And_The_Exclude_Label()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.stue_group", "light.bulb_a", "light.bulb_b", "light.skip"];
 		registry.Labels["light.skip"] = ["adaptive_exclude"];
 		ha.SetState("light.stue_group", "off", new() { ["entity_id"] = new[] { "light.bulb_a", "light.bulb_b" } });
@@ -1274,7 +1274,7 @@ public sealed class AreaEntityResolverTests
 		ha.SetState("light.bulb_b", "off");
 		ha.SetState("light.skip", "off");
 
-		var found = Resolver(ha, registry).DiscoverArea("stue");
+		AreaDiscovery found = Resolver(ha, registry).DiscoverArea("stue");
 
 		CollectionAssert.AreEqual(new[] { "light.stue_group" }, found.Lights.ToArray());
 	}
@@ -1284,8 +1284,8 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void DiscoverArea_Reports_Every_Lux_Candidate_Rather_Than_Choosing_One()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.m", "sensor.lux_a", "sensor.lux_b", "sensor.dead"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
@@ -1293,7 +1293,7 @@ public sealed class AreaEntityResolverTests
 		ha.SetState("sensor.lux_b", "6", new() { ["device_class"] = "illuminance" });
 		ha.SetState("sensor.dead", "unavailable", new() { ["device_class"] = "illuminance" });
 
-		var found = Resolver(ha, registry).DiscoverArea("stue");
+		AreaDiscovery found = Resolver(ha, registry).DiscoverArea("stue");
 
 		CollectionAssert.AreEquivalent(new[] { "sensor.lux_a", "sensor.lux_b" }, found.LuxSensors.ToArray(),
 			"the picker is how a household breaks this tie, so it must be shown both");
@@ -1302,16 +1302,16 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void DiscoverArea_Honours_The_Motion_Label_And_The_Configured_Device_Classes()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["stue"] = ["binary_sensor.mmwave", "binary_sensor.vibration", "binary_sensor.door"];
 		registry.Labels["binary_sensor.mmwave"] = ["adaptive_motion"];
 		ha.SetState("binary_sensor.mmwave", "off", new() { ["device_class"] = "sound" });
 		ha.SetState("binary_sensor.vibration", "off", new() { ["device_class"] = "vibration" });
 		ha.SetState("binary_sensor.door", "off", new() { ["device_class"] = "door" });
 
-		var global = new GlobalConfig { MotionDeviceClasses = ["vibration"] };
-		var found = Resolver(ha, registry, global).DiscoverArea("stue");
+		GlobalConfig global = new GlobalConfig { MotionDeviceClasses = ["vibration"] };
+		AreaDiscovery found = Resolver(ha, registry, global).DiscoverArea("stue");
 
 		CollectionAssert.AreEquivalent(new[] { "binary_sensor.vibration", "binary_sensor.mmwave" }, found.MotionSensors.ToArray());
 		CollectionAssert.DoesNotContain(found.MotionSensors.ToArray(), "binary_sensor.door");
@@ -1325,15 +1325,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Area_Carrying_The_Exclude_Label_Refuses_To_Resolve_And_Names_The_Label()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["petterhaugen"] = ["light.alt", "binary_sensor.inne_bevegelse"];
 		registry.AreaLabels["petterhaugen"] = ["adaptive_exclude"];
 		ha.SetState("light.alt", "off");
 		ha.SetState("binary_sensor.inne_bevegelse", "off", new() { ["device_class"] = "motion" });
 
-		var ok = Resolver(ha, registry).TryResolve(
-			new AreaConfig { AreaId = "petterhaugen" }, new AreaSettings(), out _, out var error);
+		bool ok = Resolver(ha, registry).TryResolve(
+			new AreaConfig { AreaId = "petterhaugen" }, new AreaSettings(), out _, out string? error);
 
 		Assert.IsFalse(ok, "an area labelled in HA is the owner's act, and the engine leaves it alone");
 		StringAssert.Contains(error, "adaptive_exclude", "the message must name the label so the fix is obvious");
@@ -1342,8 +1342,8 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Excluded_Whole_House_Area_Logs_No_Group_Warnings_On_The_Way_Out()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["petterhaugen"] = ["light.alt_lys", "binary_sensor.inne_bevegelse"];
 		registry.Areas["stue"] = ["binary_sensor.stue_m"];
 		registry.Areas["kjokken"] = ["binary_sensor.kjokken_m"];
@@ -1358,9 +1358,9 @@ public sealed class AreaEntityResolverTests
 		ha.SetState("binary_sensor.stue_m", "off", new() { ["device_class"] = "motion" });
 		ha.SetState("binary_sensor.kjokken_m", "off", new() { ["device_class"] = "motion" });
 
-		var logger = new RecordingLogger();
+		RecordingLogger logger = new RecordingLogger();
 
-		var ok = Resolver(ha, registry, logger: logger).TryResolve(
+		bool ok = Resolver(ha, registry, logger: logger).TryResolve(
 			new AreaConfig { AreaId = "petterhaugen" }, new AreaSettings(), out _, out _);
 
 		Assert.IsFalse(ok);
@@ -1371,14 +1371,14 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void DiscoverArea_Yields_Nothing_For_An_Excluded_Area()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["hytta"] = ["light.l", "binary_sensor.m"];
 		registry.AreaLabels["hytta"] = ["adaptive_exclude"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		var found = Resolver(ha, registry).DiscoverArea("hytta");
+		AreaDiscovery found = Resolver(ha, registry).DiscoverArea("hytta");
 
 		Assert.AreEqual(0, found.Lights.Count);
 		Assert.AreEqual(0, found.MotionSensors.Count);
@@ -1389,14 +1389,14 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void The_Areas_Exclude_Label_Matches_By_Display_Name_And_Ignores_Case()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["hytta"] = ["light.l", "binary_sensor.m"];
 		registry.AreaLabels["hytta"] = ["Adaptive_Exclude"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		var ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "hytta" }, new AreaSettings(), out _, out _);
+		bool ok = Resolver(ha, registry).TryResolve(new AreaConfig { AreaId = "hytta" }, new AreaSettings(), out _, out _);
 
 		Assert.IsFalse(ok);
 	}
@@ -1404,15 +1404,15 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void An_Empty_Exclude_Label_Excludes_No_Area()
 	{
-		var ha = new FakeHaContext();
-		var registry = new FakeAreaRegistry();
+		FakeHaContext ha = new FakeHaContext();
+		FakeAreaRegistry registry = new FakeAreaRegistry();
 		registry.Areas["hytta"] = ["light.l", "binary_sensor.m"];
 		registry.AreaLabels["hytta"] = ["adaptive_exclude"];
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		var global = new GlobalConfig { ExcludeLabel = "" };
-		var ok = Resolver(ha, registry, global).TryResolve(new AreaConfig { AreaId = "hytta" }, new AreaSettings(), out var area, out var error);
+		GlobalConfig global = new GlobalConfig { ExcludeLabel = "" };
+		bool ok = Resolver(ha, registry, global).TryResolve(new AreaConfig { AreaId = "hytta" }, new AreaSettings(), out ResolvedArea? area, out string? error);
 
 		Assert.IsTrue(ok, error);
 		Assert.AreEqual(1, area!.Lights.Count, "switching the label feature off must switch the area exclusion off with it");
@@ -1510,7 +1510,7 @@ public sealed class AreaEntityResolverTests
 	[TestMethod]
 	public void DiscoverArea_Yields_Nothing_For_An_Area_The_Registry_Does_Not_Know()
 	{
-		var found = Resolver(new FakeHaContext(), new FakeAreaRegistry()).DiscoverArea("nowhere");
+		AreaDiscovery found = Resolver(new FakeHaContext(), new FakeAreaRegistry()).DiscoverArea("nowhere");
 
 		Assert.AreEqual(0, found.Lights.Count);
 		Assert.AreEqual(0, found.MotionSensors.Count);

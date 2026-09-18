@@ -45,7 +45,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void A_Normal_Mode_Resolves_The_Baseline_Period_For_Now()
 	{
-		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Normal, At(20), NoSun);
+		ModePreview preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Normal, At(20), NoSun);
 
 		Assert.AreEqual("evening", preview.ActivePeriodName, "20:00 is the evening period on the baseline");
 		Assert.IsFalse(preview.IsOffPreview);
@@ -55,7 +55,7 @@ public sealed class ModeServicePreviewTests
 	public void A_Sleep_Mode_Resolves_The_Shared_Table()
 	{
 		// One shared table: every kind but Away resolves the same period the baseline would.
-		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Sleep, At(14), NoSun);
+		ModePreview preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Sleep, At(14), NoSun);
 
 		Assert.AreEqual("day", preview.ActivePeriodName, "14:00 is the day period on the shared table");
 		Assert.IsFalse(preview.IsOffPreview);
@@ -64,7 +64,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void A_Guest_Mode_Resolves_The_Shared_Table_Not_An_Off_Preview()
 	{
-		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Guest, At(20), NoSun);
+		ModePreview preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Guest, At(20), NoSun);
 
 		Assert.IsFalse(preview.IsOffPreview, "guest holds a scene or follows the schedule — it is not the away sweep");
 		Assert.AreEqual("evening", preview.ActivePeriodName);
@@ -73,7 +73,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void An_Away_Mode_Shows_An_Off_Preview_Not_A_Period_Colour()
 	{
-		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Away, At(20), NoSun);
+		ModePreview preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Away, At(20), NoSun);
 
 		Assert.IsTrue(preview.IsOffPreview, "an away mode pauses/sweeps the areas, so the swatch is dark");
 		Assert.IsNull(preview.ActivePeriodName);
@@ -82,9 +82,9 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void An_Empty_Table_Resolves_No_Period_Rather_Than_Guessing()
 	{
-		var config = new AdaptiveLightingConfig();
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig();
 
-		var preview = ModeService.ComputePreview(config, ModeKind.Normal, At(20), NoSun);
+		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Normal, At(20), NoSun);
 
 		Assert.IsNull(preview.ActivePeriodName, "no period can be placed, so nothing is asserted");
 		Assert.IsFalse(preview.IsOffPreview);
@@ -95,7 +95,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Away_Effect_Counts_Swept_And_Kept_Areas_Ignoring_Disabled_Ones()
 	{
-		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Away, At(20), NoSun);
+		ModePreview preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Away, At(20), NoSun);
 
 		// Three enabled areas: stue is swept, gang and ute opt out. The disabled loft is not counted.
 		Assert.AreEqual("turns 1 of 3 rooms off, keeps 2 on", preview.EffectSummary);
@@ -104,12 +104,12 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Away_Effect_Reads_Cleanly_When_No_Area_Opts_Out()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Areas = [new() { Name = "a", AreaId = "a" }, new() { Name = "b", AreaId = "b" }]
 		};
 
-		var preview = ModeService.ComputePreview(config, ModeKind.Away, At(20), NoSun);
+		ModePreview preview = ModeService.ComputePreview(config, ModeKind.Away, At(20), NoSun);
 
 		Assert.AreEqual("turns all 2 rooms off", preview.EffectSummary);
 	}
@@ -117,7 +117,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Sleep_Effect_Counts_Clamped_And_Blocked_Areas_Ignoring_Disabled_Ones()
 	{
-		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Sleep, At(2), NoSun);
+		ModePreview preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Sleep, At(2), NoSun);
 
 		// stue + gang respect sleep (loft is disabled, so not counted); only gang blocks auto-on.
 		Assert.AreEqual("night levels in 2 rooms, 1 never turn on by themselves", preview.EffectSummary);
@@ -126,7 +126,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Normal_Effect_Names_The_Period_It_Uses()
 	{
-		var preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Normal, At(20), NoSun);
+		ModePreview preview = ModeService.ComputePreview(CabinConfig(), ModeKind.Normal, At(20), NoSun);
 
 		Assert.AreEqual("everyday lighting — the \"evening\" period right now", preview.EffectSummary);
 	}
@@ -260,7 +260,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Mode_Cards_Resolve_Through_The_Running_Engines_Latch()
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState("input_select.husmodus", "Normal", new() { ["options"] = new[] { "Normal" } });
 
 		AdaptiveLightingConfig config = HeldFromMidnight();
@@ -304,8 +304,8 @@ public sealed class ModeServicePreviewTests
 	// CurrentThreadScheduler runs those inline and never returns.
 	private static ModeService ServiceOnARunningEngine(FakeHaContext ha, AdaptiveLightingConfig config)
 	{
-		var catalog = new HaCatalog(ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
-		var host = new LightingEngineHost(
+		HaCatalog catalog = new HaCatalog(ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
+		LightingEngineHost host = new LightingEngineHost(
 			new LightingConfigStore(
 				System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"modeservice-{Guid.NewGuid():N}.yaml"),
 				NullLogger<LightingConfigStore>.Instance),
@@ -333,7 +333,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void Derived_State_Comes_From_The_Current_Options_Kind()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig
 			{
@@ -350,10 +350,10 @@ public sealed class ModeServicePreviewTests
 			}
 		};
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState("input_select.husmodus", "Sover");
 
-		var state = Service(ha, config).GetHouseState();
+		HouseDerivedState state = Service(ha, config).GetHouseState();
 
 		Assert.AreEqual(ModeKind.Sleep, state.ActiveKind, "the current option is sleep-kind");
 		Assert.IsTrue(state.IsAvailable);
@@ -362,7 +362,7 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void Derived_State_Reads_A_Guest_Kind_Current_Option()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig
 			{
@@ -378,10 +378,10 @@ public sealed class ModeServicePreviewTests
 			}
 		};
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState("input_select.husmodus", "Gjester");
 
-		var state = Service(ha, config).GetHouseState();
+		HouseDerivedState state = Service(ha, config).GetHouseState();
 
 		Assert.AreEqual(ModeKind.Guest, state.ActiveKind, "a guest-kind current option drives the guest pill");
 	}
@@ -389,9 +389,9 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void Derived_State_With_No_Select_Is_Normal()
 	{
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
 
-		var state = Service(new FakeHaContext(), config).GetHouseState();
+		HouseDerivedState state = Service(new FakeHaContext(), config).GetHouseState();
 
 		Assert.AreEqual(ModeKind.Normal, state.ActiveKind);
 		Assert.IsTrue(state.IsAvailable, "no select to probe means no disconnection was discovered");
@@ -403,13 +403,13 @@ public sealed class ModeServicePreviewTests
 	public void The_Master_Switch_Toggle_Renders_From_The_Built_In_Default_When_Unset()
 	{
 		// KillSwitchEntity is blank, so the host provides the app's own enable switch as the in-memory default.
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
-		var builtIn = "input_boolean.netdaemon_test_app";
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
+		string builtIn = "input_boolean.netdaemon_test_app";
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(builtIn, "on");
 
-		var toggles = Service(ha, config, builtIn).GetToggles();
+		IReadOnlyList<ModeToggle> toggles = Service(ha, config, builtIn).GetToggles();
 
 		Assert.AreEqual(1, toggles.Count, "the master switch always renders now, via the default");
 		Assert.AreEqual(builtIn, toggles[0].EntityId);
@@ -421,26 +421,26 @@ public sealed class ModeServicePreviewTests
 	{
 		// The scoped ModeService can be built before the singleton engine host attaches to Home Assistant, so the
 		// built-in switch is read live on every call, never copied once at construction.
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
-		var builtIn = "input_boolean.netdaemon_test_app";
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
+		string builtIn = "input_boolean.netdaemon_test_app";
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(builtIn, "on");
 
-		var catalog = new HaCatalog(ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
-		var host = new LightingEngineHost(
+		HaCatalog catalog = new HaCatalog(ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
+		LightingEngineHost host = new LightingEngineHost(
 			new LightingConfigStore(
 				System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"modeservice-{Guid.NewGuid():N}.yaml"),
 				NullLogger<LightingConfigStore>.Instance),
 			NullLoggerFactory.Instance);
 
-		var service = new ModeService(ha, new FakeAppConfig(config), catalog, host, NullLogger<ModeService>.Instance);
+		ModeService service = new ModeService(ha, new FakeAppConfig(config), catalog, host, NullLogger<ModeService>.Instance);
 
 		Assert.AreEqual(0, service.GetToggles().Count, "before Attach the built-in switch is unknown, so nothing renders");
 
 		host.Attach(ha, new FakeHaRegistry(), System.Reactive.Concurrency.CurrentThreadScheduler.Instance, builtIn);
 
-		var toggles = service.GetToggles();
+		IReadOnlyList<ModeToggle> toggles = service.GetToggles();
 		Assert.AreEqual(1, toggles.Count, "after Attach the master switch appears on the same service instance");
 		Assert.AreEqual(builtIn, toggles[0].EntityId);
 	}
@@ -450,13 +450,13 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Master_Switch_View_Reads_On_When_The_Enabled_Flag_Is_On()
 	{
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
-		var builtIn = "input_boolean.netdaemon_test_app";
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
+		string builtIn = "input_boolean.netdaemon_test_app";
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(builtIn, "on");
 
-		var view = Service(ha, config, builtIn).GetMasterSwitch();
+		MasterSwitchView? view = Service(ha, config, builtIn).GetMasterSwitch();
 
 		Assert.IsNotNull(view, "the master switch resolves from the built-in default once attached");
 		Assert.AreEqual(builtIn, view.Toggle.EntityId);
@@ -468,13 +468,13 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Master_Switch_View_Reads_Off_When_The_Enabled_Flag_Is_Off()
 	{
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
-		var builtIn = "input_boolean.netdaemon_test_app";
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
+		string builtIn = "input_boolean.netdaemon_test_app";
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(builtIn, "off");
 
-		var view = Service(ha, config, builtIn).GetMasterSwitch();
+		MasterSwitchView? view = Service(ha, config, builtIn).GetMasterSwitch();
 
 		Assert.IsNotNull(view);
 		Assert.IsFalse(view.AdaptiveLightingOn, "an enabled-flag reading off means the engine is paused");
@@ -485,15 +485,15 @@ public sealed class ModeServicePreviewTests
 	public void The_Master_Switch_View_Folds_In_An_Explicit_Kill_Switchs_Inverted_Polarity()
 	{
 		// Read inverted: on muzzles the engine, so AdaptiveLightingOn is the inverse of IsOn.
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { KillSwitchEntity = "switch.kill", KillSwitchActiveWhenOff = false }
 		};
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState("switch.kill", "on");
 
-		var view = Service(ha, config).GetMasterSwitch();
+		MasterSwitchView? view = Service(ha, config).GetMasterSwitch();
 
 		Assert.IsNotNull(view);
 		Assert.AreEqual("switch.kill", view.Toggle.EntityId);
@@ -503,9 +503,9 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Master_Switch_View_Is_Null_Before_The_Default_Resolves()
 	{
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
 
-		var view = Service(new FakeHaContext(), config).GetMasterSwitch();
+		MasterSwitchView? view = Service(new FakeHaContext(), config).GetMasterSwitch();
 
 		Assert.IsNull(view, "no switch resolves before Attach, so the dashboard shows nothing rather than a phantom");
 	}
@@ -513,10 +513,10 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void The_Master_Switch_View_Reports_Unavailable_When_HA_Does_Not_Know_The_Entity()
 	{
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig { KillSwitchEntity = "switch.kill" } };
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig { KillSwitchEntity = "switch.kill" } };
 
 		// No state set for switch.kill. HA answers, it does not throw, but it has no such entity.
-		var view = Service(new FakeHaContext(), config).GetMasterSwitch();
+		MasterSwitchView? view = Service(new FakeHaContext(), config).GetMasterSwitch();
 
 		Assert.IsNotNull(view, "the entity is configured, so the control still renders");
 		Assert.IsFalse(view.IsAvailable, "Home Assistant does not know the entity");
@@ -528,22 +528,22 @@ public sealed class ModeServicePreviewTests
 	public void GetPeople_Discovers_Every_Person_Entity_When_None_Are_Configured()
 	{
 		// With no configured Persons list the panel falls back to the person domain, mirroring PresenceMonitor.
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig() };
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState("person.alex", "home", new() { ["friendly_name"] = "Alex" });
 		ha.SetState("person.kari", "not_home", new() { ["friendly_name"] = "Kari" });
 
-		var people = Service(ha, config).GetPeople();
+		IReadOnlyList<PersonView> people = Service(ha, config).GetPeople();
 
 		Assert.AreEqual(2, people.Count, "both discovered person entities are shown");
 
-		var alex = people.Single(p => p.EntityId == "person.alex");
+		PersonView alex = people.Single(p => p.EntityId == "person.alex");
 		Assert.AreEqual("Alex", alex.Name, "the friendly name is used");
 		Assert.IsTrue(alex.IsHome);
 		Assert.IsTrue(alex.IsAvailable);
 
-		var kari = people.Single(p => p.EntityId == "person.kari");
+		PersonView kari = people.Single(p => p.EntityId == "person.kari");
 		Assert.IsFalse(kari.IsHome, "not_home is away, not home");
 		Assert.IsTrue(kari.IsAvailable);
 	}
@@ -552,17 +552,17 @@ public sealed class ModeServicePreviewTests
 	public void GetPeople_Uses_The_Configured_List_When_One_Is_Set()
 	{
 		// A configured list wins over discovery, and it may name a device_tracker, as the engine watches it.
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { Persons = ["person.alex", "device_tracker.kari_phone"] }
 		};
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState("person.alex", "home", new() { ["friendly_name"] = "Alex" });
 		ha.SetState("device_tracker.kari_phone", "home");
 		ha.SetState("person.guest", "home", new() { ["friendly_name"] = "Guest" });
 
-		var people = Service(ha, config).GetPeople();
+		IReadOnlyList<PersonView> people = Service(ha, config).GetPeople();
 
 		Assert.AreEqual(2, people.Count, "only the configured entities are watched");
 		Assert.IsTrue(people.Any(p => p.EntityId == "device_tracker.kari_phone"), "a configured device_tracker is included");
@@ -572,12 +572,12 @@ public sealed class ModeServicePreviewTests
 	[TestMethod]
 	public void GetPeople_Reports_An_Unknown_Entity_As_Unavailable_Not_Away()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { Persons = ["person.ghost"] }
 		};
 
-		var people = Service(new FakeHaContext(), config).GetPeople();
+		IReadOnlyList<PersonView> people = Service(new FakeHaContext(), config).GetPeople();
 
 		Assert.AreEqual(1, people.Count);
 		Assert.IsFalse(people[0].IsAvailable, "Home Assistant does not know the entity");
@@ -587,8 +587,8 @@ public sealed class ModeServicePreviewTests
 
 	private static ModeService Service(FakeHaContext ha, AdaptiveLightingConfig config, string? defaultKillSwitch = null)
 	{
-		var catalog = new HaCatalog(ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
-		var host = new LightingEngineHost(
+		HaCatalog catalog = new HaCatalog(ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
+		LightingEngineHost host = new LightingEngineHost(
 			new LightingConfigStore(
 				System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"modeservice-{Guid.NewGuid():N}.yaml"),
 				NullLogger<LightingConfigStore>.Instance),

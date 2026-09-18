@@ -11,7 +11,7 @@ public sealed class AutoConfigureTests
 {
 	private static AreaConfig Role(string areaId)
 	{
-		var area = new AreaConfig { AreaId = areaId };
+		AreaConfig area = new AreaConfig { AreaId = areaId };
 		AreaAutoDiscovery.ApplyRole(area);
 		return area;
 	}
@@ -30,7 +30,7 @@ public sealed class AutoConfigureTests
 	[TestMethod]
 	public void A_Bathroom_Dims_At_Night_But_Still_Lights()
 	{
-		var area = Role("kjeller_bad");
+		AreaConfig area = Role("kjeller_bad");
 
 		Assert.IsTrue(area.RespectSleepMode);
 		Assert.IsNull(area.SleepBlocksAutoOn, "a 03:00 trip must still get a light, just a dim one");
@@ -66,7 +66,7 @@ public sealed class AutoConfigureTests
 
 	private static FakeHaContext WithSelect(string entityId, params string[] options)
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(entityId, options.FirstOrDefault() ?? "", new() { ["options"] = options });
 		return ha;
 	}
@@ -74,9 +74,9 @@ public sealed class AutoConfigureTests
 	[TestMethod]
 	public void The_Obvious_House_Mode_Dropdown_Is_Adopted_And_Classified()
 	{
-		var ha = WithSelect("input_select.house_state", "Home", "Away", "Sleeping", "Guests");
+		FakeHaContext ha = WithSelect("input_select.house_state", "Home", "Away", "Sleeping", "Guests");
 
-		var detected = HouseModeAutoDetect.Detect(ha, NullLogger.Instance);
+		HouseModeConfig? detected = HouseModeAutoDetect.Detect(ha, NullLogger.Instance);
 
 		Assert.IsNotNull(detected);
 		Assert.AreEqual("input_select.house_state", detected.Entity);
@@ -93,7 +93,7 @@ public sealed class AutoConfigureTests
 	[TestMethod]
 	public void Norwegian_Options_Are_Understood()
 	{
-		var detected = HouseModeAutoDetect.Detect(
+		HouseModeConfig? detected = HouseModeAutoDetect.Detect(
 			WithSelect("input_select.husmodus", "Hjemme", "Borte", "Sover", "Gjester"), NullLogger.Instance);
 
 		Assert.IsNotNull(detected);
@@ -139,7 +139,7 @@ public sealed class AutoConfigureTests
 	[TestMethod]
 	public void Two_Candidates_Means_Choosing_Neither()
 	{
-		var ha = WithSelect("input_select.house_state", "Home", "Away", "Sleeping");
+		FakeHaContext ha = WithSelect("input_select.house_state", "Home", "Away", "Sleeping");
 		ha.SetState("input_select.hytta", "Hjemme", new() { ["options"] = new[] { "Hjemme", "Borte" } });
 
 		Assert.IsNull(HouseModeAutoDetect.Detect(ha, NullLogger.Instance));

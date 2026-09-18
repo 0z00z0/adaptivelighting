@@ -1,5 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -8,7 +9,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Level_Test_Is_Refused_While_The_House_Is_Away()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.House.OnNext(AwayHouse());
 
 		Assert.IsNotNull(t.Area.LevelTestRefusal(), "the button carries its own reason");
@@ -19,7 +20,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Running_Level_Test_Is_Dropped_When_A_Guest_Scene_Takes_The_Room()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		Assert.IsNull(t.Area.TestPeriod("night"));
 
 		t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"));
@@ -35,7 +36,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Running_Level_Test_Is_Dropped_When_The_House_Goes_Away()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		Assert.IsNull(t.Area.TestPeriod("night"), "the control: an ordinary house lets the test run");
 
 		t.House.OnNext(AwayHouse());
@@ -51,7 +52,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Running_Level_Test_Is_Dropped_When_The_Master_Switch_Goes_On()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		Assert.IsNull(t.Area.TestPeriod("night"));
 
 		t.House.OnNext(House(killed: true));

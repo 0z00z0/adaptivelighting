@@ -12,7 +12,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Light_Dropping_Off_The_Network_Is_Not_A_Human_Switching_It_Off()
 	{
-		var t = Build();
+		Fixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 
@@ -27,7 +27,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Light_Coming_Back_From_Unavailable_Is_Not_A_Human_Switching_It_On()
 	{
-		var t = Build();
+		Fixture t = Build();
 		Advance(t, TimeSpan.FromSeconds(30));
 
 		t.Ha.Trigger(Light, "unavailable", null, PhysicalDevice());
@@ -40,7 +40,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Lights_Very_First_Report_Is_Not_An_Override()
 	{
-		var t = Build();
+		Fixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));
 
@@ -94,7 +94,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Real_Off_Is_Still_Read_As_A_Human()
 	{
-		var t = Build();
+		Fixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));
 

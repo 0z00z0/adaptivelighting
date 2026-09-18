@@ -100,10 +100,10 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesGlobal()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Global;
-		var expected = original.Global;
+		GlobalConfig actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Global;
+		GlobalConfig expected = original.Global;
 
 		CollectionAssert.AreEqual(expected.Persons, actual.Persons);
 		Assert.AreEqual(expected.KillSwitchEntity, actual.KillSwitchEntity);
@@ -123,10 +123,10 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesDefaults()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Defaults;
-		var expected = original.Defaults;
+		AreaSettings actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Defaults;
+		AreaSettings expected = original.Defaults;
 
 		Assert.AreEqual(expected.VacancyTimeoutSeconds, actual.VacancyTimeoutSeconds);
 		Assert.AreEqual(expected.PreOffSeconds, actual.PreOffSeconds);
@@ -330,13 +330,13 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesPeriods()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Periods;
+		List<TimePeriodConfig> actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Periods;
 
 		Assert.AreEqual(original.Periods.Count, actual.Count);
 
-		for (var index = 0; index < original.Periods.Count; index++)
+		for (int index = 0; index < original.Periods.Count; index++)
 		{
 			Assert.AreEqual(original.Periods[index].Name, actual[index].Name);
 			Assert.AreEqual(original.Periods[index].Start, actual[index].Start);
@@ -348,10 +348,10 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesFullyOverriddenArea()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[1];
-		var expected = original.Areas[1];
+		AreaConfig actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[1];
+		AreaConfig expected = original.Areas[1];
 
 		Assert.AreEqual(expected.Name, actual.Name);
 		Assert.AreEqual(expected.AreaId, actual.AreaId);
@@ -387,9 +387,9 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_LeavesInheritedAreaSettingsNull()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var area = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
+		AreaConfig area = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
 
 		Assert.AreEqual("stue", area.AreaId);
 		Assert.IsTrue(area.RespectSleepMode);
@@ -423,15 +423,15 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Serialize_DoesNotWriteComputedProperties()
 	{
-		var config = Populated();
+		AdaptiveLightingConfig config = Populated();
 		config.Global.MotionDeviceClasses = [];
 
-		var yaml = LightingConfigDocument.Serialize(config);
+		string yaml = LightingConfigDocument.Serialize(config);
 
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(nameof(GlobalConfig.EffectiveMotionDeviceClasses)));
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(nameof(AreaConfig.DisplayName)));
 
-		var reloaded = LightingConfigDocument.Deserialize(yaml).Config;
+		AdaptiveLightingConfig reloaded = LightingConfigDocument.Deserialize(yaml).Config;
 
 		Assert.AreEqual(0, reloaded.Global.MotionDeviceClasses.Count);
 		CollectionAssert.AreEqual(
@@ -442,8 +442,8 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Serialize_IsStableAcrossRepeatedRoundTrips()
 	{
-		var once = LightingConfigDocument.Serialize(Populated());
-		var twice = LightingConfigDocument.Serialize(LightingConfigDocument.Deserialize(once).Config);
+		string once = LightingConfigDocument.Serialize(Populated());
+		string twice = LightingConfigDocument.Serialize(LightingConfigDocument.Deserialize(once).Config);
 
 		Assert.AreEqual(once, twice);
 	}
@@ -457,7 +457,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Deserialize_WithoutTheRootKey_ExplainsWhatIsThere()
 	{
-		var exception = Assert.ThrowsException<LightingConfigException>(() =>
+		LightingConfigException exception = Assert.ThrowsException<LightingConfigException>(() =>
 			LightingConfigDocument.Deserialize("SomeOtherApp:\n  Setting: 1\n"));
 
 		StringAssert.Contains(exception.Message, "SomeOtherApp");
@@ -473,7 +473,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Deserialize_OfAnEmptySection_GivesAnEmptyDocumentRatherThanThrowing()
 	{
-		var config = LightingConfigDocument.Deserialize($"{LightingConfigDocument.RootKey}:\n").Config;
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize($"{LightingConfigDocument.RootKey}:\n").Config;
 
 		Assert.AreEqual(0, config.Areas.Count);
 		Assert.AreEqual(0, config.Periods.Count);
@@ -511,7 +511,7 @@ public sealed class LightingConfigDocumentTests
 	public void RoundTrip_NoHouseMode_EmitsNoHouseModeOrModeKeys()
 	{
 		// Populated() carries no HouseMode and no tagged periods, so a save must not acquire either key.
-		var yaml = LightingConfigDocument.Serialize(Populated());
+		string yaml = LightingConfigDocument.Serialize(Populated());
 
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex("HouseMode"));
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(@"\bMode:"));
@@ -523,7 +523,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesARoomsLevels()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 		original.Areas[0].Levels =
 		[
 			new RoomLevelOverride { PeriodId = "night", BrightnessPct = 8, ColorTempKelvin = 2000 },
@@ -532,7 +532,7 @@ public sealed class LightingConfigDocumentTests
 			new RoomLevelOverride { PeriodId = "kveld", BrightnessPct = 40 }   // a renamed period: kept, not dropped
 		];
 
-		var reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
+		AreaConfig reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
 
 		Assert.AreEqual(4, reloaded.Levels.Count, "the list replaces, it does not append or shrink");
 
@@ -552,7 +552,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Serialize_DoesNotWriteTheDerivedIsEmptyFlag()
 	{
-		var config = Populated();
+		AdaptiveLightingConfig config = Populated();
 		config.Areas[0].Levels = [new RoomLevelOverride { PeriodId = "night", BrightnessPct = 8 }];
 
 		StringAssert.DoesNotMatch(
@@ -625,7 +625,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_WithHouseMode_RoundTripsLosslessly()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 		original.Global.HouseMode = new HouseModeConfig
 		{
 			Entity = "input_select.husmodus",
@@ -638,7 +638,7 @@ public sealed class LightingConfigDocumentTests
 		};
 		original.Periods.Add(new TimePeriodConfig { Id = "late-5e5e", Name = "late", SetsModeId = "Sover", Start = "23:15", BrightnessPct = 10, ColorTempKelvin = 2000 });
 
-		var reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config;
+		AdaptiveLightingConfig reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config;
 
 		Assert.AreEqual("input_select.husmodus", reloaded.Global.HouseMode!.Entity);
 		Assert.AreEqual(3, reloaded.Global.HouseMode.Options.Count, "the option list replaces, it does not append");
@@ -672,7 +672,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Deserialize_ReadsTheShippedExampleShape()
 	{
-		var config = LightingConfigDocument.Deserialize(
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  ConfigName: "Adaptive lighting [Home]"

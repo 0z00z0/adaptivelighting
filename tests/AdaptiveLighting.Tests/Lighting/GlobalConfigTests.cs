@@ -11,10 +11,10 @@ public sealed class GlobalConfigTests
 	{
 		Assert.IsNull(new GlobalConfig().EffectiveKillSwitchEntity(null), "unset with no default resolves to nothing");
 
-		var defaulted = new GlobalConfig();
+		GlobalConfig defaulted = new GlobalConfig();
 		Assert.AreEqual("input_boolean.builtin", defaulted.EffectiveKillSwitchEntity("input_boolean.builtin"), "the defaulted built-in fills in");
 
-		var explicitEntity = new GlobalConfig
+		GlobalConfig explicitEntity = new GlobalConfig
 		{
 			KillSwitchEntity = "switch.explicit"
 		};
@@ -24,21 +24,21 @@ public sealed class GlobalConfigTests
 	[TestMethod]
 	public void An_Empty_KillSwitchEntity_Falls_Back_To_The_Default()
 	{
-		var empty = new GlobalConfig { KillSwitchEntity = "" };
+		GlobalConfig empty = new GlobalConfig { KillSwitchEntity = "" };
 		Assert.AreEqual("input_boolean.builtin", empty.EffectiveKillSwitchEntity("input_boolean.builtin"), "\"\" is absent, not a chosen entity");
 	}
 
 	[TestMethod]
 	public void EffectiveMotionDeviceClasses_UsesTheConfiguredListWhenPresent()
 	{
-		var configured = new GlobalConfig { MotionDeviceClasses = ["motion", "vibration"] };
+		GlobalConfig configured = new GlobalConfig { MotionDeviceClasses = ["motion", "vibration"] };
 		CollectionAssert.AreEqual(new[] { "motion", "vibration" }, configured.EffectiveMotionDeviceClasses.ToList());
 	}
 
 	[TestMethod]
 	public void EffectiveMotionDeviceClasses_FallsBackToTheBuiltInSetWhenEmpty()
 	{
-		var empty = new GlobalConfig { MotionDeviceClasses = [] };
+		GlobalConfig empty = new GlobalConfig { MotionDeviceClasses = [] };
 		CollectionAssert.AreEqual(GlobalConfig.DefaultMotionDeviceClasses.ToList(), empty.EffectiveMotionDeviceClasses.ToList());
 	}
 }

@@ -36,7 +36,7 @@ public sealed class IlluminanceGateTests
 		IEntityLastSeen? lastSeen = null,
 		ILogger? logger = null)
 	{
-		var settings = new AreaSettings { Darkness = source, LuxThreshold = 40, LuxHysteresis = 10, SunElevationThreshold = 3 };
+		AreaSettings settings = new AreaSettings { Darkness = source, LuxThreshold = 40, LuxHysteresis = 10, SunElevationThreshold = 3 };
 		tweak?.Invoke(settings);
 
 		return new IlluminanceGate(
@@ -75,7 +75,7 @@ public sealed class IlluminanceGateTests
 
 	private static FakeHaContext Ha(string? lux = null, double? sunElevation = null)
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		if (lux is not null)
 			ha.SetState(Lux, lux);
 
@@ -125,7 +125,7 @@ public sealed class IlluminanceGateTests
 	[TestMethod]
 	public void DarknessDetail_Reports_The_Lux_Reading_And_The_Threshold()
 	{
-		var gate = Build(Ha(lux: "86"), DarknessSource.Lux);
+		IlluminanceGate gate = Build(Ha(lux: "86"), DarknessSource.Lux);
 		gate.IsDarkEnough();   // take a reading first, which DarknessDetail then explains
 
 		string detail = gate.DarknessDetail();
@@ -137,8 +137,8 @@ public sealed class IlluminanceGateTests
 	[TestMethod]
 	public void Hysteresis_Holds_The_Verdict_Across_The_Threshold()
 	{
-		var ha = Ha(lux: "39");
-		var gate = Build(ha, DarknessSource.Lux);
+		FakeHaContext ha = Ha(lux: "39");
+		IlluminanceGate gate = Build(ha, DarknessSource.Lux);
 		Assert.IsTrue(gate.IsDarkEnough());
 
 		ha.SetState(Lux, "45");

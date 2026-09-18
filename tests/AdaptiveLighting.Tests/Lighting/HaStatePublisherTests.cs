@@ -17,10 +17,10 @@ public sealed class HaStatePublisherTests
 	[TestMethod]
 	public void HouseModeValue_Survives_The_Serialize_Event_ToSnapshot_Round_Trip()
 	{
-		var ha = new FakeHaContext();
-		var publisher = new HaStatePublisher(ha, NullLogger.Instance);
+		FakeHaContext ha = new FakeHaContext();
+		HaStatePublisher publisher = new HaStatePublisher(ha, NullLogger.Instance);
 
-		var snapshot = new AreaSnapshot(
+		AreaSnapshot snapshot = new AreaSnapshot(
 			"Stue", AreaState.AutoActive, TransitionReason.Motion, ModeKind.Sleep,
 			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: 70, ColorTempKelvin: 2700,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
@@ -28,17 +28,17 @@ public sealed class HaStatePublisherTests
 
 		publisher.Publish(snapshot);
 
-		var (type, data) = ha.SentEvents.Single();
+		(string? type, object? data) = ha.SentEvents.Single();
 		Assert.AreEqual(HaStatePublisher.EventType, type);
 
 		// Round-trip through JSON the way NetDaemon's Event<T>.Data does: serialize the published payload,
 		// then bind it into the web-side event record and rebuild the snapshot.
-		var json = JsonSerializer.Serialize(data);
-		var wire = JsonSerializer.Deserialize<AreaSnapshotEvent>(json);
+		string json = JsonSerializer.Serialize(data);
+		AreaSnapshotEvent? wire = JsonSerializer.Deserialize<AreaSnapshotEvent>(json);
 		Assert.IsNotNull(wire);
 		Assert.AreEqual("Sover", wire!.HouseModeValue, "house_mode_value survives serialisation into the event");
 
-		var rebuilt = wire.ToSnapshot();
+		AreaSnapshot? rebuilt = wire.ToSnapshot();
 		Assert.IsNotNull(rebuilt);
 		Assert.AreEqual("Sover", rebuilt!.HouseModeValue, "…and back out into the snapshot the card reads");
 	}
@@ -46,10 +46,10 @@ public sealed class HaStatePublisherTests
 	[TestMethod]
 	public void A_Null_HouseModeValue_Round_Trips_As_Null()
 	{
-		var ha = new FakeHaContext();
-		var publisher = new HaStatePublisher(ha, NullLogger.Instance);
+		FakeHaContext ha = new FakeHaContext();
+		HaStatePublisher publisher = new HaStatePublisher(ha, NullLogger.Instance);
 
-		var snapshot = new AreaSnapshot(
+		AreaSnapshot snapshot = new AreaSnapshot(
 			"Stue", AreaState.AutoVacant, TransitionReason.Startup, ModeKind.Normal,
 			KillSwitchActive: false, IsDark: false, PeriodName: "day", BrightnessPct: null, ColorTempKelvin: null,
 			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
@@ -57,8 +57,8 @@ public sealed class HaStatePublisherTests
 
 		publisher.Publish(snapshot);
 
-		var json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
-		var rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(json)!.ToSnapshot();
+		string json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(json)!.ToSnapshot();
 
 		Assert.IsNotNull(rebuilt);
 		Assert.IsNull(rebuilt!.HouseModeValue, "no select configured → the raw value stays null through the round trip");

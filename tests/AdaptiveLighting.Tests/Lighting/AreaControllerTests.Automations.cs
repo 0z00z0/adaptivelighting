@@ -12,7 +12,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void An_Automation_Counts_As_Manual_By_Default()
 	{
-		var t = Build();
+		Fixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 
 		t.Ha.Trigger(Light, "off", null, new Context { Id = "x", UserId = "u", ParentId = "automation" });
@@ -23,7 +23,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void An_Automation_Is_Ignored_When_TreatAutomationsAsManual_Is_False()
 	{
-		var t = Build(tweakGlobal: g => g.TreatAutomationsAsManual = false);
+		Fixture t = Build(tweakGlobal: g => g.TreatAutomationsAsManual = false);
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));
 

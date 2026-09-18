@@ -1,5 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -9,14 +10,14 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Vacant_Area_Publishes_Once_When_Darkness_Changes_Under_It()
 	{
-		var t = Build(s => s.Darkness = DarknessSource.Lux);
+		AreaFixture t = Build(s => s.Darkness = DarknessSource.Lux);
 		t.Ha.SetState(Lux, "5000");
 
 		// One tick to notice it got bright, then quiet again.
 		Advance(t, TimeSpan.FromMinutes(1));
 		Assert.AreEqual(false, t.Publisher.Snapshots[^1].IsDark);
 
-		var afterBright = t.Publisher.Snapshots.Count;
+		int afterBright = t.Publisher.Snapshots.Count;
 		Advance(t, TimeSpan.FromMinutes(20));
 		Assert.AreEqual(afterBright, t.Publisher.Snapshots.Count, "an area whose world is not moving stays quiet");
 
@@ -35,7 +36,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Repeated_Identical_Snapshot_Is_Published_Only_Once()
 	{
-		var t = Build(s => s.OverrideDurationMinutes = 120);
+		AreaFixture t = Build(s => s.OverrideDurationMinutes = 120);
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));   // past the echo window, so the manual touch is read as a human
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
@@ -55,8 +56,8 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Quiet_Area_Publishes_Nothing_However_Long_It_Ticks()
 	{
-		var t = Build();
-		var afterStartup = t.Publisher.Snapshots.Count;
+		AreaFixture t = Build();
+		int afterStartup = t.Publisher.Snapshots.Count;
 
 		Advance(t, TimeSpan.FromHours(2));
 
@@ -67,7 +68,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Tick_Publishes_When_The_House_Mode_Changes_Under_A_Resting_Area()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Publisher.Snapshots.Clear();
 
 		// Sleep mode does not transition an AutoVacant area, so only the tick's diff can carry the news.
@@ -81,7 +82,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Disposed_Controller_Goes_Quiet()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 
 		t.Area.Dispose();
@@ -96,7 +97,7 @@ public sealed partial class AreaControllerTests
 	public void A_Boundary_Already_In_Flight_Commands_Nothing_Once_The_Controller_Is_Disposed()
 	{
 		BoundaryCapturingScheduler? captured = null;
-		var t = Build(wrapScheduler: inner => captured = new BoundaryCapturingScheduler(inner));
+		AreaFixture t = Build(wrapScheduler: inner => captured = new BoundaryCapturingScheduler(inner));
 
 		t.Ha.Trigger(Motion, "on");
 

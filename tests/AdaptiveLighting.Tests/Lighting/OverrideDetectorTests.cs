@@ -18,10 +18,10 @@ public sealed class OverrideDetectorTests
 
 	private static (OverrideDetector Detector, TestScheduler Scheduler, FakeHaContext Ha) Build(Action<GlobalConfig>? tweak = null)
 	{
-		var scheduler = new TestScheduler();
+		TestScheduler scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
 
-		var global = new GlobalConfig();
+		GlobalConfig global = new GlobalConfig();
 		tweak?.Invoke(global);
 
 		return (new OverrideDetector(global, scheduler), scheduler, new FakeHaContext());
@@ -31,7 +31,7 @@ public sealed class OverrideDetectorTests
 	private static StateChange Change(FakeHaContext ha, string state, Context? context)
 	{
 		StateChange? captured = null;
-		using var subscription = ha.StateAllChanges().Subscribe(c => captured = c);
+		using IDisposable subscription = ha.StateAllChanges().Subscribe(c => captured = c);
 		ha.Trigger(Light, state, null, context);
 		return captured!;
 	}
@@ -41,9 +41,9 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void No_User_And_No_Parent_Is_A_Physical_Device()
 	{
-		var (detector, _, ha) = Build();
+		(OverrideDetector? detector, TestScheduler _, FakeHaContext? ha) = Build();
 
-		var origin = detector.Classify(Change(ha, "on", new Context { Id = "c" }));
+		ChangeOrigin origin = detector.Classify(Change(ha, "on", new Context { Id = "c" }));
 
 		Assert.AreEqual(ChangeOrigin.PhysicalDevice, origin, "nothing created this on anyone's behalf: the switch reported it");
 	}
@@ -51,9 +51,9 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void A_User_With_No_Parent_Is_A_Person_In_The_App()
 	{
-		var (detector, _, ha) = Build();
+		(OverrideDetector? detector, TestScheduler _, FakeHaContext? ha) = Build();
 
-		var origin = detector.Classify(Change(ha, "on", new Context { Id = "c", UserId = "someone" }));
+		ChangeOrigin origin = detector.Classify(Change(ha, "on", new Context { Id = "c", UserId = "someone" }));
 
 		Assert.AreEqual(ChangeOrigin.HaUser, origin);
 	}
@@ -61,9 +61,9 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void A_Parent_With_No_User_Is_An_Automation()
 	{
-		var (detector, _, ha) = Build();
+		(OverrideDetector? detector, TestScheduler _, FakeHaContext? ha) = Build();
 
-		var origin = detector.Classify(Change(ha, "on", new Context { Id = "c", ParentId = "p" }));
+		ChangeOrigin origin = detector.Classify(Change(ha, "on", new Context { Id = "c", ParentId = "p" }));
 
 		Assert.AreEqual(ChangeOrigin.Automation, origin);
 	}
@@ -73,9 +73,9 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void A_Change_Carrying_Both_A_User_And_A_Parent_Is_An_Automation_Not_A_User()
 	{
-		var (detector, _, ha) = Build();
+		(OverrideDetector? detector, TestScheduler _, FakeHaContext? ha) = Build();
 
-		var origin = detector.Classify(Change(ha, "on", new Context { Id = "c", UserId = "someone", ParentId = "script.evening" }));
+		ChangeOrigin origin = detector.Classify(Change(ha, "on", new Context { Id = "c", UserId = "someone", ParentId = "script.evening" }));
 
 		Assert.AreEqual(ChangeOrigin.Automation, origin, "it is the script that set the level, not the finger that started it");
 	}
@@ -106,9 +106,9 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void A_Change_With_No_Context_At_All_Is_Unknown()
 	{
-		var (detector, _, ha) = Build();
+		(OverrideDetector? detector, TestScheduler _, FakeHaContext? ha) = Build();
 
-		var origin = detector.Classify(Change(ha, "on", null));
+		ChangeOrigin origin = detector.Classify(Change(ha, "on", null));
 
 		Assert.AreEqual(ChangeOrigin.Unknown, origin);
 	}
@@ -118,11 +118,11 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void A_Change_Matching_A_Live_Expectation_Is_Ours_Whatever_Its_Context_Says()
 	{
-		var (detector, scheduler, ha) = Build();
+		(OverrideDetector? detector, TestScheduler? scheduler, FakeHaContext? ha) = Build();
 		detector.ExpectCommand(Light, new LightCommand(true, 70, 2700, 0));
 
 		scheduler.AdvanceBy(TimeSpan.FromSeconds(1).Ticks);
-		var origin = detector.Classify(Change(ha, "on", new Context { Id = "c", UserId = "someone" }));
+		ChangeOrigin origin = detector.Classify(Change(ha, "on", new Context { Id = "c", UserId = "someone" }));
 
 		Assert.AreEqual(ChangeOrigin.Self, origin);
 	}
@@ -130,10 +130,10 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void An_Expectation_Survives_The_Whole_Burst_Of_Changes_One_Command_Provokes()
 	{
-		var (detector, scheduler, ha) = Build();
+		(OverrideDetector? detector, TestScheduler? scheduler, FakeHaContext? ha) = Build();
 		detector.ExpectCommand(Light, new LightCommand(true, 70, 2700, 0));
 
-		for (var i = 0; i < 5; i++)
+		for (int i = 0; i < 5; i++)
 		{
 			scheduler.AdvanceBy(TimeSpan.FromSeconds(1).Ticks);
 			Assert.AreEqual(ChangeOrigin.Self, detector.Classify(Change(ha, "on", new Context { Id = $"c{i}" })),
@@ -144,11 +144,11 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void An_Expectation_Expires()
 	{
-		var (detector, scheduler, ha) = Build();   // default echo window: 8 s
+		(OverrideDetector? detector, TestScheduler? scheduler, FakeHaContext? ha) = Build();   // default echo window: 8 s
 		detector.ExpectCommand(Light, new LightCommand(true, 70, 2700, 0));
 
 		scheduler.AdvanceBy(TimeSpan.FromSeconds(9).Ticks);
-		var origin = detector.Classify(Change(ha, "on", new Context { Id = "c" }));
+		ChangeOrigin origin = detector.Classify(Change(ha, "on", new Context { Id = "c" }));
 
 		Assert.AreEqual(ChangeOrigin.PhysicalDevice, origin, "a window that never closes means nothing is ever an override");
 	}
@@ -158,7 +158,7 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void The_Expectation_Window_Spans_The_Commands_Own_Transition()
 	{
-		var (detector, scheduler, ha) = Build();   // 8 s echo window
+		(OverrideDetector? detector, TestScheduler? scheduler, FakeHaContext? ha) = Build();   // 8 s echo window
 		detector.ExpectCommand(Light, new LightCommand(true, 70, 2700, 30));
 
 		scheduler.AdvanceBy(TimeSpan.FromSeconds(20).Ticks);
@@ -173,11 +173,11 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void An_Expectation_Does_Not_Cover_A_Change_In_The_Opposite_Direction()
 	{
-		var (detector, scheduler, ha) = Build();
+		(OverrideDetector? detector, TestScheduler? scheduler, FakeHaContext? ha) = Build();
 		detector.ExpectCommand(Light, new LightCommand(true, 70, 2700, 0));
 
 		scheduler.AdvanceBy(TimeSpan.FromSeconds(1).Ticks);
-		var origin = detector.Classify(Change(ha, "off", new Context { Id = "c" }));
+		ChangeOrigin origin = detector.Classify(Change(ha, "off", new Context { Id = "c" }));
 
 		Assert.AreEqual(ChangeOrigin.PhysicalDevice, origin, "we asked for on and the light went off: that was somebody else");
 	}
@@ -185,11 +185,11 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void An_Expectation_Is_Scoped_To_Its_Own_Entity()
 	{
-		var (detector, scheduler, ha) = Build();
+		(OverrideDetector? detector, TestScheduler? scheduler, FakeHaContext? ha) = Build();
 		detector.ExpectCommand("light.somewhere_else", new LightCommand(true, 70, 2700, 0));
 
 		scheduler.AdvanceBy(TimeSpan.FromSeconds(1).Ticks);
-		var origin = detector.Classify(Change(ha, "on", new Context { Id = "c" }));
+		ChangeOrigin origin = detector.Classify(Change(ha, "on", new Context { Id = "c" }));
 
 		Assert.AreEqual(ChangeOrigin.PhysicalDevice, origin);
 	}
@@ -199,7 +199,7 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void Humans_Are_Manual_And_We_Are_Not()
 	{
-		var (detector, _, _) = Build();
+		(OverrideDetector? detector, TestScheduler _, FakeHaContext _) = Build();
 
 		Assert.IsTrue(detector.IsManual(ChangeOrigin.PhysicalDevice));
 		Assert.IsTrue(detector.IsManual(ChangeOrigin.HaUser));
@@ -210,10 +210,10 @@ public sealed class OverrideDetectorTests
 	[TestMethod]
 	public void Automations_Are_Manual_By_Default_And_Configurably_Not()
 	{
-		var (defaulted, _, _) = Build();
+		(OverrideDetector? defaulted, TestScheduler _, FakeHaContext _) = Build();
 		Assert.IsTrue(defaulted.IsManual(ChangeOrigin.Automation));
 
-		var (configured, _, _) = Build(g => g.TreatAutomationsAsManual = false);
+		(OverrideDetector? configured, TestScheduler _, FakeHaContext _) = Build(g => g.TreatAutomationsAsManual = false);
 		Assert.IsFalse(configured.IsManual(ChangeOrigin.Automation));
 	}
 

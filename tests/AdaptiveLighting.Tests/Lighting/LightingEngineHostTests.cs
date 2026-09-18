@@ -49,10 +49,10 @@ public sealed class LightingEngineHostTests
 	[TestMethod]
 	public void Save_WithNoPeriods_IsRefusedAndNothingIsWritten()
 	{
-		var config = Valid();
+		AdaptiveLightingConfig config = Valid();
 		config.Periods = [];
 
-		var result = BuildHost().Save(config);
+		SaveResult result = BuildHost().Save(config);
 
 		Assert.AreEqual(SaveStatus.Rejected, result.Status);
 		Assert.IsFalse(result.Written);
@@ -63,10 +63,10 @@ public sealed class LightingEngineHostTests
 	[TestMethod]
 	public void Save_WithNoAreas_IsAccepted()
 	{
-		var config = Valid();
+		AdaptiveLightingConfig config = Valid();
 		config.Areas = [];
 
-		var result = BuildHost().Save(config);
+		SaveResult result = BuildHost().Save(config);
 
 		Assert.AreNotEqual(SaveStatus.Rejected, result.Status, "an area-less document is valid, just idle");
 		Assert.IsTrue(File.Exists(_path), "and it reaches the disk");
@@ -76,11 +76,11 @@ public sealed class LightingEngineHostTests
 	[TestMethod]
 	public void Save_WhenRefused_ReportsTheValidatorsOwnMessages()
 	{
-		var config = Valid();
+		AdaptiveLightingConfig config = Valid();
 		config.Defaults.PreOffSeconds = 900;
 		config.Defaults.VacancyTimeoutSeconds = 600;
 
-		var result = BuildHost().Save(config);
+		SaveResult result = BuildHost().Save(config);
 
 		Assert.AreEqual(SaveStatus.Rejected, result.Status);
 		Assert.IsTrue(
@@ -91,12 +91,12 @@ public sealed class LightingEngineHostTests
 	[TestMethod]
 	public void Save_WhenRefused_LeavesTheExistingDocumentExactlyAsItWas()
 	{
-		var host = BuildHost();
+		LightingEngineHost host = BuildHost();
 		Assert.AreEqual(SaveStatus.Saved, host.Save(Valid()).Status);
 
-		var before = File.ReadAllText(_path);
+		string before = File.ReadAllText(_path);
 
-		var broken = Valid();
+		AdaptiveLightingConfig broken = Valid();
 		broken.Periods = [];
 
 		Assert.AreEqual(SaveStatus.Rejected, host.Save(broken).Status);
@@ -106,15 +106,15 @@ public sealed class LightingEngineHostTests
 	[TestMethod]
 	public void Save_OfAValidDocument_WritesItAndItLoadsBack()
 	{
-		var host = BuildHost();
+		LightingEngineHost host = BuildHost();
 
-		var result = host.Save(Valid());
+		SaveResult result = host.Save(Valid());
 
 		Assert.AreEqual(SaveStatus.Saved, result.Status);
 		Assert.IsTrue(result.Written);
 		Assert.IsTrue(File.Exists(_path));
 
-		var reloaded = host.Store.Load();
+		AdaptiveLightingConfig reloaded = host.Store.Load();
 
 		Assert.AreEqual("Adaptive lighting [test]", reloaded.ConfigName);
 		Assert.AreEqual("stue", reloaded.Areas.Single().AreaId);
@@ -123,9 +123,9 @@ public sealed class LightingEngineHostTests
 	[TestMethod]
 	public void Save_WithNoHomeAssistantAttached_SavesButDoesNotClaimToBeRunning()
 	{
-		var host = BuildHost();
+		LightingEngineHost host = BuildHost();
 
-		var result = host.Save(Valid());
+		SaveResult result = host.Save(Valid());
 
 		Assert.AreEqual(SaveStatus.Saved, result.Status);
 		Assert.IsFalse(host.IsRunning);
@@ -368,12 +368,12 @@ public sealed class LightingEngineHostTests
 	[TestMethod]
 	public void Save_OverAnExistingDocument_KeepsOneBackup()
 	{
-		var host = BuildHost();
+		LightingEngineHost host = BuildHost();
 		host.Save(Valid());
 
-		var first = File.ReadAllText(_path);
+		string first = File.ReadAllText(_path);
 
-		var second = Valid();
+		AdaptiveLightingConfig second = Valid();
 		second.ConfigName = "Adaptive lighting [second]";
 		host.Save(second);
 
@@ -393,9 +393,9 @@ public sealed class LightingEngineHostTests
 	[TestMethod]
 	public void Reload_WhenTheFileIsMissing_ReportsItRatherThanThrowing()
 	{
-		var host = BuildHost();
+		LightingEngineHost host = BuildHost();
 
-		var result = host.Reload();
+		SaveResult result = host.Reload();
 
 		Assert.AreEqual(SaveStatus.Failed, result.Status);
 		Assert.IsFalse(host.IsRunning);
@@ -407,7 +407,7 @@ public sealed class LightingEngineHostTests
 	{
 		File.WriteAllText(_path, "\tnot: [valid\n  yaml\n");
 
-		var result = BuildHost().Reload();
+		SaveResult result = BuildHost().Reload();
 
 		Assert.AreEqual(SaveStatus.Failed, result.Status);
 		Assert.IsFalse(result.Validation.IsValid);
@@ -416,10 +416,10 @@ public sealed class LightingEngineHostTests
 	[TestMethod]
 	public void Save_WithAnAreaThatCannotResolve_StillSaves()
 	{
-		var config = Valid();
+		AdaptiveLightingConfig config = Valid();
 		config.Areas.Add(new AreaConfig { Name = "Broken" });
 
-		var result = BuildHost().Save(config);
+		SaveResult result = BuildHost().Save(config);
 
 		Assert.AreEqual(SaveStatus.Saved, result.Status);
 		Assert.IsTrue(result.Validation.IsValid, "An area error is not a document error.");

@@ -22,15 +22,15 @@ public sealed class LightingOrchestratorTests
 	// paused wires the master switch as an enabled flag: off is the app muzzled.
 	private static Fixture Build(HouseModeConfig houseMode, string selectState, bool paused = false)
 	{
-		var scheduler = new TestScheduler();
+		TestScheduler scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
 
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(Person, "home");
 		ha.SetState(Select, selectState);
 		ha.SetState(Master, paused ? "off" : "on");
 
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig
 			{
@@ -43,8 +43,8 @@ public sealed class LightingOrchestratorTests
 			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }]
 		};
 
-		var actuator = new FakeLightActuator();
-		var orchestrator = new LightingOrchestrator(
+		FakeLightActuator actuator = new FakeLightActuator();
+		LightingOrchestrator orchestrator = new LightingOrchestrator(
 			ha, new FakeHaRegistry(), scheduler, config,
 			actuator, new FakeStatePublisher(), new FakeNotifier(), NullLoggerFactory.Instance);
 
@@ -66,7 +66,7 @@ public sealed class LightingOrchestratorTests
 	[TestMethod]
 	public void SceneMode_AppliesTheSceneOnceOnEntry_AndDoesNotReassert()
 	{
-		var t = Build(WithScenes(), selectState: "Normal");
+		Fixture t = Build(WithScenes(), selectState: "Normal");
 		Assert.AreEqual(0, t.Actuator.Scenes.Count, "the Normal baseline names no scene");
 
 		t.Ha.Trigger(Select, "Borte");
@@ -82,7 +82,7 @@ public sealed class LightingOrchestratorTests
 	[TestMethod]
 	public void SceneMode_ReappliesOnAFreshEntry()
 	{
-		var t = Build(WithScenes(), selectState: "Normal");
+		Fixture t = Build(WithScenes(), selectState: "Normal");
 
 		t.Ha.Trigger(Select, "Gjester");
 		t.Ha.Trigger(Select, "Normal");
@@ -95,7 +95,7 @@ public sealed class LightingOrchestratorTests
 	[TestMethod]
 	public void ANormalMode_AppliesNoScene()
 	{
-		var t = Build(WithScenes(), selectState: "Normal");
+		Fixture t = Build(WithScenes(), selectState: "Normal");
 
 		t.Ha.Trigger(Select, "Borte");
 		t.Ha.Trigger(Select, "Normal");
@@ -107,12 +107,12 @@ public sealed class LightingOrchestratorTests
 	[TestMethod]
 	public void The_Master_Switch_Stops_The_Away_And_Guest_Scenes()
 	{
-		var running = Build(WithScenes(), selectState: "Normal");
+		Fixture running = Build(WithScenes(), selectState: "Normal");
 		running.Ha.Trigger(Select, "Borte");
 		CollectionAssert.AreEqual(new[] { "scene.borte" }, running.Actuator.Scenes,
 			"the control: with the switch on, entering away applies the away scene");
 
-		var paused = Build(WithScenes(), selectState: "Normal", paused: true);
+		Fixture paused = Build(WithScenes(), selectState: "Normal", paused: true);
 		paused.Ha.Trigger(Select, "Borte");
 		paused.Ha.Trigger(Select, "Gjester");
 
@@ -123,7 +123,7 @@ public sealed class LightingOrchestratorTests
 	[TestMethod]
 	public void A_Scene_The_Master_Switch_Refused_Is_Not_Replayed_When_It_Lifts()
 	{
-		var t = Build(WithScenes(), selectState: "Normal", paused: true);
+		Fixture t = Build(WithScenes(), selectState: "Normal", paused: true);
 
 		t.Ha.Trigger(Select, "Borte");
 		Assert.AreEqual(0, t.Actuator.Scenes.Count);
@@ -548,7 +548,7 @@ public sealed class LightingOrchestratorTests
 		if (setting is { } instant)
 			ha.SetState(Sun, "above_horizon", new() { ["next_setting"] = instant.ToString("O"), ["elevation"] = -3.0 });
 
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig
 			{
@@ -579,11 +579,11 @@ public sealed class LightingOrchestratorTests
 			]
 		};
 
-		var scheduler = new TestScheduler();
+		TestScheduler scheduler = new TestScheduler();
 		scheduler.AdvanceTo(startAt.Ticks);
 
-		var actuator = new FakeLightActuator();
-		var orchestrator = new LightingOrchestrator(
+		FakeLightActuator actuator = new FakeLightActuator();
+		LightingOrchestrator orchestrator = new LightingOrchestrator(
 			ha, new FakeHaRegistry(), scheduler, config,
 			actuator, new FakeStatePublisher(), new FakeNotifier(), NullLoggerFactory.Instance);
 
@@ -599,7 +599,7 @@ public sealed class LightingOrchestratorTests
 	public void A_Sun_Entity_That_Moves_Its_Setting_Rearms_Before_The_Next_Tick()
 	{
 		DateTimeOffset startAt = new(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
-		var t = SunAnchored(startAt, startAt.AddHours(3), out FakeHaContext ha);
+		Fixture t = SunAnchored(startAt, startAt.AddHours(3), out FakeHaContext ha);
 		ha.Trigger(SunMotion, "on");
 		t.Actuator.Clear();
 
@@ -616,7 +616,7 @@ public sealed class LightingOrchestratorTests
 	public void A_Missing_Sun_Entity_Leaves_The_House_Running_And_Is_Adopted_When_It_Appears()
 	{
 		DateTimeOffset startAt = new(2026, 1, 15, 20, 0, 0, TimeSpan.Zero);
-		var t = SunAnchored(startAt, setting: null, out FakeHaContext ha);
+		Fixture t = SunAnchored(startAt, setting: null, out FakeHaContext ha);
 
 		t.Scheduler.AdvanceBy(TimeSpan.FromMinutes(20).Ticks);
 		Assert.AreEqual(0, SleepCalls(ha), "night has no sunset to be placed at, so its boundary is never crossed");

@@ -41,7 +41,7 @@ public sealed class ModeServiceReadinessTests
 	[TestMethod]
 	public void A_House_Mode_Only_Setup_With_HA_Down_Still_Reports_Not_Connected()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig
 			{
@@ -53,18 +53,18 @@ public sealed class ModeServiceReadinessTests
 			}
 		};
 
-		var ha = new DisconnectedHaContext();
-		var catalog = new HaCatalog(ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
-		var host = new LightingEngineHost(
+		DisconnectedHaContext ha = new DisconnectedHaContext();
+		HaCatalog catalog = new HaCatalog(ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
+		LightingEngineHost host = new LightingEngineHost(
 			new LightingConfigStore(
 				Path.Combine(Path.GetTempPath(), $"modeservice-{Guid.NewGuid():N}.yaml"),
 				NullLogger<LightingConfigStore>.Instance),
 			NullLoggerFactory.Instance);
-		var service = new ModeService(ha, new FakeAppConfig(config), catalog, host, NullLogger<ModeService>.Instance);
+		ModeService service = new ModeService(ha, new FakeAppConfig(config), catalog, host, NullLogger<ModeService>.Instance);
 
 		// The page renders both, in this order.
 		_ = service.GetHouseMode();
-		var toggles = service.GetToggles();
+		IReadOnlyList<ModeToggle> toggles = service.GetToggles();
 
 		Assert.AreEqual(0, toggles.Count, "no legacy toggle entities are configured");
 		Assert.IsFalse(service.IsHomeAssistantReady,
