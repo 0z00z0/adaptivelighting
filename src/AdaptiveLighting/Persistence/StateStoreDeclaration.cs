@@ -39,9 +39,10 @@ internal abstract record StateStoreDeclaration(
 	bool InStateFolder);
 
 /// <summary>A declaration with the reading rules for its own document shape.</summary>
-/// <param name="VersionOf">The version the file claims, compared against <see cref="StateStoreDeclaration.Version"/>.</param>
-/// <param name="SavedAtOf">When the file says it was written, which a clock ahead of it refuses.</param>
-/// <param name="Validate">The store's own restore rules, answering the refusal sentence or <c>null</c> to accept.</param>
+/// <remarks>
+///     <c>VersionOf</c> is compared against <c>Version</c>; <c>SavedAtOf</c> is refused when ahead of the clock;
+///     <c>Validate</c> answers a refusal sentence, or <c>null</c> to accept.
+/// </remarks>
 internal sealed record StateStoreDeclaration<TDocument>(
 	string Name,
 	string NameSuffix,

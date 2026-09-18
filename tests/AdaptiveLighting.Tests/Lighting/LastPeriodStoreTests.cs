@@ -73,6 +73,7 @@ public sealed class LastPeriodStoreTests
 	{
 		using TempDirectory temp = new();
 		LastPeriodStore store = temp.Store();
+		Directory.CreateDirectory(store.DirectoryPath);
 
 		File.WriteAllText(store.FilePath, "{ this is not json");
 		Assert.IsNull(store.Load(), "unparseable is unknown");
@@ -93,6 +94,7 @@ public sealed class LastPeriodStoreTests
 	{
 		using TempDirectory temp = new();
 		LastPeriodStore store = temp.Store();
+		Directory.CreateDirectory(store.DirectoryPath);
 
 		File.WriteAllText(store.FilePath, """
 			{
