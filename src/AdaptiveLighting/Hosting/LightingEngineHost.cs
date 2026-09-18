@@ -535,6 +535,10 @@ public sealed class LightingEngineHost : IDisposable
 			return new SaveResult(SaveStatus.Saved, validation, "Saved. Rooms start being managed as soon as Home Assistant answers.");
 		}
 
+		// Only a save hands rooms on. A start has nothing running to take over from.
+		IReadOnlyDictionary<string, AreaCarryOver>? carried =
+			notice is EngineNoticeKind.SettingsSaved ? _orchestrator?.CarryOver() : null;
+
 		StopCore();
 
 		try
@@ -554,7 +558,8 @@ public sealed class LightingEngineHost : IDisposable
 				// A save is not a boundary that went by while the engine was down; the note on disk cannot tell
 				// the two apart on its own.
 				afterSave: notice is EngineNoticeKind.SettingsSaved,
-				defaultKillSwitchEntity: _defaultKillSwitchEntity);
+				defaultKillSwitchEntity: _defaultKillSwitchEntity,
+				carried: carried);
 
 			orchestrator.Start();
 
