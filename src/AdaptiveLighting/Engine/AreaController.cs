@@ -401,6 +401,37 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	/// <summary>Why this room cannot be switched off by hand right now, or <c>null</c> when it can.</summary>
+	public string? LightOffRefusal()
+	{
+		lock (_gate)
+			return RefuseLightOff();
+	}
+
+	/// <summary>Switches this room off the way a hand at the wall would, so movement is ignored for the same while.</summary>
+	/// <returns><c>null</c> once the room is off, or the sentence saying why it is not.</returns>
+	public string? LightOff()
+	{
+		lock (_gate)
+		{
+			if (RefuseLightOff() is { } refusal)
+				return refusal;
+
+			AbandonLevelTest();
+
+			CancelAllTimers();
+			ForgetDeclinedMotion();
+			Enter(AreaState.SuppressedOff, TransitionReason.ManualLightOff);
+			RestartSuppressionTimer();
+
+			_logger.LogInformation("{Area}: switched off by hand from the app; movement is ignored until the room is quiet.", Name);
+
+			// Through TurnOff, so the fan-out declares the detector's expectation before the command goes.
+			TurnOff(TransitionReason.ManualLightOff);
+			return null;
+		}
+	}
+
 	/// <summary>Declares a house scene about to run, so its changes to this room's lights are not read as a person's.</summary>
 	// Must precede the orchestrator's scene call, as ExpectScene precedes the room's own. A Normal or Sleep scene
 	// leaves the room automating, so its echo reaches OnLightChanged.
@@ -1521,6 +1552,18 @@ public sealed class AreaController : IDisposable
 			HouseGate.KillSwitch => "The master switch is on, so nothing may command a light.",
 			HouseGate.Disabled => "This room is not enabled, so its lights are not this app's to switch on.",
 			HouseGate.Away => "The house is set to away, so nothing here is switched on.",
+			HouseGate.SceneHold when _house.ActiveScene is { } scene => $"A guest scene ({scene}) is holding this room.",
+			_ => null
+		};
+
+	// The same ladder as RefuseLightNow, worded for off.
+	private string? RefuseLightOff() =>
+		HouseGates.FirstClosed(GateState(), HouseGate.Rebuilt, HouseGate.SceneHold) switch
+		{
+			HouseGate.Rebuilt => HouseGates.BeingRebuilt,
+			HouseGate.KillSwitch => "The master switch is on, so nothing may command a light.",
+			HouseGate.Disabled => "This room is not enabled, so its lights are not this app's to switch off.",
+			HouseGate.Away => "The house is set to away, so its lights are left to the away rules.",
 			HouseGate.SceneHold when _house.ActiveScene is { } scene => $"A guest scene ({scene}) is holding this room.",
 			_ => null
 		};

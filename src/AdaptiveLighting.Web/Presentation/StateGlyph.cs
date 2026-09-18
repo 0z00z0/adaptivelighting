@@ -1,3 +1,4 @@
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Engine;
 
 namespace AdaptiveLighting.Web.Presentation;
@@ -16,9 +17,10 @@ public static class StateGlyph
 	/// <summary>The mark for a live state. <paramref name="isLeadIn"/> only changes <see cref="AreaState.PreOff"/>'s
 	/// word: a lead-in sensor lighting a dark room ahead of anyone coming in reads differently from the ordinary
 	/// dim light before switching off, though both share the shape.</summary>
-	public static StateMark For(AreaState state, bool isLeadIn = false) => state switch
+	public static StateMark For(AreaState state, bool isLeadIn = false, bool isOffByLevel = false) => state switch
 	{
-		AreaState.AutoActive => new StateMark(Glyph.StateAuto, "state-machine", "lit · auto", false),
+		AreaState.AutoActive when isOffByLevel => new StateMark(null, "state-idle", "off · auto", false),
+		AreaState.AutoActive =>new StateMark(Glyph.StateAuto, "state-machine", "lit · auto", false),
 		AreaState.PreOff => new StateMark(Glyph.StateDimming, "state-warn", isLeadIn ? "lead-in · auto" : "warning dim", true),
 
 		// The three human states share one shape: a person decided, and the word says which.
@@ -33,6 +35,16 @@ public static class StateGlyph
 		AreaState.Away => new StateMark(null, "state-idle", "house away", false),
 		_ => new StateMark(null, "state-idle", "unknown", false)
 	};
+
+	/// <summary>The mark for a snapshot, which alone can tell a room held off by a 0 % level from one lit.</summary>
+	public static StateMark For(AreaSnapshot snapshot) =>
+		For(snapshot.State, snapshot.IsLeadIn ?? false, IsOffByLevel(snapshot));
+
+	/// <summary>Whether the engine holds this room active with its lights off, because its level came to 0 %.</summary>
+	// A scene nulls the levels too, so a scened room is not off.
+	public static bool IsOffByLevel(AreaSnapshot snapshot) =>
+		snapshot is { State: AreaState.AutoActive, BrightnessPct: null, LastCommandAt: not null }
+		&& snapshot.SceneApplied is not { Length: > 0 };
 
 	/// <summary>Whether this state's colour follows the light's actual warmth; only a room the engine holds lit has a commanded Kelvin.</summary>
 	public static bool TakesKelvinTint(AreaState state) => state is AreaState.AutoActive;
