@@ -20,6 +20,21 @@ public sealed partial class AreaControllerTests
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State);
 	}
 
+	// Home Assistant can answer before Apply returns. The expectation has to be declared first, or the room reads
+	// its own turn_on as a hand at the switch; with no known user id the expectation is all that tells them apart.
+	[TestMethod]
+	public void An_Echo_Arriving_Before_Apply_Returns_Is_Still_Ours()
+	{
+		AreaFixture t = Build();
+		t.Actuator.EchoInto(t.Ha);
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.AreEqual(1, t.Actuator.Applied.Count, "the room lit once");
+		Assert.AreEqual("on", t.Ha.GetState(Light)?.State, "and the echo came back through Home Assistant");
+		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "its own command must not read as an override");
+	}
+
 	// The echo window must be SelfEchoWindowSeconds + TransitionSeconds. A fixed one reads the tail of the
 	// engine's own night fade as a human at the dimmer.
 	[TestMethod]
