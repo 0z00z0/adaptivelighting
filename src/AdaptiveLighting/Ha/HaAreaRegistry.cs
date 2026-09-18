@@ -35,6 +35,9 @@ public sealed class HaAreaRegistry : IAreaRegistry
 	public string? DeviceOf(string entityId) => _registry.DeviceOf(entityId);
 
 	/// <inheritdoc/>
+	public IReadOnlyList<string> EntitiesOnDevice(string deviceId) => _registry.EntityIdsOnDevice(deviceId);
+
+	/// <inheritdoc/>
 	/// <remarks>
 	///     A floor with no id reads as no floor. The group key is the id, so an anonymous floor would collect every
 	///     floorless area into one group.

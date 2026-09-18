@@ -1,5 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -8,7 +9,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void SleepBlocksAutoOn_Stops_The_Area_Lighting_At_All()
 	{
-		var t = Build(s => s.SleepBlocksAutoOn = true);
+		AreaFixture t = Build(s => s.SleepBlocksAutoOn = true);
 		t.House.OnNext(House(kind: ModeKind.Sleep));
 
 		t.Ha.Trigger(Motion, "on");
@@ -21,7 +22,7 @@ public sealed partial class AreaControllerTests
 	public void RespectSleepMode_Holds_The_Evening_Target_To_The_Night_Level()
 	{
 		// Sover is Sleep-kind with no ClampPeriodId, so the clamp falls back to the period named "night".
-		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode());
+		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode());
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 
 		t.Ha.Trigger(Motion, "on");
@@ -33,7 +34,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Sleep_Mode_Turning_On_Retargets_An_Active_Area()
 	{
-		var t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode());
+		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode());
 		t.Ha.Trigger(Motion, "on");
 		Assert.IsTrue(t.Actuator.Last is { BrightnessPct: 70 });
 		t.Actuator.Clear();

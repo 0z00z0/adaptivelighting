@@ -1,4 +1,5 @@
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -7,7 +8,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void The_Kill_Switch_Muzzles_The_Engine_And_Releases_Cleanly()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
@@ -29,7 +30,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void The_Kill_Switch_Is_Entered_From_Any_State()
 	{
-		var overridden = Build();
+		AreaFixture overridden = Build();
 		overridden.Ha.Trigger(Motion, "on");
 		Advance(overridden, TimeSpan.FromSeconds(30));   // clear the echo window of our own turn_on first
 		overridden.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
@@ -37,14 +38,14 @@ public sealed partial class AreaControllerTests
 		overridden.House.OnNext(House(killed: true));
 		Assert.AreEqual(AreaState.Disabled, overridden.Area.State);
 
-		var suppressed = Build();
+		AreaFixture suppressed = Build();
 		suppressed.Ha.Trigger(Motion, "on");
 		suppressed.Ha.Trigger(Light, "off", null, PhysicalDevice());
 		Assert.AreEqual(AreaState.SuppressedOff, suppressed.Area.State);
 		suppressed.House.OnNext(House(killed: true));
 		Assert.AreEqual(AreaState.Disabled, suppressed.Area.State);
 
-		var preOff = Build();
+		AreaFixture preOff = Build();
 		preOff.Ha.Trigger(Motion, "on");
 		preOff.Ha.Trigger(Motion, "off");
 		Advance(preOff, TimeSpan.FromMinutes(10));
@@ -61,7 +62,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_Disabled_Area_Never_Commands_Anything()
 	{
-		var t = Build(s => s.Enabled = false);
+		AreaFixture t = Build(s => s.Enabled = false);
 
 		t.Ha.Trigger(Motion, "on");
 
@@ -72,7 +73,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Releasing_The_Kill_Switch_Adopts_A_Room_Left_Lit()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Motion, "off");
 		t.Ha.SetState(Light, "on", new() { ["brightness"] = 178 });
@@ -98,7 +99,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Releasing_The_Kill_Switch_Over_A_Dark_Room_Changes_Nothing()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.House.OnNext(House(killed: true));
 		t.Actuator.Clear();
 
@@ -111,7 +112,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Re_Enabling_While_The_House_Is_Away_Lands_In_Away_Not_AutoVacant()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.House.OnNext(House(killed: true));
 		Assert.AreEqual(AreaState.Disabled, t.Area.State);
 

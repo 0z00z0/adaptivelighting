@@ -17,7 +17,6 @@ public sealed class LightingConfigDocumentTests
 			Persons = ["person.alex", "device_tracker.phone"],
 			KillSwitchEntity = "input_boolean.adaptive_lighting_enabled",
 			KillSwitchActiveWhenOff = false,
-			NetDaemonUserId = "abc123",
 			AwayDebounceMinutes = 7,
 			CircadianTickSeconds = 45,
 			SelfEchoWindowSeconds = 9,
@@ -101,15 +100,14 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesGlobal()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Global;
-		var expected = original.Global;
+		GlobalConfig actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Global;
+		GlobalConfig expected = original.Global;
 
 		CollectionAssert.AreEqual(expected.Persons, actual.Persons);
 		Assert.AreEqual(expected.KillSwitchEntity, actual.KillSwitchEntity);
 		Assert.AreEqual(expected.KillSwitchActiveWhenOff, actual.KillSwitchActiveWhenOff);
-		Assert.AreEqual(expected.NetDaemonUserId, actual.NetDaemonUserId);
 		Assert.AreEqual(expected.AwayDebounceMinutes, actual.AwayDebounceMinutes);
 		Assert.AreEqual(expected.CircadianTickSeconds, actual.CircadianTickSeconds);
 		Assert.AreEqual(expected.SelfEchoWindowSeconds, actual.SelfEchoWindowSeconds);
@@ -125,10 +123,10 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesDefaults()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Defaults;
-		var expected = original.Defaults;
+		AreaSettings actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Defaults;
+		AreaSettings expected = original.Defaults;
 
 		Assert.AreEqual(expected.VacancyTimeoutSeconds, actual.VacancyTimeoutSeconds);
 		Assert.AreEqual(expected.PreOffSeconds, actual.PreOffSeconds);
@@ -332,13 +330,13 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesPeriods()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Periods;
+		List<TimePeriodConfig> actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Periods;
 
 		Assert.AreEqual(original.Periods.Count, actual.Count);
 
-		for (var index = 0; index < original.Periods.Count; index++)
+		for (int index = 0; index < original.Periods.Count; index++)
 		{
 			Assert.AreEqual(original.Periods[index].Name, actual[index].Name);
 			Assert.AreEqual(original.Periods[index].Start, actual[index].Start);
@@ -350,10 +348,10 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesFullyOverriddenArea()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[1];
-		var expected = original.Areas[1];
+		AreaConfig actual = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[1];
+		AreaConfig expected = original.Areas[1];
 
 		Assert.AreEqual(expected.Name, actual.Name);
 		Assert.AreEqual(expected.AreaId, actual.AreaId);
@@ -389,9 +387,9 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_LeavesInheritedAreaSettingsNull()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 
-		var area = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
+		AreaConfig area = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
 
 		Assert.AreEqual("stue", area.AreaId);
 		Assert.IsTrue(area.RespectSleepMode);
@@ -425,15 +423,15 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Serialize_DoesNotWriteComputedProperties()
 	{
-		var config = Populated();
+		AdaptiveLightingConfig config = Populated();
 		config.Global.MotionDeviceClasses = [];
 
-		var yaml = LightingConfigDocument.Serialize(config);
+		string yaml = LightingConfigDocument.Serialize(config);
 
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(nameof(GlobalConfig.EffectiveMotionDeviceClasses)));
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(nameof(AreaConfig.DisplayName)));
 
-		var reloaded = LightingConfigDocument.Deserialize(yaml).Config;
+		AdaptiveLightingConfig reloaded = LightingConfigDocument.Deserialize(yaml).Config;
 
 		Assert.AreEqual(0, reloaded.Global.MotionDeviceClasses.Count);
 		CollectionAssert.AreEqual(
@@ -444,8 +442,8 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Serialize_IsStableAcrossRepeatedRoundTrips()
 	{
-		var once = LightingConfigDocument.Serialize(Populated());
-		var twice = LightingConfigDocument.Serialize(LightingConfigDocument.Deserialize(once).Config);
+		string once = LightingConfigDocument.Serialize(Populated());
+		string twice = LightingConfigDocument.Serialize(LightingConfigDocument.Deserialize(once).Config);
 
 		Assert.AreEqual(once, twice);
 	}
@@ -459,7 +457,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Deserialize_WithoutTheRootKey_ExplainsWhatIsThere()
 	{
-		var exception = Assert.ThrowsException<LightingConfigException>(() =>
+		LightingConfigException exception = Assert.ThrowsException<LightingConfigException>(() =>
 			LightingConfigDocument.Deserialize("SomeOtherApp:\n  Setting: 1\n"));
 
 		StringAssert.Contains(exception.Message, "SomeOtherApp");
@@ -475,7 +473,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Deserialize_OfAnEmptySection_GivesAnEmptyDocumentRatherThanThrowing()
 	{
-		var config = LightingConfigDocument.Deserialize($"{LightingConfigDocument.RootKey}:\n").Config;
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize($"{LightingConfigDocument.RootKey}:\n").Config;
 
 		Assert.AreEqual(0, config.Areas.Count);
 		Assert.AreEqual(0, config.Periods.Count);
@@ -513,7 +511,7 @@ public sealed class LightingConfigDocumentTests
 	public void RoundTrip_NoHouseMode_EmitsNoHouseModeOrModeKeys()
 	{
 		// Populated() carries no HouseMode and no tagged periods, so a save must not acquire either key.
-		var yaml = LightingConfigDocument.Serialize(Populated());
+		string yaml = LightingConfigDocument.Serialize(Populated());
 
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex("HouseMode"));
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(@"\bMode:"));
@@ -525,7 +523,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_PreservesARoomsLevels()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 		original.Areas[0].Levels =
 		[
 			new RoomLevelOverride { PeriodId = "night", BrightnessPct = 8, ColorTempKelvin = 2000 },
@@ -534,7 +532,7 @@ public sealed class LightingConfigDocumentTests
 			new RoomLevelOverride { PeriodId = "kveld", BrightnessPct = 40 }   // a renamed period: kept, not dropped
 		];
 
-		var reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
+		AreaConfig reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config.Areas[0];
 
 		Assert.AreEqual(4, reloaded.Levels.Count, "the list replaces, it does not append or shrink");
 
@@ -554,7 +552,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void Serialize_DoesNotWriteTheDerivedIsEmptyFlag()
 	{
-		var config = Populated();
+		AdaptiveLightingConfig config = Populated();
 		config.Areas[0].Levels = [new RoomLevelOverride { PeriodId = "night", BrightnessPct = 8 }];
 
 		StringAssert.DoesNotMatch(
@@ -627,7 +625,7 @@ public sealed class LightingConfigDocumentTests
 	[TestMethod]
 	public void RoundTrip_WithHouseMode_RoundTripsLosslessly()
 	{
-		var original = Populated();
+		AdaptiveLightingConfig original = Populated();
 		original.Global.HouseMode = new HouseModeConfig
 		{
 			Entity = "input_select.husmodus",
@@ -640,7 +638,7 @@ public sealed class LightingConfigDocumentTests
 		};
 		original.Periods.Add(new TimePeriodConfig { Id = "late-5e5e", Name = "late", SetsModeId = "Sover", Start = "23:15", BrightnessPct = 10, ColorTempKelvin = 2000 });
 
-		var reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config;
+		AdaptiveLightingConfig reloaded = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(original)).Config;
 
 		Assert.AreEqual("input_select.husmodus", reloaded.Global.HouseMode!.Entity);
 		Assert.AreEqual(3, reloaded.Global.HouseMode.Options.Count, "the option list replaces, it does not append");
@@ -654,25 +652,27 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual("Sover", reloaded.Global.HouseMode.OptionValueFor(setsMode), "and still writes 'Sover' to the select");
 	}
 
-	// Both kill-switch views are in-memory only, so writing either back puts a resolved fallback in the file as if
-	// it had been chosen.
+	// The built-in switch is the host's, so validating against it must leave the document as it was: a resolved
+	// fallback written back would read as a switch somebody chose.
 	[TestMethod]
 	public void Serialize_DoesNotWriteTheDefaultedOrEffectiveKillSwitch()
 	{
-		var config = Populated();
-		config.Global.DefaultKillSwitchEntity = "input_boolean.netdaemon_builtin";
+		AdaptiveLightingConfig config = Populated();
+		config.Global.KillSwitchEntity = null;
 
-		var yaml = LightingConfigDocument.Serialize(config);
+		ConfigValidator.Validate(config, new ValidationContext { DefaultKillSwitchEntity = "input_boolean.netdaemon_builtin" });
+		string yaml = LightingConfigDocument.Serialize(config);
 
-		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(nameof(GlobalConfig.DefaultKillSwitchEntity)));
-		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex(nameof(GlobalConfig.EffectiveKillSwitchEntity)));
+		Assert.IsNull(config.Global.KillSwitchEntity, "validating must not fill the document's own switch in");
+		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex("DefaultKillSwitchEntity"));
+		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex("EffectiveKillSwitchEntity"));
 		StringAssert.DoesNotMatch(yaml, new System.Text.RegularExpressions.Regex("netdaemon_builtin"));
 	}
 
 	[TestMethod]
 	public void Deserialize_ReadsTheShippedExampleShape()
 	{
-		var config = LightingConfigDocument.Deserialize(
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  ConfigName: "Adaptive lighting [Home]"
@@ -839,7 +839,26 @@ public sealed class LightingConfigDocumentTests
 		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml);
 
 		Assert.AreEqual(70d, read.Config.Periods.Single().BrightnessPct, "the period's own level is what runs now");
-		StringAssert.Contains(read.Config.RetiredKeysInDocument.Single(), "UseDaylightCurve");
+		StringAssert.Contains(read.RetiredKeys.Single(), "UseDaylightCurve");
+	}
+
+	/// <summary>The engine learns its own user now: a document still naming one loads as before and says so once.</summary>
+	[TestMethod]
+	public void A_Document_Still_Carrying_NetDaemonUserId_Loads_With_A_Retired_Key_Warning()
+	{
+		const string yaml = """
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Global:
+			    NetDaemonUserId: abc123
+			    AwayDebounceMinutes: 7
+			""";
+		RecordingLogger logger = new();
+
+		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml, logger);
+
+		Assert.AreEqual(7, read.Config.Global.AwayDebounceMinutes, "the rest of the document loads as before");
+		StringAssert.Contains(read.RetiredKeys.Single(), "NetDaemonUserId");
+		Assert.AreEqual(read.RetiredKeys.Single(), logger.Warnings.Single());
 	}
 
 	[TestMethod]
@@ -1312,7 +1331,7 @@ public sealed class LightingConfigDocumentTests
 		{
 			DocumentReadResult read = LightingConfigDocument.Deserialize(DocumentCarrying(retired.Key));
 
-			string sentence = read.Config.RetiredKeysInDocument.Single();
+			string sentence = read.RetiredKeys.Single();
 
 			StringAssert.Contains(sentence, retired.Key,
 				"the sentence must name the key, or nobody can find it in the file");
@@ -1332,7 +1351,7 @@ public sealed class LightingConfigDocumentTests
 
 		DocumentReadResult read = LightingConfigDocument.Deserialize(DocumentCarrying("MaxBrightnessPct"), logger);
 
-		Assert.AreEqual(read.Config.RetiredKeysInDocument.Single(), logger.Warnings.Single());
+		Assert.AreEqual(read.RetiredKeys.Single(), logger.Warnings.Single());
 	}
 
 	[TestMethod]
@@ -1356,7 +1375,7 @@ public sealed class LightingConfigDocumentTests
 			      MaxBrightnessPct: 30
 			""");
 
-		Assert.AreEqual(1, read.Config.RetiredKeysInDocument.Count,
+		Assert.AreEqual(1, read.RetiredKeys.Count,
 			"a setting retired on every period is one thing to fix, not four lines of the same sentence");
 	}
 
@@ -1365,7 +1384,7 @@ public sealed class LightingConfigDocumentTests
 	{
 		DocumentReadResult read = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(Populated()));
 
-		Assert.AreEqual(0, read.Config.RetiredKeysInDocument.Count);
+		Assert.AreEqual(0, read.RetiredKeys.Count);
 	}
 
 	/// <summary>What the sentence promises: saving once from the browser drops the key, and the sentence with it.</summary>
@@ -1377,20 +1396,20 @@ public sealed class LightingConfigDocumentTests
 		string saved = LightingConfigDocument.Serialize(read.Config);
 
 		Assert.IsFalse(saved.Contains("MaxBrightnessPct", StringComparison.Ordinal), "the save drops the key");
-		Assert.AreEqual(0, LightingConfigDocument.Deserialize(saved).Config.RetiredKeysInDocument.Count,
+		Assert.AreEqual(0, LightingConfigDocument.Deserialize(saved).RetiredKeys.Count,
 			"so the next read has nothing left to say about it");
 	}
 
-	/// <summary>Nothing carries the list into the file, on the precedent of the two kill-switch views beside it.</summary>
+	/// <summary>The sentences travel on the read result, so the model has nothing to carry into the file.</summary>
 	[TestMethod]
 	public void Serialize_DoesNotWriteTheRetiredKeysItFound()
 	{
 		AdaptiveLightingConfig config = Populated();
-		config.RetiredKeysInDocument = ["'MaxBrightnessPct' is still set in the configuration"];
 
 		string yaml = LightingConfigDocument.Serialize(config);
 
-		Assert.IsFalse(yaml.Contains(nameof(AdaptiveLightingConfig.RetiredKeysInDocument), StringComparison.Ordinal));
-		Assert.IsFalse(yaml.Contains("still set in the configuration", StringComparison.Ordinal));
+		Assert.IsFalse(yaml.Contains("RetiredKeys", StringComparison.Ordinal));
+		Assert.IsNull(typeof(AdaptiveLightingConfig).GetProperty("RetiredKeysInDocument"), "the list lives on DocumentReadResult");
+		Assert.IsNull(typeof(GlobalConfig).GetProperty("DefaultKillSwitchEntity"), "the built-in switch lives on the host");
 	}
 }

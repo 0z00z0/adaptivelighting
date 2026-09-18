@@ -1,5 +1,6 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 using NetDaemon.HassModel;
 
@@ -10,7 +11,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Our_Own_Echo_Is_Not_Read_As_A_Human()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 
 		Advance(t, TimeSpan.FromSeconds(1));
@@ -24,7 +25,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void An_Echo_From_The_Middle_Of_A_Long_Fade_Is_Still_Ours()
 	{
-		var t = Build(s =>
+		AreaFixture t = Build(s =>
 		{
 			s.NightTransitionSeconds = 30;
 			s.Darkness = DarknessSource.Always;
@@ -41,7 +42,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void An_Echo_After_The_Window_And_The_Fade_Have_Both_Passed_Is_A_Human()
 	{
-		var t = Build(s =>
+		AreaFixture t = Build(s =>
 		{
 			s.NightTransitionSeconds = 30;
 			s.Darkness = DarknessSource.Always;

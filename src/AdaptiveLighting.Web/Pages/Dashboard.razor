@@ -194,7 +194,7 @@ else
 								<span class="lane-name">
 									<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" />
 									<span class="lane-room">@lane.Name</span>
-									@if (DashboardPageModel.HasDropout(lane.Latest))
+									@if (DashboardPageModel.HasWarning(lane.Latest))
 									{
 										<span class="lane-dropout" aria-hidden="true">!</span>
 									}
@@ -252,7 +252,7 @@ else
 							<a class="quiet-chip" href="@HouseView.RoomHref(lane.AreaId)" title="@_model.LaneTitle(lane)" @key="lane.Key">
 								<StateChip State="lane.Latest.State" Kelvin="lane.Latest.ColorTempKelvin" Bare="true" IsLeadIn="@(lane.Latest.IsLeadIn ?? false)" />
 								@lane.Name
-								@if (DashboardPageModel.HasDropout(lane.Latest))
+								@if (DashboardPageModel.HasWarning(lane.Latest))
 								{
 									<span class="lane-dropout" aria-hidden="true">!</span>
 								}

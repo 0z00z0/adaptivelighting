@@ -289,6 +289,9 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	/// <summary>How many of the room's lights have stopped answering, when any have.</summary>
 	public string? NotResponding => Snapshot is { } snapshot ? RoomFacts.NotResponding(snapshot) : null;
 
+	/// <summary>One sentence per motion sensor with a low battery.</summary>
+	public IReadOnlyList<string> LowBatteries => Snapshot is { } snapshot ? RoomFacts.LowBatteries(snapshot, NameOf) : [];
+
 	/// <summary>The facts table beside the header.</summary>
 	public IReadOnlyList<RoomFact> Facts =>
 		Snapshot is { } snapshot ? RoomFacts.For(snapshot, Now, NameOf) : [];

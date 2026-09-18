@@ -1,4 +1,5 @@
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -7,7 +8,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Manual_Off_Suppresses_The_Area_And_Motion_Respects_It()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 
 		t.Ha.Trigger(Light, "off", null, PhysicalDevice());
@@ -24,7 +25,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Manual_Off_During_PreOff_Also_Suppresses()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromMinutes(10));
@@ -43,7 +44,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Suppression_Lifts_After_VacancyResetMinutes_Of_No_Motion()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Light, "off", null, PhysicalDevice());
 
@@ -58,7 +59,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Motion_Restarts_The_Suppression_Reset_Timer()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Light, "off", null, PhysicalDevice());
 

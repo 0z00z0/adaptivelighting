@@ -12,13 +12,13 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Every_Transition_Is_Published()
 	{
-		var t = Build();
+		Fixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Motion, "off");
 		Advance(t, TimeSpan.FromMinutes(10));
 		Advance(t, TimeSpan.FromSeconds(30));
 
-		var states = t.Publisher.Snapshots.Select(s => s.State).ToList();
+		List<AreaState> states = t.Publisher.Snapshots.Select(s => s.State).ToList();
 
 		Assert.IsTrue(t.Publisher.Snapshots.Any(s => s.Reason == TransitionReason.Startup));
 		CollectionAssert.Contains(states, AreaState.AutoActive);
@@ -31,8 +31,8 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void The_Startup_Snapshot_Claims_Only_What_It_Evaluated()
 	{
-		var dark = Build();
-		var opening = dark.Publisher.Snapshots.Single();
+		Fixture dark = Build();
+		AreaSnapshot opening = dark.Publisher.Snapshots.Single();
 
 		Assert.AreEqual(TransitionReason.Startup, opening.Reason);
 		Assert.AreEqual(true, opening.IsDark, "lux 5 is dark and the startup snapshot must have looked");

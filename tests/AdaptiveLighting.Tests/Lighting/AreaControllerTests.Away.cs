@@ -1,4 +1,5 @@
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Tests.Common;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -9,7 +10,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void A_House_The_Trackers_Call_Empty_Is_Not_Away()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
@@ -22,7 +23,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void The_House_Going_Away_Sweeps_The_Area_Off_And_Motion_Then_Does_Nothing()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
@@ -39,7 +40,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void An_Area_With_SkipAwaySweep_Goes_Away_Without_Being_Swept()
 	{
-		var t = Build(s => s.SkipAwaySweep = true);
+		AreaFixture t = Build(s => s.SkipAwaySweep = true);
 		t.Ha.Trigger(Motion, "on");
 		t.Actuator.Clear();
 
@@ -52,7 +53,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void The_Sweep_Beats_An_Override()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		Advance(t, TimeSpan.FromSeconds(30));   // clear the echo window of our own turn_on first
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
@@ -68,7 +69,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void The_Sweep_Reaches_A_Suppressed_Area_Too()
 	{
-		var t = Build();
+		AreaFixture t = Build();
 		t.Ha.Trigger(Motion, "on");
 		t.Ha.Trigger(Light, "off", null, PhysicalDevice());
 

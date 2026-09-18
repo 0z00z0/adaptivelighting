@@ -74,6 +74,9 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomSceneTests.A_Gate_That_Refuses_Auto_On_Refuses_The_Movement_Scene_Too
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomSceneTests.The_Vacancy_Timeout_Runs_The_Empty_Scene_Instead_Of_Switching_Off
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomSceneTests.The_Scenes_Own_Light_Change_Is_Not_Read_As_A_Hand_At_The_Switch
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.SensorBatteryTests.
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.CarryOverOnSaveTests.ARoomSwitchedOffByHand_StaysOffAfterASave_AndMovementDoesNotLightIt
+			| FullyQualifiedName~AdaptiveLighting.Tests.Lighting.RoomHistoryPersistenceTests.
 
 			<!-- The house: house mode, who decides it, the master switch, presence, periods and the clock. -->
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ModeMonitorTests.AnUnreadableSelect_HoldsTheModeItLastRead
@@ -150,6 +153,7 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.A_Legacy_Document_Read_Written_And_Read_Again_Lands_On_The_Current_Schema
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.Period_Authority_Ordinals_Are_Fixed
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.Saving_The_Document_Drops_The_Retired_Key_And_Its_Sentence
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.LightingConfigDocumentTests.A_Document_Still_Carrying_NetDaemonUserId_Loads_With_A_Retired_Key_Warning
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.A_Reasonable_Config_Passes
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.Brightness_Outside_The_Range_A_Byte_Can_Hold_Is_Rejected
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ConfigValidatorTests.A_PreOff_Longer_Than_The_Vacancy_Timeout_Is_Rejected

@@ -270,7 +270,11 @@ static void SeedSnapshots(FakeHaContext ha, LightingConfigStore store)
 			LightsNotResponding: total > 0 ? missing : null,
 			LightCount: total > 0 ? total : null,
 			ChangedBy: manualChange ? "By hand" : null,
-			ChangedAt: manualChange ? now.AddMinutes(-1) : null);
+			ChangedAt: manualChange ? now.AddMinutes(-1) : null,
+			// Every third room from the second previews the low-battery warning on its first motion sensor.
+			LowBatteries: index % 3 == 1 && area.MotionSensors is { Count: > 0 } sensors
+				? [new SensorBattery(sensors[0], 12)]
+				: null);
 
 		publisher.Publish(snapshot);
 

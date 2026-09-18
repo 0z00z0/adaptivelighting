@@ -43,5 +43,8 @@ public interface IAreaRegistry
 	/// <remarks>Two entities are the same hardware when they share a device id; a group helper has none.</remarks>
 	string? DeviceOf(string entityId);
 
+	/// <summary>The entity ids on device <paramref name="deviceId"/>, empty when it is unknown.</summary>
+	IReadOnlyList<string> EntitiesOnDevice(string deviceId);
+
 	AreaFloor? FloorOf(string areaId);
 }

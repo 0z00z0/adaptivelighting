@@ -83,7 +83,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void Manual_On_From_AutoVacant_Also_Overrides()
 	{
-		var t = Build();
+		Fixture t = Build();
 
 		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 255 }, PhysicalDevice());
 

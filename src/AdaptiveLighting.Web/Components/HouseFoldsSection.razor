@@ -100,7 +100,7 @@
 						 Options="@Model.LabelOptions"
 						 NoneLabel="(none — nothing is excluded)"
 						 UnknownNote="Nothing carries this label, so nothing is excluded — that's fine."
-						 Placeholder="adaptive-exclude" />
+						 Placeholder="adaptive_exclude" />
 		</div>
 		<div class="field-help">This beats the label above: carrying both means the light is left alone.</div>
 	</div>
@@ -122,7 +122,7 @@
 						 Options="@Model.LabelOptions"
 						 NoneLabel="(none — device classes decide)"
 						 UnknownNote="Nothing carries this label yet, so only the device classes below decide."
-						 Placeholder="adaptive-motion" />
+						 Placeholder="adaptive_motion" />
 		</div>
 	</div>
 
@@ -328,37 +328,6 @@
 
 <GroupFold Title="Fine tuning"
 		   Description="How often rooms re-check, how the engine tells its own changes from a person's, and how close is close enough.">
-	@* NetDaemonUserId is write-only: rendered as set or not-set in either direction, never as its
-	   value. The input starts empty and overwrites the stored value only when typed into. *@
-	<div class="field">
-		<div class="field-head">
-			<span class="field-label"><label for="netdaemon-user-id">NetDaemon user id</label>
-				<InfoPopover Label="NetDaemon user id">
-					The Home Assistant user this app connects as &mdash; find it under Settings → People, on
-					the token's user. Naming it lets a light change be recognised as the app's own by who made
-					it. Left unset, that is judged by timing alone, so a person at a switch during the window
-					below can be mistaken for the app.
-				</InfoPopover>
-			</span>
-		</div>
-		<div class="field-control">
-			@if (!Model.HasUserId)
-			{
-				<span class="badge">not set</span>
-				<span class="hint">manual changes are told apart by timing alone.</span>
-			}
-			else
-			{
-				<span class="badge ok">set</span>
-				<span class="hint">the stored value is never shown, in either direction.</span>
-				<button type="button" @onclick="Model.ClearUserId">Clear</button>
-			}
-		</div>
-		<div class="field-control">
-			<input id="netdaemon-user-id" class="cell wide" type="password" autocomplete="off" placeholder="type a new value to replace it" @bind="Model.UserIdInput" />
-		</div>
-	</div>
-
 	<div class="field">
 		<div class="field-head">
 			<span class="field-label"><label for="circadian-tick-seconds">Re-check the rooms every</label>

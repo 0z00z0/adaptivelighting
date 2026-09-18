@@ -72,6 +72,17 @@
 					that dropped out while it was lit may still be on.
 				</div>
 			}
+
+			@if (Model.LowBatteries is { Count: > 0 } batteries)
+			{
+				<div class="notice warn room-low-battery" role="status">
+					@foreach (string battery in batteries)
+					{
+						<strong>@battery</strong>@(" ")
+					}
+					Replace the battery before the sensor stops reporting movement.
+				</div>
+			}
 		}
 		@* Nothing said when there is no report: the header already carries a "no report yet" badge. *@
 

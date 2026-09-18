@@ -42,8 +42,8 @@ public sealed class LastPeriodStoreTests
 	{
 		using TempDirectory temp = new();
 
-		Assert.AreEqual(Path.Combine(temp.Path, "cabin.last-period.json"), temp.Store("cabin.yaml").FilePath);
-		Assert.AreEqual(Path.Combine(temp.Path, "b1.last-period.json"), temp.Store().FilePath);
+		Assert.AreEqual(Path.Combine(temp.Path, "state", "cabin.last-period.json"), temp.Store("cabin.yaml").FilePath);
+		Assert.AreEqual(Path.Combine(temp.Path, "state", "b1.last-period.json"), temp.Store().FilePath);
 	}
 
 	[TestMethod]
@@ -73,6 +73,7 @@ public sealed class LastPeriodStoreTests
 	{
 		using TempDirectory temp = new();
 		LastPeriodStore store = temp.Store();
+		Directory.CreateDirectory(store.DirectoryPath);
 
 		File.WriteAllText(store.FilePath, "{ this is not json");
 		Assert.IsNull(store.Load(), "unparseable is unknown");
@@ -93,6 +94,7 @@ public sealed class LastPeriodStoreTests
 	{
 		using TempDirectory temp = new();
 		LastPeriodStore store = temp.Store();
+		Directory.CreateDirectory(store.DirectoryPath);
 
 		File.WriteAllText(store.FilePath, """
 			{
@@ -129,7 +131,7 @@ public sealed class LastPeriodStoreTests
 		Assert.IsTrue(store.TrySave("evening"));
 		Assert.IsTrue(store.TrySave("night"));
 
-		string?[] names = [.. Directory.GetFiles(temp.Path).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal)];
+		string?[] names = [.. Directory.GetFiles(store.DirectoryPath).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal)];
 		CollectionAssert.AreEqual(new[] { "b1.last-period.json", "b1.last-period.json.bak" }, names);
 	}
 
@@ -143,7 +145,7 @@ public sealed class LastPeriodStoreTests
 		Directory.CreateDirectory(store.FilePath);
 
 		Assert.IsFalse(store.TrySave("night"), "the failure is reported, not thrown");
-		Assert.AreEqual(0, Directory.GetFiles(temp.Path).Length, "and no temporary file is left beside the configuration");
+		Assert.AreEqual(0, Directory.GetFiles(store.DirectoryPath).Length, "and no temporary file is left in the state folder");
 	}
 
 	[TestMethod]

@@ -121,19 +121,14 @@ public sealed class ModeService
 	/// </remarks>
 	private AdaptiveLightingConfig Config => _documents.Read() ?? _seedConfig;
 
-	/// <summary>Copies the engine's built-in enable switch onto the shared config before every read.</summary>
-	/// <remarks>
-	///     On every read, because this service is scoped while <see cref="LightingEngineHost"/> is a singleton: a
-	///     scope built before the bootstrap calls <c>Attach</c> would freeze <c>DefaultKillSwitchEntity</c> at
-	///     <c>null</c>, and the master switch would not appear until a page reload.
-	/// </remarks>
-	private void SyncDefaultKillSwitch() => Config.Global.DefaultKillSwitchEntity = _engine.DefaultKillSwitchEntity;
+	/// <summary>The engine's built-in enable switch, the kill switch when the document names none.</summary>
+	// Asked on every read: this service is scoped and the host a singleton, so a scope built before Attach would
+	// otherwise hold null and the master switch would not appear until a page reload.
+	private string? DefaultKillSwitch => _engine.DefaultKillSwitchEntity;
 
 	/// <summary>The modes this host has configured, with their current state; an unconfigured mode is absent, never disabled.</summary>
 	public IReadOnlyList<ModeToggle> GetToggles()
 	{
-		SyncDefaultKillSwitch();
-
 		var toggles = new List<ModeToggle>(1);
 		GlobalConfig global = Config.Global;
 
@@ -145,12 +140,14 @@ public sealed class ModeService
 
 		// A blank KillSwitchEntity defaults to the app's own enable switch, with the polarity forced to
 		// enabled-flag while defaulted.
-		if (global.EffectiveKillSwitchEntity is { Length: > 0 } killSwitch)
-		{
-			var defaulted = global.KillSwitchIsDefaulted;
-			var enabledFlag = defaulted || global.KillSwitchActiveWhenOff;
+		string? builtIn = DefaultKillSwitch;
 
-			bool engineEnabled = !ModeMonitor.KillSwitchPauses(global, TryGetState(killSwitch));
+		if (global.EffectiveKillSwitchEntity(builtIn) is { Length: > 0 } killSwitch)
+		{
+			bool defaulted = global.KillSwitchIsDefaulted(builtIn);
+			bool enabledFlag = defaulted || global.KillSwitchActiveWhenOff;
+
+			bool engineEnabled = !ModeMonitor.KillSwitchPauses(global, builtIn, TryGetState(killSwitch));
 
 			toggles.Add(Build(
 				"Adaptive lighting",
@@ -177,7 +174,7 @@ public sealed class ModeService
 		if (toggle is null)
 			return null;
 
-		bool commanding = !ModeMonitor.KillSwitchPauses(Config.Global, TryGetState(toggle.EntityId));
+		bool commanding = !ModeMonitor.KillSwitchPauses(Config.Global, DefaultKillSwitch, TryGetState(toggle.EntityId));
 
 		return new MasterSwitchView(toggle, commanding, toggle.IsAvailable, IsHomeAssistantReady);
 	}
@@ -186,8 +183,6 @@ public sealed class ModeService
 	/// <remarks>The options are the live ones unioned with the configured, so a disconnected HA cannot blank a known one.</remarks>
 	public HouseModeView? GetHouseMode()
 	{
-		SyncDefaultKillSwitch();
-
 		HouseModeConfig? houseMode = Config.Global.HouseMode;
 		if (houseMode?.Entity is not { Length: > 0 } entity)
 			return null;
@@ -302,8 +297,6 @@ public sealed class ModeService
 	/// </remarks>
 	public HouseDerivedState GetHouseState()
 	{
-		SyncDefaultKillSwitch();
-
 		HouseModeConfig? houseMode = Config.Global.HouseMode;
 
 		HouseModeOptionConfig? currentOption = null;
@@ -516,9 +509,6 @@ public sealed class ModeService
 	{
 		ArgumentNullException.ThrowIfNull(toggle);
 
-		// Resolve the built-in master switch live, so a toggle of it is recognised even before a page read did.
-		SyncDefaultKillSwitch();
-
 		// The argument came from a browser, so the id is re-resolved against the config and never trusted.
 		if (!IsConfiguredModeEntity(toggle.EntityId))
 		{
@@ -554,7 +544,7 @@ public sealed class ModeService
 	}
 
 	private bool IsConfiguredModeEntity(string entityId) =>
-		string.Equals(entityId, Config.Global.EffectiveKillSwitchEntity, StringComparison.Ordinal);
+		string.Equals(entityId, Config.Global.EffectiveKillSwitchEntity(DefaultKillSwitch), StringComparison.Ordinal);
 
 	// IHaContext.GetState throws until NetDaemon's initial connection completes, which is no state, not a fault.
 	private EntityState? TryGetState(string entityId)

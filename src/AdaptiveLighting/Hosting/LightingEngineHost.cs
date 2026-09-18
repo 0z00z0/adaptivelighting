@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reactive.Concurrency;
 using System.Reactive.Subjects;
 
@@ -74,6 +75,14 @@ public sealed class LightingEngineHost : IDisposable
 	// A room that cannot be set up is reported once instead of at every start. Its path comes from the store.
 	private readonly IAreaSetupMemory? _setupMemory;
 
+	// Each room's last movement, last change and who changed it, so a restart does not forget them. Its path
+	// comes from the store. Null and every room's history is lost across a restart, never a reason to have no engine.
+	private readonly IRoomHistoryStore? _roomHistory;
+
+	// The house's own copy, shared across every rebuild so a room that has not published since the last save is
+	// not dropped from the file a save writes. Seeded once from what the note held at start.
+	private ConcurrentDictionary<string, AreaHistory>? _roomHistoryLive;
+
 	// Every transition of the orchestrator goes through this: two browser tabs saving must not interleave a
 	// Dispose with a Start.
 	private readonly Lock _gate = new();
@@ -90,6 +99,9 @@ public sealed class LightingEngineHost : IDisposable
 	private IScheduler? _scheduler;
 	private string? _defaultKillSwitchEntity;
 	private LightingOrchestrator? _orchestrator;
+
+	// The retired-key sentences of the file as last read. Swapped whole, so Validate outside the gate reads one list.
+	private IReadOnlyList<string> _retiredKeys = [];
 
 	/// <summary>Creates the host. Nothing runs until <see cref="Attach"/> and <see cref="Reload"/>.</summary>
 	/// <remarks>Without <c>lastSeen</c> the gates use Home Assistant's own timestamps, which reset on its restart.</remarks>
@@ -125,6 +137,20 @@ public sealed class LightingEngineHost : IDisposable
 			_logger.LogWarning(exception,
 				"Could not place the note recording which rooms have already been reported as impossible to set up, "
 				+ "beside {Path}. Any such room will be reported again at every start.",
+				_store.FilePath);
+		}
+
+		try
+		{
+			// Real time, not the scheduler Attach hands over: that one is not known yet, and a house runs for
+			// hours between saves, so the periodic flush must tick regardless of what a test controls.
+			_roomHistory = new RoomHistoryStore(_store.FilePath, _loggerFactory, DefaultScheduler.Instance);
+		}
+		catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+		{
+			_logger.LogWarning(exception,
+				"Could not place the note recording each room's history, beside {Path}. Every room's history "
+				+ "starts again as unknown after a restart.",
 				_store.FilePath);
 		}
 	}
@@ -274,6 +300,7 @@ public sealed class LightingEngineHost : IDisposable
 			}
 
 			AdaptiveLightingConfig config = read.Config;
+			_retiredKeys = read.RetiredKeys;
 
 			// Both reasons take the same write. Translation runs first, so one rewrite covers a document that needs
 			// both, and its result is what decides whether a document in the current schema is written at all.
@@ -366,7 +393,9 @@ public sealed class LightingEngineHost : IDisposable
 
 			try
 			{
-				written = _store.Load();
+				DocumentReadResult reread = _store.Read();
+				written = reread.Config;
+				_retiredKeys = reread.RetiredKeys;
 			}
 			catch (LightingConfigException exception)
 			{
@@ -393,20 +422,19 @@ public sealed class LightingEngineHost : IDisposable
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
-		// Resolved in memory before validating, because it is what EffectiveKillSwitchEntity, and so the validator,
-		// sees when the document leaves KillSwitchEntity unset. Never written back.
-		config.Global.DefaultKillSwitchEntity = _defaultKillSwitchEntity;
-
 		HouseFacts facts = HouseFacts.Read(_ha, _registry, config);
 
-		return ConfigValidator.Validate(
-			config,
-			facts.EntityIds,
-			facts.AreaIds,
-			facts.HouseModeOptions,
-			facts.LabelsInUse,
-			facts.PeriodSelectOptions,
-			facts.LabelIds);
+		return ConfigValidator.Validate(config, new ValidationContext
+		{
+			KnownEntityIds = facts.EntityIds,
+			KnownAreaIds = facts.AreaIds,
+			LiveSelectOptions = facts.HouseModeOptions,
+			LabelsInUse = facts.LabelsInUse,
+			LivePeriodSelectOptions = facts.PeriodSelectOptions,
+			KnownLabelIds = facts.LabelIds,
+			DefaultKillSwitchEntity = _defaultKillSwitchEntity,
+			RetiredKeys = _retiredKeys
+		});
 	}
 
 	/// <summary>Every label the house has, or <c>null</c> while the registry cannot be asked.</summary>
@@ -483,11 +511,16 @@ public sealed class LightingEngineHost : IDisposable
 		{
 			_discovery.Dispose();
 
+			// The freshest word on every room's history, ahead of disposing the orchestrator that knows it.
+			if (_orchestrator is not null)
+				PersistRoomHistory(_orchestrator.CarryOver(), flushNow: true);
+
 			StopCore();
 			_ha = null;
 			_registry = null;
 			_scheduler = null;
 			_notices.Dispose();
+			(_roomHistory as IDisposable)?.Dispose();
 		}
 	}
 
@@ -530,17 +563,43 @@ public sealed class LightingEngineHost : IDisposable
 			return new SaveResult(SaveStatus.Saved, validation, "Saved. Rooms start being managed as soon as Home Assistant answers.");
 		}
 
+		// A save hands running rooms on directly. Anything else has nothing running to take over from, so it
+		// reads what the last run wrote instead.
+		IReadOnlyDictionary<string, AreaCarryOver>? carried;
+
+		if (notice is EngineNoticeKind.SettingsSaved)
+		{
+			carried = _orchestrator?.CarryOver();
+
+			if (carried is not null)
+				PersistRoomHistory(carried, flushNow: true);
+		}
+		else
+		{
+			carried = _roomHistory is null
+				? null
+				: RoomHistoryLive().ToDictionary(
+					pair => pair.Key,
+					pair => new AreaCarryOver(pair.Value, Hold: null),
+					StringComparer.OrdinalIgnoreCase);
+		}
+
 		StopCore();
 
 		try
 		{
+			IStatePublisher publisher = new HaStatePublisher(_ha, _loggerFactory.CreateLogger<HaStatePublisher>());
+
+			if (_roomHistory is not null)
+				publisher = new HistoryTrackingPublisher(publisher, _roomHistory, RoomHistoryLive());
+
 			LightingOrchestrator orchestrator = new(
 				_ha,
 				_registry,
 				_scheduler,
 				config,
 				new HaLightActuator(_ha, _loggerFactory.CreateLogger<HaLightActuator>()),
-				new HaStatePublisher(_ha, _loggerFactory.CreateLogger<HaStatePublisher>()),
+				publisher,
 				new HaNotifier(_ha, _loggerFactory.CreateLogger<HaNotifier>()),
 				_loggerFactory,
 				_lastSeen,
@@ -548,7 +607,9 @@ public sealed class LightingEngineHost : IDisposable
 				_setupMemory,
 				// A save is not a boundary that went by while the engine was down; the note on disk cannot tell
 				// the two apart on its own.
-				afterSave: notice is EngineNoticeKind.SettingsSaved);
+				afterSave: notice is EngineNoticeKind.SettingsSaved,
+				defaultKillSwitchEntity: _defaultKillSwitchEntity,
+				carried: carried);
 
 			orchestrator.Start();
 
@@ -580,6 +641,29 @@ public sealed class LightingEngineHost : IDisposable
 	{
 		_orchestrator?.Dispose();
 		_orchestrator = null;
+	}
+
+	/// <summary>The house's own copy of every room's history, seeded once from what the note held at start.</summary>
+	private ConcurrentDictionary<string, AreaHistory> RoomHistoryLive() =>
+		_roomHistoryLive ??= new ConcurrentDictionary<string, AreaHistory>(
+			_roomHistory?.Load() ?? new Dictionary<string, AreaHistory>(), StringComparer.OrdinalIgnoreCase);
+
+	/// <summary>Folds a rebuild's carry-over into the house's live history and writes it.</summary>
+	/// <remarks><paramref name="flushNow"/> is true on a save: a minute's wait is not acceptable there.</remarks>
+	private void PersistRoomHistory(IReadOnlyDictionary<string, AreaCarryOver> carried, bool flushNow)
+	{
+		if (_roomHistory is null)
+			return;
+
+		ConcurrentDictionary<string, AreaHistory> live = RoomHistoryLive();
+
+		foreach ((string key, AreaCarryOver value) in carried)
+			live[key] = value.History;
+
+		_roomHistory.TrySave(live);
+
+		if (flushNow)
+			_roomHistory.Flush();
 	}
 
 	/// <summary>Reports a write this class made over a document the engine cannot run.</summary>

@@ -27,6 +27,9 @@ public sealed record ResolvedArea(
 	/// <summary>Sensors outside the area whose movement lights it dimly before anyone comes in.</summary>
 	public IReadOnlyList<string> LeadInSensors { get; init; } = [];
 
+	/// <summary>The battery entities found on each motion sensor's device. A sensor with none is absent.</summary>
+	public IReadOnlyList<MotionBattery> MotionBatteries { get; init; } = [];
+
 	/// <summary>Whether <see cref="IgnoreWhenOn"/> applies while its entities read off instead of on.</summary>
 	public bool IgnoreWhenOnInverted { get; init; }
 
@@ -97,6 +100,7 @@ public sealed class AreaEntityResolver
 	private const string BinarySensorDomain = "binary_sensor";
 	private const string SensorDomain = "sensor";
 	private const string DeviceClassAttribute = "device_class";
+	private const string BatteryDeviceClass = "battery";
 	private const string GroupMembersAttribute = "entity_id";
 	private const string SupportedColorModesAttribute = "supported_color_modes";
 	private const string ColorTempMode = "color_temp";
@@ -288,6 +292,7 @@ public sealed class AreaEntityResolver
 			LightsSupportAnyColour = anyColour,
 			KeepLitWhenOn = [.. area.KeepLitWhenOn ?? []],
 			LeadInSensors = [.. area.LeadInSensors ?? []],
+			MotionBatteries = BatteriesOf(motion),
 			IgnoreWhenOnInverted = area.IgnoreWhenOnInverted == true,
 			KeepLitWhenOnInverted = area.KeepLitWhenOnInverted == true,
 			SceneOnMotion = Trimmed(area.SceneOnMotion),
@@ -630,6 +635,30 @@ public sealed class AreaEntityResolver
 
 		return devices;
 	}
+
+	// A sensor with no device, a group or a template, has no battery and is left out.
+	private List<MotionBattery> BatteriesOf(IReadOnlyList<string> sensors)
+	{
+		List<MotionBattery> batteries = [];
+
+		foreach (string sensor in sensors)
+		{
+			if (_registry.DeviceOf(sensor) is not { Length: > 0 } device)
+				continue;
+
+			IReadOnlyList<string> onDevice = [.. _registry.EntitiesOnDevice(device).Order(StringComparer.Ordinal)];
+			string? low = onDevice.FirstOrDefault(id => id.HasDomain(BinarySensorDomain) && IsBattery(id));
+			string? level = onDevice.FirstOrDefault(id => id.HasDomain(SensorDomain) && IsBattery(id));
+
+			if (low is not null || level is not null)
+				batteries.Add(new MotionBattery(sensor, low, level));
+		}
+
+		return batteries;
+	}
+
+	private bool IsBattery(string entityId) =>
+		string.Equals(DeviceClassOf(entityId), BatteryDeviceClass, StringComparison.OrdinalIgnoreCase);
 
 	/// <summary>Drops the groups that reach past the area's own walls, naming the room they were reaching into.</summary>
 	// Home Assistant lets a group hold entities from anywhere, and there is no way to keep the group without

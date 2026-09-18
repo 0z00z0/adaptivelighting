@@ -311,7 +311,6 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
-| **NetDaemon user id** | The Home Assistant user id owning this host's token. Optional; it sharpens "was that change us, or a person?". | none | `NetDaemonUserId` |
 | **Re-check the rooms every** | How often each room re-checks the time of day and the light outside. | 60 s | `CircadianTickSeconds` |
 | **Recognise own changes for** | How long the app's own commands are recognised as its own rather than as a person at a switch. | 8 s | `SelfEchoWindowSeconds` |
 | **Other automations count as manual changes** | Whether a change made by another automation counts as a manual change. On means your other automations win. A room can answer this for itself on its own page; every room that does not follows this. | on | `TreatAutomationsAsManual` |

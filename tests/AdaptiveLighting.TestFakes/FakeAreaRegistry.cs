@@ -55,6 +55,9 @@ public sealed class FakeAreaRegistry : IAreaRegistry
 
 	public string? DeviceOf(string entityId) => Devices.GetValueOrDefault(entityId);
 
+	public IReadOnlyList<string> EntitiesOnDevice(string deviceId) =>
+		[.. Devices.Where(entry => entry.Value == deviceId).Select(entry => entry.Key)];
+
 	public AreaFloor? FloorOf(string areaId) => Floors.GetValueOrDefault(areaId);
 
 	private RegistryLabel Pair(string labelId) => new(labelId, LabelNames.GetValueOrDefault(labelId) ?? labelId);

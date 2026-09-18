@@ -260,6 +260,19 @@ public static class RoomFacts
 		};
 	}
 
+	/// <summary>One sentence per motion sensor whose battery the engine reported low, empty while none is.</summary>
+	public static IReadOnlyList<string> LowBatteries(AreaSnapshot snapshot, Func<string, string> nameOf)
+	{
+		ArgumentNullException.ThrowIfNull(snapshot);
+		ArgumentNullException.ThrowIfNull(nameOf);
+
+		return snapshot.LowBatteries is { Count: > 0 } low
+			? [.. low.Select(battery => battery.LevelPct is { } level
+				? $"The motion sensor {nameOf(battery.SensorId)} is at {level:0} %."
+				: $"The motion sensor {nameOf(battery.SensorId)} reports a low battery.")]
+			: [];
+	}
+
 	public static bool IsOverdue(AreaSnapshot snapshot, DateTimeOffset now)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);

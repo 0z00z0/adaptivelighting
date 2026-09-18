@@ -22,11 +22,11 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_DropsPureDefaultRows_ButKeepsTheNormalTarget()
 	{
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig { HouseMode = Cabin() } };
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig { HouseMode = Cabin() } };
 
 		ConfigNormalizer.Normalize(config);
 
-		var options = config.Global.HouseMode!.Options.Select(o => o.Value).ToList();
+		List<string> options = config.Global.HouseMode!.Options.Select(o => o.Value).ToList();
 		CollectionAssert.Contains(options, "Normal", "the designated Normal row stays even though it is a pure default");
 		CollectionAssert.Contains(options, "Borte", "an away row carries a scene, so it is not a pure default");
 		CollectionAssert.Contains(options, "Sover", "a sleep row is not a pure default");
@@ -36,7 +36,7 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_KeepsRowsThatCarryAReset()
 	{
-		var mode = new HouseModeConfig
+		HouseModeConfig mode = new HouseModeConfig
 		{
 			Entity = "input_select.husmodus",
 			Options =
@@ -45,18 +45,18 @@ public sealed class ConfigNormalizerTests
 				new() { Value = "Kveld", Kind = ModeKind.Normal, ResetOnPeriodStartId = "morning" }
 			]
 		};
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig { HouseMode = mode } };
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig { HouseMode = mode } };
 
 		ConfigNormalizer.Normalize(config);
 
-		var options = config.Global.HouseMode!.Options.Select(o => o.Value).ToList();
+		List<string> options = config.Global.HouseMode!.Options.Select(o => o.Value).ToList();
 		CollectionAssert.Contains(options, "Kveld", "a row carrying a reset trigger is not a pure default");
 	}
 
 	[TestMethod]
 	public void Normalize_KeepsAPureDefaultOption_ReferencedByAPeriodSetsMode()
 	{
-		var mode = new HouseModeConfig
+		HouseModeConfig mode = new HouseModeConfig
 		{
 			Entity = "input_select.husmodus",
 			Options =
@@ -65,7 +65,7 @@ public sealed class ConfigNormalizerTests
 				new() { Value = "Dag", Kind = ModeKind.Normal }   // a pure-default row, but a period sets it
 			]
 		};
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { HouseMode = mode },
 			Periods = [new() { Name = "day", Start = "07:00", SetsModeId = "Dag" }, new() { Name = "night", Start = "22:30" }],
@@ -74,7 +74,7 @@ public sealed class ConfigNormalizerTests
 
 		ConfigNormalizer.Normalize(config);
 
-		var options = config.Global.HouseMode!.Options.Select(o => o.Value).ToList();
+		List<string> options = config.Global.HouseMode!.Options.Select(o => o.Value).ToList();
 		CollectionAssert.Contains(options, "Dag", "an option a period's SetsModeId names survives normalisation");
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,
 			"and the normalised document still validates — the SetsModeId still resolves to an option");
@@ -83,7 +83,7 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_DropsEmptyHouseMode()
 	{
-		var config = new AdaptiveLightingConfig { Global = new GlobalConfig { HouseMode = new HouseModeConfig() } };
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig { Global = new GlobalConfig { HouseMode = new HouseModeConfig() } };
 
 		ConfigNormalizer.Normalize(config);
 
@@ -94,7 +94,7 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_DropsLevelsRowsThatSayNothing()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Areas =
 			[
@@ -113,7 +113,7 @@ public sealed class ConfigNormalizerTests
 
 		ConfigNormalizer.Normalize(config);
 
-		var periods = config.Areas[0].Levels.Select(level => level.PeriodId).ToList();
+		List<string> periods = config.Areas[0].Levels.Select(level => level.PeriodId).ToList();
 		CollectionAssert.AreEqual(new[] { "night", "day" }, periods,
 			"the rows that say something survive, in the order they were written");
 	}
@@ -121,7 +121,7 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_KeepsALevelsRowThatCarriesAValue_EvenWithNoPeriod()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Areas = [new() { AreaId = "stue", Levels = [new() { BrightnessPct = 40 }] }]
 		};
@@ -135,14 +135,14 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_KeepsHouseMode_WithEntityOrOptions()
 	{
-		var withEntity = new AdaptiveLightingConfig
+		AdaptiveLightingConfig withEntity = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { HouseMode = new HouseModeConfig { Entity = "input_select.husmodus" } }
 		};
 		ConfigNormalizer.Normalize(withEntity);
 		Assert.IsNotNull(withEntity.Global.HouseMode, "an entity has been chosen — keep it");
 
-		var withOptions = new AdaptiveLightingConfig
+		AdaptiveLightingConfig withOptions = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { HouseMode = new HouseModeConfig { Options = [new() { Value = "Sover", Kind = ModeKind.Sleep }] } }
 		};
@@ -153,7 +153,7 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_TrimsAndDedupesStartsOnMotionAreas()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Periods =
 			[
@@ -176,7 +176,7 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_DropsTheRoomListToNull_WhenTheMotionStartIsOff()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Periods = [new() { Name = "morning", Start = "06:00", StartsOnMotionAreas = ["kjokken"] }]
 		};
@@ -190,7 +190,7 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_DropsTheRoomListToNull_WhenTheMotionStartNamesNoRoom()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Periods =
 			[
@@ -208,7 +208,7 @@ public sealed class ConfigNormalizerTests
 	[TestMethod]
 	public void Normalize_LeavesColorControlAndHouseModeAuthorityAlone()
 	{
-		var config = new AdaptiveLightingConfig
+		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig
 			{

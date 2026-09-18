@@ -49,6 +49,12 @@ public sealed class LightingOrchestrator : IDisposable
 	// This engine replaced a running one on settings somebody just saved. The mode brain treats that differently
 	// from a start from nothing.
 	private readonly bool _afterSave;
+
+	// What each room of the engine this one replaces handed on, by CarryOverKey. Null on a start from nothing.
+	private readonly IReadOnlyDictionary<string, AreaCarryOver>? _carried;
+
+	// The app's built-in enable switch, the kill switch when the document names none. Known to the host only.
+	private readonly string? _defaultKillSwitchEntity;
 	private readonly ILogger _logger;
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
@@ -79,6 +85,9 @@ public sealed class LightingOrchestrator : IDisposable
 	// One subscription to automation runs for the house, handed to every room so each can name who changed a light.
 	private ChangeOriginNames? _originNames;
 
+	// Learned afresh on every build, from the first snapshot that comes back.
+	private OwnUser? _ownUser;
+
 	// The house-wide instances every room is built on, composed once in Start. Null until then.
 	private HouseWiring? _wiring;
 
@@ -97,9 +106,13 @@ public sealed class LightingOrchestrator : IDisposable
 		IEntityLastSeen? lastSeen = null,
 		ILastPeriodStore? lastPeriod = null,
 		IAreaSetupMemory? setupMemory = null,
-		bool afterSave = false)
+		bool afterSave = false,
+		string? defaultKillSwitchEntity = null,
+		IReadOnlyDictionary<string, AreaCarryOver>? carried = null)
 	{
 		_afterSave = afterSave;
+		_carried = carried;
+		_defaultKillSwitchEntity = defaultKillSwitchEntity;
 		_lastSeen = lastSeen;
 		_lastPeriod = lastPeriod;
 		_setupMemory = setupMemory;
@@ -128,6 +141,20 @@ public sealed class LightingOrchestrator : IDisposable
 	// "not begun" for every held period.
 	public MotionPeriodLatch? MotionPeriods => _motionPeriods;
 
+	/// <summary>What each running room hands to its replacement, by <see cref="CarryOverKey"/>.</summary>
+	public IReadOnlyDictionary<string, AreaCarryOver> CarryOver()
+	{
+		Dictionary<string, AreaCarryOver> carried = new(StringComparer.OrdinalIgnoreCase);
+
+		foreach (AreaController area in _areas)
+			carried[CarryOverKey(area.AreaId, area.Name)] = area.CarryOver();
+
+		return carried;
+	}
+
+	// The area id where there is one, so a room renamed in the same save keeps its history.
+	private static string CarryOverKey(string? areaId, string name) => areaId is { Length: > 0 } ? areaId : name;
+
 	/// <summary>Resolves the areas and starts the engine.</summary>
 	// Areas that fail to resolve are skipped and reported in one notification, so an entity renamed in HA costs
 	// that room and never the house.
@@ -154,6 +181,8 @@ public sealed class LightingOrchestrator : IDisposable
 		_motionPeriods = MotionPeriodLatch.For(_config.Periods, _config.Global);
 
 		_originNames = new ChangeOriginNames(_ha, _loggerFactory.CreateLogger<ChangeOriginNames>());
+		_ownUser = new OwnUser(_ha, _publisher, _loggerFactory.CreateLogger<OwnUser>());
+		OwnUser ownUser = _ownUser;
 
 		// Composed once, before the first room. Every room is built on this one object, so none of them can end up
 		// on a different actuator, publisher or house-state stream.
@@ -163,11 +192,12 @@ public sealed class LightingOrchestrator : IDisposable
 			_config.Global,
 			_config.Periods,
 			_actuator,
-			_publisher,
+			ownUser,
 			_house,
 			_loggerFactory,
 			_lastSeen,
-			_originNames);
+			_originNames,
+			() => ownUser.UserId);
 
 		HaAreaRegistry registry = new(_registry);
 		AreaEntityResolver resolver = new(
@@ -314,13 +344,48 @@ public sealed class LightingOrchestrator : IDisposable
 		foreach (DroppedPeriod drop in circadian.DroppedPeriods)
 			LogDroppedPeriod(resolved.Name, drop);
 
-		return new AreaController(
+		AreaController area = new(
 			_wiring!,
 			resolved,
 			circadian,
 			config.AreaId,
 			SunMoved(resolved.Settings.SunEntity),
 			LightCalculators(resolved, config));
+
+		if (_carried is not null && _carried.TryGetValue(CarryOverKey(area.AreaId, area.Name), out AreaCarryOver? carried))
+			area.Inherit(carried);
+		else if (NewestMotionSensorChange(resolved.MotionSensors) is { } approximate)
+			// No note entry for this room: the sensor's own last-changed stands in, and who changed it stays empty.
+			area.Inherit(new AreaCarryOver(new AreaHistory(approximate, ChangedAt: null, ChangedBy: null), Hold: null));
+
+		return area;
+	}
+
+	/// <summary>The newest <c>last_changed</c> across a room's own motion sensors, or <c>null</c> when none answer.</summary>
+	private DateTimeOffset? NewestMotionSensorChange(IReadOnlyList<string> sensors)
+	{
+		DateTimeOffset? newest = null;
+
+		foreach (string sensor in sensors)
+			if (LastChangedOf(_ha.GetState(sensor)) is { } stamp && (newest is null || stamp > newest))
+				newest = stamp;
+
+		return newest;
+	}
+
+	/// <summary>An entity's <c>last_changed</c> as an instant.</summary>
+	// Home Assistant publishes UTC; a kindless value lost its label in the JSON reader and is never local time.
+	private static DateTimeOffset? LastChangedOf(EntityState? state)
+	{
+		if (state?.LastChanged is not { } raw)
+			return null;
+
+		return raw.Kind switch
+		{
+			DateTimeKind.Utc => new DateTimeOffset(raw, TimeSpan.Zero),
+			DateTimeKind.Local => new DateTimeOffset(raw).ToUniversalTime(),
+			_ => new DateTimeOffset(DateTime.SpecifyKind(raw, DateTimeKind.Utc), TimeSpan.Zero)
+		};
 	}
 
 	/// <summary>One calculator per light that states levels of its own, on that light's rows merged onto the room's.</summary>
@@ -383,7 +448,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_periodSelect,
 			_motionSensorsByArea,
 			sunMoved: SunMoved(_config.Defaults.SunEntity),
-			afterSave: _afterSave);
+			afterSave: _afterSave,
+			defaultKillSwitchEntity: _defaultKillSwitchEntity);
 
 		_subscriptions.Add(_presence.Events.SubscribeSafe((PresenceEvent _) => PublishHouseState(), _logger));
 		_subscriptions.Add(_modes.Changed.SubscribeSafe((Unit _) => PublishHouseState(), _logger));
@@ -522,6 +588,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 		_areas.Clear();
 		_originNames?.Dispose();
+		_ownUser?.Dispose();
 		_presence?.Dispose();
 		_modes?.Dispose();
 		_house.Dispose();

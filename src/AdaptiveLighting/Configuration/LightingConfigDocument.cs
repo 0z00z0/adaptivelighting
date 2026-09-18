@@ -15,6 +15,10 @@ public sealed record DocumentReadResult(
 {
 	/// <summary>Whether the file on disk is behind the schema, so <see cref="Hosting.LightingEngineHost.Reload"/> writes it back once.</summary>
 	public bool NeedsMigratingWrite => UsedLegacyKeys || MintedStableKeys;
+
+	/// <summary>One sentence per retired setting the file still carries, as the reader found them.</summary>
+	// Only the parse can see one: both binders drop an unmatched key. Empty again once a save rewrites the file.
+	public IReadOnlyList<string> RetiredKeys { get; init; } = [];
 }
 
 /// <summary>Raised when an <c>AdaptiveLighting.yaml</c> document cannot be read or written; the message is written for the web UI.</summary>
@@ -106,7 +110,10 @@ public static class LightingConfigDocument
 			+ "period. Turn it on from the room's page; the other lux brightness settings still shape the curve.",
 		["UseDaylightCurve"] =
 			"a period can no longer hand its whole brightness to the curve. Each room decides for itself, per "
-			+ "period, through that room's own Levels row — the FollowDaylightCurve field there does what this used to."
+			+ "period, through that room's own Levels row — the FollowDaylightCurve field there does what this used to.",
+		["NetDaemonUserId"] =
+			"the engine now learns its own Home Assistant user from the connection, so a change made as that "
+			+ "user is still recognised as the engine's own."
 	};
 
 	// One wording for the log and the browser. Two copies would drift, and the browser's is the one nobody reads
@@ -202,9 +209,6 @@ public static class LightingConfigDocument
 		// A present-but-empty section parses to null, meaning all defaults and no areas.
 		AdaptiveLightingConfig config = document[match] ?? new AdaptiveLightingConfig();
 
-		// The key is gone by the time the binder is done with it, so this is the only place it can be carried out of.
-		config.RetiredKeysInDocument = [.. retired.Values];
-
 		RepairStructuralNulls(config, logger);
 
 		// After the repair, so the migration walks lists it can rely on. Without it every name reference resolves to nothing, silently.
@@ -215,7 +219,8 @@ public static class LightingConfigDocument
 				"The configuration document referred to periods and house modes by name. Each has been given an id "
 				+ "and every reference repointed at it, so renaming one no longer breaks what pointed at it.");
 
-		return new DocumentReadResult(config, usedLegacyKeys, mintedStableKeys);
+		// The key is gone by the time the binder is done with it, so this is the only place it can be carried out of.
+		return new DocumentReadResult(config, usedLegacyKeys, mintedStableKeys) { RetiredKeys = [.. retired.Values] };
 	}
 
 	/// <summary>Puts back the collections and sub-objects the model says are never <c>null</c>.</summary>

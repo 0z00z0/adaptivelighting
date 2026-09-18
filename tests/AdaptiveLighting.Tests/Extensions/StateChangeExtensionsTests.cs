@@ -11,7 +11,7 @@ public sealed class StateChangeExtensionsTests
 
 	private static EntityState St(string state)
 	{
-		var ha = new FakeHaContext();
+		FakeHaContext ha = new FakeHaContext();
 		ha.SetState(EntityId, state);
 		return ha.GetState(EntityId)!;
 	}
