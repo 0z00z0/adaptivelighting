@@ -50,6 +50,9 @@ public sealed class LightingOrchestrator : IDisposable
 	// from a start from nothing.
 	private readonly bool _afterSave;
 
+	// What each room of the engine this one replaces handed on, by CarryOverKey. Null on a start from nothing.
+	private readonly IReadOnlyDictionary<string, AreaCarryOver>? _carried;
+
 	// The app's built-in enable switch, the kill switch when the document names none. Known to the host only.
 	private readonly string? _defaultKillSwitchEntity;
 	private readonly ILogger _logger;
@@ -104,9 +107,11 @@ public sealed class LightingOrchestrator : IDisposable
 		ILastPeriodStore? lastPeriod = null,
 		IAreaSetupMemory? setupMemory = null,
 		bool afterSave = false,
-		string? defaultKillSwitchEntity = null)
+		string? defaultKillSwitchEntity = null,
+		IReadOnlyDictionary<string, AreaCarryOver>? carried = null)
 	{
 		_afterSave = afterSave;
+		_carried = carried;
 		_defaultKillSwitchEntity = defaultKillSwitchEntity;
 		_lastSeen = lastSeen;
 		_lastPeriod = lastPeriod;
@@ -135,6 +140,20 @@ public sealed class LightingOrchestrator : IDisposable
 	// Exposed so a read-only surface asks the same object every area's calculator reads; a fresh one would answer
 	// "not begun" for every held period.
 	public MotionPeriodLatch? MotionPeriods => _motionPeriods;
+
+	/// <summary>What each running room hands to its replacement, by <see cref="CarryOverKey"/>.</summary>
+	public IReadOnlyDictionary<string, AreaCarryOver> CarryOver()
+	{
+		Dictionary<string, AreaCarryOver> carried = new(StringComparer.OrdinalIgnoreCase);
+
+		foreach (AreaController area in _areas)
+			carried[CarryOverKey(area.AreaId, area.Name)] = area.CarryOver();
+
+		return carried;
+	}
+
+	// The area id where there is one, so a room renamed in the same save keeps its history.
+	private static string CarryOverKey(string? areaId, string name) => areaId is { Length: > 0 } ? areaId : name;
 
 	/// <summary>Resolves the areas and starts the engine.</summary>
 	// Areas that fail to resolve are skipped and reported in one notification, so an entity renamed in HA costs
@@ -325,13 +344,18 @@ public sealed class LightingOrchestrator : IDisposable
 		foreach (DroppedPeriod drop in circadian.DroppedPeriods)
 			LogDroppedPeriod(resolved.Name, drop);
 
-		return new AreaController(
+		AreaController area = new(
 			_wiring!,
 			resolved,
 			circadian,
 			config.AreaId,
 			SunMoved(resolved.Settings.SunEntity),
 			LightCalculators(resolved, config));
+
+		if (_carried is not null && _carried.TryGetValue(CarryOverKey(area.AreaId, area.Name), out AreaCarryOver? carried))
+			area.Inherit(carried);
+
+		return area;
 	}
 
 	/// <summary>One calculator per light that states levels of its own, on that light's rows merged onto the room's.</summary>

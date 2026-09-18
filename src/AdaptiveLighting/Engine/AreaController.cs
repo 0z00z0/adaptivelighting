@@ -102,6 +102,12 @@ public sealed class AreaController : IDisposable
 	private string? _changedBy;
 	private DateTimeOffset? _changedAt;
 
+	// When the running hold's countdown last started. Only meaningful in OverriddenOn or SuppressedOff.
+	private DateTimeOffset? _holdStartedAt;
+
+	// A hold handed over by the room this one replaced, taken up or dropped in Start.
+	private AreaHold? _carriedHold;
+
 	// The automation run whose change was last reported as left alone, so one run's burst of updates is one row.
 	private string? _ignoredContextId;
 
@@ -408,12 +414,71 @@ public sealed class AreaController : IDisposable
 				if (!IsOnOrOff(_ha.GetState(leaf)))
 					_notResponding.Add(leaf);
 
-			// What cannot be known yet, the last command and last motion, stays null instead of being guessed.
+			// The last command cannot be known yet, so it stays null instead of being guessed.
 			RefreshDarkness();
-			Publish(AdoptIfLit() ? TransitionReason.AdoptedAtStartup : TransitionReason.Startup);
+			Publish(ResumeCarriedHold() ? TransitionReason.Startup
+				: AdoptIfLit() ? TransitionReason.AdoptedAtStartup
+				: TransitionReason.Startup);
 
 			// Same gate as every other reach into the calculator: the tick above is already subscribed.
 			_boundary.Arm();
+		}
+	}
+
+	/// <summary>The history and hold a replacement for this room should take over.</summary>
+	public AreaCarryOver CarryOver()
+	{
+		lock (_gate)
+		{
+			AreaHold? hold = _state is AreaState.OverriddenOn or AreaState.SuppressedOff && _holdStartedAt is { } started
+				? new AreaHold(_state, started)
+				: null;
+
+			return new AreaCarryOver(new AreaHistory(_lastMotionAt, _changedAt, _changedBy), hold);
+		}
+	}
+
+	/// <summary>Takes over what the room this one replaces handed on. Call before <see cref="Start"/>.</summary>
+	public void Inherit(AreaCarryOver carried)
+	{
+		ArgumentNullException.ThrowIfNull(carried);
+
+		lock (_gate)
+		{
+			_lastMotionAt = carried.History.LastMotionAt;
+			_changedAt = carried.History.ChangedAt;
+			_changedBy = carried.History.ChangedBy;
+			_carriedHold = carried.Hold;
+		}
+	}
+
+	// Only from the resting state, as adoption: the opening house state may already have disabled or swept the room.
+	// The deadline counts from the hold's own start under the new length; one already passed fires at once.
+	private bool ResumeCarriedHold()
+	{
+		AreaHold? hold = _carriedHold;
+		_carriedHold = null;
+
+		if (hold is null || !IsEngineAllowed() || _state != AreaState.AutoVacant)
+			return false;
+
+		// Dropped when the lights no longer say what the hold says.
+		bool lit = _area.Lights.Any(_ha.IsOn);
+
+		switch (hold.State)
+		{
+			case AreaState.OverriddenOn when lit:
+				Enter(AreaState.OverriddenOn, TransitionReason.Startup);
+				RestartOverrideTimer(hold.StartedAt);
+				return true;
+
+			case AreaState.SuppressedOff when !lit:
+				Enter(AreaState.SuppressedOff, TransitionReason.Startup);
+				RestartSuppressionTimer(hold.StartedAt);
+				return true;
+
+			default:
+				return false;
 		}
 	}
 
@@ -1474,11 +1539,17 @@ public sealed class AreaController : IDisposable
 		ArmCountdown(_vacancyTimer, TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds), OnVacancyTimeout);
 	}
 
-	private void RestartSuppressionTimer() =>
-		ArmCountdown(_suppressionTimer, TimeSpan.FromMinutes(_area.Settings.VacancyResetMinutes), OnSuppressionLifted);
+	private void RestartSuppressionTimer(DateTimeOffset? startedAt = null)
+	{
+		_holdStartedAt = startedAt ?? _scheduler.Now;
+		ArmCountdown(_suppressionTimer, TimeSpan.FromMinutes(_area.Settings.VacancyResetMinutes), OnSuppressionLifted, _holdStartedAt);
+	}
 
-	private void RestartOverrideTimer() =>
-		ArmCountdown(_overrideTimer, OverrideHold(), OnOverrideExpired);
+	private void RestartOverrideTimer(DateTimeOffset? startedAt = null)
+	{
+		_holdStartedAt = startedAt ?? _scheduler.Now;
+		ArmCountdown(_overrideTimer, OverrideHold(), OnOverrideExpired, _holdStartedAt);
+	}
 
 	// A movement-led hold runs for the vacancy timeout and motion restarts it, so IsOccupied is false when it fires
 	// unless a sensor still reads on. Re-arming it while IsOccupied is false holds a sensorless room lit for ever.
@@ -1489,11 +1560,14 @@ public sealed class AreaController : IDisposable
 
 	// The single place all four state timers are armed, so a published deadline is never out of step with the
 	// timer that will honour it. Records both ends of the window for the snapshot's elapsed-versus-remaining.
-	private void ArmCountdown(SerialDisposable timer, TimeSpan delay, Action onElapsed)
+	private void ArmCountdown(SerialDisposable timer, TimeSpan delay, Action onElapsed, DateTimeOffset? from = null)
 	{
-		_nextChangeFrom = _scheduler.Now;
-		_nextChangeAt = _scheduler.Now + delay;
-		timer.Disposable = _scheduler.Schedule(delay, onElapsed);
+		DateTimeOffset start = from ?? _scheduler.Now;
+		DateTimeOffset due = start + delay;
+
+		_nextChangeFrom = start;
+		_nextChangeAt = due;
+		timer.Disposable = _scheduler.Schedule(due > _scheduler.Now ? due - _scheduler.Now : TimeSpan.Zero, onElapsed);
 	}
 
 	private void ClearCountdown()
