@@ -37,6 +37,9 @@ public sealed class AreaController : IDisposable
 	// The lights not answering. Kept from the subscriptions, so a snapshot never reads state to count them.
 	private readonly HashSet<string> _notResponding = new(StringComparer.OrdinalIgnoreCase);
 
+	// The motion sensors whose battery is low, kept from the battery subscriptions the same way.
+	private IReadOnlyList<SensorBattery> _lowBatteries = [];
+
 	private readonly object _gate = new();
 	private readonly CompositeDisposable _subscriptions = [];
 	private readonly SerialDisposable _vacancyTimer = new();
@@ -398,6 +401,13 @@ public sealed class AreaController : IDisposable
 					.StateAllChanges()
 					.SubscribeSafe(OnMemberChanged, _logger));
 
+		foreach (MotionBattery battery in _area.MotionBatteries)
+			foreach (string? entity in (string?[])[battery.LowEntity, battery.LevelEntity])
+				if (entity is not null)
+					_subscriptions.Add(_ha.Entity(entity)
+						.StateChanges()
+						.SubscribeSafe((StateChange _) => OnBatteryChanged(), _logger));
+
 		_subscriptions.Add(_houseChanged.SubscribeSafe(OnHouseChanged, _logger));
 
 		// A moved sun time can put a boundary in the past as easily as the future, so this evaluates before it re-arms.
@@ -413,6 +423,8 @@ public sealed class AreaController : IDisposable
 			foreach (string leaf in _fanOut.Leaves)
 				if (!IsOnOrOff(_ha.GetState(leaf)))
 					_notResponding.Add(leaf);
+
+			_lowBatteries = LowBatteries();
 
 			// The last command cannot be known yet, so it stays null instead of being guessed.
 			RefreshDarkness();
@@ -731,6 +743,27 @@ public sealed class AreaController : IDisposable
 		if (IsOnOrOff(change.New) ? _notResponding.Remove(entityId) : _notResponding.Add(entityId))
 			Publish(TransitionReason.LightAvailability);
 	}
+
+	private void OnBatteryChanged()
+	{
+		lock (_gate)
+		{
+			if (_disposed)
+				return;
+
+			_lowBatteries = LowBatteries();
+			Publish(TransitionReason.SensorBattery);
+		}
+	}
+
+	private List<SensorBattery> LowBatteries() =>
+	[
+		.. _area.MotionBatteries
+			.Select(battery => battery.LowFrom(StateOf(battery.LowEntity), StateOf(battery.LevelEntity)))
+			.OfType<SensorBattery>()
+	];
+
+	private string? StateOf(string? entityId) => entityId is null ? null : _ha.GetState(entityId)?.State;
 
 	private void OnHouseChanged(HouseState house)
 	{
@@ -1694,7 +1727,8 @@ public sealed class AreaController : IDisposable
 			ChangedBy: _changedBy,
 			ChangedAt: _changedAt,
 			// Enter clears _leadIn on leaving PreOff.
-			IsLeadIn: _leadIn);
+			IsLeadIn: _leadIn,
+			LowBatteries: _lowBatteries);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>

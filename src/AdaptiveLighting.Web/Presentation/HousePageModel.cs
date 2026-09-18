@@ -76,6 +76,10 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	// mid-edit costs the thing being edited.
 	private IReadOnlyDictionary<AreaConfig, AreaState> _liveStates = new Dictionary<AreaConfig, AreaState>();
 
+	// Per room, the low-battery sentences from the same read. Absent means none.
+	private IReadOnlyDictionary<AreaConfig, IReadOnlyList<string>> _lowBatteries =
+		new Dictionary<AreaConfig, IReadOnlyList<string>>();
+
 	// _unsaved holds rooms added since the last save. They cannot be opened: the room page reads the document
 	// from disk, not from here.
 	private readonly HashSet<string> _unsaved = new(StringComparer.Ordinal);
@@ -529,15 +533,26 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	private void RefreshLiveStates()
 	{
 		Dictionary<AreaConfig, AreaState> states = [];
+		Dictionary<AreaConfig, IReadOnlyList<string>> batteries = [];
 
 		foreach (AreaConfig area in _config.Areas)
 		{
-			if (_cache.Find(area.AreaId, RoomName(area)) is { } snapshot)
-				states[area] = snapshot.State;
+			if (_cache.Find(area.AreaId, RoomName(area)) is not { } snapshot)
+				continue;
+
+			states[area] = snapshot.State;
+
+			if (RoomFacts.LowBatteries(snapshot, _catalog.FriendlyNameOrId) is { Count: > 0 } low)
+				batteries[area] = low;
 		}
 
 		_liveStates = states;
+		_lowBatteries = batteries;
 	}
+
+	/// <summary>What a room's row says about low motion sensor batteries, or <c>null</c> while none is low.</summary>
+	public string? LowBatteryTitle(AreaConfig area) =>
+		_lowBatteries.TryGetValue(area, out IReadOnlyList<string>? low) ? string.Join(" ", low) : null;
 
 	/// <summary>What a room is doing right now, or <c>null</c> when nothing has been heard about it.</summary>
 	public AreaState? LiveStateOf(AreaConfig area) =>

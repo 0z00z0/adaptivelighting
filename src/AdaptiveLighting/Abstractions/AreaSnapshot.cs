@@ -47,7 +47,8 @@ public sealed record AreaSnapshot(
 	int? LightCount = null,
 	string? ChangedBy = null,
 	DateTimeOffset? ChangedAt = null,
-	bool? IsLeadIn = null)
+	bool? IsLeadIn = null,
+	IReadOnlyList<SensorBattery>? LowBatteries = null)
 {
 	/// <summary>Whether the room's lights are on: lit by the engine, dimming before off, or held on by hand, at a
 	/// brightness above zero.</summary>
@@ -87,10 +88,14 @@ public sealed record AreaSnapshot(
 		LightsNotResponding == other.LightsNotResponding &&
 		LightCount == other.LightCount &&
 		SameLights(LightLevels, other.LightLevels) &&
+		SameBatteries(LowBatteries, other.LowBatteries) &&
 		Forced == other.Forced;
 
 	// LightsMoved is left out: it says what this publish was about, like Reason. A light moving on its own is still
 	// news through LightLevels, or the tick that retunes one lamp would be suppressed as a repeat.
 	private static bool SameLights(IReadOnlyList<LightStanding>? left, IReadOnlyList<LightStanding>? right) =>
 		left is null || right is null ? left is null && right is null : left.SequenceEqual(right);
+
+	private static bool SameBatteries(IReadOnlyList<SensorBattery>? left, IReadOnlyList<SensorBattery>? right) =>
+		(left ?? []).SequenceEqual(right ?? []);
 }
