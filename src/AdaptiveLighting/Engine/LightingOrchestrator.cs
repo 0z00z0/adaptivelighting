@@ -49,6 +49,9 @@ public sealed class LightingOrchestrator : IDisposable
 	// This engine replaced a running one on settings somebody just saved. The mode brain treats that differently
 	// from a start from nothing.
 	private readonly bool _afterSave;
+
+	// The app's built-in enable switch, the kill switch when the document names none. Known to the host only.
+	private readonly string? _defaultKillSwitchEntity;
 	private readonly ILogger _logger;
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
@@ -97,9 +100,11 @@ public sealed class LightingOrchestrator : IDisposable
 		IEntityLastSeen? lastSeen = null,
 		ILastPeriodStore? lastPeriod = null,
 		IAreaSetupMemory? setupMemory = null,
-		bool afterSave = false)
+		bool afterSave = false,
+		string? defaultKillSwitchEntity = null)
 	{
 		_afterSave = afterSave;
+		_defaultKillSwitchEntity = defaultKillSwitchEntity;
 		_lastSeen = lastSeen;
 		_lastPeriod = lastPeriod;
 		_setupMemory = setupMemory;
@@ -383,7 +388,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_periodSelect,
 			_motionSensorsByArea,
 			sunMoved: SunMoved(_config.Defaults.SunEntity),
-			afterSave: _afterSave);
+			afterSave: _afterSave,
+			defaultKillSwitchEntity: _defaultKillSwitchEntity);
 
 		_subscriptions.Add(_presence.Events.SubscribeSafe((PresenceEvent _) => PublishHouseState(), _logger));
 		_subscriptions.Add(_modes.Changed.SubscribeSafe((Unit _) => PublishHouseState(), _logger));

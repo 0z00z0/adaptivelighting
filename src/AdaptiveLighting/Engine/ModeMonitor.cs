@@ -19,6 +19,7 @@ public sealed class ModeMonitor : IDisposable
 {
 	private readonly IHaContext _ha;
 	private readonly GlobalConfig _global;
+	private readonly string? _defaultKillSwitchEntity;
 	private readonly ILogger _logger;
 	private readonly IScheduler _scheduler;
 	private readonly IReadOnlyList<TimePeriodConfig> _periods;
@@ -71,9 +72,11 @@ public sealed class ModeMonitor : IDisposable
 		IReadOnlyDictionary<string, IReadOnlyList<string>>? motionSensorsByArea = null,
 		TimeZoneInfo? zone = null,
 		IObservable<Unit>? sunMoved = null,
-		bool afterSave = false)
+		bool afterSave = false,
+		string? defaultKillSwitchEntity = null)
 	{
 		_sunMoved = sunMoved;
+		_defaultKillSwitchEntity = defaultKillSwitchEntity;
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_global = global ?? throw new ArgumentNullException(nameof(global));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -91,7 +94,8 @@ public sealed class ModeMonitor : IDisposable
 			periods, global, sunTimes, roomLevels: null, periodSelect?.ReadPeriod, _motionPeriods.StateOf, resolvedZone);
 
 		_modes = new HouseModeRules(
-			_ha, _global, _logger, _scheduler, _areaMotionSensors, _gate, _subscriptions, () => IsDisposed, RaiseChanged);
+			_ha, _global, defaultKillSwitchEntity, _logger, _scheduler, _areaMotionSensors, _gate, _subscriptions,
+			() => IsDisposed, RaiseChanged);
 
 		_periodTracker = new PeriodTracker(
 			_ha, _logger, _periods, sunTimes, resolvedZone, _circadian, _motionPeriods, lastPeriod, periodSelect,
@@ -108,8 +112,8 @@ public sealed class ModeMonitor : IDisposable
 
 	/// <summary>Whether the master switch reading <paramref name="state"/> pauses the engine.</summary>
 	// The one copy of the rule; pages call this too.
-	public static bool KillSwitchPauses(GlobalConfig global, EntityState? state) =>
-		HouseModeRules.KillSwitchPauses(global, state);
+	public static bool KillSwitchPauses(GlobalConfig global, string? defaultKillSwitchEntity, EntityState? state) =>
+		HouseModeRules.KillSwitchPauses(global, defaultKillSwitchEntity, state);
 
 	/// <summary>The house-mode option string, or <c>null</c> when the select is unconfigured or has never answered.</summary>
 	public string? CurrentModeValue => _modes.CurrentModeValue;
@@ -142,7 +146,7 @@ public sealed class ModeMonitor : IDisposable
 			startingPeriod = _periodTracker.BeginRun(_scheduler.Now);
 		}
 
-		if (_global.EffectiveKillSwitchEntity is { Length: > 0 } killSwitch)
+		if (_global.EffectiveKillSwitchEntity(_defaultKillSwitchEntity) is { Length: > 0 } killSwitch)
 		{
 			_logger.LogInformation("Watching kill switch {EntityId}.", killSwitch);
 			_subscriptions.Add(_ha.Entity(killSwitch)
