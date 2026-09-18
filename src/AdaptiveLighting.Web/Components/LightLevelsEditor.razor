@@ -103,6 +103,10 @@
 	[Parameter]
 	public EventCallback Changed { get; set; }
 
+	/// <summary>Raised with the period id before <see cref="Changed"/> when a level of that period is edited.</summary>
+	[Parameter]
+	public EventCallback<string> LevelEdited { get; set; }
+
 	/// <summary>Why this room's lights cannot be commanded, or <c>null</c> when they can.</summary>
 	[Parameter]
 	public string? TestRefusal { get; set; }
@@ -121,7 +125,7 @@
 
 	/// <summary>How long a test holds the light, for the wording on the buttons.</summary>
 	[Parameter]
-	public int TestSeconds { get; set; } = 10;
+	public int TestSeconds { get; set; } = 5;
 
 	/// <summary>Raised when one light's Test button is pressed.</summary>
 	[Parameter]
@@ -349,7 +353,13 @@
 	{
 		LightLevels.SetGroupBrightness(Room, leaves, periodId, value);
 
-		return Changed.InvokeAsync();
+		return Edited(periodId);
+	}
+
+	private async Task Edited(string periodId)
+	{
+		await LevelEdited.InvokeAsync(periodId);
+		await Changed.InvokeAsync();
 	}
 
 	private Task SetGroupColour(IReadOnlyList<string> leaves, string periodId, double? value)
@@ -360,7 +370,7 @@
 			periodId,
 			value is { } kelvin ? (int)Math.Round(kelvin, MidpointRounding.AwayFromZero) : null);
 
-		return Changed.InvokeAsync();
+		return Edited(periodId);
 	}
 
 	private Task SetGroupCurve(IReadOnlyList<string> leaves, string periodId, bool follow)
@@ -370,7 +380,7 @@
 
 		LightLevels.SetGroupFollowsDaylightCurve(Periods, Room, leaves, periodId, roomFollows, follow);
 
-		return Changed.InvokeAsync();
+		return Edited(periodId);
 	}
 
 	/// <summary>The same placeholder the schedule editor uses for an unnamed period.</summary>
@@ -391,7 +401,7 @@
 	{
 		LightLevels.SetBrightness(Room, entityId, periodId, value);
 
-		return Changed.InvokeAsync();
+		return Edited(periodId);
 	}
 
 	private Task SetColour(string entityId, string periodId, double? value)
@@ -402,7 +412,7 @@
 			periodId,
 			value is { } kelvin ? (int)Math.Round(kelvin, MidpointRounding.AwayFromZero) : null);
 
-		return Changed.InvokeAsync();
+		return Edited(periodId);
 	}
 
 	private Task SetCurve(string entityId, LightLevelRow row, bool follow)
@@ -412,6 +422,6 @@
 
 		LightLevels.SetFollowsDaylightCurve(Room, entityId, row.PeriodId, row.BrightnessPct, roomFollows, follow);
 
-		return Changed.InvokeAsync();
+		return Edited(row.PeriodId);
 	}
 }

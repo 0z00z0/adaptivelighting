@@ -157,6 +157,23 @@ public sealed class RoomPageModelTests
 		model.Dispose();
 	}
 
+	[TestMethod]
+	public async Task ATestPressedRightAfterALevelEdit_SavesTheEditFirst()
+	{
+		RoomPageModel model = OpenRoom(out LightingEngineHost host);
+
+		RoomLevels.SetBrightness(model.Area!, PeriodId, 40);
+		await model.MarkDirty();
+
+		model.TestPeriod(PeriodId);
+
+		Assert.IsFalse(model.Dirty, "the edit is written before the test, not a second later");
+		double? saved = Room(host.Store.Load()).Levels.SingleOrDefault(level => level.PeriodId == PeriodId)?.BrightnessPct;
+		Assert.AreEqual(40, saved ?? 0, 0.5, "so the test shows the level just set, not the one before it");
+
+		model.Dispose();
+	}
+
 	/// <summary>A document the validator accepts, holding the one room these tests work on.</summary>
 	private static AdaptiveLightingConfig OneRoom() => new()
 	{

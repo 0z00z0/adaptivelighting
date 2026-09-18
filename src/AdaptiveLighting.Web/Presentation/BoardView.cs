@@ -347,7 +347,7 @@ public static class BoardView
 
 			AreaState.SceneHold => "held by a scene — the engine stands back until the house leaves this mode",
 
-			_ => StateGlyph.For(snapshot.State).Word
+			_ => StateGlyph.For(snapshot).Word
 		};
 	}
 

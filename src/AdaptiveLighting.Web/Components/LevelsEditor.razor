@@ -216,6 +216,7 @@
 					   TestSecondsLeft="@TestSecondsLeft"
 					   TestSeconds="@TestSeconds"
 					   Test="@TestLight"
+					   LevelEdited="@LevelEdited"
 					   Changed="@Changed" />
 </div>
 
@@ -249,6 +250,10 @@
 	[Parameter]
 	public EventCallback Changed { get; set; }
 
+	/// <summary>Raised with the period id before <see cref="Changed"/> when a level of that period is edited.</summary>
+	[Parameter]
+	public EventCallback<string> LevelEdited { get; set; }
+
 	/// <summary>Why this room's lights cannot be commanded, or <c>null</c> when they can.</summary>
 	/// <remarks>The engine's own sentence, never composed here: a second reading of the gates would drift.</remarks>
 	[Parameter]
@@ -264,7 +269,7 @@
 
 	/// <summary>How long a test holds the room, for the wording on the buttons that are not running one.</summary>
 	[Parameter]
-	public int TestSeconds { get; set; } = 10;
+	public int TestSeconds { get; set; } = 5;
 
 	/// <summary>Raised with a period id when its Test button is pressed.</summary>
 	[Parameter]
@@ -336,7 +341,13 @@
 	{
 		RoomLevels.SetBrightness(Room, periodId, value);
 
-		return Changed.InvokeAsync();
+		return Edited(periodId);
+	}
+
+	private async Task Edited(string periodId)
+	{
+		await LevelEdited.InvokeAsync(periodId);
+		await Changed.InvokeAsync();
 	}
 
 	// currentBrightnessPct is whatever this cell already shows, room override or schedule, so the curve's dark
@@ -349,7 +360,7 @@
 		double currentBrightnessPct = RoomLevels.Rows(Periods, Room).Single(row => row.PeriodId == periodId).BrightnessPct;
 		RoomLevels.SetFollowsDaylightCurve(Room, period, currentBrightnessPct, follow);
 
-		return Changed.InvokeAsync();
+		return Edited(periodId);
 	}
 
 	// Kelvin is a whole number in the schema while the preset control carries a double. Rounded and not
@@ -361,7 +372,7 @@
 			periodId,
 			value is { } kelvin ? (int)Math.Round(kelvin, MidpointRounding.AwayFromZero) : null);
 
-		return Changed.InvokeAsync();
+		return Edited(periodId);
 	}
 
 	private Task Drop(string periodId)
