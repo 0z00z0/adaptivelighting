@@ -2013,7 +2013,7 @@ suite on request, or when something is wrong.
 
 ### The core set is chosen by hand
 
-About a tenth of the suite: **202 test methods, 209 cases, of 2020** (2026-09-13). A test earns a place when its
+About a tenth of the suite: **258 cases of 2115** (2026-09-18). A test earns a place when its
 failure would reach a person in a house, or when it guards a stored value that must never change: the auto-on
 gates, away and the house mode, vacancy and the warning dim, override detection, the sleep clamp, loading,
 validating and round-tripping the document (raw brightness bytes, retired keys, stable ids), and what a
@@ -2039,6 +2039,11 @@ once per case.
 The fakes live in the non-packable project `tests/AdaptiveLighting.TestFakes`, which `tools/uihost` references
 instead of the test project. `tests/AdaptiveLighting.Tests/GlobalUsings.cs` brings them into every test file, so
 a new test file needs no `using` for them.
+
+The fake light actuator only records a command unless `FakeLightActuator.EchoInto` is called, after which
+each command also comes back through the fake context as a state change before `Apply` returns, carrying the
+app's user as Home Assistant's echo would. That is what makes a command sent ahead of its expectation visible
+to a test; a test that arranges light states by hand leaves it off.
 
 Area tests build a started controller through `tests/AdaptiveLighting.Tests/Common/AreaTestBuilder.cs`. Its
 defaults are the ones the state-machine tests rely on: 2026-01-15 20:00 UTC, inside "evening"; motion off, light
