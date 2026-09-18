@@ -354,8 +354,38 @@ public sealed class LightingOrchestrator : IDisposable
 
 		if (_carried is not null && _carried.TryGetValue(CarryOverKey(area.AreaId, area.Name), out AreaCarryOver? carried))
 			area.Inherit(carried);
+		else if (NewestMotionSensorChange(resolved.MotionSensors) is { } approximate)
+			// No note entry for this room: the sensor's own last-changed stands in, and who changed it stays empty.
+			area.Inherit(new AreaCarryOver(new AreaHistory(approximate, ChangedAt: null, ChangedBy: null), Hold: null));
 
 		return area;
+	}
+
+	/// <summary>The newest <c>last_changed</c> across a room's own motion sensors, or <c>null</c> when none answer.</summary>
+	private DateTimeOffset? NewestMotionSensorChange(IReadOnlyList<string> sensors)
+	{
+		DateTimeOffset? newest = null;
+
+		foreach (string sensor in sensors)
+			if (LastChangedOf(_ha.GetState(sensor)) is { } stamp && (newest is null || stamp > newest))
+				newest = stamp;
+
+		return newest;
+	}
+
+	/// <summary>An entity's <c>last_changed</c> as an instant.</summary>
+	// Home Assistant publishes UTC; a kindless value lost its label in the JSON reader and is never local time.
+	private static DateTimeOffset? LastChangedOf(EntityState? state)
+	{
+		if (state?.LastChanged is not { } raw)
+			return null;
+
+		return raw.Kind switch
+		{
+			DateTimeKind.Utc => new DateTimeOffset(raw, TimeSpan.Zero),
+			DateTimeKind.Local => new DateTimeOffset(raw).ToUniversalTime(),
+			_ => new DateTimeOffset(DateTime.SpecifyKind(raw, DateTimeKind.Utc), TimeSpan.Zero)
+		};
 	}
 
 	/// <summary>One calculator per light that states levels of its own, on that light's rows merged onto the room's.</summary>
