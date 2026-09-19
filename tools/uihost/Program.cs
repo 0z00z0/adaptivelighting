@@ -6,6 +6,7 @@ using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
 using AdaptiveLighting.Hosting;
+using AdaptiveLighting.Lamplight;
 using AdaptiveLighting.TestFakes;
 using AdaptiveLighting.Web;
 using AdaptiveLighting.Web.Services;
@@ -21,6 +22,7 @@ using NetDaemon.HassModel;
 // Run:  dotnet run --project tools/uihost                 ->  http://localhost:5199
 //       dotnet run --project tools/uihost -- --port 5200  ->  http://localhost:5200
 //       dotnet run --project tools/uihost -- --port 0     ->  any free port, printed on startup
+//       dotnet run --project tools/uihost -- --lamplight-port 5198  ->  Lamplight as well, on http://localhost:5198
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -46,8 +48,14 @@ string document = builder.Configuration["ConfigPath"]
 
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 {
-	["AdaptiveLighting:ConfigPath"] = document
+	["AdaptiveLighting:ConfigPath"] = document,
+	[LamplightSite.PortKey] = builder.Configuration["lamplight-port"]
 });
+
+int? lamplightPort = LamplightSite.Port(builder.Configuration);
+
+if (lamplightPort is not null)
+	builder.Services.AddLamplight();
 
 // The fake house. Populated below so the two helper screens have live options to reconcile against, including
 // one orphan on each, the state the "move it to…" control exists for.
@@ -76,9 +84,13 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 // AddAdditionalAssemblies as well as the AdditionalRoutes service: the first registers this host's preview
 // pages as endpoints, the second is what the Router resolves once a circuit is navigating on its own.
-app.MapRazorComponents<App>()
+RazorComponentsEndpointConventionBuilder firstDesign = app.MapRazorComponents<App>()
 	.AddAdditionalAssemblies(typeof(Program).Assembly)
 	.AddInteractiveServerRenderMode();
+
+// The same split a house gets from AdaptiveLighting:LamplightPort, so both sites share this one engine.
+if (lamplightPort is { } lamplight)
+	app.MapLamplight(lamplight, firstDesign);
 
 // Hands the engine the fake house and a handful of not-yet-committed rooms, so the commissioning board and
 // every room's light switch answer from a running engine instead of "nothing is running" — and files a dozen
@@ -95,9 +107,14 @@ string address = port == 0
 	? "http://127.0.0.1:0"
 	: $"http://localhost:{port.ToString(CultureInfo.InvariantCulture)}";
 
+app.Urls.Add(address);
+
+if (lamplightPort is { } lamplightListen)
+	app.Urls.Add($"http://localhost:{lamplightListen.ToString(CultureInfo.InvariantCulture)}");
+
 try
 {
-	app.Run(address);
+	app.Run();
 }
 catch (IOException error)
 {

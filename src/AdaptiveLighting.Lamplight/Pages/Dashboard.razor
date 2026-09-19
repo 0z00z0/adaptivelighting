@@ -1,0 +1,39 @@
+@page "/"
+@implements IDisposable
+@inject AreaSnapshotCache Cache
+@inject ActivityLog Log
+@inject LightingEngineHost Engine
+@inject DocumentCache Documents
+@inject ModeService Service
+@inject HaCatalog Catalog
+@inject ILogger<Dashboard> Logger
+
+<PageTitle>Dashboard &mdash; Adaptive lighting</PageTitle>
+
+<h1 class="pagetitle">Dashboard</h1>
+
+<section class="glass">
+	<p class="lede">
+		@(_model.EngineIsRunning ? "The lighting engine is running." : "The lighting engine is not running.")
+		The activity record holds @_model.Entries.Count @(_model.Entries.Count == 1 ? "report" : "reports").
+	</p>
+</section>
+
+@code {
+	private DashboardPageModel _model = default!;
+
+	/// <inheritdoc/>
+	protected override void OnInitialized()
+	{
+		_model = new DashboardPageModel(Cache, Log, Engine, Documents, Service, Catalog, Logger, work => InvokeAsync(work));
+		_model.Changed += StateHasChanged;
+		_model.Start();
+	}
+
+	/// <inheritdoc/>
+	public void Dispose()
+	{
+		_model.Changed -= StateHasChanged;
+		_model.Dispose();
+	}
+}

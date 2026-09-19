@@ -19,6 +19,9 @@ dotnet run --project tools/uihost -- --port 5200   # a second worktree
 dotnet run --project tools/uihost -- --port 0      # any free port, printed on startup
 ```
 
+`--lamplight-port 5198` serves Lamplight as well, on its own port, over the same engine and fake house —
+the same split a house gets from `AdaptiveLighting:LamplightPort`. Without it only the first design runs.
+
 The bound address is printed as `uihost listening on …` once the host is up, which is the line to read after
 `--port 0`.
 

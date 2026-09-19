@@ -1,3 +1,4 @@
+using AdaptiveLighting.Lamplight;
 using AdaptiveLighting.Web;
 
 using Microsoft.AspNetCore.Builder;
@@ -22,8 +23,10 @@ public sealed record AdaptiveLightingHouseOptions(string? KeyRingPath = null, in
 
 /// <summary>Adopts AdaptiveLighting into a NetDaemon host.</summary>
 /// <remarks>
-///     Owns the process's only root Blazor component: a second root in the same container puts two "/" endpoints in
-///     one route table, and every request fails with <c>AmbiguousMatchException</c>.
+///     Owns the process's root Blazor components: the first design's, and Lamplight's when
+///     <c>AdaptiveLighting:LamplightPort</c> is set. Two roots put two "/" endpoints in one route table, which fails
+///     every request with <c>AmbiguousMatchException</c> unless <see cref="LamplightSite.MapLamplight"/> splits them
+///     by listening port.
 ///     EXPOSURE: the UI listens on every interface with no authentication. Keep it on a trusted LAN, or behind Home
 ///     Assistant ingress or an authenticating proxy.
 /// </remarks>
@@ -70,16 +73,42 @@ public static class AdaptiveLightingHouse
 		int port = options.Port
 			?? (int.TryParse(builder.Configuration[PortKey], out int configured) ? configured : DefaultPort);
 
-		if (port == 0)
-			return;
+		if (port != 0)
+		{
+			builder.WebHost.ConfigureKestrel(kestrel => kestrel.ListenAnyIP(port));
 
-		builder.WebHost.ConfigureKestrel(kestrel => kestrel.ListenAnyIP(port));
+			logger.LogWarning(
+				"The lighting UI is listening on port {Port} on every interface, with no authentication: anyone who "
+				+ "can reach it can rewrite this house's lighting configuration. Keep it on the LAN — do not forward "
+				+ "or NAT it. Set {Key} to 0 to bind it yourself.",
+				port, PortKey);
+		}
+
+		ListenForLamplight(builder, port, logger);
+	}
+
+	/// <summary>Binds Lamplight's port when the setting names one; otherwise adds nothing at all.</summary>
+	private static void ListenForLamplight(WebApplicationBuilder builder, int firstPort, ILogger logger)
+	{
+		if (LamplightSite.Port(builder.Configuration) is not { } lamplight)
+		{
+			if (builder.Configuration[LamplightSite.PortKey] is { Length: > 0 } unreadable && unreadable != "0")
+				logger.LogWarning("{Key} is {Value}, which is not a port, so Lamplight is not served.", LamplightSite.PortKey, unreadable);
+
+			return;
+		}
+
+		if (lamplight == firstPort)
+			throw new InvalidOperationException(
+				$"{LamplightSite.PortKey} and {PortKey} are both {lamplight}; Lamplight needs a port of its own.");
+
+		builder.Services.AddLamplight();
+		builder.WebHost.ConfigureKestrel(kestrel => kestrel.ListenAnyIP(lamplight));
 
 		logger.LogWarning(
-			"The lighting UI is listening on port {Port} on every interface, with no authentication: anyone who "
-			+ "can reach it can rewrite this house's lighting configuration. Keep it on the LAN — do not forward "
-			+ "or NAT it. Set {Key} to 0 to bind it yourself.",
-			port, PortKey);
+			"Lamplight is listening on port {Port} on every interface, with no authentication, like the first "
+			+ "design. Remove {Key} to turn it off.",
+			lamplight, LamplightSite.PortKey);
 	}
 
 	/// <summary>Maps the UI's assets and endpoints.</summary>
@@ -95,7 +124,10 @@ public static class AdaptiveLightingHouse
 		// Blazor's own _framework/blazor.web.js resolve outside Development.
 		app.MapStaticAssets();
 		app.UseAntiforgery();
-		app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+		RazorComponentsEndpointConventionBuilder firstDesign = app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+
+		if (LamplightSite.Port(app.Configuration) is { } lamplight)
+			app.MapLamplight(lamplight, firstDesign);
 
 		return app;
 	}

@@ -1901,6 +1901,35 @@ scroll width was **1239** — `.chips` inside an unconstrained parent lays out a
 An entity list is the case that has to go further and take the card's full width: it is a block, not a widget
 beside a label, and squeezed into what is left it wraps to one chip per line.
 
+### Two designs, one process, split by listening port
+
+Lamplight is its own library, served on its own port beside the first design and in the same process. It is
+off unless `AdaptiveLighting:LamplightPort` names a port: absent, empty or 0 means no second listener, no
+routing rule and no Lamplight endpoints, so a house that has not chosen a port runs as before.
+`Without_A_Lamplight_Port_Only_The_First_Design_Listens` holds that, and goes red with two bound addresses when
+the setting is present.
+
+- **One process, never two.** Two would run two engines against the same lights, two writers to one document
+  with no shared lock, two activity records overwriting one file, and two key rings under one cookie name. In
+  one process both sites read the same snapshots, save through the one write path and share the key ring.
+- **Two roots, two route tables.** Each design's root component routes pages from its own library only. Both
+  claim "/", which in one route table fails every request with `AmbiguousMatchException`.
+  `LamplightSite.MapLamplight` tags Lamplight's endpoints with its port and the first design's with every port
+  but that one, and a matcher policy drops a candidate whose tag does not fit the connection. Untagged
+  endpoints, the static assets, answer on both ports. A page from one design asked on the other's port is not
+  found: measured, `/activity` is 200 on the first design's port and 404 on Lamplight's.
+- **Routing is by the port the connection arrived on, never the Host header.** The add-on can map an outside
+  port onto a different inside one. A split on the address the browser used then answers nothing on that
+  site; the listening-port split serves the right design either way.
+- **The live connection needs nothing per port.** The browser opens it back to the port that served the page.
+  Measured: the negotiate handshake answers on both ports, and neither page raises a console error.
+- **The two ports must differ.** The same number for both is refused at start with a message naming both
+  settings.
+- **Browser storage is per port; cookies are not.** Each site stores its own theme choice in the browser, and
+  the two never share it.
+- Lamplight constructs the existing page models unchanged. `InvariantNumber` and `AssetToken` are public so it
+  uses them instead of carrying copies.
+
 ### Shutdown order: the snapshot cache stops before Kestrel
 
 The host stops hosted services in reverse registration order, and `GenericWebHostService` is registered by

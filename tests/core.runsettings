@@ -225,6 +225,7 @@
 			<!-- The host: key ring beside the document, the port, no token in the log file. -->
 			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.The_Key_Ring_Lands_Beside_The_Document
 			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.The_Port_Comes_From_Configuration_And_Defaults_To_10000
+			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.Without_A_Lamplight_Port_Only_The_First_Design_Listens
 			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.DurableLogFormatterTests.A_Token_Logged_Through_ILogger_Never_Reaches_The_File
 			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.LoggedValueTests.A_Home_Assistant_Long_Lived_Token_Is_Replaced_Wherever_It_Sits
 

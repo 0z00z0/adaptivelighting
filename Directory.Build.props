@@ -2,7 +2,7 @@
 
   <!--
     Shared build + package metadata. Each project adds only its own PackageId and Description.
-    Version is set here so the four packages always ship as a matched set: the engine, the UI, the
+    Version is set here so the five packages always ship as a matched set: the engine, the UI, Lamplight, the
     extensions and the NetDaemon host binding are compiled against each other, so a mixed set is not a
     supported combination. They go to GitHub Packages under 0z00z0, and nowhere else.
     The tag is authoritative for a release: release.yml overrides Version from it with -p:Version.

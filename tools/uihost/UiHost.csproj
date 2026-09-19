@@ -17,6 +17,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\AdaptiveLighting.Web\AdaptiveLighting.Web.csproj" />
+		<ProjectReference Include="..\..\src\AdaptiveLighting.Lamplight\AdaptiveLighting.Lamplight.csproj" />
 		<!-- FakeHaContext and FakeHaRegistry already exist and are public; a second pair would drift. The fakes
 		     project carries no test framework, so this host stays free of MSTest. -->
 		<ProjectReference Include="..\..\tests\AdaptiveLighting.TestFakes\AdaptiveLighting.TestFakes.csproj" />

@@ -150,12 +150,13 @@ Full documentation — how it works, how to use it, the settings reference and a
 
 ## Packages
 
-Ship the four as a matched set — they are compiled against each other. Referencing the top one brings the rest.
+Ship the five as a matched set — they are compiled against each other. Referencing the top one brings the rest.
 
 | Package | What it is |
 |---|---|
 | `AdaptiveLighting.NetDaemon` | The host wiring: registration, static assets, antiforgery, the key ring. Start here. |
 | `AdaptiveLighting.Web` | Blazor dashboard + config editor (Razor Class Library). |
+| `AdaptiveLighting.Lamplight` | The second design, on its own port once `AdaptiveLighting:LamplightPort` is set. Off otherwise. |
 | `AdaptiveLighting` | The engine. No network surface, no UI. |
 | `AdaptiveLighting.Extensions` | Host-agnostic HassModel helpers. Useful in any NetDaemon app. |
 

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+	<PropertyGroup>
+		<RootNamespace>AdaptiveLighting.Lamplight</RootNamespace>
+		<PackageId>AdaptiveLighting.Lamplight</PackageId>
+		<Description>Lamplight, the second design of the AdaptiveLighting UI. A Razor Class Library served on its own port beside the first design, in the same process and over the same engine, page models and configuration document. Off unless AdaptiveLighting:LamplightPort is set. LAN-only and unauthenticated, like the first design.</Description>
+		<AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+		<GenerateDocumentationFile>false</GenerateDocumentationFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- The page models and services live in AdaptiveLighting.Web; this library holds markup and styling only. -->
+		<ProjectReference Include="..\AdaptiveLighting.Web\AdaptiveLighting.Web.csproj" />
+	</ItemGroup>
+
+</Project>

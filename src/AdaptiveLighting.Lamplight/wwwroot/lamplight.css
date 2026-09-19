@@ -1,0 +1,77 @@
+/*
+	Lamplight's own stylesheet, served at _content/AdaptiveLighting.Lamplight/lamplight.css. Hand-written with no
+	external link: the UI runs on a LAN that may have no internet.
+	Each page package appends one delimited block, headed by a banner comment naming the package.
+*/
+
+/* ============================================================ type scale, theme-independent */
+:root {
+	--t-xs: 12.5px; --t-sm: 14px; --t-md: 16px; --t-lg: 22px; --t-xl: 32px; --t-xxl: 52px;
+	--lh: 1.45; --ls-dis: -0.02em; --ls-dis-s: -0.015em; --ls-big: -0.04em;
+	--w-body: 400; --w-med: 500; --w-semi: 600; --w-strong: 650; --w-bold: 700; --w-black: 800;
+}
+
+/* ============================================================ Warm charcoal */
+/* The only palette until the themes step; the bare :root is what every device gets. */
+:root {
+	color-scheme: dark;
+	--bg: #141210; --surface: #1e1b18; --surface-2: #29251f; --inset: #0e0c0a; --line: #3f3931; --line-soft: #2e2a24; --card-line: transparent;
+	--ink: #f3ede4; --ink-2: #c3b8a8; --ink-3: #9d9282;
+	--accent: #8cc4dc; --accent-ink: #0b1d26; --focus: #8cc4dc; --mark: rgba(140, 196, 220, 0.16);
+	--auto: #ffb070; --auto-bg: #3a2716; --on-ink: #1a1206;
+	--hand: #c9aefc; --hand-bg: #2f2640;
+	--ok: #9dd49a; --ok-bg: #1f2e1d; --on-ok: #141210;
+	--off: #9d9282; --off-bg: #0e0c0a;
+	--warn: #f6d25c; --warn-bg: #372e12; --bad: #ff8a78; --bad-bg: #3e1d18; --on-state: #141210;
+	--k2200: #ffa04a; --k2700: #ffb46b; --k3000: #ffc187; --k3200: #ffc98f; --k4000: #ffe0bd; --k4500: #ffe9d0;
+	--lamp-max: 0.34; --lamp-reach: 68%; --lamp-edge: transparent; --on-lamp: #2a1c0c; --lit-ink-2: #f3ede4;
+	--room-off: #0e0c0a; --room-off-ink: #9d9282;
+	--shadow-pop: 0 12px 36px rgba(0, 0, 0, 0.55);
+	/* The faces ship with the theme-faces step; until then each stack falls through to the device's own. */
+	--font-head: "Fraunces", "Iowan Old Style", Georgia, serif;
+	--font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+	--font-num: "IBM Plex Mono", Consolas, monospace;
+	--t-lg: 23px; --t-xl: 34px; --t-xxl: 54px; --lh: 1.5;
+	--ls-dis: -0.012em; --ls-dis-s: -0.008em; --ls-big: -0.028em;
+	--r: 12px; --r-big: 20px; --r-pill: 999px;
+}
+
+/* ============================================================ shell */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); }
+body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md); line-height: var(--lh); }
+
+.app { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); }
+.app a { color: inherit; }
+.app :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* The router focuses each page's h1 after navigation; that focus is for a screen reader, not a ring. */
+[tabindex="-1"]:focus { outline: none; }
+
+.top { display: flex; align-items: center; flex-wrap: wrap; gap: 0 28px; min-height: 62px; padding: 0 28px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: var(--w-black); white-space: nowrap; }
+.brand svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
+.brand span { font-family: var(--font-head); font-size: 18px; letter-spacing: var(--ls-dis); }
+.nav { display: flex; gap: 4px; }
+.nav a { padding: 8px 15px; border-radius: var(--r-pill); color: var(--ink-2); text-decoration: none; font-size: var(--t-sm); font-weight: var(--w-semi); white-space: nowrap; }
+.nav a.cur { color: var(--ink); background: var(--surface); box-shadow: inset 0 0 0 1px var(--card-line); }
+.top-end { margin-left: auto; font-size: var(--t-xs); color: var(--ink-3); white-space: nowrap; }
+
+.main { width: 100%; max-width: 1240px; margin: 0 auto; padding: 18px 28px 48px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
+.pagetitle { margin: 0; font-family: var(--font-head); font-size: var(--t-xl); font-weight: var(--w-bold); letter-spacing: var(--ls-dis); }
+.glass { padding: 18px 20px; border-radius: var(--r-big); background: var(--surface); box-shadow: inset 0 0 0 1px var(--card-line); }
+.lede { margin: 0; color: var(--ink-2); }
+
+.tabbar { display: none; }
+
+@media (max-width: 720px) {
+	.top { gap: 0 12px; padding: 0 16px; min-height: 54px; }
+	.top-end { display: none; }
+	.top .nav { display: none; }
+	.main { padding: 12px 16px 24px; gap: 12px; }
+
+	.tabbar { position: sticky; bottom: 0; z-index: 20; display: flex; justify-content: space-around; padding: 6px 8px 10px; background: var(--surface); border-top: 1px solid var(--line-soft); }
+	.tabbar a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 14px; font-size: 12px; font-weight: var(--w-semi); color: var(--ink-3); text-decoration: none; }
+	.tabbar a.cur { color: var(--ink); }
+	.tabbar a.cur svg { color: var(--accent); }
+	.tabbar svg { width: 22px; height: 22px; }
+}

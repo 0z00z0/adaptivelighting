@@ -6,14 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 calendar-based, `YYYY.M.patch` (e.g. `2026.8.0`), unpadded to match the leading-zero stripping NuGet
 already applies on publish — see *Numbers that were chosen, not derived* in `docs/mechanisms.md`.
 The packages —
-`AdaptiveLighting`, `AdaptiveLighting.Web`, `AdaptiveLighting.Extensions` and
-`AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
+`AdaptiveLighting`, `AdaptiveLighting.Web`, `AdaptiveLighting.Extensions`,
+`AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
 ## [Unreleased]
 
 ### Added
 
+- `AdaptiveLighting.Lamplight`, a fifth package: the second design, served on its own port beside the first in the same process and over the same engine. Setting `AdaptiveLighting:LamplightPort` turns it on; without it no second port opens and a house runs as before. `AdaptiveLighting.NetDaemon` depends on it, so a house needs no new reference. `InvariantNumber` is now public, and `AssetToken` carries the asset cache token both designs use.
 - `AreaSnapshot.IsLit`, `AreaSnapshotCache.Find` and `KeyOf`, `HaCatalog.IsHomeAssistantResponding` and `FriendlyNameOrId`, the `DocumentCache` service with a `ModeService` constructor that takes it, and the `ActivityRow` component. `IsLit` is not part of the room report sent to Home Assistant.
 - `AdaptiveLighting.Hosting.EngineServiceCollectionExtensions.AddLightingEngine`, which registers the configuration path, the store, the engine host and the last-seen cache in the order they have always been registered in. A host that wants the engine without the interface no longer copies the web package's wiring. `AddLightingWeb` keeps its name and its behaviour, and calls it.
 - `GlobalConfig.DefaultExcludeLabel`, `DefaultMotionLabel` and `DefaultIlluminanceDeviceClass`. The last-seen cache reads these instead of holding its own copies, so it can no longer file a house's sensors under one rule while the engine discovers them under another. The values themselves are unchanged.
