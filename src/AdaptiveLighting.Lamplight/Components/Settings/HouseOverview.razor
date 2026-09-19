@@ -1,0 +1,321 @@
+@* Lamplight's "House" tab: the house's lamp card, the folds a room page also carries (over the house
+   defaults), the tail "House only", and the room list — the former "Areas" tab folded into this one body,
+   as the theme draft draws the house page. *@
+@using System.Globalization
+@using AdaptiveLighting.Configuration
+@using AdaptiveLighting.Engine
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+
+<LampCard Name="House" Big="@Big" BigSub="@BigSub" StateChip="@EngineChip">
+	<Pair Name="Adaptive lighting" Word="@(Model.EngineIsRunning ? "RUNNING" : "STOPPED")" WordKind="@(Model.EngineIsRunning ? "ok" : "off")" Options="@_noOptions">
+		<Help>@Model.RoomsManagedLine @Model.EngineFault</Help>
+	</Pair>
+	<Pair Name="House mode" Word="@(Model.ActiveModeValue ?? "—")" WordKind="plain" Options="@_noOptions">
+		<Help>Set up under House modes, below.</Help>
+	</Pair>
+</LampCard>
+
+<NowCard Warnings="@Warnings" Facts="@Facts" />
+
+<SectionIndex Items="@IndexItems" OnJump="@Jump" />
+
+<Fold Id="levels" Title="Brightness and warmth" Summary="@LevelsSummary" Count="@Model.Periods.Count" CountTitle="Periods in the schedule" Open="@IsOpen("levels")" OpenChanged="@(open => SetOpen("levels", open))">
+	<div class="rows">
+		@foreach (TimePeriodConfig period in Model.Periods)
+		{
+			TimePeriodConfig current = period;
+
+			<Row Label="@current.Name" Value="@($"{TokenFormat.Percent(current.BrightnessPct)} · {TokenFormat.Number(current.ColorTempKelvin, "K")}")" IsEditing="@(_expandedPeriod == current.Key)" OnToggleEdit="@(() => _expandedPeriod = _expandedPeriod == current.Key ? null : current.Key)">
+				<ChildContent><span class="per-note">Starts @current.Start</span></ChildContent>
+			</Row>
+		}
+	</div>
+	<p class="hint">Edited on the Schedule tab, where the same table sets when each period starts.</p>
+</Fold>
+
+@foreach (AllSettingsPanel.Group group in Model.HouseSettingsInput.Groups)
+{
+	<SettingsGroupFold Id="@Slug(group.Source.Title)" Group="@group" Model="@Model" />
+}
+
+<Fold Id="sensors" Title="Lights and sensors" Summary="@SensorsSummary" BangKind="@(Model.SharedLights.Count > 0 ? "warn" : null)" BangTitle="@Model.SharedLightsHeadline" Open="@IsOpen("sensors")" OpenChanged="@(open => SetOpen("sensors", open))">
+	@if (Model.SharedLights.Count > 0)
+	{
+		<ul class="warns"><li class="warn-i warn"><Bang Kind="warn" Title="@Model.SharedLightsHeadline" /><span>@Model.SharedLightsHeadline</span></li></ul>
+	}
+
+	<div class="rows">
+		<Row Label="Only manage lights with (label)" Value="@(Model.IncludeLabel ?? "none")" IsWide="true">
+			<Help>Set it and every light without this label stops being managed, in every room. Lights named by hand in a room are managed either way.</Help>
+			<ChildContent>
+				<LabelPicker Value="@Model.IncludeLabel" ValueChanged="@Model.SetIncludeLabel" Options="@Model.LabelOptions" NoneLabel="(none — manage every light that's found)" Placeholder="adaptive" />
+			</ChildContent>
+		</Row>
+		<Row Label="Never touch (label)" Value="@(Model.ExcludeLabel ?? "none")" IsWide="true">
+			<Help>Anything carrying this label is never discovered, commanded or counted.</Help>
+			<ChildContent>
+				<LabelPicker Value="@Model.ExcludeLabel" ValueChanged="@Model.SetExcludeLabel" Options="@Model.LabelOptions" NoneLabel="(none — nothing is excluded)" Placeholder="adaptive_exclude" />
+			</ChildContent>
+		</Row>
+		<Row Label="Counts as motion (label)" Value="@(Model.MotionLabel ?? "none")" IsWide="true">
+			<Help>A sensor carrying this label wakes the lights in its room whatever Home Assistant thinks it measures.</Help>
+			<ChildContent>
+				<LabelPicker Value="@Model.MotionLabel" ValueChanged="@Model.SetMotionLabel" Options="@Model.LabelOptions" NoneLabel="(none — device classes decide)" Placeholder="adaptive_motion" />
+			</ChildContent>
+		</Row>
+		<Row Label="Outdoor light-level sensor" Value="@(Model.OutdoorLuxSensor ?? "none")" IsWide="true">
+			<Help>Where the house reads the daylight, so darkness follows the clouds rather than the clock.</Help>
+			<ChildContent>
+				<EntityPicker Value="@Model.OutdoorLuxSensor" ValueChanged="@Model.SetOutdoorLux" Options="@Model.LuxSensors" NoneLabel="(none)" EmptyNote="@Model.EmptyNote("No light-level sensors found — type an id.")" Placeholder="sensor.ute_lux" />
+			</ChildContent>
+		</Row>
+		<Row Label="What counts as a light-level sensor" Value="@Model.IlluminanceDeviceClass" IsWide="true">
+			<Help>Which kind of sensor a room takes its light reading from. <code>illuminance</code> is nearly always right.</Help>
+			<ChildContent>
+				<select class="cell wide" @bind="Model.IlluminanceDeviceClass">
+					@foreach (string deviceClass in Model.SensorDeviceClasses)
+					{
+						<option value="@deviceClass">@deviceClass</option>
+					}
+					@if (!Model.IlluminanceDeviceClassIsOffered)
+					{
+						<option value="@Model.IlluminanceDeviceClass">@Model.IlluminanceDeviceClass — no sensor here reports this</option>
+					}
+				</select>
+			</ChildContent>
+		</Row>
+		<Row Label="What counts as a motion sensor" Value="@($"{Model.MotionDeviceClassChoices.Count(Model.MotionDeviceClassIsOn)} kinds")" IsWide="true">
+			<Help>Ticking anything replaces the built-in set (@HousePageModel.DefaultMotionDeviceClassesText) rather than adding to it.</Help>
+			<ChildContent>
+				<div class="checks" role="group">
+					@foreach (string deviceClass in Model.MotionDeviceClassChoices)
+					{
+						string current = deviceClass;
+						<label><input type="checkbox" checked="@Model.MotionDeviceClassIsOn(current)" @onchange="args => Model.ToggleMotionDeviceClass(current, args.Value is true)" /> @current</label>
+					}
+				</div>
+			</ChildContent>
+		</Row>
+	</div>
+</Fold>
+
+<div class="tail-lab">House only</div>
+
+<Fold Id="people" Title="People" Summary="@PeopleSummary" Open="@IsOpen("people")" OpenChanged="@(open => SetOpen("people", open))">
+	<SentenceView Sentences="@Model.AwaySentence" Edited="@Model.OnGlobalEdited" Note="@HousePageModel.TokenNote" ShowLegend="false" />
+	<div class="rows">
+		<Row Label="Who lives here" Value="@(Model.Persons.Count == 0 ? "Everyone" : $"{Model.Persons.Count} named")" IsWide="true">
+			<Help>Whose phones are watched, so the dashboard can show who is home. Empty means everyone Home Assistant knows.</Help>
+			<ChildContent>
+				<EntityListPicker Value="@Model.Persons" ValueChanged="@Model.SetPersons" Options="@Model.PersonOptions" Lookup="@Model.Lookup" EmptyLabel="Empty — everyone Home Assistant knows." AddLabel="Watch someone…" EmptyNote="@Model.EmptyNote("No people found — type an id.")" Placeholder="person.example" />
+			</ChildContent>
+		</Row>
+	</div>
+</Fold>
+
+<Fold Id="master" Title="Master switch" Summary="@(Model.UsesBuiltInKillSwitch ? "this app's own switch" : Model.KillSwitchEntity)" Open="@IsOpen("master")" OpenChanged="@(open => SetOpen("master", open))">
+	<div class="rows">
+		<Row Label="Master switch" Value="@(Model.EffectiveKillSwitchEntity ?? "not connected yet")" IsWide="true">
+			<Help>Which Home Assistant switch pauses everything. Left unset it uses this app's own switch.</Help>
+			<ChildContent>
+				<EntityPicker Value="@Model.KillSwitchEntity" ValueChanged="@Model.SetKillSwitchEntity" Options="@Model.Switches" NoneLabel="(default — this app's own enable switch)" EmptyNote="@Model.EmptyNote("No switches found — type an id.")" Placeholder="input_boolean.adaptive_lighting_enabled" />
+			</ChildContent>
+		</Row>
+		@if (!Model.UsesBuiltInKillSwitch)
+		{
+			<Row Label="Which way round it reads" Value="@(Model.KillSwitchPolarityValue == "true" ? "on lets lights adjust" : "off lets lights adjust")" IsWide="true">
+				<ChildContent>
+					<select class="cell wide" @bind:get="Model.KillSwitchPolarityValue" @bind:set="Model.SetKillSwitchPolarity">
+						<option value="true">on lets lights adjust, off pauses everything</option>
+						<option value="false">off lets lights adjust, on pauses everything</option>
+					</select>
+				</ChildContent>
+			</Row>
+		}
+	</div>
+</Fold>
+
+<Fold Id="tuning" Title="Fine tuning" Summary="@($"{Model.CircadianTickSeconds} s · {Model.SelfEchoWindowSeconds} s")" Open="@IsOpen("tuning")" OpenChanged="@(open => SetOpen("tuning", open))">
+	<div class="rows">
+		<Row Label="Re-check the rooms every" Value="@($"{Model.CircadianTickSeconds} s")">
+			<Help>How often each room re-reads the time of day and the light outside. 60 is plenty.</Help>
+			<ChildContent><Stepper Value="@Model.CircadianTickSeconds" Text="@($"{Model.CircadianTickSeconds} s")" Label="Re-check the rooms every" Step="5" Min="1" ValueChanged="@(value => Model.CircadianTickSeconds = (int)value)" /></ChildContent>
+		</Row>
+		<Row Label="Recognise own changes for" Value="@($"{Model.SelfEchoWindowSeconds} s")">
+			<Help>A light that changes within this many seconds of one of the app's own commands is read as its echo, not as somebody at a switch. 8 s suits most houses.</Help>
+			<ChildContent><Stepper Value="@Model.SelfEchoWindowSeconds" Text="@($"{Model.SelfEchoWindowSeconds} s")" Label="Recognise own changes for" Step="1" Min="0" ValueChanged="@(value => Model.SelfEchoWindowSeconds = (int)value)" /></ChildContent>
+		</Row>
+		<Row Label="Other automations count as manual changes" Value="@(Model.TreatAutomationsAsManual ? "Yes" : "No")">
+			<Help>Ticked, a light another automation changes is treated as a manual change. A room can answer this for itself under Movement and timing.</Help>
+			<ChildContent>
+				<button type="button" class="toggle @(Model.TreatAutomationsAsManual ? "on" : null)" role="switch" aria-checked="@(Model.TreatAutomationsAsManual ? "true" : "false")" aria-label="Other automations count as manual changes" @onclick="() => Model.TreatAutomationsAsManual = !Model.TreatAutomationsAsManual">
+					<span class="knob"></span>
+				</button>
+			</ChildContent>
+		</Row>
+	</div>
+</Fold>
+
+<Fold Id="install" Title="This house" Summary="@HousePageModel.Version" Open="@IsOpen("install")" OpenChanged="@(open => SetOpen("install", open))">
+	<div class="rows">
+		<Row Label="House name" Value="@(Model.HouseName ?? "Adaptive lighting")" IsWide="true">
+			<Help>A label for logs and notifications, so two houses can be told apart.</Help>
+			<ChildContent><input class="cell wide" value="@Model.HouseName" placeholder="Adaptive lighting" @onchange="args => Model.HouseName = args.Value as string" /></ChildContent>
+		</Row>
+	</div>
+	<dl class="facts">
+		<dt>Version</dt><dd>@HousePageModel.Version</dd>
+		<dt>Engine</dt><dd>@(Model.EngineIsRunning ? "running · " + Model.RoomsManagedLine : "not running · " + Model.EngineFault)</dd>
+		<dt>File</dt><dd>@Model.ConfigFilePath · @Model.LocationDescription</dd>
+		<dt>Home Assistant</dt><dd>@(Model.HomeAssistantIsAnswering ? "connected · " + Model.AreasKnownLine : "not connected")</dd>
+	</dl>
+</Fold>
+
+<Fold Id="rooms" Title="Rooms" Summary="@RoomsSummary" Count="@Model.Areas.Count" Open="@IsOpen("rooms")" OpenChanged="@(open => SetOpen("rooms", open))">
+	<div class="panel-actions">
+		<button type="button" @onclick="Model.ToggleAddRoom">@(Model.AddingRoom ? "Cancel" : "Add a room")</button>
+	</div>
+
+	@if (Model.AddingRoom)
+	{
+		<div class="rows one">
+			<Row Label="Which room?" Value="@(Model.AddAreaId ?? "pick one")" IsWide="true">
+				<ChildContent><AreaPicker Value="@Model.AddAreaId" ValueChanged="@Model.AddRoom" Areas="@Model.AddableAreas" NoneLabel="(pick a room)" EmptyNote="@Model.AddEmptyNote" /></ChildContent>
+			</Row>
+		</div>
+	}
+
+	@if (Model.SetupNote is { Length: > 0 } setupNote)
+	{
+		<p class="hint ok">@setupNote</p>
+	}
+
+	<div class="areas">
+		@foreach (FloorGroup<AreaConfig> floor in Model.AreaGroups)
+		{
+			FloorGroup<AreaConfig> current = floor;
+
+			@if (Model.ShowsFloorHeader(current))
+			{
+				<div class="floor">@HousePageModel.FloorTitle(current) <button type="button" class="add" @onclick="() => Model.SwitchFloor(current)">@Model.FloorAction(current)</button></div>
+			}
+
+			@foreach (AreaConfig area in current.Items)
+			{
+				AreaConfig room = area;
+				bool enabled = Model.IsEnabled(room);
+
+				<div class="area @(enabled ? "" : "off")">
+					<button type="button" class="toggle @(enabled ? "on" : null)" role="switch" aria-checked="@(enabled ? "true" : "false")" aria-label="@Model.ToggleLabel(room)" @onclick="() => Model.ToggleEnabled(room)"><span class="knob"></span></button>
+					@if (Model.RoomLink(room) is { Length: > 0 } href)
+					{
+						<a href="@href">
+							<b>@Model.RoomName(room)</b>
+							@if (HandHeld(room))
+							{
+								<Chip Kind="hand" Word="by hand" />
+							}
+							@if (Model.LowBatteryTitle(room) is { Length: > 0 } battery)
+							{
+								<Bang Kind="warn" Title="@battery" />
+							}
+							<span class="area-sum">@HousePageModel.RoomSummary(room)</span>
+						</a>
+					}
+					else
+					{
+						<span><b>@Model.RoomName(room)</b><span class="area-sum">save to open this room</span></span>
+					}
+				</div>
+			}
+		}
+	</div>
+
+	@if (Model.HasNoRooms)
+	{
+		<div class="empty">No rooms yet. Add one to get started.</div>
+	}
+
+	@if (Model.SwitchedOffLine is { Length: > 0 } switchedOff)
+	{
+		<p class="hint">@switchedOff</p>
+	}
+</Fold>
+
+@code {
+	[Parameter, EditorRequired]
+	public HousePageModel Model { get; set; } = null!;
+
+	private static readonly IReadOnlyList<string> _noOptions = [];
+
+	// Fold-open state this page tracks itself, the same way a room's own page tracks which row is being
+	// edited: HousePageModel only remembers open state for the five RoomSettings groups (Toggle/_openedGroups),
+	// because those need to survive a rebuild after every edit. Nothing here is model state.
+	private readonly HashSet<string> _openDefault = ["levels", "rooms"];
+	private readonly Dictionary<string, bool> _open = [];
+
+	private string? _expandedPeriod;
+
+	private bool IsOpen(string id) => _open.TryGetValue(id, out bool value) ? value : _openDefault.Contains(id);
+
+	private void SetOpen(string id, bool open) => _open[id] = open;
+
+	private string Big => Model.Areas.Count.ToString(CultureInfo.CurrentCulture);
+
+	private string BigSub => Model.Areas.Count == 1 ? "room configured" : "rooms configured";
+
+	private RenderFragment EngineChip => @<Chip Kind="@(Model.EngineIsRunning ? "ok" : "idle")" Word="@(Model.EngineIsRunning ? "running" : "stopped")" />;
+
+	private IReadOnlyList<NowCard.Warning> Warnings => Model.SharedLights.Count > 0
+		? [new NowCard.Warning("warn", Model.SharedLightsHeadline)]
+		: [];
+
+	private IReadOnlyList<(string Label, string Value)> Facts =>
+	[
+		("Engine", Model.EngineIsRunning ? Model.RoomsManagedLine : Model.EngineFault),
+		("Home Assistant", Model.HomeAssistantIsAnswering ? Model.AreasKnownLine : "not connected")
+	];
+
+	private string LevelsSummary => Model.Periods.Count switch
+	{
+		0 => "no periods yet",
+		_ => string.Join(" · ", Model.Periods.Take(2).Select(period => TokenFormat.Percent(period.BrightnessPct)))
+	};
+
+	private string SensorsSummary => Model.IncludeLabel ?? Model.OutdoorLuxSensor ?? "every light found";
+
+	private string PeopleSummary => Model.Persons.Count == 0 ? "everyone" : $"{Model.Persons.Count} named";
+
+	private string RoomsSummary => $"{Model.Areas.Count(Model.IsEnabled)} of {Model.Areas.Count} on";
+
+	// The same meaning BoardView groups as "hand" for the timeline: a state the engine will not correct on its
+	// own until the room empties or the hold expires.
+	private bool HandHeld(AreaConfig area) => Model.LiveStateOf(area) is AreaState.OverriddenOn or AreaState.SceneHold;
+
+	private IReadOnlyList<SectionIndex.Item> IndexItems =>
+	[
+		new("levels", "Brightness and warmth", Model.Periods.Count),
+		.. Model.HouseSettingsInput.Groups.Select(group => new SectionIndex.Item(Slug(group.Source.Title), group.Source.Title)),
+		new("sensors", "Lights and sensors", null, Model.SharedLights.Count > 0 ? "warn" : null, Model.SharedLightsHeadline),
+		new("people", "People"),
+		new("master", "Master switch"),
+		new("tuning", "Fine tuning"),
+		new("install", "This house")
+	];
+
+	private void Jump(string id)
+	{
+		if (Model.HouseSettingsInput.Groups.FirstOrDefault(group => Slug(group.Source.Title) == id) is { } group)
+		{
+			if (!group.Open)
+				Model.Toggle(group.Source);
+
+			return;
+		}
+
+		SetOpen(id, true);
+	}
+
+	private static string Slug(string title) => title.Replace(" & ", "-", StringComparison.Ordinal).Replace(' ', '-').ToLowerInvariant();
+}

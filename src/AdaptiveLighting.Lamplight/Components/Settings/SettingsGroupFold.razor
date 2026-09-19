@@ -1,0 +1,101 @@
+@* One of HouseSettingsInput.Groups, drawn with the kit's Fold and Row. A house row is never "own" — there is
+   nothing above the house to inherit from, so RevertSetting has no house-level twin and none is wired. *@
+@using AdaptiveLighting.Configuration
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+
+<Fold Id="@Id" Title="@Group.Source.Title" Summary="@Group.Source.Note" Open="@Group.Open" OpenChanged="@(_ => Model.Toggle(Group.Source))">
+	<div class="rows">
+		@foreach (AllSettingsPanel.Item entry in Group.Items)
+		{
+			AllSettingsPanel.Item item = entry;
+			RoomSetting setting = item.Source;
+
+			<Row Label="@setting.Label" Value="@ValueOf(item)" IsEditing="@(_editing == setting.Key)" OnToggleEdit="@(() => ToggleEdit(setting.Key))">
+				<Help>@setting.Help</Help>
+				<ChildContent>
+				@switch (setting.Control)
+				{
+					case RoomControl.Steps:
+						<div class="seg" role="group" aria-label="@setting.Label">
+							@foreach (TokenChoice option in SleepSteps.Options)
+							{
+								TokenChoice step = option;
+								bool chosen = string.Equals(step.Value, item.StepValue, StringComparison.Ordinal);
+								<button type="button" aria-pressed="@(chosen ? "true" : "false")" @onclick="() => Model.SetHouseSetting(AllSettingsPanel.Change.OfText(setting, step.Value))">@step.Text</button>
+							}
+						</div>
+						break;
+
+					case RoomControl.Flag:
+						<button type="button" class="toggle @(item.Flag ? "on" : null)" role="switch" aria-checked="@(item.Flag ? "true" : "false")" aria-label="@setting.Label" @onclick="() => Model.SetHouseSetting(AllSettingsPanel.Change.OfFlag(setting, !item.Flag))">
+							<span class="knob"></span>
+						</button>
+						break;
+
+					case RoomControl.Choice:
+						<div class="seg" role="group" aria-label="@setting.Label">
+							@foreach (TokenChoice option in RoomSettings.ChoicesFor(setting.Key))
+							{
+								TokenChoice choice = option;
+								bool chosen = string.Equals(item.ChoiceValue, choice.Value, StringComparison.Ordinal);
+								<button type="button" aria-pressed="@(chosen ? "true" : "false")" @onclick="() => Model.SetHouseSetting(AllSettingsPanel.Change.OfText(setting, choice.Value))">@choice.Text</button>
+							}
+						</div>
+						break;
+
+					case RoomControl.Entity:
+						<EntityPicker Value="@item.Text"
+									  ValueChanged="@(value => Model.SetHouseSetting(AllSettingsPanel.Change.OfText(setting, value)))"
+									  Options="@item.Picker.Options"
+									  NoneLabel="@item.Picker.NoneLabel"
+									  EmptyNote="@item.Picker.EmptyNote"
+									  Placeholder="@item.Picker.Placeholder" />
+						break;
+
+					default:
+						<Stepper Value="@item.Number"
+								 Text="@item.Text"
+								 Label="@setting.Label"
+								 Step="@setting.Step"
+								 Min="@setting.Min"
+								 Max="@setting.Max"
+								 IsOwn="@item.ValueIsOwn"
+								 ValueChanged="@(value => Model.SetHouseSetting(AllSettingsPanel.Change.OfNumber(setting, value)))" />
+
+						@if (string.Equals(setting.Key, nameof(AreaSettings.LuxBrightnessGamma), StringComparison.Ordinal))
+						{
+							<CurveGlyph Exponent="@item.Number" Label="@CurvePath.Describe(item.Number)" />
+						}
+						break;
+				}
+				</ChildContent>
+			</Row>
+		}
+	</div>
+</Fold>
+
+@code {
+	[Parameter, EditorRequired]
+	public string Id { get; set; } = "";
+
+	[Parameter, EditorRequired]
+	public AllSettingsPanel.Group Group { get; set; } = null!;
+
+	[Parameter, EditorRequired]
+	public HousePageModel Model { get; set; } = null!;
+
+	// Only one row in the group is open at a time, tracked here rather than on the model: it is display state,
+	// the same way a room's own page tracks which row is being edited.
+	private string? _editing;
+
+	private void ToggleEdit(string key) => _editing = _editing == key ? null : key;
+
+	private static string ValueOf(AllSettingsPanel.Item item) => item.Source.Control switch
+	{
+		RoomControl.Flag => item.Flag ? "Yes" : "No",
+		RoomControl.Choice => RoomSettings.Word(item.Source.Key, item.ChoiceValue ?? ""),
+		RoomControl.Steps => SleepSteps.TryParse(item.StepValue, out SleepStep step) ? SleepSteps.Word(step) : item.StepValue ?? "",
+		_ => item.Text ?? ""
+	};
+}

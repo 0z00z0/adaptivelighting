@@ -18,6 +18,7 @@ against each other.
 - The shared controls and charts are drawn by a new `controls.css` in `AdaptiveLighting.Web`, linked by both designs, and read only tokens both designs define; `app.css` keeps the page chrome and gains token aliases on `:root`. The first design looks the same: measured identical in every theme at both widths.
 - Lamplight's room page, over the same `RoomPageModel` as the first design: the lamp hero with the Light on/off switch and the adaptive lighting switch, a section index, then Brightness and warmth ahead of Movement and timing, Lights and sensors, Darkness, Daylight curve, Room behaviour and Rarely needed, "This room" and "What happened here", and the save line. No new page model member; a fold with no summarising member shows none rather than inventing one.
 - `AdaptiveLighting.Lamplight` gains its Activity page (`/activity`), built over the existing `ActivityPageModel`: the room filter, the category chips with counts, the pending-reports line, the hidden-reports note and the rows grouped by day, each with its time, room, what happened and why.
+- Lamplight's house page, at `/settings`: House, Schedule and House modes under one sub-navigation, Brightness and warmth ahead of Movement and timing, the same fold order as the room page over the house's own defaults, the room list folded into the House body, and the save bar.
 
 ## [2026.9.15] - 2026-09-19
 
