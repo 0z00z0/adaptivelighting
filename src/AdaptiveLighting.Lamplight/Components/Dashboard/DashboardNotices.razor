@@ -1,0 +1,26 @@
+@if (Model.KillSwitchActive)
+{
+	<div class="notice bad">
+		<strong>Adaptive lighting is paused.</strong> Nothing was turned off, but no lights will change until it is
+		switched back on.
+	</div>
+}
+@if (!Model.EngineIsRunning)
+{
+	<div class="notice bad"><strong>Adaptive lighting has stopped.</strong></div>
+}
+@if (Model.EngineFault is { Length: > 0 } fault)
+{
+	<div class="notice bad">@fault</div>
+}
+@if (!Model.HasData)
+{
+	<div class="notice">
+		<strong>Waiting for the first report from the rooms.</strong> This normally takes a few seconds.
+	</div>
+}
+
+@code {
+	[Parameter, EditorRequired]
+	public DashboardPageModel Model { get; set; } = default!;
+}
