@@ -81,7 +81,7 @@
 			AreaConfig current = area;
 			bool enabled = Model.IsEnabled(current);
 
-			<div class="room-row @AreaView.EdgeClass(enabled, Model.LiveStateOf(current))" @key="current">
+			<div class="room-row @FamilyClass(AreaView.FamilyOf(enabled, Model.LiveStateOf(current)))" @key="current">
 				@* Outside the link: a control inside an anchor is invalid markup and cannot be tapped
 				   without also navigating. *@
 				<button type="button"
@@ -163,4 +163,13 @@
 	[Parameter]
 	[EditorRequired]
 	public HousePageModel Model { get; set; } = null!;
+
+	// This design's names for the four families the model answers with.
+	private static string FamilyClass(RoomFamily family) => family switch
+	{
+		RoomFamily.Off => "family-off",
+		RoomFamily.Machine => "family-machine",
+		RoomFamily.Human => "family-human",
+		_ => "family-idle"
+	};
 }

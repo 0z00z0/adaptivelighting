@@ -1,0 +1,37 @@
+@* One row of the activity record. The model gives What and Why as one line each; a house-wide row names the
+   rooms it was assembled from in a title, the same sentence ActivityView.ReportedBy already builds. There is
+   no per-report "who" distinct from Why: a manual change already carries who made it inside that sentence, so
+   nothing here guesses at it from the wording. *@
+@using System.Globalization
+
+<li class="act">
+	<time datetime="@Row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(Row.At)</time>
+
+	@if (Row.IsAboutTheHouse)
+	{
+		<span class="act-room" title="@ActivityView.ReportedBy(Row)">@HouseLabel</span>
+	}
+	else if (HouseView.RoomHref(Row.Snapshot?.AreaId) is { } href)
+	{
+		<a class="act-room" href="@href">@Row.Room</a>
+	}
+	else
+	{
+		<span class="act-room">@Row.Room</span>
+	}
+
+	<span class="act-what">@Row.Line.What</span>
+
+	@if (Row.Line.Why is { Length: > 0 } why)
+	{
+		<span class="act-why">@why</span>
+	}
+</li>
+
+@code {
+	[Parameter, EditorRequired]
+	public ActivityRow Row { get; set; } = default!;
+
+	/// <summary>What stands where a room name would on a house-wide row.</summary>
+	private string HouseLabel => Row.Rooms.Count > 1 ? $"House · {Row.Rooms.Count} rooms" : "House";
+}
