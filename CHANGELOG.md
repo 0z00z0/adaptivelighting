@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+- A room removed from the lighting document no longer keeps its entry in the room-history file for ever: a save now drops any room-history key that is not one of the document's own rooms, right after writing it. A room only renamed, or left disabled, keeps its history as before.
+
 ## [2026.9.20] - 2026-09-19
 
 - A "Reload from Home Assistant" button on the house page, in both designs, beside the rooms list: rebuilds every room's lights and sensors from what Home Assistant reports right now, through `LightingEngineHost.Reload`, with no restart. Refused while an edit on the page is unsaved.

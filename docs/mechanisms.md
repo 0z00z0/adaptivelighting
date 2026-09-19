@@ -1408,6 +1408,14 @@ remembers, and it comes with no "changed by": nobody touched a light, a sensor m
 point before the engine was watching. The flush runs on the registry's scheduler from construction, not on the
 scheduler `Attach` hands over later, so it ticks before the house connects.
 
+A room deleted from the document keeps no entry either, once a person saves. `LightingEngineHost.Save`, on its
+own settings-save path, prunes the live dictionary against `LightingOrchestrator.DocumentRoomKeys` right after
+folding the carry-over in and before the write, so a house that renames and deletes rooms often does not grow
+this file for ever. The key compared is the same one the room is stored under - its area id where it has one,
+else its name - so a rename that keeps the area id is not mistaken for a deletion, and a disabled-but-still-
+declared room keeps its key. `Reload` and `Dispose` do not prune: only a person's own save has a fresh document
+to prune against.
+
 ### The activity journal
 
 The activity record's rows are written through the state-store registry, coalesced: a burst of appends between
