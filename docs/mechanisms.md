@@ -1382,14 +1382,16 @@ replace fault is about 0.5–1 % of writes. Each file kind has one writer lock. 
 ahead of the clock is discarded, and one minute is a chosen value. A file from a newer version is left alone.
 The notes live in `state/` beside the document, and are moved there at start from beside the document.
 
-`AreaSetupMemoryStore`, `LastPeriodStore` and `LastSeenStore` take an optional registry through their
-constructor, but the engine host does not yet build one and pass it in — each store still opens its own file
-directly through `JsonNoteFile`, without the registry's shared flusher or its start-up report. `RoomHistoryStore`
-and `ActivityJournalStore` (below) each open their own private `StateStoreRegistry` instance instead of sharing
-one with the host, for the reasons given under each. So today there is no one registry per house: three
-independent write paths, none sharing the flusher the type exists to provide. See
-[issue #148](https://github.com/0z00z0/adaptivelighting/issues/148) for wiring this into
-`LightingEngineHost` and `LightingOrchestrator`.
+One registry per house. `AddLightingEngine` registers it as a singleton on the configuration document's path and
+the host's `IScheduler` where one is registered, real time otherwise. The engine host's three notes (the period
+last run in, rooms already reported, each room's history), the last-seen cache and the activity journal all
+declare themselves in it, so all five share the one flusher and its retry. The file names and folders are the
+ones each store derived before, because every store still derives its path from the same document path.
+
+The start-up report runs once, after the first `Reload` that starts the engine: one line per store, saying what
+it restored, restored from its backup, discarded, or has not read yet. The container disposes the registry after
+everything that depends on it, which writes whatever is still waiting. A host built without the container, as
+the tests do, builds and disposes a registry of its own.
 
 ### Room history is coalesced, not written on every event
 
@@ -1403,15 +1405,14 @@ watching, and a shutdown has no next tick coming.
 A room with nothing in the note (no file yet, or a room the note has never seen) shows its motion sensor's own
 `last_changed` instead, read once at start and never written back — an approximation, not a fact the engine
 remembers, and it comes with no "changed by": nobody touched a light, a sensor merely saw movement at some
-point before the engine was watching. `RoomHistoryStore` opens its own `StateStoreRegistry` rather than sharing
-the host's, because its periodic flush has to run from construction, before the host has a scheduler of its own.
+point before the engine was watching. The flush runs on the registry's scheduler from construction, not on the
+scheduler `Attach` hands over later, so it ticks before the house connects.
 
 ### The activity journal
 
 The activity record's rows are written through the state-store registry, coalesced: a burst of appends between
-two flushes costs one write, not one per row. `ActivityJournalStore` owns its own registry instance rather than
-sharing the engine host's, because the record lives in the web layer, a separate assembly the registry's
-internal types cannot cross into; only the public `IActivityJournalStore` interface crosses. `TrySave` prunes
+two flushes costs one write, not one per row. The store sits in the core assembly and `AddActivityJournal` hands
+it the shared registry; the web layer's activity record sees only `IActivityJournalStore`. `TrySave` prunes
 to the newest 500 rows by sequence before writing, so the file never grows without end regardless of what the
 caller passes in.
 

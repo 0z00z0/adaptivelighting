@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+- Every file the engine keeps about its own state (the period last run in, rooms already reported, each room's history, the last-seen cache and the activity journal) is now written through one shared registry, so a failed write is retried the same way for all of them and one start-up report in the log names what each restored. The files keep their names and places, so a house reads its existing ones after the update.
+
 ## [2026.9.19] - 2026-09-19
 
 - `AreaView.EdgeClass` is replaced by `AreaView.FamilyOf`, returning the new `RoomFamily` enum (`Off`, `Machine`, `Human`, `Idle`) rather than a `family-*` class name. Each design now maps the family to its own class, the way `RoomSaveState` is already mapped.
