@@ -3,6 +3,7 @@ using System.Text.Json;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Hosting;
+using AdaptiveLighting.Persistence;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
@@ -65,6 +66,20 @@ public sealed class RoomHistoryPersistenceTests
 
 	private static string? Field(JsonElement report, string name) =>
 		report.GetProperty(name) is { ValueKind: not JsonValueKind.Null } value ? value.ToString() : null;
+
+	/// <summary>Where the room-history note lands: the state subfolder, named after the document's own stem.</summary>
+	private string HistoryFilePath => Path.Combine(
+		_directory,
+		JsonNoteFile.StateFolderName,
+		Path.GetFileNameWithoutExtension(ConfigPath) + RoomHistoryStore.NameSuffix);
+
+	/// <summary>The note's <c>rooms</c> object, read straight off disk rather than through the store.</summary>
+	private JsonElement RoomsInHistoryFile()
+	{
+		using JsonDocument document = JsonDocument.Parse(File.ReadAllText(HistoryFilePath));
+
+		return document.RootElement.GetProperty("rooms").Clone();
+	}
 
 	[TestMethod]
 	public void History_Survives_A_Restart()
@@ -155,5 +170,78 @@ public sealed class RoomHistoryPersistenceTests
 			Assert.IsNull(Field(report, "changed_at"), "no change is known, so it stays empty");
 			Assert.IsNull(Field(report, "changed_by"), "and so does who");
 		}
+	}
+
+	[TestMethod]
+	public void RoomHistory_ForARoomRemovedFromTheDocument_IsPrunedOnTheNextSave()
+	{
+		const string LightB = "light.test_room_b";
+		const string MotionB = "binary_sensor.test_room_b_motion";
+
+		FakeHaContext ha = new();
+		ha.SetState(Light, "on");
+		ha.SetState(Motion, "off");
+		ha.SetState(LightB, "on");
+		ha.SetState(MotionB, "off");
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(Start.Ticks);
+
+		AdaptiveLightingConfig twoRooms = Document();
+		twoRooms.Areas.Add(new AreaConfig
+		{
+			Name = "Room B",
+			Lights = [LightB],
+			MotionSensors = [MotionB],
+			OverrideDurationMinutes = 60,
+			OverrideUntilVacant = false
+		});
+
+		using LightingEngineHost host = new(
+			new LightingConfigStore(ConfigPath, NullLogger<LightingConfigStore>.Instance),
+			NullLoggerFactory.Instance);
+		host.Attach(ha, new FakeHaRegistry(), scheduler);
+
+		SaveResult withBothRooms = host.Save(twoRooms);
+		Assert.AreEqual(2, host.RunningAreaCount, withBothRooms.Message);
+
+		AdaptiveLightingConfig roomAOnly = Document();
+
+		SaveResult withRoomBRemoved = host.Save(roomAOnly);
+		Assert.AreEqual(1, host.RunningAreaCount, withRoomBRemoved.Message);
+
+		JsonElement rooms = RoomsInHistoryFile();
+		Assert.IsTrue(rooms.TryGetProperty("Test room", out _), "the room kept in the document keeps its history");
+		Assert.IsFalse(rooms.TryGetProperty("Room B", out _), "the room removed from the document loses its history on the next save");
+	}
+
+	/// <summary>
+	///     What <see cref="LightingEngineHost"/> prunes by: a room's key is its area id where it has one, so a rename
+	///     that only changes <see cref="AreaConfig.Name"/> must not look like a removal. A room with no area id has
+	///     nothing else to key on, so the same rename does change its key there - the control that proves the first
+	///     result is the area id at work, not the method ignoring the rename altogether.
+	/// </summary>
+	[TestMethod]
+	public void DocumentRoomKeys_ForARoomWithAnAreaId_DoesNotChangeWhenOnlyItsNameDoes()
+	{
+		AdaptiveLightingConfig namedOnly = new() { Areas = [new AreaConfig { Name = "Test room" }] };
+		AdaptiveLightingConfig namedOnlyRenamed = new() { Areas = [new AreaConfig { Name = "Test room, renamed" }] };
+
+		AdaptiveLightingConfig withAreaId = new() { Areas = [new AreaConfig { AreaId = "room_a", Name = "Test room" }] };
+		AdaptiveLightingConfig withAreaIdRenamed = new() { Areas = [new AreaConfig { AreaId = "room_a", Name = "Test room, renamed" }] };
+
+		FakeHaRegistry registry = new();
+
+		HashSet<string> namedKeysBefore = LightingOrchestrator.DocumentRoomKeys(namedOnly, registry);
+		HashSet<string> namedKeysAfter = LightingOrchestrator.DocumentRoomKeys(namedOnlyRenamed, registry);
+		HashSet<string> idKeysBefore = LightingOrchestrator.DocumentRoomKeys(withAreaId, registry);
+		HashSet<string> idKeysAfter = LightingOrchestrator.DocumentRoomKeys(withAreaIdRenamed, registry);
+
+		Assert.IsTrue(idKeysBefore.Contains("room_a"), "keyed by area id");
+		CollectionAssert.AreEquivalent(idKeysBefore.ToList(), idKeysAfter.ToList(), "an area id survives its room being renamed");
+
+		Assert.IsFalse(
+			namedKeysBefore.SetEquals(namedKeysAfter),
+			"the control: with no area id to fall back on, the same rename does change the key, which is why the area id case above is the area id at work");
 	}
 }
