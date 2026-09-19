@@ -222,8 +222,9 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomSettingsTests.The_Conversions_Survive_A_Comma_Decimal_Culture
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.RoomLevelsTests.Reading_The_Table_Writes_Nothing
 
-			<!-- The host: key ring beside the document, the port, no token in the log file. -->
+			<!-- The host: key ring beside the document, the state files a house already has, the port, no token in the log file. -->
 			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.The_Key_Ring_Lands_Beside_The_Document
+			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.A_Houses_Existing_State_Files_Are_Read_Through_The_One_Shared_Registry
 			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.The_Port_Comes_From_Configuration_And_Defaults_To_10000
 			| FullyQualifiedName=AdaptiveLighting.Tests.Hosting.AdaptiveLightingHouseTests.Without_A_Lamplight_Port_Only_The_First_Design_Listens
 			| FullyQualifiedName=AdaptiveLighting.Tests.Logging.DurableLogFormatterTests.A_Token_Logged_Through_ILogger_Never_Reaches_The_File

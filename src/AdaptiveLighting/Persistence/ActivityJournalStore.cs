@@ -6,9 +6,8 @@ namespace AdaptiveLighting.Persistence;
 
 /// <summary><see cref="IActivityJournalStore"/> over one declared state file in the state folder.</summary>
 /// <remarks>
-///     Written coalesced: a burst of rows arriving between two flushes costs one write, not one per row. Owns its
-///     own <see cref="StateStoreRegistry"/> rather than sharing one with the engine host, because the activity
-///     record lives in the web layer, a separate assembly the registry's internal types cannot cross into.
+///     Written coalesced: a burst of rows arriving between two flushes costs one write, not one per row. Registered
+///     in the engine's shared <see cref="StateStoreRegistry"/> where the container has one.
 /// </remarks>
 internal sealed class ActivityJournalStore : IActivityJournalStore, IDisposable
 {
@@ -27,7 +26,8 @@ internal sealed class ActivityJournalStore : IActivityJournalStore, IDisposable
 		VersionOf: document => document.Version,
 		SavedAtOf: document => document.SavedAt);
 
-	private readonly StateStoreRegistry _registry;
+	// Null where the journal is declared in a registry it does not own.
+	private readonly StateStoreRegistry? _ownedRegistry;
 	private readonly StateStore<ActivityJournalDocument> _store;
 	private readonly Func<DateTimeOffset> _now;
 
@@ -45,8 +45,20 @@ internal sealed class ActivityJournalStore : IActivityJournalStore, IDisposable
 
 		_now = now ?? (() => DateTimeOffset.UtcNow);
 
-		_registry = new StateStoreRegistry(configFilePath, loggerFactory.CreateLogger<StateStoreRegistry>(), scheduler);
-		_store = _registry.Open(Declaration, ActivityJournalDocument.SerializerOptions, loggerFactory.CreateLogger<ActivityJournalStore>());
+		_ownedRegistry = new StateStoreRegistry(configFilePath, loggerFactory.CreateLogger<StateStoreRegistry>(), scheduler);
+		_store = _ownedRegistry.Open(Declaration, ActivityJournalDocument.SerializerOptions, loggerFactory.CreateLogger<ActivityJournalStore>());
+	}
+
+	/// <summary>Declares the journal in <paramref name="registry"/>, whose flusher and start-up report then cover it.</summary>
+	/// <exception cref="ArgumentException">The registry's configuration path has no directory.</exception>
+	internal ActivityJournalStore(StateStoreRegistry registry, ILoggerFactory loggerFactory, Func<DateTimeOffset>? now = null)
+	{
+		ArgumentNullException.ThrowIfNull(registry);
+		ArgumentNullException.ThrowIfNull(loggerFactory);
+
+		_now = now ?? (() => DateTimeOffset.UtcNow);
+
+		_store = registry.Open(Declaration, ActivityJournalDocument.SerializerOptions, loggerFactory.CreateLogger<ActivityJournalStore>());
 	}
 
 	/// <summary>The directory the file lives in, which is the state folder beside the configuration document.</summary>
@@ -75,6 +87,12 @@ internal sealed class ActivityJournalStore : IActivityJournalStore, IDisposable
 		return _store.Write(new ActivityJournalDocument { SavedAt = _now(), Rows = kept });
 	}
 
-	/// <summary>Stops the registry's flusher and writes whatever is still waiting.</summary>
-	public void Dispose() => _registry.Dispose();
+	/// <summary>Writes whatever is still waiting, and stops the flusher where the journal owns its registry.</summary>
+	public void Dispose()
+	{
+		if (_ownedRegistry is not null)
+			_ownedRegistry.Dispose();
+		else
+			_store.Flush();
+	}
 }

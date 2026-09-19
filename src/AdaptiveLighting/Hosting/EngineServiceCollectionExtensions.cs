@@ -1,3 +1,5 @@
+using System.Reactive.Concurrency;
+
 using AdaptiveLighting.LastSeen;
 
 using Microsoft.Extensions.Configuration;
@@ -29,8 +31,20 @@ public static class EngineServiceCollectionExtensions
 			provider.GetRequiredService<ConfigLocation>().Path,
 			provider.GetRequiredService<ILogger<LightingConfigStore>>()));
 
+		// One registry for every engine-owned state file, so they share one flusher and one start-up report.
+		// Disposed by the container after everything that depends on it, which flushes what is still waiting.
+		services.AddSingleton(provider => new StateStoreRegistry(
+			provider.GetRequiredService<LightingConfigStore>().FilePath,
+			provider.GetRequiredService<ILogger<StateStoreRegistry>>(),
+			// The host's scheduler when it registers one, so tests and hosts share a clock.
+			provider.GetService<IScheduler>() ?? DefaultScheduler.Instance));
+
 		// One engine per process, outliving every Blazor circuit and every load of the document.
-		services.AddSingleton<LightingEngineHost>();
+		services.AddSingleton(provider => new LightingEngineHost(
+			provider.GetRequiredService<LightingConfigStore>(),
+			provider.GetRequiredService<ILoggerFactory>(),
+			provider.GetService<IEntityLastSeen>(),
+			provider.GetRequiredService<StateStoreRegistry>()));
 
 		// After the store: the last-seen cache derives its file names from the document's path.
 		services.AddEntityLastSeen();

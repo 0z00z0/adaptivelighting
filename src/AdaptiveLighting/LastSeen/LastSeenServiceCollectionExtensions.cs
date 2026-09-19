@@ -22,7 +22,8 @@ public static class LastSeenServiceCollectionExtensions
 
 		services.AddSingleton(provider => new LastSeenStore(
 			provider.GetRequiredService<LightingConfigStore>().FilePath,
-			provider.GetRequiredService<ILogger<LastSeenStore>>()));
+			provider.GetRequiredService<ILogger<LastSeenStore>>(),
+			provider.GetService<StateStoreRegistry>()));
 
 		// Registered as itself so the interface and the hosted service resolve to one instance, which the record needs
 		// to accumulate from process start.

@@ -79,6 +79,13 @@ public sealed class LightingEngineHost : IDisposable
 	// comes from the store. Null and every room's history is lost across a restart, never a reason to have no engine.
 	private readonly IRoomHistoryStore? _roomHistory;
 
+	private readonly StateStoreRegistry _stateStores;
+
+	// Set only where the host built the registry itself; one the container supplies is the container's to dispose.
+	private readonly StateStoreRegistry? _ownedStateStores;
+
+	private bool _restoreReported;
+
 	// The house's own copy, shared across every rebuild so a room that has not published since the last save is
 	// not dropped from the file a save writes. Seeded once from what the note held at start.
 	private ConcurrentDictionary<string, AreaHistory>? _roomHistoryLive;
@@ -106,6 +113,12 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>Creates the host. Nothing runs until <see cref="Attach"/> and <see cref="Reload"/>.</summary>
 	/// <remarks>Without <c>lastSeen</c> the gates use Home Assistant's own timestamps, which reset on its restart.</remarks>
 	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen = null)
+		: this(store, loggerFactory, lastSeen, stateStores: null)
+	{
+	}
+
+	/// <summary>Creates the host on a registry the container owns; without one the host builds and disposes its own.</summary>
+	internal LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen, StateStoreRegistry? stateStores)
 	{
 		_lastSeen = lastSeen;
 		_store = store ?? throw new ArgumentNullException(nameof(store));
@@ -114,9 +127,15 @@ public sealed class LightingEngineHost : IDisposable
 
 		_discovery = new AreaDiscoveryScheduler(_gate, _store, _loggerFactory, WriteDiscoveredAreas, AdoptDiscoveredAreas);
 
+		// Real time, not the scheduler Attach hands over: that one is not known yet, and a house runs for
+		// hours between saves, so the periodic flush must tick regardless of what a test controls.
+		_stateStores = stateStores
+			?? new StateStoreRegistry(_store.FilePath, _loggerFactory.CreateLogger<StateStoreRegistry>(), DefaultScheduler.Instance);
+		_ownedStateStores = stateStores is null ? _stateStores : null;
+
 		try
 		{
-			_lastPeriod = new LastPeriodStore(_store.FilePath, _loggerFactory.CreateLogger<LastPeriodStore>());
+			_lastPeriod = new LastPeriodStore(_store.FilePath, _loggerFactory.CreateLogger<LastPeriodStore>(), _stateStores);
 		}
 		catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
 		{
@@ -129,7 +148,7 @@ public sealed class LightingEngineHost : IDisposable
 
 		try
 		{
-			_setupMemory = new AreaSetupMemoryStore(_store.FilePath, _loggerFactory.CreateLogger<AreaSetupMemoryStore>());
+			_setupMemory = new AreaSetupMemoryStore(_store.FilePath, _loggerFactory.CreateLogger<AreaSetupMemoryStore>(), _stateStores);
 		}
 		catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
 		{
@@ -142,9 +161,7 @@ public sealed class LightingEngineHost : IDisposable
 
 		try
 		{
-			// Real time, not the scheduler Attach hands over: that one is not known yet, and a house runs for
-			// hours between saves, so the periodic flush must tick regardless of what a test controls.
-			_roomHistory = new RoomHistoryStore(_store.FilePath, _loggerFactory, DefaultScheduler.Instance);
+			_roomHistory = new RoomHistoryStore(_stateStores, _loggerFactory);
 		}
 		catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
 		{
@@ -355,7 +372,16 @@ public sealed class LightingEngineHost : IDisposable
 
 			_discovery.ArmIfNeeded(config, _ha, _registry, _scheduler);
 
-			return ApplyCore(config, EngineNoticeKind.Started);
+			SaveResult result = ApplyCore(config, EngineNoticeKind.Started);
+
+			// Once, after the first start that ran: the engine's own stores have been read by then.
+			if (!_restoreReported && _orchestrator is not null)
+			{
+				_restoreReported = true;
+				_stateStores.ReportRestored();
+			}
+
+			return result;
 		}
 	}
 
@@ -564,7 +590,7 @@ public sealed class LightingEngineHost : IDisposable
 			_registry = null;
 			_scheduler = null;
 			_notices.Dispose();
-			(_roomHistory as IDisposable)?.Dispose();
+			_ownedStateStores?.Dispose();
 		}
 	}
 
