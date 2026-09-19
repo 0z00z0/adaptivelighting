@@ -614,3 +614,29 @@ details.panel[open] > summary .area-chevron { transform: rotate(-135deg); margin
 	.act-why { justify-self: start; }
 }
 /* ==== end activity ==== */
+
+/* ==== F. Theme faces ==== */
+/* One @font-face per file under wwwroot/fonts/, unmodified Fontsource 5.3.0 Latin-subset woff2s, licensed
+   OFL 1.1 (licence text beside each family's files). Nothing fetched from elsewhere at run time. A theme's
+   stack in block T already names these families; a browser without a file falls through to the stack's
+   next entry. */
+@font-face { font-family: "Fraunces"; src: url("fonts/fraunces/fraunces-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 500 700; font-display: swap; }
+@font-face { font-family: "Figtree"; src: url("fonts/figtree/figtree-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 800; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibmplexmono/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibmplexmono/ibm-plex-mono-latin-500-normal.woff2") format("woff2"); font-style: normal; font-weight: 500; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibmplexmono/ibm-plex-mono-latin-600-normal.woff2") format("woff2"); font-style: normal; font-weight: 600; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibmplexmono/ibm-plex-mono-latin-700-normal.woff2") format("woff2"); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: "Newsreader"; src: url("fonts/newsreader/newsreader-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Karla"; src: url("fonts/karla/karla-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 800; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrainsmono/jetbrains-mono-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 300 700; font-display: swap; }
+@font-face { font-family: "Space Grotesk"; src: url("fonts/spacegrotesk/space-grotesk-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans"; src: url("fonts/ibmplexsans/ibm-plex-sans-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Martian Mono"; src: url("fonts/martianmono/martian-mono-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Cascadia Mono"; src: url("fonts/cascadiamono/cascadia-mono-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 200 700; font-display: swap; }
+@font-face { font-family: "Lora"; src: url("fonts/lora/lora-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Source Sans 3"; src: url("fonts/sourcesans3/source-sans-3-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 800; font-display: swap; }
+@font-face { font-family: "Source Code Pro"; src: url("fonts/sourcecodepro/source-code-pro-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Epilogue"; src: url("fonts/epilogue/epilogue-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 800; font-display: swap; }
+@font-face { font-family: "Literata"; src: url("fonts/literata/literata-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Red Hat Mono"; src: url("fonts/redhatmono/red-hat-mono-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
+/* ==== end F. Theme faces ==== */
