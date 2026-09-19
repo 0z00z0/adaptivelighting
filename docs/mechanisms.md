@@ -1968,8 +1968,34 @@ design's own stylesheet, so a design styles those itself before a control looks 
   the minutes box 112 px against 72 px); reading the stylesheet does not show it. The pages reachable in the
   host exercise 150 of the 262 rules: the lux curve, steppers, number boxes and token popovers render only on a
   real room page.
-- The values in Lamplight's block B are Warm charcoal placeholders until the themes step gives each theme its
-  own.
+- The eight tokens block B held as Warm charcoal placeholders (`--now`, `--lane`, the two `--kelvin-*` and the
+  four `--daylight-*`) moved into block T once the themes step gave each theme its own.
+
+### Six themes, painted before first render
+
+`LamplightThemes` lists seven entries: `System` first, then the four dark themes, then the two light ones.
+`lamplight.css` block T carries one rule per theme, `:root[data-theme="<id>"]`, each setting every token the
+stylesheet reads — surfaces, text, accent, state colours, the lamp ramp, shape and the whole type scale — so
+no rule depends on another's cascade order. Warm charcoal's selector also matches the bare `:root`, so a page
+whose script did not run paints Warm charcoal rather than falling through to nothing.
+
+- **Isolation is doubled, not single.** Lamplight stores its choice under `lamplight-theme`, never today's
+  design's `adaptive-lighting-theme`, and the two designs run on different ports — a different origin for
+  `localStorage` regardless of key names. Measured: setting a theme on Lamplight's port leaves both keys
+  absent on the first design's port, and the reverse.
+- **`lamplight-theme.js` always writes `data-theme`, never leaves it unset.** An id in the allow-list wins;
+  otherwise the device's `prefers-color-scheme: light` match decides between `data-light` and `data-dark`
+  (rendered onto the script tag from `LamplightThemes.LightDefault`/`DarkDefault`), so a browser with nothing
+  stored, or a stored id this build no longer ships, always gets a real palette instead of the unstyled
+  `:root`. Measured with a cleared store: a dark-emulated load resolves `warm-charcoal`, a light-emulated one
+  `paper`, and a stored `daylight` (never shipped) resolves `warm-charcoal` on a dark-emulated device.
+- **"Follow the device" is an absence, not a value.** `apply("system")` removes the stored key rather than
+  writing the literal string, so the fallback rule in `paint()` stays the only place that resolves a device
+  default.
+- **The media-query listener repaints without a reload.** With nothing stored, switching the emulated
+  `prefers-color-scheme` from dark to light while the page stays open moves `data-theme` from `warm-charcoal`
+  to `paper` on the same load, because the listener only fires the repaint while `read()` finds nothing
+  stored — a chosen theme never moves under a person who did not ask it to.
 
 ### Shutdown order: the snapshot cache stops before Kestrel
 
