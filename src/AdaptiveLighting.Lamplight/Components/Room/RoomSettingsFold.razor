@@ -1,0 +1,133 @@
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+@using AdaptiveLighting.Configuration
+
+@* One of SettingsInput.Groups: a Row per setting. Flag, Choice and Steps have no leaf control of their own —
+   AllSettingsPanel draws them as raw .toggle/.seg markup, and that markup's CSS lives in app.css, not
+   controls.css, so this draws the same shape from the same data in Lamplight's own classes. Only one row opens
+   at a time, tracked here and nowhere the model needs to know about. *@
+
+<Fold Id="@Id"
+	  Title="@Group.Source.Title"
+	  Summary="@Group.Source.Note"
+	  Count="@(Group.OwnCount > 0 ? Group.OwnCount : null)"
+	  CountTitle="Set for this room"
+	  Open="@Open"
+	  OpenChanged="@OpenChanged">
+	<div class="rows">
+		@foreach (AllSettingsPanel.Item item in Group.Items)
+		{
+			AllSettingsPanel.Item current = item;
+			RoomSetting setting = current.Source;
+			bool editing = string.Equals(_editingKey, setting.Key, StringComparison.Ordinal);
+
+			<Row Label="@setting.Label"
+				 Value="@RoomSettings.Describe(Model.Area, Model.Defaults, setting.Key)"
+				 IsOwn="@current.IsOwn"
+				 HouseText="@current.HouseText"
+				 IsEditing="@editing"
+				 OnToggleEdit="@(() => ToggleEdit(setting.Key))"
+				 OnRevert="@(() => Model.RevertSetting(setting))">
+				<Help>@setting.Help</Help>
+				<ChildContent>
+					@switch (setting.Control)
+					{
+						case RoomControl.Steps:
+							<div class="seg" role="group" aria-label="@setting.Label">
+								@foreach (TokenChoice option in SleepSteps.Options)
+								{
+									TokenChoice step = option;
+									bool chosen = string.Equals(step.Value, current.StepValue, StringComparison.Ordinal);
+									<button type="button" aria-pressed="@(chosen ? "true" : "false")" @onclick="() => Set(setting, step.Value)">@step.Text</button>
+								}
+							</div>
+							break;
+
+						case RoomControl.Flag:
+							<button type="button"
+									class="toggle @(current.Flag ? "on" : null)"
+									role="switch"
+									aria-checked="@(current.Flag ? "true" : "false")"
+									aria-label="@setting.Label"
+									@onclick="() => SetFlag(setting, !current.Flag)">
+								<span class="knob" aria-hidden="true"></span>
+							</button>
+							break;
+
+						case RoomControl.Choice:
+							<div class="seg" role="group" aria-label="@setting.Label">
+								@foreach (TokenChoice option in RoomSettings.ChoicesFor(setting.Key))
+								{
+									TokenChoice choice = option;
+									bool chosen = string.Equals(current.ChoiceValue, choice.Value, StringComparison.Ordinal);
+									<button type="button" aria-pressed="@(chosen ? "true" : "false")" @onclick="() => Set(setting, choice.Value)">@choice.Text</button>
+								}
+							</div>
+							break;
+
+						case RoomControl.Entity:
+							<EntityPicker Value="@current.Text"
+										  ValueChanged="@(value => Set(setting, value))"
+										  Options="@current.Picker.Options"
+										  Lookup="@current.Picker.Lookup"
+										  NoneLabel="@current.Picker.NoneLabel"
+										  EmptyNote="@current.Picker.EmptyNote"
+										  Placeholder="@current.Picker.Placeholder" />
+							break;
+
+						default:
+							<Stepper Value="@current.Number"
+									 Text="@(current.Text ?? "")"
+									 Label="@setting.Label"
+									 Step="@setting.Step"
+									 Min="@setting.Min"
+									 Max="@setting.Max"
+									 IsOwn="@current.ValueIsOwn"
+									 ValueChanged="@(value => SetNumber(setting, value))" />
+
+							@* The one stepper whose number is a curve, so the shape is drawn beside it, as AllSettingsPanel draws it. *@
+							@if (string.Equals(setting.Key, nameof(AreaSettings.LuxBrightnessGamma), StringComparison.Ordinal))
+							{
+								<CurveGlyph Exponent="@current.Number" Label="@CurvePath.Describe(current.Number)" />
+							}
+							break;
+					}
+				</ChildContent>
+			</Row>
+		}
+	</div>
+
+	@ChildContent
+</Fold>
+
+@code {
+	[Parameter, EditorRequired]
+	public string Id { get; set; } = "";
+
+	[Parameter, EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+
+	[Parameter, EditorRequired]
+	public AllSettingsPanel.Group Group { get; set; } = default!;
+
+	[Parameter]
+	public bool Open { get; set; }
+
+	[Parameter]
+	public EventCallback<bool> OpenChanged { get; set; }
+
+	/// <summary>Drawn at the foot of the fold's rows: Movement's entity lists, the daylight curve's chart.</summary>
+	[Parameter]
+	public RenderFragment? ChildContent { get; set; }
+
+	private string? _editingKey;
+
+	private void ToggleEdit(string key) =>
+		_editingKey = string.Equals(_editingKey, key, StringComparison.Ordinal) ? null : key;
+
+	private Task Set(RoomSetting setting, string? value) => Model.SetSetting(AllSettingsPanel.Change.OfText(setting, value));
+
+	private Task SetFlag(RoomSetting setting, bool value) => Model.SetSetting(AllSettingsPanel.Change.OfFlag(setting, value));
+
+	private Task SetNumber(RoomSetting setting, double value) => Model.SetSetting(AllSettingsPanel.Change.OfNumber(setting, value));
+}

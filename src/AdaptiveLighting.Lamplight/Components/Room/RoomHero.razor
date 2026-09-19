@@ -1,0 +1,111 @@
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+
+@* The room page's head: the lamp card and the "right now" card, then the headline and countdown as prose. The
+   theme draft draws no countdown ring for Lamplight, so Countdown only decides IsOverdue's wording, never a
+   custom property nobody asked to see. *@
+
+<TickRegion Clock="@Model">
+	<div class="d2-hero">
+		<LampCard Name="@Model.PageName" LampStyle="@LampStyle" Big="@Big" BigSub="@BigSub">
+			<Pair Name="Lights"
+				  Word="@(Model.IsLightOn ? "ON" : "OFF")"
+				  WordKind="@(Model.IsLightOn ? "on" : "off")"
+				  Options="@LightOptions"
+				  Current="@(Model.IsLightOn ? 0 : 1)"
+				  OnSelect="OnLightSelect">
+				<Help>@Model.LightTitle</Help>
+			</Pair>
+			<Pair Name="Adaptive lighting"
+				  Word="@(Model.IsEnabled ? "ON" : "OFF")"
+				  WordKind="@(Model.IsEnabled ? "ok" : "off")"
+				  Options="@EnableOptions"
+				  Current="@(Model.IsEnabled ? 0 : 1)"
+				  OnSelect="OnEnableSelect">
+				<Help>@Model.SwitchTitle</Help>
+			</Pair>
+		</LampCard>
+
+		<NowCard Warnings="@Warnings" Facts="@Facts" />
+	</div>
+
+	@if (Model.LightRefused is { Length: > 0 } refused)
+	{
+		<div class="notice warn">
+			<strong>@(Model.LightRefusedOff ? "Not switched off." : "Not switched on.")</strong> @refused
+		</div>
+	}
+
+	@if (!Model.IsEnabled)
+	{
+		<div class="notice">
+			<strong>This room is not enabled.</strong> Nothing below is commanded and the lamps are left exactly
+			as they are &mdash; the settings are kept, and take effect the moment the room is enabled.
+		</div>
+	}
+
+	@if (Model.HasReport)
+	{
+		<p class="lede">@Model.Headline <span class="since">@Model.Since</span></p>
+
+		@if (Model.NextLine is { Length: > 0 } next)
+		{
+			<p class="lede @(Model.IsOverdue ? "bad" : null)">@next</p>
+		}
+	}
+
+	@if (Model.SwitchOnNote is { } note)
+	{
+		<SwitchOnNoteView Note="@note" AdviceHref="settings?section=house" Dismissed="@Model.DismissSwitchOnNote" />
+	}
+</TickRegion>
+
+@code {
+	[Parameter, EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+
+	private static readonly IReadOnlyList<string> LightOptions = ["Light on", "Light off"];
+	private static readonly IReadOnlyList<string> EnableOptions = ["On", "Off"];
+
+	private string? LampStyle => LampPaint.Style(Model.Lamp.IsLit, Model.Lamp.BrightnessPct, Model.Lamp.Kelvin);
+
+	// The same reading RoomTiles already draws on the dashboard: brightness where there is one, "lit" or "off"
+	// otherwise, and the warmth beside it.
+	private string Big => !Model.Lamp.IsLit ? "off" : Model.Lamp.BrightnessPct is { } pct ? $"{pct} %" : "lit";
+
+	private string BigSub => Model.Lamp.Kelvin is { } kelvin ? $"{kelvin} K" : "";
+
+	private IReadOnlyList<NowCard.Warning> Warnings
+	{
+		get
+		{
+			List<NowCard.Warning> warnings = [];
+
+			if (Model.NotResponding is { Length: > 0 } notResponding)
+				warnings.Add(new NowCard.Warning("warn", notResponding));
+
+			foreach (string battery in Model.LowBatteries)
+				warnings.Add(new NowCard.Warning("warn", battery));
+
+			return warnings;
+		}
+	}
+
+	private IReadOnlyList<(string Label, string Value)> Facts =>
+		[.. Model.Facts.Select(fact => (fact.Label, fact.Detail is { Length: > 0 } detail ? $"{fact.Value} ({detail})" : fact.Value))];
+
+	// A wall switch, not a flip: pressing the side already lit is harmless, so no guard is needed here.
+	private Task OnLightSelect(int index)
+	{
+		if (index == 0)
+			Model.LightOn();
+		else
+			Model.LightOff();
+
+		return Task.CompletedTask;
+	}
+
+	// Unlike the light pair, this one flips: pressing the side already pressed must do nothing.
+	private Task OnEnableSelect(int index) =>
+		index == (Model.IsEnabled ? 0 : 1) ? Task.CompletedTask : Model.ToggleEnabled();
+}

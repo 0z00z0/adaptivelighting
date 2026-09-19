@@ -1,0 +1,108 @@
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+
+@* Movement's rules that have no twin in the house defaults, so RoomSettings.Groups carries none of them:
+   the lead-in sensors, the two blockers, the two scenes, and whether another automation counts as manual.
+   Row takes both Help and ChildContent as named fragments: once one is written explicitly, the other must be
+   too, or the control markup has nowhere recognised to land. *@
+
+<div class="rows">
+	<Row Label="Light dimly when these see movement" Value="@(Model.LeadInSensors.Count > 0 ? $"{Model.LeadInSensors.Count} named" : "Nothing")" IsWide="true">
+		<Help>Sensors outside this room. Movement there lights this dark, empty room at the dim level, ready for someone coming in.</Help>
+		<ChildContent>
+			<EntityListPicker Value="@Model.LeadInSensors"
+							  ValueChanged="@Model.SetLeadInSensors"
+							  Options="@Model.LeadInOptions"
+							  Lookup="@Model.Lookup"
+							  EmptyLabel="Nothing outside lights this room ahead of time."
+							  AddLabel="Add a sensor…"
+							  Placeholder="binary_sensor.front_steps_motion" />
+		</ChildContent>
+	</Row>
+
+	<Row Label="Don't switch on while" Value="@(Model.IgnoreWhenOn.Count > 0 ? $"{Model.IgnoreWhenOn.Count} named" : "Nothing")" IsWide="true">
+		<Help>The room won't light itself while any of these is on. Tick the box for the opposite.</Help>
+		<ChildContent>
+			<EntityListPicker Value="@Model.IgnoreWhenOn"
+							  ValueChanged="@Model.SetIgnoreWhenOn"
+							  Options="@Model.BlockerOptions"
+							  Lookup="@Model.Lookup"
+							  EmptyLabel="Nothing blocks this room."
+							  AddLabel="Add a blocker…"
+							  Placeholder="binary_sensor.projector_is_on" />
+			@if (Model.IgnoreWhenOn is { Count: > 0 })
+			{
+				<label class="checks">
+					<input type="checkbox" checked="@Model.IgnoreWhenOnInverted" @onchange="@(args => Model.SetIgnoreWhenOnInverted(args.Value is true))" />
+					while these are off instead
+				</label>
+			}
+		</ChildContent>
+	</Row>
+
+	<Row Label="Don't switch off while" Value="@(Model.KeepLitWhenOn.Count > 0 ? $"{Model.KeepLitWhenOn.Count} named" : "Nothing")" IsWide="true">
+		<Help>The room won't turn its own lights off while any of these is on. Switching off by hand still works.</Help>
+		<ChildContent>
+			<EntityListPicker Value="@Model.KeepLitWhenOn"
+							  ValueChanged="@Model.SetKeepLitWhenOn"
+							  Options="@Model.BlockerOptions"
+							  Lookup="@Model.Lookup"
+							  EmptyLabel="Nothing holds this room's lights on."
+							  AddLabel="Add one…"
+							  Placeholder="input_boolean.meeting" />
+			@if (Model.KeepLitWhenOn is { Count: > 0 })
+			{
+				<label class="checks">
+					<input type="checkbox" checked="@Model.KeepLitWhenOnInverted" @onchange="@(args => Model.SetKeepLitWhenOnInverted(args.Value is true))" />
+					while these are off instead
+				</label>
+			}
+		</ChildContent>
+	</Row>
+
+	<Row Label="Run a scene instead, on movement" Value="@(Model.SceneOnMotion is { Length: > 0 } onMotion ? onMotion : "None")" IsWide="true">
+		<Help>Runs this scene instead of setting the room's own brightness and warmth.</Help>
+		<ChildContent>
+			<EntityPicker Value="@Model.SceneOnMotion"
+						  ValueChanged="@Model.SetSceneOnMotion"
+						  Options="@Model.SceneOptions"
+						  Lookup="@Model.Lookup"
+						  NoneLabel="(this room's own brightness and warmth)"
+						  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+						  Placeholder="scene.stue_kveld" />
+		</ChildContent>
+	</Row>
+
+	<Row Label="Run a scene instead, when empty" Value="@(Model.SceneWhenEmpty is { Length: > 0 } whenEmpty ? whenEmpty : "None")" IsWide="true">
+		<Help>Runs this scene and stays there instead of going dark.</Help>
+		<ChildContent>
+			<EntityPicker Value="@Model.SceneWhenEmpty"
+						  ValueChanged="@Model.SetSceneWhenEmpty"
+						  Options="@Model.SceneOptions"
+						  Lookup="@Model.Lookup"
+						  NoneLabel="(switch the lights off)"
+						  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+						  Placeholder="scene.stue_natt" />
+		</ChildContent>
+	</Row>
+
+	<Row Label="Other automations count as manual changes"
+		 Value="@(Model.AutomationsCountAsManual ? "Yes" : "No")"
+		 IsOwn="@Model.AutomationsAreOwn"
+		 HouseText="@Model.AutomationsHouseText"
+		 OnRevert="@(() => Model.SetAutomationsAsManual(null))"
+		 IsWide="true">
+		<Help>Yes: a change made by another Home Assistant automation is treated like somebody at the switch.</Help>
+		<ChildContent>
+			<div class="seg" role="group" aria-label="Other automations count as manual changes">
+				<button type="button" aria-pressed="@(Model.AutomationsCountAsManual ? "true" : "false")" @onclick="@(() => Model.SetAutomationsAsManual(true))">Yes</button>
+				<button type="button" aria-pressed="@(Model.AutomationsCountAsManual ? "false" : "true")" @onclick="@(() => Model.SetAutomationsAsManual(false))">No</button>
+			</div>
+		</ChildContent>
+	</Row>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+}
