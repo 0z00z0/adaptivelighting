@@ -4,7 +4,7 @@
 	<PropertyGroup>
 		<RootNamespace>AdaptiveLighting.NetDaemon</RootNamespace>
 		<PackageId>AdaptiveLighting.NetDaemon</PackageId>
-		<Description>Binds AdaptiveLighting into a NetDaemon host in one line. Registers the engine, the Blazor UI, static web assets, antiforgery and a DataProtection key ring that survives a deploy, and stamps the log with an ISO timestamp. A house supplies its own AdaptiveLighting:ConfigPath and port; everything else the library knows about hosting itself lives here rather than in each host's program.cs.</Description>
+		<Description>Binds AdaptiveLighting into a NetDaemon host in one line. Registers the engine, the Blazor UI (and Lamplight on its own port when AdaptiveLighting:LamplightPort is set), static web assets, antiforgery and a DataProtection key ring that survives a deploy, and stamps the log with an ISO timestamp. A house supplies its own AdaptiveLighting:ConfigPath and port; everything else the library knows about hosting itself lives here rather than in each host's program.cs.</Description>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -24,6 +24,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\AdaptiveLighting.Web\AdaptiveLighting.Web.csproj" />
+		<ProjectReference Include="..\AdaptiveLighting.Lamplight\AdaptiveLighting.Lamplight.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

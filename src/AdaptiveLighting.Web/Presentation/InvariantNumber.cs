@@ -3,7 +3,7 @@ using System.Globalization;
 namespace AdaptiveLighting.Web.Presentation;
 
 /// <summary>A number written into markup: SVG coordinates, CSS lengths, numeric attributes.</summary>
-internal static class InvariantNumber
+public static class InvariantNumber
 {
 	private static readonly string[] Formats = ["0", "0.#", "0.##", "0.###", "0.####", "0.#####"];
 

@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
+
 using AdaptiveLighting.Hosting;
 using AdaptiveLighting.NetDaemon;
 using AdaptiveLighting.Web.Services;
@@ -171,5 +175,39 @@ public sealed class AdaptiveLightingHouseTests
 
 		using WebApplication app = builder.Build();
 		Assert.IsNotNull(app, "the explicit 0 has to beat the configured 10000, or a host cannot opt out");
+	}
+
+	/// <summary>What makes Lamplight safe to ship before a house has chosen its port.</summary>
+	[TestMethod]
+	public async Task Without_A_Lamplight_Port_Only_The_First_Design_Listens()
+	{
+		string root = TempRoot();
+		WebApplicationBuilder builder = BuilderWith(Path.Combine(root, "house.yaml"), root);
+		builder.Configuration["AdaptiveLighting:Port"] = FreePort().ToString(CultureInfo.InvariantCulture);
+
+		builder.AddAdaptiveLighting();
+
+		// No UseAdaptiveLighting: its static-asset manifest does not exist beside a test host, and every listen is
+		// decided in AddAdaptiveLighting.
+		await using WebApplication app = builder.Build();
+		await app.StartAsync();
+
+		// The server's own bound addresses once started, not the requested ones.
+		ICollection<string> addresses = app.Urls;
+		string bound = string.Join(", ", addresses);
+
+		await app.StopAsync();
+
+		Assert.AreEqual(1, addresses.Count, $"a house without the setting must open no second port; bound {bound}");
+	}
+
+	private static int FreePort()
+	{
+		TcpListener probe = new(IPAddress.Loopback, 0);
+		probe.Start();
+		int port = ((IPEndPoint)probe.LocalEndpoint).Port;
+		probe.Stop();
+
+		return port;
 	}
 }

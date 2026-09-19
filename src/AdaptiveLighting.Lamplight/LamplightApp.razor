@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<base href="/" />
+	<title>Adaptive lighting</title>
+	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Lamplight/lamplight.css?v={AssetToken.Text}")" />
+	<link rel="icon" type="image/svg+xml" href="_content/AdaptiveLighting.Web/favicon.svg" />
+	<HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+	<LamplightRoutes @rendermode="InteractiveServer" />
+	<script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>

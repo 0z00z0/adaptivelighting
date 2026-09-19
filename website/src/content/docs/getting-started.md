@@ -16,7 +16,7 @@ This page is one level below that: starting from nothing.
   for a sign-in on every read — even for a public, MIT-licensed repository.
 
 :::caution[The packages are currently private]
-As of this writing the four packages restore only for accounts the `0z00z0` organisation has
+As of this writing the five packages restore only for accounts the `0z00z0` organisation has
 explicitly granted access to — a `read:packages` token is necessary but not sufficient. This is a
 known limitation, tracked as
 [issue #33](https://github.com/0z00z0/adaptivelighting/issues/33): the organisation blocks public

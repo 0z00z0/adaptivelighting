@@ -1,0 +1,13 @@
+@* Pages from this library only. A page from the first design never resolves here, and the reverse. *@
+<Router AppAssembly="@typeof(LamplightRoutes).Assembly">
+	<Found Context="routeData">
+		<RouteView RouteData="@routeData" DefaultLayout="@typeof(LamplightLayout)" />
+		<FocusOnNavigate RouteData="@routeData" Selector="h1" />
+	</Found>
+	<NotFound>
+		<LayoutView Layout="@typeof(LamplightLayout)">
+			<h1 class="pagetitle">Not found</h1>
+			<p>There is no page at this address.</p>
+		</LayoutView>
+	</NotFound>
+</Router>
