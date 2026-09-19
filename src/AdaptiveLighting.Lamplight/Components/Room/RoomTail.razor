@@ -1,0 +1,69 @@
+@using System.Globalization
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+
+@* "This room" and "What happened here": the two folds after the settings groups, in that order. *@
+
+<p class="tail-lab">This room</p>
+
+<Fold Id="identity" Title="This room" Summary="@Model.RoomName" Open="@IdentityOpen" OpenChanged="@IdentityOpenChanged">
+	<div class="rows">
+		<Row Label="Name" Value="@(Model.OwnName is { Length: > 0 } own ? own : Model.RoomName)" IsWide="true">
+			<Help>Leave it empty to follow the Home Assistant area's name.</Help>
+			<ChildContent>
+				<input type="text" class="cell" value="@Model.OwnName" placeholder="@Model.RoomName" aria-label="Name" @onchange="@(args => Model.SetOwnName(args.Value as string))" />
+			</ChildContent>
+		</Row>
+
+		<Row Label="Home Assistant area" Value="@(Model.AreaId ?? "")" IsWide="true">
+			<Help>Changing it looks for lights and sensors again.</Help>
+			<ChildContent>
+				<AreaPicker Value="@Model.AreaId" ValueChanged="@Model.ChangeArea" Areas="@Model.Areas" />
+			</ChildContent>
+		</Row>
+	</div>
+</Fold>
+
+<Fold Id="log" Title="What happened here" Summary="@LogSummary" Open="@LogOpen" OpenChanged="@LogOpenChanged">
+	@if (Model.RoomLog is { Count: > 0 } rows)
+	{
+		<ol class="log">
+			@foreach (AdaptiveLighting.Web.Presentation.ActivityRow row in rows)
+			{
+				<li @key="row.Sequence">
+					<time datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(row.At)</time>
+					<span>@row.Line.What</span>
+					@if (row.Line.Why is { Length: > 0 } why)
+					{
+						<span class="why">@why</span>
+					}
+				</li>
+			}
+		</ol>
+		<p class="d2-foot">@Model.LogFoot</p>
+	}
+	else
+	{
+		<p class="lede">Nothing recorded here yet.</p>
+	}
+	<a class="morelink" href="activity">All activity &rsaquo;</a>
+</Fold>
+
+@code {
+	[Parameter, EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+
+	[Parameter]
+	public bool IdentityOpen { get; set; }
+
+	[Parameter]
+	public EventCallback<bool> IdentityOpenChanged { get; set; }
+
+	[Parameter]
+	public bool LogOpen { get; set; }
+
+	[Parameter]
+	public EventCallback<bool> LogOpenChanged { get; set; }
+
+	private string? LogSummary => Model.RoomLog is { Count: > 0 } rows ? rows[0].Line.What : null;
+}

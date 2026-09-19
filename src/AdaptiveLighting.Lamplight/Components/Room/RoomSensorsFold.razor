@@ -1,0 +1,161 @@
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+
+@* Lights and sensors: what discovery found, the way back from each ×, and the four pickers for when it is
+   wrong. RoomGearCard draws the richer first-design version of this (a label filter, a "pick by hand" fold,
+   setup-again and remove-room); none of that is named by this package's section, so none of it is built here. *@
+
+<Fold Id="sensors"
+	  Title="Lights and sensors"
+	  Summary="@Summary"
+	  Open="@Open"
+	  OpenChanged="@OpenChanged">
+	@if (Model.Resolved is { } resolved)
+	{
+		<ul class="gear">
+			@foreach (string light in resolved.Lights)
+			{
+				string entityId = light;
+				<li>
+					@Model.NameOf(entityId)
+					<button type="button" class="x" title="@($"Leave {Model.NameOf(entityId)} out of this room")" aria-label="@($"Leave {Model.NameOf(entityId)} out of this room")" @onclick="() => Model.Exclude(entityId)">&times;</button>
+				</li>
+			}
+			@foreach (string sensor in resolved.MotionSensors)
+			{
+				string entityId = sensor;
+				<li>
+					@Model.NameOf(entityId)
+					<button type="button" class="x" title="@($"Leave {Model.NameOf(entityId)} out of this room")" aria-label="@($"Leave {Model.NameOf(entityId)} out of this room")" @onclick="() => Model.Exclude(entityId)">&times;</button>
+				</li>
+			}
+			@foreach (string sensor in resolved.LuxSensors)
+			{
+				string entityId = sensor;
+				<li>
+					@Model.NameOf(entityId)
+					<button type="button" class="x" title="@($"Leave {Model.NameOf(entityId)} out of this room")" aria-label="@($"Leave {Model.NameOf(entityId)} out of this room")" @onclick="() => Model.Exclude(entityId)">&times;</button>
+				</li>
+			}
+		</ul>
+
+		@if (resolved.MotionSensors.Count == 0)
+		{
+			<p class="lede">Nothing here senses movement &mdash; the room never lights itself. Switching it on at the wall lights it, and it goes off when that hold runs out.</p>
+		}
+
+		@if (Model.CountsAsDarkForWantOfASensor)
+		{
+			<p class="lede">No light-level sensor here &mdash; the room counts as dark, so movement lights it.</p>
+		}
+		else if (resolved.LuxSensors.Count > 1)
+		{
+			<p class="lede">@resolved.LuxSensors.Count light-level sensors here &mdash; the room reads the average of whichever are still reporting.</p>
+		}
+	}
+	else
+	{
+		<div class="notice bad">@Model.PreviewError</div>
+	}
+
+	@if (Model.Excluded is { Count: > 0 } excluded)
+	{
+		<div class="sub-h">Left out of this room, by hand</div>
+		<ul class="gear">
+			@foreach (string entity in excluded)
+			{
+				string entityId = entity;
+				<li>
+					@Model.NameOf(entityId)
+					<button type="button" class="x" title="@($"Let discovery find {Model.NameOf(entityId)} again")" aria-label="@($"Let discovery find {Model.NameOf(entityId)} again")" @onclick="() => Model.Include(entityId)">&times;</button>
+				</li>
+			}
+		</ul>
+	}
+
+	<div class="sub-h">Pick by hand</div>
+	<p class="lede">Each list filled in here <strong>replaces</strong> the automatic choice for that list only. Fixing the room in Home Assistant is usually better.</p>
+
+	<div class="rows">
+		<Row Label="Lights" Value="@LightsValue" IsWide="true">
+			<Help>Empty means every light found in this room. Name any here and only those are managed.</Help>
+			<ChildContent>
+				<EntityListPicker Value="@Model.Lights"
+								  ValueChanged="@Model.SetLights"
+								  Options="@Model.LightChoices"
+								  Others="@Model.LightOthers"
+								  OthersLabel="@RoomPageModel.OthersLabel"
+								  Lookup="@Model.Lookup"
+								  EmptyLabel="Found in this room."
+								  AddLabel="Add a light…"
+								  EmptyNote="@Model.EmptyNote("lights")"
+								  Placeholder="light.example" />
+			</ChildContent>
+		</Row>
+
+		<Row Label="Motion sensors" Value="@MotionValue" IsWide="true">
+			<Help>Empty means every motion sensor found in this room. Only motion, presence and occupancy sensors are offered.</Help>
+			<ChildContent>
+				<EntityListPicker Value="@Model.MotionSensors"
+								  ValueChanged="@Model.SetMotionSensors"
+								  Options="@Model.MotionChoices"
+								  Others="@Model.MotionOthers"
+								  OthersLabel="@RoomPageModel.OthersLabel"
+								  Lookup="@Model.Lookup"
+								  EmptyLabel="Found in this room."
+								  AddLabel="Add a motion sensor…"
+								  EmptyNote="@Model.EmptyNote("motion sensors")"
+								  Placeholder="binary_sensor.example" />
+			</ChildContent>
+		</Row>
+
+		<Row Label="Daylight sensor" Value="@(Model.DaylightSensor is { Length: > 0 } day ? day : "House outdoor sensor")" IsWide="true">
+			<Help>Which reading the daylight curve follows here. The house's outdoor sensor by default.</Help>
+			<ChildContent>
+				<EntityPicker Value="@Model.DaylightSensor"
+							  ValueChanged="@Model.SetDaylightSensor"
+							  Options="@Model.LuxSensorOptions"
+							  NoneLabel="@Model.OutdoorSensorLabel"
+							  EmptyNote="@Model.EmptyNote("light-level sensors")"
+							  Placeholder="sensor.example_illuminance" />
+			</ChildContent>
+		</Row>
+
+		<Row Label="Light-level sensor" Value="@(Model.LuxSensor is { Length: > 0 } lux ? lux : "Found in this room")" IsWide="true">
+			<Help>Which reading decides whether this room is dark. Only needed when the room has more than one.</Help>
+			<ChildContent>
+				<EntityPicker Value="@Model.LuxSensor"
+							  ValueChanged="@Model.SetLuxSensor"
+							  Options="@Model.LuxChoices"
+							  Others="@Model.LuxOthers"
+							  OthersLabel="@RoomPageModel.OthersLabel"
+							  NoneLabel="(the one found in this room)"
+							  EmptyNote="@Model.EmptyNote("light-level sensors")"
+							  Placeholder="sensor.example_illuminance" />
+			</ChildContent>
+		</Row>
+	</div>
+
+	<p class="lede">@Model.ScopeNote</p>
+</Fold>
+
+@code {
+	[Parameter, EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+
+	[Parameter]
+	public bool Open { get; set; }
+
+	[Parameter]
+	public EventCallback<bool> OpenChanged { get; set; }
+
+	// A plain count of what discovery found, read off the same list the chips above are drawn from — not a
+	// meaning the model states, just its length.
+	private string? Summary => Model.Resolved is { } resolved
+		? $"{resolved.Lights.Count} lights · {resolved.MotionSensors.Count} motion"
+		: null;
+
+	private string LightsValue => Model.Lights.Count > 0 ? $"{Model.Lights.Count} named" : "Found in this room";
+
+	private string MotionValue => Model.MotionSensors.Count > 0 ? $"{Model.MotionSensors.Count} named" : "Found in this room";
+}
