@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+- `AdaptiveLighting.Lamplight` gains its Kit: `Fold`, `Row`, `Pair`, `Info`, `Chip`, `Bang`, `By`, `LampCard`, `NowCard` and `SectionIndex` under `Components/Kit/`, the pieces room, house, dashboard and activity share. `LampPaint` turns a lit room's brightness and colour temperature into the `--lampc`/`--lvl` custom properties the shared `lamp-glow` rule reads, picking the nearest step of the six-step Kelvin ramp.
+
 ## [2026.9.15] - 2026-09-19
 
 ### Added

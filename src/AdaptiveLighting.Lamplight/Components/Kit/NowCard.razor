@@ -1,0 +1,40 @@
+@* The room and house page's "right now" card: warnings first, then the facts list. The draft's own CSS hides
+   the facts list on a phone, so nothing here decides that. *@
+
+<section class="glass d2-now">
+	@if (Warnings.Count > 0)
+	{
+		<ul class="warns">
+			@foreach (Warning warning in Warnings)
+			{
+				<li class="warn-i @warning.Kind">
+					<Bang Kind="@warning.Kind" Title="@warning.Text" />
+					<span>@warning.Text</span>
+					<Info Label="@warning.Text">@warning.Help</Info>
+				</li>
+			}
+		</ul>
+	}
+
+	@if (Facts.Count > 0)
+	{
+		<dl class="facts">
+			@foreach ((string label, string value) in Facts)
+			{
+				<dt>@label</dt>
+				<dd>@value</dd>
+			}
+		</dl>
+	}
+</section>
+
+@code {
+	/// <summary>A warning line: "warn" or "bad", the sentence, and optional (i) help.</summary>
+	public sealed record Warning(string Kind, string Text, RenderFragment? Help = null);
+
+	[Parameter, EditorRequired]
+	public IReadOnlyList<Warning> Warnings { get; set; } = [];
+
+	[Parameter, EditorRequired]
+	public IReadOnlyList<(string Label, string Value)> Facts { get; set; } = [];
+}
