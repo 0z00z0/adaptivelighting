@@ -8,6 +8,8 @@
 	<title>Adaptive lighting</title>
 	@* Every asset carries ?v=: without it a browser keeps its cached app.css across a deploy. *@
 	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Web/app.css?v={Build}")" />
+	@* After app.css: a control's rule has to win a tie with the generic element rules there. *@
+	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Web/controls.css?v={Build}")" />
 	<link rel="icon" type="image/svg+xml" href="_content/AdaptiveLighting.Web/favicon.svg" />
 	@* Blocking and above the body: the server paints this page, so a theme applied after render arrives a repaint
 		late. data-themes is the allow-list, and an id outside it falls back to the device. *@

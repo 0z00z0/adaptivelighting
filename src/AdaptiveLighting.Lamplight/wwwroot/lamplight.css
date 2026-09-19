@@ -75,3 +75,21 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 	.tabbar a.cur svg { color: var(--accent); }
 	.tabbar svg { width: 22px; height: 22px; }
 }
+
+/* ==== B. Shared control tokens ==== */
+/* The tokens controls.css reads that Lamplight has no name of its own for. Values for Warm charcoal until the themes
+   step; each theme block will set its own. */
+:root {
+	--now: #e3a0cf;
+	--lane: #1a1714;
+	--kelvin-weight: 100%; --kelvin-shade: transparent;
+	--daylight-night: #1d2136; --daylight-twilight: #3a4876; --daylight-day: #a3804a; --daylight-halo: rgba(14, 12, 10, 0.72);
+	--icon-accent: var(--accent);
+	--grid: var(--line-soft);
+	--rule: 1px solid var(--line); --rule-inner: 1px solid var(--line-soft);
+	--radius-control: 10px; --radius-chip: 8px;
+	--stroke-hair: 1px; --stroke-control: 1.5px; --stroke-mark: 2px;
+	--space-1: 4px; --space-2: 6px; --space-3: 8px; --space-4: 12px; --space-5: 16px; --space-6: 24px;
+	--label-track: 0.14em;
+}
+/* ==== end B. Shared control tokens ==== */

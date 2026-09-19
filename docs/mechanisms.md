@@ -1930,6 +1930,47 @@ the setting is present.
 - Lamplight constructs the existing page models unchanged. `InvariantNumber` and `AssetToken` are public so it
   uses them instead of carrying copies.
 
+### The shared controls' stylesheet
+
+The leaf controls and charts both designs use (steppers, number boxes, preset sliders, the pickers, the levels
+and per-light levels tables, the period and house-mode option editors, the start editor, the daylight and lux
+charts, sentences and tokens, icons, info popovers, the switch-on note, the period-select panel) are drawn by
+`controls.css` in `AdaptiveLighting.Web`. Both roots link it with the same `?v=` token. It holds 262 rules; the
+page chrome and the generic element rules (buttons, inputs, selects, chips, badges, notices, panels) stay in each
+design's own stylesheet, so a design styles those itself before a control looks finished in it.
+
+- **It reads 42 design tokens, and both designs define every one.** Lamplight's name where Lamplight has one;
+  otherwise the first design's name, which Lamplight defines natively in its block B. `app.css` defines 16 of
+  the names once, on `:root`, as aliases of its own tokens: `--ink` of `--text`, `--ink-2` of `--muted`,
+  `--surface` and `--surface-2` of the panels, `--inset` of `--chip`, `--line-soft` of `--grid`, `--off` and
+  `--off-bg` of the idle pair, `--auto` of `--machine`, `--shadow-pop` of `--shadow-float`, `--font-body` of
+  `--font-sans`, `--font-num` of `--mono`, `--t-xs`, `--t-sm` and `--t-md` of the text sizes, `--r` of
+  `--radius-panel`. `--text-base` and `--radius` read the same values as `--text-md` and `--radius-panel`, and
+  map to the same names.
+- **An alias resolves on `:root`.** All five of the first design's colour blocks are on `:root`, so every theme
+  reaches the controls. A token redefined on an element below `:root` would not reach a control through its
+  alias; the control would keep the root value.
+- **Link order carries the cascade.** The first design links `app.css` and then `controls.css`: the moved rules
+  followed the generic rules they override, and a tie on specificity goes to the later file. Lamplight links
+  `controls.css` first, so its own rules win a tie with a control's.
+- **A few rules sit on the other side of the line to keep their order.** `.start-editor
+  .start-minutes` is dead in the first design (the later `.cell.num` width wins; measured 112 px, not the
+  4.5 rem it asks for), and after `app.css` it would win and shrink the box to 72 px. The period and house-mode
+  fold shell stays in the unified fold block it shares with the settings group folds. `.tok-text`, the
+  commissioning name box, is also a `.tok` and moved with it to keep following it; `.ic-head`
+  moved with `.ic` for the same reason.
+- **`[hidden] { display: none !important; }` is in both files.** The preset slider's readouts rely on it, and
+  Lamplight has no copy of its own.
+- **Verified by rendering, not by reading.** The UI host served the new pair and, in a second browser context at
+  the same moment, the old `app.css` alone. Every standard computed property of every element and pseudo-element
+  was compared, and the full-page screenshots byte for byte: 110 page states across both widths and five theme
+  states, all identical. A split that breaks one of the orders above shows here (the icon 17 px against 18 px,
+  the minutes box 112 px against 72 px); reading the stylesheet does not show it. The pages reachable in the
+  host exercise 150 of the 262 rules: the lux curve, steppers, number boxes and token popovers render only on a
+  real room page.
+- The values in Lamplight's block B are Warm charcoal placeholders until the themes step gives each theme its
+  own.
+
 ### Shutdown order: the snapshot cache stops before Kestrel
 
 The host stops hosted services in reverse registration order, and `GenericWebHostService` is registered by

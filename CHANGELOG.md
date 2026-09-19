@@ -12,6 +12,10 @@ against each other.
 
 ## [Unreleased]
 
+### Changed
+
+- The shared controls and charts are drawn by a new `controls.css` in `AdaptiveLighting.Web`, linked by both designs, and read only tokens both designs define; `app.css` keeps the page chrome and gains token aliases on `:root`. The first design looks the same: measured identical in every theme at both widths.
+
 ## [2026.9.15] - 2026-09-19
 
 ### Added
