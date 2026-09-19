@@ -225,7 +225,9 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 /* ==== K. Lamplight kit ==== */
 /* Room, house, dashboard and activity share these: the fold, the row, the pair, the (i) popover, the state
    chip, the warning mark, the "who" tag, the lamp-card hero, the "right now" card and the settings jump row.
-   .lamp-glow and .lampdot are LampPaint's CSS counterpart: --lampc and --lvl painted, nothing else reads them. */
+   .lamp-glow and .lampdot are LampPaint's CSS counterpart: --lampc and --lvl painted, nothing else reads them.
+   The toggle, segmented control, checkbox row, name/value field, button, notice and tail label are drawn once
+   here too — room and house both draw them from the same theme draft, so one copy is what renders on both. */
 .row-value, .big b, .facts dd, .fold-sum { font-variant-numeric: tabular-nums; }
 
 .chip { display: inline-flex; align-items: center; gap: 7px; padding: 1px 10px 1px 8px; border-radius: var(--r-pill); font-size: var(--t-xs); font-weight: var(--w-strong); line-height: 1.7; white-space: nowrap; }
@@ -341,6 +343,36 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 	.fold-title { font-size: 20px; }
 	.fold-body { padding: 0 14px 16px; }
 }
+
+.tail-lab { margin-top: 14px; font-size: var(--t-xs); font-weight: var(--w-bold); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+
+.toggle { position: relative; flex: none; width: 46px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--off-bg); }
+.toggle .knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--off); transition: transform 0.15s ease; }
+.toggle.on { border-color: var(--ok); background: var(--ok-bg); }
+.toggle.on .knob { transform: translateX(20px); background: var(--ok); }
+@media (prefers-reduced-motion: reduce) { .toggle .knob { transition: none; } }
+
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-pill); background: var(--inset); max-width: 100%; }
+.seg button { padding: 5px 11px; border: 0; border-radius: var(--r-pill); background: none; color: var(--ink-2); font-size: var(--t-sm); font-weight: var(--w-semi); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.checks { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-sm); }
+.checks label { display: inline-flex; align-items: center; gap: 6px; }
+.checks input { accent-color: var(--accent); }
+
+.cell { padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--inset); color: var(--ink); font: inherit; font-size: var(--t-sm); min-width: 12rem; max-width: 100%; }
+
+.btn { padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); font-size: var(--t-sm); font-weight: var(--w-semi); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: var(--bad); }
+
+.notice { padding: 10px 14px; border-radius: var(--r); background: var(--surface-2); font-size: var(--t-sm); color: var(--ink-2); }
+.notice.warn { background: var(--warn-bg); color: var(--warn); }
+.notice.bad { background: var(--bad-bg); color: var(--bad); }
+.notice.ok { background: var(--ok-bg); color: var(--ok); }
+.notice strong { color: var(--ink); font-weight: var(--w-bold); }
+.notice ul { margin: 6px 0 0; padding-left: 18px; }
+.notice li { margin: 2px 0; }
 /* ==== end K. Lamplight kit ==== */
 
 /* ==== B. Shared control tokens ==== */
@@ -364,10 +396,6 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
    segments read the same --lampc. */
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .tick, .tile .pct, .log time { font-variant-numeric: tabular-nums; }
-
-.notice { padding: 12px 16px; border-radius: var(--r); background: var(--surface-2); color: var(--ink); font-size: var(--t-sm); }
-.notice.bad { background: var(--bad-bg); color: var(--bad); }
-.notice strong { font-weight: var(--w-bold); }
 
 .sec-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; margin: 0 0 10px; font-family: var(--font-head); font-size: var(--t-lg); font-weight: var(--w-bold); letter-spacing: var(--ls-dis-s); }
 .sec-h small { font-family: var(--font-num); font-size: 12.5px; font-weight: var(--w-body); color: var(--ink-3); letter-spacing: 0; }
@@ -455,37 +483,18 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 
 /* ==== 2. Room page ==== */
 /* The room body: the back link, the lamp hero, the section index, the settings folds and the save line.
-   Flag, Choice and Steps settings have no leaf control of their own (AllSettingsPanel draws them as raw
-   markup, and that markup's CSS lives in app.css, not controls.css), so .toggle and .seg are drawn here from
-   the theme draft's own shapes. */
+   The toggle, segmented control, checkbox row, name field, button and tail label this page's raw settings
+   markup draws (AllSettingsPanel; Flag, Choice and Steps settings have no leaf control of their own) are the
+   kit's shared copies, not drawn again here. */
 .back { align-self: flex-start; color: var(--ink-2); text-decoration: none; font-size: var(--t-sm); font-weight: var(--w-semi); }
 .since { font-family: var(--font-num); font-size: var(--t-sm); color: var(--ink-3); }
-
-.toggle { position: relative; flex: none; width: 46px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--off-bg); }
-.toggle .knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--off); transition: transform 0.15s ease; }
-.toggle.on { border-color: var(--ok); background: var(--ok-bg); }
-.toggle.on .knob { transform: translateX(20px); background: var(--ok); }
-
-.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-pill); background: var(--inset); max-width: 100%; }
-.seg button { padding: 5px 11px; border: 0; border-radius: var(--r-pill); background: none; color: var(--ink-2); font-size: var(--t-sm); font-weight: var(--w-semi); }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 
 .gear { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .gear li { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 4px 4px 4px 10px; border-radius: var(--r-pill); background: var(--inset); font-size: var(--t-sm); }
 .gear .x { padding: 0 6px; border: 0; background: none; color: var(--ink-3); font-size: 17px; line-height: 1; }
 
-.checks { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-sm); }
-.checks label { display: inline-flex; align-items: center; gap: 6px; }
-.checks input { accent-color: var(--accent); }
-
-.cell { padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--inset); color: var(--ink); font: inherit; font-size: var(--t-sm); min-width: 12rem; max-width: 100%; }
-
 .sub-h { display: flex; align-items: center; gap: 8px; margin: 16px 0 4px; font-size: var(--t-xs); font-weight: var(--w-bold); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
-.tail-lab { margin-top: 14px; font-size: var(--t-xs); font-weight: var(--w-bold); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
 
-.btn { padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); color: var(--ink); font-size: var(--t-sm); font-weight: var(--w-semi); }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn.danger { color: var(--bad); }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
 .savebar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 10px 14px; border-radius: var(--r); background: var(--surface-2); font-size: var(--t-sm); color: var(--ink-2); }
@@ -503,30 +512,18 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 /* ==== 3. House page ==== */
 /* Buttons, inputs, chips, badges, notices and panels are not in controls.css, so the leaf controls this page
    reuses (SelectAuthorityPanel, PeriodSelectPanel, HouseModeOptions, LabelPicker, EntityPicker) draw their own
-   .field/.notice/.badge/.panel/.cell/.checks/.empty/.hint/.danger/.unit markup against these rules. Room and
-   House page blocks were written in parallel and both style .cell/.toggle/.seg/.checks/.tail-lab/.btn/.savebar
-   from the same theme draft; this block is textually last, so it wins the shared property values — the actual
-   overlap is small (mostly sizing), and reconciling the two names is a later hand-merge, not this package's. */
+   .field/.badge/.panel/.cell/.checks/.empty/.hint/.danger/.unit markup against these rules. .cell/.toggle/.seg/
+   .checks/.tail-lab/.btn/.notice are the kit's shared copies; only .floor-row and the fixed .savebar-fixed toast
+   are drawn here, because this page's own markup needs a layout the shared .floor and .savebar don't. */
 .subnav { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: var(--t-sm); font-weight: var(--w-semi); }
 .subnav a { color: var(--ink-2); text-decoration: none; padding-bottom: 2px; border-bottom: 2px solid transparent; }
 .subnav a.cur { color: var(--ink); border-bottom-color: var(--accent); }
 
-.tail-lab { margin-top: 14px; font-size: var(--t-xs); font-weight: var(--w-bold); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
 .per-note { color: var(--ink-3); font-size: var(--t-sm); }
 .panel-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 
-.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-pill); background: var(--inset); max-width: 100%; }
-.seg button { padding: 5px 11px; border: 0; border-radius: var(--r-pill); background: none; color: var(--ink-2); font-size: var(--t-sm); font-weight: var(--w-semi); }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
-
-.toggle { position: relative; flex: none; width: 46px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--off-bg); }
-.toggle .knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--off); transition: transform 0.15s ease; }
-.toggle.on { border-color: var(--ok); background: var(--ok-bg); }
-.toggle.on .knob { transform: translateX(20px); background: var(--ok); }
-@media (prefers-reduced-motion: reduce) { .toggle .knob { transition: none; } }
-
 .areas { display: flex; flex-direction: column; }
-.floor { display: flex; align-items: center; gap: 10px; padding: 12px 0 4px; font-size: 11.5px; font-weight: var(--w-bold); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.floor-row { display: flex; align-items: center; gap: 10px; padding: 12px 0 4px; font-size: 11.5px; font-weight: var(--w-bold); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
 .area { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line-soft); }
 .area a, .area > span:last-child { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; text-decoration: none; color: inherit; }
 .area b { font-weight: var(--w-strong); }
@@ -540,20 +537,15 @@ button:disabled { opacity: 0.5; cursor: default; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: var(--w-semi); }
 button.danger { color: var(--bad); }
 button.add, .add { padding: 5px 10px; border: 1px dashed var(--line); border-radius: var(--r); background: none; color: var(--ink-2); font-size: var(--t-sm); }
-.btn { padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); font-size: var(--t-sm); font-weight: var(--w-semi); }
 
 input[type="text"], input[type="number"], input[type="password"], select {
 	font: inherit; color: var(--ink); background: var(--inset); border: 1px solid var(--line); border-radius: var(--r); padding: 5px 10px; font-size: var(--t-sm);
 }
 input:focus, select:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
-.cell { min-width: 6rem; }
 .cell.num { width: 6rem; text-align: right; font-family: var(--font-num); }
 .cell.wide { min-width: min(22rem, 100%); max-width: 100%; }
 .unit { color: var(--ink-3); font-size: var(--t-xs); }
-
-.checks { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-sm); }
-.checks label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 
 .field { padding: 10px 0; border-top: 1px solid var(--line-soft); }
 .field:first-child { border-top: 0; padding-top: 0; }
@@ -562,13 +554,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .field-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .field-help { color: var(--ink-3); font-size: var(--t-xs); margin-top: 4px; max-width: 60ch; }
 
-.notice { padding: 10px 14px; border-radius: var(--r); background: var(--surface-2); font-size: var(--t-sm); color: var(--ink-2); }
-.notice.warn { background: var(--warn-bg); color: var(--warn); }
-.notice.bad { background: var(--bad-bg); color: var(--bad); }
-.notice.ok { background: var(--ok-bg); color: var(--ok); }
-.notice strong { color: var(--ink); font-weight: var(--w-bold); }
-.notice ul { margin: 6px 0 0; padding-left: 18px; }
-.notice li { margin: 2px 0; }
 .hint { color: var(--ink-3); font-size: var(--t-xs); }
 .hint.ok { color: var(--ok); }
 
@@ -586,7 +571,7 @@ details.panel > summary::-webkit-details-marker { display: none; }
 .area-chevron { flex: none; width: 9px; height: 9px; margin: 0 6px 4px; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(45deg); }
 details.panel[open] > summary .area-chevron { transform: rotate(-135deg); margin: 4px 6px 0; }
 
-.savebar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 40; width: min(1100px, calc(100vw - 3rem)); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-big); padding: 10px 16px; box-shadow: var(--shadow-pop); }
+.savebar-fixed { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; z-index: 40; width: min(1100px, calc(100vw - 3rem)); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-big); padding: 10px 16px; box-shadow: var(--shadow-pop); }
 .savebar-note { font-size: var(--t-sm); color: var(--ink-2); }
 .savebar-note.ok { color: var(--ok); }
 .savebar-note.bad { color: var(--bad); }
@@ -594,7 +579,7 @@ details.panel[open] > summary .area-chevron { transform: rotate(-135deg); margin
 .savebar-toast::before { content: "\2713"; font-weight: var(--w-bold); }
 
 @media (max-width: 720px) {
-	.savebar { bottom: 70px; width: calc(100vw - 24px); }
+	.savebar-fixed { bottom: 70px; width: calc(100vw - 24px); }
 	.field-head { flex-wrap: wrap; }
 }
 /* ==== end 3. House page ==== */
