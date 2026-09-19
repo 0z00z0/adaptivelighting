@@ -317,6 +317,24 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 
 ---
 
+## Lamplight
+
+*A second design of the same interface, on its own port.*
+
+| Setting | What it does | Default | Where it's set |
+|---|---|---|---|
+| **Lamplight's port** | Turns Lamplight on and opens it on this port. Off when the value is absent, empty or `0`. Must differ from the first design's own port. | off | `AdaptiveLighting:LamplightPort` in `appsettings.json` |
+
+This is a host setting, not a key in the configuration document above, and neither design carries a
+control for it. The NetDaemon add-on publishes ports 10000–10004; a port only answers from the
+network once it is mapped by hand in the add-on's **Network** panel. The first design keeps
+answering on its own port (`AdaptiveLighting:Port`) whether or not Lamplight is switched on.
+
+See [How to use it](/user-guide/#9-lamplight) for the theme picker, and
+[How it works](/overview/#lamplight) for what Lamplight is.
+
+---
+
 ## Upgrading a file written before 2.0
 
 A document that says `Zones:` still loads. The old keys are translated as it is read, and the file is

@@ -300,6 +300,22 @@ engine in place. No restart.
 The picker at the right-hand end of the top bar offers **Follow the system** (the default),
 **Light**, **Dark** and **0z0 tech**. The choice is kept in your browser.
 
+## 9. Lamplight
+
+Lamplight is a second way to reach the same house: a different design of the same pages, on its own
+port. Set `AdaptiveLighting:LamplightPort` to turn it on — see the
+[settings reference](/configuration/#lamplight) — then map that port in the add-on's **Network**
+panel, and Lamplight answers at `http://<host>:<port>`. The first design keeps answering on its own
+port, unaffected.
+
+The theme picker sits at the top right. Lamplight offers six themes: four dark (Warm charcoal, Plum
+dusk, Blackout, 0z0) and two light (Paper, Fern). Picking one repaints the page at once, with no
+reload. The choice is kept in the browser and belongs to that address alone — the same browser keeps
+a separate choice for the first design's address.
+
+Every typeface each theme uses ships inside the package. Nothing is fetched from the internet to
+show it.
+
 ## Troubleshooting
 
 **A light did not come on when I walked in.** Open the room and read *Right now — what the engine
