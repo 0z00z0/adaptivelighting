@@ -1,0 +1,92 @@
+@using AdaptiveLighting.Lamplight.Components.Kit
+
+<section class="glass d2-house" aria-label="The house">
+	@if (Model.HouseMode is { } mode)
+	{
+		<div class="d2-cell">
+			<Pair Name="House mode"
+				  Word="@(mode.CurrentValue ?? "unknown")"
+				  WordKind="plain"
+				  Options="@ModeOptions(mode)"
+				  Current="@CurrentMode(mode)"
+				  OnSelect="index => Model.SelectMode(mode.Options[index].Value)" />
+			@if (Model.ModeConfirmation.TextAt(Model.Now) is { Length: > 0 } confirmation)
+			{
+				<p class="d2-note ok">@confirmation</p>
+			}
+			@if (Model.ModeMessage is { Length: > 0 } message)
+			{
+				<p class="d2-note bad">@message</p>
+			}
+		</div>
+	}
+	else
+	{
+		<p class="d2-note">No house mode is set up. <a href="settings?section=housemodes">Add one under House modes</a>.</p>
+	}
+
+	@if (Model.MasterSwitch is { } master)
+	{
+		<div class="d2-cell" title="@Model.MasterTitle">
+			<Pair Name="Adaptive lighting"
+				  Word="@MasterWord(master)"
+				  WordKind="@MasterKind(master)"
+				  Options="@MasterOptions"
+				  Current="@MasterIndex(master)"
+				  OnSelect="index => SelectMaster(master, index)" />
+			@if (Model.MasterNote is { Length: > 0 } note)
+			{
+				<p class="d2-note">@note</p>
+			}
+		</div>
+	}
+
+	@if (Model.People.Count > 0)
+	{
+		<ul class="people" aria-label="Who is home">
+			@foreach (PersonView person in Model.People)
+			{
+				<li class="@PersonClass(person)">@person.Name</li>
+			}
+		</ul>
+	}
+</section>
+
+@code {
+	[Parameter, EditorRequired]
+	public DashboardPageModel Model { get; set; } = default!;
+
+	private static readonly IReadOnlyList<string> MasterOptions = ["On", "Off"];
+
+	private static IReadOnlyList<string> ModeOptions(HouseModeView mode) => [.. mode.Options.Select(option => option.Value)];
+
+	private static int CurrentMode(HouseModeView mode)
+	{
+		for (int index = 0; index < mode.Options.Count; index++)
+		{
+			if (mode.Options[index].IsCurrent)
+				return index;
+		}
+
+		return -1;
+	}
+
+	private static string MasterWord(MasterSwitchView master) =>
+		!master.IsAvailable ? "unknown" : master.AdaptiveLightingOn ? "on" : "off";
+
+	private static string MasterKind(MasterSwitchView master) =>
+		!master.IsAvailable ? "plain" : master.AdaptiveLightingOn ? "ok" : "off";
+
+	private static int MasterIndex(MasterSwitchView master) =>
+		!master.IsAvailable ? -1 : master.AdaptiveLightingOn ? 0 : 1;
+
+	// The switch flips; pressing the side already shown does nothing.
+	private void SelectMaster(MasterSwitchView master, int index)
+	{
+		if (index != MasterIndex(master))
+			Model.ToggleMaster();
+	}
+
+	private static string? PersonClass(PersonView person) =>
+		!person.IsAvailable ? "unknown" : person.IsHome ? null : "away";
+}
