@@ -129,6 +129,18 @@ begins.
 **The master switch.** One switch pauses every room. Nothing is commanded while it is off, and the
 board still shows what each room would be doing.
 
+## Lamplight
+
+The interface has two designs, drawn from the same rooms, the same schedule and the same document.
+The first stays exactly as it is. Lamplight is the second, reachable at its own address once a house
+sets `AdaptiveLighting:LamplightPort` — see the [settings reference](/configuration/#lamplight).
+Nothing about the first design changes when Lamplight is switched on.
+
+Lamplight offers six themes, four dark and two light, picked from the top of the page. A choice
+repaints the page at once and is kept in the browser for that address alone — the same browser keeps
+a separate choice for the first design's address. Every typeface a theme uses ships inside the
+package, so nothing is fetched from the internet to show it.
+
 ## The rooms, drawn
 
 Each arrow names the setting that drives it.
