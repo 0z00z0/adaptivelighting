@@ -1,0 +1,57 @@
+@page "/activity"
+@implements IDisposable
+@inject ActivityLog Log
+@inject AreaSnapshotCache Cache
+@inject ILogger<Activity> Logger
+@using AdaptiveLighting.Lamplight.Components.Activity
+
+<PageTitle>Activity &mdash; Adaptive lighting</PageTitle>
+
+<h1 class="pagetitle">Activity</h1>
+
+<section class="glass">
+	<ActivityFilters RoomOptions="_model.RoomOptions"
+					  Room="@_model.Room"
+					  RoomChanged="_model.SelectRoom"
+					  Chips="_model.Chips"
+					  Toggle="_model.Toggle"
+					  Pending="_model.Pending"
+					  PendingWord="@_model.PendingWord"
+					  ShowNew="_model.ShowNew"
+					  HiddenNote="@_model.HiddenNote"
+					  ShowEverything="_model.ShowEverything" />
+
+	@* Now is read at render time, not page load: a page left open past midnight must not keep heading
+	   yesterday's entries Today. *@
+	@foreach (ActivityDay day in ActivityView.GroupByDay(_model.Rows, DateTimeOffset.Now))
+	{
+		<h2 class="day">@day.Heading</h2>
+		<ol class="acts">
+			@foreach (ActivityRow row in day.Rows)
+			{
+				<ReportRow @key="row.Sequence" Row="row" />
+			}
+		</ol>
+	}
+
+	<p class="act-foot">@_model.FootLine</p>
+</section>
+
+@code {
+	private ActivityPageModel _model = default!;
+
+	/// <inheritdoc/>
+	protected override void OnInitialized()
+	{
+		_model = new ActivityPageModel(Log, Cache, Logger, work => InvokeAsync(work));
+		_model.Changed += StateHasChanged;
+		_model.Start();
+	}
+
+	/// <inheritdoc/>
+	public void Dispose()
+	{
+		_model.Changed -= StateHasChanged;
+		_model.Dispose();
+	}
+}

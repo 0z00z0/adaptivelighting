@@ -13,6 +13,7 @@ against each other.
 ## [Unreleased]
 
 - `AdaptiveLighting.Lamplight` gains its Kit: `Fold`, `Row`, `Pair`, `Info`, `Chip`, `Bang`, `By`, `LampCard`, `NowCard` and `SectionIndex` under `Components/Kit/`, the pieces room, house, dashboard and activity share. `LampPaint` turns a lit room's brightness and colour temperature into the `--lampc`/`--lvl` custom properties the shared `lamp-glow` rule reads, picking the nearest step of the six-step Kelvin ramp.
+- `AdaptiveLighting.Lamplight` gains its Activity page (`/activity`), built over the existing `ActivityPageModel`: the room filter, the category chips with counts, the pending-reports line, the hidden-reports note and the rows grouped by day, each with its time, room, what happened and why.
 
 ## [2026.9.15] - 2026-09-19
 
