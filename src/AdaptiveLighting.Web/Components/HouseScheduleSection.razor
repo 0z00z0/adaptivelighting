@@ -1,16 +1,18 @@
 @* The house page's schedule, as today's design arranges it. *@
 
 <header class="section-head">
-	<h2><Icon Name="@Glyph.Schedule" Class="ic-head" />Schedule</h2>
-	<p class="lede">
-		How bright and how warm the lights are through the day. One schedule for the whole house.
-	</p>
+	<h2 class="info-host">
+		<span class="info-line">
+			<Icon Name="@Glyph.Schedule" Class="ic-head" />Schedule
+			<InfoPopover Label="Schedule">How bright and how warm the lights are through the day. One schedule for the whole house.</InfoPopover>
+		</span>
+	</h2>
 </header>
 
 <section class="panel room-card house-card">
 	<div class="room-card-head">
 		<span class="room-card-title">Through the day</span>
-		<span class="room-card-note">one rhythm for the whole house</span>
+		<span class="room-card-note">whole house</span>
 	</div>
 
 	<div class="house-chart">
@@ -36,7 +38,7 @@
 			   PeriodHold="@Model.PeriodHoldRule" />
 
 @* Open only when already in use: then it is what decides what the table above means. *@
-<GroupFold Title="Connect a dropdown helper from Home Assistant"
+<GroupFold Title="Dropdown helper"
 		   Description="@Model.PeriodSelectSummary"
 		   Open="@Model.PeriodSelectConnected">
 	<PeriodSelectPanel Global="@Model.Global"

@@ -101,6 +101,9 @@ public sealed class ActivityPageModel : IDisposable
 	/// <summary>What the filters are keeping off the page, or <c>null</c> when they keep nothing off it.</summary>
 	public string? HiddenNote => ActivityView.HiddenNote(_entries.Count, _visible.Count, _room, _categories);
 
+	/// <summary>Why <see cref="HiddenNote"/>'s reports are off the page.</summary>
+	public string HiddenWhy => ActivityView.HiddenWhy(_room, _categories);
+
 	/// <summary>What the page is holding, and the cap it is held to.</summary>
 	public string FootLine
 	{
@@ -110,10 +113,15 @@ public sealed class ActivityPageModel : IDisposable
 			string shown = _visible.Count == _entries.Count ? held : $"{_visible.Count} of {held}";
 
 			return _recorded < ActivityLog.Capacity
-				? $"Showing {shown} since adaptive lighting started."
-				: $"Showing {shown}. Only the most recent {ActivityLog.Capacity} are kept; older ones have been dropped.";
+				? $"{shown} since start"
+				: $"{shown} · last {ActivityLog.Capacity} kept";
 		}
 	}
+
+	/// <summary>What the (i) beside <see cref="FootLine"/> explains.</summary>
+	public string FootWhy => _recorded < ActivityLog.Capacity
+		? "Recording starts when adaptive lighting starts. Times come from the machine running it, which is not always the one this page is read on."
+		: $"Only the most recent {ActivityLog.Capacity} reports are kept; older ones have been dropped.";
 
 	/// <summary>Draws everything the log is holding and moves the read mark to the newest report.</summary>
 	/// <remarks>One <see cref="ActivityLog.Read"/>, never the two properties in turn: a report landing between

@@ -14,15 +14,14 @@
 		</select>
 		@if (NoColourTemperature)
 		{
-			<span class="lvl-warmth-note">@NoColourNote</span>
+			<span class="lvl-warmth-note info-host"><InfoPopover Label="No colour temperature">@NoColourNote</InfoPopover></span>
 		}
 	</div>
 
 	@if (Periods.Count == 0)
 	{
 		<div class="empty">
-			The schedule has no periods yet, so there is nothing for this room to agree or disagree with.
-			<a href="config?section=schedule">Set the day up</a> first.
+			No periods yet &mdash; <a href="config?section=schedule">set the day up</a>
 		</div>
 	}
 

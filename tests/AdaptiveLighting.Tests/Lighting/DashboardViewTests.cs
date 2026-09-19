@@ -130,12 +130,12 @@ public sealed class DashboardViewTests
 	public void The_Footer_Names_The_Count_And_Offers_The_Way_Back()
 	{
 		HiddenRoomsNote many = AreaView.HiddenNote(4)!;
-		Assert.AreEqual("4 rooms are switched off —", many.Lead);
-		Assert.AreEqual("turn them on in Configuration", many.LinkText);
+		Assert.AreEqual("4 rooms switched off —", many.Lead);
+		Assert.AreEqual("switch on", many.LinkText);
 
 		HiddenRoomsNote one = AreaView.HiddenNote(1)!;
-		Assert.AreEqual("1 room is switched off —", one.Lead);
-		Assert.AreEqual("turn it on in Configuration", one.LinkText);
+		Assert.AreEqual("1 room switched off —", one.Lead);
+		Assert.AreEqual("switch on", one.LinkText);
 	}
 
 	// ===================== waiting for the first choice =====================

@@ -45,7 +45,7 @@ public sealed class SwitchOnWarningTests
 
 		Assert.IsNotNull(note);
 		Assert.IsTrue(note.IsWarning);
-		StringAssert.Contains(note.Lead, "The one light");
+		Assert.AreEqual("Lab on · 1 light, not a lamp?", note.Lead);
 	}
 
 	// ===================== the quiet tier =====================
@@ -58,7 +58,7 @@ public sealed class SwitchOnWarningTests
 		Assert.IsNotNull(note);
 		Assert.IsFalse(note.IsWarning, "nothing here deserves amber");
 		Assert.IsNull(note.Advice, "there is nothing to advise about a room of ordinary lamps");
-		Assert.AreEqual("Stue is on, and will command 3 lights.", note.Lead);
+		Assert.AreEqual("Stue on · 3 lights", note.Lead);
 		Assert.AreEqual("They are Taklys, Leselampe and Gulvlampe.", note.OthersLine);
 	}
 
@@ -103,7 +103,7 @@ public sealed class SwitchOnWarningTests
 		SwitchOnNote? note = SwitchOnWarning.For("Stue", TheLivingRoom, null);
 
 		Assert.IsNotNull(note);
-		Assert.AreEqual("Stue is on, and will command 5 lights. 3 of them look like something other than room lighting.", note.Lead);
+		Assert.AreEqual("Stue on · 5 lights, 3 not a lamp?", note.Lead);
 	}
 
 	[TestMethod]
@@ -115,7 +115,7 @@ public sealed class SwitchOnWarningTests
 			null);
 
 		Assert.IsNotNull(note);
-		StringAssert.Contains(note.Lead, "none of them looks like room lighting");
+		StringAssert.Contains(note.Lead, "none a lamp?");
 		Assert.IsNull(note.OthersLine);
 	}
 
@@ -152,7 +152,7 @@ public sealed class SwitchOnWarningTests
 		StringAssert.Contains(note.Suspicious[0].Reason, "colour channel of stue_vegglys");
 
 		Assert.AreEqual(
-			"Stue is on, and will command 4 lights. 3 of them look like something other than room lighting.",
+			"Stue on · 4 lights, 3 not a lamp?",
 			note.Lead,
 			"the count is still what the engine will drive — the lamp behind the group is context, never a light to name");
 

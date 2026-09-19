@@ -40,15 +40,20 @@
 	}
 	else if (Selected is { HasLights: false })
 	{
-		<span class="picker-note bad">
-			No lights found in this room, so it can't run. Assign lights to the area in Home Assistant, or pick them
-			by hand below.
+		<span class="picker-note bad info-host">
+			<span class="info-line">
+				No lights here
+				<InfoPopover Label="No lights" Severity="InfoSeverity.Bad">
+					No lights found in this room, so it can't run. Assign lights to the area in Home Assistant, or pick
+					them by hand below.
+				</InfoPopover>
+			</span>
 		</span>
 	}
 	else if (Selected is { LuxIsAmbiguous: true })
 	{
 		<span class="picker-note">
-			@Selected.LuxCount light-level sensors here — pick which one to use below.
+			@Selected.LuxCount light sensors — pick one below
 		</span>
 	}
 </div>
@@ -68,12 +73,12 @@
 	public IReadOnlyList<AreaOption> Areas { get; set; } = [];
 
 	[Parameter]
-	public string NoneLabel { get; set; } = "(none — list the entities explicitly instead)";
+	public string NoneLabel { get; set; } = "(none — list entities by hand)";
 
 	/// <summary>Why there is nothing to pick, worded so it never blames the connection: a disconnected Home
 	/// Assistant and a house with no areas look the same here.</summary>
 	[Parameter]
-	public string EmptyNote { get; set; } = "No areas to pick from yet — type an area id instead.";
+	public string EmptyNote { get; set; } = "No areas — type an area id";
 
 	private bool _manual;
 

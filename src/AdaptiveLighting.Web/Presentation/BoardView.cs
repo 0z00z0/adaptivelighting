@@ -321,31 +321,31 @@ public static class BoardView
 		if (IsBlockedFromLighting(snapshot))
 		{
 			return snapshot.AutoOnBlockedBy is AutoOnBlock.Sleep
-				? "dark enough, but the house is asleep — movement won't light the room"
+				? "dark, but the house is asleep"
 				: snapshot.AutoOnBlockingEntity is { Length: > 0 } blocking
-					? $"dark enough, but {blocking} is on — movement won't light the room"
-					: "dark enough, but something here is on — movement won't light the room";
+					? $"dark, but {blocking} is on"
+					: "dark, but something here is on";
 		}
 
 		return snapshot.State switch
 		{
 			AreaState.PreOff when snapshot.IsLeadIn is true => snapshot.NextChangeAt is { } off
-				? $"lead-in — lights out {Countdown(off, now)} unless someone comes in"
-				: "lead-in — the lights go out shortly unless someone comes in",
+				? $"lead-in — off {Countdown(off, now)}"
+				: "lead-in — off shortly",
 
 			AreaState.PreOff => snapshot.NextChangeAt is { } off
-				? $"warning dim — lights out {Countdown(off, now)} unless someone moves"
-				: "warning dim — the lights go out shortly unless someone moves",
+				? $"warning dim — off {Countdown(off, now)}"
+				: "warning dim — off shortly",
 
 			AreaState.OverriddenOn => snapshot.NextChangeAt is { } resumes
-				? $"set manually — automatic control returns at {Clock(resumes)}"
-				: "set manually — the engine stands back until somebody resumes it",
+				? $"set manually — until {Clock(resumes)}"
+				: "set manually — until resumed",
 
 			AreaState.SuppressedOff => snapshot.NextChangeAt is { } listens
-				? $"off manually — movement is ignored until {Clock(listens)}"
-				: "off manually — movement is ignored until the room has been empty long enough",
+				? $"off manually — until {Clock(listens)}"
+				: "off manually — until empty",
 
-			AreaState.SceneHold => "held by a scene — the engine stands back until the house leaves this mode",
+			AreaState.SceneHold => "held by a scene",
 
 			_ => StateGlyph.For(snapshot).Word
 		};
@@ -356,18 +356,18 @@ public static class BoardView
 		int quiet = Math.Max(0, rooms - exceptions);
 
 		if (quiet == 0)
-			return exceptions == 1 ? "That is the only room switched on." : "Every room switched on is in the tray.";
+			return exceptions == 1 ? "The only room on" : "Every room on is here";
 
 		string subject = exceptions == 0
 			? quiet switch
 			{
-				1 => "The one room switched on is",
-				2 => "Both rooms are",
-				_ => $"All {quiet} rooms are"
+				1 => "The one room",
+				2 => "Both rooms",
+				_ => $"All {quiet} rooms"
 			}
-			: quiet == 1 ? "The other room is" : $"The other {quiet} rooms are";
+			: quiet == 1 ? "The other room" : $"The other {quiet}";
 
-		return $"{subject} doing what the schedule says.";
+		return $"{subject} on schedule";
 	}
 
 	/// <summary>What the board's activity summary is showing, out of what it holds, and what it is holding back.</summary>
@@ -389,7 +389,7 @@ public static class BoardView
 		int hidden = Math.Max(0, reachable - kept);
 
 		string lead = shown >= LogPreview
-			? $"newest {shown} rows of {Count(kept, "report")}"
+			? $"newest {shown} of {Count(kept, "report")}"
 			: Count(kept, "report");
 
 		// When the filter has taken everything, the hidden count is the answer: "0 reports" beside a count of
@@ -397,12 +397,12 @@ public static class BoardView
 		if (hidden > 0)
 		{
 			lead = kept == 0
-				? $"{Count(hidden, "everyday report")} on the Activity page"
-				: $"{lead} — {Count(hidden, "everyday report")} on the Activity page";
+				? $"{hidden} everyday on Activity"
+				: $"{lead} · {hidden} everyday on Activity";
 		}
 
 		return held >= capacity
-			? $"{lead}; the most recent {capacity} are kept"
+			? $"{lead} · last {capacity} kept"
 			: lead;
 	}
 

@@ -92,7 +92,7 @@ public sealed class HouseSentencesTests
 		Assert.AreEqual("Hjemme", line.Name);
 		Assert.AreEqual(ModeKind.Normal, line.Kind);
 		Assert.AreEqual(
-			"is everyday automatic lighting. The house returns here when another mode ends.",
+			"is everyday lighting; other modes end here.",
 			Text(line.Sentences.Single()));
 	}
 
@@ -113,8 +113,8 @@ public sealed class HouseSentencesTests
 
 		IReadOnlyList<ModeLine> lines = HouseSentences.Modes(modes, []);
 
-		StringAssert.Contains(Text(lines[0].Sentences.Single()), "The house returns here");
-		StringAssert.Contains(Text(lines[1].Sentences.Single()), "not to this one");
+		StringAssert.Contains(Text(lines[0].Sentences.Single()), "other modes end here");
+		StringAssert.Contains(Text(lines[1].Sentences.Single()), "the first Normal above");
 	}
 
 	[TestMethod]
@@ -170,8 +170,8 @@ public sealed class HouseSentencesTests
 
 		List<TimePeriodConfig> periods = [new TimePeriodConfig { Name = "Night", Start = "23:00" }];
 
-		StringAssert.Contains(Text(HouseSentences.Modes(modes, periods).Single().Sentences.Single()), "the Night period's limits");
-		StringAssert.Contains(Text(HouseSentences.Modes(modes, []).Single().Sentences.Single()), "no period is named for it yet");
+		StringAssert.Contains(Text(HouseSentences.Modes(modes, periods).Single().Sentences.Single()), "to Night levels");
+		StringAssert.Contains(Text(HouseSentences.Modes(modes, []).Single().Sentences.Single()), "no period named");
 	}
 
 	[TestMethod]

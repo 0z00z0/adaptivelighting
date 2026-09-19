@@ -711,9 +711,17 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	// such row, so a reader sent there finds nothing.
 	public string DaylightSourceNote =>
 		Area?.DaylightSensor is { Length: > 0 } own
-			? $"Reading {NameOf(own)}, this room's own choice. Change it under “Not right? Pick by hand”."
+			? $"Reading {NameOf(own)} (this room's)"
 			: Document.Global.OutdoorLuxSensor is { Length: > 0 } house
-				? $"Reading {NameOf(house)}, the house's outdoor sensor."
+				? $"Reading {NameOf(house)} (the house's)"
+				: "No outdoor sensor — held at the dark end";
+
+	/// <summary>What the (i) beside <see cref="DaylightSourceNote"/> explains.</summary>
+	public string DaylightSourceWhy =>
+		Area?.DaylightSensor is { Length: > 0 }
+			? "This room's own choice. Change it under “Not right? Pick by hand”."
+			: Document.Global.OutdoorLuxSensor is { Length: > 0 }
+				? "The house's outdoor sensor. A room can pick its own under “Not right? Pick by hand”."
 				: "No outdoor sensor is named, so the curve holds the level at its dark end. Name one under House, or pick one for this room under “Not right? Pick by hand”.";
 
 	/// <summary>Applies one setting a drag or an arrow key changed, through the path the stepper uses.</summary>
@@ -740,7 +748,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 			// Short: see the note's markup for the 390px measurement that set the length.
 			return own == 0
 				? $"All {AreaView.OverridableSettingCount} follow the"
-				: $"{own} of {AreaView.OverridableSettingCount} are set for this room; the rest follow the";
+				: $"{own} own, the rest follow the";
 		}
 	}
 
@@ -1020,8 +1028,8 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 	/// <summary>The line under the tick-box: what the lists are showing right now.</summary>
 	public string ScopeNote => ScopeToArea
-		? "Showing what Home Assistant puts in this room. Anything you have already picked stays listed even if it is elsewhere."
-		: "Showing every one in the house.";
+		? "This room's entities"
+		: "Every entity in the house";
 
 	/// <summary>The house's include label as stored, or empty when it manages every light it finds.</summary>
 	private string IncludeLabel => Document.Global.IncludeLabel ?? string.Empty;
@@ -1045,8 +1053,8 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 	/// <summary>The line under the filter: what the second block of each list is holding right now.</summary>
 	public string LabelNote => LabelledOnly
-		? $"Everything else in this room that carries the “{IncludeLabelName}” label — what adaptive lighting manages on its own."
-		: "Everything else in this room, labelled or not. Naming one here manages it whatever labels it carries.";
+		? $"Labelled “{IncludeLabelName}” only"
+		: "Labelled or not";
 
 	/// <summary>Narrows or widens the second block; changes what is offered, never what is configured.</summary>
 	public void SetLabelFilter(bool labelledOnly)
@@ -1057,9 +1065,9 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 	/// <summary>Why a picker has nothing to offer; an empty scoped list is ordinary.</summary>
 	public string EmptyNote(string what) =>
-		!HomeAssistantIsAnswering ? "Waiting for Home Assistant — type an id for now."
-		: ScopeToArea ? $"No {what} in this room. Tick “offer entities from the whole house” to pick from anywhere."
-		: $"No {what} anywhere in Home Assistant — type an id if one is coming.";
+		!HomeAssistantIsAnswering ? "Waiting for Home Assistant — type an id"
+		: ScopeToArea ? $"No {what} in this room — widen to the house"
+		: $"No {what} in Home Assistant — type an id";
 
 	/// <summary>The lights this room names for itself.</summary>
 	public IReadOnlyList<string> Lights => Area?.Lights ?? [];
@@ -1109,8 +1117,8 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	/// <summary>What "say nothing" means on the daylight picker, which is the house's own choice.</summary>
 	public string OutdoorSensorLabel =>
 		Document.Global.OutdoorLuxSensor is { Length: > 0 } house
-			? $"(the house's outdoor sensor — {NameOf(house)})"
-			: "(the house's outdoor sensor — none is named)";
+			? $"(the house's — {NameOf(house)})"
+			: "(the house's — none named)";
 
 	// ---- setting up again, and removal -----------------------------------------------------------------
 
@@ -1196,8 +1204,8 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 			// Only the row budget earns the second sentence; a collapsed run is still on this card.
 			return shown >= LogRows && total > shown
-				? $"The newest {shown} of {total} reports from this room. The rest are on the Activity page."
-				: "Everything this room has reported since the engine started.";
+				? $"newest {shown} of {total} · rest on Activity"
+				: "all since start";
 		}
 	}
 

@@ -93,7 +93,7 @@ public static class SetupWarning
 			losses.Add($"{Count(rebuild.OverrideCount, "changed setting")}");
 
 		return losses.Count == 0
-			? "nothing to lose — it is rebuilt from what Home Assistant knows now"
+			? "nothing to lose"
 			: $"loses {Join(losses)}";
 	}
 

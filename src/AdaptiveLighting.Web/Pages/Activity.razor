@@ -12,11 +12,15 @@
 
 <PageTitle>Activity &mdash; Adaptive lighting</PageTitle>
 
-<h1>Activity</h1>
-<p class="lede">
-	What each room decided, newest at top. Times come from the machine running adaptive lighting, which is
-	not always the one you are reading this on.
-</p>
+<h1 class="info-host">
+	<span class="info-line">
+		Activity
+		<InfoPopover Label="Activity">
+			What each room decided, newest at top. Times come from the machine running adaptive lighting, which is
+			not always the one this page is read on.
+		</InfoPopover>
+	</span>
+</h1>
 
 @if (Model.Entries.Count > 0)
 {
@@ -63,8 +67,8 @@
 		@* Suppressed when everything is hidden: the empty panel below then carries the same sentence. *@
 		@if (Model.Rows.Count > 0 && Model.HiddenNote is { Length: > 0 } hidden)
 		{
-			<p class="log-hidden">
-				<span>@hidden</span>
+			<p class="log-hidden info-host">
+				<span class="info-line">@hidden <InfoPopover Label="Hidden">@Model.HiddenWhy</InfoPopover></span>
 				<button type="button" class="log-reset" @onclick="Model.ShowEverything">Show everything</button>
 			</p>
 		}
@@ -73,54 +77,65 @@
 
 @if (Model.Entries.Count == 0)
 {
-	<div class="empty">
+	<div class="empty info-host">
 		@if (!Engine.IsAttached)
 		{
-			<strong>Waiting for Home Assistant.</strong>
-			<p>Reports reach this page through Home Assistant, so nothing can be recorded until the connection is up.</p>
-			<p>This is normal for a minute after a restart.</p>
+			<strong>
+				Waiting for Home Assistant
+				<InfoPopover Label="Waiting">
+					Reports reach this page through Home Assistant, so nothing can be recorded until the connection is up.
+					This is normal for a minute after a restart.
+				</InfoPopover>
+			</strong>
 		}
 		else if (!Engine.IsRunning)
 		{
-			<strong>Connected, but adaptive lighting isn't running.</strong>
-			<p>@(Engine.Fault ?? "No reason was recorded.")</p>
-			<p>See <a href="config">Configuration</a> for details.</p>
+			<strong>
+				Adaptive lighting isn't running
+				<InfoPopover Label="Not running" Severity="InfoSeverity.Bad">
+					Connected to Home Assistant. @(Engine.Fault ?? "No reason was recorded.")
+				</InfoPopover>
+			</strong>
+			<p><a href="config">Configuration</a></p>
 		}
 		else
 		{
-			<strong>Nothing has happened yet.</strong>
-			<p>
-				Recording starts when adaptive lighting starts, and a room appears here the first time it
-				decides something &mdash; movement, a change of house mode, or the light outside crossing the
-				level it counts as dark.
-			</p>
-			<p>
-				A quiet house can sit here for a long time. Rooms also start switched off after set-up, so if
-				you have not turned any on yet there is nothing for the engine to decide &mdash;
-				<a href="config?section=areas">choose the rooms it should look after</a>.
-			</p>
+			<strong>
+				Nothing has happened yet
+				<InfoPopover Label="Activity">
+					Recording starts when adaptive lighting starts, and a room appears here the first time it
+					decides something &mdash; movement, a change of house mode, or the light outside crossing the
+					level it counts as dark. Rooms start switched off after set-up, so until one is switched on
+					there is nothing to decide.
+				</InfoPopover>
+			</strong>
+			<p><a href="config?section=areas">Choose rooms</a></p>
 		}
 	</div>
 }
 else if (InRoom.Count == 0)
 {
 	@* The room has nothing left in the buffer at all, which is not the same as the categories hiding it. *@
-	<div class="empty">
-		<strong>Nothing from @Model.RoomName is still being held.</strong>
-		<p>Its older reports may have been dropped to make room. The rest of the house is still here.</p>
+	<div class="empty info-host">
+		<strong>
+			Nothing held from @Model.RoomName
+			<InfoPopover Label="@Model.RoomName">Its older reports may have been dropped to make room. The rest of the house is still here.</InfoPopover>
+		</strong>
 		<p><button type="button" class="log-reset" @onclick="Model.ShowEverything">Show everything</button></p>
 	</div>
 }
 else if (Model.Rows.Count == 0)
 {
-	<div class="empty">
-		<strong>Every report is in a category you switched off.</strong>
-		<p>
-			@(InRoom.Count == 1
-				? "1 report is being held"
-				: $"{InRoom.Count} reports are being held")@(string.IsNullOrEmpty(Model.Room) ? "" : $" from {Model.RoomName}"),
-			and none of them falls into the categories that are switched on.
-		</p>
+	<div class="empty info-host">
+		<strong>
+			All hidden by the filter
+			<InfoPopover Label="Hidden">
+				@(InRoom.Count == 1
+					? "1 report is being held"
+					: $"{InRoom.Count} reports are being held")@(string.IsNullOrEmpty(Model.Room) ? "" : $" from {Model.RoomName}"),
+				and none of them falls into the categories that are switched on.
+			</InfoPopover>
+		</strong>
 		<p><button type="button" class="log-reset" @onclick="Model.ShowEverything">Show everything</button></p>
 	</div>
 }
@@ -142,7 +157,7 @@ else
 		</ol>
 	}
 
-	<p class="log-foot">@Model.FootLine</p>
+	<p class="log-foot info-host"><span class="info-line">@Model.FootLine <InfoPopover Label="Reports">@Model.FootWhy</InfoPopover></span></p>
 }
 
 @code {

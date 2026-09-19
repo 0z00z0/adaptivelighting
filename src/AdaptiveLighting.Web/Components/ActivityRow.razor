@@ -26,8 +26,12 @@
 			}
 		}
 	</div>
-	<div class="log-body">
+	<div class="log-body info-host">
 		<span class="log-what">@Row.Line.What</span>
+		@if (Row.Line.More is { Length: > 0 } more)
+		{
+			<InfoPopover Label="@Row.Line.What">@more</InfoPopover>
+		}
 		@if (Row.Line.Why is { Length: > 0 } why)
 		{
 			<span class="log-why">@why</span>

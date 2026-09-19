@@ -5,8 +5,11 @@
 
 	@if (People.Count == 0)
 	{
-		<div class="housebar-note">
-			No people to watch. Adaptive lighting assumes someone is always home.
+		<div class="housebar-note info-host">
+			<span class="info-line">
+				No one watched
+				<InfoPopover Label="Who's home">No people to watch, so adaptive lighting assumes someone is always home.</InfoPopover>
+			</span>
 		</div>
 	}
 	else

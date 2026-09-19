@@ -2,13 +2,17 @@
    model, so a second design draws its own arrangement over the same rules. *@
 
 <header class="section-head">
-	<h2><Icon Name="@Glyph.Areas" Class="ic-head" />Areas</h2>
-	<p class="lede">
-		Rooms not listed here are never touched. Lights and sensors are found automatically from Home
-		Assistant's areas &mdash; open a room to see what was found and to change how it behaves.
-		What every room starts with, and which lights count as a room's, are under
-		<button type="button" class="thread" @onclick="() => Model.Show(HouseSection.House)">House</button>.
-	</p>
+	<h2 class="info-host">
+		<span class="info-line">
+			<Icon Name="@Glyph.Areas" Class="ic-head" />Areas
+			<InfoPopover Label="Areas">
+				Rooms not listed here are never touched. Lights and sensors are found automatically from Home
+				Assistant's areas &mdash; open a room to see what was found and to change how it behaves.
+				What every room starts with, and which lights count as a room's, are under
+				<button type="button" class="thread" @onclick="() => Model.Show(HouseSection.House)">House</button>.
+			</InfoPopover>
+		</span>
+	</h2>
 </header>
 
 <div class="panel-actions">
@@ -20,9 +24,11 @@
 
 @if (!Model.HomeAssistantIsAnswering)
 {
-	<p class="hint">
-		Setting rooms up again needs Home Assistant &mdash; each room is rebuilt from what the registry
-		says right now.
+	<p class="hint info-host">
+		<span class="info-line">
+			Setting up again needs Home Assistant
+			<InfoPopover Label="Set up rooms again">Each room is rebuilt from what the registry says right now.</InfoPopover>
+		</span>
 	</p>
 }
 
@@ -30,7 +36,12 @@
 {
 	<div class="panel house-add">
 		<div class="field">
-			<div class="field-head"><label class="field-label" for="add-room-area">Which room?</label></div>
+			<div class="field-head">
+				<span class="field-label">
+					<label for="add-room-area">Which room?</label>
+					<InfoPopover Label="Add a room">It arrives switched off, so nothing in it changes until it is switched on.</InfoPopover>
+				</span>
+			</div>
 			<div class="field-control">
 				<AreaPicker Id="add-room-area"
 							Value="@Model.AddAreaId"
@@ -38,9 +49,6 @@
 							Areas="@Model.AddableAreas"
 							NoneLabel="(pick a room)"
 							EmptyNote="@Model.AddEmptyNote" />
-			</div>
-			<div class="field-help">
-				It arrives switched off, so nothing in it changes until you switch it on.
 			</div>
 		</div>
 	</div>
@@ -150,7 +158,7 @@
 
 @if (Model.HasNoRooms)
 {
-	<div class="empty">No rooms yet. Add one to get started.</div>
+	<div class="empty">No rooms yet</div>
 }
 
 @if (Model.SwitchedOffLine is { Length: > 0 } switchedOff)

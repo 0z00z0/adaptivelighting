@@ -71,8 +71,8 @@
 	// Nothing writes back until a control is changed, so it survives the render.
 	private string UnreadableNote =>
 		string.IsNullOrWhiteSpace(Value)
-			? "No start set yet. Pick a clock time, or a time relative to the sun."
-			: $"The engine will refuse '{Value}'. It is kept until you pick a clock time or a time relative to the sun.";
+			? "No start yet — pick a time"
+			: $"'{Value}' is refused — pick a time";
 
 	/// <summary>For a sun-anchored start, the wall-clock time it resolves to; it says "next" because
 	/// <c>SunTimesToday</c> reads sun.sun's next rising or setting, often tomorrow.</summary>

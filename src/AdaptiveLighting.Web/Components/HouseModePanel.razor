@@ -7,7 +7,7 @@
 	@if (HouseMode is not { } houseMode)
 	{
 		<div class="housebar-note">
-			No house mode set up. <a href="config?section=housemodes">Add one under House modes</a>.
+			None &mdash; <a href="config?section=housemodes">set one up</a>
 		</div>
 	}
 	else
@@ -34,7 +34,12 @@
 
 		@if (!Available)
 		{
-			<p class="housebar-note">Waiting for Home Assistant &mdash; the mode can't be read or changed right now.</p>
+			<p class="housebar-note info-host">
+				<span class="info-line">
+					Waiting for Home Assistant
+					<InfoPopover Label="House mode">The mode can't be read or changed until Home Assistant answers.</InfoPopover>
+				</span>
+			</p>
 		}
 		@if (Confirmation is { Length: > 0 } confirmation)
 		{

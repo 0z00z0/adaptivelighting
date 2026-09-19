@@ -51,7 +51,7 @@ public static class CommissioningVerdicts
 	public const string ReadyWord = "Ready";
 
 	/// <summary>The note a room with no motion sensor carries, which is how the table tells the two kinds apart.</summary>
-	public const string SwitchDrivenNote = "no motion sensor — it lights at the wall, never by itself";
+	public const string SwitchDrivenNote = "no motion sensor — wall switch only";
 
 	/// <summary>The notes one proposed room earns, worst first.</summary>
 	/// <param name="area">The proposed room, whose <c>null</c> properties mean "inherit".</param>
@@ -78,7 +78,7 @@ public static class CommissioningVerdicts
 		// the list would come back empty. An empty list is how this table says the room is good to go.
 		if (lightCount == 0)
 		{
-			notes.Add(new Verdict("no lights found — switching this on will do nothing", VerdictTone.Warn));
+			notes.Add(new Verdict("no lights found", VerdictTone.Warn));
 
 			return notes;
 		}
@@ -92,8 +92,8 @@ public static class CommissioningVerdicts
 		{
 			notes.Add(new Verdict(
 				suspectCount == 1
-					? $"1 of {lightCount} lights looks like something else"
-					: $"{suspectCount} of {lightCount} lights look like something else",
+					? $"1 of {lightCount} lights not a lamp?"
+					: $"{suspectCount} of {lightCount} lights not lamps?",
 				VerdictTone.Warn));
 		}
 
@@ -109,12 +109,12 @@ public static class CommissioningVerdicts
 		if (effective.WelcomeHome)
 			notes.Add(awayIsReachable
 				? new Verdict("lights up when away mode ends", VerdictTone.Info)
-				: new Verdict("set to light up when away mode ends, but no house-mode option is marked Away", VerdictTone.Warn));
+				: new Verdict("lights up after away — no Away option", VerdictTone.Warn));
 
 		if (effective.SkipAwaySweep)
 			notes.Add(awayIsReachable
 				? new Verdict("stays on when the house goes away", VerdictTone.Info)
-				: new Verdict("set to stay on when the house goes away, but no house-mode option is marked Away", VerdictTone.Warn));
+				: new Verdict("stays on when away — no Away option", VerdictTone.Warn));
 
 		return notes;
 	}
@@ -149,22 +149,27 @@ public static class CommissioningVerdicts
 	public static string? NoSensorLine(int count) => count switch
 	{
 		<= 0 => null,
-		1 => "One room has no light-level sensor, so it counts as dark all day — movement alone lights it. "
-			+ "Give it one in Home Assistant, or set how it decides it is dark on its own page.",
-		_ => $"{count} rooms have no light-level sensor, so they count as dark all day — movement alone lights "
-			+ "them. Give them one in Home Assistant, or set how they decide they are dark on their own pages."
+		1 => "1 room has no light-level sensor",
+		_ => $"{count} rooms have no light-level sensor"
 	};
+
+	/// <summary>What the (i) beside <see cref="NoSensorLine"/> explains.</summary>
+	public const string NoSensorWhy =
+		"Without one a room counts as dark all day, so movement alone lights it. Give it a sensor in Home Assistant, "
+		+ "or set how it decides it is dark on its own page.";
 
 	/// <summary>The line under the table about the rooms with no motion sensor, said once for the house.</summary>
 	/// <param name="count">How many proposed rooms have lights but nothing that senses movement.</param>
 	public static string? SwitchDrivenLine(int count) => count switch
 	{
 		<= 0 => null,
-		1 => "One room has no motion sensor, so it never lights itself. Switching it on at the wall lights it, "
-			+ "and it goes off when that hold runs out.",
-		_ => $"{count} rooms have no motion sensor, so they never light themselves. Switching one on at the wall "
-			+ "lights it, and it goes off when that hold runs out."
+		1 => "1 room has no motion sensor",
+		_ => $"{count} rooms have no motion sensor"
 	};
+
+	/// <summary>What the (i) beside <see cref="SwitchDrivenLine"/> explains.</summary>
+	public const string SwitchDrivenWhy =
+		"Such a room never lights itself. Switching it on at the wall lights it, and it goes off when that hold runs out.";
 
 	/// <summary>What the commit button says, which is also the whole progress model.</summary>
 	public static string CommitLabel(int picked) => picked switch
@@ -182,8 +187,8 @@ public static class CommissioningVerdicts
 		return rest switch
 		{
 			<= 0 => null,
-			1 => "The other room stays listed under House, with its own switch.",
-			_ => $"The other {rest} stay listed under House, each with its own switch."
+			1 => "The other room stays off, under House",
+			_ => $"The other {rest} stay off, under House"
 		};
 	}
 }

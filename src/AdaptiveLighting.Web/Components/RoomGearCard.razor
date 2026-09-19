@@ -37,9 +37,14 @@
 
 		@if (resolved.MotionSensors.Count == 0)
 		{
-			<p class="room-card-foot">
-				Nothing here senses movement &mdash; the room never lights itself. Switching it on at the
-				wall lights it, and it goes off when that hold runs out.
+			<p class="room-card-foot info-host">
+				<span class="info-line">
+					No motion sensor
+					<InfoPopover Label="No motion sensor" Severity="InfoSeverity.Warn">
+						Nothing here senses movement &mdash; the room never lights itself. Switching it on at the
+						wall lights it, and it goes off when that hold runs out.
+					</InfoPopover>
+				</span>
 			</p>
 		}
 
@@ -47,11 +52,21 @@
 		   sensor, is not counted as dark for want of one. The commissioning board reads the same rule. *@
 		@if (Model.CountsAsDarkForWantOfASensor)
 		{
-			<p class="room-card-foot">No light-level sensor here &mdash; the room counts as dark, so movement lights it.</p>
+			<p class="room-card-foot info-host">
+				<span class="info-line">
+					No light-level sensor
+					<InfoPopover Label="No light-level sensor" Severity="InfoSeverity.Warn">The room counts as dark, so movement lights it at any hour.</InfoPopover>
+				</span>
+			</p>
 		}
 		else if (resolved.LuxSensors.Count > 1)
 		{
-			<p class="room-card-foot">@resolved.LuxSensors.Count light-level sensors here &mdash; the room reads the average of whichever are still reporting.</p>
+			<p class="room-card-foot info-host">
+				<span class="info-line">
+					@resolved.LuxSensors.Count light-level sensors
+					<InfoPopover Label="Light-level sensors">The room reads the average of whichever are still reporting.</InfoPopover>
+				</span>
+			</p>
 		}
 	}
 	else
@@ -62,7 +77,7 @@
 	@* The exclusions are listed so the × is reversible from the page that performed it. *@
 	@if (Model.Excluded is { Count: > 0 } excluded)
 	{
-		<p class="room-card-foot">Left out of this room, by hand:</p>
+		<p class="room-card-foot">Left out by hand</p>
 		<div class="room-gear">
 			@foreach (string entity in excluded)
 			{
@@ -88,11 +103,16 @@
 		@if (Model.PickersOpen)
 		{
 			<div class="sgroup-body">
-				<p class="lede">
-					Each list you fill in <strong>replaces</strong> the automatic choice for that list only. Use it
-					when Home Assistant's room assignments don't match reality &mdash; a hallway sensor that
-					watches this room, a lamp filed under the wrong room. Fixing the room in Home Assistant is
-					usually better.
+				<p class="lede info-host">
+					<span class="info-line">
+						Each list replaces the automatic choice
+						<InfoPopover Label="Pick by hand">
+							Each list filled in <strong>replaces</strong> the automatic choice for that list only. Use it
+							when Home Assistant's room assignments don't match reality &mdash; a hallway sensor that
+							watches this room, a lamp filed under the wrong room. Fixing the room in Home Assistant is
+							usually better.
+						</InfoPopover>
+					</span>
 				</p>
 
 				@* Each list is offered in two blocks: what the room resolves to now, then everything else
@@ -108,8 +128,10 @@
 								<input type="checkbox" @bind:get="Model.ShowAllEntities" @bind:set="OnShowAllChanged" />
 								offer entities from the whole house
 							</label>
+							<InfoPopover Label="Offered">
+								@Model.ScopeNote. Anything already picked stays listed even if it is elsewhere.
+							</InfoPopover>
 						</div>
-						<div class="field-help">@Model.ScopeNote</div>
 					</div>
 				}
 
@@ -128,7 +150,12 @@
 										@onclick="() => Model.SetLabelFilter(false)">All</button>
 							</div>
 						</div>
-						<div class="field-help">@Model.LabelNote</div>
+						<div class="field-help info-host">
+							<span class="info-line">
+								@Model.LabelNote
+								<InfoPopover Label="Labelled">Naming an entity here manages it whatever labels it carries.</InfoPopover>
+							</span>
+						</div>
 					</div>
 				}
 
@@ -139,7 +166,7 @@
 									  Others="@Model.LightOthers"
 									  OthersLabel="@RoomPageModel.OthersLabel"
 									  Lookup="@Model.Lookup"
-									  EmptyLabel="Found in this room."
+									  EmptyLabel="Found in this room"
 									  AddLabel="Add a light…"
 									  EmptyNote="@Model.EmptyNote("lights")"
 									  Placeholder="light.example" />
@@ -152,7 +179,7 @@
 									  Others="@Model.MotionOthers"
 									  OthersLabel="@RoomPageModel.OthersLabel"
 									  Lookup="@Model.Lookup"
-									  EmptyLabel="Found in this room."
+									  EmptyLabel="Found in this room"
 									  AddLabel="Add a motion sensor…"
 									  EmptyNote="@Model.EmptyNote("motion sensors")"
 									  Placeholder="binary_sensor.example" />
@@ -193,13 +220,15 @@
 	}
 	else if (Model.Removing)
 	{
-		<div class="notice warn">
-			<strong>Remove @Model.RoomName?</strong>
-			<p>
-				The room stops being managed and its settings are gone. Its lights and sensors stay exactly as
-				they are in Home Assistant &mdash; this app simply stops touching them. Setting the room up
-				again later starts from scratch.
-			</p>
+		<div class="notice warn info-host">
+			<span class="info-line">
+				<strong>Remove @Model.RoomName?</strong>
+				<InfoPopover Label="Remove" Severity="InfoSeverity.Warn">
+					The room stops being managed and its settings are gone. Its lights and sensors stay exactly as
+					they are in Home Assistant &mdash; this app simply stops touching them. Setting the room up
+					again later starts from scratch.
+				</InfoPopover>
+			</span>
 			<div class="panel-actions">
 				<button type="button" class="danger" @onclick="Model.Remove">Remove this room</button>
 				<button type="button" @onclick="Model.KeepRoom">Keep it</button>

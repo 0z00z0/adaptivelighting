@@ -159,7 +159,7 @@ public static class RoomSettings
 	[
 		new RoomSettingGroup(
 			MovementSection,
-			"How long the lights stay on, and what stops or overrules them",
+			"stay-on time and overrides",
 			[
 				new RoomSetting(
 					nameof(AreaSettings.VacancyTimeoutSeconds),
@@ -196,7 +196,7 @@ public static class RoomSettings
 
 		new RoomSettingGroup(
 			"Darkness",
-			"What counts as dark enough for movement to light the room",
+			"when a room counts as dark",
 			[
 				new RoomSetting(
 					nameof(AreaSettings.Darkness),
@@ -228,7 +228,7 @@ public static class RoomSettings
 
 		new RoomSettingGroup(
 			"Daylight curve",
-			"The brightness this room takes for whichever of its periods follow the light outside",
+			"brightness from the light outside",
 			[
 				new RoomSetting(
 					nameof(AreaSettings.LuxBrightnessStartLux),
@@ -259,7 +259,7 @@ public static class RoomSettings
 
 		new RoomSettingGroup(
 			"Room behaviour",
-			"What this room does when the house sleeps, empties or fills again",
+			"sleep, away and return",
 			[
 				new RoomSetting(
 					nameof(AreaSettings.ColorControl),

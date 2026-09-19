@@ -6,7 +6,8 @@ namespace AdaptiveLighting.Web.Presentation;
 
 /// <param name="What">What the engine did, or declined to do. Never empty.</param>
 /// <param name="Why">The reading or condition behind it, or <c>null</c> when the event speaks for itself.</param>
-public sealed record ActivityLine(string What, string? Why);
+/// <param name="More">An explanation too long for the row, drawn behind an (i).</param>
+public sealed record ActivityLine(string What, string? Why, string? More = null);
 
 /// <summary>One rendered line of the record: the words, when they were said, and who they are attributed to.</summary>
 /// <remarks>
@@ -153,13 +154,14 @@ public static class ActivityView
 			return new ActivityLine(MovementRefusedBy(snapshot), RefusalDetail(snapshot));
 
 		if (snapshot.KillSwitchActive)
-			return new ActivityLine("Paused by the master switch", "No lights change until it's turned back on.");
+			return new ActivityLine("Paused by the master switch", null, "No lights change until it's turned back on.");
 
 		// Worded here, not in Condition: the dim light is PreOff's, whose condition says nothing. A lead-in report
 		// outside PreOff lit nothing, so Condition names whatever gate held the room dark.
 		if (snapshot is { Reason: TransitionReason.LeadIn, State: AreaState.PreOff })
 			return new ActivityLine(
 				Headline(snapshot),
+				null,
 				"Nobody has come in yet. Movement in the room brings the lights up; without it they go off when the dim light runs out.");
 
 		// Who made it, as Home Assistant's logbook words it. Unnamed, the row reads as it did before names existed.
@@ -185,10 +187,12 @@ public static class ActivityView
 		return notice.Kind switch
 		{
 			EngineNoticeKind.SettingsSaved => new ActivityLine(
-				"Settings saved — every room rebuilt",
+				"Settings saved — rooms rebuilt",
+				null,
 				"Every room was rebuilt on the saved settings. The rooms below it start again from there."),
 			_ => new ActivityLine(
 				"Adaptive lighting started",
+				null,
 				"Nothing above this line was recorded by this run of the engine.")
 		};
 	}
@@ -426,15 +430,20 @@ public static class ActivityView
 		if (hidden <= 0)
 			return null;
 
-		string count = hidden == 1 ? "1 report is hidden" : $"{hidden} reports are hidden";
+		return $"{hidden} hidden";
+	}
+
+	/// <summary>Why <see cref="HiddenNote"/>'s reports are off the page, for the (i) beside it.</summary>
+	public static string HiddenWhy(string? room, ActivityCategory categories)
+	{
 		bool byRoom = !string.IsNullOrWhiteSpace(room);
 		bool byCategory = categories != AllCategories;
 
 		return (byRoom, byCategory) switch
 		{
-			(true, true) => $"{count} — they came from other rooms, or fall into categories that are switched off.",
-			(true, false) => $"{count} — they came from other rooms.",
-			_ => $"{count} — they fall into categories that are switched off."
+			(true, true) => "They came from other rooms, or fall into categories that are switched off.",
+			(true, false) => "They came from other rooms.",
+			_ => "They fall into categories that are switched off."
 		};
 	}
 
@@ -717,23 +726,23 @@ public static class ActivityView
 		// The away branch is the mode found at start-up, never a mode that moved: the room was swept because the
 		// house was already away, and "took the room as it was" would deny the sweep.
 		TransitionReason.Startup => snapshot.State == AreaState.Away
-			? "Started up — the house was already away"
-			: "Started up — took the room as it was",
-		TransitionReason.AdoptedAtStartup => "Started up — these lights were already on",
+			? "Started — house already away"
+			: "Started — took the room as it was",
+		TransitionReason.AdoptedAtStartup => "Started — lights already on",
 		TransitionReason.Motion => snapshot.State switch
 		{
 			AreaState.AutoActive => Lit("Movement — lights on", snapshot),
-			AreaState.SuppressedOff => "Movement, but the lights were switched off manually",
+			AreaState.SuppressedOff => "Movement, but switched off manually",
 			AreaState.OverriddenOn => "Movement while the manual levels stand",
 			_ => "Movement"
 		},
-		TransitionReason.VacancyTimeout => Lit("No movement — dimmed as a warning", snapshot),
+		TransitionReason.VacancyTimeout => Lit("No movement — warning dim", snapshot),
 		TransitionReason.PreOffElapsed => "Dim warning unanswered — lights off",
 		TransitionReason.LeadIn => snapshot.State == AreaState.PreOff
 			? Lit("Movement nearby — lit dimly", snapshot)
 			: "Movement nearby",
 		TransitionReason.LeadInUnanswered => "Nobody came in — lights off",
-		TransitionReason.AutomationIgnored => "An automation changed the lights — not treated as a manual change",
+		TransitionReason.AutomationIgnored => "Automation change, not counted as manual",
 		TransitionReason.ManualOn => "Lights set manually",
 		TransitionReason.ManualOff => "Lights switched off manually",
 		TransitionReason.OverrideExpired => "The manual change ran its course",
@@ -744,7 +753,7 @@ public static class ActivityView
 		TransitionReason.CircadianTick => snapshot.State == AreaState.AutoActive
 			? snapshot.LightsMoved is { Count: > 0 } moved
 				? LightsRetuned(moved, snapshot)
-				: Lit("Retuned to the time of day", snapshot)
+				: Lit("Retuned", snapshot)
 			: "Rechecked the room",
 		// On a forced change the select never moves, so HouseModeValue still reads whatever a person last chose.
 		// The option the engine actually put the house on comes off the force. Only an entity override is
@@ -761,15 +770,15 @@ public static class ActivityView
 			? "A guest scene has this room"
 			: "The guest scene let this room go",
 		TransitionReason.ManualLightOn => Lit("Switched on from the app", snapshot),
-		TransitionReason.ManualLightOff => "Switched off from the app — movement is ignored for now",
+		TransitionReason.ManualLightOff => "Switched off from the app",
 		TransitionReason.LightAvailability => RoomFacts.NotResponding(snapshot)?.TrimEnd('.') ?? "Every light is responding again",
 		TransitionReason.SensorBattery => snapshot.LowBatteries is { Count: > 0 }
-			? "A motion sensor's battery is low"
-			: "Every motion sensor's battery is fine again",
+			? "Motion sensor battery low"
+			: "Motion sensor batteries fine again",
 		TransitionReason.LevelTestStarted => snapshot.TestingPeriodId is { Length: > 0 } tested
-			? $"Testing the '{tested}' period on the real lights"
-			: "Testing a period on the real lights",
-		TransitionReason.LevelTestEnded => "The test ended and the lights went back",
+			? $"Testing '{tested}' on the lights"
+			: "Testing a period on the lights",
+		TransitionReason.LevelTestEnded => "Test ended, lights back",
 		_ => snapshot.Reason.ToString()
 	};
 
@@ -798,11 +807,11 @@ public static class ActivityView
 	// too, so the engine's own verdict is the only answer.
 	private static string DarkEnough(AreaSnapshot snapshot) => snapshot.AutoOnBlockedBy switch
 	{
-		AutoOnBlock.Sleep => "Dark enough, but the house is asleep — movement won't light the room",
+		AutoOnBlock.Sleep => "Dark, but the house is asleep",
 		AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
-			? $"Dark enough, but {blocker} is on — movement won't light the room"
-			: "Dark enough, but something here is on — movement won't light the room",
-		_ => "Dark enough — movement will light the room"
+			? $"Dark, but {blocker} is on"
+			: "Dark, but something here is on",
+		_ => "Dark enough — movement will light it"
 	};
 
 	/// <summary>Whether this report is movement the engine turned down.</summary>
@@ -821,7 +830,7 @@ public static class ActivityView
 
 		AutoOnBlock.Away => "Movement, but the house is in away mode",
 		AutoOnBlock.SceneHold => "Movement, but a guest scene has this room",
-		AutoOnBlock.Sleep => "Movement, but the house is asleep and this room stays dark",
+		AutoOnBlock.Sleep => "Movement, but the house is asleep",
 		AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
 			? $"Movement, but {blocker} is on"
 			: "Movement, but something here is on",
@@ -902,7 +911,7 @@ public static class ActivityView
 				: light)
 		];
 
-		return $"Retuned to the time of day: {string.Join(" · ", named)}";
+		return $"Retuned: {string.Join(" · ", named)}";
 	}
 
 	// Lights adopted at start-up have no command behind them, so the headline stands alone.

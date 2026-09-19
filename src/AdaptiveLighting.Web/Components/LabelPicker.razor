@@ -34,7 +34,12 @@
 
 	@if (!HasOptions)
 	{
-		<span class="picker-note">@EmptyNote</span>
+		<span class="picker-note info-host">
+			<span class="info-line">
+				@EmptyNote
+				<InfoPopover Label="Labels">Labels are made in Home Assistant under Settings &rarr; Areas, labels &amp; zones &rarr; Labels. Create one there, then pick it here.</InfoPopover>
+			</span>
+		</span>
 	}
 	else if (IsUnlisted)
 	{
@@ -66,11 +71,11 @@
 	/// <summary>What to say when the house has made no labels at all.</summary>
 	[Parameter]
 	public string EmptyNote { get; set; } =
-		"You haven't created any labels in Home Assistant yet. Labels are made under Settings → Areas, labels & zones → Labels — create one there, then pick it here.";
+		"No labels in Home Assistant yet";
 
 	/// <summary>What to say when the stored value matches no live label.</summary>
 	[Parameter]
-	public string UnknownNote { get; set; } = "No label with this name exists in Home Assistant yet.";
+	public string UnknownNote { get; set; } = "No such label yet";
 
 	private bool _manual;
 

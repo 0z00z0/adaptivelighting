@@ -2,12 +2,16 @@
    here and not in the model; every word that is not markup comes from the model's copy record. *@
 
 <header class="section-head">
-	<h2><Icon Name="@Glyph.Modes" Class="ic-head" />House modes</h2>
-	<p class="lede">
-		The house mode lives in a Home Assistant dropdown helper. Pick the helper, then say what each
-		of its options means &mdash; Normal, Sleep, Away or Guest. You switch modes on the
-		<a href="/">dashboard</a>.
-	</p>
+	<h2 class="info-host">
+		<span class="info-line">
+			<Icon Name="@Glyph.Modes" Class="ic-head" />House modes
+			<InfoPopover Label="House modes">
+				The house mode lives in a Home Assistant dropdown helper. Pick the helper, then say what each
+				of its options means &mdash; Normal, Sleep, Away or Guest. Modes are switched on the
+				<a href="/">dashboard</a>.
+			</InfoPopover>
+		</span>
+	</h2>
 </header>
 
 <div class="panel">
@@ -29,39 +33,48 @@
 			   Assistant cannot tell an empty helper from no answer, so it must say so. *@
 			@if (Model.HelperDiff.Differs)
 			{
-				<p class="hint">
-					@* The entity leads the sentence: a <code> chip's padding floats a trailing full stop
-					   a space away from it. *@
-					<code>@Model.HouseModeEntityId</code> and this list have drifted apart. @Model.HelperDriftText
+				<p class="hint info-host">
+					<span class="info-line">
+						<code>@Model.HouseModeEntityId</code> has drifted
+						<InfoPopover Label="Helper drifted" Severity="InfoSeverity.Warn">
+							The helper and this list have drifted apart. @Model.HelperDriftText
+						</InfoPopover>
+					</span>
 				</p>
 			}
 			else if (Model.HelperDiff.Matches)
 			{
-				<p class="hint"><code>@Model.HouseModeEntityId</code> offers exactly these options.</p>
+				<p class="hint"><code>@Model.HouseModeEntityId</code> matches</p>
 			}
 			else
 			{
-				<p class="hint">
-					Home Assistant hasn't said which options <code>@Model.HouseModeEntityId</code> has, so this list
-					can't be compared with it. Nothing here is out of date &mdash; it simply can't be
-					checked until the connection is back.
+				<p class="hint info-host">
+					<span class="info-line">
+						Can't compare with <code>@Model.HouseModeEntityId</code>
+						<InfoPopover Label="Not checked">
+							Home Assistant hasn't said which options the helper has. Nothing here is out of date &mdash;
+							it simply can't be checked until the connection is back.
+						</InfoPopover>
+					</span>
 				</p>
 			}
 
 			@* Named and not merely counted: the controls for these live on three different cards. *@
 			@if (Model.DormantRules.Any)
 			{
-				<div class="notice warn mode-dormant-rules">
-					<strong>These are set up but not firing while Home Assistant decides:</strong>
-					<ul>
-						@foreach (string rule in Model.DormantRules.Names)
-						{
-							<li>@rule</li>
-						}
-					</ul>
-					<span>
-						They are kept as they are and start working again the moment you hand the house
-						mode back to adaptive lighting.
+				<div class="notice warn mode-dormant-rules info-host">
+					<span class="info-line">
+						<strong>Rules paused while Home Assistant decides</strong>
+						<InfoPopover Label="Paused rules" Severity="InfoSeverity.Warn">
+							@foreach (string rule in Model.DormantRules.Names)
+							{
+								<span class="info-para">@rule</span>
+							}
+							<span class="info-para">
+								They are kept as they are and start working again the moment the house mode is handed
+								back to adaptive lighting.
+							</span>
+						</InfoPopover>
 					</span>
 				</div>
 			}
@@ -147,7 +160,7 @@
 	</text>;
 
 	private RenderFragment NoHelperNote => @<text>
-		Without one the house is always in everyday lighting. Say below what each option means.
+		Without one the house is always in everyday lighting.
 	</text>;
 
 	private RenderFragment DirectionHelp => @<text>

@@ -57,8 +57,11 @@
 		@* Raised by the press itself and cleared by the next one, so a refusal never outlives what caused it. *@
 		@if (Model.LightRefused is { Length: > 0 } refused)
 		{
-			<div class="notice warn room-light-refused">
-				<strong>@(Model.LightRefusedOff ? "Not switched off." : "Not switched on.")</strong> @refused
+			<div class="notice warn room-light-refused info-host">
+				<span class="info-line">
+					<strong>@(Model.LightRefusedOff ? "Not switched off" : "Not switched on")</strong>
+					<InfoPopover Label="Refused" Severity="InfoSeverity.Warn">@refused</InfoPopover>
+				</span>
 			</div>
 		}
 
@@ -68,25 +71,44 @@
 
 			@if (Model.NextLine is { Length: > 0 } next)
 			{
-				<p class="room-next @(Model.IsOverdue ? "room-overdue" : null)">@next</p>
+				<p class="room-next @(Model.IsOverdue ? "room-overdue" : null) info-host">
+					<span class="info-line">
+						@next
+						@if (Model.IsOverdue)
+						{
+							<InfoPopover Label="Update overdue" Severity="InfoSeverity.Bad">
+								An update was due and hasn't arrived. The Home Assistant connection may be down.
+							</InfoPopover>
+						}
+					</span>
+				</p>
 			}
 
 			@if (Model.NotResponding is { Length: > 0 } dropped)
 			{
-				<div class="notice warn room-not-responding" role="status">
-					<strong>@dropped</strong> The room reads on or off from the lights that still answer, so a light
-					that dropped out while it was lit may still be on.
+				<div class="notice warn room-not-responding info-host" role="status">
+					<span class="info-line">
+						<strong>@dropped</strong>
+						<InfoPopover Label="Not responding" Severity="InfoSeverity.Warn">
+							The room reads on or off from the lights that still answer, so a light that dropped out while
+							it was lit may still be on.
+						</InfoPopover>
+					</span>
 				</div>
 			}
 
 			@if (Model.LowBatteries is { Count: > 0 } batteries)
 			{
-				<div class="notice warn room-low-battery" role="status">
+				<div class="notice warn room-low-battery info-host" role="status">
 					@foreach (string battery in batteries)
 					{
-						<strong>@battery</strong>@(" ")
+						<span class="info-line">
+							<strong>@battery</strong>
+							<InfoPopover Label="Low battery" Severity="InfoSeverity.Warn">
+								Replace the battery before the sensor stops reporting movement.
+							</InfoPopover>
+						</span>
 					}
-					Replace the battery before the sensor stops reporting movement.
 				</div>
 			}
 		}
@@ -94,9 +116,14 @@
 
 		@if (!Model.IsEnabled)
 		{
-			<div class="notice">
-				<strong>This room is not enabled.</strong> Nothing below is commanded and the lamps are left
-				exactly as they are &mdash; the settings are kept, and take effect the moment the room is enabled.
+			<div class="notice info-host">
+				<span class="info-line">
+					<strong>This room is not enabled</strong>
+					<InfoPopover Label="Not enabled">
+						Nothing below is commanded and the lamps are left exactly as they are &mdash; the settings are
+						kept, and take effect the moment the room is enabled.
+					</InfoPopover>
+				</span>
 			</div>
 		}
 

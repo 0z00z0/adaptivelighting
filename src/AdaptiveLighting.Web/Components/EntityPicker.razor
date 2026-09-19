@@ -47,7 +47,7 @@
 	}
 	else if (IsUnknown)
 	{
-		<span class="picker-note bad">Home Assistant doesn't know this id — check for typos.</span>
+		<span class="picker-note bad">Unknown id — typo?</span>
 	}
 </div>
 
@@ -81,7 +81,7 @@
 	public string Placeholder { get; set; } = "domain.entity_id";
 
 	/// <summary>What a picker says when it has nothing to offer and the caller did not word it.</summary>
-	public const string DefaultEmptyNote = "Nothing to pick from yet — type an id instead.";
+	public const string DefaultEmptyNote = "Nothing to pick — type an id";
 
 	/// <summary>Why there is nothing to pick, worded by the caller: a Home Assistant that is down and a list
 	/// filtered to an area holding no such entity look the same here.</summary>

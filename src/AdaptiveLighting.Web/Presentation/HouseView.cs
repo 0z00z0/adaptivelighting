@@ -64,7 +64,7 @@ public static class HouseView
 		List<AreaConfig> rooms = [.. areas];
 
 		if (rooms.Count == 0)
-			return "no rooms yet — these apply to every room you add";
+			return "no rooms yet";
 
 		List<string> straying =
 		[
@@ -72,13 +72,13 @@ public static class HouseView
 		];
 
 		if (straying.Count == 0)
-			return rooms.Count == 1 ? "the one room follows these exactly" : $"all {rooms.Count} rooms follow these exactly";
+			return rooms.Count == 1 ? "the one room follows these" : $"all {rooms.Count} follow these";
 
 		int following = rooms.Count - straying.Count;
 
 		return following == 0
-			? $"every room carries values of its own: {NameList(straying)}"
-			: $"{Count(following, "room")} follow{(following == 1 ? "s" : "")} these exactly; {NameList(straying)} carr{(straying.Count == 1 ? "ies" : "y")} their own values";
+			? $"every room differs: {NameList(straying)}"
+			: $"{following} follow · {NameList(straying)} differ{(straying.Count == 1 ? "s" : "")}";
 	}
 
 	public static string? SwitchedOffLine(IEnumerable<AreaConfig> areas, AreaSettings defaults)
@@ -91,8 +91,8 @@ public static class HouseView
 		return off switch
 		{
 			<= 0 => null,
-			1 => "1 room is switched off — it never changes by itself, and its switch is in the list above.",
-			_ => $"{off} rooms are switched off — they never change by themselves, and their switches are in the list above."
+			1 => "1 room off — never changes by itself",
+			_ => $"{off} rooms off — never change by themselves"
 		};
 	}
 

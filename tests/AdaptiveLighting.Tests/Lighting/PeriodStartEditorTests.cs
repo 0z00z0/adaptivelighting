@@ -34,7 +34,7 @@ public class PeriodStartEditorTests
 		(string html, List<string> written) = await RenderAsync("");
 
 		Assert.AreEqual(0, written.Count);
-		StringAssert.Contains(html, "No start set yet");
+		StringAssert.Contains(html, "No start yet");
 	}
 
 	[TestMethod]

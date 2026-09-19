@@ -145,10 +145,10 @@ public sealed class RoomFactsTests
 	{
 		AreaSnapshot asleep = Report(blockedBy: AutoOnBlock.Sleep);
 
-		Assert.AreEqual("The house is asleep — movement won't light the room.", RoomFacts.AutoOnNote(asleep));
-		Assert.AreEqual("The house is asleep — movement won't light the room.", RoomFacts.NextLine(asleep, Now));
+		Assert.AreEqual("Asleep — movement won't light it", RoomFacts.AutoOnNote(asleep));
+		Assert.AreEqual("Asleep — movement won't light it", RoomFacts.NextLine(asleep, Now));
 
-		StringAssert.Contains(ValueOf(RoomFacts.For(asleep, Now), "If someone walks in"), "won't light the room");
+		StringAssert.Contains(ValueOf(RoomFacts.For(asleep, Now), "If someone walks in"), "won't light it");
 	}
 
 	[TestMethod]
@@ -156,7 +156,7 @@ public sealed class RoomFactsTests
 	{
 		AreaSnapshot blocked = Report(blockedBy: AutoOnBlock.EntityOn, blockingEntity: "media_player.tv");
 
-		Assert.AreEqual("media_player.tv is on — movement won't light the room.", RoomFacts.AutoOnNote(blocked));
+		Assert.AreEqual("media_player.tv is on — won't light", RoomFacts.AutoOnNote(blocked));
 
 		AreaSnapshot unnamed = Report(blockedBy: AutoOnBlock.EntityOn);
 		StringAssert.StartsWith(RoomFacts.AutoOnNote(unnamed)!, "Something here is on");
@@ -177,8 +177,8 @@ public sealed class RoomFactsTests
 		Assert.AreEqual(forced.Describe(), RoomFacts.AutoOnNote(held));
 		Assert.AreEqual(forced.Describe(), ValueOf(RoomFacts.For(held, Now), "If someone walks in"));
 
-		Assert.AreEqual("The house is in away mode.", RoomFacts.Headline(held));
-		Assert.AreEqual("Wakes when the house leaves away mode.", RoomFacts.NextLine(held, Now));
+		Assert.AreEqual("Away", RoomFacts.Headline(held));
+		Assert.AreEqual("Wakes when away mode ends", RoomFacts.NextLine(held, Now));
 	}
 
 	[TestMethod]
@@ -203,12 +203,12 @@ public sealed class RoomFactsTests
 		{
 			AreaSnapshot away = Report(state: AreaState.Away, blockedBy: AutoOnBlock.Away, isAnyoneHome: whoIsHome);
 
-			Assert.AreEqual("The house is in away mode.", RoomFacts.Headline(away));
-			Assert.AreEqual("Wakes when the house leaves away mode.", RoomFacts.NextLine(away, Now));
+			Assert.AreEqual("Away", RoomFacts.Headline(away));
+			Assert.AreEqual("Wakes when away mode ends", RoomFacts.NextLine(away, Now));
 			Assert.AreEqual("The house is in away mode.", RoomFacts.AutoOnNote(away));
 
 			Assert.AreEqual(
-				"The house is in away mode. This room keeps its lights on.",
+				"Away — kept on",
 				RoomFacts.Headline(Report(state: AreaState.Away, isAnyoneHome: whoIsHome, brightness: 20)));
 		}
 	}
@@ -221,7 +221,7 @@ public sealed class RoomFactsTests
 
 		Assert.IsNull(RoomFacts.AutoOnNote(older));
 		Assert.IsFalse(RoomFacts.For(older, Now).Any(fact => fact.Label == "If someone walks in"));
-		Assert.AreEqual("Awaiting movement.", RoomFacts.NextLine(older, Now));
+		Assert.AreEqual("Awaiting movement", RoomFacts.NextLine(older, Now));
 	}
 
 	[TestMethod]
@@ -232,7 +232,7 @@ public sealed class RoomFactsTests
 			Assert.IsNull(RoomFacts.AutoOnNote(Report(blockedBy: quiet)), $"{quiet} is already stated elsewhere on the page");
 		}
 
-		Assert.AreEqual("Awaiting movement.", RoomFacts.NextLine(Report(blockedBy: AutoOnBlock.None), Now));
+		Assert.AreEqual("Awaiting movement", RoomFacts.NextLine(Report(blockedBy: AutoOnBlock.None), Now));
 	}
 
 	// ===================== the countdown =====================
@@ -257,7 +257,7 @@ public sealed class RoomFactsTests
 
 		Assert.IsTrue(RoomFacts.IsOverdue(stale, Now));
 		Assert.IsNull(RoomFacts.Countdown(stale, Now));
-		StringAssert.Contains(RoomFacts.NextLine(stale, Now)!, "hasn't arrived");
+		StringAssert.Contains(RoomFacts.NextLine(stale, Now)!, "Update overdue");
 
 		Assert.IsFalse(RoomFacts.IsOverdue(Report(nextChange: Now.AddSeconds(-30)), Now),
 			"a deadline a moment past is a report in flight, not a broken connection");
@@ -307,7 +307,7 @@ public sealed class RoomFactsTests
 	{
 		StringAssert.Contains(
 			RoomFacts.Headline(Report(state: AreaState.AutoActive, brightness: 100)),
-			"already on when the engine started");
+			"On at start-up");
 
 		StringAssert.StartsWith(
 			RoomFacts.Headline(Report(state: AreaState.AutoActive, brightness: 70, kelvin: 2700, lastCommand: Now)),
@@ -325,7 +325,7 @@ public sealed class RoomFactsTests
 	[TestMethod]
 	public void A_Switched_Off_Room_Says_It_Never_Changes_By_Itself()
 	{
-		Assert.AreEqual("This room never changes by itself.", RoomFacts.Headline(Report(state: AreaState.Disabled)));
+		Assert.AreEqual("Never changes by itself", RoomFacts.Headline(Report(state: AreaState.Disabled)));
 	}
 
 	// ===================== relative time =====================
@@ -361,7 +361,7 @@ public sealed class RoomFactsTests
 		AreaSnapshot held = Report(state, brightness: brightness, isHeldLit: true, heldLitBy: "media_player.stue_tv");
 
 		Assert.AreEqual(
-			"Won't switch off while the television is holding the lights on.",
+			"Held on by the television",
 			RoomFacts.NextLine(held, Now, _ => "the television"));
 	}
 
@@ -374,7 +374,7 @@ public sealed class RoomFactsTests
 		// An older engine reports the hold without naming it, so the sentence must still parse.
 		AreaSnapshot anonymous = Report(AreaState.AutoActive, isHeldLit: true);
 		Assert.AreEqual(
-			"Won't switch off while something in this room is holding the lights on.",
+			"Held on by something in this room",
 			RoomFacts.NextLine(anonymous, Now));
 	}
 
@@ -403,7 +403,7 @@ public sealed class RoomFactsTests
 			isHeldLit: true,
 			heldLitBy: "media_player.stue_tv");
 
-		StringAssert.Contains(RoomFacts.NextLine(stale, Now), "hasn't arrived", StringComparison.Ordinal);
+		StringAssert.Contains(RoomFacts.NextLine(stale, Now), "Update overdue", StringComparison.Ordinal);
 	}
 
 	// ===================== the room's own scene =====================
@@ -477,7 +477,7 @@ public sealed class RoomFactsTests
 	{
 		StringAssert.Contains(
 			RoomFacts.Headline(Report(AreaState.OverriddenOn, sceneApplied: "scene.stue_kveld")),
-			"set these lights manually",
+			"Set by hand",
 			StringComparison.Ordinal);
 	}
 

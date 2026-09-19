@@ -416,8 +416,7 @@ public sealed class AreaSentencesTests
 
 		Assert.AreEqual(3, sentences.Count);
 		Assert.AreEqual(
-			"Warmth: No colour temperature. The schedule's kelvin figure does nothing for these lights, so they "
-			+ "run at neutral white.",
+			"Warmth: No colour temperature — neutral white.",
 			sentences[^1].PlainText);
 	}
 

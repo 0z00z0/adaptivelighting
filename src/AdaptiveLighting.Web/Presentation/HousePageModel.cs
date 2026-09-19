@@ -250,8 +250,8 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 				// Result is cleared so the persistent note never restates the toast. A refused save keeps it.
 				ShowSaveConfirmation(advanced
-					? $"Saved ✓  Written to {System.IO.Path.GetFileName(_engine.Store.FilePath)} at {savedAt}."
-					: "Saved, but the file timestamp did not change — check the log.");
+					? $"Saved ✓ {savedAt}"
+					: "Saved, timestamp unchanged — check the log");
 				Result = null;
 
 				// Everything on disk now has a page to open.
@@ -500,12 +500,12 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	/// connection is not reported as an empty domain.</summary>
 	public string EmptyNote(string noneYet) => HomeAssistantIsAnswering
 		? noneYet
-		: "Waiting for Home Assistant — type an id for now.";
+		: "Waiting for Home Assistant — type an id";
 
 	/// <summary>Why the add-a-room picker has nothing to offer: no connection, or no area left unclaimed.</summary>
 	public string AddEmptyNote => !HomeAssistantIsAnswering
-		? "Waiting for Home Assistant — type an area id for now."
-		: "Every area Home Assistant knows already has a room. Type an id if one is coming.";
+		? "Waiting for Home Assistant — type an area id"
+		: "Every area has a room — type an id";
 
 	// ---- the rooms list ----
 
@@ -747,7 +747,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 		_config.Areas.Add(new AreaConfig { AreaId = areaId, Enabled = false });
 		_unsaved.Add(areaId);
-		SetupNote = $"{AreaName(areaId)} added, switched off. Save and apply, then open it to set it up.";
+		SetupNote = $"{AreaName(areaId)} added, off — save to open it";
 
 		Revalidate();
 	}
@@ -849,7 +849,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 		SetupNote = done.Count == 0
 			? "Nothing changed."
-			: $"{string.Join(" · ", done)}. Nothing is written yet — press Save and apply, or Discard changes to undo.";
+			: $"{string.Join(" · ", done)} — not saved yet";
 
 		Revalidate();
 
@@ -884,14 +884,14 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		get
 		{
 			if (_config.Global.PeriodSelect?.EntityId is not { } entity)
-				return "not connected — the schedule's start times decide the time of day";
+				return "not connected";
 
 			int mapped = _config.Global.PeriodSelect.Options.Count(option => !option.IsEmpty);
 			string rows = mapped == 1 ? "1 option mapped" : $"{mapped} options mapped";
 
 			return Schedule.HomeAssistantDecides(_config.Global)
-				? $"{entity} decides the time of day · {rows}"
-				: $"{entity} is kept in step with the schedule · {rows}";
+				? $"{entity} decides · {rows}"
+				: $"{entity} follows · {rows}";
 		}
 	}
 
@@ -1010,16 +1010,16 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	{
 		Label = "House mode",
 		NoneLabel = "(none — the house has no modes)",
-		EmptyNote = EmptyNote("No dropdown helpers yet — make one in Home Assistant under Settings → Devices & services → Helpers, or type an id."),
+		EmptyNote = EmptyNote("No dropdown helpers — type an id"),
 		Placeholder = "input_select.husmodus",
-		AuthorityLabel = "Changes to the house mode are set by:",
+		AuthorityLabel = "Set by",
 		AuthorityNote = HouseModeAuthorityNote,
 		UnavailableNote = HouseModeUnavailableNote
 	};
 
 	/// <summary>What the period-select fold tells a picker with nothing to offer.</summary>
 	public string PeriodSelectEmptyNote =>
-		EmptyNote("No dropdown helpers yet — make one in Home Assistant under Settings → Devices & services → Helpers, or type an id.");
+		EmptyNote("No dropdown helpers — type an id");
 
 	/// <summary>The option values a period's "sets mode" dropdown may reference: live ∪ configured,
 	/// deduped.</summary>
@@ -1167,7 +1167,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 				{
 					Options = SunEntities,
 					NoneLabel = "(none — the engine needs one)",
-					EmptyNote = EmptyNote("No sun entity found — type an id (normally sun.sun)."),
+					EmptyNote = EmptyNote("No sun entity — type an id"),
 					Placeholder = "sun.sun"
 				}
 			},
@@ -1260,8 +1260,8 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 	/// <summary>The headline over the shared-light warning.</summary>
 	public string SharedLightsHeadline => SharedLights.Count == 1
-		? "One light is commanded by more than one room."
-		: $"{SharedLights.Count} lights are commanded by more than one room.";
+		? "1 light in more than one room"
+		: $"{SharedLights.Count} lights in more than one room";
 
 	public string? IncludeLabel => _config.Global.IncludeLabel;
 
@@ -1443,9 +1443,9 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	/// <summary>What keeping the document where it is costs or buys.</summary>
 	public string LocationDescription => _location.Source switch
 	{
-		ConfigLocationSource.External => "outside the deploy folder — survives a deploy",
-		ConfigLocationSource.SeededFromTree => "created from the shipped example — survives a deploy",
-		_ => "inside the deploy folder — a deploy will overwrite it"
+		ConfigLocationSource.External => "survives a deploy",
+		ConfigLocationSource.SeededFromTree => "from the example — survives a deploy",
+		_ => "a deploy overwrites it"
 	};
 
 	public bool HasBackup => _engine.Store.HasBackup;

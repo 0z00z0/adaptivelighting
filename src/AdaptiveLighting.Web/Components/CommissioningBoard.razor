@@ -7,7 +7,15 @@
    puts a working copy through LightingEngineHost.Save; a refusal leaves the board as it stands. *@
 
 <div class="onboarding">
-	<p class="onboarding-lead">@Lead</p>
+	<p class="onboarding-lead info-host">
+		<span class="info-line">
+			@Lead
+			<InfoPopover Label="@Lead">
+				Their sensors are already matched up. Nothing in the house changes until the one button at the
+				bottom &mdash; start with a hallway, it's the easiest room to trust.
+			</InfoPopover>
+		</span>
+	</p>
 
 	<FindingsStrip Rooms="_rows.Count"
 				   Lights="_lights"
@@ -42,8 +50,16 @@
 {
 	<div class="panel comm-sheet">
 		<div class="sheet-head">
-			<span class="lab">Name it &amp; who lives here</span>
-			<span class="note">the facts discovery cannot know</span>
+			<span class="lab info-host">
+				<span class="info-line">
+					Name it &amp; who lives here
+					<InfoPopover Label="Who lives here">
+						The facts discovery cannot know. Tap a person to leave them out &mdash; a car tracker reads
+						<i>home</i> whenever it is parked. Nothing here switches a light: the house mode decides
+						whether the house is away. The delay applies at commit; nothing is written until then.
+					</InfoPopover>
+				</span>
+			</span>
 		</div>
 		<div class="sheet-body">
 			<div class="sentences">
@@ -72,18 +88,11 @@
 							</button>
 						}
 					</span>@IdentitySentence.Parts.BeforeDelay<SentenceTokenView Token="IdentitySentence.Delay(DebounceNow)"
-																			   Note="Applies at commit — nothing is written until then."
+																			   Note="Applies at commit"
 																			   Edited="OnDelayEdited" />@IdentitySentence.Parts.AfterDelay
 				</p>
 			</div>
 
-			<p class="sentence-legend">
-				<span>
-					Tap a person to leave them out &mdash; a car tracker reads <i>home</i> whenever it is parked,
-					which makes it worth nobody's attention on the dashboard. Nothing here switches a light:
-					the house mode is what decides whether the house is away.
-				</span>
-			</p>
 		</div>
 	</div>
 }
@@ -94,7 +103,14 @@
 	<div class="panel comm-sheet">
 		<div class="sheet-head">
 			<span class="lab">House mode</span>
-			<span class="note"><span class="mono">@_houseModeEntity</span> &mdash; adopted from Home Assistant, read back in English</span>
+			<span class="note info-host">
+				<span class="info-line">
+					<span class="mono">@_houseModeEntity</span>
+					<InfoPopover Label="House mode">
+						Adopted from Home Assistant and read back in English. @ModeFoot
+					</InfoPopover>
+				</span>
+			</span>
 		</div>
 		<div class="sheet-body">
 			<div class="sentences">
@@ -111,7 +127,6 @@
 				<button type="button" class="@(_draft.KeepHouseMode is false ? "primary" : null)" @onclick="() => SetMode(false)">Detach &mdash; this house has no mode</button>
 			</div>
 
-			<p class="smallprint">@ModeFoot</p>
 		</div>
 	</div>
 }
@@ -126,26 +141,30 @@
 						   Changed="Recount" />
 
 	<div class="commit-copy">
-		<p class="commit-promise">
-			<strong>Nothing in the house changes until this button.</strong>
-			<span class="smallprint">One save: your answers and the rooms you picked &mdash; then those rooms go live.</span>
+		<p class="commit-promise info-host">
+			<span class="info-line">
+				<strong>Nothing changes until this button</strong>
+				<InfoPopover Label="Switching on">
+					One save: the answers and the rooms picked &mdash; then those rooms go live.
+				</InfoPopover>
+			</span>
 		</p>
 	</div>
 
 	@if (_saveMessage is { Length: > 0 } saveMessage)
 	{
 		@* Said in place: a refusal leaves the file and the running engine untouched. *@
-		<div class="notice bad">
-			<strong>Not switched on.</strong> @saveMessage
-			@if (_saveErrors.Count > 0)
-			{
-				<ul>
+		<div class="notice bad info-host">
+			<span class="info-line">
+				<strong>Not switched on</strong>
+				<InfoPopover Label="Not switched on" Severity="InfoSeverity.Bad">
+					<span class="info-para">@saveMessage</span>
 					@foreach (string error in _saveErrors)
 					{
-						<li>@error</li>
+						<span class="info-para">@ValidationWording.Plain(error)</span>
 					}
-				</ul>
-			}
+				</InfoPopover>
+			</span>
 		</div>
 	}
 
@@ -320,15 +339,15 @@
 
 	private string ModeStatus => _draft.KeepHouseMode switch
 	{
-		false => "detaching — this house will run without a mode",
+		false => "detaching — no mode",
 		true => $"{_houseModeName} — kept",
-		_ => $"{_houseModeName} — {_modes.Count} options to check"
+		_ => $"{_houseModeName} — {_modes.Count} to check"
 	};
 
 	private string ModeFoot => _draft.KeepHouseMode switch
 	{
 		false => "Detached — staged. This house will run without a mode; nothing is written until commit.",
-		_ => "Adoption only ever reads the dropdown. Remapping what each option means lives under House."
+		_ => "Adoption only ever reads the dropdown. Remapping what each option means lives under House modes."
 	};
 
 	private void Recount()
@@ -395,9 +414,5 @@
 	}
 
 	// "with lights" is the whole membership rule now that a room needs no motion sensor to be proposed.
-	private string Lead => _rows.Count == 1
-		? "Found one room with lights, its sensors already matched up. Nothing in the house changes until the "
-			+ "one button at the bottom."
-		: $"Found {_rows.Count} rooms with lights, their sensors already matched up. Nothing in the house changes "
-			+ "until the one button at the bottom — start with a hallway, it's the easiest room to trust.";
+	private string Lead => _rows.Count == 1 ? "Found 1 room with lights" : $"Found {_rows.Count} rooms with lights";
 }

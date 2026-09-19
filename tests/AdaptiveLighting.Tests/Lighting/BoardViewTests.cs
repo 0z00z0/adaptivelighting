@@ -537,7 +537,7 @@ public sealed class BoardViewTests
 		string line = BoardView.ExceptionLine(Report(AreaState.PreOff, nextChangeAt: Now.AddSeconds(18)), Now);
 
 		StringAssert.Contains(line, "in 18 s");
-		StringAssert.Contains(line, "unless someone moves");
+		StringAssert.Contains(line, "warning dim");
 	}
 
 	// A lead-in and the ordinary warning dim share the AreaState; only the snapshot's own IsLeadIn tells them apart.
@@ -547,7 +547,7 @@ public sealed class BoardViewTests
 		string line = BoardView.ExceptionLine(Report(AreaState.PreOff, nextChangeAt: Now.AddSeconds(18), isLeadIn: true), Now);
 
 		StringAssert.Contains(line, "lead-in");
-		StringAssert.Contains(line, "unless someone comes in");
+		StringAssert.Contains(line, "in 18 s");
 		Assert.IsFalse(line.Contains("warning dim", StringComparison.Ordinal));
 	}
 
@@ -567,11 +567,11 @@ public sealed class BoardViewTests
 	[TestMethod]
 	public void The_Quiet_Line_Counts_What_The_Tray_Did_Not_Name()
 	{
-		Assert.AreEqual("The other 12 rooms are doing what the schedule says.", BoardView.QuietRoomsLine(15, 3));
-		Assert.AreEqual("The other room is doing what the schedule says.", BoardView.QuietRoomsLine(2, 1));
-		Assert.AreEqual("All 15 rooms are doing what the schedule says.", BoardView.QuietRoomsLine(15, 0));
-		Assert.AreEqual("The one room switched on is doing what the schedule says.", BoardView.QuietRoomsLine(1, 0));
-		Assert.AreEqual("That is the only room switched on.", BoardView.QuietRoomsLine(1, 1));
+		Assert.AreEqual("The other 12 on schedule", BoardView.QuietRoomsLine(15, 3));
+		Assert.AreEqual("The other room on schedule", BoardView.QuietRoomsLine(2, 1));
+		Assert.AreEqual("All 15 rooms on schedule", BoardView.QuietRoomsLine(15, 0));
+		Assert.AreEqual("The one room on schedule", BoardView.QuietRoomsLine(1, 0));
+		Assert.AreEqual("The only room on", BoardView.QuietRoomsLine(1, 1));
 	}
 
 	// ===================== seventeen lanes =====================

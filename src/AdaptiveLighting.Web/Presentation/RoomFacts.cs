@@ -121,27 +121,27 @@ public static class RoomFacts
 
 		return snapshot switch
 		{
-			{ KillSwitchActive: true } => "Paused by the master switch — no lights will change until it is turned back on.",
+			{ KillSwitchActive: true } => "Paused by the master switch",
 
 			// A scene nulls both levels, so every arm below quoting them would read "level unknown".
 			_ when IsEngineScened(snapshot) =>
-				"Sitting on this room's own scene. The engine set it and holds no level of its own here.",
+				"On this room's own scene",
 
 			{ State: AreaState.AutoActive, LastCommandAt: null } =>
-				"These lights were already on when the engine started. They're managed now — their levels weren't touched.",
+				"On at start-up — levels untouched",
 			{ State: AreaState.AutoActive } => Levels("Lit at", snapshot),
-			{ State: AreaState.PreOff, Reason: TransitionReason.LeadIn } => Levels("Lit dimly at", snapshot, " ahead of anyone coming in"),
-			{ State: AreaState.PreOff } => Levels("Dimmed to", snapshot, " as a warning"),
-			{ State: AreaState.OverriddenOn } => "Someone set these lights manually — they're being left alone.",
-			{ State: AreaState.SuppressedOff } => "Someone switched these lights off. Movement is ignored for now.",
-			{ State: AreaState.SceneHold } => "A scene is holding this room. The engine stands back until the scene lets go.",
+			{ State: AreaState.PreOff, Reason: TransitionReason.LeadIn } => Levels("Lead-in at", snapshot),
+			{ State: AreaState.PreOff } => Levels("Warning dim at", snapshot),
+			{ State: AreaState.OverriddenOn } => "Set by hand — left alone",
+			{ State: AreaState.SuppressedOff } => "Switched off by hand",
+			{ State: AreaState.SceneHold } => "Held by a scene",
 
 			{ State: AreaState.Away, BrightnessPct: not null } =>
-				"The house is in away mode. This room keeps its lights on.",
-			{ State: AreaState.Away } => "The house is in away mode.",
-			{ State: AreaState.Disabled } => "This room never changes by itself.",
-			{ State: AreaState.AutoVacant, IsDark: false } => "Off, watching. Too bright to switch on right now.",
-			_ => "Off, watching for movement."
+				"Away — kept on",
+			{ State: AreaState.Away } => "Away",
+			{ State: AreaState.Disabled } => "Never changes by itself",
+			{ State: AreaState.AutoVacant, IsDark: false } => "Off — too bright to switch on",
+			_ => "Off, watching for movement"
 		};
 	}
 
@@ -152,14 +152,13 @@ public static class RoomFacts
 
 		if (IsOverdue(snapshot, now))
 		{
-			return $"An update was due {Ago(snapshot.NextChangeAt!.Value, now)} and hasn't arrived. " +
-				"The Home Assistant connection may be down.";
+			return $"Update overdue, due {Ago(snapshot.NextChangeAt!.Value, now)} — connection down?";
 		}
 
 		// A hold nulls NextChangeAt while the room stays lit, so without this a room refusing to switch off would
 		// say nothing at all.
 		if (snapshot is { IsHeldLit: true, State: AreaState.AutoActive or AreaState.PreOff })
-			return $"Won't switch off while {Holder(snapshot, nameOf)} is holding the lights on.";
+			return $"Held on by {Holder(snapshot, nameOf)}";
 
 		string? countdown = snapshot.NextChangeAt is { } due ? In(due, now) : null;
 
@@ -170,21 +169,21 @@ public static class RoomFacts
 		return snapshot.State switch
 		{
 			AreaState.AutoActive when countdown is not null && StateGlyph.IsOffByLevel(snapshot) =>
-				$"Counts as empty {countdown} unless someone moves.",
-			AreaState.AutoActive when countdown is not null => $"Starts dimming {countdown} unless someone moves.",
+				$"Empty {countdown} unless someone moves",
+			AreaState.AutoActive when countdown is not null => $"Dims {countdown} unless someone moves",
 			AreaState.PreOff when countdown is not null && snapshot.Reason is TransitionReason.LeadIn =>
-				$"Lights out {countdown} unless someone comes in.",
-			AreaState.PreOff when countdown is not null => $"Lights out {countdown} — any movement keeps them on.",
-			AreaState.OverriddenOn when countdown is not null => $"Back under automatic control {countdown}.",
+				$"Off {countdown} unless someone comes in",
+			AreaState.PreOff when countdown is not null => $"Off {countdown} unless someone moves",
+			AreaState.OverriddenOn when countdown is not null => $"Automatic again {countdown}",
 			AreaState.SuppressedOff when countdown is not null =>
-				$"Starts answering movement again {countdown}, sooner if the room stays quiet.",
+				$"Answers movement {countdown}, or sooner",
 			AreaState.AutoVacant when snapshot is { IsDark: false, DarknessDetail: { Length: > 0 } detail } =>
-				$"Movement will light it once it's dark — {detail}.",
-			AreaState.AutoVacant when snapshot.IsDark is false => "Movement will light it once it's dark.",
-			AreaState.AutoVacant => "Awaiting movement.",
+				$"Lights once dark — {detail}",
+			AreaState.AutoVacant when snapshot.IsDark is false => "Lights once dark",
+			AreaState.AutoVacant => "Awaiting movement",
 
-			AreaState.Away => "Wakes when the house leaves away mode.",
-			AreaState.Disabled => "Nothing will be commanded until it is switched back on.",
+			AreaState.Away => "Wakes when away mode ends",
+			AreaState.Disabled => "Off until switched back on",
 			_ => null
 		};
 	}
@@ -236,10 +235,10 @@ public static class RoomFacts
 
 		return snapshot.AutoOnBlockedBy switch
 		{
-			AutoOnBlock.Sleep => "The house is asleep — movement won't light the room.",
+			AutoOnBlock.Sleep => "Asleep — movement won't light it",
 			AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
-				? $"{blocker} is on — movement won't light the room."
-				: "Something here is on — movement won't light the room.",
+				? $"{blocker} is on — won't light"
+				: "Something here is on — won't light",
 			AutoOnBlock.Away => ActivityView.AwayHold(snapshot),
 			_ => null
 		};
@@ -270,8 +269,8 @@ public static class RoomFacts
 
 		return snapshot.LowBatteries is { Count: > 0 } low
 			? [.. low.Select(battery => battery.LevelPct is { } level
-				? $"The motion sensor {nameOf(battery.SensorId)} is at {level:0} %."
-				: $"The motion sensor {nameOf(battery.SensorId)} reports a low battery.")]
+				? $"{nameOf(battery.SensorId)} battery at {level:0} %"
+				: $"{nameOf(battery.SensorId)} battery low")]
 			: [];
 	}
 
@@ -364,16 +363,16 @@ public static class RoomFacts
 		if (snapshot.BrightnessPct is not { } brightness)
 		{
 			if (snapshot.SceneApplied is { Length: > 0 })
-				return $"{prefix.TrimEnd()} — level unknown{suffix}.";
+				return $"{prefix.TrimEnd()} — level unknown{suffix}";
 
 			return snapshot.PeriodName is { Length: > 0 } period
-				? $"Off — the {period} level comes to 0 %, so the engine keeps these lights off."
-				: "Off — this room's level comes to 0 %, so the engine keeps these lights off.";
+				? $"Off — {period} level is 0 %"
+				: "Off — this room's level is 0 %";
 		}
 
 		return snapshot.ColorTempKelvin is { } kelvin
-			? $"{prefix} {brightness:0} %{suffix} — {Warmth(kelvin)}, {kelvin} K."
-			: $"{prefix} {brightness:0} %{suffix}.";
+			? $"{prefix} {brightness:0} %{suffix} · {kelvin} K"
+			: $"{prefix} {brightness:0} %{suffix}";
 	}
 
 	private static string Warmth(int kelvin) => kelvin switch

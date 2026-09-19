@@ -3,7 +3,7 @@
 
 <span class="info" @onkeydown="OnKeyDown">
 	<button type="button"
-			class="info-icon"
+			class="info-icon @InfoSeverityClass.Of(Severity)"
 			aria-expanded="@(_open ? "true" : "false")"
 			aria-label="@($"More about {Label}")"
 			title="@($"More about {Label}")"
@@ -29,6 +29,10 @@
 
 	[Parameter, EditorRequired]
 	public RenderFragment? ChildContent { get; set; }
+
+	/// <summary>The icon's colour: neutral help, yellow worth knowing, red needs attention.</summary>
+	[Parameter]
+	public InfoSeverity Severity { get; set; }
 
 	private bool _open;
 

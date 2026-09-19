@@ -4,8 +4,15 @@
 	@* Said once for the table as a whole: without it the Start fields below look like Start fields that work. *@
 	@if (StartsAreDead)
 	{
-		<p class="notice period-authority">
-			Start times are not in force &mdash; Home Assistant decides when periods change.
+		<p class="notice period-authority info-host">
+			<span class="info-line">
+				Start times not in force
+				<InfoPopover Label="Start times" Severity="InfoSeverity.Warn">
+					Home Assistant decides when periods change. A period runs for as long as its dropdown names it.
+					The start times are kept, and take over again the moment the time of day is handed back to
+					adaptive lighting.
+				</InfoPopover>
+			</span>
 		</p>
 	}
 
@@ -38,12 +45,14 @@
 			</summary>
 
 			<div class="field">
-				<div class="field-head"><label class="field-label" for="@($"period-name-{position}")">Period name</label></div>
+				<div class="field-head">
+					<span class="field-label">
+						<label for="@($"period-name-{position}")">Period name</label>
+						<InfoPopover Label="Period name">Shown on the dashboard. Rename it at any time &mdash; nothing points at the name.</InfoPopover>
+					</span>
+				</div>
 				<div class="field-control">
 					<input type="text" id="@($"period-name-{position}")" class="cell wide" @bind="period.Name" @bind:event="oninput" placeholder="evening" />
-				</div>
-				<div class="field-help">
-					Shown on the dashboard. Rename it whenever you like — nothing points at the name.
 				</div>
 			</div>
 
@@ -75,14 +84,17 @@
 							time has come round, and only once a day, so a 02:00 trip to the kitchen isn't the morning.
 							If nobody moves, the next period's own start overtakes it, so an empty house is never left
 							on last night's levels.
+							@if (StartsAreDead)
+							{
+								<span class="info-para">
+									Not in force now: Home Assistant decides when periods change. The setting is kept.
+								</span>
+							}
 						</InfoPopover>
 					</span>
 					@if (StartsAreDead)
 					{
-						<span class="mode-dormant">
-							Not in force &mdash; Home Assistant decides when periods change, so nothing here waits for
-							movement. The setting is kept, and takes over again the moment you hand the time of day back.
-						</span>
+						<span class="mode-dormant">not in force</span>
 					}
 				</div>
 
@@ -102,10 +114,10 @@
 										  ValueChanged="@(value => SetMotionAreas(period, value))"
 										  Options="@MotionAreaOptions"
 										  Lookup="@RoomLookup"
-										  EmptyLabel="Any room the engine watches."
+										  EmptyLabel="Any watched room"
 										  AddLabel="Add a room…"
 										  Placeholder="area id, e.g. stue"
-										  EmptyNote="No rooms to pick from yet — type an area id instead." />
+										  EmptyNote="No rooms yet — type an area id" />
 						<div class="pfield-help">@MotionRoomsHelp(period)</div>
 					</div>
 				}
@@ -178,27 +190,19 @@
 
 	@if (Periods.Count == 0)
 	{
-		<div class="empty">
-			No periods yet. Add at least one so the lights know what to do.
-		</div>
+		<div class="empty">No periods yet</div>
 	}
 
 	<div class="panel-actions">
 		<button type="button" @onclick="Add">Add a period</button>
+		@if (!StartsAreDead)
+		{
+			<span class="info-host">
+				<InfoPopover Label="Periods">Each period runs until the next one starts. Sun-tied starts move with the seasons, so the running order can differ from the list order.</InfoPopover>
+			</span>
+		}
 	</div>
 
-	<p class="lede">
-		@if (StartsAreDead)
-		{
-			@:A period runs for as long as Home Assistant's dropdown names it. The start times are kept, and take
-			@:over again the moment you hand the time of day back to adaptive lighting.
-		}
-		else
-		{
-			@:Each period runs until the next one starts. Sun-tied starts move with the seasons, so the running
-			@:order can differ from the list order.
-		}
-	</p>
 </div>
 
 @code {
@@ -330,8 +334,8 @@
 
 	private string MotionRoomsHelp(TimePeriodConfig period) =>
 		PeriodStartText.MotionRooms(MotionRoomNames(period)) is { } rooms
-			? $"Only movement in {rooms} starts this period."
-			: "Movement in any room the engine watches starts this period.";
+			? $"Only {rooms}"
+			: "Any watched room";
 
 	/// <summary>The option key a period's mode switch is stored as, or empty.</summary>
 	// A live option nobody has classified has no row and so no id; its own value is then the key, which is what
@@ -344,9 +348,9 @@
 	private string ModeHelp(TimePeriodConfig period)
 	{
 		if (period.SetsModeId is not { Length: > 0 } key)
-			return "Doesn't change the house mode.";
+			return "Mode unchanged";
 
-		return $"When this period begins, the house switches to '{HouseMode?.OptionValueFor(key) ?? key.Trim()}'.";
+		return $"Switches to '{HouseMode?.OptionValueFor(key) ?? key.Trim()}'";
 	}
 
 	private Task Set(Action mutate)

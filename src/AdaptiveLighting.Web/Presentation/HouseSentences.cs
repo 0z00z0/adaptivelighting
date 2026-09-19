@@ -63,7 +63,7 @@ public static class HouseSentences
 				"Show the house as empty after",
 				global.AwayDebounceMinutes * 60,
 				AwayDebounceChoices)
-			.Text(" after the last person leaves — a trip to the bin should not read as an empty house.")
+			.Text(" after the last person leaves.")
 			.Build();
 	}
 
@@ -124,21 +124,21 @@ public static class HouseSentences
 			case ModeKind.Normal:
 				return builder
 					.Text(isResetTarget
-						? "is everyday automatic lighting. The house returns here when another mode ends."
-						: "is everyday automatic lighting. It does nothing of its own — and the house returns to the first Normal mode above, not to this one.")
+						? "is everyday lighting; other modes end here."
+						: "is everyday lighting; modes end at the first Normal above.")
 					.Build();
 
 			case ModeKind.Sleep:
 				builder.Text(HouseModeConfig.SleepClampPeriodFor(option, periods) is { Name: { Length: > 0 } clamp }
-					? $"holds the rooms that are gentle at night to the {clamp} period's limits, and the rooms set never to come on by themselves stay off"
-					: "holds the rooms that are gentle at night to the night period's limits — but no period is named for it yet, so nothing is clamped");
+					? $"holds night-gentle rooms to {clamp} levels"
+					: "holds night-gentle rooms — no period named, nothing held");
 				break;
 
 			case ModeKind.Away:
 				Arms(builder, option, index);
 				builder.Text(option.Scene is { Length: > 0 } scene
 					? $"runs the {scene} scene and pauses automatic lighting"
-					: "sweeps the lights off and pauses automatic lighting — rooms set to stay on when the house goes away are left alone");
+					: "sweeps the lights off and pauses automatic lighting");
 				break;
 
 			default:

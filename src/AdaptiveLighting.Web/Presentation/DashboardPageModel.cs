@@ -150,17 +150,36 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 				return null;
 
 			if (!master.IsAvailable)
+				return master.IsReady ? "Switch not found" : "Waiting for Home Assistant";
+
+			return master.AdaptiveLightingOn ? null : "Paused";
+		}
+	}
+
+	/// <summary>What the (i) beside <see cref="MasterNote"/> explains.</summary>
+	public string? MasterNoteMore
+	{
+		get
+		{
+			if (MasterSwitch is not { } master)
+				return null;
+
+			if (!master.IsAvailable)
 			{
 				return master.IsReady
 					? "Home Assistant doesn't know the master switch, so its state can't be shown."
-					: "Waiting for Home Assistant — state unknown.";
+					: "Home Assistant hasn't answered yet, so the switch's state is unknown.";
 			}
 
 			return master.AdaptiveLightingOn
 				? null
-				: "Paused — nothing was turned off, but no lights will change until you turn it back on.";
+				: "Nothing was turned off, but no lights will change until it is turned back on.";
 		}
 	}
+
+	/// <summary>How much <see cref="MasterNote"/> matters: a paused house needs attention.</summary>
+	public InfoSeverity MasterNoteSeverity =>
+		MasterSwitch is { IsAvailable: true, AdaptiveLightingOn: false } ? InfoSeverity.Bad : InfoSeverity.Neutral;
 
 	/// <summary>What the master switch says on hover.</summary>
 	public string MasterTitle
@@ -207,7 +226,7 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 		else
 		{
 			_modeConfirmation = TransientMessage.None;
-			ModeMessage = $"Couldn't switch to '{option}' — Home Assistant may be offline.";
+			ModeMessage = $"Couldn't switch to '{option}' — Home Assistant offline?";
 		}
 
 		ReadHouseState();
@@ -307,16 +326,16 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 	/// <summary>How far back the board can see; a restart wipes the morning.</summary>
 	public string SinceLine =>
 		_engine.LastStartedUtc is { } started
-			? $"since adaptive lighting started, {BoardView.Clock(started)}"
-			: "since adaptive lighting started";
+			? $"since {BoardView.Clock(started)}"
+			: "since start";
 
 	/// <summary>What the log below is showing, what the filter is holding back, and the cap it is held to.</summary>
 	public string LogFoot => BoardView.LogFoot(_entries.Count, _reachable, _kept, LogRows.Count, ActivityLog.Capacity);
 
 	/// <summary>The count in front of the nothing-important empty state.</summary>
 	public string BackgroundOnlyLine => _reachable == 1
-		? "The one report so far is routine."
-		: $"All {_reachable} reports so far are routine.";
+		? "The one report so far is routine. Movement, re-checks and everyday light changes are on the Activity page."
+		: $"All {_reachable} reports so far are routine. Movement, re-checks and everyday light changes are on the Activity page.";
 
 	/// <summary>What a lane says on hover: the room, its state, its lights, any that dropped out, and low batteries.</summary>
 	public string LaneTitle(BoardLane lane)
