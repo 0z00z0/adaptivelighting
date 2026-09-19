@@ -2,8 +2,10 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 
+using AdaptiveLighting.Engine;
 using AdaptiveLighting.Hosting;
 using AdaptiveLighting.NetDaemon;
+using AdaptiveLighting.Persistence;
 using AdaptiveLighting.Web.Services;
 
 using Microsoft.AspNetCore.Builder;
@@ -45,6 +47,43 @@ public sealed class AdaptiveLightingHouseTests
 		Assert.IsNotNull(provider.GetService<ConfigLocation>(), "the page has to be able to name the file it edits");
 		Assert.IsNotNull(provider.GetService<LightingEngineHost>(), "a host that skips this has a lighting app that cannot be constructed");
 		Assert.IsNotNull(provider.GetService<LightingConfigStore>());
+	}
+
+	// The file names are literal on purpose: a house carries these files across every update, and a name that moves
+	// is a house that forgets its state.
+	[TestMethod]
+	public async Task A_Houses_Existing_State_Files_Are_Read_Through_The_One_Shared_Registry()
+	{
+		string root = TempRoot();
+		string state = Directory.CreateDirectory(Path.Combine(root, "state")).FullName;
+		File.WriteAllText(Path.Combine(state, "house.last-period.json"),
+			"""{ "version": 1, "savedAt": "2026-09-01T06:00:00+00:00", "period": "morning" }""");
+
+		WebApplicationBuilder builder = BuilderWith(Path.Combine(root, "house.yaml"), root);
+		builder.AddAdaptiveLighting();
+
+		await using ServiceProvider provider = builder.Services.BuildServiceProvider();
+
+		provider.GetRequiredService<LightingEngineHost>();
+		provider.GetRequiredService<IActivityJournalStore>();
+		StateStoreRegistry registry = provider.GetRequiredService<StateStoreRegistry>();
+
+		CollectionAssert.AreEquivalent(
+			new[]
+			{
+				Path.Combine(state, "house.last-period.json"),
+				Path.Combine(state, "house.setup-faults.json"),
+				Path.Combine(state, "house.room-history.json"),
+				Path.Combine(state, "house.activity-journal.json"),
+				Path.Combine(root, "last-seen")
+			},
+			registry.Stores.Select(store => store.Location).ToArray(),
+			"every engine-owned file is declared once, in the one registry, at the path a house already has");
+
+		LastPeriodDocument? restored = registry.Stores.OfType<StateStore<LastPeriodDocument>>().Single()
+			.Restore(new DateTimeOffset(2026, 9, 19, 12, 0, 0, TimeSpan.Zero));
+
+		Assert.AreEqual("morning", restored?.Period, "the note written before the update is what the engine reads after it");
 	}
 
 	/// <summary>Scoped, because NetDaemon scopes <c>IHaContext</c> and these depend on it: one per Blazor circuit.</summary>

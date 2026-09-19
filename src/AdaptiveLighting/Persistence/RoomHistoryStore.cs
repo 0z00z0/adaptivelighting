@@ -1,5 +1,3 @@
-using System.Reactive.Concurrency;
-
 using AdaptiveLighting.Engine;
 
 namespace AdaptiveLighting.Persistence;
@@ -7,12 +5,10 @@ namespace AdaptiveLighting.Persistence;
 /// <summary><see cref="IRoomHistoryStore"/> over one declared state file in the state folder.</summary>
 /// <remarks>
 ///     Written coalesced: motion and light changes across every room mark the file dirty, and the registry's
-///     own flusher writes it at most once a minute. <see cref="Flush"/> is the extra write on a settings save
-///     and on shutdown, the two moments a minute's wait is not acceptable. Owns its own
-///     <see cref="StateStoreRegistry"/> so the periodic flush runs from construction, before the host has a
-///     scheduler of its own to hand it one.
+///     flusher writes it at most once a minute. <see cref="Flush"/> is the extra write on a settings save
+///     and on shutdown, the two moments a minute's wait is not acceptable.
 /// </remarks>
-internal sealed class RoomHistoryStore : IRoomHistoryStore, IDisposable
+internal sealed class RoomHistoryStore : IRoomHistoryStore
 {
 	public const string NameSuffix = ".room-history.json";
 
@@ -25,25 +21,22 @@ internal sealed class RoomHistoryStore : IRoomHistoryStore, IDisposable
 		VersionOf: document => document.Version,
 		SavedAtOf: document => document.SavedAt);
 
-	private readonly StateStoreRegistry _registry;
 	private readonly StateStore<RoomHistoryDocument> _store;
 	private readonly Func<DateTimeOffset> _now;
 
-	/// <summary>Creates a store whose file sits in the state folder beside <paramref name="configFilePath"/>.</summary>
-	/// <exception cref="ArgumentException"><paramref name="configFilePath"/> is blank or has no directory.</exception>
+	/// <summary>Declares the store in <paramref name="registry"/>, whose flusher then writes it.</summary>
+	/// <exception cref="ArgumentException">The registry's configuration path has no directory.</exception>
 	public RoomHistoryStore(
-		string configFilePath,
+		StateStoreRegistry registry,
 		ILoggerFactory loggerFactory,
-		IScheduler? scheduler = null,
 		Func<DateTimeOffset>? now = null)
 	{
-		ArgumentException.ThrowIfNullOrWhiteSpace(configFilePath);
+		ArgumentNullException.ThrowIfNull(registry);
 		ArgumentNullException.ThrowIfNull(loggerFactory);
 
 		_now = now ?? (() => DateTimeOffset.UtcNow);
 
-		_registry = new StateStoreRegistry(configFilePath, loggerFactory.CreateLogger<StateStoreRegistry>(), scheduler);
-		_store = _registry.Open(Declaration, RoomHistoryDocument.SerializerOptions, loggerFactory.CreateLogger<RoomHistoryStore>());
+		_store = registry.Open(Declaration, RoomHistoryDocument.SerializerOptions, loggerFactory.CreateLogger<RoomHistoryStore>());
 	}
 
 	/// <summary>The directory the file lives in, which is the state folder beside the configuration document.</summary>
@@ -75,7 +68,4 @@ internal sealed class RoomHistoryStore : IRoomHistoryStore, IDisposable
 
 	/// <inheritdoc/>
 	public bool Flush() => _store.Flush();
-
-	/// <summary>Stops the registry's flusher and writes whatever is still waiting.</summary>
-	public void Dispose() => _registry.Dispose();
 }

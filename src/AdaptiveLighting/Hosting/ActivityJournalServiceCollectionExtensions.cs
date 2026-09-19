@@ -15,11 +15,13 @@ public static class ActivityJournalServiceCollectionExtensions
 	{
 		ArgumentNullException.ThrowIfNull(services);
 
-		services.AddSingleton<IActivityJournalStore>(provider => new ActivityJournalStore(
-			provider.GetRequiredService<ConfigLocation>().Path,
-			provider.GetRequiredService<ILoggerFactory>(),
-			// The host's scheduler when it registers one, so tests and hosts share a clock.
-			provider.GetService<IScheduler>() ?? DefaultScheduler.Instance));
+		services.AddSingleton<IActivityJournalStore>(provider => provider.GetService<StateStoreRegistry>() is { } registry
+			? new ActivityJournalStore(registry, provider.GetRequiredService<ILoggerFactory>())
+			: new ActivityJournalStore(
+				provider.GetRequiredService<ConfigLocation>().Path,
+				provider.GetRequiredService<ILoggerFactory>(),
+				// The host's scheduler when it registers one, so tests and hosts share a clock.
+				provider.GetService<IScheduler>() ?? DefaultScheduler.Instance));
 
 		return services;
 	}
