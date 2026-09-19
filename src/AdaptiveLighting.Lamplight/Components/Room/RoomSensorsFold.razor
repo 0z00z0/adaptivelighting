@@ -116,11 +116,13 @@
 		</Row>
 
 		<Row Label="Daylight sensor" Value="@(Model.DaylightSensor is { Length: > 0 } day ? day : "House outdoor sensor")" IsWide="true">
-			<Help>Which reading the daylight curve follows here. The house's outdoor sensor by default.</Help>
+			<Help>Which reading the daylight curve follows here. The house's outdoor sensor by default, or one of this room's own light-level sensors.</Help>
 			<ChildContent>
 				<EntityPicker Value="@Model.DaylightSensor"
 							  ValueChanged="@Model.SetDaylightSensor"
-							  Options="@Model.LuxSensorOptions"
+							  Options="@Model.DaylightChoices"
+							  Others="@Model.DaylightOthers"
+							  OthersLabel="@RoomPageModel.OthersLabel"
 							  NoneLabel="@Model.OutdoorSensorLabel"
 							  EmptyNote="@Model.EmptyNote("light-level sensors")"
 							  Placeholder="sensor.example_illuminance" />

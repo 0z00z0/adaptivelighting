@@ -1111,7 +1111,15 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	/// <summary>Everything else in the room, for the light-level picker.</summary>
 	public IReadOnlyList<EntityOption> LuxOthers { get; private set; } = [];
 
-	/// <summary>Every light-level sensor in the house, for the daylight picker.</summary>
+	/// <summary>What the daylight picker offers first: the house's own outdoor sensor, then this room's own
+	/// illuminance sensors. A sensor already saved here is kept even from outside that list.</summary>
+	public IReadOnlyList<EntityOption> DaylightChoices { get; private set; } = [];
+
+	/// <summary>Everything else in the room, for the daylight picker.</summary>
+	public IReadOnlyList<EntityOption> DaylightOthers { get; private set; } = [];
+
+	/// <summary>Every light-level sensor in the house — the daylight and light-level pickers' fallback once
+	/// widened, not what either shows scoped to the room.</summary>
 	public IReadOnlyList<EntityOption> LuxSensorOptions { get; private set; } = [];
 
 	/// <summary>What "say nothing" means on the daylight picker, which is the house's own choice.</summary>
@@ -1277,6 +1285,8 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		LightChoices = Scope(inArea.Lights, _lights, room.Lights);
 		MotionChoices = Scope(inArea.MotionSensors, _motionSensors, room.MotionSensors);
 		LuxChoices = Scope(inArea.LuxSensors, LuxSensorOptions, room.LuxSensor is { Length: > 0 } lux ? [lux] : null);
+		DaylightChoices = DaylightSensorScope.For(
+			ScopeToArea, inArea.LuxSensors, LuxSensorOptions, Document.Global.OutdoorLuxSensor, room.DaylightSensor, NameOf);
 
 		// Only while the lists are scoped to the room. Widened to the house they already hold everything.
 		AreaEntities others = ScopeToArea
@@ -1286,6 +1296,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		LightOthers = Beyond(others.Lights, LightChoices);
 		MotionOthers = Beyond(others.MotionSensors, MotionChoices);
 		LuxOthers = Beyond(others.LuxSensors, LuxChoices);
+		DaylightOthers = Beyond(others.LuxSensors, DaylightChoices);
 
 		ReadLiveState();
 	}
