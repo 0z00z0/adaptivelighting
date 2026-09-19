@@ -19,7 +19,7 @@
 		were built against. Only the NetDaemon pieces this host calls directly are listed here.
 	-->
 	<ItemGroup>
-		<PackageReference Include="AdaptiveLighting.NetDaemon" Version="2026.9.15" />
+		<PackageReference Include="AdaptiveLighting.NetDaemon" Version="2026.9.19" />
 		<PackageReference Include="NetDaemon.Runtime" Version="26.36.0" />
 		<PackageReference Include="NetDaemon.Extensions.Logging" Version="26.36.0" />
 		<PackageReference Include="NetDaemon.Extensions.Scheduling" Version="26.36.0" />
