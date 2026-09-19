@@ -23,6 +23,7 @@ using NetDaemon.HassModel;
 //       dotnet run --project tools/uihost -- --port 5200  ->  http://localhost:5200
 //       dotnet run --project tools/uihost -- --port 0     ->  any free port, printed on startup
 //       dotnet run --project tools/uihost -- --lamplight-port 5198  ->  Lamplight as well, on http://localhost:5198
+//       dotnet run --project tools/uihost -- --house lit            ->  the seeded rooms enabled and lit
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -53,6 +54,11 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 });
 
 int? lamplightPort = LamplightSite.Port(builder.Configuration);
+
+// The commissioning board's own state — rooms discovered but nothing switched on — is the default a house
+// starts from. --house lit is the other state a design needs to look at: every seeded room enabled, some lit
+// at a brightness and warmth, at least one left dark.
+bool litHouse = string.Equals(builder.Configuration["house"], "lit", StringComparison.OrdinalIgnoreCase);
 
 if (lamplightPort is not null)
 	builder.Services.AddLamplight();
@@ -95,7 +101,7 @@ if (lamplightPort is { } lamplight)
 // Hands the engine the fake house and a handful of not-yet-committed rooms, so the commissioning board and
 // every room's light switch answer from a running engine instead of "nothing is running" — and files a dozen
 // activity reports across the record's own categories, so the Activity page is drivable as shipped.
-app.Lifetime.ApplicationStarted.Register(() => AttachEngineAndSeedActivity(ha, registry, app.Services));
+app.Lifetime.ApplicationStarted.Register(() => AttachEngineAndSeedActivity(ha, registry, app.Services, litHouse));
 
 // Read after start, not from the port above: with --port 0 the requested port is 0 and only the server knows
 // which one it got.
@@ -232,7 +238,7 @@ static void Lamp(FakeHaContext ha, string entityId, string name, IReadOnlyList<s
 // document holding a handful of discovered-but-not-yet-committed rooms. Saving (not Reload) is deliberate: it
 // writes the document, re-reads it and rebuilds the orchestrator in one step, without arming the discovery
 // scan, which this fake registry cannot answer.
-static void AttachEngineAndSeedActivity(FakeHaContext ha, FakeHaRegistry registry, IServiceProvider services)
+static void AttachEngineAndSeedActivity(FakeHaContext ha, FakeHaRegistry registry, IServiceProvider services, bool litHouse)
 {
 	LightingEngineHost engine = services.GetRequiredService<LightingEngineHost>();
 
@@ -243,7 +249,7 @@ static void AttachEngineAndSeedActivity(FakeHaContext ha, FakeHaRegistry registr
 	engine.Attach(ha, registry, DefaultScheduler.Instance);
 
 	AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
-	config.Areas.AddRange(CommissioningRooms());
+	config.Areas.AddRange(CommissioningRooms(litHouse));
 
 	SaveResult result = engine.Save(config);
 
@@ -251,11 +257,16 @@ static void AttachEngineAndSeedActivity(FakeHaContext ha, FakeHaRegistry registr
 		Console.Error.WriteLine($"uihost: seed configuration was not accepted: {result.Message}");
 
 	SeedActivity(ha);
+
+	if (litHouse)
+		SeedLitRooms(ha);
 }
 
 // A first-run house: rooms discovery would have found, none committed yet. Every light is named explicitly,
-// never by Home Assistant area, because FakeHaRegistry answers no area membership.
-static List<AreaConfig> CommissioningRooms() =>
+// never by Home Assistant area, because FakeHaRegistry answers no area membership. --house lit enables every
+// one instead, so there is a grid of switched-on rooms for a dashboard to draw rather than the commissioning
+// board's empty first run.
+static List<AreaConfig> CommissioningRooms(bool enabled) =>
 [
 	new()
 	{
@@ -263,15 +274,15 @@ static List<AreaConfig> CommissioningRooms() =>
 		Lights = ["light.stue_taklys", "light.stue_leselampe", "light.stue_gulvlampe"],
 		MotionSensors = ["binary_sensor.stue_bevegelse"],
 		LuxSensor = "sensor.stue_lux",
-		Enabled = false
+		Enabled = enabled
 	},
-	new() { Name = "Bad", Lights = ["light.bad_tak"], Enabled = false },
+	new() { Name = "Bad", Lights = ["light.bad_tak"], Enabled = enabled },
 	new()
 	{
 		Name = "Kjøkken",
 		Lights = ["light.kjokken_tak", "light.kjokken_benk"],
 		MotionSensors = ["binary_sensor.kjokken_bevegelse"],
-		Enabled = false
+		Enabled = enabled
 	},
 	new()
 	{
@@ -279,10 +290,10 @@ static List<AreaConfig> CommissioningRooms() =>
 		Lights = ["light.kontor_skrivebord", "light.kontor_tak"],
 		MotionSensors = ["binary_sensor.kontor_bevegelse"],
 		LuxSensor = "sensor.kontor_lux",
-		Enabled = false
+		Enabled = enabled
 	},
-	new() { Name = "Soverom", Lights = ["light.soverom_tak", "light.soverom_nattbord"], Enabled = false },
-	new() { Name = "Gjesterom", Lights = ["light.gjesterom_tak"], Enabled = false }
+	new() { Name = "Soverom", Lights = ["light.soverom_tak", "light.soverom_nattbord"], Enabled = enabled },
+	new() { Name = "Gjesterom", Lights = ["light.gjesterom_tak"], Enabled = enabled }
 ];
 
 // A dozen reports spread across every chip the Activity page draws, so the page is drivable without hand-editing.
@@ -349,6 +360,60 @@ static void SeedActivity(FakeHaContext ha)
 
 	// House: a guest scene has this room.
 	Report(Base("Gjesterom", AreaState.SceneHold, TransitionReason.SceneHold) with { SceneApplied = "scene.gjester_kos" });
+}
+
+// --house lit: a current report per enabled room, published after the activity history above so each room's
+// cached state is this one and not whichever history entry happened to run last. Warm to cool across the
+// Kelvin ramp, brightness varied, one room hand-held, two left dark — so a tile grid, a timeline and a room
+// header all have brightness and warmth to draw, and at least one off room to draw dark.
+static void SeedLitRooms(FakeHaContext ha)
+{
+	HaStatePublisher publisher = new(ha, NullLogger.Instance);
+	DateTimeOffset now = DateTimeOffset.Now;
+
+	void Report(AreaSnapshot snapshot)
+	{
+		publisher.Publish(snapshot);
+
+		// See the identical comment in SeedActivity: Publish only records the event, the echo is what the
+		// dashboard's cache actually reads.
+		(string type, object? data) = ha.SentEvents[^1];
+		ha.RaiseEvent(type, data);
+	}
+
+	AreaSnapshot Lit(string area, AreaState state, double brightnessPct, int kelvin) => new(
+		area, state, TransitionReason.CircadianTick, ModeKind.Normal,
+		KillSwitchActive: false,
+		IsDark: true,
+		PeriodName: "Kveld",
+		BrightnessPct: brightnessPct,
+		ColorTempKelvin: kelvin,
+		Timestamp: now,
+		LastCommandAt: now,
+		LastMotionAt: now,
+		NextChangeAt: null,
+		NextChangeFrom: null);
+
+	AreaSnapshot Dark(string area) => new(
+		area, AreaState.AutoVacant, TransitionReason.CircadianTick, ModeKind.Normal,
+		KillSwitchActive: false,
+		IsDark: false,
+		PeriodName: "Dag",
+		BrightnessPct: null,
+		ColorTempKelvin: null,
+		Timestamp: now,
+		LastCommandAt: null,
+		LastMotionAt: null,
+		NextChangeAt: null,
+		NextChangeFrom: null);
+
+	Report(Lit("Stue", AreaState.AutoActive, 65, 2700));
+	Report(Lit("Kjøkken", AreaState.AutoActive, 90, 4000));
+	Report(Lit("Kontor", AreaState.AutoActive, 40, 3000));
+	Report(Lit("Gjesterom", AreaState.OverriddenOn, 80, 2200));
+
+	Report(Dark("Soverom"));
+	Report(Dark("Bad"));
 }
 
 internal sealed class SeedConfig : IAppConfig<AdaptiveLightingConfig>

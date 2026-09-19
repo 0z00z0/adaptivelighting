@@ -31,6 +31,7 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 
 	private IReadOnlyList<AreaSnapshot> _snapshots = [];
 	private IReadOnlyList<RoomView> _rooms = [];
+	private IReadOnlyList<RoomTile> _roomTiles = [];
 	private IReadOnlyList<ActivityEntry> _entries = [];
 
 	// _kept is what the summary categories leave; _reachable is what the Activity page would draw on the same
@@ -337,6 +338,10 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 	/// <summary>What the page says about rooms that are switched off, when it says anything.</summary>
 	public HiddenRoomsNote? HiddenRooms => AreaView.HiddenNote(AreaView.SwitchedOffCount(_rooms));
 
+	/// <summary>Every enabled room, with what its lamps are doing now — a room that has not reported is dark,
+	/// not missing.</summary>
+	public IReadOnlyList<RoomTile> Rooms => _roomTiles;
+
 	// ---- reading ---------------------------------------------------------------------------------------
 
 	/// <summary>Re-reads the page the moment the commissioning board's save lands, ahead of the next beat.</summary>
@@ -375,6 +380,11 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 	private void ReadBoard()
 	{
 		_rooms = _service.GetRooms();
+		_roomTiles =
+		[
+			.. _rooms.Where(room => room.IsEnabled)
+				.Select(room => new RoomTile(room.Name, room.AreaId, RoomLamp.Of(_cache.Find(room.AreaId, room.Name))))
+		];
 		Window = BoardWindow.Around(Now, BoardView.LookBack, BoardView.LookAhead);
 		Ticks = Window.Ticks;
 		NowPercent = Math.Clamp(Window.PercentAt(Now), 0, 100);
