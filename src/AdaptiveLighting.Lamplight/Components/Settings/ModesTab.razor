@@ -1,0 +1,123 @@
+@* Lamplight's "House modes" tab: the same leaf controls and the same three help bodies today's
+   HouseModesSection wires (they are markup, not model state), over Lamplight's own shell. *@
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+
+<h1 class="pagetitle">House modes</h1>
+<p class="lede">
+	The house mode lives in a Home Assistant dropdown helper. Pick the helper, then say what each of its
+	options means &mdash; Normal, Sleep, Away or Guest. Modes are switched on the <a href="/">dashboard</a>.
+</p>
+
+<section class="glass">
+	<SelectAuthorityPanel Copy="@Copy"
+						   Entity="@Model.HouseModeEntity"
+						   EntityChanged="@Model.SetHouseModeEntity"
+						   Entities="@Model.InputSelects"
+						   Lookup="@Model.Lookup"
+						   Group="lamplight-housemode-authority"
+						   HomeAssistant="@Model.HouseModeAuthorityIsHomeAssistant"
+						   HomeAssistantChanged="@Model.SetHouseModeAuthority"
+						   IsAvailable="@Model.HouseModeEntityIsAvailable"
+						   IsReady="@Model.HomeAssistantIsAnswering"
+						   LiveOptions="@Model.LiveSelectOptions">
+		<Body Context="state">
+			@if (Model.HelperDiff.Differs)
+			{
+				<p class="hint"><code>@Model.HouseModeEntityId</code> and this list have drifted apart. @Model.HelperDriftText</p>
+			}
+			else if (Model.HelperDiff.Matches)
+			{
+				<p class="hint"><code>@Model.HouseModeEntityId</code> offers exactly these options.</p>
+			}
+			else
+			{
+				<p class="hint">Home Assistant hasn&rsquo;t said which options <code>@Model.HouseModeEntityId</code> has, so this list can&rsquo;t be compared with it.</p>
+			}
+
+			@if (Model.DormantRules.Any)
+			{
+				<div class="notice warn">
+					<strong>These are set up but not firing while Home Assistant decides:</strong>
+					<ul>
+						@foreach (string rule in Model.DormantRules.Names)
+						{
+							<li>@rule</li>
+						}
+					</ul>
+				</div>
+			}
+		</Body>
+	</SelectAuthorityPanel>
+</section>
+
+@if (Model.ModeLines.Count > 0)
+{
+	<section class="glass">
+		<h2 class="sec-h">What each mode does<small>@Model.HouseModeEntity</small></h2>
+		@foreach (ModeLine line in Model.ModeLines)
+		{
+			ModeLine mode = line;
+
+			<div class="rows one">
+				<Row Label="@mode.Name" Value="@(Model.IsActiveMode(mode) ? "active now" : "")" IsWide="true">
+					<ChildContent><SentenceView Sentences="@mode.Sentences" Edited="@Model.OnModeEdited" Note="@HousePageModel.TokenNote" ShowLegend="false" /></ChildContent>
+				</Row>
+			</div>
+		}
+	</section>
+}
+
+@if (Model.HasHouseModeEntity)
+{
+	<h2 class="sec-h">
+		Mode options
+		<InfoPopover Label="Mode options">
+			<strong>Normal</strong> is everyday lighting and the option every reset returns to.
+			<strong>Sleep</strong> holds rooms set to be gentle at night to a dimmer period.
+			<strong>Away</strong> sweeps the lights off and stops adjusting them.
+			<strong>Guest</strong> leaves every room exactly as it is.
+		</InfoPopover>
+	</h2>
+
+	<HouseModeOptions HouseMode="@Model.HouseMode"
+					   LiveOptions="@Model.LiveSelectOptions"
+					   ActiveValue="@Model.ActiveModeValue"
+					   Periods="@Model.Periods"
+					   Scenes="@Model.Scenes"
+					   PresenceSensors="@Model.PresenceEntities"
+					   DateTimes="@Model.DateTimes"
+					   ActivationEntities="@Model.ActivationEntities"
+					   Lookup="@Model.Lookup"
+					   IsReady="@Model.HomeAssistantIsAnswering"
+					   HomeAssistantDecides="@Model.HouseModeIsHomeAssistants"
+					   Changed="@Model.OnHouseModeOptionsChanged" />
+}
+
+@code {
+	[Parameter, EditorRequired]
+	public HousePageModel Model { get; set; } = null!;
+
+	private SelectAuthorityCopy Copy => Model.HouseModePanelCopy with
+	{
+		LabelHelp = HelperHelp,
+		Note = NoHelperNote,
+		AuthorityHelp = DirectionHelp
+	};
+
+	private RenderFragment HelperHelp => @<text>
+		Which dropdown helper holds this house's modes. Its options appear below &mdash; say what each one
+		means. No helper yet? Make one in Home Assistant under <strong>Settings &rarr; Devices &amp; services
+		&rarr; Helpers &rarr; Create helper &rarr; Dropdown</strong>, add options, then pick it here.
+	</text>;
+
+	private RenderFragment NoHelperNote => @<text>
+		Without one the house is always in everyday lighting. Say below what each option means.
+	</text>;
+
+	private RenderFragment DirectionHelp => @<text>
+		<strong>Home Assistant</strong> means the dropdown is the only thing that moves the house: the engine
+		reads it and never writes it back. <strong>Adaptive lighting</strong> means the engine may set the mode
+		itself and keeps the dropdown pointing at the answer.
+	</text>;
+}

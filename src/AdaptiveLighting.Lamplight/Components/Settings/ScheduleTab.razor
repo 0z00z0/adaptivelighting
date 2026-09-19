@@ -1,0 +1,46 @@
+@* Lamplight's "Schedule" tab: the same leaf controls today's HouseScheduleSection wires, over Lamplight's own
+   glass/fold shell instead of GroupFold. *@
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+
+<h1 class="pagetitle">Schedule</h1>
+<p class="lede">How bright and how warm the lights are through the day &mdash; one schedule for the whole house.</p>
+
+<section class="glass">
+	<DaylightChart Periods="@Model.Periods" HouseMode="@Model.HouseMode" Location="@Model.HomeCoordinates" />
+	<SentenceView Sentences="@Model.BlendSentence" Edited="@Model.OnGlobalEdited" Note="@HousePageModel.TokenNote" ShowLegend="false" />
+</section>
+
+<PeriodsEditor Periods="@Model.Periods"
+			   Changed="@Model.Revalidate"
+			   Areas="@Model.Areas"
+			   HouseModeOptions="@Model.HouseModeOptionValues"
+			   HouseMode="@Model.HouseMode"
+			   Global="@Model.Global"
+			   PeriodHold="@Model.PeriodHoldRule" />
+
+<Fold Id="periodselect" Title="Connect a dropdown helper from Home Assistant" Summary="@Model.PeriodSelectSummary" Open="@_periodSelectOpen" OpenChanged="@(open => _periodSelectOpen = open)">
+	<PeriodSelectPanel Global="@Model.Global"
+						Periods="@Model.Periods"
+						InputSelects="@Model.InputSelects"
+						LiveOptions="@Model.LivePeriodSelectOptions"
+						ActiveValue="@Model.ActivePeriodValue"
+						IsAvailable="@Model.PeriodSelectIsAvailable"
+						IsReady="@Model.HomeAssistantIsAnswering"
+						EmptyNote="@Model.PeriodSelectEmptyNote"
+						Lookup="@Model.Lookup"
+						EntityChanged="@Model.SetPeriodSelectEntity"
+						Changed="@Model.Revalidate" />
+</Fold>
+
+@code {
+	[Parameter, EditorRequired]
+	public HousePageModel Model { get; set; } = null!;
+
+	// Starts open exactly when GroupFold's Open="@Model.PeriodSelectConnected" would today — once already in
+	// use, it decides what the table above means — then stays a plain hand-toggled fold like any other.
+	private bool _periodSelectOpen;
+
+	/// <inheritdoc/>
+	protected override void OnInitialized() => _periodSelectOpen = Model.PeriodSelectConnected;
+}

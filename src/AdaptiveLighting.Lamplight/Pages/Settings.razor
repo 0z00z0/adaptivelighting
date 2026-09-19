@@ -1,0 +1,176 @@
+@page "/settings"
+@implements IDisposable
+@using Microsoft.JSInterop
+@using AdaptiveLighting.Configuration
+@using AdaptiveLighting.Lamplight.Components.Settings
+@inject LightingEngineHost Engine
+@inject HaCatalog Catalog
+@inject ConfigLocation Location
+@inject HomeLocation HomeGeo
+@inject AreaSnapshotCache Cache
+@inject ILogger<HousePageModel> Logger
+@inject IJSRuntime Js
+
+<PageTitle>Settings &mdash; Adaptive lighting</PageTitle>
+
+<NavigationLock OnBeforeInternalNavigation="ConfirmLeave" ConfirmExternalNavigation="@Model.HasUnsavedEdits" />
+
+<h1 class="sr-only">Settings</h1>
+
+@if (Model.LoadError is { Length: > 0 } loadError)
+{
+	<div class="notice bad">
+		<strong>The configuration file couldn&rsquo;t be read.</strong>
+		<p>@loadError</p>
+		<p>
+			The file is <code>@Model.ConfigFilePath</code>. Fix it by hand, or press <em>Start from scratch</em> &mdash;
+			the old file is kept as <code>@Model.BackupPath</code> when saved.
+		</p>
+		<button type="button" @onclick="Model.StartFromScratch">Start from scratch</button>
+	</div>
+}
+else
+{
+	@if (Model.LocationWarning is { Length: > 0 } locationWarning)
+	{
+		<div class="notice warn">
+			<strong>Edits here will not survive a deploy.</strong>
+			<p>@locationWarning</p>
+		</div>
+	}
+
+	@if (!Model.EngineIsRunning || !Model.HomeAssistantIsAnswering)
+	{
+		<div class="notice warn">
+			@if (!Model.EngineIsRunning)
+			{
+				<p><strong>Adaptive lighting isn&rsquo;t running.</strong> @Model.EngineFault Edits here are saved either way, and take effect when it starts.</p>
+			}
+			@if (!Model.HomeAssistantIsAnswering)
+			{
+				<p><strong>Waiting for Home Assistant.</strong> The pickers below have nothing to offer until it answers. Ids can still be typed by hand; they are not checked against Home Assistant if saved now.</p>
+			}
+		</div>
+	}
+
+	@if (Model.HasValidationNotice && Model.Validation is { } validation)
+	{
+		<div class="notice @(validation.IsValid ? "warn" : "bad")">
+			@if (validation.Errors.Count > 0)
+			{
+				<strong>Fix these before saving:</strong>
+				<ul>
+					@foreach (string error in validation.Errors)
+					{
+						<li>@error</li>
+					}
+				</ul>
+			}
+			@if (validation.AreaErrors.Count > 0)
+			{
+				<strong>These rooms will be skipped &mdash; everything else still works, and can still be saved:</strong>
+				<ul>
+					@foreach (AreaError areaError in validation.AreaErrors)
+					{
+						<li><b>@areaError.AreaName</b>: @areaError.Message</li>
+					}
+				</ul>
+			}
+			@if (validation.Warnings.Count > 0)
+			{
+				<strong>Worth knowing &mdash; none of these stops anything:</strong>
+				<ul>
+					@foreach (string warning in validation.Warnings)
+					{
+						<li>@warning</li>
+					}
+				</ul>
+			}
+		</div>
+	}
+
+	<nav class="subnav" aria-label="Settings">
+		<a href="settings?section=house" class="@(HouseTabActive ? "cur" : null)" @onclick="() => Model.Show(HouseSection.House)" @onclick:preventDefault="true">House</a>
+		<a href="settings?section=schedule" class="@(Model.IsActive(HouseSection.Schedule) ? "cur" : null)" @onclick="() => Model.Show(HouseSection.Schedule)" @onclick:preventDefault="true">Schedule</a>
+		<a href="settings?section=housemodes" class="@(Model.IsActive(HouseSection.HouseModes) ? "cur" : null)" @onclick="() => Model.Show(HouseSection.HouseModes)" @onclick:preventDefault="true">House modes</a>
+	</nav>
+
+	@if (HouseTabActive)
+	{
+		<HouseOverview Model="@Model" />
+	}
+	else if (Model.IsActive(HouseSection.Schedule))
+	{
+		<ScheduleTab Model="@Model" />
+	}
+	else
+	{
+		<ModesTab Model="@Model" />
+	}
+
+	@if (Model.ShowSaveBar)
+	{
+		<div class="savebar">
+			<button type="button" class="primary" @onclick="Model.Save" disabled="@Model.IsBusy">Save and apply</button>
+			<button type="button" @onclick="Model.Reload" disabled="@Model.IsBusy">Discard changes</button>
+
+			@if (Model.SaveBarProblems is { Length: > 0 } problems)
+			{
+				<span class="savebar-note bad">@problems</span>
+			}
+			else if (Model.Result is { Written: false } result)
+			{
+				<span class="savebar-note bad">@result.Message</span>
+			}
+
+			@if (Model.SaveConfirmation.TextAt(Model.Now) is { Length: > 0 } confirmation)
+			{
+				<span class="savebar-note ok savebar-toast" role="status">@confirmation</span>
+			}
+		</div>
+	}
+}
+
+@code {
+	private HousePageModel? _model;
+
+	/// <summary>Which section to open on load; read once, after which the sub-navigation owns the choice.</summary>
+	[Parameter]
+	[SupplyParameterFromQuery(Name = "section")]
+	public string? SectionQuery { get; set; }
+
+	private HousePageModel Model => _model!;
+
+	// The former "Areas" tab is folded into Lamplight's "House" body, so a link built for it
+	// (the dashboard's hidden-rooms note points at ?section=areas) still lands somewhere.
+	private bool HouseTabActive => Model.IsActive(HouseSection.House) || Model.IsActive(HouseSection.Areas);
+
+	/// <inheritdoc/>
+	protected override void OnInitialized()
+	{
+		_model = new HousePageModel(Engine, Catalog, Location, HomeGeo, Cache, Logger);
+		_model.Changed += Redraw;
+		_model.Start(SectionQuery);
+	}
+
+	private async Task ConfirmLeave(LocationChangingContext context)
+	{
+		if (!Model.HasUnsavedEdits)
+			return;
+
+		if (!await Js.InvokeAsync<bool>("confirm", HousePageModel.LeaveQuestion))
+			context.PreventNavigation();
+	}
+
+	private void Redraw() => _ = InvokeAsync(StateHasChanged);
+
+	/// <inheritdoc/>
+	public void Dispose()
+	{
+		if (_model is null)
+			return;
+
+		_model.Changed -= Redraw;
+		_model.Dispose();
+	}
+}

@@ -15,6 +15,7 @@ against each other.
 - `AdaptiveLighting.Lamplight` gains its Kit: `Fold`, `Row`, `Pair`, `Info`, `Chip`, `Bang`, `By`, `LampCard`, `NowCard` and `SectionIndex` under `Components/Kit/`, the pieces room, house, dashboard and activity share. `LampPaint` turns a lit room's brightness and colour temperature into the `--lampc`/`--lvl` custom properties the shared `lamp-glow` rule reads, picking the nearest step of the six-step Kelvin ramp.
 - Lamplight's dashboard and layout: a top bar on a desktop and a bottom tab bar on a phone, both with Dashboard, Activity and Settings; the dashboard shows any notices, the house card, the timeline above the room tiles, and what is worth knowing. Each tile is painted in the colour and brightness its lamps give off now, and a room that is off is dark.
 - The shared controls and charts are drawn by a new `controls.css` in `AdaptiveLighting.Web`, linked by both designs, and read only tokens both designs define; `app.css` keeps the page chrome and gains token aliases on `:root`. The first design looks the same: measured identical in every theme at both widths.
+- Lamplight's house page, at `/settings`: House, Schedule and House modes under one sub-navigation, Brightness and warmth ahead of Movement and timing, the same fold order as the room page over the house's own defaults, the room list folded into the House body, and the save bar.
 
 ## [2026.9.15] - 2026-09-19
 
