@@ -21,6 +21,8 @@
     -->
     <ProjectReference Include="..\..\src\AdaptiveLighting.Web\AdaptiveLighting.Web.csproj" />
     <ProjectReference Include="..\..\src\AdaptiveLighting.Extensions\AdaptiveLighting.Extensions.csproj" />
+    <!-- For LamplightThemesTests: the stored theme ids are pinned here, not copied into the test project. -->
+    <ProjectReference Include="..\..\src\AdaptiveLighting.Lamplight\AdaptiveLighting.Lamplight.csproj" />
     <!--
       AdaptiveLighting.NetDaemon is the one reference here that pulls in a web host. It earns that: the
       registration it performs is the whole product of the package, and its key-ring guard needs a

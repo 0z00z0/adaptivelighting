@@ -19,6 +19,7 @@ against each other.
 - Lamplight's room page, over the same `RoomPageModel` as the first design: the lamp hero with the Light on/off switch and the adaptive lighting switch, a section index, then Brightness and warmth ahead of Movement and timing, Lights and sensors, Darkness, Daylight curve, Room behaviour and Rarely needed, "This room" and "What happened here", and the save line. No new page model member; a fold with no summarising member shows none rather than inventing one.
 - `AdaptiveLighting.Lamplight` gains its Activity page (`/activity`), built over the existing `ActivityPageModel`: the room filter, the category chips with counts, the pending-reports line, the hidden-reports note and the rows grouped by day, each with its time, room, what happened and why.
 - Lamplight's house page, at `/settings`: House, Schedule and House modes under one sub-navigation, Brightness and warmth ahead of Movement and timing, the same fold order as the room page over the house's own defaults, the room list folded into the House body, and the save bar.
+- Lamplight's six themes and its theme picker: Warm charcoal, Plum dusk, Blackout and 0z0 (dark), Paper and Fern (light), each with its own type scale and typeface stack, plus *Follow the device*. A choice is stored in the browser under its own key, separate from the first design's, and repaints at once with no reload. Painted before first render by a classic script in `<head>`, so there is no flash of the wrong theme and no unstyled page for a stored id this build no longer ships.
 
 ## [2026.9.15] - 2026-09-19
 

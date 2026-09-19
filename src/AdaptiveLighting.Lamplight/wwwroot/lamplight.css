@@ -4,16 +4,13 @@
 	Each page package appends one delimited block, headed by a banner comment naming the package.
 */
 
-/* ============================================================ type scale, theme-independent */
-:root {
-	--t-xs: 12.5px; --t-sm: 14px; --t-md: 16px; --t-lg: 22px; --t-xl: 32px; --t-xxl: 52px;
-	--lh: 1.45; --ls-dis: -0.02em; --ls-dis-s: -0.015em; --ls-big: -0.04em;
-	--w-body: 400; --w-med: 500; --w-semi: 600; --w-strong: 650; --w-bold: 700; --w-black: 800;
-}
-
-/* ============================================================ Warm charcoal */
-/* The only palette until the themes step; the bare :root is what every device gets. */
-:root {
+/* ==== T. Themes ==== */
+/* One rule per theme, each setting every token this file reads: surfaces, text, accent, state colours,
+   the lamp ramp, shape and the whole type scale. No rule depends on another's order, and no
+   prefers-color-scheme block: lamplight-theme.js resolves the device and paints data-theme itself, always,
+   before this stylesheet's first rule is even parsed by a repaint. Warm charcoal's selector also matches the
+   bare :root, so a page whose script did not run still paints instead of falling through to nothing. */
+:root, :root[data-theme="warm-charcoal"] {
 	color-scheme: dark;
 	--bg: #141210; --surface: #1e1b18; --surface-2: #29251f; --inset: #0e0c0a; --line: #3f3931; --line-soft: #2e2a24; --card-line: transparent;
 	--ink: #f3ede4; --ink-2: #c3b8a8; --ink-3: #9d9282;
@@ -27,14 +24,159 @@
 	--lamp-max: 0.34; --lamp-reach: 68%; --lamp-edge: transparent; --on-lamp: #2a1c0c; --lit-ink-2: #f3ede4;
 	--room-off: #0e0c0a; --room-off-ink: #9d9282;
 	--shadow-pop: 0 12px 36px rgba(0, 0, 0, 0.55);
-	/* The faces ship with the theme-faces step; until then each stack falls through to the device's own. */
+	--t-xs: 12.5px; --t-sm: 14px; --t-md: 16px; --t-lg: 23px; --t-xl: 34px; --t-xxl: 54px; --lh: 1.5;
+	--ls-dis: -0.012em; --ls-dis-s: -0.008em; --ls-big: -0.028em;
+	--r: 12px; --r-big: 20px; --r-pill: 999px;
+	--w-body: 400; --w-med: 500; --w-semi: 600; --w-strong: 650; --w-bold: 700; --w-black: 800;
+	--now: #e3a0cf; --lane: #1a1714;
+	--kelvin-weight: 100%; --kelvin-shade: transparent;
+	--daylight-night: #1d2136; --daylight-twilight: #3a4876; --daylight-day: #a3804a; --daylight-halo: rgba(14, 12, 10, 0.72);
+	/* A soft serif over a warm humanist sans: the theme's whole claim is that nothing reads cold. */
 	--font-head: "Fraunces", "Iowan Old Style", Georgia, serif;
 	--font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
 	--font-num: "IBM Plex Mono", Consolas, monospace;
-	--t-lg: 23px; --t-xl: 34px; --t-xxl: 54px; --lh: 1.5;
-	--ls-dis: -0.012em; --ls-dis-s: -0.008em; --ls-big: -0.028em;
-	--r: 12px; --r-big: 20px; --r-pill: 999px;
 }
+/* Plum dusk: aubergine ground, orchid accent. Manual stays blue, so it cannot be read as the accent. */
+:root[data-theme="plum-dusk"] {
+	color-scheme: dark;
+	--bg: #17101d; --surface: #211729; --surface-2: #2b2036; --inset: #100a15; --line: #443353; --line-soft: #322542; --card-line: transparent;
+	--ink: #f2ecf6; --ink-2: #c8b9d4; --ink-3: #a294b0;
+	--accent: #d9a7ff; --accent-ink: #26123a; --focus: #d9a7ff; --mark: rgba(217, 167, 255, 0.16);
+	--auto: #ffb46b; --auto-bg: #3a2a1a; --on-ink: #1a1206;
+	--hand: #8fc4ff; --hand-bg: #1d2c3f;
+	--ok: #7fd9a8; --ok-bg: #1b3226; --on-ok: #17101d;
+	--off: #a294b0; --off-bg: #100a15;
+	--warn: #ffd36b; --warn-bg: #3b3119; --bad: #ff8a86; --bad-bg: #3e1f2b; --on-state: #17101d;
+	--k2200: #ffa04a; --k2700: #ffb46b; --k3000: #ffc187; --k3200: #ffc98f; --k4000: #ffe0bd; --k4500: #ffe9d0;
+	--lamp-max: 0.34; --lamp-reach: 68%; --lamp-edge: transparent; --on-lamp: #2a1c0c; --lit-ink-2: #f2ecf6;
+	--room-off: #100a15; --room-off-ink: #a294b0;
+	--shadow-pop: 0 12px 36px rgba(0, 0, 0, 0.55);
+	--t-xs: 12.5px; --t-sm: 14px; --t-md: 16px; --t-lg: 23px; --t-xl: 33px; --t-xxl: 50px; --lh: 1.5;
+	--ls-dis: -0.008em; --ls-dis-s: -0.005em; --ls-big: -0.025em;
+	--r: 12px; --r-big: 20px; --r-pill: 999px;
+	--w-body: 400; --w-med: 500; --w-semi: 600; --w-strong: 650; --w-bold: 700; --w-black: 800;
+	--now: #ff9ec7; --lane: #1c1423;
+	--kelvin-weight: 100%; --kelvin-shade: transparent;
+	--daylight-night: #1d2136; --daylight-twilight: #3a4876; --daylight-day: #a3804a; --daylight-halo: rgba(16, 10, 21, 0.72);
+	/* A literary serif with a quirky grotesque under it, for a room in the evening. */
+	--font-head: "Newsreader", "Iowan Old Style", Georgia, serif;
+	--font-body: "Karla", "Segoe UI", system-ui, sans-serif;
+	--font-num: "JetBrains Mono", Consolas, monospace;
+}
+/* Blackout: true black, white text, tighter corners. The glow is raised, because a lamp colour has nothing
+   to mix into. */
+:root[data-theme="blackout"] {
+	color-scheme: dark;
+	--bg: #000000; --surface: #0d0d0d; --surface-2: #171717; --inset: #050505; --line: #353535; --line-soft: #242424; --card-line: #242424;
+	--ink: #ffffff; --ink-2: #d2d2d2; --ink-3: #a9a9a9;
+	--accent: #8ecbff; --accent-ink: #04121f; --focus: #8ecbff; --mark: rgba(142, 203, 255, 0.18);
+	--auto: #ffb46b; --auto-bg: #33240f; --on-ink: #1a1206;
+	--hand: #c9b0ff; --hand-bg: #241d38;
+	--ok: #74dfa2; --ok-bg: #0f2b1a; --on-ok: #000000;
+	--off: #a9a9a9; --off-bg: #050505;
+	--warn: #ffd93d; --warn-bg: #33290a; --bad: #ff7b6b; --bad-bg: #361612; --on-state: #000000;
+	--k2200: #ffa04a; --k2700: #ffb46b; --k3000: #ffc187; --k3200: #ffc98f; --k4000: #ffe0bd; --k4500: #ffe9d0;
+	--lamp-max: 0.38; --lamp-reach: 70%; --lamp-edge: transparent; --on-lamp: #2a1c0c; --lit-ink-2: #ffffff;
+	--room-off: #050505; --room-off-ink: #a9a9a9;
+	--shadow-pop: 0 12px 36px rgba(0, 0, 0, 0.8);
+	--t-xs: 12px; --t-sm: 13.5px; --t-md: 15.5px; --t-lg: 20px; --t-xl: 30px; --t-xxl: 48px; --lh: 1.4;
+	--ls-dis: -0.03em; --ls-dis-s: -0.02em; --ls-big: -0.05em;
+	--r: 8px; --r-big: 14px; --r-pill: 999px;
+	--w-body: 400; --w-med: 500; --w-semi: 600; --w-strong: 600; --w-bold: 700; --w-black: 800;
+	--now: #e3a0cf; --lane: #070707;
+	--kelvin-weight: 100%; --kelvin-shade: transparent;
+	--daylight-night: #1d2136; --daylight-twilight: #3a4876; --daylight-day: #a3804a; --daylight-halo: rgba(5, 5, 5, 0.72);
+	/* The tightest, most technical pairing of the set, on the densest scale: nothing is spent on decoration
+	   here, in type any more than in colour. */
+	--font-head: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+	--font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+	--font-num: "Martian Mono", Consolas, monospace;
+}
+/* 0z0: the studio palette, the studio face Cascadia Mono, light weights throughout. Teal accent, blue for
+   running, purple for manual, amber for a warning; the error red is pushed redder than the amber beside it. */
+:root[data-theme="0z0"] {
+	color-scheme: dark;
+	--bg: #0a0f17; --surface: #0e1620; --surface-2: #142130; --inset: #070b11; --line: #24384c; --line-soft: #182734; --card-line: #182734;
+	--ink: #eaf2f8; --ink-2: #b9cbd6; --ink-3: #7fa8b8;
+	--accent: #27e0c8; --accent-ink: #04231f; --focus: #27e0c8; --mark: rgba(39, 224, 200, 0.16);
+	--auto: #ffb46b; --auto-bg: #33260f; --on-ink: #1a1206;
+	--hand: #7b8cff; --hand-bg: #1d2440;
+	--ok: #11a9d6; --ok-bg: #0d2733; --on-ok: #0a0f17;
+	--off: #7fa8b8; --off-bg: #070b11;
+	--warn: #d8a657; --warn-bg: #2e2716; --bad: #d9705e; --bad-bg: #35191a; --on-state: #0a0f17;
+	--k2200: #ffa04a; --k2700: #ffb46b; --k3000: #ffc187; --k3200: #ffc98f; --k4000: #ffe0bd; --k4500: #ffe9d0;
+	--lamp-max: 0.34; --lamp-reach: 66%; --lamp-edge: transparent; --on-lamp: #2a1c0c; --lit-ink-2: #eaf2f8;
+	--room-off: #070b11; --room-off-ink: #7fa8b8;
+	--shadow-pop: 0 12px 36px rgba(0, 0, 0, 0.6);
+	--t-xs: 12px; --t-sm: 13.5px; --t-md: 15px; --t-lg: 20px; --t-xl: 29px; --t-xxl: 46px; --lh: 1.5;
+	--ls-dis: 0; --ls-dis-s: 0; --ls-big: 0;
+	--r: 4px; --r-big: 6px; --r-pill: 4px;
+	--w-body: 300; --w-med: 300; --w-semi: 400; --w-strong: 400; --w-bold: 500; --w-black: 500;
+	--now: #e46ad6; --lane: #0c131c;
+	--kelvin-weight: 100%; --kelvin-shade: transparent;
+	--daylight-night: #101a30; --daylight-twilight: #2f4788; --daylight-day: #8a6a30; --daylight-halo: rgba(7, 11, 17, 0.72);
+	/* The studio's own face, everywhere: headings, text and figures are one family. A monospace sets its own
+	   width, so the display tracking is dropped and the scale comes in a step to keep the same words on the
+	   same number of lines. */
+	--font-head: "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+	--font-body: "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+	--font-num: "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+:root[data-theme="paper"] {
+	color-scheme: light;
+	--bg: #f6f5f1; --surface: #ffffff; --surface-2: #efeee9; --inset: #e6e4de; --line: #d3d1c9; --line-soft: #e4e2db; --card-line: #e4e2db;
+	--ink: #17181a; --ink-2: #45474c; --ink-3: #5f6166;
+	--accent: #0d6c8f; --accent-ink: #ffffff; --focus: #0d6c8f; --mark: rgba(13, 108, 143, 0.1);
+	--auto: #9a4f0c; --auto-bg: #fbe6cf; --on-ink: #ffffff;
+	--hand: #6340c9; --hand-bg: #ebe4fc;
+	--ok: #1f6f47; --ok-bg: #d8efe2; --on-ok: #ffffff;
+	--off: #5f6166; --off-bg: #e6e4de;
+	--warn: #735400; --warn-bg: #f7eac0; --bad: #ad2a22; --bad-bg: #fadcd8; --on-state: #ffffff;
+	--k2200: #ff9436; --k2700: #ffa955; --k3000: #ffb86e; --k3200: #ffc07c; --k4000: #ffd49f; --k4500: #ffdfb6;
+	--lamp-max: 0.6; --lamp-reach: 72%; --lamp-edge: rgba(110, 70, 20, 0.38); --on-lamp: #2a1c0c; --lit-ink-2: #45474c;
+	--room-off: #dcdad3; --room-off-ink: #45474c;
+	--shadow-pop: 0 12px 36px rgba(20, 20, 20, 0.16);
+	--t-xs: 12.5px; --t-sm: 14px; --t-md: 16px; --t-lg: 23px; --t-xl: 34px; --t-xxl: 52px; --lh: 1.5;
+	--ls-dis: -0.006em; --ls-dis-s: -0.004em; --ls-big: -0.025em;
+	--r: 12px; --r-big: 20px; --r-pill: 999px;
+	--w-body: 400; --w-med: 500; --w-semi: 600; --w-strong: 650; --w-bold: 700; --w-black: 800;
+	--now: #a8327a; --lane: #f6f5f1;
+	--kelvin-weight: 45%; --kelvin-shade: #17181a;
+	--daylight-night: #384777; --daylight-twilight: #7e93c9; --daylight-day: #e8d296; --daylight-halo: rgba(255, 255, 255, 0.8);
+	/* Editorial: a bookish serif over a warm humanist sans, to suit near-white and hairline rules. */
+	--font-head: "Lora", Georgia, "Times New Roman", serif;
+	--font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+	--font-num: "Source Code Pro", Consolas, monospace;
+}
+/* Fern: pale sage ground, dark green ink, berry accent. */
+:root[data-theme="fern"] {
+	color-scheme: light;
+	--bg: #eef1e8; --surface: #fbfcf8; --surface-2: #e6ebdd; --inset: #dde3d2; --line: #c5cdb6; --line-soft: #e0e6d6; --card-line: #e2e7d9;
+	--ink: #1a2018; --ink-2: #43503f; --ink-3: #545f4e;
+	--accent: #8a2f5e; --accent-ink: #ffffff; --focus: #8a2f5e; --mark: rgba(138, 47, 94, 0.1);
+	--auto: #8a4a12; --auto-bg: #f3e2c8; --on-ink: #ffffff;
+	--hand: #4a3fb0; --hand-bg: #e3e2f5;
+	--ok: #1d6440; --ok-bg: #d7e9d9; --on-ok: #ffffff;
+	--off: #545f4e; --off-bg: #dde3d2;
+	--warn: #6b5100; --warn-bg: #f0e6b4; --bad: #a8291f; --bad-bg: #f6dbd4; --on-state: #ffffff;
+	--k2200: #ff9436; --k2700: #ffa955; --k3000: #ffb86e; --k3200: #ffc07c; --k4000: #ffd49f; --k4500: #ffdfb6;
+	--lamp-max: 0.58; --lamp-reach: 72%; --lamp-edge: rgba(90, 70, 20, 0.36); --on-lamp: #2a1c0c; --lit-ink-2: #43503f;
+	--room-off: #d3d9c6; --room-off-ink: #43503f;
+	--shadow-pop: 0 12px 36px rgba(26, 32, 24, 0.16);
+	--t-xs: 12.5px; --t-sm: 14px; --t-md: 16px; --t-lg: 22px; --t-xl: 31px; --t-xxl: 48px; --lh: 1.55;
+	--ls-dis: -0.02em; --ls-dis-s: -0.012em; --ls-big: -0.035em;
+	--r: 12px; --r-big: 20px; --r-pill: 999px;
+	--w-body: 400; --w-med: 500; --w-semi: 600; --w-strong: 650; --w-bold: 700; --w-black: 800;
+	--now: #0e6a7a; --lane: #eef1e8;
+	--kelvin-weight: 45%; --kelvin-shade: #1a2018;
+	--daylight-night: #384777; --daylight-twilight: #7e93c9; --daylight-day: #e8d296; --daylight-halo: rgba(251, 252, 248, 0.8);
+	/* The long-read theme, so the warmth sits in the text face: a reading serif, a warm mono beside it, and a
+	   grotesque above. */
+	--font-head: "Epilogue", "Segoe UI", system-ui, sans-serif;
+	--font-body: "Literata", Georgia, "Times New Roman", serif;
+	--font-num: "Red Hat Mono", Consolas, monospace;
+}
+/* ==== end T. Themes ==== */
 
 /* ============================================================ shell */
 *, *::before, *::after { box-sizing: border-box; }
@@ -54,7 +196,11 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 .nav { display: flex; gap: 4px; }
 .nav a { padding: 8px 15px; border-radius: var(--r-pill); color: var(--ink-2); text-decoration: none; font-size: var(--t-sm); font-weight: var(--w-semi); white-space: nowrap; }
 .nav a.cur { color: var(--ink); background: var(--surface); box-shadow: inset 0 0 0 1px var(--card-line); }
-.top-end { margin-left: auto; font-size: var(--t-xs); color: var(--ink-3); white-space: nowrap; }
+.top-end { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.theme-picker { display: flex; align-items: center; gap: 8px; }
+.theme-picker-label { font-size: var(--t-xs); color: var(--ink-3); white-space: nowrap; }
+.theme-select { padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); color: var(--ink); font-size: var(--t-sm); }
+.top-end-note { font-size: var(--t-xs); color: var(--ink-3); white-space: nowrap; }
 
 .main { width: 100%; max-width: 1240px; margin: 0 auto; padding: 18px 28px 48px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
 .pagetitle { margin: 0; font-family: var(--font-head); font-size: var(--t-xl); font-weight: var(--w-bold); letter-spacing: var(--ls-dis); }
@@ -65,7 +211,7 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 
 @media (max-width: 720px) {
 	.top { gap: 0 12px; padding: 0 16px; min-height: 54px; }
-	.top-end { display: none; }
+	.top-end-note { display: none; }
 	.top .nav { display: none; }
 	.main { padding: 12px 16px 24px; gap: 12px; }
 
@@ -230,13 +376,10 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 /* ==== end K. Lamplight kit ==== */
 
 /* ==== B. Shared control tokens ==== */
-/* The tokens controls.css reads that Lamplight has no name of its own for. Values for Warm charcoal until the themes
-   step; each theme block will set its own. */
+/* The tokens controls.css reads that Lamplight has no name of its own for. --now, --lane, --kelvin-weight,
+   --kelvin-shade and the four --daylight-* tokens moved into block T: each theme sets its own. What is left
+   here is theme-independent, mostly aliases of tokens block T already defines per theme. */
 :root {
-	--now: #e3a0cf;
-	--lane: #1a1714;
-	--kelvin-weight: 100%; --kelvin-shade: transparent;
-	--daylight-night: #1d2136; --daylight-twilight: #3a4876; --daylight-day: #a3804a; --daylight-halo: rgba(14, 12, 10, 0.72);
 	--icon-accent: var(--accent);
 	--grid: var(--line-soft);
 	--rule: 1px solid var(--line); --rule-inner: 1px solid var(--line-soft);

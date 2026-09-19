@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@using AdaptiveLighting.Lamplight.Components
 @inject NavigationManager Navigation
 
 <div class="app">
@@ -13,7 +14,10 @@
 			<a href="activity" class="@TabClass(Tab.Activity)" aria-current="@Current(Tab.Activity)">Activity</a>
 			<a href="settings" class="@TabClass(Tab.Settings)" aria-current="@Current(Tab.Settings)">Settings</a>
 		</nav>
-		<span class="top-end">LAN only &middot; no login</span>
+		<div class="top-end">
+			<ThemeSelect />
+			<span class="top-end-note">LAN only &middot; no login</span>
+		</div>
 	</header>
 
 	<main class="main">
