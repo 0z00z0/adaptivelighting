@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Navigation
 
 <div class="app">
 	<header class="top">
@@ -7,7 +9,9 @@
 			<span>Adaptive lighting</span>
 		</div>
 		<nav class="nav" aria-label="Pages">
-			<NavLink href="" Match="NavLinkMatch.All" ActiveClass="cur">Dashboard</NavLink>
+			<a href="" class="@TabClass(Tab.Dashboard)" aria-current="@Current(Tab.Dashboard)">Dashboard</a>
+			<a href="activity" class="@TabClass(Tab.Activity)" aria-current="@Current(Tab.Activity)">Activity</a>
+			<a href="settings" class="@TabClass(Tab.Settings)" aria-current="@Current(Tab.Settings)">Settings</a>
 		</nav>
 		<span class="top-end">LAN only &middot; no login</span>
 	</header>
@@ -17,9 +21,63 @@
 	</main>
 
 	<nav class="tabbar" aria-label="Pages">
-		<NavLink href="" Match="NavLinkMatch.All" ActiveClass="cur">
+		<a href="" class="@TabClass(Tab.Dashboard)" aria-current="@Current(Tab.Dashboard)">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h10M4 12h16M4 17h7" /></svg>
 			<span>Dashboard</span>
-		</NavLink>
+		</a>
+		<a href="activity" class="@TabClass(Tab.Activity)" aria-current="@Current(Tab.Activity)">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12" /><circle cx="4" cy="6" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="18" r="1" /></svg>
+			<span>Activity</span>
+		</a>
+		<a href="settings" class="@TabClass(Tab.Settings)" aria-current="@Current(Tab.Settings)">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></svg>
+			<span>Settings</span>
+		</a>
 	</nav>
 </div>
+
+@code {
+	private enum Tab { Dashboard, Activity, Settings }
+
+	private Tab _current;
+
+	/// <inheritdoc/>
+	protected override void OnInitialized()
+	{
+		_current = TabOf(Navigation.Uri);
+		Navigation.LocationChanged += OnLocationChanged;
+	}
+
+	private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+	{
+		Tab next = TabOf(args.Location);
+
+		if (next == _current)
+			return;
+
+		_current = next;
+		_ = InvokeAsync(StateHasChanged);
+	}
+
+	// A room page belongs to the Dashboard tab: rooms open from there. Any /settings address, whatever its
+	// query, is the Settings tab.
+	private Tab TabOf(string uri)
+	{
+		string path = Navigation.ToBaseRelativePath(uri);
+
+		if (path.StartsWith("settings", StringComparison.OrdinalIgnoreCase))
+			return Tab.Settings;
+
+		if (path.StartsWith("activity", StringComparison.OrdinalIgnoreCase))
+			return Tab.Activity;
+
+		return Tab.Dashboard;
+	}
+
+	private string? TabClass(Tab tab) => tab == _current ? "cur" : null;
+
+	private string? Current(Tab tab) => tab == _current ? "page" : null;
+
+	/// <inheritdoc/>
+	public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}
