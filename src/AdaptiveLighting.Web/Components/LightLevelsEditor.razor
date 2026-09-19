@@ -95,6 +95,10 @@
 	[Parameter]
 	public bool NoColourTemperature { get; set; }
 
+	/// <summary>Whether this room can be dimmed at all; without it no light offers a brightness slider either.</summary>
+	[Parameter]
+	public bool NoBrightness { get; set; }
+
 	/// <summary>Home Assistant's own name for an entity.</summary>
 	[Parameter]
 	public Func<string, string>? NameOf { get; set; }
@@ -191,40 +195,46 @@
 		{
 			LightLevelRow current = row;
 
-			<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(current.IsOwn ? "lvl-own" : null)" @key="current.PeriodId">
+			<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(NoBrightness ? "lvl-nobrightness" : null) @(current.IsOwn ? "lvl-own" : null)" @key="current.PeriodId">
 				<div class="lvl-when">
 					<span class="lvl-name">@PeriodName(current.Name)</span>
 					<span class="lvl-start">@StartOf(current.PeriodId)</span>
 
-					<label class="lvl-curve-toggle">
-						<input type="checkbox" checked="@current.FollowsDaylightCurve"
-							   @onchange="args => SetCurve(entityId, current, args.Value is true)" />
-						Follow the daylight curve
-					</label>
-				</div>
-
-				<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
-					@if (!current.FollowsDaylightCurve)
+					@if (!NoBrightness)
 					{
-						<PresetSlider Value="@current.BrightnessPct"
-									  AtDefault="@(!current.BrightnessIsOwn)"
-									  Inheritable="true"
-									  DefaultLabel="the room's"
-									  Options="@Presets.BrightnessPct"
-									  Unit="%"
-									  Label="Brightness"
-									  AriaLabel="@($"Brightness during {PeriodName(current.Name)}")"
-									  FineAdjustable="true"
-									  ValueChanged="@(value => SetBrightness(entityId, current.PeriodId, value))">
-							<Mark>
-								@if (current.BrightnessIsOwn)
-								{
-									<span class="tok-own-dot" title="This light's own setting" aria-hidden="true"></span>
-								}
-							</Mark>
-						</PresetSlider>
+						<label class="lvl-curve-toggle">
+							<input type="checkbox" checked="@current.FollowsDaylightCurve"
+								   @onchange="args => SetCurve(entityId, current, args.Value is true)" />
+							Follow the daylight curve
+						</label>
 					}
 				</div>
+
+				@if (!NoBrightness)
+				{
+					<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
+						@if (!current.FollowsDaylightCurve)
+						{
+							<PresetSlider Value="@current.BrightnessPct"
+										  AtDefault="@(!current.BrightnessIsOwn)"
+										  Inheritable="true"
+										  DefaultLabel="the room's"
+										  Options="@Presets.BrightnessPct"
+										  Unit="%"
+										  Label="Brightness"
+										  AriaLabel="@($"Brightness during {PeriodName(current.Name)}")"
+										  FineAdjustable="true"
+										  ValueChanged="@(value => SetBrightness(entityId, current.PeriodId, value))">
+								<Mark>
+									@if (current.BrightnessIsOwn)
+									{
+										<span class="tok-own-dot" title="This light's own setting" aria-hidden="true"></span>
+									}
+								</Mark>
+							</PresetSlider>
+						}
+					</div>
+				}
 
 				@if (!NoColourTemperature)
 				{
@@ -279,41 +289,47 @@
 		{
 			GroupLevelRow current = row;
 
-			<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(current.BrightnessIsOwn || current.ColourIsOwn ? "lvl-own" : null)" @key="current.PeriodId">
+			<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(NoBrightness ? "lvl-nobrightness" : null) @(current.BrightnessIsOwn || current.ColourIsOwn ? "lvl-own" : null)" @key="current.PeriodId">
 				<div class="lvl-when">
 					<span class="lvl-name">@PeriodName(current.Name)</span>
 					<span class="lvl-start">@StartOf(current.PeriodId)</span>
 
-					<label class="lvl-curve-toggle">
-						<input type="checkbox" checked="@current.FollowsDaylightCurve"
-							   @onchange="args => SetGroupCurve(leaves, current.PeriodId, args.Value is true)" />
-						@(current.CurveMixed ? "Follow the daylight curve (some do)" : "Follow the daylight curve")
-					</label>
-				</div>
-
-				<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
-					@if (!current.FollowsDaylightCurve)
+					@if (!NoBrightness)
 					{
-						<PresetSlider Value="@current.BrightnessPct"
-									  AtDefault="@(!current.BrightnessIsOwn)"
-									  Inheritable="true"
-									  DefaultLabel="the room's"
-									  Options="@Presets.BrightnessPct"
-									  Unit="%"
-									  Label="Brightness"
-									  AriaLabel="@($"Brightness of every light in this group during {PeriodName(current.Name)}")"
-									  FineAdjustable="true"
-									  Mixed="@(current.BrightnessMixed ? "mixed" : null)"
-									  ValueChanged="@(value => SetGroupBrightness(leaves, current.PeriodId, value))">
-							<Mark>
-								@if (current.BrightnessIsOwn)
-								{
-									<span class="tok-own-dot" title="Set on at least one light in this group" aria-hidden="true"></span>
-								}
-							</Mark>
-						</PresetSlider>
+						<label class="lvl-curve-toggle">
+							<input type="checkbox" checked="@current.FollowsDaylightCurve"
+								   @onchange="args => SetGroupCurve(leaves, current.PeriodId, args.Value is true)" />
+							@(current.CurveMixed ? "Follow the daylight curve (some do)" : "Follow the daylight curve")
+						</label>
 					}
 				</div>
+
+				@if (!NoBrightness)
+				{
+					<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
+						@if (!current.FollowsDaylightCurve)
+						{
+							<PresetSlider Value="@current.BrightnessPct"
+										  AtDefault="@(!current.BrightnessIsOwn)"
+										  Inheritable="true"
+										  DefaultLabel="the room's"
+										  Options="@Presets.BrightnessPct"
+										  Unit="%"
+										  Label="Brightness"
+										  AriaLabel="@($"Brightness of every light in this group during {PeriodName(current.Name)}")"
+										  FineAdjustable="true"
+										  Mixed="@(current.BrightnessMixed ? "mixed" : null)"
+										  ValueChanged="@(value => SetGroupBrightness(leaves, current.PeriodId, value))">
+								<Mark>
+									@if (current.BrightnessIsOwn)
+									{
+										<span class="tok-own-dot" title="Set on at least one light in this group" aria-hidden="true"></span>
+									}
+								</Mark>
+							</PresetSlider>
+						}
+					</div>
+				}
 
 				@if (!NoColourTemperature)
 				{

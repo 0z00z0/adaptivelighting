@@ -90,6 +90,7 @@
 	private const string Floor = "light.stue_gulvlampe";
 	private const string Gone = "light.stue_gammel_lampe";
 	private const string Only = "light.bad_tak";
+	private const string Switch = "light.bod_bryter";
 
 	private readonly List<TimePeriodConfig> _periods =
 	[
@@ -154,19 +155,36 @@
 				{
 					[Group] = [First, Second, Third],
 					[Lamp] = [Lamp]
-				}))
+				})),
+
+			// A plain on/off switch: reports "onoff" and nothing else, so neither brightness nor colour of any
+			// kind reaches it. Both halves of the card drop out, leaving only the period name and the Test button.
+			new Case(
+				"A plain on/off switch — nothing here to dim or colour",
+				"Neither the brightness column nor the warmth question has anywhere to reach, so both are gone and the row is left with the period and the Test button alone.",
+				new AreaConfig { Name = "Bod" },
+				Resolved("Bod", [Switch], new() { [Switch] = [Switch] }, LightsSupportAnyColour: false, LightsSupportBrightness: false))
 		];
 
-	private static ResolvedArea Resolved(string name, string[] lights, Dictionary<string, string[]> leaves)
+	private static ResolvedArea Resolved(
+		string name,
+		string[] lights,
+		Dictionary<string, string[]> leaves,
+		bool? LightsSupportAnyColour = null,
+		bool? LightsSupportBrightness = null)
 	{
 		Dictionary<string, IReadOnlySet<string>> beneath = new(StringComparer.Ordinal);
 
 		foreach ((string entry, string[] under) in leaves)
 			beneath[entry] = new HashSet<string>(under, StringComparer.Ordinal);
 
-		return new ResolvedArea(name, new AreaSettings(), lights, [], [], [], LightsSupportColorTemp: true)
+		return new ResolvedArea(
+			name, new AreaSettings(), lights, [], [], [],
+			LightsSupportColorTemp: LightsSupportAnyColour is false ? null : true)
 		{
-			LeavesOfEntry = beneath
+			LeavesOfEntry = beneath,
+			LightsSupportAnyColour = LightsSupportAnyColour ?? true,
+			LightsSupportBrightness = LightsSupportBrightness ?? true
 		};
 	}
 

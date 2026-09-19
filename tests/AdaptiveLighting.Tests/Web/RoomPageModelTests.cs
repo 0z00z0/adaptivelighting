@@ -158,6 +158,48 @@ public sealed class RoomPageModelTests
 	}
 
 	[TestMethod]
+	public void ARoomWhoseOnlyLightIsAPlainSwitchHidesDimmingAndWarmth()
+	{
+		// No Home Assistant area named here: TryResolve only checks the registry for a stated area id, and
+		// FakeHaRegistry cannot register one (its Area type has no public constructor). An explicit light list
+		// resolves without it, which is enough to reach ResolvedArea and its capability flags.
+		const string noArea = "";
+		_ha.SetState("light.stue_taklys", "off", new() { ["supported_color_modes"] = new[] { "onoff" } });
+
+		LightingEngineHost host = new(
+			new LightingConfigStore(_path, NullLogger<LightingConfigStore>.Instance),
+			NullLoggerFactory.Instance);
+
+		Assert.IsTrue(host.Save(new AdaptiveLightingConfig
+		{
+			ConfigName = "Adaptive lighting [test]",
+			Periods = [new TimePeriodConfig { Id = PeriodId, Name = "evening", Start = "18:00", BrightnessPct = 70 }],
+			Areas = [new AreaConfig { AreaId = noArea, Name = "Switch room", Lights = ["light.stue_taklys"] }]
+		}).Written, "the test document has to reach the disk first");
+
+		HaCatalog catalog = new(_ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
+
+		RoomPageModel model = new(
+			host, catalog, _cache!, _activity, NullLogger.Instance,
+			work =>
+			{
+				work();
+
+				return Task.CompletedTask;
+			});
+
+		model.Start();
+		model.Show(noArea);
+
+		Assert.IsNotNull(model.Resolved, "the light list resolves without needing a Home Assistant area at all");
+		Assert.IsFalse(model.ShowBrightnessControls, "a plain on/off switch has nothing to dim");
+		Assert.IsFalse(model.ShowColorControls, "a plain on/off switch has no colour of any kind");
+		Assert.IsFalse(model.ShowLevelsCard, "with neither left, the whole card has nothing to show");
+
+		model.Dispose();
+	}
+
+	[TestMethod]
 	public async Task ATestPressedRightAfterALevelEdit_SavesTheEditFirst()
 	{
 		RoomPageModel model = OpenRoom(out LightingEngineHost host);

@@ -55,6 +55,11 @@ public sealed record ResolvedArea(
 	// one covers both "nobody answered" and "nobody has colour", and only this separates them.
 	public bool? LightsSupportAnyColour { get; init; }
 
+	/// <summary>Whether any of the area's lights can be dimmed at all, or <c>null</c> when none answered.</summary>
+	// A plain on/off switch reports "onoff" and nothing else; every other mode implies brightness, so this is a
+	// straight capability fact for the room page, unrelated to ColorControl and never overruled by it.
+	public bool? LightsSupportBrightness { get; init; }
+
 	/// <summary>How this area's warmth is commanded, with <see cref="ColorControl.Auto"/> already decided.</summary>
 	// Null capability means no light could be read, which is no evidence that none has a colour temperature, so
 	// Auto stays on Kelvin until a fixture says otherwise.
@@ -104,6 +109,7 @@ public sealed class AreaEntityResolver
 	private const string GroupMembersAttribute = "entity_id";
 	private const string SupportedColorModesAttribute = "supported_color_modes";
 	private const string ColorTempMode = "color_temp";
+	private const string OnOffMode = "onoff";
 
 	// The modes that give equal channels somewhere to land. Nothing else counts as evidence against kelvin.
 	// Internal: HaLightActuator reads the same list to tell "not in colour mode" from "has no colour".
@@ -267,7 +273,7 @@ public sealed class AreaEntityResolver
 				+ "hand puts it on the manual hold, and it goes off when that hold runs out.",
 				name);
 
-		(bool? colorTemp, bool? anyColour) = ColourCapabilityOf(lights);
+		(bool? colorTemp, bool? anyColour, bool? anyBrightness) = ColourCapabilityOf(lights);
 
 		if (settings.ColorControl is ColorControl.Auto && anyColour == false)
 			_logger.LogInformation(
@@ -290,6 +296,7 @@ public sealed class AreaEntityResolver
 			LeavesOfEntry = leaves,
 			LightLevels = SettleLightLevels(name, area, leaves),
 			LightsSupportAnyColour = anyColour,
+			LightsSupportBrightness = anyBrightness,
 			KeepLitWhenOn = [.. area.KeepLitWhenOn ?? []],
 			LeadInSensors = [.. area.LeadInSensors ?? []],
 			MotionBatteries = BatteriesOf(motion),
@@ -350,14 +357,16 @@ public sealed class AreaEntityResolver
 	private static string? Trimmed(string? entityId) =>
 		string.IsNullOrWhiteSpace(entityId) ? null : entityId.Trim();
 
-	// What the area's fixtures say about colour. A light with no readable supported_color_modes said nothing and
-	// is not counted, so both answers stay null while a house is still starting up: absence of evidence must not
-	// resolve every room to equal channels, nor take the colour command away from one.
-	private (bool? ColorTemp, bool? AnyColour) ColourCapabilityOf(List<string> lights)
+	// What the area's fixtures say about colour and brightness. A light with no readable
+	// supported_color_modes said nothing and is not counted, so every answer stays null while a house is still
+	// starting up: absence of evidence must not resolve every room to equal channels, nor take a command away
+	// from one that can still take it.
+	private (bool? ColorTemp, bool? AnyColour, bool? Brightness) ColourCapabilityOf(List<string> lights)
 	{
 		bool anyAnswered = false;
 		bool anyColourTemp = false;
 		bool anyColourChannel = false;
+		bool anyBrightness = false;
 
 		foreach (string light in lights)
 		{
@@ -375,14 +384,20 @@ public sealed class AreaEntityResolver
 			// take the kelvin away from every room holding one beside a real lamp.
 			else if (ColourChannelModes.Any(mode => modes.Contains(mode, StringComparer.OrdinalIgnoreCase)))
 				anyColourChannel = true;
+
+			// Every mode other than plain on/off implies brightness control, colour temperature and every colour
+			// channel mode included. A fixture cannot mix "onoff" with another mode, so one non-onoff entry is
+			// enough.
+			if (modes.Any(mode => !string.Equals(mode, OnOffMode, StringComparison.OrdinalIgnoreCase)))
+				anyBrightness = true;
 		}
 
 		if (!anyAnswered)
-			return (null, null);
+			return (null, null, null);
 
 		bool? colorTemp = anyColourTemp ? true : anyColourChannel ? false : null;
 
-		return (colorTemp, anyColourTemp || anyColourChannel);
+		return (colorTemp, anyColourTemp || anyColourChannel, anyBrightness);
 	}
 
 	// Re-runs discovery without the include label, because an area with no lights at all must not be told to go

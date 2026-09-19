@@ -3,20 +3,25 @@
    chose and the schedule would stop reaching this room. Nothing here writes to disk. *@
 
 <div class="levels">
-	@* Asked once for the room and not once per period: warmth is a fact about the fixtures. *@
-	<div class="lvl-warmth">
-		<label class="lvl-warmth-lab" for="lvl-warmth">Warmth</label>
-		<select id="lvl-warmth" class="cell" @bind:get="WarmthNow" @bind:set="SetWarmth">
-			@foreach (TokenChoice option in AreaSentences.WarmthChoices)
+	@* Asked once for the room and not once per period: warmth is a fact about the fixtures. Dropped entirely,
+	   not disabled, when nothing here has any colour at all — choosing Kelvin or equal channels for a plain
+	   on/off switch or dimmer has nothing to reach. *@
+	@if (!NoColourAtAll)
+	{
+		<div class="lvl-warmth">
+			<label class="lvl-warmth-lab" for="lvl-warmth">Warmth</label>
+			<select id="lvl-warmth" class="cell" @bind:get="WarmthNow" @bind:set="SetWarmth">
+				@foreach (TokenChoice option in AreaSentences.WarmthChoices)
+				{
+					<option value="@option.Value">@option.Text</option>
+				}
+			</select>
+			@if (NoColourTemperature)
 			{
-				<option value="@option.Value">@option.Text</option>
+				<span class="lvl-warmth-note info-host"><InfoPopover Label="No colour temperature">@NoColourNote</InfoPopover></span>
 			}
-		</select>
-		@if (NoColourTemperature)
-		{
-			<span class="lvl-warmth-note info-host"><InfoPopover Label="No colour temperature">@NoColourNote</InfoPopover></span>
-		}
-	</div>
+		</div>
+	}
 
 	@if (Periods.Count == 0)
 	{
@@ -29,9 +34,12 @@
 	   the rows stack and each control carries its own label instead, or a slider would sit under nothing. *@
 	@if (Periods.Count > 0)
 	{
-		<div class="lvl lvl-head @(NoColourTemperature ? "lvl-nocolour" : null)" aria-hidden="true">
+		<div class="lvl lvl-head @(NoColourTemperature ? "lvl-nocolour" : null) @(NoBrightness ? "lvl-nobrightness" : null)" aria-hidden="true">
 			<span class="lvl-head-cell">Period</span>
-			<span class="lvl-head-cell">Brightness</span>
+			@if (!NoBrightness)
+			{
+				<span class="lvl-head-cell">Brightness</span>
+			}
 			@if (!NoColourTemperature)
 			{
 				<span class="lvl-head-cell">Warmth</span>
@@ -66,9 +74,10 @@
 		RoomLevelRow current = row;
 		bool isNow = string.Equals(current.PeriodId, ActivePeriod, StringComparison.OrdinalIgnoreCase);
 
-		<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(current.IsOwn ? "lvl-own" : null) @(isNow ? "lvl-now" : null)" @key="current.PeriodId">
+		<div class="lvl @(NoColourTemperature ? "lvl-nocolour" : null) @(NoBrightness ? "lvl-nobrightness" : null) @(current.IsOwn ? "lvl-own" : null) @(isNow ? "lvl-now" : null)" @key="current.PeriodId">
 			@* Name, start and the curve question on one line: the question is about this period, and a checkbox on
-			   a line of its own is a line every row on the page pays for. *@
+			   a line of its own is a line every row on the page pays for. The curve only ever sets brightness, so
+			   it has nothing to offer a room that cannot dim. *@
 			<div class="lvl-when">
 				<span class="lvl-name">@PeriodName(current.Name)</span>
 				@if (isNow)
@@ -77,38 +86,44 @@
 				}
 				<span class="lvl-start">@StartOf(current.PeriodId)</span>
 
-				<label class="lvl-curve-toggle">
-					<input type="checkbox" checked="@current.FollowsDaylightCurve"
-						   @onchange="args => SetFollowsDaylightCurve(current.PeriodId, args.Value is true)" />
-					Follow the daylight curve
-				</label>
+				@if (!NoBrightness)
+				{
+					<label class="lvl-curve-toggle">
+						<input type="checkbox" checked="@current.FollowsDaylightCurve"
+							   @onchange="args => SetFollowsDaylightCurve(current.PeriodId, args.Value is true)" />
+						Follow the daylight curve
+					</label>
+				}
 			</div>
 
 			@* Dropped, not replaced by a sentence, while this room follows the curve: the row shrinks to its one
 			   line. Anything the room pinned stays in the document and comes back with the control. The empty cell
 			   still holds its column where the table has columns. *@
-			<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
-				@if (!current.FollowsDaylightCurve)
-				{
-					<PresetSlider Value="@current.BrightnessPct"
-								  AtDefault="@(current.Brightness == LevelSource.Schedule)"
-								  Inheritable="true"
-								  DefaultLabel="the schedule's"
-								  Options="@Presets.BrightnessPct"
-								  Unit="%"
-								  Label="Brightness"
-								  AriaLabel="@($"Brightness during {PeriodName(current.Name)}")"
-								  FineAdjustable="true"
-								  ValueChanged="@(value => SetBrightness(current.PeriodId, value))">
-						<Mark>
-							@if (current.Brightness == LevelSource.Room)
-							{
-								<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
-							}
-						</Mark>
-					</PresetSlider>
-				}
-			</div>
+			@if (!NoBrightness)
+			{
+				<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
+					@if (!current.FollowsDaylightCurve)
+					{
+						<PresetSlider Value="@current.BrightnessPct"
+									  AtDefault="@(current.Brightness == LevelSource.Schedule)"
+									  Inheritable="true"
+									  DefaultLabel="the schedule's"
+									  Options="@Presets.BrightnessPct"
+									  Unit="%"
+									  Label="Brightness"
+									  AriaLabel="@($"Brightness during {PeriodName(current.Name)}")"
+									  FineAdjustable="true"
+									  ValueChanged="@(value => SetBrightness(current.PeriodId, value))">
+							<Mark>
+								@if (current.Brightness == LevelSource.Room)
+								{
+									<span class="tok-own-dot" title="This room's own setting" aria-hidden="true"></span>
+								}
+							</Mark>
+						</PresetSlider>
+					}
+				</div>
+			}
 
 			@* Dropped and not disabled, but anything a period already pinned stays in the document and comes
 			   back with the control. *@
@@ -208,6 +223,7 @@
 					   Room="@Room"
 					   Resolved="@Resolved"
 					   NoColourTemperature="@NoColourTemperature"
+					   NoBrightness="@NoBrightness"
 					   NameOf="@NameOf"
 					   TestRefusal="@TestRefusal"
 					   TestingLightId="@TestingLightId"
@@ -307,6 +323,15 @@
 	/// <summary>Which of the two reasons the room is offered no kelvin.</summary>
 	private string NoColourNote =>
 		Resolved is { CommandsColour: false } ? AreaSentences.NoColourAtAll : AreaSentences.NoColourTemperature;
+
+	// Whether to draw the warmth-mode select at all. Unlike NoColourTemperature this is never overruled by a
+	// stated ColorControl: choosing Kelvin or equal channels for a fixture with no colour of any kind has
+	// nothing to reach, whatever the room's document says.
+	private bool NoColourAtAll => Resolved is { LightsSupportAnyColour: false };
+
+	// A capability fact, not a schedule one: unresolved defaults to false (show), matching how the room page
+	// behaves before Home Assistant has answered at all.
+	private bool NoBrightness => Resolved is { LightsSupportBrightness: false };
 
 	private string WarmthNow => AreaSentences.WarmthOf(Room, Defaults).ToString();
 

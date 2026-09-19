@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+- A room whose lights cannot dim, or hold no colour of any kind, no longer shows a dimming or a warmth control for it: `ResolvedArea` gains `LightsSupportBrightness`, read off `supported_color_modes` the same way as the existing colour flags, and the room page's shared `LevelsEditor`/`LightLevelsEditor` hide the affected column, row and the warmth-mode selector. Where a room has neither (a plain on/off switch), the whole "Brightness & warmth" card is dropped rather than shown empty, in both designs.
+- Lamplight's Activity page: a long description could spill across the timestamp and room columns, because `.act-room`/`.act-what`/`.act-why` had no floor under their grid track's default minimum width. Fixed with `min-width: 0` and `overflow-wrap: break-word` on all three, matching the equivalent rule already in place on the first design's Activity page.
 - A room removed from the lighting document no longer keeps its entry in the room-history file for ever: a save now drops any room-history key that is not one of the document's own rooms, right after writing it. A room only renamed, or left disabled, keeps its history as before.
 
 ## [2026.9.20] - 2026-09-19

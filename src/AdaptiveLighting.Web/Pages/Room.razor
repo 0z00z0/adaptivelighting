@@ -108,60 +108,65 @@ else
 		</div>
 	</section>
 
-	<section class="panel room-card room-levels-card">
-		<div class="room-card-head">
-			<span class="room-card-title">Brightness &amp; warmth</span>
-			@if (_model.OwnPeriodCount is > 0 and int chosen)
-			{
-				<span class="sgroup-count" title="Periods this room sets for itself">@chosen</span>
-			}
-			@* The first card head already announces the save. *@
-			<TickRegion Clock="@_model">
-				<span class="room-save @SaveClass" aria-hidden="true">@_model.SaveLine</span>
-			</TickRegion>
-		</div>
-
-		<p class="room-card-foot lvl-lede">@_model.LevelsLede</p>
-
-		<LevelsEditor Periods="@_model.Periods"
-					  Room="@room"
-					  Defaults="@_model.Defaults"
-					  Resolved="@_model.Resolved"
-					  ActivePeriod="@_model.ActivePeriodId"
-					  NameOf="@_model.NameOf"
-					  TestRefusal="@_model.TestRefusal"
-					  TestingPeriodId="@_model.TestingPeriod"
-					  TestSecondsLeft="@_model.TestSecondsLeft"
-					  TestSeconds="@RoomPageModel.TestSeconds"
-					  Test="@_model.TestPeriod"
-					  TestingLightId="@_model.TestingLight"
-					  TestLight="@_model.TestLight"
-					  LevelEdited="@_model.EndTestOf"
-					  Changed="@_model.MarkDirty" />
-
-		@* Only where this room asked for it, for at least one period. With none the chart has nothing to
-		   describe, and its handles would edit numbers that change nothing. *@
-		@if (_model.CurvePeriodNames.Count > 0)
-		{
-			<div class="lvl-daylight">
-				<div class="lvl-daylight-head">
-					<span class="lvl-daylight-title">Daylight curve</span>
-				</div>
-
-				<LuxCurveChart Settings="@_model.Effective"
-							   PeriodNames="@_model.CurvePeriodNames"
-							   Reading="@_model.DaylightLux"
-							   Changed="@_model.OnCurveEdited" />
-
-				<p class="room-card-foot info-host">
-					<span class="info-line">
-						@_model.DaylightSourceNote
-						<InfoPopover Label="Daylight reading">@_model.DaylightSourceWhy</InfoPopover>
-					</span>
-				</p>
+	@* Hidden outright, not shown empty, when neither brightness nor colour applies: a plain on/off switch has
+	   no level here to set, and periods with nothing to hold are not a card worth a fold. *@
+	@if (_model.ShowLevelsCard)
+	{
+		<section class="panel room-card room-levels-card">
+			<div class="room-card-head">
+				<span class="room-card-title">Brightness &amp; warmth</span>
+				@if (_model.OwnPeriodCount is > 0 and int chosen)
+				{
+					<span class="sgroup-count" title="Periods this room sets for itself">@chosen</span>
+				}
+				@* The first card head already announces the save. *@
+				<TickRegion Clock="@_model">
+					<span class="room-save @SaveClass" aria-hidden="true">@_model.SaveLine</span>
+				</TickRegion>
 			</div>
-		}
-	</section>
+
+			<p class="room-card-foot lvl-lede">@_model.LevelsLede</p>
+
+			<LevelsEditor Periods="@_model.Periods"
+						  Room="@room"
+						  Defaults="@_model.Defaults"
+						  Resolved="@_model.Resolved"
+						  ActivePeriod="@_model.ActivePeriodId"
+						  NameOf="@_model.NameOf"
+						  TestRefusal="@_model.TestRefusal"
+						  TestingPeriodId="@_model.TestingPeriod"
+						  TestSecondsLeft="@_model.TestSecondsLeft"
+						  TestSeconds="@RoomPageModel.TestSeconds"
+						  Test="@_model.TestPeriod"
+						  TestingLightId="@_model.TestingLight"
+						  TestLight="@_model.TestLight"
+						  LevelEdited="@_model.EndTestOf"
+						  Changed="@_model.MarkDirty" />
+
+			@* Only where this room asked for it, for at least one period, and only where brightness reaches its
+			   lights at all: the curve has nothing but a brightness number to hand out. *@
+			@if (_model.ShowBrightnessControls && _model.CurvePeriodNames.Count > 0)
+			{
+				<div class="lvl-daylight">
+					<div class="lvl-daylight-head">
+						<span class="lvl-daylight-title">Daylight curve</span>
+					</div>
+
+					<LuxCurveChart Settings="@_model.Effective"
+								   PeriodNames="@_model.CurvePeriodNames"
+								   Reading="@_model.DaylightLux"
+								   Changed="@_model.OnCurveEdited" />
+
+					<p class="room-card-foot info-host">
+						<span class="info-line">
+							@_model.DaylightSourceNote
+							<InfoPopover Label="Daylight reading">@_model.DaylightSourceWhy</InfoPopover>
+						</span>
+					</p>
+				</div>
+			}
+		</section>
+	}
 
 	@* All settings, the gear and the log sit together at the foot of the page. *@
 	<section class="panel room-card">

@@ -206,6 +206,22 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	/// <summary>Why discovery could not answer.</summary>
 	public string? PreviewError => Preview.Error;
 
+	/// <summary>Whether this room has anything worth dimming, for both designs' room page.</summary>
+	// A capability fact, not a schedule one: unlike CommandsKelvin this is never overruled, since there is no
+	// per-room setting that asks a fixture to dim when it cannot. Unresolved or unanswered defaults to true, so
+	// a house still starting up shows its controls rather than hiding them on no evidence.
+	public bool ShowBrightnessControls => Resolved?.LightsSupportBrightness is not false;
+
+	/// <summary>Whether any light here offers colour of any kind, for the warmth mode choice.</summary>
+	// Deliberately not CommandsKelvin: that folds in an owner's ColorControl override, which still answers a
+	// question about the schedule and not about what is worth offering on a fixture with no colour at all.
+	public bool ShowColorControls => Resolved?.LightsSupportAnyColour is not false;
+
+	/// <summary>Whether the "Brightness &amp; warmth" card has anything left to show at all.</summary>
+	// Hides the whole fold rather than an empty shell: with neither fact true (a plain on/off switch) there is
+	// no level to set and no warmth to choose, only the schedule's periods with nothing to put in them.
+	public bool ShowLevelsCard => ShowBrightnessControls || ShowColorControls;
+
 	/// <summary>This room's newest report from the engine.</summary>
 	public AreaSnapshot? Snapshot { get; private set; }
 

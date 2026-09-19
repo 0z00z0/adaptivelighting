@@ -1945,6 +1945,17 @@
 	.lvl-nocolour {
 		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr) auto;
 	}
+
+	/* The mirror of .lvl-nocolour, for a fixture that answers with no brightness of its own. The room page
+	   hides the whole card once neither is left, so both classes together are not reached from there, but the
+	   column math has to hold on its own regardless of what hides the fold. */
+	.lvl-nobrightness {
+		grid-template-columns: minmax(8rem, 0.85fr) minmax(11rem, 1fr) auto;
+	}
+
+	.lvl-nocolour.lvl-nobrightness {
+		grid-template-columns: minmax(8rem, 0.85fr) auto;
+	}
 }
 
 /* The room list spans the whole period grid: the chips and the add row need more than one 230px column, and a
