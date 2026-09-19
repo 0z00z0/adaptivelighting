@@ -20,7 +20,20 @@
 		@(Model.AddingRoom ? "Cancel" : "Add a room")
 	</button>
 	<button type="button" @onclick="Model.OpenSetupForEveryRoom" disabled="@(!Model.CanSetUpAgain)">Set up rooms again</button>
+	<button type="button" @onclick="Model.ReloadFromHomeAssistant" disabled="@(!Model.CanReloadFromHomeAssistant)">Reload from Home Assistant</button>
+	<span class="info-host">
+		<InfoPopover Label="Reload from Home Assistant">
+			Rebuilds every room's lights and sensors from what Home Assistant reports right now, the same rebuild a
+			save or a restart already does. Refused while an edit here sits unsaved, since it rebuilds from the
+			file on disk and not from what is on screen.
+		</InfoPopover>
+	</span>
 </div>
+
+@if (Model.ReloadOutcome is { Length: > 0 } reloadOutcome)
+{
+	<p class="hint">@reloadOutcome</p>
+}
 
 @if (!Model.HomeAssistantIsAnswering)
 {

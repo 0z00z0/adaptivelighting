@@ -70,6 +70,22 @@ public sealed class HousePageModelTests
 	}
 
 	[TestMethod]
+	public void Reload_From_Home_Assistant_Is_Refused_While_An_Edit_Is_Unsaved()
+	{
+		HousePageModel model = Model();
+		model.Start(null);
+
+		model.HouseName = "Edited, not saved";
+		Assert.IsTrue(model.HasUnsavedEdits);
+		Assert.IsFalse(model.CanReloadFromHomeAssistant);
+
+		model.ReloadFromHomeAssistant();
+
+		StringAssert.Contains(model.ReloadOutcome, "Save");
+		Assert.IsNull(_engine!.LastValidation, "A refused reload must never reach the engine — it would rebuild off the file, silently dropping the edit on screen.");
+	}
+
+	[TestMethod]
 	public void A_Section_Alias_Resolves_To_Its_Section()
 	{
 		Assert.AreEqual(HouseSection.Schedule, HousePageModel.Resolve("periods"));

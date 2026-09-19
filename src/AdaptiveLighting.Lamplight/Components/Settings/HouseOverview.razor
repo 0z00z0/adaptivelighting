@@ -184,7 +184,18 @@
 <Fold Id="rooms" Title="Rooms" Summary="@RoomsSummary" Count="@Model.Areas.Count" Open="@IsOpen("rooms")" OpenChanged="@(open => SetOpen("rooms", open))">
 	<div class="panel-actions">
 		<button type="button" @onclick="Model.ToggleAddRoom">@(Model.AddingRoom ? "Cancel" : "Add a room")</button>
+		<button type="button" @onclick="Model.ReloadFromHomeAssistant" disabled="@(!Model.CanReloadFromHomeAssistant)">Reload from Home Assistant</button>
+		<Info Label="Reload from Home Assistant">
+			Rebuilds every room's lights and sensors from what Home Assistant reports right now, the same rebuild a
+			save or a restart already does. Refused while an edit here sits unsaved, since it rebuilds from the
+			file on disk and not from what is on screen.
+		</Info>
 	</div>
+
+	@if (Model.ReloadOutcome is { Length: > 0 } reloadOutcome)
+	{
+		<p class="hint">@reloadOutcome</p>
+	}
 
 	@if (Model.AddingRoom)
 	{

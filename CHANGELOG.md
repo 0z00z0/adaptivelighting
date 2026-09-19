@@ -12,6 +12,7 @@ against each other.
 
 ## [Unreleased]
 
+- A "Reload from Home Assistant" button on the house page, in both designs, beside the rooms list: rebuilds every room's lights and sensors from what Home Assistant reports right now, through `LightingEngineHost.Reload`, with no restart. Refused while an edit on the page is unsaved.
 - Every file the engine keeps about its own state (the period last run in, rooms already reported, each room's history, the last-seen cache and the activity journal) is now written through one shared registry, so a failed write is retried the same way for all of them and one start-up report in the log names what each restored. The files keep their names and places, so a house reads its existing ones after the update.
 
 ## [2026.9.19] - 2026-09-19
