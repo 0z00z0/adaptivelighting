@@ -12,6 +12,9 @@ against each other.
 
 ## [Unreleased]
 
+- A room whose lights cannot dim, or hold no colour of any kind, no longer shows a dimming or a warmth control for it: `ResolvedArea` gains `LightsSupportBrightness`, read off `supported_color_modes` the same way as the existing colour flags, and the room page's shared `LevelsEditor`/`LightLevelsEditor` hide the affected column, row and the warmth-mode selector. Where a room has neither (a plain on/off switch), the whole "Brightness & warmth" card is dropped rather than shown empty, in both designs.
+- Lamplight's Activity page: a long description could spill across the timestamp and room columns, because `.act-room`/`.act-what`/`.act-why` had no floor under their grid track's default minimum width. Fixed with `min-width: 0` and `overflow-wrap: break-word` on all three, matching the equivalent rule already in place on the first design's Activity page.
+
 ## [2026.9.20] - 2026-09-19
 
 - A "Reload from Home Assistant" button on the house page, in both designs, beside the rooms list: rebuilds every room's lights and sensors from what Home Assistant reports right now, through `LightingEngineHost.Reload`, with no restart. Refused while an edit on the page is unsaved.

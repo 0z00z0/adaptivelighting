@@ -3,31 +3,35 @@
 @using AdaptiveLighting.Configuration
 
 @* Brightness and warmth, ahead of every other fold: the owner's ordering decision. LevelsEditor already draws
-   LightLevelsEditor at its foot, so this is the whole of today's room-levels-card in one leaf control. *@
+   LightLevelsEditor at its foot, so this is the whole of today's room-levels-card in one leaf control.
+   Dropped entirely, not left open and empty, when the room has neither to offer — a plain on/off switch. *@
 
-<Fold Id="levels"
-	  Title="Brightness and warmth"
-	  Summary="@Model.LevelsLede"
-	  Count="@(Model.OwnPeriodCount > 0 ? Model.OwnPeriodCount : null)"
-	  CountTitle="Periods this room sets for itself"
-	  Open="@Open"
-	  OpenChanged="@OpenChanged">
-	<LevelsEditor Periods="@Model.Periods"
-				  Room="@Room"
-				  Defaults="@Model.Defaults"
-				  Resolved="@Model.Resolved"
-				  ActivePeriod="@Model.ActivePeriodId"
-				  NameOf="@Model.NameOf"
-				  TestRefusal="@Model.TestRefusal"
-				  TestingPeriodId="@Model.TestingPeriod"
-				  TestSecondsLeft="@Model.TestSecondsLeft"
-				  TestSeconds="@RoomPageModel.TestSeconds"
-				  Test="@Model.TestPeriod"
-				  TestingLightId="@Model.TestingLight"
-				  TestLight="@Model.TestLight"
-				  LevelEdited="@Model.EndTestOf"
-				  Changed="@Model.MarkDirty" />
-</Fold>
+@if (Model.ShowLevelsCard)
+{
+	<Fold Id="levels"
+		  Title="Brightness and warmth"
+		  Summary="@Model.LevelsLede"
+		  Count="@(Model.OwnPeriodCount > 0 ? Model.OwnPeriodCount : null)"
+		  CountTitle="Periods this room sets for itself"
+		  Open="@Open"
+		  OpenChanged="@OpenChanged">
+		<LevelsEditor Periods="@Model.Periods"
+					  Room="@Room"
+					  Defaults="@Model.Defaults"
+					  Resolved="@Model.Resolved"
+					  ActivePeriod="@Model.ActivePeriodId"
+					  NameOf="@Model.NameOf"
+					  TestRefusal="@Model.TestRefusal"
+					  TestingPeriodId="@Model.TestingPeriod"
+					  TestSecondsLeft="@Model.TestSecondsLeft"
+					  TestSeconds="@RoomPageModel.TestSeconds"
+					  Test="@Model.TestPeriod"
+					  TestingLightId="@Model.TestingLight"
+					  TestLight="@Model.TestLight"
+					  LevelEdited="@Model.EndTestOf"
+					  Changed="@Model.MarkDirty" />
+	</Fold>
+}
 
 @code {
 	[Parameter, EditorRequired]

@@ -138,7 +138,9 @@ else
 
 	private IReadOnlyList<SectionIndex.Item> IndexItems =>
 	[
-		new(LevelsId, "Brightness and warmth", _model.OwnPeriodCount > 0 ? _model.OwnPeriodCount : null),
+		.. _model.ShowLevelsCard
+			? [new SectionIndex.Item(LevelsId, "Brightness and warmth", _model.OwnPeriodCount > 0 ? _model.OwnPeriodCount : null)]
+			: Array.Empty<SectionIndex.Item>(),
 		new(MovementId, MovementGroup.Source.Title, MovementGroup.OwnCount > 0 ? MovementGroup.OwnCount : null),
 		new(SensorsId, "Lights and sensors"),
 		new(DarknessId, DarknessGroup.Source.Title, DarknessGroup.OwnCount > 0 ? DarknessGroup.OwnCount : null),

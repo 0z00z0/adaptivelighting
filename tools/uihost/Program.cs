@@ -217,6 +217,11 @@ static void SeedMoreRooms(FakeHaContext ha)
 
 	Lamp(ha, "light.gjesterom_tak", "Gjesterom tak");
 	ha.SetState("scene.gjester_kos", "scening", new() { ["friendly_name"] = "Gjester kos" });
+
+	// A room whose only light is a plain on/off switch: Home Assistant reports "onoff" and nothing else, no
+	// brightness attribute at all. Exercises the room page's capability hiding, which every other seeded light
+	// (colour temperature, always dimmable) never reaches.
+	SwitchOnlyLamp(ha, "light.bod_bryter", "Bod bryterlys");
 }
 
 static void Lamp(FakeHaContext ha, string entityId, string name, IReadOnlyList<string>? members = null)
@@ -233,6 +238,15 @@ static void Lamp(FakeHaContext ha, string entityId, string name, IReadOnlyList<s
 
 	ha.SetState(entityId, "on", attributes);
 }
+
+// A plain switch behind a "light" entity: HA reports its one mode and no brightness attribute, since it has
+// none to report.
+static void SwitchOnlyLamp(FakeHaContext ha, string entityId, string name) =>
+	ha.SetState(entityId, "on", new Dictionary<string, object>(StringComparer.Ordinal)
+	{
+		["friendly_name"] = name,
+		["supported_color_modes"] = new List<string> { "onoff" }
+	});
 
 // Attaches the engine exactly as a house's own [NetDaemonApp] does (see samples/MinimalHost), then saves a
 // document holding a handful of discovered-but-not-yet-committed rooms. Saving (not Reload) is deliberate: it
@@ -293,7 +307,8 @@ static List<AreaConfig> CommissioningRooms(bool enabled) =>
 		Enabled = enabled
 	},
 	new() { Name = "Soverom", Lights = ["light.soverom_tak", "light.soverom_nattbord"], Enabled = enabled },
-	new() { Name = "Gjesterom", Lights = ["light.gjesterom_tak"], Enabled = enabled }
+	new() { Name = "Gjesterom", Lights = ["light.gjesterom_tak"], Enabled = enabled },
+	new() { Name = "Bod", Lights = ["light.bod_bryter"], Enabled = enabled }
 ];
 
 // A dozen reports spread across every chip the Activity page draws, so the page is drivable without hand-editing.

@@ -323,6 +323,32 @@ public sealed class ColorControlTests
 		Assert.IsTrue(area.CommandsKelvin);
 	}
 
+	// ===================== whether anything in the room can be dimmed at all =====================
+
+	[TestMethod]
+	public void A_Plain_OnOff_Switch_Cannot_Be_Dimmed_Or_Coloured()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Light, "off", new() { [SupportedColorModes] = new[] { "onoff" } });
+
+		ResolvedArea area = Resolve(ha, ColorControl.Auto, Light);
+
+		Assert.AreEqual<bool?>(false, area.LightsSupportBrightness, "onoff is the one mode with no brightness in it");
+		Assert.AreEqual<bool?>(false, area.LightsSupportAnyColour, "a switch has no colour of any kind either");
+	}
+
+	[TestMethod]
+	public void One_Dimmable_Fixture_Keeps_A_Switch_Only_Room_Dimmable()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Light, "off", new() { [SupportedColorModes] = new[] { "onoff" } });
+		ha.SetState("light.b", "off", new() { [SupportedColorModes] = new[] { "color_temp" } });
+
+		ResolvedArea area = Resolve(ha, ColorControl.Auto, Light, "light.b");
+
+		Assert.AreEqual<bool?>(true, area.LightsSupportBrightness, "the dimmable lamp beside the switch must not be hidden with it");
+	}
+
 	// ===================== a person overruling the fixtures, both ways =====================
 
 	[TestMethod]

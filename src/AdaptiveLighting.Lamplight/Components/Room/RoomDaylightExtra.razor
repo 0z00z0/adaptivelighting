@@ -1,9 +1,11 @@
 @using AdaptiveLighting.Web.Components
 @using AdaptiveLighting.Lamplight.Components.Kit
 
-@* The daylight curve's chart, drawn above the fold's numeric rows only where a period actually follows it. *@
+@* The daylight curve's chart, drawn above the fold's numeric rows only where a period actually follows it, and
+   only where brightness reaches the room's lights at all: the curve has nothing but a brightness number to hand
+   out. *@
 
-@if (Model.CurvePeriodNames.Count > 0)
+@if (Model.ShowBrightnessControls && Model.CurvePeriodNames.Count > 0)
 {
 	<LuxCurveChart Settings="@Model.Effective"
 				   PeriodNames="@Model.CurvePeriodNames"
