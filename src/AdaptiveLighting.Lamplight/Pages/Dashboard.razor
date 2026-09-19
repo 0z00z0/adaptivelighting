@@ -1,5 +1,7 @@
 @page "/"
 @implements IDisposable
+@using AdaptiveLighting.Lamplight.Components.Dashboard
+@using AdaptiveLighting.Web.Components
 @inject AreaSnapshotCache Cache
 @inject ActivityLog Log
 @inject LightingEngineHost Engine
@@ -10,14 +12,25 @@
 
 <PageTitle>Dashboard &mdash; Adaptive lighting</PageTitle>
 
-<h1 class="pagetitle">Dashboard</h1>
+<h1 class="sr-only">Dashboard</h1>
 
-<section class="glass">
-	<p class="lede">
-		@(_model.EngineIsRunning ? "The lighting engine is running." : "The lighting engine is not running.")
-		The activity record holds @_model.Entries.Count @(_model.Entries.Count == 1 ? "report" : "reports").
-	</p>
-</section>
+<DashboardNotices Model="_model" />
+
+@if (_model.AwaitingRoomChoice)
+{
+	<p class="glass lede">No room has been switched on for adaptive lighting yet. Rooms are chosen on the first design&rsquo;s dashboard.</p>
+}
+else
+{
+	<HouseCard Model="_model" />
+
+	@* On the clock: the now-line walks and the tiles follow each report. *@
+	<TickRegion Clock="@_model">
+		<Timeline Model="_model" />
+		<RoomTiles Rooms="_model.Rooms" Hidden="_model.HiddenRooms" />
+		<WorthKnowing Model="_model" />
+	</TickRegion>
+}
 
 @code {
 	private DashboardPageModel _model = default!;
