@@ -43,34 +43,34 @@ public sealed class AreaViewTests
 			"Enabled stays on the room — it moved to the header toggle, it did not leave the model");
 	}
 
-	// ===================== the edge colour =====================
+	// ===================== the edge colour family =====================
 
 	[TestMethod]
-	public void The_Edge_Follows_The_Dashboards_Colour_Families()
+	public void The_Family_Follows_The_Dashboards_Colour_Families()
 	{
-		Assert.AreEqual("family-machine", AreaView.EdgeClass(true, AreaState.AutoActive));
-		Assert.AreEqual("family-machine", AreaView.EdgeClass(true, AreaState.AutoVacant));
-		Assert.AreEqual("family-machine", AreaView.EdgeClass(true, AreaState.PreOff));
-		Assert.AreEqual("family-human", AreaView.EdgeClass(true, AreaState.OverriddenOn));
-		Assert.AreEqual("family-human", AreaView.EdgeClass(true, AreaState.SuppressedOff));
-		Assert.AreEqual("family-idle", AreaView.EdgeClass(true, AreaState.Away));
-		Assert.AreEqual("family-idle", AreaView.EdgeClass(true, AreaState.SceneHold));
+		Assert.AreEqual(RoomFamily.Machine, AreaView.FamilyOf(true, AreaState.AutoActive));
+		Assert.AreEqual(RoomFamily.Machine, AreaView.FamilyOf(true, AreaState.AutoVacant));
+		Assert.AreEqual(RoomFamily.Machine, AreaView.FamilyOf(true, AreaState.PreOff));
+		Assert.AreEqual(RoomFamily.Human, AreaView.FamilyOf(true, AreaState.OverriddenOn));
+		Assert.AreEqual(RoomFamily.Human, AreaView.FamilyOf(true, AreaState.SuppressedOff));
+		Assert.AreEqual(RoomFamily.Idle, AreaView.FamilyOf(true, AreaState.Away));
+		Assert.AreEqual(RoomFamily.Idle, AreaView.FamilyOf(true, AreaState.SceneHold));
 	}
 
 	// The page opens before the first report arrives.
 	[TestMethod]
-	public void A_Room_With_No_Snapshot_Yet_Renders_Idle()
+	public void A_Room_With_No_Snapshot_Yet_Has_The_Idle_Family()
 	{
-		Assert.AreEqual("family-idle", AreaView.EdgeClass(true, null));
+		Assert.AreEqual(RoomFamily.Idle, AreaView.FamilyOf(true, null));
 	}
 
 	[TestMethod]
-	public void A_Switched_Off_Room_Is_Flat_Grey_Whatever_It_Last_Did()
+	public void A_Switched_Off_Room_Has_The_Off_Family_Whatever_It_Last_Did()
 	{
 		foreach (AreaState state in Enum.GetValues<AreaState>())
-			Assert.AreEqual("family-off", AreaView.EdgeClass(false, state), $"{state} with the switch off");
+			Assert.AreEqual(RoomFamily.Off, AreaView.FamilyOf(false, state), $"{state} with the switch off");
 
-		Assert.AreEqual("family-off", AreaView.EdgeClass(false, null));
+		Assert.AreEqual(RoomFamily.Off, AreaView.FamilyOf(false, null));
 	}
 
 	// ===================== enablement =====================
