@@ -3,7 +3,7 @@
 @* A row's notes come from CommissioningVerdicts, read off the document and never re-derived here. *@
 
 <div class="comm-label">
-	<span class="lab">The rooms &mdash; switch on the ones this app may run</span>
+	<span class="lab">Rooms to switch on</span>
 
 	@* A label around the box, not a control inside one. *@
 	@if (AllKeys.Count > 0)
@@ -116,15 +116,15 @@
 @* The switch-driven line first: it says what a room does, where the other says what it cannot judge. *@
 @if (SwitchDriven is { Length: > 0 } switchDriven)
 {
-	<p class="comm-caveat">@switchDriven</p>
+	<p class="comm-caveat info-host"><span class="info-line">@switchDriven <InfoPopover Label="@switchDriven" Severity="InfoSeverity.Warn">@CommissioningVerdicts.SwitchDrivenWhy</InfoPopover></span></p>
 }
 
 @if (NoSensor is { Length: > 0 } noSensor)
 {
-	<p class="comm-caveat">@noSensor</p>
+	<p class="comm-caveat info-host"><span class="info-line">@noSensor <InfoPopover Label="@noSensor" Severity="InfoSeverity.Warn">@CommissioningVerdicts.NoSensorWhy</InfoPopover></span></p>
 }
 
-<p class="comm-escape">Or <a href="config?section=areas">switch rooms on under Configuration</a>, the way this app has always done it.</p>
+<p class="comm-escape">Or <a href="config?section=areas">switch rooms on under Configuration</a></p>
 
 @code {
 	/// <summary>The proposed rooms, already grouped by floor in display order.</summary>

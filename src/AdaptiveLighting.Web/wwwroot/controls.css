@@ -78,6 +78,20 @@
 
 .info {
 	display: inline-flex;
+	vertical-align: middle;
+}
+
+/* The block an (i) panel opens under; the panel is absolute and needs a positioned ancestor. */
+.info-host {
+	position: relative;
+}
+
+/* A headline with its (i) beside it: one line, the explanation behind the icon. */
+.info-line {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-wrap: wrap;
 }
 
 .info-icon {
@@ -115,6 +129,25 @@
 .info-icon[aria-expanded="true"] {
 	border-color: var(--accent);
 	color: var(--accent);
+}
+
+/* Severity: yellow is worth knowing, red needs attention. Filled so the colour reads at 1.15rem. */
+.info-icon.warn,
+.info-icon.warn:hover,
+.info-icon.warn[aria-expanded="true"] {
+	border-color: var(--warn);
+	background: var(--warn);
+	color: var(--bg);
+	font-weight: 700;
+}
+
+.info-icon.bad,
+.info-icon.bad:hover,
+.info-icon.bad[aria-expanded="true"] {
+	border-color: var(--bad);
+	background: var(--bad);
+	color: var(--bg);
+	font-weight: 700;
 }
 
 .info-icon:focus-visible {
@@ -171,6 +204,24 @@
 
 .info-body {
 	color: var(--ink);
+}
+
+/* Several headlines in one notice stack, one per line. */
+.notice > .info-line {
+	display: flex;
+}
+
+.notice > .info-line + .info-line {
+	margin-top: 0.35rem;
+}
+
+/* One paragraph or list item of a longer explanation. */
+.info-para {
+	display: block;
+}
+
+.info-para + .info-para {
+	margin-top: 0.35rem;
 }
 
 .info-close {

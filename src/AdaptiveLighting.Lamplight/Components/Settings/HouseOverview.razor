@@ -31,7 +31,10 @@
 			</Row>
 		}
 	</div>
-	<p class="hint">Edited on the Schedule tab, where the same table sets when each period starts.</p>
+	<p class="hint info-line">
+		Edit on the Schedule tab
+		<Info Label="Brightness and warmth">The same table there sets when each period starts.</Info>
+	</p>
 </Fold>
 
 @foreach (AllSettingsPanel.Group group in Model.HouseSettingsInput.Groups)
@@ -42,7 +45,13 @@
 <Fold Id="sensors" Title="Lights and sensors" Summary="@SensorsSummary" BangKind="@(Model.SharedLights.Count > 0 ? "warn" : null)" BangTitle="@Model.SharedLightsHeadline" Open="@IsOpen("sensors")" OpenChanged="@(open => SetOpen("sensors", open))">
 	@if (Model.SharedLights.Count > 0)
 	{
-		<ul class="warns"><li class="warn-i warn"><Bang Kind="warn" Title="@Model.SharedLightsHeadline" /><span>@Model.SharedLightsHeadline</span></li></ul>
+		<ul class="warns">
+			<li class="warn-i warn">
+				<Bang Kind="warn" Title="@Model.SharedLightsHeadline" />
+				<span>@Model.SharedLightsHeadline</span>
+				<Info Label="Shared lights" Severity="InfoSeverity.Warn">@SharedLightsHelp</Info>
+			</li>
+		</ul>
 	}
 
 	<div class="rows">
@@ -67,7 +76,7 @@
 		<Row Label="Outdoor light-level sensor" Value="@(Model.OutdoorLuxSensor ?? "none")" IsWide="true">
 			<Help>Where the house reads the daylight, so darkness follows the clouds rather than the clock.</Help>
 			<ChildContent>
-				<EntityPicker Value="@Model.OutdoorLuxSensor" ValueChanged="@Model.SetOutdoorLux" Options="@Model.LuxSensors" NoneLabel="(none)" EmptyNote="@Model.EmptyNote("No light-level sensors found — type an id.")" Placeholder="sensor.ute_lux" />
+				<EntityPicker Value="@Model.OutdoorLuxSensor" ValueChanged="@Model.SetOutdoorLux" Options="@Model.LuxSensors" NoneLabel="(none)" EmptyNote="@Model.EmptyNote("No light-level sensors — type an id")" Placeholder="sensor.ute_lux" />
 			</ChildContent>
 		</Row>
 		<Row Label="What counts as a light-level sensor" Value="@Model.IlluminanceDeviceClass" IsWide="true">
@@ -108,7 +117,7 @@
 		<Row Label="Who lives here" Value="@(Model.Persons.Count == 0 ? "Everyone" : $"{Model.Persons.Count} named")" IsWide="true">
 			<Help>Whose phones are watched, so the dashboard can show who is home. Empty means everyone Home Assistant knows.</Help>
 			<ChildContent>
-				<EntityListPicker Value="@Model.Persons" ValueChanged="@Model.SetPersons" Options="@Model.PersonOptions" Lookup="@Model.Lookup" EmptyLabel="Empty — everyone Home Assistant knows." AddLabel="Watch someone…" EmptyNote="@Model.EmptyNote("No people found — type an id.")" Placeholder="person.example" />
+				<EntityListPicker Value="@Model.Persons" ValueChanged="@Model.SetPersons" Options="@Model.PersonOptions" Lookup="@Model.Lookup" EmptyLabel="Empty — everyone" AddLabel="Watch someone…" EmptyNote="@Model.EmptyNote("No people — type an id")" Placeholder="person.example" />
 			</ChildContent>
 		</Row>
 	</div>
@@ -119,7 +128,7 @@
 		<Row Label="Master switch" Value="@(Model.EffectiveKillSwitchEntity ?? "not connected yet")" IsWide="true">
 			<Help>Which Home Assistant switch pauses everything. Left unset it uses this app's own switch.</Help>
 			<ChildContent>
-				<EntityPicker Value="@Model.KillSwitchEntity" ValueChanged="@Model.SetKillSwitchEntity" Options="@Model.Switches" NoneLabel="(default — this app's own enable switch)" EmptyNote="@Model.EmptyNote("No switches found — type an id.")" Placeholder="input_boolean.adaptive_lighting_enabled" />
+				<EntityPicker Value="@Model.KillSwitchEntity" ValueChanged="@Model.SetKillSwitchEntity" Options="@Model.Switches" NoneLabel="(default — this app's own enable switch)" EmptyNote="@Model.EmptyNote("No switches — type an id")" Placeholder="input_boolean.adaptive_lighting_enabled" />
 			</ChildContent>
 		</Row>
 		@if (!Model.UsesBuiltInKillSwitch)
@@ -234,7 +243,7 @@
 
 	@if (Model.HasNoRooms)
 	{
-		<div class="empty">No rooms yet. Add one to get started.</div>
+		<div class="empty">No rooms yet</div>
 	}
 
 	@if (Model.SwitchedOffLine is { Length: > 0 } switchedOff)
@@ -268,8 +277,16 @@
 	private RenderFragment EngineChip => @<Chip Kind="@(Model.EngineIsRunning ? "ok" : "idle")" Word="@(Model.EngineIsRunning ? "running" : "stopped")" />;
 
 	private IReadOnlyList<NowCard.Warning> Warnings => Model.SharedLights.Count > 0
-		? [new NowCard.Warning("warn", Model.SharedLightsHeadline)]
+		? [new NowCard.Warning("warn", Model.SharedLightsHeadline, SharedLightsHelp)]
 		: [];
+
+	// Id beside the name, as SwitchOnNoteView orders it: the reason ends in advice.
+	private RenderFragment SharedLightsHelp => @<text>
+		@foreach (SuspectLight shared in Model.SharedLights)
+		{
+			<span class="info-para"><strong>@shared.Name</strong> <code>@shared.EntityId</code> &mdash; @shared.Reason</span>
+		}
+	</text>;
 
 	private IReadOnlyList<(string Label, string Value)> Facts =>
 	[

@@ -24,50 +24,67 @@
 
 <NavigationLock OnBeforeInternalNavigation="ConfirmLeave" ConfirmExternalNavigation="@Model.HasUnsavedEdits" />
 
-<h1>The house</h1>
+<h1 class="info-host">
+	<span class="info-line">
+		The house
+		<InfoPopover Label="The house">
+			Everything that isn't one room: what every room starts with, the day's schedule, the modes, the people
+			and the engine itself. Changes apply as soon as they are saved &mdash; no restart needed.
+		</InfoPopover>
+	</span>
+</h1>
 
 @if (Model.LoadError is { Length: > 0 } loadError)
 {
-	<div class="notice bad">
-		<strong>The configuration file couldn't be read.</strong>
-		<p>@loadError</p>
-		<p>
-			The file is <code>@Model.ConfigFilePath</code>. Fix it by hand, or press <em>Start from scratch</em> &mdash;
-			the old file is kept as <code>@Model.BackupPath</code> when you save.
-		</p>
+	<div class="notice bad info-host">
+		<span class="info-line">
+			<strong>Settings file unreadable</strong>
+			<InfoPopover Label="Settings file" Severity="InfoSeverity.Bad">
+				<span class="info-para">@loadError</span>
+				<span class="info-para">
+					The file is <code>@Model.ConfigFilePath</code>. Fix it by hand, or press <em>Start from scratch</em> &mdash;
+					the old file is kept as <code>@Model.BackupPath</code> on save.
+				</span>
+			</InfoPopover>
+		</span>
 		<button type="button" @onclick="Model.StartFromScratch">Start from scratch</button>
 	</div>
 }
 else
 {
-	<p class="lede">
-		Everything that isn't one room: what every room starts with, the day's schedule, the modes, the people
-		and the engine itself. Changes apply as soon as you save &mdash; no restart needed.
-	</p>
-
 	@* Permanent, not a footnote: a document the next deploy silently reverts makes the UI look broken. *@
 	@if (Model.LocationWarning is { Length: > 0 } locationWarning)
 	{
-		<div class="notice warn">
-			<strong>Edits here will not survive a deploy.</strong>
-			<p>@locationWarning</p>
+		<div class="notice warn info-host">
+			<span class="info-line">
+				<strong>A deploy overwrites these edits</strong>
+				<InfoPopover Label="Settings file" Severity="InfoSeverity.Warn">@locationWarning</InfoPopover>
+			</span>
 		</div>
 	}
 
 	@* Above the rail, so it cannot hide with a section nobody is looking at. *@
 	@if (!Model.EngineIsRunning || !Model.HomeAssistantIsAnswering)
 	{
-		<div class="notice warn">
+		<div class="notice warn info-host">
 			@if (!Model.EngineIsRunning)
 			{
-				<div><strong>Adaptive lighting isn't running.</strong> @Model.EngineFault Edits here are saved either way, and take effect when it starts.</div>
+				<span class="info-line">
+					<strong>Adaptive lighting isn't running</strong>
+					<InfoPopover Label="Not running" Severity="InfoSeverity.Bad">
+						@Model.EngineFault Edits here are saved either way, and take effect when it starts.
+					</InfoPopover>
+				</span>
 			}
 			@if (!Model.HomeAssistantIsAnswering)
 			{
-				<div>
-					<strong>Waiting for Home Assistant.</strong> The pickers below have nothing to offer until it answers.
-					You can still type ids by hand; they are not checked against Home Assistant if you save now.
-				</div>
+				<span class="info-line">
+					<strong>Waiting for Home Assistant</strong>
+					<InfoPopover Label="Waiting" Severity="InfoSeverity.Bad">
+						The pickers below have nothing to offer until it answers. Ids can still be typed by hand; they
+						are not checked against Home Assistant on a save now.
+					</InfoPopover>
+				</span>
 			}
 		</div>
 	}
@@ -101,36 +118,44 @@ else
 	   so it must not hide with its section. *@
 	@if (Model.HasValidationNotice && Model.Validation is { } validation)
 	{
-		<div class="notice @(validation.IsValid ? "warn" : "bad")">
+		<div class="notice @(validation.IsValid ? "warn" : "bad") info-host validation-lines">
 			@if (validation.Errors.Count > 0)
 			{
-				<strong>Fix these before saving:</strong>
-				<ul>
-					@foreach (string error in validation.Errors)
-					{
-						<li>@error</li>
-					}
-				</ul>
+				<span class="info-line">
+					<strong>@ValidationHeadline.Errors(validation.Errors.Count)</strong>
+					<InfoPopover Label="Fix before saving" Severity="InfoSeverity.Bad">
+						@foreach (string error in validation.Errors)
+						{
+							<span class="info-para">@ValidationWording.Plain(error)</span>
+						}
+					</InfoPopover>
+				</span>
 			}
 			@if (validation.AreaErrors.Count > 0)
 			{
-				<strong>These rooms will be skipped &mdash; everything else still works, and you can still save:</strong>
-				<ul>
-					@foreach (AreaError areaError in validation.AreaErrors)
-					{
-						<li><b>@areaError.AreaName</b>: @areaError.Message</li>
-					}
-				</ul>
+				<span class="info-line">
+					<strong>@ValidationHeadline.SkippedRooms(validation.AreaErrors.Count)</strong>
+					<InfoPopover Label="Skipped rooms" Severity="InfoSeverity.Warn">
+						<span class="info-para">Everything else still works, and saving still works.</span>
+						@foreach (AreaError areaError in validation.AreaErrors)
+						{
+							<span class="info-para"><b>@areaError.AreaName</b>: @ValidationWording.Plain(areaError.Message)</span>
+						}
+					</InfoPopover>
+				</span>
 			}
 			@if (validation.Warnings.Count > 0)
 			{
-				<strong>Worth knowing &mdash; none of these stops anything:</strong>
-				<ul>
-					@foreach (string warning in validation.Warnings)
-					{
-						<li>@warning</li>
-					}
-				</ul>
+				<span class="info-line">
+					<strong>@ValidationHeadline.Warnings(validation.Warnings.Count)</strong>
+					<InfoPopover Label="Worth knowing" Severity="InfoSeverity.Warn">
+						<span class="info-para">None of these stops anything.</span>
+						@foreach (string warning in validation.Warnings)
+						{
+							<span class="info-para">@ValidationWording.Plain(warning)</span>
+						}
+					</InfoPopover>
+				</span>
 			}
 		</div>
 	}

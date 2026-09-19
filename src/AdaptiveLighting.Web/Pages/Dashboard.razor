@@ -51,7 +51,15 @@
 			</div>
 			@if (_model.MasterNote is { Length: > 0 } note)
 			{
-				<p class="housebar-note">@note</p>
+				<p class="housebar-note info-host">
+					<span class="info-line">
+						@note
+						@if (_model.MasterNoteMore is { Length: > 0 } more)
+						{
+							<InfoPopover Label="Master switch" Severity="@_model.MasterNoteSeverity">@more</InfoPopover>
+						}
+					</span>
+				</p>
 			}
 		</div>
 	}
@@ -59,17 +67,28 @@
 
 @if (_model.KillSwitchActive)
 {
-	<div class="notice bad">
-		<strong>Adaptive lighting is paused.</strong> Nothing was turned off, but no lights will change until you
-		turn it back on above.
+	<div class="notice bad info-host">
+		<span class="info-line">
+			<strong>Adaptive lighting is paused</strong>
+			<InfoPopover Label="Paused" Severity="InfoSeverity.Bad">
+				Nothing was turned off, but no lights will change until it is turned back on above.
+			</InfoPopover>
+		</span>
 	</div>
 }
 else if (!_model.EngineIsRunning && _model.HasData)
 {
-	<div class="notice bad">
-		<strong>Adaptive lighting has stopped@(_model.EngineFault is { Length: > 0 } ? ":" : ".")</strong>
-		@_model.EngineFault
-		The timeline below shows what each room was doing when it stopped.
+	<div class="notice bad info-host">
+		<span class="info-line">
+			<strong>Adaptive lighting has stopped</strong>
+			<InfoPopover Label="Stopped" Severity="InfoSeverity.Bad">
+				@if (_model.EngineFault is { Length: > 0 } fault)
+				{
+					<span class="info-para">@fault</span>
+				}
+				<span class="info-para">The timeline below shows what each room was doing when it stopped.</span>
+			</InfoPopover>
+		</span>
 	</div>
 }
 
@@ -77,17 +96,23 @@ else if (!_model.EngineIsRunning && _model.HasData)
    first-run state, so neither is dressed up as onboarding. *@
 @if (!_model.HasData && !_model.EngineIsAttached)
 {
-	<div class="empty">
-		<strong>Connecting to Home Assistant&hellip;</strong>
-		<p>This is normal for a minute after a restart. If it doesn't clear, the connection is down.</p>
+	<div class="empty info-host">
+		<strong>
+			Connecting to Home Assistant&hellip;
+			<InfoPopover Label="Connecting">Normal for a minute after a restart. If it doesn't clear, the connection is down.</InfoPopover>
+		</strong>
 	</div>
 }
 else if (!_model.HasData && !_model.EngineIsRunning)
 {
-	<div class="empty">
-		<strong>Connected, but adaptive lighting isn't running.</strong>
-		<p>@(_model.EngineFault ?? "No reason was recorded.")</p>
-		<p>See <a href="config">Configuration</a> for details.</p>
+	<div class="empty info-host">
+		<strong>
+			Adaptive lighting isn't running
+			<InfoPopover Label="Not running" Severity="InfoSeverity.Bad">
+				Connected to Home Assistant. @(_model.EngineFault ?? "No reason was recorded.")
+			</InfoPopover>
+		</strong>
+		<p><a href="config">Configuration</a></p>
 	</div>
 }
 else if (_model.AwaitingRoomChoice)
@@ -98,17 +123,21 @@ else if (_model.AwaitingRoomChoice)
 }
 else if (!_model.HasData)
 {
-	<div class="empty">
-		<strong>Starting up &mdash; waiting for the first report from your rooms.</strong>
-		<p>This normally takes a few seconds.</p>
+	<div class="empty info-host">
+		<strong>
+			Starting up&hellip;
+			<InfoPopover Label="Starting up">Waiting for the first report from the rooms. This normally takes a few seconds.</InfoPopover>
+		</strong>
 	</div>
 }
 else if (_model.Lanes.Count == 0)
 {
 	@* Reports have arrived, but none from a room that is switched on. *@
-	<div class="empty">
-		<strong>None of the rooms you switched on has reported yet.</strong>
-		<p>Each one gets a lane here as it checks in.</p>
+	<div class="empty info-host">
+		<strong>
+			No room has reported yet
+			<InfoPopover Label="No reports">None of the rooms switched on has reported yet. Each one gets a lane here as it checks in.</InfoPopover>
+		</strong>
 	</div>
 }
 else
@@ -265,9 +294,11 @@ else
 
 		@if (_model.Entries.Count == 0)
 		{
-			<p class="board-note">
-				Nothing has been recorded yet. Recording starts when adaptive lighting starts, and a room appears
-				the first time it decides something.
+			<p class="board-note info-host">
+				<span class="info-line">
+					Nothing recorded yet
+					<InfoPopover Label="Timeline">Recording starts when adaptive lighting starts, and a room appears the first time it decides something.</InfoPopover>
+				</span>
 			</p>
 		}
 
@@ -275,14 +306,18 @@ else
 		<div class="board-foot">
 			@if (_model.HasMarks)
 			{
-				<span class="board-key"><StateChip State="AreaState.AutoActive" Bare="true" Kelvin="2700" /><span class="board-swatch blk-lit" style="--blk: @KelvinColour.Css(2700)"></span> lit by the engine (colour = actual warmth)</span>
+				<span class="board-key"><StateChip State="AreaState.AutoActive" Bare="true" Kelvin="2700" /><span class="board-swatch blk-lit" style="--blk: @KelvinColour.Css(2700)"></span> lit (colour = warmth)</span>
 				<span class="board-key"><StateChip State="AreaState.OverriddenOn" Bare="true" /><span class="board-swatch blk-hand"></span> set manually</span>
 				<span class="board-key"><StateChip State="AreaState.PreOff" Bare="true" /><span class="board-swatch blk-dimming"></span> warning dim</span>
 				<span class="board-key"><StateChip State="AreaState.SuppressedOff" Bare="true" /><span class="board-swatch blk-held"></span> off manually</span>
-				<span class="board-key"><span class="board-swatch board-swatch-refusal"></span> movement, but no &mdash; hover for why</span>
+				<span class="board-key"><span class="board-swatch board-swatch-refusal"></span> movement refused</span>
 				<span class="board-key"><span class="board-swatch board-swatch-next"></span> what happens next</span>
 			}
-			<span class="board-foot-end">Tap a room for its page</span>
+			<span class="board-foot-end info-host">
+				<InfoPopover Label="Timeline">
+					Tap a room for its page. Hover a refused movement for why. The colour of a lit block is the warmth the lights actually had.
+				</InfoPopover>
+			</span>
 		</div>
 	</section>
 
@@ -297,30 +332,32 @@ else
 	@* Filtered to ActivityView.SummaryCategories and not the Activity page's opening set, the board above
 	   having drawn the routine already. The budget is spent after the filter, never before it. *@
 	<div class="board-loghead">
-		<h2 class="board-title">What's worth knowing &mdash; newest at top</h2>
+		<h2 class="board-title">Worth knowing</h2>
 		<span class="board-since">@_model.LogFoot</span>
 	</div>
 
 	@if (_model.Entries.Count == 0)
 	{
-		<div class="empty">
-			<strong>Nothing has happened yet.</strong>
-			<p>
-				A quiet house can sit here for a long time. Each room appears the first time it decides
-				something &mdash; movement, a change of house mode, or the light outside crossing the level it
-				counts as dark.
-			</p>
+		<div class="empty info-host">
+			<strong>
+				Nothing has happened yet
+				<InfoPopover Label="Worth knowing">
+					A quiet house can sit here for a long time. Each room appears the first time it decides
+					something &mdash; movement, a change of house mode, or the light outside crossing the level it
+					counts as dark.
+				</InfoPopover>
+			</strong>
 		</div>
 	}
 	else if (_model.LogRows.Count == 0)
 	{
 		@* Reports exist, but not of the kind this summary carries. *@
-		<div class="empty">
-			<strong>Nothing important has happened yet.</strong>
-			<p>
-				@_model.BackgroundOnlyLine Movement, re-checks and everyday light changes are kept on the
-				<a href="activity">Activity</a> page, so this list stays short.
-			</p>
+		<div class="empty info-host">
+			<strong>
+				Nothing important yet
+				<InfoPopover Label="Worth knowing">@_model.BackgroundOnlyLine</InfoPopover>
+			</strong>
+			<p><a href="activity">Activity</a></p>
 		</div>
 	}
 	else

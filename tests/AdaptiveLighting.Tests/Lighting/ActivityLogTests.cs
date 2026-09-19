@@ -343,7 +343,7 @@ public sealed class ActivityLogTests
 			isDark: true,
 			darknessDetail: "lux 12, dark below 40"));
 
-		Assert.AreEqual("Dark enough — movement will light the room", line.What);
+		Assert.AreEqual("Dark enough — movement will light it", line.What);
 		Assert.AreEqual("lux 12, dark below 40", line.Why);
 	}
 
@@ -361,7 +361,7 @@ public sealed class ActivityLogTests
 			autoOnBlockedBy: AutoOnBlock.Sleep));
 
 		Assert.AreEqual(
-			"Dark enough, but the house is asleep — movement won't light the room",
+			"Dark, but the house is asleep",
 			line.What);
 		Assert.AreEqual("lux 12, dark below 40", line.Why,
 			"the reading is still the measurement the verdict was reached on");
@@ -380,7 +380,7 @@ public sealed class ActivityLogTests
 			autoOnBlockingEntity: "media_player.stue_tv"));
 
 		Assert.AreEqual(
-			"Dark enough, but media_player.stue_tv is on — movement won't light the room",
+			"Dark, but media_player.stue_tv is on",
 			line.What);
 		Assert.AreEqual("lux 12, dark below 40", line.Why);
 	}
@@ -389,7 +389,7 @@ public sealed class ActivityLogTests
 	[TestMethod]
 	public void An_Open_Gate_And_An_Older_Report_Both_Keep_The_Original_Words()
 	{
-		const string Promise = "Dark enough — movement will light the room";
+		const string Promise = "Dark enough — movement will light it";
 
 		Assert.AreEqual(Promise, ActivityView.Describe(Report(
 			"Stue", AreaState.AutoVacant, TransitionReason.CircadianTick,
@@ -432,7 +432,7 @@ public sealed class ActivityLogTests
 	{
 		ActivityLine line = ActivityView.Describe(Report("Stue", AreaState.AutoVacant, TransitionReason.Startup));
 
-		Assert.AreEqual("Started up — took the room as it was", line.What);
+		Assert.AreEqual("Started — took the room as it was", line.What);
 		Assert.AreEqual("Darkness not checked here yet.", line.Why);
 	}
 
@@ -490,7 +490,7 @@ public sealed class ActivityLogTests
 			killSwitch: true));
 
 		Assert.AreEqual("Paused by the master switch", line.What);
-		Assert.AreEqual("No lights change until it's turned back on.", line.Why);
+		Assert.AreEqual("No lights change until it's turned back on.", line.More);
 	}
 
 	[TestMethod]
@@ -514,7 +514,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Movement, but the room is bright enough",
 			Declined(AutoOnBlock.NotDark, isDark: false).What);
 
-		Assert.AreEqual("Movement, but the house is asleep and this room stays dark",
+		Assert.AreEqual("Movement, but the house is asleep",
 			Declined(AutoOnBlock.Sleep).What);
 
 		Assert.AreEqual("Movement, but media_player.stue_tv is on",
@@ -906,7 +906,7 @@ public sealed class ActivityLogTests
 
 		ActivityLine line = ActivityView.Describe(measured);
 
-		Assert.AreEqual("Started up — took the room as it was", line.What);
+		Assert.AreEqual("Started — took the room as it was", line.What);
 		Assert.AreEqual("Too bright to switch on — lux 4096 (mean of 2 of 2 sensors), dark below 40", line.Why);
 
 		Assert.IsTrue(ActivityView.IsWorthShowing(measured));
@@ -940,7 +940,7 @@ public sealed class ActivityLogTests
 
 		ActivityLine line = ActivityView.Describe(swept);
 
-		Assert.AreEqual("Started up — the house was already away", line.What);
+		Assert.AreEqual("Started — house already away", line.What);
 		Assert.AreEqual("Away mode is forced while input_boolean.occupancy is on.", line.Why,
 			"what is forcing the mode still has to reach the row");
 
@@ -1052,7 +1052,7 @@ public sealed class ActivityLogTests
 			isDark: true, autoOnBlockedBy: AutoOnBlock.EntityOn, autoOnBlockingEntity: "media_player.stue_tv");
 
 		Assert.AreEqual(
-			"Dark enough, but media_player.stue_tv is on — movement won't light the room.",
+			"Dark, but media_player.stue_tv is on.",
 			ActivityView.Describe(television).Why,
 			"named rather than alluded to, in the same words the dusk row and the board's tray use");
 	}
@@ -1260,26 +1260,21 @@ public sealed class ActivityLogTests
 		Assert.IsNull(ActivityView.HiddenNote(0, 0, ActivityView.AllRooms, ActivityView.DefaultCategories),
 			"an empty timeline is not a filtered one; the page has other words for that");
 
-		string? categories = ActivityView.HiddenNote(40, 12, ActivityView.AllRooms, ActivityView.DefaultCategories);
+		Assert.AreEqual("28 hidden", ActivityView.HiddenNote(40, 12, ActivityView.AllRooms, ActivityView.DefaultCategories));
+		Assert.AreEqual("1 hidden", ActivityView.HiddenNote(13, 12, ActivityView.AllRooms, ActivityView.DefaultCategories));
 
-		StringAssert.Contains(categories, "28 reports are hidden");
+		string categories = ActivityView.HiddenWhy(ActivityView.AllRooms, ActivityView.DefaultCategories);
+
 		StringAssert.Contains(categories, "categories");
-		Assert.IsFalse(categories!.Contains("rooms", StringComparison.Ordinal),
+		Assert.IsFalse(categories.Contains("rooms", StringComparison.Ordinal),
 			"no room was chosen, so blaming the room filter would send somebody to the wrong control");
 
-		string? room = ActivityView.HiddenNote(40, 12, "Stue", ActivityView.AllCategories);
+		StringAssert.Contains(ActivityView.HiddenWhy("Stue", ActivityView.AllCategories), "other rooms");
 
-		StringAssert.Contains(room, "28 reports are hidden");
-		StringAssert.Contains(room, "other rooms");
-
-		string? both = ActivityView.HiddenNote(40, 12, "Stue", ActivityView.DefaultCategories);
+		string both = ActivityView.HiddenWhy("Stue", ActivityView.DefaultCategories);
 
 		StringAssert.Contains(both, "other rooms");
 		StringAssert.Contains(both, "categories");
-
-		StringAssert.Contains(
-			ActivityView.HiddenNote(13, 12, ActivityView.AllRooms, ActivityView.DefaultCategories),
-			"1 report is hidden");
 	}
 
 	// ===================== one row per thing that happened =====================
@@ -1411,9 +1406,9 @@ public sealed class ActivityLogTests
 			"Describe is what the room page reads, and there the condition is attributed and wanted");
 	}
 
-	/// <summary>Its second line is about the house, not the publishing room, so the collapse keeps it.</summary>
+	/// <summary>Its explanation is about the house, not the publishing room, so the collapse keeps it.</summary>
 	[TestMethod]
-	public void The_Master_Switch_Keeps_Its_Own_Second_Line()
+	public void The_Master_Switch_Keeps_Its_Own_Explanation()
 	{
 		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(
 		[
@@ -1423,7 +1418,7 @@ public sealed class ActivityLogTests
 
 		Assert.AreEqual(1, rows.Count);
 		Assert.AreEqual("Paused by the master switch", rows[0].Line.What);
-		StringAssert.Contains(rows[0].Line.Why, "until it's turned back on");
+		StringAssert.Contains(rows[0].Line.More, "until it's turned back on");
 	}
 
 	[TestMethod]
@@ -1521,9 +1516,9 @@ public sealed class ActivityLogTests
 		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
 
 		Assert.AreEqual(3, rows.Count);
-		Assert.AreEqual("Dark enough — movement will light the room", rows[0].Line.What);
+		Assert.AreEqual("Dark enough — movement will light it", rows[0].Line.What);
 		Assert.AreEqual("Too bright to switch on", rows[1].Line.What);
-		Assert.AreEqual("Dark enough — movement will light the room", rows[2].Line.What);
+		Assert.AreEqual("Dark enough — movement will light it", rows[2].Line.What);
 	}
 
 	/// <summary>A run is the room's own: every room is re-checked in the same pass, so a room's repeats are never adjacent.</summary>
@@ -1575,8 +1570,8 @@ public sealed class ActivityLogTests
 		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(entries);
 
 		Assert.AreEqual(2, rows.Count);
-		Assert.AreEqual("Dark enough, but the house is asleep — movement won't light the room", rows[0].Line.What);
-		Assert.AreEqual("Dark enough — movement will light the room", rows[1].Line.What);
+		Assert.AreEqual("Dark, but the house is asleep", rows[0].Line.What);
+		Assert.AreEqual("Dark enough — movement will light it", rows[1].Line.What);
 	}
 
 	[TestMethod]
@@ -1704,11 +1699,11 @@ public sealed class ActivityLogTests
 		StringAssert.Contains(wholeThing, "63 reports");
 		Assert.IsFalse(wholeThing.Contains("11", StringComparison.Ordinal),
 			"nothing was cut, so no row count is set against the report count");
-		StringAssert.Contains(wholeThing, "74 everyday reports on the Activity page");
+		StringAssert.Contains(wholeThing, "74 everyday on Activity");
 
 		// 100 held, 5 dropped by Shown() and 30 background, so 65 are reachable. Against the buffer it claims 92.
 		StringAssert.Contains(BoardView.LogFoot(100, 65, 8, 8, ActivityLog.Capacity),
-			"57 everyday reports on the Activity page");
+			"57 everyday on Activity");
 
 		string quiet = BoardView.LogFoot(40, 40, 40, 8, ActivityLog.Capacity);
 
@@ -1719,20 +1714,20 @@ public sealed class ActivityLogTests
 		// Budget spent: the line says how many rows it drew, and out of how many reports.
 		string cut = BoardView.LogFoot(600, 600, 240, BoardView.LogPreview, ActivityLog.Capacity);
 
-		StringAssert.Contains(cut, $"newest {BoardView.LogPreview} rows of 240 reports");
-		StringAssert.Contains(cut, "360 everyday reports on the Activity page");
+		StringAssert.Contains(cut, $"newest {BoardView.LogPreview} of 240 reports");
+		StringAssert.Contains(cut, "360 everyday on Activity");
 
 		StringAssert.Contains(BoardView.LogFoot(1, 1, 1, 1, ActivityLog.Capacity), "1 report");
-		StringAssert.Contains(BoardView.LogFoot(3, 3, 2, 2, ActivityLog.Capacity), "1 everyday report on the Activity page");
+		StringAssert.Contains(BoardView.LogFoot(3, 3, 2, 2, ActivityLog.Capacity), "1 everyday on Activity");
 
 		string routineOnly = BoardView.LogFoot(71, 71, 0, 0, ActivityLog.Capacity);
 
-		Assert.AreEqual("71 everyday reports on the Activity page", routineOnly,
+		Assert.AreEqual("71 everyday on Activity", routineOnly,
 			"'0 reports' beside a count of held-back ones reads as a contradiction: the log plainly holds something");
 
 		StringAssert.Contains(
 			BoardView.LogFoot(ActivityLog.Capacity, ActivityLog.Capacity, 300, 12, ActivityLog.Capacity),
-			$"the most recent {ActivityLog.Capacity} are kept",
+			$"last {ActivityLog.Capacity} kept",
 			"a full buffer has started forgetting, and a reader who is not told will read the oldest row as the beginning");
 	}
 
@@ -1749,7 +1744,7 @@ public sealed class ActivityLogTests
 
 		IReadOnlyList<ActivityRow> rows = ActivityView.Rows(ActivityView.Shown(log.Entries));
 
-		Assert.AreEqual(1, rows.Count(row => row.Line.What == "Settings saved — every room rebuilt"));
+		Assert.AreEqual(1, rows.Count(row => row.Line.What == "Settings saved — rooms rebuilt"));
 		Assert.AreEqual(3, log.Newest, "one running count, shared with the reports either side of it");
 	}
 

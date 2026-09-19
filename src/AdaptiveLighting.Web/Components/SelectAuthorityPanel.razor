@@ -4,9 +4,18 @@
 <div class="field">
 	<div class="field-head">
 		<span class="field-label"><label for="@EntityInputId">@Copy.Label</label>
-			@if (Copy.LabelHelp is not null)
+			@if (Copy.LabelHelp is not null || Copy.Note is not null)
 			{
-				<InfoPopover Label="@Copy.Label">@Copy.LabelHelp</InfoPopover>
+				<InfoPopover Label="@Copy.Label">
+					@if (Copy.Note is not null)
+					{
+						<span class="info-para">@Copy.Note</span>
+					}
+					@if (Copy.LabelHelp is not null)
+					{
+						<span class="info-para">@Copy.LabelHelp</span>
+					}
+				</InfoPopover>
 			}
 		</span>
 	</div>
@@ -20,10 +29,6 @@
 					  EmptyNote="@Copy.EmptyNote"
 					  Placeholder="@Copy.Placeholder" />
 	</div>
-	@if (Copy.Note is not null)
-	{
-		<div class="field-help">@Copy.Note</div>
-	}
 </div>
 
 @if (EntityId is not null)
@@ -31,10 +36,13 @@
 	<div class="field">
 		<div class="field-head">
 			<span class="field-label"><span id="@AuthorityLabelId">@Copy.AuthorityLabel</span>
-				@if (Copy.AuthorityHelp is not null)
-				{
-					<InfoPopover Label="@Copy.AuthorityLabel">@Copy.AuthorityHelp</InfoPopover>
-				}
+				<InfoPopover Label="@Copy.AuthorityLabel">
+					<span class="info-para">@Copy.AuthorityNote</span>
+					@if (Copy.AuthorityHelp is not null)
+					{
+						<span class="info-para">@Copy.AuthorityHelp</span>
+					}
+				</InfoPopover>
 			</span>
 		</div>
 		@* Renaming a periodselect-* class breaks the house mode too. *@
@@ -50,14 +58,17 @@
 				Adaptive lighting
 			</label>
 		</div>
-		<div class="field-help">@Copy.AuthorityNote</div>
 	</div>
 
 	@if (ShowsUnavailable)
 	{
-		<div class="notice bad periodselect-warning">
-			<strong>Home Assistant doesn't know <code>@EntityId</code>.</strong>
-			<span>@Copy.UnavailableNote</span>
+		<div class="notice bad periodselect-warning info-host">
+			<span class="info-line">
+				<strong><code>@EntityId</code> not found</strong>
+				<InfoPopover Label="Not found" Severity="InfoSeverity.Bad">
+					Home Assistant doesn't know this helper. @Copy.UnavailableNote
+				</InfoPopover>
+			</span>
 		</div>
 	}
 

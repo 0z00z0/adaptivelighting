@@ -3,16 +3,20 @@
    is its own table of contents. Warnings and validation errors stay above the section rail, where
    a fault cannot hide inside an unopened group. *@
 <header class="section-head">
-	<h2><Icon Name="@Glyph.House" Class="ic-head" />House</h2>
-	<p class="lede">
-		The settings there is one of: what every room starts with, which lights count as a room's,
-		what this house is called, who lives in it, and the one switch that pauses everything.
-	</p>
+	<h2 class="info-host">
+		<span class="info-line">
+			<Icon Name="@Glyph.House" Class="ic-head" />House
+			<InfoPopover Label="House">
+				The settings there is one of: what every room starts with, which lights count as a room's,
+				what this house is called, who lives in it, and the one switch that pauses everything.
+			</InfoPopover>
+		</span>
+	</h2>
 </header>
 
 @* Flush, because everything inside already spans the fold. *@
 <GroupFold Title="Every room starts with these"
-		   Description="How long lights stay on, how a room decides it's dark, and how it behaves. A room's own settings win."
+		   Description="a room's own settings win"
 		   Flush="true">
 	<div class="room-sentences">
 		<SentenceView Sentences="@Model.DefaultsSentences"
@@ -42,22 +46,24 @@
 </GroupFold>
 
 <GroupFold Title="Finding lights & sensors"
-		   Description="Which lights this app may manage, what counts as a sensor, and where the house reads the daylight."
+		   Description="labels, sensors, daylight"
 		   Open="@(Model.SharedLights.Count > 0)">
 	@* Bulbs more than one room commands, found by the engine as it builds. The fold opens itself
 	   when there is one, since a warning inside a closed drawer is shown to nobody. *@
 	@if (Model.SharedLights is { Count: > 0 } sharedLights)
 	{
-		<div class="notice warn">
-			<strong>@Model.SharedLightsHeadline</strong>
-			<ul>
-				@foreach (SuspectLight shared in sharedLights)
-				{
-					@* Id beside the name, as SwitchOnNoteView orders it: the reason ends in advice, and
-					   a trailing entity id reads as part of that advice. *@
-					<li><strong>@shared.Name</strong> <code>@shared.EntityId</code> &mdash; @shared.Reason</li>
-				}
-			</ul>
+		<div class="notice warn info-host">
+			<span class="info-line">
+				<strong>@Model.SharedLightsHeadline</strong>
+				<InfoPopover Label="Shared lights" Severity="InfoSeverity.Warn">
+					@foreach (SuspectLight shared in sharedLights)
+					{
+						@* Id beside the name, as SwitchOnNoteView orders it: the reason ends in advice, and
+						   a trailing entity id reads as part of that advice. *@
+						<span class="info-para"><strong>@shared.Name</strong> <code>@shared.EntityId</code> &mdash; @shared.Reason</span>
+					}
+				</InfoPopover>
+			</span>
 		</div>
 	}
 
@@ -67,7 +73,8 @@
 				<InfoPopover Label="Only manage lights with (label)">
 					Set it and every light without this label stops being managed, in every room &mdash; useful
 					when a room resolves to status LEDs and colour channels as well as lamps. Lights you named
-					by hand in a room are managed either way, and <em>Never touch</em> below still wins.
+					by hand in a room are managed either way, and <em>Never touch</em> below still wins. Empty is the
+					usual answer: every light found is managed.
 				</InfoPopover>
 			</span>
 		</div>
@@ -77,10 +84,9 @@
 						 ValueChanged="@Model.SetIncludeLabel"
 						 Options="@Model.LabelOptions"
 						 NoneLabel="(none — manage every light that's found)"
-						 UnknownNote="No light carries this label yet, so no room will resolve. Label the lights in Home Assistant, or clear this."
+						 UnknownNote="No light carries it — no room will resolve"
 						 Placeholder="adaptive" />
 		</div>
-		<div class="field-help">Empty is the usual answer: every light found is managed.</div>
 	</div>
 
 	<div class="field">
@@ -89,7 +95,8 @@
 				<InfoPopover Label="Never touch (label)">
 					Anything carrying this label stops being found: never discovered, never commanded, never
 					counted. Put it on the fridge lamp and the router's status LED. A light you named by hand
-					in a room is the one thing it does not reach.
+					in a room is the one thing it does not reach. It beats the label above: carrying both means the
+					light is left alone.
 				</InfoPopover>
 			</span>
 		</div>
@@ -99,10 +106,9 @@
 						 ValueChanged="@Model.SetExcludeLabel"
 						 Options="@Model.LabelOptions"
 						 NoneLabel="(none — nothing is excluded)"
-						 UnknownNote="Nothing carries this label, so nothing is excluded — that's fine."
+						 UnknownNote="Nothing carries it — nothing excluded"
 						 Placeholder="adaptive_exclude" />
 		</div>
-		<div class="field-help">This beats the label above: carrying both means the light is left alone.</div>
 	</div>
 
 	<div class="field">
@@ -121,7 +127,7 @@
 						 ValueChanged="@Model.SetMotionLabel"
 						 Options="@Model.LabelOptions"
 						 NoneLabel="(none — device classes decide)"
-						 UnknownNote="Nothing carries this label yet, so only the device classes below decide."
+						 UnknownNote="Nothing carries it — device classes decide"
 						 Placeholder="adaptive_motion" />
 		</div>
 	</div>
@@ -145,7 +151,7 @@
 						  ValueChanged="@Model.SetOutdoorLux"
 						  Options="@Model.LuxSensors"
 						  NoneLabel="(none — no room can follow the house's daylight)"
-						  EmptyNote="@Model.EmptyNote("No light-level sensors found — type an id.")"
+						  EmptyNote="@Model.EmptyNote("No light-level sensors — type an id")"
 						  Placeholder="sensor.ute_lux" />
 		</div>
 	</div>
@@ -159,7 +165,9 @@
 					<InfoPopover Label="What counts as a motion sensor">
 						Which kinds of binary sensor wake the lights. The built-in set &mdash; motion, occupancy,
 						presence &mdash; suits nearly every house. Ticking anything <strong>replaces</strong> that
-						set rather than adding to it, so a room can go silent by losing a class you forgot to tick.
+						set rather than adding to it, so a room can go silent by losing a class left unticked. Ticking
+						nothing means the built-in set (<code>@HousePageModel.DefaultMotionDeviceClassesText</code>).
+						Currently in effect: <code>@Model.EffectiveMotionDeviceClassesText</code>.
 					</InfoPopover>
 				</span>
 			</div>
@@ -174,13 +182,6 @@
 						@current
 					</label>
 				}
-			</div>
-			<div class="field-help">
-				Ticking nothing means the built-in set
-				(<code>@HousePageModel.DefaultMotionDeviceClassesText</code>), which is usually right.
-				Ticking anything <strong>replaces</strong> that set rather than adding to it, so tick every class
-				you want &mdash; including the built-in ones you still need. Currently in effect:
-				<code>@Model.EffectiveMotionDeviceClassesText</code>.
 			</div>
 		</div>
 
@@ -206,17 +207,12 @@
 					}
 				</select>
 			</div>
-			<div class="field-help">What makes a sensor count as a room's light-level reading.</div>
 		</div>
 	</details>
 </GroupFold>
 
 <GroupFold Title="People"
-		   Description="Whose phones are shown as home or away, and how long before the house reads as empty.">
-	<p class="group-note">
-		Who is home is shown, never acted on. The house mode is what decides whether the house is away
-		&mdash; a phone that never comes back does not switch a single light.
-	</p>
+		   Description="shown, never acted on">
 	<SentenceView Sentences="@Model.AwaySentence"
 				  Edited="@Model.OnGlobalEdited"
 				  Note="@HousePageModel.TokenNote"
@@ -229,7 +225,8 @@
 					Whose phones are watched, so the dashboard can show who is home. Empty means everyone
 					Home Assistant knows, including people added later &mdash; usually right. Name people
 					only to leave someone out: a car tracker or a guest phone whose comings and goings are
-					not worth showing.
+					not worth showing. Who is home is shown, never acted on: the house mode decides whether the house is
+					away, and a phone that never comes back does not switch a single light.
 				</InfoPopover>
 			</span>
 		</div>
@@ -239,27 +236,31 @@
 							  ValueChanged="@Model.SetPersons"
 							  Options="@Model.PersonOptions"
 							  Lookup="@Model.Lookup"
-							  EmptyLabel="Empty — everyone Home Assistant knows, including people added later."
+							  EmptyLabel="Empty — everyone"
 							  AddLabel="Watch someone…"
-							  EmptyNote="@Model.EmptyNote("No people found in Home Assistant — type an id.")"
+							  EmptyNote="@Model.EmptyNote("No people — type an id")"
 							  Placeholder="person.example" />
 		</div>
 	</div>
 </GroupFold>
 
 <GroupFold Title="Master switch"
-		   Description="Which switch pauses all automatic lighting, and which way round it reads.">
-	<p class="group-note">
-		On means lights adjust automatically; off pauses everything at once &mdash; nothing is turned off,
-		changes just stop. This is the same switch as the On/Off control on the dashboard.
-	</p>
+		   Description="pauses everything">
 	<div class="field">
 		<div class="field-head">
 			<span class="field-label"><label for="kill-switch-entity">Master switch</label>
 				<InfoPopover Label="Master switch">
 					Which Home Assistant switch pauses everything. Left unset it uses this app's own switch,
 					which is what the dashboard's On/Off control flips. Point it at your own toggle to gate the
-					app on something else &mdash; an alarm state, a holiday helper.
+					app on something else &mdash; an alarm state, a holiday helper. On means lights adjust
+					automatically; off pauses everything at once &mdash; nothing is turned off, changes just stop.
+					@if (!Model.UsesBuiltInKillSwitch)
+					{
+						<span class="info-para">
+							The dropdown says which way round it reads. Backwards, the house pauses exactly when it should
+							be working. This switch replaces the app's own.
+						</span>
+					}
 				</InfoPopover>
 			</span>
 		</div>
@@ -269,7 +270,7 @@
 						  ValueChanged="@Model.SetKillSwitchEntity"
 						  Options="@Model.Switches"
 						  NoneLabel="(default — this app's own enable switch)"
-						  EmptyNote="@Model.EmptyNote("No switches or toggle helpers found — type an id.")"
+						  EmptyNote="@Model.EmptyNote("No switches — type an id")"
 						  Placeholder="input_boolean.adaptive_lighting_enabled" />
 		</div>
 		@if (Model.UsesBuiltInKillSwitch)
@@ -279,16 +280,11 @@
 			<div class="field-help">
 				@if (Model.EffectiveKillSwitchEntity is { Length: > 0 } builtIn)
 				{
-					<span>
-						Using <code>@builtIn</code> — the app's own switch in Home Assistant. Turning it off
-						pauses the whole app, this page included.
-					</span>
+					<span>Using <code>@builtIn</code></span>
 				}
 				else
 				{
-					<span>
-						Will default to this app's own enable switch once the host has connected to Home Assistant.
-					</span>
+					<span>This app's own switch, once connected</span>
 				}
 			</div>
 		}
@@ -304,16 +300,12 @@
 					<option value="false">off lets lights adjust, on pauses everything</option>
 				</select>
 			</div>
-			<div class="field-help">
-				Which way round this switch reads. Get it backwards and the house pauses exactly when it
-				should be working. This switch replaces the app's own.
-			</div>
 		}
 	</div>
 </GroupFold>
 
 <GroupFold Title="House name"
-		   Description="What this house is called in logs and notifications.">
+		   Description="for logs and notifications">
 	<div class="field">
 		<div class="field-head">
 			<span class="field-label"><label for="house-name">House name</label>
@@ -327,7 +319,7 @@
 </GroupFold>
 
 <GroupFold Title="Fine tuning"
-		   Description="How often rooms re-check, how the engine tells its own changes from a person's, and how close is close enough.">
+		   Description="re-checks and echoes">
 	<div class="field">
 		<div class="field-head">
 			<span class="field-label"><label for="circadian-tick-seconds">Re-check the rooms every</label>
@@ -370,14 +362,14 @@
 			</span>
 		</div>
 		<div class="field-control checks">
-			<label><input id="treat-automations-as-manual" type="checkbox" @bind="Model.TreatAutomationsAsManual" /> a change from another automation counts as a manual change</label>
+			<label><input id="treat-automations-as-manual" type="checkbox" @bind="Model.TreatAutomationsAsManual" /> counts as manual</label>
 		</div>
 	</div>
 
 </GroupFold>
 
 <GroupFold Title="This installation"
-		   Description="Which version is running, whether the engine is running, whether Home Assistant is answering, and where the settings file is kept.">
+		   Description="version, engine, file">
 	<div class="status-row">
 		<span class="status-label">Version</span>
 		<code>@HousePageModel.Version</code>
@@ -401,7 +393,7 @@
 		<span class="badge">@Model.LocationDescription</span>
 		@if (Model.HasBackup)
 		{
-			<span class="hint">previous version kept at <code>@Model.BackupPath</code></span>
+			<span class="hint info-host"><InfoPopover Label="Previous version">Kept at <code>@Model.BackupPath</code>.</InfoPopover></span>
 		}
 	</div>
 	<div class="status-row">
@@ -414,7 +406,11 @@
 		else
 		{
 			<span class="badge bad">not connected</span>
-			<span>You can still type ids by hand; they are not checked against Home Assistant if you save now.</span>
+			<span class="info-host">
+				<InfoPopover Label="Not connected" Severity="InfoSeverity.Bad">
+					Ids can still be typed by hand; they are not checked against Home Assistant on a save now.
+				</InfoPopover>
+			</span>
 		}
 	</div>
 </GroupFold>

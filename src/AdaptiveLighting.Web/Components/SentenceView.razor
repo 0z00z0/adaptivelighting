@@ -66,7 +66,7 @@
 	public bool ShowLegend { get; set; } = true;
 
 	[Parameter]
-	public string LegendText { get; set; } = "= this room's own setting, not the house's";
+	public string LegendText { get; set; } = "= this room's own";
 
 	private bool HasOwnValues => Sentences.Sum(sentence => sentence.OwnValueCount) > 0;
 }

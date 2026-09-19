@@ -89,8 +89,8 @@ public sealed class CommissioningVerdictsTests
 	public void The_No_Sensor_Line_Is_Said_Once()
 	{
 		Assert.IsNull(CommissioningVerdicts.NoSensorLine(0));
-		StringAssert.StartsWith(CommissioningVerdicts.NoSensorLine(1), "One room has no light-level sensor, so it counts as dark all day");
-		StringAssert.StartsWith(CommissioningVerdicts.NoSensorLine(11), "11 rooms have no light-level sensor, so they count as dark all day");
+		Assert.AreEqual("1 room has no light-level sensor", CommissioningVerdicts.NoSensorLine(1));
+		Assert.AreEqual("11 rooms have no light-level sensor", CommissioningVerdicts.NoSensorLine(11));
 	}
 
 	[TestMethod]
@@ -160,7 +160,7 @@ public sealed class CommissioningVerdictsTests
 			"both settings are unreachable, and each is its own thing to fix");
 
 		foreach (Verdict note in notes)
-			StringAssert.Contains(note.Text, "no house-mode option is marked Away");
+			StringAssert.Contains(note.Text, "no Away option");
 	}
 
 	[TestMethod]
@@ -181,7 +181,7 @@ public sealed class CommissioningVerdictsTests
 
 		IReadOnlyList<Verdict> notes = CommissioningVerdicts.For(room, Defaults, 1, suspectCount: 2, lightCount: 5, motionCount: 1);
 
-		Assert.AreEqual("2 of 5 lights look like something else", notes[0].Text);
+		Assert.AreEqual("2 of 5 lights not lamps?", notes[0].Text);
 		Assert.AreEqual(VerdictTone.Warn, notes[0].Tone);
 		Assert.AreEqual(VerdictTone.Info, notes[1].Tone);
 	}
@@ -192,7 +192,7 @@ public sealed class CommissioningVerdictsTests
 		AreaConfig room = new() { AreaId = "kjokken" };
 
 		Assert.AreEqual(
-			"1 of 3 lights looks like something else",
+			"1 of 3 lights not a lamp?",
 			CommissioningVerdicts.For(room, Defaults, 1, 1, 3, 1)[0].Text);
 	}
 
@@ -222,7 +222,7 @@ public sealed class CommissioningVerdictsTests
 			CommissioningVerdicts.For(spisestue, Defaults, 1, suspectCount: 2, lightCount: 5, motionCount: 0);
 
 		Assert.AreEqual(CommissioningVerdicts.SwitchDrivenNote, notes[0].Text);
-		Assert.AreEqual("2 of 5 lights look like something else", notes[1].Text);
+		Assert.AreEqual("2 of 5 lights not lamps?", notes[1].Text);
 	}
 
 	[TestMethod]
@@ -265,13 +265,11 @@ public sealed class CommissioningVerdictsTests
 		Assert.IsNull(CommissioningVerdicts.SwitchDrivenLine(0));
 
 		Assert.AreEqual(
-			"One room has no motion sensor, so it never lights itself. Switching it on at the wall lights it, "
-			+ "and it goes off when that hold runs out.",
+			"1 room has no motion sensor",
 			CommissioningVerdicts.SwitchDrivenLine(1));
 
 		Assert.AreEqual(
-			"4 rooms have no motion sensor, so they never light themselves. Switching one on at the wall "
-			+ "lights it, and it goes off when that hold runs out.",
+			"4 rooms have no motion sensor",
 			CommissioningVerdicts.SwitchDrivenLine(4));
 	}
 
@@ -288,8 +286,8 @@ public sealed class CommissioningVerdictsTests
 	[TestMethod]
 	public void The_Rest_Line_Says_Where_They_Went()
 	{
-		Assert.AreEqual("The other 8 stay listed under House, each with its own switch.", CommissioningVerdicts.RestLine(9, 17));
-		Assert.AreEqual("The other room stays listed under House, with its own switch.", CommissioningVerdicts.RestLine(16, 17));
+		Assert.AreEqual("The other 8 stay off, under House", CommissioningVerdicts.RestLine(9, 17));
+		Assert.AreEqual("The other room stays off, under House", CommissioningVerdicts.RestLine(16, 17));
 		Assert.IsNull(CommissioningVerdicts.RestLine(17, 17));
 	}
 }

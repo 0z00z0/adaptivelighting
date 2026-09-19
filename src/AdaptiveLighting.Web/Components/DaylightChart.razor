@@ -6,17 +6,27 @@
 <div class="daylight-chart">
 	@if (!_haveLocation)
 	{
-		<div class="notice warn">
-			Home Assistant hasn't shared the home's location, so the year chart can't be drawn.
+		<div class="notice warn info-host">
+			<span class="info-line">
+				No home location
+				<InfoPopover Label="No home location" Severity="InfoSeverity.Warn">
+					Home Assistant hasn't shared the home's location, so the year chart can't be drawn.
+				</InfoPopover>
+			</span>
 		</div>
 	}
 	else
 	{
 		@((MarkupString)_svg)
 
-		<p class="daylight-caption">
-			Night, twilight and daylight through the year. Lines are your period starts — a sun-tied start follows
-			the curve. The dashed line is today.
+		<p class="daylight-caption info-host">
+			<span class="info-line">
+				The year&rsquo;s daylight
+				<InfoPopover Label="Daylight through the year">
+					Night, twilight and daylight through the year. Lines are the period starts &mdash; a sun-tied start
+					follows the curve. The dashed line is today.
+				</InfoPopover>
+			</span>
 		</p>
 	}
 </div>

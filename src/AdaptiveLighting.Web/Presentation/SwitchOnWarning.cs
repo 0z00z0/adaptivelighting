@@ -69,24 +69,15 @@ public static class SwitchOnWarning
 	/// <summary>The first line: what the switch just did, and how much of it deserves a second look.</summary>
 	private static string Lead(string roomName, int lightCount, int suspectCount)
 	{
-		if (lightCount == 1)
-		{
-			return suspectCount == 0
-				? $"{roomName} is on, and will command 1 light."
-				: $"{roomName} is on. The one light it will command looks like something other than room lighting.";
-		}
-
-		string commands = $"{roomName} is on, and will command {Count(lightCount, "light")}";
+		string commands = $"{roomName} on · {Count(lightCount, "light")}";
 
 		if (suspectCount == 0)
-			return $"{commands}.";
+			return commands;
 
 		if (suspectCount == lightCount)
-			return $"{commands} — and none of them looks like room lighting.";
+			return lightCount == 1 ? $"{commands}, not a lamp?" : $"{commands}, none a lamp?";
 
-		return suspectCount == 1
-			? $"{commands}. One of them looks like something other than room lighting."
-			: $"{commands}. {suspectCount} of them look like something other than room lighting.";
+		return $"{commands}, {suspectCount} not a lamp?";
 	}
 
 	private static string? Advice(string roomName, string? includeLabel) =>

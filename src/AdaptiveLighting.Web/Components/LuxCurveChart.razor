@@ -72,7 +72,12 @@
 		<div class="luxc-surface" style="@LuxCurve.SurfaceStyle()" @ref="_surface"></div>
 	</div>
 
-	<p class="luxc-caption">@Description</p>
+	<p class="luxc-caption info-host">
+		<span class="info-line">
+			@ShortCaption
+			<InfoPopover Label="Daylight curve">@Description</InfoPopover>
+		</span>
+	</p>
 </div>
 
 @code {
@@ -396,7 +401,12 @@
 		_ => ""
 	};
 
-	/// <summary>The chart in words, used for the accessible name and the caption alike.</summary>
+	/// <summary>The caption on the page: where the curve stands now, in a few words.</summary>
+	private string ShortCaption => Reading is { } now
+		? $"Now {LuxCurve.Lux(now)} → {TokenFormat.Percent(Math.Round(LuxBrightnessCurve.Brightness(now, Settings)))}"
+		: "No outdoor reading — dark-end level";
+
+	/// <summary>The chart in words, used for the accessible name and behind the caption's (i).</summary>
 	private string Description
 	{
 		get

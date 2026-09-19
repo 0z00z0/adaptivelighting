@@ -145,8 +145,8 @@ public static class AreaView
 	public static HiddenRoomsNote? HiddenNote(int switchedOff) => switchedOff switch
 	{
 		<= 0 => null,
-		1 => new HiddenRoomsNote("1 room is switched off —", "turn it on in Configuration"),
-		_ => new HiddenRoomsNote($"{switchedOff} rooms are switched off —", "turn them on in Configuration")
+		1 => new HiddenRoomsNote("1 room switched off —", "switch on"),
+		_ => new HiddenRoomsNote($"{switchedOff} rooms switched off —", "switch on")
 	};
 
 	/// <summary>

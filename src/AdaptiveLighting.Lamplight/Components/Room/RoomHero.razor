@@ -32,15 +32,23 @@
 	@if (Model.LightRefused is { Length: > 0 } refused)
 	{
 		<div class="notice warn">
-			<strong>@(Model.LightRefusedOff ? "Not switched off." : "Not switched on.")</strong> @refused
+			<span class="info-line">
+				<strong>@(Model.LightRefusedOff ? "Not switched off" : "Not switched on")</strong>
+				<Info Label="Refused" Severity="InfoSeverity.Warn">@refused</Info>
+			</span>
 		</div>
 	}
 
 	@if (!Model.IsEnabled)
 	{
 		<div class="notice">
-			<strong>This room is not enabled.</strong> Nothing below is commanded and the lamps are left exactly
-			as they are &mdash; the settings are kept, and take effect the moment the room is enabled.
+			<span class="info-line">
+				<strong>This room is not enabled</strong>
+				<Info Label="Not enabled">
+					Nothing below is commanded and the lamps are left exactly as they are &mdash; the settings are kept,
+					and take effect the moment the room is enabled.
+				</Info>
+			</span>
 		</div>
 	}
 
@@ -50,7 +58,15 @@
 
 		@if (Model.NextLine is { Length: > 0 } next)
 		{
-			<p class="lede @(Model.IsOverdue ? "bad" : null)">@next</p>
+			<p class="lede info-line @(Model.IsOverdue ? "bad" : null)">
+				@next
+				@if (Model.IsOverdue)
+				{
+					<Info Label="Update overdue" Severity="InfoSeverity.Bad">
+						An update was due and hasn&rsquo;t arrived. The Home Assistant connection may be down.
+					</Info>
+				}
+			</p>
 		}
 	}
 
@@ -82,14 +98,21 @@
 			List<NowCard.Warning> warnings = [];
 
 			if (Model.NotResponding is { Length: > 0 } notResponding)
-				warnings.Add(new NowCard.Warning("warn", notResponding));
+				warnings.Add(new NowCard.Warning("warn", notResponding, NotRespondingHelp));
 
 			foreach (string battery in Model.LowBatteries)
-				warnings.Add(new NowCard.Warning("warn", battery));
+				warnings.Add(new NowCard.Warning("warn", battery, BatteryHelp));
 
 			return warnings;
 		}
 	}
+
+	private static readonly RenderFragment NotRespondingHelp = @<text>
+		The room reads on or off from the lights that still answer, so a light that dropped out while it was lit
+		may still be on.
+	</text>;
+
+	private static readonly RenderFragment BatteryHelp = @<text>Replace the battery before the sensor stops reporting movement.</text>;
 
 	private IReadOnlyList<(string Label, string Value)> Facts =>
 		[.. Model.Facts.Select(fact => (fact.Label, fact.Detail is { Length: > 0 } detail ? $"{fact.Value} ({detail})" : fact.Value))];

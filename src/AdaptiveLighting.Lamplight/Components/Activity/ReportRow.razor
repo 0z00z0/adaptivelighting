@@ -1,3 +1,4 @@
+@using AdaptiveLighting.Lamplight.Components.Kit
 @* One row of the activity record. The model gives What and Why as one line each; a house-wide row names the
    rooms it was assembled from in a title, the same sentence ActivityView.ReportedBy already builds. There is
    no per-report "who" distinct from Why: a manual change already carries who made it inside that sentence, so
@@ -20,7 +21,13 @@
 		<span class="act-room">@Row.Room</span>
 	}
 
-	<span class="act-what">@Row.Line.What</span>
+	<span class="act-what">
+		@Row.Line.What
+		@if (Row.Line.More is { Length: > 0 } more)
+		{
+			<Info Label="@Row.Line.What">@more</Info>
+		}
+	</span>
 
 	@if (Row.Line.Why is { Length: > 0 } why)
 	{

@@ -19,19 +19,26 @@
 @if (_model.LoadError is { Length: > 0 } loadError)
 {
 	<h1>This room can't be shown</h1>
-	<div class="notice bad">
-		<strong>The configuration file couldn't be read.</strong>
-		<p>@loadError</p>
-		<p>Every room is in that one file, so nothing can be shown or changed until it parses. <a href="config">Open the Configuration page</a> to repair it.</p>
+	<div class="notice bad info-host">
+		<span class="info-line">
+			<strong>Settings file unreadable</strong>
+			<InfoPopover Label="Settings file" Severity="InfoSeverity.Bad">
+				<span class="info-para">@loadError</span>
+				<span class="info-para">Every room is in that one file, so nothing can be shown or changed until it parses.</span>
+			</InfoPopover>
+			<a href="config">Repair it</a>
+		</span>
 	</div>
 }
 else if (_model.Area is not { } room)
 {
 	<h1>No such room</h1>
-	<div class="empty">
-		<strong>Nothing here is set up as <code>@AreaId</code>.</strong>
-		<p>The room may have been removed, or its Home Assistant area may have been changed.</p>
-		<p><a href="">Back to the dashboard</a> &mdash; or <a href="config?section=areas">see every room</a>.</p>
+	<div class="empty info-host">
+		<strong>
+			No room <code>@AreaId</code>
+			<InfoPopover Label="No such room">The room may have been removed, or its Home Assistant area may have been changed.</InfoPopover>
+		</strong>
+		<p><a href="">Dashboard</a> &middot; <a href="config?section=areas">Every room</a></p>
 	</div>
 }
 else
@@ -46,17 +53,17 @@ else
 	@* A refused save stays until it is resolved: until then the file on disk is not what is on screen. *@
 	@if (_model.Failure is { } failure)
 	{
-		<div class="notice bad">
-			<strong>Not saved.</strong> @failure.Message
-			@if (failure.Validation.Errors.Count > 0)
-			{
-				<ul>
+		<div class="notice bad info-host">
+			<span class="info-line">
+				<strong>Not saved</strong>
+				<InfoPopover Label="Not saved" Severity="InfoSeverity.Bad">
+					<span class="info-para">@failure.Message</span>
 					@foreach (string error in failure.Validation.Errors)
 					{
-						<li>@error</li>
+						<span class="info-para">@ValidationWording.Plain(error)</span>
 					}
-				</ul>
-			}
+				</InfoPopover>
+			</span>
 			<div class="panel-actions">
 				@* No retry on a conflict: the same save refuses again until the room is read afresh. *@
 				@if (failure.Status is not SaveStatus.Conflicted)
@@ -72,8 +79,11 @@ else
 	else if (_model.AreaError is { } mine)
 	{
 		@* An area-level error costs this room, not the save. *@
-		<div class="notice warn">
-			<strong>This room will be skipped.</strong> @mine.Message
+		<div class="notice warn info-host">
+			<span class="info-line">
+				<strong>This room will be skipped</strong>
+				<InfoPopover Label="Skipped" Severity="InfoSeverity.Warn">@ValidationWording.Plain(mine.Message)</InfoPopover>
+			</span>
 		</div>
 	}
 
@@ -143,7 +153,12 @@ else
 							   Reading="@_model.DaylightLux"
 							   Changed="@_model.OnCurveEdited" />
 
-				<p class="room-card-foot">@_model.DaylightSourceNote</p>
+				<p class="room-card-foot info-host">
+					<span class="info-line">
+						@_model.DaylightSourceNote
+						<InfoPopover Label="Daylight reading">@_model.DaylightSourceWhy</InfoPopover>
+					</span>
+				</p>
 			</div>
 		}
 	</section>
@@ -160,7 +175,7 @@ else
 			@* Kept short: at 390px this bar has 340px, and a longer sentence wraps to three lines. *@
 			<span class="room-more-note">
 				@_model.OwnLine
-				<a href="config?section=house">house default settings</a>.
+				<a href="config?section=house">house</a>
 			</span>
 		</div>
 
@@ -181,7 +196,7 @@ else
 											  ValueChanged="@_model.SetLeadInSensors"
 											  Options="@_model.LeadInOptions"
 											  Lookup="@_model.Lookup"
-											  EmptyLabel="Nothing outside lights this room ahead of time."
+											  EmptyLabel="None"
 											  AddLabel="Add a sensor…"
 											  Placeholder="binary_sensor.front_steps_motion" />
 						</SettingRow>
@@ -192,7 +207,7 @@ else
 											  ValueChanged="@_model.SetIgnoreWhenOn"
 											  Options="@_model.BlockerOptions"
 											  Lookup="@_model.Lookup"
-											  EmptyLabel="Nothing blocks this room."
+											  EmptyLabel="None"
 											  AddLabel="Add a blocker…"
 											  Placeholder="binary_sensor.projector_is_on" />
 
@@ -213,7 +228,7 @@ else
 											  ValueChanged="@_model.SetKeepLitWhenOn"
 											  Options="@_model.BlockerOptions"
 											  Lookup="@_model.Lookup"
-											  EmptyLabel="Nothing holds this room's lights on."
+											  EmptyLabel="None"
 											  AddLabel="Add one…"
 											  Placeholder="input_boolean.meeting" />
 
@@ -253,7 +268,7 @@ else
 										  Options="@_model.SceneOptions"
 										  Lookup="@_model.Lookup"
 										  NoneLabel="(this room's own brightness and warmth)"
-										  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+										  EmptyNote="No scenes — type an id"
 										  Placeholder="scene.stue_kveld" />
 						</SettingRow>
 
@@ -264,7 +279,7 @@ else
 										  Options="@_model.SceneOptions"
 										  Lookup="@_model.Lookup"
 										  NoneLabel="(switch the lights off)"
-										  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+										  EmptyNote="No scenes — type an id"
 										  Placeholder="scene.stue_natt" />
 						</SettingRow>
 					}
@@ -278,7 +293,7 @@ else
 								aria-expanded="@(_model.IdentityOpen ? "true" : "false")"
 								@onclick="_model.ToggleIdentity">
 							<span class="sgroup-title">Room identity</span>
-							<span class="sgroup-note">What this room is called, and which Home Assistant area it is</span>
+							<span class="sgroup-note">name and area</span>
 							<span class="area-chevron" aria-hidden="true"></span>
 						</button>
 

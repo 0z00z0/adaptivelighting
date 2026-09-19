@@ -304,7 +304,7 @@ public static class AreaSentences
 					WarmthChoices,
 					OriginOf(area, area?.ColorControl),
 					defaults.ColorControl.ToString())
-				.Text($". {NoColourTemperature}")
+				.Text(" — neutral white.")
 				.Build();
 
 	/// <summary>A light level as the sentence and the shortlist both write it, so the popover can tick on words.</summary>

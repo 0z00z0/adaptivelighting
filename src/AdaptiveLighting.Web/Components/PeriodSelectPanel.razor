@@ -16,19 +16,26 @@
 		<Body Context="state">
 			@if (!state.ShowsUnavailable && CurrentIsUnmapped)
 			{
-				<div class="notice warn periodselect-warning">
-					<strong>The helper is on &ldquo;@ActiveValue&rdquo;, and nothing maps it to a period.</strong>
-					<span>@UnmappedNote</span>
+				<div class="notice warn periodselect-warning info-host">
+					<span class="info-line">
+						<strong>&ldquo;@ActiveValue&rdquo; has no period</strong>
+						<InfoPopover Label="Unmapped option" Severity="InfoSeverity.Warn">
+							The helper is on &ldquo;@ActiveValue&rdquo;, and nothing maps it to a period. @UnmappedNote
+						</InfoPopover>
+					</span>
 				</div>
 			}
 
 			@if (Shortfall > 0)
 			{
-				<div class="notice periodselect-warning">
-					<strong>@ShortfallTitle</strong>
-					<span>
-						Every option needs a period of its own &mdash; two options cannot share one, because the engine
-						would have no way to tell them apart.
+				<div class="notice periodselect-warning info-host">
+					<span class="info-line">
+						<strong>@ShortfallTitle</strong>
+						<InfoPopover Label="Too few periods" Severity="InfoSeverity.Warn">
+							The helper has @_liveValues.Count options and the schedule @Periods.Count periods. Every option
+							needs a period of its own &mdash; two options cannot share one, because the engine would have
+							no way to tell them apart.
+						</InfoPopover>
 					</span>
 					<div class="panel-actions">
 						<button type="button" @onclick="AddPeriod">Add a period</button>
@@ -38,14 +45,17 @@
 
 			@if (state.LiveValues.Count == 0)
 			{
-				<div class="empty">
+				<div class="empty info-host">
 					@if (state.IsReady)
 					{
-						<text>This helper has no options yet. Add one option per period in Home Assistant, then come back here.</text>
+						<span class="info-line">
+							No options yet
+							<InfoPopover Label="No options">Add one option per period to the helper in Home Assistant, then come back here.</InfoPopover>
+						</span>
 					}
 					else
 					{
-						<text>Waiting for Home Assistant to list the helper's options.</text>
+						<text>Waiting for Home Assistant</text>
 					}
 				</div>
 			}
@@ -94,9 +104,14 @@
 
 						<div class="periodselect-orphan" @key="orphan">
 							<HelperOrphanBadge />
-							<span class="periodselect-orphan-text">
-								<code>@orphan.Value</code> means <b>@OrphanPeriod(orphan)</b>, and the helper no longer
-								offers it. Move it across if you renamed it; the mapping does nothing until you do.
+							<span class="periodselect-orphan-text info-host">
+								<span class="info-line">
+									<code>@orphan.Value</code> &rarr; <b>@OrphanPeriod(orphan)</b>
+									<InfoPopover Label="Gone from the helper" Severity="InfoSeverity.Warn">
+										The helper no longer offers this option. Move it across if it was renamed; the mapping
+										does nothing until then.
+									</InfoPopover>
+								</span>
 							</span>
 
 							@if (UnmappedLiveValues.Count > 0)
@@ -148,7 +163,7 @@
 	public bool IsReady { get; set; } = true;
 
 	[Parameter]
-	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
+	public string EmptyNote { get; set; } = "Nothing to pick — type an id";
 
 	/// <summary>What an id is called and whether Home Assistant knows it, handed on to the picker.</summary>
 	[Parameter]
@@ -240,7 +255,7 @@
 		NoneLabel = "(none — the schedule decides the time of day)",
 		EmptyNote = EmptyNote,
 		Placeholder = "input_select.tid_pa_dagnet",
-		AuthorityLabel = "Changes to periods are set by:",
+		AuthorityLabel = "Set by",
 		AuthorityHelp = DirectionHelp,
 		AuthorityNote = AuthorityNote,
 		UnavailableNote = UnavailableNote
@@ -253,7 +268,7 @@
 	</text>;
 
 	private RenderFragment NoHelperNote => @<text>
-		Without one, periods change at the start times in the schedule above and nothing else is read or written.
+		Without one, periods change at the start times in the schedule above.
 	</text>;
 
 	private RenderFragment DirectionHelp => @<text>
@@ -281,12 +296,7 @@
 	{
 		get
 		{
-			int options = _liveValues.Count;
-			int periods = Periods.Count;
-			string shortfall = Shortfall == 1 ? "one of them has" : $"{Shortfall} of them have";
-
-			return $"This helper has {options} {(options == 1 ? "option" : "options")} and the schedule has "
-				+ $"{periods} {(periods == 1 ? "period" : "periods")}, so {shortfall} no period to point at.";
+			return Shortfall == 1 ? "1 option has no period" : $"{Shortfall} options have no period";
 		}
 	}
 

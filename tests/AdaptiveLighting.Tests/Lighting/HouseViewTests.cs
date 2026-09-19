@@ -68,8 +68,8 @@ public sealed class HouseViewTests
 	[TestMethod]
 	public void A_House_That_Follows_The_Defaults_Says_So()
 	{
-		Assert.AreEqual("all 3 rooms follow these exactly", HouseView.StrayLine([Room("A"), Room("B"), Room("C")], null));
-		Assert.AreEqual("the one room follows these exactly", HouseView.StrayLine([Room("A")], null));
+		Assert.AreEqual("all 3 follow these", HouseView.StrayLine([Room("A"), Room("B"), Room("C")], null));
+		Assert.AreEqual("the one room follows these", HouseView.StrayLine([Room("A")], null));
 	}
 
 	[TestMethod]
@@ -86,12 +86,12 @@ public sealed class HouseViewTests
 		rooms.Add(stue);
 		rooms.Add(kontor);
 
-		Assert.AreEqual("14 rooms follow these exactly; Stue and Kontor carry their own values", HouseView.StrayLine(rooms, null));
+		Assert.AreEqual("14 follow · Stue and Kontor differ", HouseView.StrayLine(rooms, null));
 
 		for (int index = 0; index < 6; index++)
 			rooms[index].WelcomeHome = true;
 
-		StringAssert.Contains(HouseView.StrayLine(rooms, null), "and 6 others carry their own values");
+		StringAssert.Contains(HouseView.StrayLine(rooms, null), "and 6 others differ");
 	}
 
 	[TestMethod]
@@ -101,7 +101,7 @@ public sealed class HouseViewTests
 		stue.VacancyTimeoutSeconds = 1800;
 
 		Assert.AreEqual(
-			"1 room follows these exactly; Stue carries their own values",
+			"1 follow · Stue differs",
 			HouseView.StrayLine([Room("Gang"), stue], null));
 	}
 
@@ -111,7 +111,7 @@ public sealed class HouseViewTests
 		AreaConfig stue = Room("Stue");
 		stue.VacancyTimeoutSeconds = 1800;
 
-		StringAssert.StartsWith(HouseView.StrayLine([stue], null), "every room carries values of its own");
+		StringAssert.StartsWith(HouseView.StrayLine([stue], null), "every room differs");
 	}
 
 	// ===================== the switched-off line =====================
@@ -128,11 +128,11 @@ public sealed class HouseViewTests
 		AreaConfig off = Room("Bod");
 		off.Enabled = false;
 
-		StringAssert.StartsWith(HouseView.SwitchedOffLine([Room("Stue"), off], House), "1 room is switched off");
+		StringAssert.StartsWith(HouseView.SwitchedOffLine([Room("Stue"), off], House), "1 room off");
 
 		AreaSettings houseOff = new() { Enabled = false };
 
-		StringAssert.StartsWith(HouseView.SwitchedOffLine([Room("Stue"), off], houseOff), "2 rooms are switched off");
+		StringAssert.StartsWith(HouseView.SwitchedOffLine([Room("Stue"), off], houseOff), "2 rooms off");
 	}
 
 	// ===================== adding a room =====================

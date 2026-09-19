@@ -288,7 +288,7 @@ public sealed class CommissioningDraftTests
 		Assert.IsFalse(draft.IncludesAll(keys));
 		Assert.AreEqual("Switch on 2 rooms", CommissioningVerdicts.CommitLabel(draft.PickedCount));
 		Assert.AreEqual(
-			"The other room stays listed under House, with its own switch.",
+			"The other room stays off, under House",
 			CommissioningVerdicts.RestLine(draft.PickedCount, keys.Length));
 	}
 

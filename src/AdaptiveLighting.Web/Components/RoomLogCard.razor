@@ -3,7 +3,6 @@
 <section class="panel room-card">
 	<div class="room-card-head">
 		<span class="room-card-title">What happened here</span>
-		<span class="room-card-note">newest at top</span>
 	</div>
 
 	@if (Model.RoomLog is { Count: > 0 } rows)
@@ -19,7 +18,7 @@
 	}
 	else
 	{
-		<p class="room-card-foot">Nothing recorded here yet.</p>
+		<p class="room-card-foot">Nothing recorded yet</p>
 	}
 </section>
 

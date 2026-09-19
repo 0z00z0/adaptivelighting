@@ -101,7 +101,7 @@
 	/// <summary>Why there is nothing to pick, worded by the caller: an empty list usually means it was filtered
 	/// to an area, which this component cannot tell from a disconnected Home Assistant.</summary>
 	[Parameter]
-	public string EmptyNote { get; set; } = "Nothing to pick from yet — type an id instead.";
+	public string EmptyNote { get; set; } = "Nothing to pick — type an id";
 
 	/// <summary>What an id is called and whether Home Assistant knows it, which drives the "unknown" chip
 	/// styling. Left unset, an id is its own name and every id is taken on trust.</summary>

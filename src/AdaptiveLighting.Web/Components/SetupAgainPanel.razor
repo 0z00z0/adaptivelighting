@@ -4,15 +4,19 @@
 <div class="panel setup-panel">
 	@if (_plan is null || _step == Step.Pick)
 	{
-		<h3 class="setup-title">Set up rooms again</h3>
-		<p class="lede">
-			Each room you tick is rebuilt from what Home Assistant knows right now, as if it were newly found.
-			Nothing changes until you confirm on the next step.
-		</p>
+		<h3 class="setup-title info-host">
+			<span class="info-line">
+				Set up rooms again
+				<InfoPopover Label="Set up rooms again">
+					Each ticked room is rebuilt from what Home Assistant knows right now, as if it were newly found.
+					Nothing changes until the next step is confirmed.
+				</InfoPopover>
+			</span>
+		</h3>
 
 		@if (Rebuildable.Count == 0)
 		{
-			<p class="hint">No room here names a Home Assistant area, so there is nothing to rebuild.</p>
+			<p class="hint">No room names an area &mdash; nothing to rebuild</p>
 		}
 		else
 		{
@@ -71,14 +75,31 @@
 	}
 	else
 	{
-		<h3 class="setup-title">@SetupWarning.Title(_plan)</h3>
+		<h3 class="setup-title info-host">
+			<span class="info-line">
+				@SetupWarning.Title(_plan)
+				<InfoPopover Label="Set up again" Severity="InfoSeverity.Warn">
+					<span class="info-para">
+						Each room is rebuilt from what Home Assistant knows right now, as if it were newly found. Its
+						automatically-guessed behaviour is re-guessed; everything changed by hand is lost.
+					</span>
+					<span class="info-para">
+						Rooms stay switched on or off as they are now. Rooms not ticked are untouched.
+						@if (CommitNote is { Length: > 0 } commitNote)
+						{
+							@commitNote
+						}
+						else
+						{
+							<text>Nothing is written until <em>Save and apply</em> &mdash; <em>Discard changes</em> undoes this.</text>
+						}
+					</span>
+				</InfoPopover>
+			</span>
+		</h3>
 
 		@if (_lines.Count > 0)
 		{
-			<p>
-				Each room is rebuilt from what Home Assistant knows right now, as if it were newly found. Its
-				automatically-guessed behaviour is re-guessed; everything you changed by hand is lost:
-			</p>
 			<ul class="setup-losses">
 				@foreach (SetupWarningLine line in _lines)
 				{
@@ -98,19 +119,6 @@
 			<p>@added</p>
 		}
 
-		<p class="hint">
-			Rooms stay switched on or off as they are now. Rooms you didn't tick are untouched.
-			@if (CommitNote is { Length: > 0 } commitNote)
-			{
-				@commitNote
-			}
-			else
-			{
-				<text>
-					Nothing is written until you press <em>Save and apply</em> &mdash; <em>Discard changes</em> undoes this.
-				</text>
-			}
-		</p>
 
 		<div class="panel-actions">
 			<button type="button" class="primary" @onclick="Confirm">Set up again</button>

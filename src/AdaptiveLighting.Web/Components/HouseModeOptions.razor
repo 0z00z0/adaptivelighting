@@ -7,11 +7,11 @@
 		<div class="empty">
 			@if (IsReady)
 			{
-				<text>This helper has no options yet. Add options to it in Home Assistant, then come back here.</text>
+				<text>No options yet</text>
 			}
 			else
 			{
-				<text>Waiting for Home Assistant to list the helper's options.</text>
+				<text>Waiting for Home Assistant</text>
 			}
 		</div>
 	}
@@ -19,9 +19,13 @@
 	{
 		@if (NoNormalOption)
 		{
-			<div class="notice warn housemode-note">
-				No option is marked <strong>Normal</strong>, so the house has nothing to switch back to. Mark one
-				option Normal.
+			<div class="notice warn housemode-note info-host">
+				<span class="info-line">
+					<strong>No Normal option</strong>
+					<InfoPopover Label="No Normal option" Severity="InfoSeverity.Warn">
+						No option is marked Normal, so the house has nothing to switch back to. Mark one option Normal.
+					</InfoPopover>
+				</span>
 			</div>
 		}
 
@@ -49,7 +53,7 @@
 					else if (kind == ModeKind.Normal && option is not null)
 					{
 						@* Normal but not the reset target: the engine takes the first Normal option. *@
-						<span class="badge warn" title="Only the first Normal option is the reset target; this one has no behaviour of its own.">Normal — not the reset target</span>
+						<span class="badge warn" title="Only the first Normal option is the reset target; this one has no behaviour of its own.">Normal — not the target</span>
 					}
 					else
 					{
@@ -111,7 +115,7 @@
 								  Options="@Scenes"
 								  Lookup="@Lookup"
 								  NoneLabel="@SceneNoneLabel(kind)"
-								  EmptyNote="@EmptyNote("No scenes yet — create one in Home Assistant, or type an id.")"
+								  EmptyNote="@EmptyNote("No scenes — type an id")"
 								  Placeholder="scene.kveldslys" />
 				</div>
 
@@ -160,13 +164,15 @@
 											  Lookup="@Lookup"
 											  EmptyLabel="(none — only the dropdown activates this mode)"
 											  AddLabel="Add a switch or sensor…"
-											  EmptyNote="@EmptyNote("No switches, toggles or binary sensors found — type an id.")"
+											  EmptyNote="@EmptyNote("No switches or sensors — type an id")"
 											  Placeholder="input_boolean.sover" />
 							@if (HomeAssistantDecides)
 							{
-								<span class="mode-dormant">
-									Not in force &mdash; Home Assistant owns the house mode, so nothing here switches it.
-									Whatever is listed is kept, and takes over again the moment you hand the mode back.
+								<span class="mode-dormant info-host">
+									<span class="info-line">
+										not in force
+										<InfoPopover Label="Not in force" Severity="InfoSeverity.Warn">Home Assistant owns the house mode, so nothing here switches it. Whatever is listed is kept, and takes over again the moment the mode is handed back.</InfoPopover>
+									</span>
 								</span>
 							}
 						</div>
@@ -188,9 +194,11 @@
 							</span>
 							@if (HomeAssistantDecides)
 							{
-								<span class="mode-dormant">
-									Not in force &mdash; Home Assistant owns the house mode, so an idle house is never
-									switched by the engine. The setting is kept for when you hand the mode back.
+								<span class="mode-dormant info-host">
+									<span class="info-line">
+										not in force
+										<InfoPopover Label="Not in force" Severity="InfoSeverity.Warn">Home Assistant owns the house mode, so an idle house is never switched by the engine. The setting is kept for when the mode is handed back.</InfoPopover>
+									</span>
 								</span>
 							}
 							@if (boundOption.ActivateAfterNoMotionMinutes is > 0)
@@ -217,9 +225,11 @@
 
 							@if (HomeAssistantDecides)
 							{
-								<span class="mode-dormant">
-									Not in force &mdash; a reset puts the dropdown back to Normal, and Home Assistant owns
-									the dropdown. Whatever is set here is kept for when you hand the mode back.
+								<span class="mode-dormant info-host">
+									<span class="info-line">
+										not in force
+										<InfoPopover Label="Not in force" Severity="InfoSeverity.Warn">A reset puts the dropdown back to Normal, and Home Assistant owns the dropdown. Whatever is set here is kept for when the mode is handed back.</InfoPopover>
+									</span>
 								</span>
 							}
 
@@ -263,7 +273,7 @@
 														  Lookup="@Lookup"
 														  EmptyLabel="(default — every room's motion sensors)"
 														  AddLabel="Add a sensor…"
-														  EmptyNote="@EmptyNote("No motion sensors found — type an id.")"
+														  EmptyNote="@EmptyNote("No motion sensors — type an id")"
 														  Placeholder="binary_sensor.gang_bevegelse" />
 										<div class="housemode-grace">
 											<span class="hint">ignore arrivals for</span>
@@ -420,7 +430,7 @@
 	/// <summary>The empty-picker note, worded by whether Home Assistant is answering.</summary>
 	private string EmptyNote(string noneYet) => IsReady
 		? noneYet
-		: "Waiting for Home Assistant — type an id for now.";
+		: "Waiting for Home Assistant — type an id";
 
 	private async Task SetKind(string value, ModeKind kind)
 	{

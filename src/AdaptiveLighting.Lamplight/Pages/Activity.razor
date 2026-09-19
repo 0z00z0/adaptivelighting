@@ -4,10 +4,17 @@
 @inject AreaSnapshotCache Cache
 @inject ILogger<Activity> Logger
 @using AdaptiveLighting.Lamplight.Components.Activity
+@using AdaptiveLighting.Lamplight.Components.Kit
 
 <PageTitle>Activity &mdash; Adaptive lighting</PageTitle>
 
-<h1 class="pagetitle">Activity</h1>
+<h1 class="pagetitle info-line">
+	Activity
+	<Info Label="Activity">
+		What each room decided, newest at top. Times come from the machine running adaptive lighting, which is not
+		always the one this page is read on.
+	</Info>
+</h1>
 
 <section class="glass">
 	<ActivityFilters RoomOptions="_model.RoomOptions"
@@ -19,6 +26,7 @@
 					  PendingWord="@_model.PendingWord"
 					  ShowNew="_model.ShowNew"
 					  HiddenNote="@_model.HiddenNote"
+					  HiddenWhy="@_model.HiddenWhy"
 					  ShowEverything="_model.ShowEverything" />
 
 	@* Now is read at render time, not page load: a page left open past midnight must not keep heading
@@ -34,7 +42,10 @@
 		</ol>
 	}
 
-	<p class="act-foot">@_model.FootLine</p>
+	<p class="act-foot info-line">
+		@_model.FootLine
+		<Info Label="Reports">@_model.FootWhy</Info>
+	</p>
 </section>
 
 @code {
