@@ -185,10 +185,12 @@
 									  Placeholder="binary_sensor.example" />
 				</SettingRow>
 
-				<SettingRow Label="Daylight sensor" Help="Which reading the daylight curve follows here. The house's outdoor sensor by default, because an indoor one measures this room's own lamps and the curve would chase itself. Any light-level sensor in the house can be picked.">
+				<SettingRow Label="Daylight sensor" Help="Which reading the daylight curve follows here. The house's outdoor sensor by default, because an indoor one measures this room's own lamps and the curve would chase itself. This room's own light-level sensors can be picked too.">
 					<EntityPicker Value="@Model.DaylightSensor"
 								  ValueChanged="@Model.SetDaylightSensor"
-								  Options="@Model.LuxSensorOptions"
+								  Options="@Model.DaylightChoices"
+								  Others="@Model.DaylightOthers"
+								  OthersLabel="@RoomPageModel.OthersLabel"
 								  NoneLabel="@Model.OutdoorSensorLabel"
 								  EmptyNote="@Model.EmptyNote("light-level sensors")"
 								  Placeholder="sensor.example_illuminance" />
