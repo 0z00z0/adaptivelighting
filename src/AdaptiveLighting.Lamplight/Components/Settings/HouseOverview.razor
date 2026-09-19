@@ -198,7 +198,7 @@
 
 			@if (Model.ShowsFloorHeader(current))
 			{
-				<div class="floor">@HousePageModel.FloorTitle(current) <button type="button" class="add" @onclick="() => Model.SwitchFloor(current)">@Model.FloorAction(current)</button></div>
+				<div class="floor-row">@HousePageModel.FloorTitle(current) <button type="button" class="add" @onclick="() => Model.SwitchFloor(current)">@Model.FloorAction(current)</button></div>
 			}
 
 			@foreach (AreaConfig area in current.Items)
