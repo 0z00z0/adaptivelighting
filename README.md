@@ -162,7 +162,8 @@ Ship the five as a matched set — they are compiled against each other. Referen
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The typefaces under `src/AdaptiveLighting.Lamplight/wwwroot/fonts/` are each
+under the SIL Open Font License 1.1, with that family's licence text beside its files.
 
 ---
 
