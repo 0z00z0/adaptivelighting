@@ -642,7 +642,12 @@ public sealed class LightingEngineHost : IDisposable
 			carried = _orchestrator?.CarryOver(config);
 
 			if (carried is not null)
-				PersistRoomHistory(carried, flushNow: true);
+			{
+				// A person's save, so a room no longer in the document at all loses its history here, not on the
+				// next room that happens to publish. Disabled-but-still-declared rooms keep their key.
+				HashSet<string> stillDocumented = LightingOrchestrator.DocumentRoomKeys(config, _registry);
+				PersistRoomHistory(carried, flushNow: true, prune: stillDocumented);
+			}
 		}
 		else
 		{
@@ -719,8 +724,12 @@ public sealed class LightingEngineHost : IDisposable
 			_roomHistory?.Load() ?? new Dictionary<string, AreaHistory>(), StringComparer.OrdinalIgnoreCase);
 
 	/// <summary>Folds a rebuild's carry-over into the house's live history and writes it.</summary>
-	/// <remarks><paramref name="flushNow"/> is true on a save: a minute's wait is not acceptable there.</remarks>
-	private void PersistRoomHistory(IReadOnlyDictionary<string, AreaCarryOver> carried, bool flushNow)
+	/// <remarks>
+	///     <paramref name="flushNow"/> is true on a save: a minute's wait is not acceptable there. <paramref name="prune"/>
+	///     is given only on a person's save: every key not in it is dropped, so a room removed from the document does not
+	///     keep growing the file for ever. Left <c>null</c> elsewhere, where there is no fresh document to prune against.
+	/// </remarks>
+	private void PersistRoomHistory(IReadOnlyDictionary<string, AreaCarryOver> carried, bool flushNow, IReadOnlySet<string>? prune = null)
 	{
 		if (_roomHistory is null)
 			return;
@@ -729,6 +738,12 @@ public sealed class LightingEngineHost : IDisposable
 
 		foreach ((string key, AreaCarryOver value) in carried)
 			live[key] = value.History;
+
+		if (prune is not null)
+		{
+			foreach (string staleKey in live.Keys.Where(key => !prune.Contains(key)).ToList())
+				live.TryRemove(staleKey, out _);
+		}
 
 		_roomHistory.TrySave(live);
 

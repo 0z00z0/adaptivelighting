@@ -171,6 +171,17 @@ public sealed class LightingOrchestrator : IDisposable
 			StringComparer.OrdinalIgnoreCase);
 	}
 
+	/// <summary>Every room's <see cref="CarryOverKey"/> as <paramref name="config"/> declares it now, enabled or not.</summary>
+	/// <remarks>Lets the host prune a room-history entry once its room leaves the document entirely; a disabled room keeps its key.</remarks>
+	internal static HashSet<string> DocumentRoomKeys(AdaptiveLightingConfig config, IHaRegistry hassRegistry)
+	{
+		HaAreaRegistry registry = new(hassRegistry);
+
+		return new HashSet<string>(
+			config.Areas.Select(area => CarryOverKey(area.AreaId, AreaNaming.DisplayName(area, registry))),
+			StringComparer.OrdinalIgnoreCase);
+	}
+
 	// The area id where there is one, so a room renamed in the same save keeps its history.
 	private static string CarryOverKey(string? areaId, string name) => areaId is { Length: > 0 } ? areaId : name;
 
