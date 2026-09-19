@@ -258,6 +258,10 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 	// ---- the header ------------------------------------------------------------------------------------
 
+	/// <summary>What this room's lamps are doing now, for a design that paints from facts rather than from
+	/// <see cref="Glow"/>'s pixels.</summary>
+	public RoomLamp Lamp => RoomLamp.Of(Snapshot);
+
 	/// <summary>The header lamp's reading, or <c>null</c> when nothing is lit.</summary>
 	public RoomGlow? Glow =>
 		Snapshot is { IsLit: true } snapshot

@@ -22,6 +22,11 @@ dotnet run --project tools/uihost -- --port 0      # any free port, printed on s
 `--lamplight-port 5198` serves Lamplight as well, on its own port, over the same engine and fake house —
 the same split a house gets from `AdaptiveLighting:LamplightPort`. Without it only the first design runs.
 
+`--house lit` enables every seeded room instead of leaving them all switched off for the commissioning
+board, and gives each a current report: four lit at a brightness and warmth of their own (one held by hand),
+two left dark. This is what a dashboard needs to draw a tile grid, a timeline and a lit room header from —
+without it the seeded house is the first-run state, with nothing switched on.
+
 The bound address is printed as `uihost listening on …` once the host is up, which is the line to read after
 `--port 0`.
 
