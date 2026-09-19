@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.20] - 2026-09-19
+
 - A "Reload from Home Assistant" button on the house page, in both designs, beside the rooms list: rebuilds every room's lights and sensors from what Home Assistant reports right now, through `LightingEngineHost.Reload`, with no restart. Refused while an edit on the page is unsaved.
 - The room page's daylight-sensor picker now offers the house's own outdoor sensor first, then the room's own illuminance sensors, instead of every illuminance sensor in the house. A sensor already saved on the room is kept even if it sits outside that list, and an "everything else" group still reaches the rest of the house. Both designs share the same list, through a new `DaylightSensorScope` in `AdaptiveLighting.Web`.
 - Every file the engine keeps about its own state (the period last run in, rooms already reported, each room's history, the last-seen cache and the activity journal) is now written through one shared registry, so a failed write is retried the same way for all of them and one start-up report in the log names what each restored. The files keep their names and places, so a house reads its existing ones after the update.
