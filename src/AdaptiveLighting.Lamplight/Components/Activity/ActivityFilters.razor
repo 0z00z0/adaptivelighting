@@ -1,3 +1,4 @@
+@using AdaptiveLighting.Lamplight.Components.Kit
 @* The room filter, the category chips, the pending line and the hidden-reports note: everything above the
    day-grouped rows. Takes values and raises events, same as the kit; ActivityPageModel stays with the page. *@
 
@@ -33,7 +34,7 @@
 	@if (HiddenNote is { Length: > 0 } hidden)
 	{
 		<p class="hidden-note">
-			<span>@hidden</span>
+			<span class="info-line">@hidden <Info Label="Hidden">@HiddenWhy</Info></span>
 			<button type="button" @onclick="ShowEverything">Show everything</button>
 		</p>
 	}
@@ -67,6 +68,10 @@
 
 	[Parameter]
 	public string? HiddenNote { get; set; }
+
+	/// <summary>Why the hidden reports are off the page, behind the note's (i).</summary>
+	[Parameter]
+	public string? HiddenWhy { get; set; }
 
 	[Parameter, EditorRequired]
 	public EventCallback ShowEverything { get; set; }

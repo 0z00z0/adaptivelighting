@@ -1,4 +1,5 @@
 @using System.Globalization
+@using AdaptiveLighting.Lamplight.Components.Kit
 
 <section class="glass" aria-label="Worth knowing">
 	<h2 class="sec-h">Worth knowing</h2>
@@ -24,6 +25,10 @@
 							<b>@row.Room</b>
 						}
 						&middot; @row.Line.What
+						@if (row.Line.More is { Length: > 0 } more)
+						{
+							<Info Label="@row.Line.What">@more</Info>
+						}
 					</span>
 					@if (row.Line.Why is { Length: > 0 } why)
 					{

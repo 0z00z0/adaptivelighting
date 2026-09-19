@@ -23,18 +23,25 @@
 {
 	<h1 class="pagetitle">This room can't be shown</h1>
 	<div class="notice bad">
-		<strong>The configuration file couldn't be read.</strong>
-		<p>@loadError</p>
-		<p>Every room is in that one file, so nothing can be shown or changed until it parses. <a href="settings">Open Settings</a> to repair it.</p>
+		<span class="info-line">
+			<strong>Settings file unreadable</strong>
+			<Info Label="Settings file" Severity="InfoSeverity.Bad">
+				<span class="info-para">@loadError</span>
+				<span class="info-para">Every room is in that one file, so nothing can be shown or changed until it parses.</span>
+			</Info>
+			<a href="settings">Repair it</a>
+		</span>
 	</div>
 }
 else if (_model.Area is null)
 {
 	<h1 class="pagetitle">No such room</h1>
 	<div class="notice">
-		<p><strong>Nothing here is set up as @AreaId.</strong></p>
-		<p>The room may have been removed, or its Home Assistant area may have been changed.</p>
-		<p><a href="">Back to the dashboard</a> &mdash; or <a href="settings?section=areas">see every room</a>.</p>
+		<span class="info-line">
+			<strong>No room @AreaId</strong>
+			<Info Label="No such room">The room may have been removed, or its Home Assistant area may have been changed.</Info>
+		</span>
+		<p><a href="">Dashboard</a> &middot; <a href="settings?section=areas">Every room</a></p>
 	</div>
 }
 else

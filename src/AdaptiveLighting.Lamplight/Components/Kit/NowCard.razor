@@ -10,7 +10,7 @@
 				<li class="warn-i @warning.Kind">
 					<Bang Kind="@warning.Kind" Title="@warning.Text" />
 					<span>@warning.Text</span>
-					<Info Label="@warning.Text">@warning.Help</Info>
+					<Info Label="@warning.Text" Severity="@(warning.Kind == "bad" ? InfoSeverity.Bad : InfoSeverity.Warn)">@warning.Help</Info>
 				</li>
 			}
 		</ul>

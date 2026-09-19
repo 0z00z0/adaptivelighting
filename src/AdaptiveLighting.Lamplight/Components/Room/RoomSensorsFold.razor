@@ -60,7 +60,7 @@
 
 	@if (Model.Excluded is { Count: > 0 } excluded)
 	{
-		<div class="sub-h">Left out of this room, by hand</div>
+		<div class="sub-h">Left out by hand</div>
 		<ul class="gear">
 			@foreach (string entity in excluded)
 			{
@@ -74,7 +74,13 @@
 	}
 
 	<div class="sub-h">Pick by hand</div>
-	<p class="lede">Each list filled in here <strong>replaces</strong> the automatic choice for that list only. Fixing the room in Home Assistant is usually better.</p>
+	<p class="lede info-line">
+		Each list replaces the automatic choice
+		<Info Label="Pick by hand">
+			Each list filled in here <strong>replaces</strong> the automatic choice for that list only. Fixing the room
+			in Home Assistant is usually better.
+		</Info>
+	</p>
 
 	<div class="rows">
 		<Row Label="Lights" Value="@LightsValue" IsWide="true">
@@ -136,7 +142,10 @@
 		</Row>
 	</div>
 
-	<p class="lede">@Model.ScopeNote</p>
+	<p class="lede info-line">
+		@Model.ScopeNote
+		<Info Label="Offered">Anything already picked stays listed even if it is elsewhere.</Info>
+	</p>
 </Fold>
 
 @code {

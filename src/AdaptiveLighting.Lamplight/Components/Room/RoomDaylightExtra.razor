@@ -1,4 +1,5 @@
 @using AdaptiveLighting.Web.Components
+@using AdaptiveLighting.Lamplight.Components.Kit
 
 @* The daylight curve's chart, drawn above the fold's numeric rows only where a period actually follows it. *@
 
@@ -9,7 +10,10 @@
 				   Reading="@Model.DaylightLux"
 				   Changed="@Model.OnCurveEdited" />
 
-	<p class="lede">@Model.DaylightSourceNote</p>
+	<p class="lede info-line">
+		@Model.DaylightSourceNote
+		<Info Label="Daylight reading">@Model.DaylightSourceWhy</Info>
+	</p>
 }
 
 @code {

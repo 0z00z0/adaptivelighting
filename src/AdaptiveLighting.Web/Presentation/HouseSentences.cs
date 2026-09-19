@@ -35,7 +35,7 @@ public static class HouseSentences
 				"Blend between periods",
 				TokenFormat.Carry(minutes),
 				BlendChoices(minutes))
-			.Text(" when one period hands over to the next.")
+			.Text(" between periods.")
 			.Build();
 	}
 

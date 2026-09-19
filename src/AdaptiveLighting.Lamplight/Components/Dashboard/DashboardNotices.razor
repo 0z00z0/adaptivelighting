@@ -1,22 +1,35 @@
+@using AdaptiveLighting.Lamplight.Components.Kit
+
 @if (Model.KillSwitchActive)
 {
 	<div class="notice bad">
-		<strong>Adaptive lighting is paused.</strong> Nothing was turned off, but no lights will change until it is
-		switched back on.
+		<span class="info-line">
+			<strong>Adaptive lighting is paused</strong>
+			<Info Label="Paused" Severity="InfoSeverity.Bad">
+				Nothing was turned off, but no lights will change until it is switched back on.
+			</Info>
+		</span>
 	</div>
 }
 @if (!Model.EngineIsRunning)
 {
-	<div class="notice bad"><strong>Adaptive lighting has stopped.</strong></div>
-}
-@if (Model.EngineFault is { Length: > 0 } fault)
-{
-	<div class="notice bad">@fault</div>
+	<div class="notice bad">
+		<span class="info-line">
+			<strong>Adaptive lighting has stopped</strong>
+			@if (Model.EngineFault is { Length: > 0 } fault)
+			{
+				<Info Label="Stopped" Severity="InfoSeverity.Bad">@fault</Info>
+			}
+		</span>
+	</div>
 }
 @if (!Model.HasData)
 {
 	<div class="notice">
-		<strong>Waiting for the first report from the rooms.</strong> This normally takes a few seconds.
+		<span class="info-line">
+			<strong>Starting up&hellip;</strong>
+			<Info Label="Starting up">Waiting for the first report from the rooms. This normally takes a few seconds.</Info>
+		</span>
 	</div>
 }
 

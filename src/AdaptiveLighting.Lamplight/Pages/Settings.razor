@@ -3,6 +3,7 @@
 @using Microsoft.JSInterop
 @using AdaptiveLighting.Configuration
 @using AdaptiveLighting.Lamplight.Components.Settings
+@using AdaptiveLighting.Lamplight.Components.Kit
 @inject LightingEngineHost Engine
 @inject HaCatalog Catalog
 @inject ConfigLocation Location
@@ -20,12 +21,16 @@
 @if (Model.LoadError is { Length: > 0 } loadError)
 {
 	<div class="notice bad">
-		<strong>The configuration file couldn&rsquo;t be read.</strong>
-		<p>@loadError</p>
-		<p>
-			The file is <code>@Model.ConfigFilePath</code>. Fix it by hand, or press <em>Start from scratch</em> &mdash;
-			the old file is kept as <code>@Model.BackupPath</code> when saved.
-		</p>
+		<span class="info-line">
+			<strong>Settings file unreadable</strong>
+			<Info Label="Settings file" Severity="InfoSeverity.Bad">
+				<span class="info-para">@loadError</span>
+				<span class="info-para">
+					The file is <code>@Model.ConfigFilePath</code>. Fix it by hand, or press <em>Start from scratch</em>
+					&mdash; the old file is kept as <code>@Model.BackupPath</code> when saved.
+				</span>
+			</Info>
+		</span>
 		<button type="button" @onclick="Model.StartFromScratch">Start from scratch</button>
 	</div>
 }
@@ -34,8 +39,10 @@ else
 	@if (Model.LocationWarning is { Length: > 0 } locationWarning)
 	{
 		<div class="notice warn">
-			<strong>Edits here will not survive a deploy.</strong>
-			<p>@locationWarning</p>
+			<span class="info-line">
+				<strong>A deploy overwrites these edits</strong>
+				<Info Label="Settings file" Severity="InfoSeverity.Warn">@locationWarning</Info>
+			</span>
 		</div>
 	}
 
@@ -44,11 +51,22 @@ else
 		<div class="notice warn">
 			@if (!Model.EngineIsRunning)
 			{
-				<p><strong>Adaptive lighting isn&rsquo;t running.</strong> @Model.EngineFault Edits here are saved either way, and take effect when it starts.</p>
+				<span class="info-line">
+					<strong>Adaptive lighting isn&rsquo;t running</strong>
+					<Info Label="Not running" Severity="InfoSeverity.Bad">
+						@Model.EngineFault Edits here are saved either way, and take effect when it starts.
+					</Info>
+				</span>
 			}
 			@if (!Model.HomeAssistantIsAnswering)
 			{
-				<p><strong>Waiting for Home Assistant.</strong> The pickers below have nothing to offer until it answers. Ids can still be typed by hand; they are not checked against Home Assistant if saved now.</p>
+				<span class="info-line">
+					<strong>Waiting for Home Assistant</strong>
+					<Info Label="Waiting" Severity="InfoSeverity.Bad">
+						The pickers below have nothing to offer until it answers. Ids can still be typed by hand; they are
+						not checked against Home Assistant if saved now.
+					</Info>
+				</span>
 			}
 		</div>
 	}
@@ -58,33 +76,41 @@ else
 		<div class="notice @(validation.IsValid ? "warn" : "bad")">
 			@if (validation.Errors.Count > 0)
 			{
-				<strong>Fix these before saving:</strong>
-				<ul>
-					@foreach (string error in validation.Errors)
-					{
-						<li>@error</li>
-					}
-				</ul>
+				<span class="info-line">
+					<strong>@ValidationHeadline.Errors(validation.Errors.Count)</strong>
+					<Info Label="Fix before saving" Severity="InfoSeverity.Bad">
+						@foreach (string error in validation.Errors)
+						{
+							<span class="info-para">@ValidationWording.Plain(error)</span>
+						}
+					</Info>
+				</span>
 			}
 			@if (validation.AreaErrors.Count > 0)
 			{
-				<strong>These rooms will be skipped &mdash; everything else still works, and can still be saved:</strong>
-				<ul>
-					@foreach (AreaError areaError in validation.AreaErrors)
-					{
-						<li><b>@areaError.AreaName</b>: @areaError.Message</li>
-					}
-				</ul>
+				<span class="info-line">
+					<strong>@ValidationHeadline.SkippedRooms(validation.AreaErrors.Count)</strong>
+					<Info Label="Skipped rooms" Severity="InfoSeverity.Warn">
+						<span class="info-para">Everything else still works, and can still be saved.</span>
+						@foreach (AreaError areaError in validation.AreaErrors)
+						{
+							<span class="info-para"><strong>@areaError.AreaName</strong>: @ValidationWording.Plain(areaError.Message)</span>
+						}
+					</Info>
+				</span>
 			}
 			@if (validation.Warnings.Count > 0)
 			{
-				<strong>Worth knowing &mdash; none of these stops anything:</strong>
-				<ul>
-					@foreach (string warning in validation.Warnings)
-					{
-						<li>@warning</li>
-					}
-				</ul>
+				<span class="info-line">
+					<strong>@ValidationHeadline.Warnings(validation.Warnings.Count)</strong>
+					<Info Label="Worth knowing" Severity="InfoSeverity.Warn">
+						<span class="info-para">None of these stops anything.</span>
+						@foreach (string warning in validation.Warnings)
+						{
+							<span class="info-para">@ValidationWording.Plain(warning)</span>
+						}
+					</Info>
+				</span>
 			}
 		</div>
 	}

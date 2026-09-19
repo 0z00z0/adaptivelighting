@@ -254,6 +254,9 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 .info { position: relative; display: inline-flex; }
 .info-i { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: none; color: var(--ink-3); font-family: Georgia, "Times New Roman", serif; font-size: 12px; font-style: italic; font-weight: var(--w-bold); line-height: 1; }
 .info-i[aria-expanded="true"] { border-color: var(--ink); color: var(--ink); }
+/* Severity: yellow is worth knowing, red needs attention. */
+.info-i.warn, .info-i.warn[aria-expanded="true"] { border-color: var(--warn); background: var(--warn); color: var(--on-state); }
+.info-i.bad, .info-i.bad[aria-expanded="true"] { border-color: var(--bad); background: var(--bad); color: var(--on-state); }
 .info-pop { position: absolute; z-index: 40; top: calc(100% + 6px); left: -10px; width: 300px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-big); background: var(--surface); box-shadow: var(--shadow-pop); color: var(--ink); font-family: var(--font-body); font-size: var(--t-sm); font-weight: var(--w-body); line-height: 1.45; letter-spacing: 0; text-transform: none; white-space: normal; text-align: left; }
 .info-pop b { display: block; margin-bottom: 2px; font-weight: var(--w-bold); }
 

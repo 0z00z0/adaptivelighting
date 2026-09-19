@@ -22,7 +22,7 @@
 	}
 	else
 	{
-		<p class="d2-note">No house mode is set up. <a href="settings?section=housemodes">Add one under House modes</a>.</p>
+		<p class="d2-note">No house mode &mdash; <a href="settings?section=housemodes">set one up</a></p>
 	}
 
 	@if (Model.MasterSwitch is { } master)
@@ -36,7 +36,13 @@
 				  OnSelect="index => SelectMaster(master, index)" />
 			@if (Model.MasterNote is { Length: > 0 } note)
 			{
-				<p class="d2-note">@note</p>
+				<p class="d2-note info-line">
+					@note
+					@if (Model.MasterNoteMore is { Length: > 0 } more)
+					{
+						<Info Label="Master switch" Severity="@Model.MasterNoteSeverity">@more</Info>
+					}
+				</p>
 			}
 		</div>
 	}

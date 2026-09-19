@@ -20,7 +20,7 @@ public sealed class HouseSentencesTests
 	{
 		GlobalConfig global = new() { SmoothTransitions = true, BlendMinutes = 30 };
 
-		Assert.AreEqual("Lights ease over 30 min when one period hands over to the next.", Text(HouseSentences.Blend(global)));
+		Assert.AreEqual("Lights ease over 30 min between periods.", Text(HouseSentences.Blend(global)));
 	}
 
 	[TestMethod]
@@ -28,7 +28,7 @@ public sealed class HouseSentencesTests
 	{
 		GlobalConfig global = new() { SmoothTransitions = false, BlendMinutes = 30 };
 
-		Assert.AreEqual("Lights step at the boundary when one period hands over to the next.", Text(HouseSentences.Blend(global)));
+		Assert.AreEqual("Lights step at the boundary between periods.", Text(HouseSentences.Blend(global)));
 	}
 
 	[TestMethod]

@@ -14,7 +14,7 @@
 							  ValueChanged="@Model.SetLeadInSensors"
 							  Options="@Model.LeadInOptions"
 							  Lookup="@Model.Lookup"
-							  EmptyLabel="Nothing outside lights this room ahead of time."
+							  EmptyLabel="None"
 							  AddLabel="Add a sensor…"
 							  Placeholder="binary_sensor.front_steps_motion" />
 		</ChildContent>
@@ -47,7 +47,7 @@
 							  ValueChanged="@Model.SetKeepLitWhenOn"
 							  Options="@Model.BlockerOptions"
 							  Lookup="@Model.Lookup"
-							  EmptyLabel="Nothing holds this room's lights on."
+							  EmptyLabel="None"
 							  AddLabel="Add one…"
 							  Placeholder="input_boolean.meeting" />
 			@if (Model.KeepLitWhenOn is { Count: > 0 })
@@ -68,7 +68,7 @@
 						  Options="@Model.SceneOptions"
 						  Lookup="@Model.Lookup"
 						  NoneLabel="(this room's own brightness and warmth)"
-						  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+						  EmptyNote="No scenes — type an id"
 						  Placeholder="scene.stue_kveld" />
 		</ChildContent>
 	</Row>
@@ -81,7 +81,7 @@
 						  Options="@Model.SceneOptions"
 						  Lookup="@Model.Lookup"
 						  NoneLabel="(switch the lights off)"
-						  EmptyNote="No scenes in Home Assistant yet — type an id instead."
+						  EmptyNote="No scenes — type an id"
 						  Placeholder="scene.stue_natt" />
 		</ChildContent>
 	</Row>
