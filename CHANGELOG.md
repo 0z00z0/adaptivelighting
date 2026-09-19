@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.15] - 2026-09-19
+
 ### Added
 
 - `AreaSnapshot.IsLit`, `AreaSnapshotCache.Find` and `KeyOf`, `HaCatalog.IsHomeAssistantResponding` and `FriendlyNameOrId`, the `DocumentCache` service with a `ModeService` constructor that takes it, and the `ActivityRow` component. `IsLit` is not part of the room report sent to Home Assistant.
