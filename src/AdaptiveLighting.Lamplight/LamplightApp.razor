@@ -10,6 +10,12 @@
 	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Web/controls.css?v={AssetToken.Text}")" />
 	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Lamplight/lamplight.css?v={AssetToken.Text}")" />
 	<link rel="icon" type="image/svg+xml" href="_content/AdaptiveLighting.Web/favicon.svg" />
+	@* Blocking and above the body, after both stylesheets: the server paints this page, so a theme applied
+		after render arrives a repaint late. data-themes is the allow-list; an id outside it, or nothing
+		stored, falls back to the device's own default named by data-dark/data-light. *@
+	<script src="@($"_content/AdaptiveLighting.Lamplight/lamplight-theme.js?v={AssetToken.Text}")"
+		data-themes="@LamplightThemes.DataThemeIds" data-dark="@LamplightThemes.DarkDefault.Id"
+		data-light="@LamplightThemes.LightDefault.Id"></script>
 	<HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
