@@ -1,0 +1,42 @@
+@* Fully controlled: Word/WordKind come from the page model on every render, so a click never needs to guess
+   what the new state should look like — it only reports which button was pressed. *@
+
+<div class="pair" role="group" aria-label="@Name">
+	<span class="pair-name">@Name</span>
+	<span class="word @WordKind">@Word</span>
+	<Info Label="@Name">@Help</Info>
+	<span class="pair-btns">
+		@for (int index = 0; index < Options.Count; index++)
+		{
+			int captured = index;
+			<button type="button" aria-pressed="@(captured == Current ? "true" : "false")" @onclick="() => Select(captured)">@Options[captured]</button>
+		}
+	</span>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public string Name { get; set; } = "";
+
+	[Parameter, EditorRequired]
+	public string Word { get; set; } = "";
+
+	/// <summary>"on", "ok", "off" or "plain" — a CSS <c>word</c> modifier, nothing derived here.</summary>
+	[Parameter, EditorRequired]
+	public string WordKind { get; set; } = "";
+
+	[Parameter]
+	public RenderFragment? Help { get; set; }
+
+	[Parameter, EditorRequired]
+	public IReadOnlyList<string> Options { get; set; } = [];
+
+	/// <summary>Index into Options of the pressed button.</summary>
+	[Parameter]
+	public int Current { get; set; }
+
+	[Parameter]
+	public EventCallback<int> OnSelect { get; set; }
+
+	private Task Select(int index) => OnSelect.InvokeAsync(index);
+}

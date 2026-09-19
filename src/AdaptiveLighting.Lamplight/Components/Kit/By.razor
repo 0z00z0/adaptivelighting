@@ -1,0 +1,10 @@
+<span class="by by-@Kind"><i>@Kind</i>@Who</span>
+
+@code {
+	/// <summary>Who made the change: "person", "device" or "automation".</summary>
+	[Parameter, EditorRequired]
+	public string Kind { get; set; } = "";
+
+	[Parameter, EditorRequired]
+	public string Who { get; set; } = "";
+}
