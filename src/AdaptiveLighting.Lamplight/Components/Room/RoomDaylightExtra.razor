@@ -1,0 +1,18 @@
+@using AdaptiveLighting.Web.Components
+
+@* The daylight curve's chart, drawn above the fold's numeric rows only where a period actually follows it. *@
+
+@if (Model.CurvePeriodNames.Count > 0)
+{
+	<LuxCurveChart Settings="@Model.Effective"
+				   PeriodNames="@Model.CurvePeriodNames"
+				   Reading="@Model.DaylightLux"
+				   Changed="@Model.OnCurveEdited" />
+
+	<p class="lede">@Model.DaylightSourceNote</p>
+}
+
+@code {
+	[Parameter, EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+}

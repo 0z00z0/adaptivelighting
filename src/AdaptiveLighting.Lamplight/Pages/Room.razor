@@ -1,0 +1,158 @@
+@page "/room/{AreaId}"
+@implements IDisposable
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Lamplight.Components.Room
+@using AdaptiveLighting.Web.Components
+@using Microsoft.JSInterop
+@inject LightingEngineHost Engine
+@inject HaCatalog Catalog
+@inject AreaSnapshotCache Cache
+@inject ActivityLog Log
+@inject NavigationManager Nav
+@inject ILogger<Room> Logger
+@inject IJSRuntime Js
+
+@* Layout, styling and the wiring of presses to RoomPageModel — the same model today's design uses, with
+   Lamplight's own markup over it. Every rule, sentence and write lives in the model. *@
+
+<PageTitle>@_model.PageName &mdash; Adaptive lighting</PageTitle>
+
+<NavigationLock OnBeforeInternalNavigation="ConfirmLeave" ConfirmExternalNavigation="@_model.HasRefusedEdit" />
+
+@if (_model.LoadError is { Length: > 0 } loadError)
+{
+	<h1 class="pagetitle">This room can't be shown</h1>
+	<div class="notice bad">
+		<strong>The configuration file couldn't be read.</strong>
+		<p>@loadError</p>
+		<p>Every room is in that one file, so nothing can be shown or changed until it parses. <a href="settings">Open Settings</a> to repair it.</p>
+	</div>
+}
+else if (_model.Area is null)
+{
+	<h1 class="pagetitle">No such room</h1>
+	<div class="notice">
+		<p><strong>Nothing here is set up as @AreaId.</strong></p>
+		<p>The room may have been removed, or its Home Assistant area may have been changed.</p>
+		<p><a href="">Back to the dashboard</a> &mdash; or <a href="settings?section=areas">see every room</a>.</p>
+	</div>
+}
+else
+{
+	<a class="back" href="">&lsaquo; Dashboard</a>
+
+	<RoomHero Model="@_model" />
+
+	<SectionIndex Items="@IndexItems" OnJump="JumpTo" />
+
+	<RoomLevelsFold Model="@_model" Open="@IsOpen(LevelsId)" OpenChanged="@(open => SetOpen(LevelsId, open))" />
+
+	<RoomSettingsFold Id="@MovementId" Model="@_model" Group="@MovementGroup" Open="@IsOpen(MovementId)" OpenChanged="@(open => SetOpen(MovementId, open))">
+		<RoomMovementExtra Model="@_model" />
+	</RoomSettingsFold>
+
+	<RoomSensorsFold Model="@_model" Open="@IsOpen(SensorsId)" OpenChanged="@(open => SetOpen(SensorsId, open))" />
+
+	<RoomSettingsFold Id="@DarknessId" Model="@_model" Group="@DarknessGroup" Open="@IsOpen(DarknessId)" OpenChanged="@(open => SetOpen(DarknessId, open))" />
+
+	<RoomSettingsFold Id="@CurveId" Model="@_model" Group="@CurveGroup" Open="@IsOpen(CurveId)" OpenChanged="@(open => SetOpen(CurveId, open))">
+		<RoomDaylightExtra Model="@_model" />
+	</RoomSettingsFold>
+
+	<RoomSettingsFold Id="@BehaviourId" Model="@_model" Group="@BehaviourGroup" Open="@IsOpen(BehaviourId)" OpenChanged="@(open => SetOpen(BehaviourId, open))" />
+
+	<RoomSettingsFold Id="@RareId" Model="@_model" Group="@RareGroup" Open="@IsOpen(RareId)" OpenChanged="@(open => SetOpen(RareId, open))" />
+
+	<RoomTail Model="@_model"
+			  IdentityOpen="@IsOpen(IdentityId)" IdentityOpenChanged="@(open => SetOpen(IdentityId, open))"
+			  LogOpen="@IsOpen(LogId)" LogOpenChanged="@(open => SetOpen(LogId, open))" />
+
+	<RoomSaveBar Model="@_model" />
+}
+
+@code {
+	private const string LevelsId = "levels";
+	private const string MovementId = "movement";
+	private const string SensorsId = "sensors";
+	private const string DarknessId = "darkness";
+	private const string CurveId = "curve";
+	private const string BehaviourId = "behaviour";
+	private const string RareId = "rare";
+	private const string IdentityId = "identity";
+	private const string LogId = "log";
+
+	/// <summary>The Home Assistant area id in the URL.</summary>
+	[Parameter]
+	public string AreaId { get; set; } = "";
+
+	private RoomPageModel _model = default!;
+
+	// Which folds are open. Brightness and warmth starts open, the owner's ordering decision made visible on
+	// load; everything else starts closed, as the theme draft shows a lit room.
+	private readonly HashSet<string> _open = [LevelsId];
+
+	protected override void OnInitialized()
+	{
+		_model = new RoomPageModel(Engine, Catalog, Cache, Log, Logger, work => InvokeAsync(work));
+		_model.Changed += StateHasChanged;
+		_model.Navigated += Leave;
+		_model.Start();
+	}
+
+	protected override void OnParametersSet() => _model.Show(AreaId);
+
+	private void Leave(string href) => Nav.NavigateTo(href);
+
+	private async Task ConfirmLeave(LocationChangingContext context)
+	{
+		if (_model.HasRefusedEdit
+			&& !await Js.InvokeAsync<bool>("confirm", RoomPageModel.LeaveQuestion))
+			context.PreventNavigation();
+	}
+
+	// RoomSettings.Groups is defined in this fixed order: Movement & timing, Darkness, Daylight curve, Room
+	// behaviour, Rarely needed. Reading SettingsInput.Groups by position keeps that order rather than matching
+	// on title, which is what "model order" means here.
+	private AllSettingsPanel.Group MovementGroup => _model.SettingsInput.Groups[0];
+	private AllSettingsPanel.Group DarknessGroup => _model.SettingsInput.Groups[1];
+	private AllSettingsPanel.Group CurveGroup => _model.SettingsInput.Groups[2];
+	private AllSettingsPanel.Group BehaviourGroup => _model.SettingsInput.Groups[3];
+	private AllSettingsPanel.Group RareGroup => _model.SettingsInput.Groups[4];
+
+	private bool IsOpen(string id) => _open.Contains(id);
+
+	private void SetOpen(string id, bool open)
+	{
+		if (open)
+			_open.Add(id);
+		else
+			_open.Remove(id);
+	}
+
+	private IReadOnlyList<SectionIndex.Item> IndexItems =>
+	[
+		new(LevelsId, "Brightness and warmth", _model.OwnPeriodCount > 0 ? _model.OwnPeriodCount : null),
+		new(MovementId, MovementGroup.Source.Title, MovementGroup.OwnCount > 0 ? MovementGroup.OwnCount : null),
+		new(SensorsId, "Lights and sensors"),
+		new(DarknessId, DarknessGroup.Source.Title, DarknessGroup.OwnCount > 0 ? DarknessGroup.OwnCount : null),
+		new(CurveId, CurveGroup.Source.Title, CurveGroup.OwnCount > 0 ? CurveGroup.OwnCount : null),
+		new(BehaviourId, BehaviourGroup.Source.Title, BehaviourGroup.OwnCount > 0 ? BehaviourGroup.OwnCount : null),
+		new(RareId, RareGroup.Source.Title, RareGroup.OwnCount > 0 ? RareGroup.OwnCount : null),
+		new(IdentityId, "This room"),
+		new(LogId, "What happened here")
+	];
+
+	// Opens the target fold and scrolls it into view; the fold's own id is already on its <section>.
+	private async Task JumpTo(string id)
+	{
+		SetOpen(id, true);
+		await Js.InvokeVoidAsync("eval", $"document.getElementById('{id}')?.scrollIntoView({{behavior:'smooth',block:'start'}})");
+	}
+
+	public void Dispose()
+	{
+		_model.Changed -= StateHasChanged;
+		_model.Navigated -= Leave;
+		_model.Dispose();
+	}
+}

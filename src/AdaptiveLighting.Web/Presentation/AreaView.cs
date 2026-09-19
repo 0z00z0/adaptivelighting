@@ -10,6 +10,15 @@ namespace AdaptiveLighting.Web.Presentation;
 /// <param name="LinkText">The link's own words, which have to read as an instruction on their own.</param>
 public sealed record HiddenRoomsNote(string Lead, string LinkText);
 
+/// <summary>The colour family a room's edge belongs to: the engine acting, a person having acted, neither, or off.</summary>
+public enum RoomFamily
+{
+	Off,
+	Machine,
+	Human,
+	Idle
+}
+
 /// <summary>The decisions the two area screens make about how a room is shown, in one testable place.</summary>
 /// <remarks>The dashboard's cards and the settings list share this colour mapping, so one house is painted once.</remarks>
 public static class AreaView
@@ -22,7 +31,7 @@ public static class AreaView
 	public const string FloorlessTitle = "Other rooms";
 
 	/// <summary>The colour family a live state belongs to: the engine acting, a person having acted, or neither.</summary>
-	/// <returns><c>machine</c>, <c>human</c> or <c>idle</c>, the suffix of a <c>family-*</c> class.</returns>
+	/// <returns><c>machine</c>, <c>human</c> or <c>idle</c>, naming the colour family a design paints.</returns>
 	public static string Family(AreaState state) => state switch
 	{
 		AreaState.AutoActive or AreaState.AutoVacant or AreaState.PreOff => "machine",
@@ -31,13 +40,18 @@ public static class AreaView
 	};
 
 	/// <summary>
-	///     The left-edge class for a room in the settings list. A switched-off room is flat grey whatever the
+	///     The family a room's edge belongs to in the settings list. A switched-off room is flat grey whatever the
 	///     engine last said, and a room with no snapshot is idle, never unpainted.
 	/// </summary>
-	public static string EdgeClass(bool enabled, AreaState? state) =>
-		!enabled ? "family-off"
-		: state is { } live ? $"family-{Family(live)}"
-		: "family-idle";
+	public static RoomFamily FamilyOf(bool enabled, AreaState? state) =>
+		!enabled ? RoomFamily.Off
+		: state is { } live ? Family(live) switch
+		{
+			"machine" => RoomFamily.Machine,
+			"human" => RoomFamily.Human,
+			_ => RoomFamily.Idle
+		}
+		: RoomFamily.Idle;
 
 	/// <summary>Whether the engine may command this room, following the document's inheritance.</summary>
 	public static bool IsEnabled(AreaConfig area, AreaSettings defaults)
