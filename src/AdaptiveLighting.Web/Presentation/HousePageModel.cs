@@ -1451,4 +1451,31 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	public bool HasBackup => _engine.Store.HasBackup;
 
 	public string BackupPath => _engine.Store.BackupPath;
+
+	// ---- reload from Home Assistant ----
+
+	/// <summary>The reload button's last result, in a few words; <c>null</c> before it is pressed.</summary>
+	public string? ReloadOutcome { get; private set; }
+
+	/// <summary>Whether the reload button may be pressed.</summary>
+	/// <remarks>Reload rebuilds from the file on disk, so an edit sitting unsaved here would be silently
+	/// dropped from the room count it reports.</remarks>
+	public bool CanReloadFromHomeAssistant => !_dirty;
+
+	/// <summary>Rebuilds every room from Home Assistant, through the same path a save or a restart already
+	/// takes: <see cref="LightingEngineHost.Reload"/>.</summary>
+	public void ReloadFromHomeAssistant()
+	{
+		if (_dirty)
+		{
+			ReloadOutcome = "Save first.";
+			Notify();
+
+			return;
+		}
+
+		SaveResult result = _engine.Reload();
+		ReloadOutcome = result.Written ? RoomsManagedLine : result.Message;
+		Notify();
+	}
 }
