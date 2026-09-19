@@ -110,7 +110,7 @@ else
 
 	@if (Model.ShowSaveBar)
 	{
-		<div class="savebar">
+		<div class="savebar-fixed">
 			<button type="button" class="primary" @onclick="Model.Save" disabled="@Model.IsBusy">Save and apply</button>
 			<button type="button" @onclick="Model.Reload" disabled="@Model.IsBusy">Discard changes</button>
 
