@@ -6,6 +6,8 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<base href="/" />
 	<title>Adaptive lighting</title>
+	@* Before lamplight.css, so this design's own rules win a tie with a shared control's. *@
+	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Web/controls.css?v={AssetToken.Text}")" />
 	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Lamplight/lamplight.css?v={AssetToken.Text}")" />
 	<link rel="icon" type="image/svg+xml" href="_content/AdaptiveLighting.Web/favicon.svg" />
 	<HeadOutlet @rendermode="InteractiveServer" />
