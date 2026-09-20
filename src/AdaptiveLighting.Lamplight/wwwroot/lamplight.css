@@ -279,6 +279,9 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 .pair-btns { display: inline-flex; gap: 3px; margin-left: auto; }
 .pair-btns button { padding: 7px 12px; border: 1px solid transparent; border-radius: var(--r-pill); background: none; color: var(--ink-2); font-size: var(--t-sm); font-weight: var(--w-semi); white-space: nowrap; }
 .pair-btns button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+/* No name and no word: the pill is the buttons, so the label's left inset and the push-right would both leave a gap. */
+.pair-bare { padding-left: 8px; }
+.pair-bare .pair-btns { margin-left: 0; }
 .lampcard .pair { background: color-mix(in srgb, var(--surface) 72%, transparent); }
 
 .warns { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 0; padding: 0; list-style: none; }
@@ -301,6 +304,8 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 .big b { font-size: var(--t-xxl); font-weight: var(--w-black); line-height: 1; letter-spacing: var(--ls-big); white-space: nowrap; }
 .big span { font-size: 18px; color: var(--lit-ink-2); }
 .lc-pairs { display: flex; flex-wrap: wrap; gap: 8px; }
+/* The way into adaptive lighting stands beside the light pair, so it takes the pill's shape and height. */
+.lc-pairs .btn { min-height: 44px; padding: 6px 16px; border-radius: var(--r-pill); }
 
 .d2-now { display: flex; flex-direction: column; gap: 16px; }
 
@@ -343,6 +348,8 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 	.pair { width: 100%; border-radius: min(22px, var(--r-big)); padding: 6px 6px 6px 14px; }
 	.pair-btns { flex: 1 1 100%; }
 	.pair-btns button { flex: 1; }
+	/* Nothing precedes the buttons but the (i), so a full-width wrap would leave that icon alone on a line. */
+	.pair-bare .pair-btns { flex: 1 1 auto; }
 	.lampcard { padding: 16px; gap: 10px; }
 	.big b { font-size: 40px; }
 	.d2-now { gap: 10px; }

@@ -1884,6 +1884,11 @@ from the file afterwards, or the page's next full save would report a conflict a
 itself. And the clean baseline is only re-taken when the page matched the file to begin with: with other
 edits pending the page stays dirty, which is the truth.
 
+**Lamplight's room header carries only the way in.** With the switch taking effect on the press, an off room
+needs one button and nothing else, so the header has *Activate adaptive lighting* and the On/Off pair lives
+under "This room". The light pair there also drops its own name and ON/OFF word (`Pair.ShowStatus`), because
+the card's large reading above it is the same fact in bigger type.
+
 **A room with no slot on disk keeps the old behaviour.** No area id, or added or adopted since the last save:
 `RoomWrite` appends where it finds no slot, and for an adopted room that writes the room a second time. Those
 wait for Save, which is what the page already tells a newly added room to do. Switching a whole floor stays
