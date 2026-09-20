@@ -101,7 +101,6 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	// Everything Home Assistant has, read once per document load. The pickers' fallback, not what they show.
 	private IReadOnlyList<EntityOption> _lights = [];
 	private IReadOnlyList<EntityOption> _motionSensors = [];
-	private IReadOnlyList<EntityOption> _sunEntities = [];
 
 	private EntityLookup? _lookup;
 	private Func<string, string>? _nameOf;
@@ -796,7 +795,6 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		RoomControl.Steps => SetStep(change.Text ?? ""),
 		RoomControl.Flag => SetFlag(change.Setting.Key, change.Flag),
 		RoomControl.Choice => SetChoice(change.Setting.Key, change.Text ?? ""),
-		RoomControl.Entity => SetEntity(change.Setting.Key, change.Text),
 		_ => SetNumber(change.Setting.Key, change.Number)
 	};
 
@@ -822,16 +820,6 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 			RoomControl.Steps => item with { StepValue = SleepSteps.Of(Area, Defaults).ToString() },
 			RoomControl.Flag => item with { Flag = RoomSettings.Flag(Area, Defaults, setting.Key) },
 			RoomControl.Choice => item with { ChoiceValue = RoomSettings.ChoiceName(Area, Defaults, setting.Key) },
-			RoomControl.Entity => item with
-			{
-				Text = RoomSettings.Entity(Area, Defaults, setting.Key),
-				Picker = new AllSettingsPanel.PickerField
-				{
-					Options = _sunEntities,
-					NoneLabel = "(the house's sun entity)",
-					Placeholder = "sun.sun"
-				}
-			},
 			_ => item with
 			{
 				Text = RoomSettings.Describe(Area, Defaults, setting.Key),
@@ -1274,7 +1262,6 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		_catalog.Invalidate();
 
 		Areas = _catalog.Areas(Document.Global);
-		_sunEntities = _catalog.EntitiesInDomains("sun");
 		BlockerOptions = _catalog.EntitiesInDomains("binary_sensor", "input_boolean", "switch", "media_player");
 		SceneOptions = _catalog.EntitiesInDomains("scene");
 		_motionSensors = _catalog.EntitiesWithDeviceClass("binary_sensor", [.. Document.Global.EffectiveMotionDeviceClasses]);
@@ -1462,16 +1449,6 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	{
 		if (Area is not { } room || !RoomSettings.Apply(room, new SentenceEdit(key, TokenKind.Choice, value)))
 			return Task.CompletedTask;
-
-		return MarkDirty();
-	}
-
-	private Task SetEntity(string key, string? value)
-	{
-		if (Area is not { } room)
-			return Task.CompletedTask;
-
-		RoomSettings.SetEntity(room, key, value);
 
 		return MarkDirty();
 	}

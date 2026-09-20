@@ -12,6 +12,7 @@ against each other.
 
 ## [Unreleased]
 
+- The room page's "Rarely needed" fold is gone. Its sun entity setting moves to the house page, next to the outdoor light-level sensor, as a house-wide `Global.SunEntity` — it no longer takes a per-room override, since a house has exactly one. Its fade-time settings (fade when light out, fade when dark out) move into the room's darkness fold, renamed "Darkness and fading" to match. A document that still names `SunEntity` under a room or under `Defaults` loads that key as unmatched and drops it silently, the same as any other retired key; the house falls back to reading `Global.SunEntity`, `sun.sun` by default.
 - A house-mode scene stands instead of being undone in the same instant it runs. Entering a mode whose option names a scene (a sleep mode switching the house off, say) fired the scene and then, in the same pass, re-aimed every room the engine believed was active — so a room went dark and came straight back on at the new mode's levels. A room now takes up the scene as the look its lights carry: neither the mode change nor the tick behind it re-aims over the top of it, the vacancy countdown settles the room instead of running the warning dim through it, and a level test puts back what the fixtures showed rather than re-firing a house-wide scene. Movement, a hand at the switch or the next mode change hands the room back to the engine as before, and a mode that names no scene still retargets exactly as it did.
 
 ## [2026.9.21] - 2026-09-20

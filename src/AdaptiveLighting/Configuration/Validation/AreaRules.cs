@@ -244,9 +244,6 @@ internal static class AreaRules
 		if (settings.SunElevationThreshold is < ValidationRanges.MinSunElevationDegrees or > ValidationRanges.MaxSunElevationDegrees)
 			result.AddError($"[{scope}] SunElevationThreshold must be between {ValidationRanges.MinSunElevationDegrees} and {ValidationRanges.MaxSunElevationDegrees} degrees (is {settings.SunElevationThreshold}).");
 
-		if (string.IsNullOrWhiteSpace(settings.SunEntity))
-			result.AddError($"[{scope}] SunEntity is empty.");
-
 		if (settings.DayTransitionSeconds < 0)
 			result.AddError($"[{scope}] DayTransitionSeconds must not be negative (is {settings.DayTransitionSeconds}).");
 

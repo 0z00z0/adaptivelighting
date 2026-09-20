@@ -46,9 +46,9 @@ Four more controls close the section, though none is one of the 22: two lists th
 the room switches itself on and off, and two scenes it can run instead. They belong to one room and
 have no house-wide baseline, so they are described under [a room's own facts](#a-rooms-own-facts).
 
-### Darkness
+### Darkness and fading
 
-*What has to be true outside before movement lights the room.*
+*What has to be true outside before movement lights the room, and how fast the lights fade between light and dark.*
 
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
@@ -56,6 +56,8 @@ have no house-wide baseline, so they are described under [a room's own facts](#a
 | **Dark below** | At or below this many lux the room counts as dark. Readings run from a few lux at night to tens of thousands at midday, so pick the decade before the number. | 1000 lx | `LuxThreshold` |
 | **Bright again above** | The extra light needed to count as bright again, so a sensor sitting on the threshold cannot flap. Scale it with the threshold. | 10 lx | `LuxHysteresis` |
 | **Dark when the sun is below** | Sun elevation below which the room counts as dark. In degrees above the horizon: 0° is sunset, −6° is dusk. | 3° | `SunElevationThreshold` |
+| **Fade when it's light out** | How long the lights take to reach a new level while the room is not dark. | 1 s | `DayTransitionSeconds` |
+| **Fade when it's dark out** | Gentler, because eyes are dark-adapted. | 15 s | `NightTransitionSeconds` |
 
 *Dark below* and *Bright again above* are shown under **Sensor**; *Dark when the sun is below* under
 **Sun**.
@@ -116,14 +118,6 @@ the Configuration page says so.
 `true`/`false`, and **Dims and stays off** is `true`/`true`. A hand-written file may set
 `SleepBlocksAutoOn` without `RespectSleepMode`; it loads and runs, and the control shows it as **Dims and
 stays off**.
-
-### Rarely needed
-
-| Setting | What it does | Default | In the file |
-|---|---|---|---|
-| **Fade when it's light out** | How long the lights take to reach a new level while the room is not dark. | 1 s | `DayTransitionSeconds` |
-| **Fade when it's dark out** | Gentler, because eyes are dark-adapted. | 15 s | `NightTransitionSeconds` |
-| **Sun entity** | A house normally has exactly one. | `sun.sun` | `SunEntity` |
 
 ---
 
@@ -288,6 +282,7 @@ as Normal and keeps managing its rooms. There is no fallback to the trackers.
 | **Never touch (label)** | Anything carrying this label is invisible to the app. Always wins over the include label. | `adaptive_exclude` | `ExcludeLabel` |
 | **Counts as motion (label)** | A sensor with this label is treated as a motion sensor whatever its type. | `adaptive_motion` | `MotionLabel` |
 | **Outdoor light sensor** | The house's outdoor sensor. The daylight curve reads it in any room that follows it, unless that room names its own Daylight sensor; for darkness a room reads it only if it asks to. | none | `OutdoorLuxSensor` |
+| **Sun entity** | Where the house reads the sun's height, for darkness by Sun and every sun-anchored schedule boundary. A house has exactly one, so no room overrides it. | `sun.sun` | `SunEntity` |
 | **What counts as a motion sensor** | Device classes that qualify a `binary_sensor`. Listing any **replaces** the built-in set rather than adding to it. | motion, occupancy, presence | `MotionDeviceClasses` |
 | **What counts as a light-level sensor** | The device class that qualifies a `sensor`. | `illuminance` | `IlluminanceDeviceClass` |
 

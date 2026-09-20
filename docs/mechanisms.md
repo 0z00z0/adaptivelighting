@@ -344,8 +344,16 @@ costs lateness, never correctness.
 until then the armed one-shot stands on yesterday's instant. `LightingOrchestrator.SunMoved` watches the sun
 entity, projects those two anchors off the change's own payload, and emits through `DistinctUntilChanged`, so
 the elevation and azimuth the same entity republishes every half minute announce nothing: no boundary is
-anchored to either. What is left is two to four events a day. Each area is handed the observable for its own
-`SunEntity` and `ModeMonitor` the house's, matching the calculator each was built with.
+anchored to either. What is left is two to four events a day. Every area and `ModeMonitor` are handed the
+observable for the same `GlobalConfig.SunEntity`, matching the calculator each was built with.
+
+`SunEntity` is house-wide, not a per-area override — moved out of `AreaSettings`/`AreaConfig` into
+`GlobalConfig` (alongside `OutdoorLuxSensor`), since a room-level value never had a real use: almost every
+Home Assistant install has exactly one sun entity, and the darkness-by-Sun rule already read straight past a
+per-room choice. `IlluminanceGate` and `LightingOrchestrator` take it as a plain string now, not off the
+resolved `AreaSettings`. An old document naming `SunEntity` per room or under `Defaults` loads that key as
+unmatched and silently drops it, the same as any other retired key; the house then reads its own
+`Global.SunEntity`, `sun.sun` by default.
 
 It runs `OnTick()`, not a bare re-arm. A sun time can move *backwards* past now as easily as forwards, and
 `NextBoundary` answers with the first `Start` strictly after now, so re-arming alone would step straight over a

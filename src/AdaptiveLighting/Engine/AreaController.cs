@@ -187,6 +187,7 @@ public sealed class AreaController : IDisposable
 			_ha,
 			luxSensors,
 			area.Settings,
+			_global.SunEntity,
 			staleAfter,
 			() => _scheduler.Now,
 			_logger,

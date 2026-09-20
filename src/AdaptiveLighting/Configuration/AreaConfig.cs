@@ -134,9 +134,6 @@ public class AreaConfig
 	/// <inheritdoc cref="AreaSettings.SunElevationThreshold"/>
 	public double? SunElevationThreshold { get; set; }
 
-	/// <inheritdoc cref="AreaSettings.SunEntity"/>
-	public string? SunEntity { get; set; }
-
 	/// <inheritdoc cref="AreaSettings.DayTransitionSeconds"/>
 	public double? DayTransitionSeconds { get; set; }
 
@@ -186,7 +183,6 @@ public class AreaConfig
 			LuxBrightnessMaxPct = LuxBrightnessMaxPct ?? defaults.LuxBrightnessMaxPct,
 			LuxBrightnessGamma = LuxBrightnessGamma ?? defaults.LuxBrightnessGamma,
 			SunElevationThreshold = SunElevationThreshold ?? defaults.SunElevationThreshold,
-			SunEntity = SunEntity ?? defaults.SunEntity,
 			DayTransitionSeconds = DayTransitionSeconds ?? defaults.DayTransitionSeconds,
 			NightTransitionSeconds = NightTransitionSeconds ?? defaults.NightTransitionSeconds,
 			RespectSleepMode = RespectSleepMode ?? defaults.RespectSleepMode,

@@ -1160,17 +1160,6 @@ public sealed class HousePageModel : IPageClock, IDisposable
 			RoomControl.Steps => item with { StepValue = SleepSteps.Of(_config.Defaults).ToString() },
 			RoomControl.Flag => item with { Flag = RoomSettings.Flag(null, _config.Defaults, setting.Key) },
 			RoomControl.Choice => item with { ChoiceValue = RoomSettings.ChoiceName(null, _config.Defaults, setting.Key) },
-			RoomControl.Entity => item with
-			{
-				Text = RoomSettings.Entity(null, _config.Defaults, setting.Key),
-				Picker = new AllSettingsPanel.PickerField
-				{
-					Options = SunEntities,
-					NoneLabel = "(none — the engine needs one)",
-					EmptyNote = EmptyNote("No sun entity — type an id"),
-					Placeholder = "sun.sun"
-				}
-			},
 			_ => item with
 			{
 				Text = RoomSettings.Describe(null, _config.Defaults, setting.Key),
@@ -1194,9 +1183,6 @@ public sealed class HousePageModel : IPageClock, IDisposable
 				break;
 			case RoomControl.Choice:
 				SetHouseChoice(change.Setting.Key, change.Text ?? "");
-				break;
-			case RoomControl.Entity:
-				SetHouseEntity(change.Setting.Key, change.Text);
 				break;
 			default:
 				SetHouseNumber(change.Setting.Key, change.Number);
@@ -1247,12 +1233,6 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		Revalidate();
 	}
 
-	private void SetHouseEntity(string key, string? value)
-	{
-		RoomSettings.SetEntity(_config.Defaults, key, value);
-		Revalidate();
-	}
-
 	// ---- the house: finding lights and sensors ----
 
 	/// <summary>Bulbs more than one room commands, found by the engine as it builds.</summary>
@@ -1294,6 +1274,15 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	public void SetOutdoorLux(string? value)
 	{
 		_config.Global.OutdoorLuxSensor = string.IsNullOrWhiteSpace(value) ? null : value;
+		Revalidate();
+	}
+
+	/// <summary>The house's sun entity. Not nullable: unlike the outdoor sensor, every darkness-by-sun room needs one.</summary>
+	public string SunEntity => _config.Global.SunEntity;
+
+	public void SetSunEntity(string? value)
+	{
+		_config.Global.SunEntity = value ?? string.Empty;
 		Revalidate();
 	}
 
