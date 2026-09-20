@@ -50,3 +50,4 @@ tools/uihost/local.yaml
 tools/uihost/*.yaml
 tools/uihost/*.yaml.bak
 tools/uihost/last-seen/
+tools/uihost/state/
