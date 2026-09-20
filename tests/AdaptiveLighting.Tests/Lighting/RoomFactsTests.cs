@@ -499,6 +499,44 @@ public sealed class RoomFactsTests
 		Assert.IsFalse(lights.Title!.Contains("The scene decides", StringComparison.Ordinal), state.ToString());
 	}
 
+	/// <summary>A hand at the switch, then a house scene: the table must credit neither the scene nor the engine.</summary>
+	// The scene moves LastCommandAt past the person's own change without the engine having decided anything about
+	// this room, so a plain newer-wins comparison would hand the row to the engine.
+	[TestMethod]
+	public void A_House_Scene_After_A_Manual_Override_Credits_Neither_The_Scene_Nor_The_Engine()
+	{
+		AreaSnapshot overridden = Report(
+			AreaState.OverriddenOn,
+			lastCommand: Now.AddMinutes(-1),
+			sceneApplied: "scene.natt") with
+		{
+			ChangedBy = "Espen",
+			ChangedAt = Now.AddMinutes(-4)
+		};
+
+		IReadOnlyList<RoomFact> facts = RoomFacts.For(overridden, Now);
+
+		Assert.IsFalse(facts.Any(fact => fact.Label == "Scene"),
+			"the engine did not put that scene on a room a hand is holding");
+		Assert.AreEqual("Espen", facts.Single(fact => fact.Label == "Last changed").Detail,
+			"the person's change is the newest word on these lights, whatever the scene's timestamp says");
+	}
+
+	/// <summary>The control: where the engine is aiming, its own newer command still wins the row.</summary>
+	[TestMethod]
+	public void An_Engine_Command_After_A_Manual_Change_Still_Wins_While_The_Engine_Is_Aiming()
+	{
+		AreaSnapshot aiming = Report(AreaState.AutoActive, brightness: 40, lastCommand: Now.AddMinutes(-1)) with
+		{
+			ChangedBy = "Espen",
+			ChangedAt = Now.AddMinutes(-4)
+		};
+
+		Assert.AreEqual(
+			ChangeOriginNames.ByTheEngine,
+			RoomFacts.For(aiming, Now).Single(fact => fact.Label == "Last changed").Detail);
+	}
+
 	/// <summary>The other direction: the two states the engine does scene must still say so on both surfaces.</summary>
 	[TestMethod]
 	[DataRow(AreaState.AutoActive)]

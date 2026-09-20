@@ -22,6 +22,47 @@ public sealed class ConfigValidatorTests
 		Assert.IsTrue(ConfigValidator.Validate(Minimal()).IsValid);
 	}
 
+	// ===================== the house's sun entity =====================
+
+	/// <summary>A sun entity nothing answers to is warned about the way the outdoor sensor is: the house still runs.</summary>
+	[TestMethod]
+	public void A_Sun_Entity_Home_Assistant_Does_Not_Know_Is_Warned_About()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.SunEntity = "sun.gone";
+
+		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["sun.sun"] });
+
+		Assert.IsTrue(result.IsValid, "the rules that do not need the sun still run");
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("sun.gone", StringComparison.Ordinal)),
+			"a warning without the id nobody can act on");
+	}
+
+	[TestMethod]
+	public void A_Sun_Entity_In_The_Wrong_Domain_Is_Warned_About()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.SunEntity = "sensor.sol";
+
+		ValidationResult result = ConfigValidator.Validate(
+			config,
+			new ValidationContext { KnownEntityIds = ["sensor.sol"] });
+
+		Assert.IsTrue(result.Warnings.Any(w => w.Contains("sensor.sol", StringComparison.Ordinal)),
+			"a known entity in the wrong domain reads the sun no better than a missing one");
+	}
+
+	[TestMethod]
+	public void The_Houses_Real_Sun_Entity_Is_Not_Warned_About()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Global.SunEntity = "sun.sun";
+
+		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["sun.sun"] });
+
+		Assert.IsFalse(result.Warnings.Any(w => w.Contains("SunEntity", StringComparison.Ordinal)));
+	}
+
 	// ===================== the outdoor sensor is not a silent fallback =====================
 
 	/// <summary>The outdoor sensor is opt-in, so a document written before it was looks identical and behaves differently.</summary>
@@ -389,7 +430,10 @@ public sealed class ConfigValidatorTests
 			}
 		];
 
-		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["scene.stue_kveld", "scene.stue_natt"] });
+		// The house's own sun entity is checked against this list too, so a list without it is a house with no sun.
+		ValidationResult result = ConfigValidator.Validate(
+			config,
+			new ValidationContext { KnownEntityIds = ["scene.stue_kveld", "scene.stue_natt", "sun.sun"] });
 
 		Assert.IsTrue(result.IsValid);
 		Assert.AreEqual(0, result.Warnings.Count);

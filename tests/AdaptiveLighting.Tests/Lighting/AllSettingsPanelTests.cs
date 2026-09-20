@@ -35,13 +35,11 @@ public sealed class AllSettingsPanelTests
 			Stepper(),
 			Steps(),
 			Flag(on: true),
-			Choice(),
-			Entity("sun.sun")));
+			Choice()));
 
 		StringAssert.Contains(html, "class=\"steps\"", "a steps row draws its ladder");
 		StringAssert.Contains(html, "aria-checked=\"true\"", "a flag row reads its state from the input");
 		StringAssert.Contains(html, "class=\"seg\"", "a choice row draws its segments");
-		StringAssert.Contains(html, "sun.sun", "an entity row draws the id it was given");
 		StringAssert.Contains(html, "10 min", "a stepper row draws the wording it was given");
 	}
 
@@ -103,16 +101,6 @@ public sealed class AllSettingsPanelTests
 			RoomControl.Choice))
 		{
 			ChoiceValue = ColorControl.Auto.ToString()
-		};
-
-	private static AllSettingsPanel.Item Entity(string id) =>
-		new(new RoomSetting(
-			nameof(GlobalConfig.SunEntity),
-			"Sun entity",
-			"Which entity the daylight is read from.",
-			RoomControl.Entity))
-		{
-			Text = id
 		};
 
 	private static AllSettingsPanel.Input Fold(bool open, params AllSettingsPanel.Item[] items) =>

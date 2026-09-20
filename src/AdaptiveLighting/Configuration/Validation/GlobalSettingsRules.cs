@@ -44,6 +44,16 @@ internal static class GlobalSettingsRules
 				result.AddWarning($"The built-in master switch '{killSwitch}' is not known to Home Assistant yet; the state manager creates it at app start.");
 		}
 
+		// Warnings, not errors, for the same reason the lux sensor gets them: the house still runs, on the rules
+		// that do not need the sun, and refusing the save would block the page that fixes the id.
+		if (global.SunEntity is { Length: > 0 } sun)
+		{
+			if (sun.Domain() is not "sun")
+				result.AddWarning($"Global.SunEntity '{sun}' is not a sun entity; darkness by the sun's height and every sun-anchored period boundary have nothing to read.");
+			else if (!knownEntityIds.Contains(sun))
+				result.AddWarning($"Global.SunEntity '{sun}' is not known to Home Assistant; darkness by the sun's height and every sun-anchored period boundary have nothing to read until it appears.");
+		}
+
 		// Fails open: an unknown or non-sensor id leaves the following rooms with no reading, so they count as dark.
 		if (global.OutdoorLuxSensor is { Length: > 0 } outdoorLux)
 		{

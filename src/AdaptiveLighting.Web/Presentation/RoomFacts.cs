@@ -48,7 +48,7 @@ public static class RoomFacts
 
 		facts.Add(new RoomFact("Lights", Reading(snapshot), LightsTitle(snapshot), LightReadout.Line(snapshot, nameOf)));
 
-		if (snapshot.SceneApplied is { Length: > 0 } scene)
+		if (IsEngineScened(snapshot) && snapshot.SceneApplied is { Length: > 0 } scene)
 		{
 			facts.Add(new RoomFact(
 				"Scene",
@@ -81,10 +81,13 @@ public static class RoomFacts
 		return facts;
 	}
 
-	// The newer of the engine's own last command and the last change somebody else made, with who made it.
+	// The newer of the engine's own last command and the last change somebody else made, with who made it. In a
+	// state the engine is not aiming, the person's change wins outright: a house scene firing afterwards moves
+	// LastCommandAt without the engine having decided anything about this room.
 	private static RoomFact LastChange(AreaSnapshot snapshot, DateTimeOffset now)
 	{
-		if (snapshot.ChangedAt is { } changed && (snapshot.LastCommandAt is not { } commanded || changed > commanded))
+		if (snapshot.ChangedAt is { } changed
+			&& (!EngineAims(snapshot) || snapshot.LastCommandAt is not { } commanded || changed > commanded))
 		{
 			return snapshot.ChangedBy is { Length: > 0 } by
 				? new RoomFact("Last changed", Stamp(changed, now), $"These lights were last changed at {Clock(changed)}.", by)
@@ -113,6 +116,12 @@ public static class RoomFacts
 	/// </remarks>
 	private static bool IsEngineScened(AreaSnapshot snapshot) =>
 		snapshot is { State: AreaState.AutoActive or AreaState.AutoVacant, SceneApplied: { Length: > 0 } };
+
+	/// <summary>Whether the engine is the one deciding these levels right now.</summary>
+	// Wider than IsEngineScened by PreOff, where the warning dim is the engine's own command and is the newest
+	// word on the lights. Every other state belongs to a hand at the switch, a guest scene, or nobody.
+	private static bool EngineAims(AreaSnapshot snapshot) =>
+		snapshot.State is AreaState.AutoVacant or AreaState.AutoActive or AreaState.PreOff;
 
 	/// <summary>The room's present tense: what the lights are doing and why.</summary>
 	public static string Headline(AreaSnapshot snapshot)

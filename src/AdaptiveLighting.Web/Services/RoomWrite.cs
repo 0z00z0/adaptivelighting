@@ -51,7 +51,16 @@ public static class RoomWrite
 
 		// Re-read, never stamped off the object just sent: the store normalises on the way out, so the next save
 		// has to match the bytes on disk.
-		return new RoomWriteResult(saved, Open(engine.Store.Load(), room?.AreaId ?? token.AreaId));
+		try
+		{
+			return new RoomWriteResult(saved, Open(engine.Store.Load(), room?.AreaId ?? token.AreaId));
+		}
+		catch (LightingConfigException)
+		{
+			// The write is already on disk. Failing here would report a save that happened as one that did not;
+			// the caller keeps the old token and the next write against it reports a conflict a reload clears.
+			return new RoomWriteResult(saved, token);
+		}
 	}
 
 	private static string Conflict(string roomName) =>

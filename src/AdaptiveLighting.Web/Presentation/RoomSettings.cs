@@ -27,9 +27,7 @@ public enum RoomControl
 	Choice,
 
 	/// <summary>A rising ladder of named steps, where each step writes more than one flag at once.</summary>
-	Steps,
-
-	Entity
+	Steps
 }
 
 /// <summary>One overridable per-room setting, as the detail view needs it.</summary>
@@ -437,21 +435,6 @@ public static class RoomSettings
 		RoomProperties[key].SetValue(room, value);
 	}
 
-	public static string Entity(AreaConfig? room, AreaSettings defaults, string key)
-	{
-		ArgumentNullException.ThrowIfNull(defaults);
-
-		return Effective(room, defaults, key) as string ?? string.Empty;
-	}
-
-	/// <summary>An empty pick clears the setting back to the house.</summary>
-	public static void SetEntity(AreaConfig room, string key, string? value)
-	{
-		ArgumentNullException.ThrowIfNull(room);
-
-		RoomProperties[key].SetValue(room, string.IsNullOrWhiteSpace(value) ? null : value);
-	}
-
 	public static string Describe(AreaConfig? room, AreaSettings defaults, string key)
 	{
 		ArgumentNullException.ThrowIfNull(defaults);
@@ -463,11 +446,10 @@ public static class RoomSettings
 			RoomControl.Seconds => TokenFormat.Duration((int)Shown(room, defaults, key)),
 			RoomControl.Minutes => TokenFormat.DurationFromMinutes((int)Shown(room, defaults, key)),
 			RoomControl.Fraction => TokenFormat.Percent(Shown(room, defaults, key)),
-			RoomControl.Number => TokenFormat.Number(Shown(room, defaults, key), setting.Unit),
 			RoomControl.Flag => Flag(room, defaults, key) ? "yes" : "no",
 			RoomControl.Steps => SleepSteps.Word(SleepSteps.Of(room, defaults)),
 			RoomControl.Choice => Word(key, ChoiceName(room, defaults, key)),
-			_ => Entity(room, defaults, key) is { Length: > 0 } entity ? entity : "none"
+			_ => TokenFormat.Number(Shown(room, defaults, key), setting.Unit)
 		};
 	}
 
@@ -608,14 +590,6 @@ public static class RoomSettings
 
 		if (Enum.TryParse(property.PropertyType, value, out object? parsed))
 			property.SetValue(house, parsed);
-	}
-
-	/// <summary>An empty pick is stored as an empty string, which is what the engine reads as "nothing chosen".</summary>
-	public static void SetEntity(AreaSettings house, string key, string? value)
-	{
-		ArgumentNullException.ThrowIfNull(house);
-
-		HouseProperties[key].SetValue(house, value ?? string.Empty);
 	}
 
 	/// <summary>The same typed conversions <see cref="Apply(AreaConfig, SentenceEdit)"/> makes.</summary>

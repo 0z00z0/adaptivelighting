@@ -22,6 +22,16 @@ public sealed class ConfigKeyCollisionTests
 		nameof(AreaSettings.Darkness)
 	};
 
+	/// <summary>
+	///     <see cref="GlobalConfig.SunEntity"/> is meant to collide with
+	///     <see cref="LightingConfigDocument.RetiredOutsideGlobal"/>: that dictionary is reported everywhere the
+	///     name is not this property, which is what a scoped retirement is.
+	/// </summary>
+	private static readonly HashSet<string> ExemptOutsideGlobalNames = new(StringComparer.Ordinal)
+	{
+		$"{nameof(GlobalConfig)}.{nameof(GlobalConfig.SunEntity)}"
+	};
+
 	[TestMethod]
 	public void No_Configuration_Property_Is_Named_Like_A_Legacy_Or_Retired_Key()
 	{
@@ -41,6 +51,24 @@ public sealed class ConfigKeyCollisionTests
 			"these properties share a name the legacy-key, retired-key or legacy-value pass rewrites, reports or "
 			+ $"translates on sight, with no idea which type it belongs to: {string.Join(", ", collisions)}. "
 			+ "Rename the property, or the key it collides with.");
+	}
+
+	/// <summary>The scoped retirements, which are reported everywhere except inside the Global section.</summary>
+	[TestMethod]
+	public void Only_A_Global_Property_May_Share_A_Name_Retired_Outside_Global()
+	{
+		HashSet<string> reservedNames = new(LightingConfigDocument.RetiredOutsideGlobal.Keys, StringComparer.OrdinalIgnoreCase);
+
+		List<string> collisions =
+		[.. ConfigurationTypes()
+			.SelectMany(type => type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+			.Where(property => reservedNames.Contains(property.Name))
+			.Select(property => $"{property.DeclaringType!.Name}.{property.Name}")
+			.Where(name => !ExemptOutsideGlobalNames.Contains(name))];
+
+		Assert.AreEqual(0, collisions.Count,
+			"these properties share a name the pass reports as retired wherever it is not inside Global, so a "
+			+ $"document stating one gets a warning about a setting that still works: {string.Join(", ", collisions)}.");
 	}
 
 	/// <summary>Every configuration class reachable from the document root, walked once each.</summary>

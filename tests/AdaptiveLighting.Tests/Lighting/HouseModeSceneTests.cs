@@ -62,8 +62,8 @@ public sealed class HouseModeSceneTests
 		t.Actuator.Clear();
 	}
 
-	// The reported failure: the scene switched the room off and the engine put it straight back on, because the
-	// same mode change that fired the scene re-aimed every active room.
+	// ExpectHouseScene must run before the room is handed the new house state, or the mode change re-aims every
+	// active room over the scene it just fired.
 	[TestMethod]
 	public void The_Modes_Own_Scene_Is_Not_Re_Aimed_By_The_Mode_Change_That_Fired_It()
 	{
@@ -82,6 +82,31 @@ public sealed class HouseModeSceneTests
 
 		Assert.IsFalse(t.Actuator.Applied.Any(applied => applied.Command.On),
 			"nothing between the scene and the room emptying may switch the lights back on");
+	}
+
+	/// <summary>A level test still running when the mode's scene fires: its return must command nothing.</summary>
+	// The scene arrives after the test started, so it is held as the house scene alone and the test captured no
+	// levels to put back. The scene has already reached the fixtures, so the return owes nothing — and re-firing
+	// it from this one room would reach every other room that scene names.
+	[TestMethod]
+	public void A_Level_Test_Returning_Under_A_House_Scene_Commands_Nothing()
+	{
+		Fixture t = Build(NightScene);
+		LightByMovement(t);
+
+		Assert.IsNull(t.Room.TestPeriod("day"), "arranged: a level test is running, with no scene standing");
+
+		t.Ha.Trigger(Select, SleepOption);
+
+		CollectionAssert.AreEqual(new List<string> { NightScene }, t.Actuator.Scenes, "arranged: the scene ran mid-test");
+		t.Actuator.Clear();
+
+		t.Scheduler.AdvanceBy(TimeSpan.FromSeconds(AreaController.LevelTestSeconds).Ticks);
+
+		Assert.AreEqual(0, t.Actuator.Applied.Count,
+			"the scene is the look on these lights; the test's return must not command a level over it");
+		Assert.AreEqual(0, t.Actuator.Scenes.Count,
+			"and must not re-fire the house scene, which would reach every other room it names");
 	}
 
 	// The control: the same mode change, with no scene on the option, still re-aims the room. A mode that darkens

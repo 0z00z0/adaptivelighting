@@ -213,6 +213,106 @@ public sealed class HousePageModelTests
 			"the scoped write must not leave the page saving against a token the file has moved past");
 	}
 
+	/// <summary>A refused write must leave the switch where the file left it, not where the press did.</summary>
+	[TestMethod]
+	public void A_Room_Switch_Goes_Back_When_Its_Write_Is_Refused()
+	{
+		HousePageModel model = Model();
+		model.Start(null);
+
+		AreaConfig room = model.Areas.Single();
+
+		Assert.IsTrue(model.IsEnabled(room), "arranged: the room starts switched on");
+
+		// Somebody else writes that same room while the page is open.
+		AdaptiveLightingConfig elsewhere = Document();
+		elsewhere.Areas[0].Lights = ["light.stue_taklys", "light.stue_vindu"];
+		File.WriteAllText(_path, LightingConfigDocument.Serialize(elsewhere));
+
+		model.ToggleEnabled(room);
+
+		Assert.IsNotNull(model.Result);
+		Assert.AreEqual(SaveStatus.Conflicted, model.Result.Status, "arranged: the write is refused as a conflict");
+		Assert.IsTrue(model.IsEnabled(room), "nothing was written, so the switch must not read as switched off");
+		Assert.IsTrue(RoomIsOn(LightingConfigDocument.Deserialize(File.ReadAllText(_path)).Config),
+			"and the file still says what the other write left");
+	}
+
+	/// <summary>An unsaved edit to the same room is this page's own, and must not read as somebody else's
+	/// write.</summary>
+	[TestMethod]
+	public void Switching_A_Floor_In_The_Draft_Does_Not_Refuse_A_Room_Switch_After_It()
+	{
+		HousePageModel model = Model(ThreeRooms());
+		model.Start(null);
+
+		// Switches every room off in the draft, which touches the very slot the press below writes.
+		model.SwitchFloor(model.AreaGroups.Single());
+
+		Assert.IsTrue(model.HasUnsavedEdits, "arranged: the floor switch is an unsaved edit");
+
+		AreaConfig room = model.Areas.First(area => string.Equals(area.AreaId, "kjokken", StringComparison.Ordinal));
+
+		model.ToggleEnabled(room);
+
+		Assert.IsNull(model.Result, "the page's own pending edit is not a conflict: " + (model.Result?.Message ?? ""));
+		Assert.IsTrue(model.IsEnabled(room), "the press switched the room back on");
+		Assert.IsTrue(
+			LightingConfigDocument.Deserialize(File.ReadAllText(_path)).Config.Areas
+				.Single(area => string.Equals(area.AreaId, "kjokken", StringComparison.Ordinal))
+				.Enabled == true,
+			"and it reached the file");
+	}
+
+	/// <summary>A room moves within its own floor and never out of it.</summary>
+	[TestMethod]
+	public void A_Room_Moves_Within_Its_Floor_And_Never_Across_A_Floor_Boundary()
+	{
+		HousePageModel model = Model(ThreeRooms(), areas: TwoFloors());
+		model.Start(null);
+
+		CollectionAssert.AreEqual(new[] { "stue", "bad", "kjokken" }, Listed(model),
+			"arranged: the ground floor's two rooms are listed before the upper floor's one");
+
+		AreaConfig first = model.AreaGroups[0].Items[0];
+		AreaConfig last = model.AreaGroups[0].Items[1];
+		AreaConfig alone = model.AreaGroups[1].Items.Single();
+
+		Assert.IsFalse(model.CanMoveRoomUp(first), "the first room on a floor has nothing above it on that floor");
+		Assert.IsFalse(model.CanMoveRoomDown(last), "the last room on a floor has nothing below it on that floor");
+		Assert.IsFalse(model.CanMoveRoomUp(alone), "a floor's only room has nowhere to go");
+		Assert.IsFalse(model.CanMoveRoomDown(alone));
+
+		model.MoveRoomUp(first);
+		model.MoveRoomDown(last);
+		model.MoveRoomUp(alone);
+
+		CollectionAssert.AreEqual(new[] { "stue", "bad", "kjokken" }, Listed(model), "a refused move changes nothing");
+		Assert.IsFalse(model.HasUnsavedEdits, "and arms nothing");
+
+		model.MoveRoomDown(first);
+
+		CollectionAssert.AreEqual(new[] { "bad", "stue", "kjokken" }, Listed(model),
+			"the swap is within the floor, and the other floor's room stays where it is");
+		CollectionAssert.AreEqual(new[] { "kjokken" }, Floor(model, 1), "no room crossed the boundary");
+	}
+
+	/// <summary>Two rooms on the ground floor and one above, with the upper floor's room sitting between them in
+	/// the document, so a move that ignored the grouping would be visible.</summary>
+	private static FakeAreaRegistry TwoFloors()
+	{
+		FakeAreaRegistry registry = new();
+
+		registry.Floors["stue"] = new AreaFloor("ground", "Ground floor", 0);
+		registry.Floors["kjokken"] = new AreaFloor("upper", "Upper floor", 1);
+		registry.Floors["bad"] = new AreaFloor("ground", "Ground floor", 0);
+
+		return registry;
+	}
+
+	private static string[] Floor(HousePageModel model, int index) =>
+		[.. model.AreaGroups[index].Items.Select(area => area.AreaId ?? "")];
+
 	private static bool RoomIsOn(AdaptiveLightingConfig document) =>
 		document.Areas.Single().Effective(document.Defaults).Enabled;
 
@@ -249,7 +349,10 @@ public sealed class HousePageModelTests
 		return config;
 	}
 
-	private HousePageModel Model(AdaptiveLightingConfig? document = null, bool running = false)
+	private HousePageModel Model(
+		AdaptiveLightingConfig? document = null,
+		bool running = false,
+		IAreaRegistry? areas = null)
 	{
 		_path = Path.Combine(Path.GetTempPath(), $"adaptive-lighting-house-{Guid.NewGuid():N}.yaml");
 		File.WriteAllText(_path, LightingConfigDocument.Serialize(document ?? Document()));
@@ -273,7 +376,7 @@ public sealed class HousePageModelTests
 		services.AddScoped<IHaContext>(_ => ha);
 		_provider = services.BuildServiceProvider();
 
-		HaCatalog catalog = new(ha, new FakeHaRegistry(), NullLoggerFactory.Instance);
+		HaCatalog catalog = new(ha, new FakeHaRegistry(), NullLoggerFactory.Instance, areas);
 		AreaSnapshotCache cache = new(
 			_provider.GetRequiredService<IServiceScopeFactory>(),
 			NullLogger<AreaSnapshotCache>.Instance,

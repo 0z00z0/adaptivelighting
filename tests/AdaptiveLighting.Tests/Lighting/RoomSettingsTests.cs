@@ -511,7 +511,7 @@ public sealed class RoomSettingsTests
 		AreaSettings house = House;
 		AreaConfig room = new();
 
-		foreach (RoomSetting setting in AllSettings.Where(item => item.Control is not (RoomControl.Flag or RoomControl.Choice or RoomControl.Steps or RoomControl.Entity)))
+		foreach (RoomSetting setting in AllSettings.Where(item => item.Control is not (RoomControl.Flag or RoomControl.Choice or RoomControl.Steps)))
 		{
 			double shown = Math.Max(setting.Min, 5);
 
@@ -648,10 +648,6 @@ public sealed class RoomSettingsTests
 
 			case RoomControl.Choice:
 				room.Darkness = DarknessSource.Always;
-				break;
-
-			case RoomControl.Entity:
-				RoomSettings.SetEntity(room, setting.Key, "sun.other");
 				break;
 
 			default:

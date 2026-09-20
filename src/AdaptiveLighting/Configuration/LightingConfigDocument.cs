@@ -116,6 +116,19 @@ public static class LightingConfigDocument
 			+ "user is still recognised as the engine's own."
 	};
 
+	/// <summary>Retired keys a live setting elsewhere in the document still uses by the same name.</summary>
+	/// <remarks>
+	///     <see cref="RetiredKeys"/> is matched by name alone, with no idea whose key it is, so a name that is
+	///     retired in one place and live in another has to say where. Reported everywhere except under
+	///     <see cref="AdaptiveLightingConfig.Global"/>, which is the one section these names are still read in.
+	/// </remarks>
+	internal static readonly Dictionary<string, string> RetiredOutsideGlobal = new(StringComparer.OrdinalIgnoreCase)
+	{
+		[nameof(GlobalConfig.SunEntity)] =
+			"the sun entity is set once for the whole house now, under Global. A room no longer chooses its own, "
+			+ "and this one is read by nothing."
+	};
+
 	// One wording for the log and the browser. Two copies would drift, and the browser's is the one nobody reads
 	// twice to notice.
 	private static string RetiredKeySentence(string key, string reason) =>
@@ -348,7 +361,7 @@ public static class LightingConfigDocument
 
 		foreach (YamlDocument document in stream.Documents)
 			foreach (YamlNode section in SectionsOf(document.RootNode))
-				used |= Translate(section, logger, retired);
+				used |= Translate(section, logger, retired, inGlobal: false);
 
 		if (!used)
 			return (yaml, false);
@@ -360,8 +373,10 @@ public static class LightingConfigDocument
 	}
 
 	/// <summary>Renames the legacy keys of one node and everything under it, in place.</summary>
+	/// <remarks><c>inGlobal</c> says whether this node sits inside the document's Global section, which is where a
+	/// scoped retirement stops applying.</remarks>
 	/// <returns><c>true</c> when anything was renamed or dropped.</returns>
-	private static bool Translate(YamlNode node, ILogger? logger, Dictionary<string, string> retired)
+	private static bool Translate(YamlNode node, ILogger? logger, Dictionary<string, string> retired, bool inGlobal)
 	{
 		bool used = false;
 
@@ -371,14 +386,21 @@ public static class LightingConfigDocument
 				// Materialised first: the renames below add to and remove from the very collection being walked.
 				foreach (KeyValuePair<YamlNode, YamlNode> child in mapping.Children.ToList())
 				{
-					used |= Translate(child.Value, logger, retired);
+					string? key = (child.Key as YamlScalarNode)?.Value;
 
-					if (child.Key is not YamlScalarNode { Value: { Length: > 0 } name })
+					used |= Translate(
+						child.Value,
+						logger,
+						retired,
+						inGlobal || string.Equals(key, nameof(AdaptiveLightingConfig.Global), StringComparison.OrdinalIgnoreCase));
+
+					if (key is not { Length: > 0 } name)
 						continue;
 
 					// `used` is not set here. The document is unchanged, and claiming a migration happened would send
 					// Reload writing the file back.
-					if (RetiredKeys.TryGetValue(name, out string? reason))
+					if (RetiredKeys.TryGetValue(name, out string? reason)
+						|| (!inGlobal && RetiredOutsideGlobal.TryGetValue(name, out reason)))
 					{
 						string sentence = RetiredKeySentence(name, reason);
 
@@ -440,7 +462,7 @@ public static class LightingConfigDocument
 
 			case YamlSequenceNode sequence:
 				foreach (YamlNode item in sequence.Children)
-					used |= Translate(item, logger, retired);
+					used |= Translate(item, logger, retired, inGlobal);
 
 				break;
 		}
