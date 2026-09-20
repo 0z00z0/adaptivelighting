@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @using AdaptiveLighting.Lamplight.Components
+@using AdaptiveLighting.Web.Presentation
 @inject NavigationManager Navigation
 
 <div class="app">
@@ -16,6 +17,14 @@
 		</nav>
 		<div class="top-end">
 			<ThemeSelect />
+			@* Reuses the first design's link builder and version text: one number, never two to disagree. *@
+			<a class="feedback-link" href="@FeedbackHref" target="_blank" rel="noopener"
+			   aria-label="Give feedback" title="Give feedback">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+					<path d="M20 14.4 A2.1 2.1 0 0 1 17.9 16.5 H10.2 L6.2 19.8 V16.5 H6.1 A2.1 2.1 0 0 1 4 14.4 V6.9 A2.1 2.1 0 0 1 6.1 4.8 H17.9 A2.1 2.1 0 0 1 20 6.9 Z" />
+				</svg>
+				<span class="feedback-link-text">Give feedback</span>
+			</a>
 			<span class="top-end-note">LAN only &middot; no login</span>
 		</div>
 	</header>
@@ -42,6 +51,9 @@
 
 @code {
 	private enum Tab { Dashboard, Activity, Settings }
+
+	// Built once: the version cannot change while the process runs, and this renders on every page.
+	private static readonly string FeedbackHref = FeedbackUrl.Build(AppVersion.Text);
 
 	private Tab _current;
 
