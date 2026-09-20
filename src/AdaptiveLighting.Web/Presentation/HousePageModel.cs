@@ -45,6 +45,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	private readonly ConfigLocation _location;
 	private readonly HomeLocation _homeGeo;
 	private readonly AreaSnapshotCache _cache;
+	private readonly ModeService _modes;
 	private readonly ILogger _logger;
 
 	private AdaptiveLightingConfig _config = new();
@@ -98,6 +99,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		ConfigLocation location,
 		HomeLocation homeGeo,
 		AreaSnapshotCache cache,
+		ModeService modes,
 		ILogger<HousePageModel> logger)
 	{
 		_engine = engine ?? throw new ArgumentNullException(nameof(engine));
@@ -105,6 +107,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		_location = location ?? throw new ArgumentNullException(nameof(location));
 		_homeGeo = homeGeo ?? throw new ArgumentNullException(nameof(homeGeo));
 		_cache = cache ?? throw new ArgumentNullException(nameof(cache));
+		_modes = modes ?? throw new ArgumentNullException(nameof(modes));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
 	}
 
@@ -245,7 +248,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 			if (Result.Written)
 			{
 				DateTimeOffset? writtenAfter = _engine.Store.LastWrittenUtc;
-				string savedAt = writtenAfter is { } utc ? utc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture) : "now";
+				string savedAt = SavedAt();
 				bool advanced = writtenAfter is { } after && (writtenBefore is not { } before || after >= before);
 
 				// Result is cleared so the persistent note never restates the toast. A refused save keeps it.
@@ -548,6 +551,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 		_liveStates = states;
 		_lowBatteries = batteries;
+		MasterSwitch = _modes.GetMasterSwitch();
 	}
 
 	/// <summary>What a room's row says about low motion sensor batteries, or <c>null</c> while none is low.</summary>
@@ -624,12 +628,91 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		Revalidate();
 	}
 
+	// ---- the order the rooms are listed in ----
+
+	/// <summary>The rooms this one is ordered against: the floor it is grouped under.</summary>
+	private IReadOnlyList<AreaConfig> NeighboursOf(AreaConfig area) =>
+		AreaGroups.FirstOrDefault(group => PositionIn(group.Items, area) >= 0)?.Items ?? [];
+
+	// AreaConfig is a class and two rooms can hold identical values, so the row is found by identity.
+	private static int PositionIn(IReadOnlyList<AreaConfig> rooms, AreaConfig area)
+	{
+		for (int index = 0; index < rooms.Count; index++)
+		{
+			if (ReferenceEquals(rooms[index], area))
+				return index;
+		}
+
+		return -1;
+	}
+
+	public bool CanMoveRoomUp(AreaConfig area) => PositionIn(NeighboursOf(area), area) > 0;
+
+	public bool CanMoveRoomDown(AreaConfig area)
+	{
+		IReadOnlyList<AreaConfig> neighbours = NeighboursOf(area);
+		int index = PositionIn(neighbours, area);
+
+		return index >= 0 && index < neighbours.Count - 1;
+	}
+
+	public void MoveRoomUp(AreaConfig area) => MoveRoom(area, -1);
+
+	public void MoveRoomDown(AreaConfig area) => MoveRoom(area, 1);
+
+	/// <summary>Swaps a room with the one above or below it on its floor.</summary>
+	/// <remarks>An edit like any other: it arms the save bar, it does not save. Within a floor the list follows the
+	/// document, so swapping the two document positions is the move; rows between them sit on other floors and
+	/// keep their own order. Nothing moves across a floor boundary, since the floor's own level decides where a
+	/// group lands.</remarks>
+	private void MoveRoom(AreaConfig area, int step)
+	{
+		IReadOnlyList<AreaConfig> neighbours = NeighboursOf(area);
+		int index = PositionIn(neighbours, area);
+		int target = index + step;
+
+		if (index < 0 || target < 0 || target >= neighbours.Count)
+			return;
+
+		int from = PositionIn(_config.Areas, area);
+		int to = PositionIn(_config.Areas, neighbours[target]);
+
+		if (from < 0 || to < 0)
+			return;
+
+		(_config.Areas[from], _config.Areas[to]) = (_config.Areas[to], _config.Areas[from]);
+
+		// A note keyed by a row's position would follow the position and not the room it was raised for.
+		ForgetPositionalNotes();
+		Revalidate();
+	}
+
+	/// <summary>What a screen reader calls the two controls that move a room up or down its floor.</summary>
+	public string MoveUpLabel(AreaConfig area) => $"Move {RoomName(area)} up";
+
+	public string MoveDownLabel(AreaConfig area) => $"Move {RoomName(area)} down";
+
 	/// <summary>Flips a room's power switch, writing an explicit true or false and never null.</summary>
-	/// <remarks>An edit like any other: it arms the save bar, it does not save.</remarks>
+	/// <remarks>
+	///     The one edit on this page that does not wait for the save bar. A switch is the whole intent, so the room
+	///     is written on the press and the engine rebuilds around it, which is what makes it resolve and run. Only
+	///     that room's slot is sent: every other edit in the draft stays where it is and still needs Save.
+	/// </remarks>
 	public void ToggleEnabled(AreaConfig area)
 	{
+		ArgumentNullException.ThrowIfNull(area);
+
+		// Taken before the flip. The scoped write has to match the room as the file holds it, not as the press
+		// leaves it.
+		RoomWriteToken token = RoomWrite.Open(_config, area.AreaId);
+		bool wasClean = !_dirty;
 		bool switchingOn = !IsEnabled(area);
+
 		area.Enabled = switchingOn;
+
+		if (HasSlotOnDisk(area))
+			WriteRoomNow(area, token, wasClean);
+
 		Revalidate();
 
 		if (switchingOn)
@@ -637,6 +720,54 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		else
 			_switchOnNotes.Remove(KeyOf(area));
 	}
+
+	/// <summary>Whether this room has a slot on disk for a scoped write to land in.</summary>
+	// RoomWrite appends where it finds no slot. A room with no area id has nothing to key on, and one added or
+	// adopted since the last save is not in the file yet, so appending it would write the room a second time.
+	private bool HasSlotOnDisk(AreaConfig area) =>
+		LoadError is not { Length: > 0 }
+		&& area.AreaId is { Length: > 0 } areaId
+		&& !_unsaved.Contains(areaId);
+
+	/// <summary>Writes one room through the same save path the whole document takes.</summary>
+	private void WriteRoomNow(AreaConfig area, RoomWriteToken token, bool wasClean)
+	{
+		// Drop any lingering confirmation, so a refused write is never shown next to a stale one.
+		ClearConfirmation();
+
+		try
+		{
+			RoomWriteResult write = RoomWrite.Save(_engine, token, area, RoomName(area));
+
+			if (!write.Result.Written)
+			{
+				Result = write.Result;
+
+				return;
+			}
+
+			Result = null;
+
+			// The file has moved, so without this the next whole-document save reports a conflict against a write
+			// this page made itself.
+			_documentStamp = ConfigStamp.OfDocument(_engine.Store.Load());
+
+			// Only from a draft that already matched the file. With other edits pending the page is still ahead of
+			// it, and saying otherwise would take the save bar away from them.
+			if (wasClean)
+				MarkClean();
+
+			ShowSaveConfirmation(wasClean ? $"Saved ✓ {SavedAt()}" : "Room saved ✓ · rest not saved");
+		}
+		catch (LightingConfigException exception)
+		{
+			LoadError = exception.Message;
+		}
+	}
+
+	private string SavedAt() => _engine.Store.LastWrittenUtc is { } utc
+		? utc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)
+		: "now";
 
 	/// <summary>Rebuilds every standing note: the note for a room already on, when what it commands looks
 	/// wrong.</summary>
@@ -1367,6 +1498,81 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	{
 		_config.Global.KillSwitchActiveWhenOff = string.Equals(value, "true", StringComparison.Ordinal);
 		Revalidate();
+	}
+
+	/// <summary>The master switch as this page reads it live, or <c>null</c> before the built-in default resolves.</summary>
+	public MasterSwitchView? MasterSwitch { get; private set; }
+
+	/// <summary>What the master switch says on hover, matching the dashboard's own control.</summary>
+	public string MasterTitle
+	{
+		get
+		{
+			if (MasterSwitch is not { } master)
+				return string.Empty;
+
+			if (!master.IsAvailable)
+			{
+				return master.IsReady
+					? "Home Assistant doesn't know this switch."
+					: "Waiting for Home Assistant.";
+			}
+
+			return master.Toggle.CanToggle
+				? $"Turn adaptive lighting {(master.AdaptiveLightingOn ? "off" : "on")}"
+				: "This entity can't be switched on or off.";
+		}
+	}
+
+	/// <summary>The line under the master switch, or <c>null</c> when the switch is simply on.</summary>
+	public string? MasterNote
+	{
+		get
+		{
+			if (MasterSwitch is not { } master)
+				return null;
+
+			if (!master.IsAvailable)
+				return master.IsReady ? "Switch not found" : "Waiting for Home Assistant";
+
+			return master.AdaptiveLightingOn ? null : "Paused";
+		}
+	}
+
+	/// <summary>What the (i) beside <see cref="MasterNote"/> explains.</summary>
+	public string? MasterNoteMore
+	{
+		get
+		{
+			if (MasterSwitch is not { } master)
+				return null;
+
+			if (!master.IsAvailable)
+			{
+				return master.IsReady
+					? "Home Assistant doesn't know the master switch, so its state can't be shown."
+					: "Home Assistant hasn't answered yet, so the switch's state is unknown.";
+			}
+
+			return master.AdaptiveLightingOn
+				? null
+				: "Nothing was turned off, but no lights will change until it is turned back on.";
+		}
+	}
+
+	/// <summary>How much <see cref="MasterNote"/> matters: a paused house needs attention.</summary>
+	public InfoSeverity MasterNoteSeverity =>
+		MasterSwitch is { IsAvailable: true, AdaptiveLightingOn: false } ? InfoSeverity.Bad : InfoSeverity.Neutral;
+
+	/// <summary>Flips the master switch through the config-resolved toggle, then re-reads it.</summary>
+	/// <remarks>A live Home Assistant call, not a document edit: it never arms the save bar.</remarks>
+	public void ToggleMaster()
+	{
+		if (MasterSwitch is { IsAvailable: true, Toggle.CanToggle: true } master)
+			_modes.Toggle(master.Toggle);
+
+		MasterSwitch = _modes.GetMasterSwitch();
+		Notify();
 	}
 
 	/// <summary>A label for logs and notifications, so two houses can be told apart.</summary>

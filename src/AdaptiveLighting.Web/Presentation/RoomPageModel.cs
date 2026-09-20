@@ -407,6 +407,10 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		// the gear card shows.
 		await MarkDirty().ConfigureAwait(false);
 
+		// The quiet window is there for a held stepper. A switch is one press, and waiting it out leaves the room
+		// not running for a second after it reads on.
+		Commit();
+
 		SwitchOnNote = switchingOn && !_switchOnDismissed
 			? SwitchOnWarning.For(RoomName, _catalog.LightsIn(room, Defaults, Document.Global), Document.Global.IncludeLabel)
 			: null;

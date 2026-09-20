@@ -25,27 +25,7 @@
 		<p class="d2-note">No house mode &mdash; <a href="settings?section=housemodes">set one up</a></p>
 	}
 
-	@if (Model.MasterSwitch is { } master)
-	{
-		<div class="d2-cell" title="@Model.MasterTitle">
-			<Pair Name="Adaptive lighting"
-				  Word="@MasterWord(master)"
-				  WordKind="@MasterKind(master)"
-				  Options="@MasterOptions"
-				  Current="@MasterIndex(master)"
-				  OnSelect="index => SelectMaster(master, index)" />
-			@if (Model.MasterNote is { Length: > 0 } note)
-			{
-				<p class="d2-note info-line">
-					@note
-					@if (Model.MasterNoteMore is { Length: > 0 } more)
-					{
-						<Info Label="Master switch" Severity="@Model.MasterNoteSeverity">@more</Info>
-					}
-				</p>
-			}
-		</div>
-	}
+	@* The master switch itself lives under Settings → House, not here — see the "Master switch" fold. *@
 
 	@if (Model.People.Count > 0)
 	{
@@ -62,8 +42,6 @@
 	[Parameter, EditorRequired]
 	public DashboardPageModel Model { get; set; } = default!;
 
-	private static readonly IReadOnlyList<string> MasterOptions = ["On", "Off"];
-
 	private static IReadOnlyList<string> ModeOptions(HouseModeView mode) => [.. mode.Options.Select(option => option.Value)];
 
 	private static int CurrentMode(HouseModeView mode)
@@ -75,22 +53,6 @@
 		}
 
 		return -1;
-	}
-
-	private static string MasterWord(MasterSwitchView master) =>
-		!master.IsAvailable ? "unknown" : master.AdaptiveLightingOn ? "on" : "off";
-
-	private static string MasterKind(MasterSwitchView master) =>
-		!master.IsAvailable ? "plain" : master.AdaptiveLightingOn ? "ok" : "off";
-
-	private static int MasterIndex(MasterSwitchView master) =>
-		!master.IsAvailable ? -1 : master.AdaptiveLightingOn ? 0 : 1;
-
-	// The switch flips; pressing the side already shown does nothing.
-	private void SelectMaster(MasterSwitchView master, int index)
-	{
-		if (index != MasterIndex(master))
-			Model.ToggleMaster();
 	}
 
 	private static string? PersonClass(PersonView person) =>

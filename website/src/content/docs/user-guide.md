@@ -112,9 +112,10 @@ the now-line]
 
 Top to bottom:
 
-- **The house bar** — the house mode with buttons to change it, who is home, and the master switch
-  that pauses everything. It speaks up when anything is wrong: a line under it and a colour on the
-  panel's edge when the engine is paused or unreachable, plus a notice across the page while paused.
+- **The house bar** — the house mode with buttons to change it, and who is home. It speaks up when
+  anything is wrong: a notice across the page while the master switch is paused or the engine is
+  unreachable. The master switch itself lives under **Configuration → House**, in the "Master
+  switch" section.
 - **The exception tray** — one line per room doing something other than following the schedule.
   There are four: a warning dim running, somebody's setting standing, somebody having switched the
   lights off, and a scene holding the room. When no room is doing any of them, the tray is one
@@ -344,8 +345,8 @@ holds a room people walk through first thing.
 **A room I expected has no lane.** It is switched off. The line under the board says how many are,
 and links to where you turn them back on.
 
-**Nothing is changing at all.** Check the master switch in the house bar. While it is off,
-everything is paused, and the board still shows what each room would be doing.
+**Nothing is changing at all.** Check the master switch, under **Configuration → House**. While it
+is off, everything is paused, and the board still shows what each room would be doing.
 
 **A room's name reads as a slug.** The room is named after its Home Assistant area, resolved every
 time it is shown. If it reads `kjeller_bad`, Home Assistant is not answering — the display name

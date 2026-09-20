@@ -1916,19 +1916,17 @@ select {
 }
 
 /* ---- the house bar ----
-   The board's chrome: the master switch, the house mode and who's home, in ONE strip.
+   The board's chrome: the house mode and who's home, in ONE strip. The master switch moved to Configuration
+   → House: it is touched twice a year, and no longer the first thing on the page.
 
    They used to be a card and then two more, stacked: about three hundred pixels before the first lane, which
    on a phone is the entire first screen. Almost all of that height was a second line under each fact restating
-   what the fact already said, so the compaction is mostly deletion: the "everything is fine" line moved into
-   the toggle's hover, the mode's meaning into the value's, and the who's-home table became one row of chips.
-   What each mode actually does is now written out in full on the House tab, which is where somebody reading
-   about modes instead of glancing at one is standing.
+   what the fact already said, so the compaction is mostly deletion: the mode's meaning moved into the value's
+   hover, and the who's-home table became one row of chips. What each mode actually does is now written out in
+   full on the House tab, which is where somebody reading about modes instead of glancing at one is standing.
 
-   Three cells, hairline-separated, wrapping to a column on a narrow screen with no media query: auto-fit
-   collapses the track count by itself. The master switch is LAST: it is the one control here that stops
-   everything, and it is also the one touched twice a year, so it keeps the panel's edge colour for the two
-   states that are news and otherwise sits quietly at the end. */
+   Two cells, hairline-separated, wrapping to a column on a narrow screen with no media query: auto-fit
+   collapses the track count by itself. */
 
 .housebar {
 	display: grid;
@@ -1941,13 +1939,6 @@ select {
 	padding: 0.55rem 0.9rem;
 	margin-bottom: var(--space-4);
 }
-
-/* Only the two states that are news colour the edge. A green bar across the whole strip whenever nothing is
-   wrong is the same permanent reassurance the note line already refuses to print, and it made the master the
-   loudest thing on a board that is about rooms. Switched on therefore looks like any other panel. */
-.housebar:has(.housebar-master.on) { border-left-color: var(--line); }
-.housebar:has(.housebar-master.off) { border-left-color: var(--idle); }
-.housebar:has(.housebar-master.unknown) { border-left-color: var(--warn); }
 
 /* A hairline between cells, not three boxes: one panel with internal rules reads as one strip, and
    three panels read as three things to look at. The rule disappears on the first cell of a wrapped row:
@@ -2007,13 +1998,6 @@ select {
 
 .housebar-note.ok { color: var(--ok); }
 .housebar-note.bad { color: var(--bad); }
-
-/* The master's switch is the room switch at the same size, not a scaled-up one: it is the same kind of control
-   and reads as such. Left-aligned with the cell, because margin-left:auto pushed the old button to the far edge
-   of a third of the strip and made a small control look like a big one by sitting alone. */
-.housebar-master .switch {
-	padding-left: 0;
-}
 
 /* One row of chips, not one row per person: a household of three cost three rows to say three words. */
 .people-row {

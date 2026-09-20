@@ -8,6 +8,20 @@
 
 <Fold Id="identity" Title="This room" Summary="@Model.RoomName" Open="@IdentityOpen" OpenChanged="@IdentityOpenChanged">
 	<div class="rows">
+		@* The way out. The hero carries only the way in, so an enabled room's switch is not restated up there. *@
+		<Row Label="Adaptive lighting" Value="" IsWide="true">
+			<Help>@Model.SwitchTitle</Help>
+			<ChildContent>
+				<Pair Name="Adaptive lighting"
+					  ShowStatus="false"
+					  Word="@(Model.IsEnabled ? "ON" : "OFF")"
+					  WordKind="@(Model.IsEnabled ? "ok" : "off")"
+					  Options="@EnableOptions"
+					  Current="@(Model.IsEnabled ? 0 : 1)"
+					  OnSelect="OnEnableSelect" />
+			</ChildContent>
+		</Row>
+
 		<Row Label="Name" Value="@(Model.OwnName is { Length: > 0 } own ? own : Model.RoomName)" IsWide="true">
 			<Help>Leave it empty to follow the Home Assistant area's name.</Help>
 			<ChildContent>
@@ -66,4 +80,10 @@
 	public EventCallback<bool> LogOpenChanged { get; set; }
 
 	private string? LogSummary => Model.RoomLog is { Count: > 0 } rows ? rows[0].Line.What : null;
+
+	private static readonly IReadOnlyList<string> EnableOptions = ["On", "Off"];
+
+	// Pressing the side already pressed must do nothing; this is a flip, not a wall switch.
+	private Task OnEnableSelect(int index) =>
+		index == (Model.IsEnabled ? 0 : 1) ? Task.CompletedTask : Model.ToggleEnabled();
 }
