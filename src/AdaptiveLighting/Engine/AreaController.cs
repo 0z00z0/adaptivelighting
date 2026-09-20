@@ -125,6 +125,11 @@ public sealed class AreaController : IDisposable
 	// engine aiming the room itself, which the scene no longer describes.
 	private string? _standingScene;
 
+	// The house-mode scene these lights are showing, or null. Kept apart from _standingScene because
+	// ReassertLights re-fires a standing scene, and a house scene re-fired from one room reaches every other
+	// room it names.
+	private string? _houseScene;
+
 	// The orchestrator composes and publishes the opening house state before any room starts, so the first thing
 	// this controller reads off that stream is it. The mode it carries was read, not changed, and every rebuild
 	// would otherwise report a mode change nobody made.
@@ -432,13 +437,26 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
-	/// <summary>Declares a house scene about to run, so its changes to this room's lights are not read as a person's.</summary>
+	/// <summary>Declares a house scene about to run, and takes it as the look these lights now carry.</summary>
 	// Must precede the orchestrator's scene call, as ExpectScene precedes the room's own. A Normal or Sleep scene
-	// leaves the room automating, so its echo reaches OnLightChanged.
-	public void ExpectHouseScene()
+	// leaves the room automating, so its echo reaches OnLightChanged. Taking it up is what stops the mode change
+	// that fired it, and the tick behind it, re-aiming the room over the top of the scene.
+	public void ExpectHouseScene(string scene)
 	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(scene);
+
 		lock (_gate)
+		{
 			_fanOut.ExpectSceneOnEveryLight(TransitionSeconds());
+
+			_houseScene = scene;
+
+			// The room's own levels no longer describe these lights, as after ApplyScene.
+			_lastTargets = null;
+			_lastCommand = null;
+			_lastLightCommands = null;
+			_lastCommandAt = _scheduler.Now;
+		}
 	}
 
 	/// <summary>Subscribes and publishes the opening snapshot, leaving the lights as found.</summary>
@@ -935,6 +953,11 @@ public sealed class AreaController : IDisposable
 			bool opening = _openingHouseState;
 			_openingHouseState = false;
 
+			// A house scene stands only while the mode that fired it does. ExpectHouseScene has already recorded a
+			// scene this state brings, so anything else here is the scene that has gone.
+			if (!string.Equals(_houseScene, house.ActiveScene, StringComparison.Ordinal))
+				_houseScene = null;
+
 			if (!IsEngineAllowed())
 			{
 				// Its return runs through the ordinary command path, so it would command a light the master
@@ -999,13 +1022,21 @@ public sealed class AreaController : IDisposable
 				return;
 			}
 
+			bool modeMoved = previous.ActiveKind != house.ActiveKind
+				|| !string.Equals(previous.ModeValue, house.ModeValue, StringComparison.OrdinalIgnoreCase);
+
 			// A mode switch is a command: retarget an active area when the kind or the mode value moved. A room
-			// sitting on its own scene is not retargeted, on the same rule the tick follows.
-			if (_state == AreaState.AutoActive
-				&& _standingScene is null
-				&& (previous.ActiveKind != house.ActiveKind
-					|| !string.Equals(previous.ModeValue, house.ModeValue, StringComparison.OrdinalIgnoreCase)))
+			// sitting on a scene is not retargeted, on the same rule the tick follows.
+			if (_state == AreaState.AutoActive && SceneStanding is null && modeMoved)
+			{
 				ApplyTarget(ModeReason(opening));
+				return;
+			}
+
+			// The mode's own scene is the look on these lights, so the room says so instead of re-aiming. Without
+			// this the room's snapshot keeps the mode it has left until the next tick.
+			if (modeMoved && _houseScene is not null)
+				Publish(ModeReason(opening));
 		}
 	}
 
@@ -1016,8 +1047,10 @@ public sealed class AreaController : IDisposable
 
 		CancelAllTimers();
 
-		// The house's scene is the look now, so the room's own no longer describes these lights.
+		// The house's scene is the look now, so the room's own no longer describes these lights. The state itself
+		// reports the guest scene, so neither scene field names it.
 		_standingScene = null;
+		_houseScene = null;
 
 		Enter(AreaState.SceneHold, TransitionReason.SceneHold);
 		Publish(TransitionReason.SceneHold);
@@ -1057,7 +1090,7 @@ public sealed class AreaController : IDisposable
 				return;
 
 			// A standing scene is the room's look, so nothing here re-aims it.
-			if (_state == AreaState.AutoActive && _standingScene is null)
+			if (_state == AreaState.AutoActive && SceneStanding is null)
 			{
 				AreaTargets? targets = ResolveTargets();
 
@@ -1103,7 +1136,9 @@ public sealed class AreaController : IDisposable
 		}
 
 		// Nothing is about to go off, so there is nothing to warn about and the dim would be a step to nowhere.
-		if (_area.SceneWhenEmpty is { Length: > 0 })
+		// A room sitting on the house's scene skips it too: the dim is a command of the engine's own, and where
+		// that scene switched the room off it would light a dark room to warn it about going dark.
+		if (_area.SceneWhenEmpty is { Length: > 0 } || _houseScene is not null)
 		{
 			ClearCountdown();
 			Enter(AreaState.AutoVacant, TransitionReason.VacancyTimeout);
@@ -1210,6 +1245,7 @@ public sealed class AreaController : IDisposable
 		{
 			_logger.LogDebug("{Area}: away scene {Scene} is holding; skipping the leaving sweep.", Name, _house.ActiveScene);
 			_standingScene = null;
+			_houseScene = null;
 			Publish(reason);
 			return;
 		}
@@ -1490,12 +1526,18 @@ public sealed class AreaController : IDisposable
 		TurnOff(reason);
 	}
 
+	/// <summary>The scene these lights are showing, the room's own or the house's, or <c>null</c> when neither is.</summary>
+	// The one read both re-aim sites ask, so a room sitting on a scene is left alone by the tick and by a mode
+	// change alike.
+	private string? SceneStanding => _standingScene ?? _houseScene;
+
 	private void ApplyScene(string sceneId, TransitionReason reason)
 	{
 		RefreshDarkness();
 		_fanOut.RunScene(sceneId, TransitionSeconds());
 
 		_standingScene = sceneId;
+		_houseScene = null;
 		_lastTargets = null;
 		_lastCommand = null;
 		_lastLightCommands = null;
@@ -1516,6 +1558,7 @@ public sealed class AreaController : IDisposable
 	private void Send(LightCommand command, IReadOnlyDictionary<string, LightCommand>? lightCommands = null)
 	{
 		_standingScene = null;
+		_houseScene = null;
 		_fanOut.Send(command, lightCommands);
 
 		// The standing command, so a republish keeps the levels that are actually holding instead of blanking them.
@@ -1568,10 +1611,11 @@ public sealed class AreaController : IDisposable
 			_ => null
 		};
 
-	// The two states whose levels the engine did not choose and cannot resolve again: a hand at the switch, and a
-	// house scene. EnterSceneHold clears _standingScene, so ReassertLights would take a scene-held room to dark.
+	// The levels the engine did not choose and cannot resolve again: a hand at the switch, and a house scene.
+	// EnterSceneHold clears _standingScene, so ReassertLights would take a scene-held room to dark, and a room
+	// still automating under a mode scene would be re-aimed off it.
 	private bool LevelsAreSomebodyElses() =>
-		_state is AreaState.OverriddenOn or AreaState.SceneHold;
+		_state is AreaState.OverriddenOn or AreaState.SceneHold || _houseScene is not null;
 
 	/// <summary>Reads this room's fixtures as they stand, as commands that would put them back.</summary>
 	private IReadOnlyList<(string Light, LightCommand Command)> CaptureLights(IEnumerable<string> lights)
@@ -1888,7 +1932,7 @@ public sealed class AreaController : IDisposable
 			Forced: _house.Forced,
 			IsHeldLit: heldLitBy is not null,
 			HeldLitBy: heldLitBy,
-			SceneApplied: _standingScene,
+			SceneApplied: SceneStanding,
 			TestingPeriodId: _levelTest.PeriodId,
 			TestEndsAt: _levelTest.EndsAt,
 			LightLevels: standing is not null ? LightStandings() : null,

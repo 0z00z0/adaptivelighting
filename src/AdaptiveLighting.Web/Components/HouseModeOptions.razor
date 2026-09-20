@@ -105,9 +105,9 @@
 					<span class="housemode-field-label">
 						Run this scene when the mode starts
 						<InfoPopover Label="Run this scene when the mode starts">
-							A scene fired the moment the house enters this mode. On Away and Guest it stands, because those
-							pause automatic lighting. On Normal and Sleep the rooms keep adjusting, so the scene lasts only
-							until the next re-check.
+							A scene fired the moment the house enters this mode. It stands: no room is re-aimed over it.
+							On Away and Guest that is for as long as the mode lasts. On Normal and Sleep a room takes
+							itself back when somebody moves in it, or when it empties.
 						</InfoPopover>
 					</span>
 					<EntityPicker Value="@(Find(current)?.Scene)"
