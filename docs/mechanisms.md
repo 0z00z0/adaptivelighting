@@ -1834,6 +1834,31 @@ Two consequences:
 - Retrying a conflicted save cannot clear it: the page's copy is still the old one. So the refusal names the
   room, and the page offers a reload where it otherwise offers a retry.
 
+### The room switch writes on the press, and takes nothing else with it
+
+A room that is switched on and then left waiting for a Save button resolves nothing and runs nothing, which
+is not what the switch looks like it did. So `HousePageModel.ToggleEnabled` is the one edit on that page that
+writes: it puts that room through `RoomWrite` on the press, and the engine rebuilds around it. `RoomPageModel`
+already wrote on a timer and now commits at once instead, because the quiet window is there for a held
+stepper and a switch is one press.
+
+**It is scoped, so the rest of the draft is untouched.** `RoomWrite` sends one area slot, so a house name or a
+period edited a moment earlier stays unsaved and still needs Save. The save line says which of the two
+happened — a plain *Saved* when the page had nothing else pending, and *Room saved · rest not saved* when it
+had. What it does take with it is any pending edit to **that same room**, since the whole `AreaConfig` object
+goes; on the house page the only other per-room edit is adopting an area, and that case is excluded below.
+
+**Three things make it safe to do on a press.** The write token is taken **before** the flip, so it still
+describes the room as the file holds it and a conflict is still caught. The whole-document stamp is retaken
+from the file afterwards, or the page's next full save would report a conflict against a write the page made
+itself. And the clean baseline is only re-taken when the page matched the file to begin with: with other
+edits pending the page stays dirty, which is the truth.
+
+**A room with no slot on disk keeps the old behaviour.** No area id, or added or adopted since the last save:
+`RoomWrite` appends where it finds no slot, and for an adopted room that writes the room a second time. Those
+wait for Save, which is what the page already tells a newly added room to do. Switching a whole floor stays
+batched too — it is a bulk edit, not a switch.
+
 The room page's "Set up rooms again" is scoped to that room for the same reason. `AreaSetupService.Plan`
 proposes every unconfigured area it finds, whatever scope it is given, so the plan is stripped of `NewAreas`
 before the panel sees it — the warning a person reads then matches what confirming does. Adopting rooms

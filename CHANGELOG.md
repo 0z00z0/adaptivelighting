@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+- Switching a room's adaptive lighting on now takes effect at once, in both designs: the house page writes that one room through the ordinary save path on the press instead of waiting for its Save button, so the room resolves its lights and sensors and starts running there and then. Only that room is written — every other unsaved edit on the page stays unsaved and still needs Save, and the save line says so. A room with no Home Assistant area, or one added or adopted since the last save, still waits for Save, because there is no slot on disk to write it into. The room page's own switch likewise no longer sits out its one-second quiet window.
+
 ## [2026.9.21] - 2026-09-20
 
 - Lamplight's top bar gains a "Give feedback" link, next to the theme picker, reusing the first design's `FeedbackUrl.Build` and running version so both designs open the same prefilled GitHub issue.
