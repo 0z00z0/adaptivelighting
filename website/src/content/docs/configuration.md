@@ -254,7 +254,7 @@ option is then tagged here.
 |---|---|---|
 | **House mode** | The `input_select` whose value is the house mode. | `Global.HouseMode.Entity` |
 | **Kind** | What the option means: **Normal**, **Sleep**, **Away** or **Guest**. Mark exactly one option Normal — it is what every reset returns to. | `Kind` |
-| **Activate this scene when entering mode** | A `scene.*` applied on entry. Away with no scene sweeps the lights off instead. | `Scene` |
+| **Activate this scene when entering mode** | A `scene.*` applied on entry, and no room is re-aimed over it. Away with no scene sweeps the lights off instead. Under Normal and Sleep a room takes itself back when somebody moves in it, or when it empties. | `Scene` |
 | **Dim level while asleep** | Sleep only: the period whose dimness sleep-respecting rooms are held to. Falls back to a period that sets this mode, then to one named `night`. | `ClampPeriodId` |
 | **Turn this mode on while …** | While any listed entity is on, this option is the active mode whatever the dropdown says — a bedside "sleep" switch. | `ActivateWhileOn` |
 | **Activate when no movement for** | Switch to this option once the whole house has had no movement for this long. Non-Normal options only. | `ActivateAfterNoMotionMinutes` |
@@ -303,7 +303,8 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 |---|---|---|---|
 | **Who lives here** | Whose phones are watched, so the dashboard can show who is home. Shown, never acted on — the house mode dropdown decides Home and Away. Empty means everyone Home Assistant knows, including people added later. | empty | `Persons` |
 | **Show the house as empty after** | How long everyone must be gone before the dashboard calls the house empty. Nothing is switched on the strength of it. | 5 min | `AwayDebounceMinutes` |
-| **Master switch** | The entity that pauses everything. Left at the default, the app's own enable switch in Home Assistant is used — turning that one off pauses the app, this page included. | the app's own switch | `KillSwitchEntity` |
+| **Adaptive lighting** | The live on/off control, in the same "Master switch" section: pauses or resumes the entity named below. | on | *(live, not stored)* |
+| **Which switch** | The entity that pauses everything. Left at the default, the app's own enable switch in Home Assistant is used — turning that one off pauses the app, this page included. | the app's own switch | `KillSwitchEntity` |
 | Which way round it reads | Offered only once you pick your own entity: *read as an enabled flag — off kills the engine*, or *read as a kill switch — on kills the engine*. | enabled flag | `KillSwitchActiveWhenOff` |
 | **House name** | A label for logs and notifications, so two houses can be told apart. | "Adaptive lighting" | `ConfigName` |
 

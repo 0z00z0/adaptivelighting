@@ -1041,10 +1041,12 @@ with neither user nor parent in the context.
 - Before the scene call, `LightingOrchestrator` tells **every** room to expect it (`AreaController.ExpectHouseScene`),
   the same way a room's own scene is declared. The scene's contents are unreadable, so no room can be left out.
 - The window matches either polarity for the room's echo window plus its transition.
-- The room retargets for the new mode in the same instant, and that command's expectation says on. Because
-  scene windows are stored apart from command expectations, the scene switching a lamp off is still the house's
-  own work.
+- A room that commands its own levels inside that window, an override expiring or movement arriving, declares
+  an expectation saying on. Because scene windows are stored apart from command expectations, the scene
+  switching a lamp off is still the house's own work.
 - The cost: a person switching a light inside that window, in any room, is missed.
+
+The same call is what makes the scene stand; see *A house-mode scene stands*.
 
 ### A room says when its lights stop answering
 
@@ -1193,9 +1195,11 @@ point for both: while it applies the room does neither, and stays lit as it was.
 around the hold. `SettleHeldBackOff`'s `Away` branch stays a `TurnOff`, because the sweep it refused was a
 sweep.
 
-`_standingScene` is what stops the room being re-aimed: it is set by `ApplyScene`, cleared by `Send`, and
-guards the retarget in both `OnTick` and the house-mode branch of `OnHouseChanged`. A light command is the
-engine aiming the room itself, which the scene no longer describes.
+`_standingScene` is what stops the room being re-aimed: it is set by `ApplyScene`, cleared by `Send`, and,
+through `SceneStanding`, guards the retarget in both `OnTick` and the house-mode branch of `OnHouseChanged`.
+A light command is the engine aiming the room itself, which the scene no longer describes. `_houseScene` is
+the same fact for the mode's own scene and is read through the same property; see *A house-mode scene
+stands*.
 
 Two consequences that follow:
 
@@ -1207,9 +1211,35 @@ Two consequences that follow:
 - A room lit by its empty scene raises its own illuminance, so the darkness gate may then refuse to auto-on
   for movement. That is already true of any `KeepLitWhenOn` room and is not special-cased.
 
-`AreaSnapshot.SceneApplied` names the scene the room is sitting on. `BrightnessPct` and `ColorTempKelvin` are
-null while it stands, because the engine commanded no levels and must not invent them. It is not the house's
-Guest scene, which `AreaState.SceneHold` reports.
+`AreaSnapshot.SceneApplied` names the scene the room is sitting on, the room's own or the house's.
+`BrightnessPct` and `ColorTempKelvin` are null while it stands, because the engine commanded no levels and
+must not invent them. It is not the house's Guest scene, which `AreaState.SceneHold` reports, nor the away
+scene: both states report themselves and clear the field.
+
+### A house-mode scene stands
+
+`LightingOrchestrator.PublishHouseStateCore` fires the option's scene and hands the new house state to every
+room in one synchronous pass, `_house` being a `BehaviorSubject`. Away and Guest give the room a state of its
+own; every other kind leaves it automating, so the room has to be told that the scene is the look its lights
+now carry. Without that the room read the mode change as a command, re-aimed itself, and switched a room the
+scene had just darkened straight back on at the new mode's levels.
+
+- `ExpectHouseScene` takes the scene as `_houseScene` and drops the room's own target and command, exactly as
+  `ApplyScene` does for a room scene. It is called only where the scene actually goes out, so the master
+  switch stopping the scene records nothing.
+- `OnHouseChanged` reconciles first: a `_houseScene` that is not the incoming state's `ActiveScene` belongs to
+  a mode that has gone, so it is dropped and the room retargets as it always did. A mode that names no scene
+  is therefore unaffected.
+- The vacancy timeout settles the room instead of running the warning dim, on the same rule `SceneWhenEmpty`
+  follows: the dim is a command of the engine's own, and where the scene switched the room off it would light
+  a dark room to warn it about going dark.
+- `_houseScene` is kept apart from `_standingScene` because `ReassertLights` re-fires a standing scene, and a
+  house scene re-fired from one room's level-test return would reach every other room it names. A test in a
+  room sitting on a house scene therefore captures the fixtures and puts those levels back, through
+  `LevelsAreSomebodyElses`.
+- The cost: a room the scene does not actually name stops following the daylight curve until the next thing
+  that happens in it — movement, a hand at the switch, the vacancy timeout or the next mode change. The
+  scene's contents are unreadable, which is the same assumption `ExpectHouseScene` is already declared on.
 
 ### Testing a period's levels holds the room for five seconds and changes nothing else
 
@@ -1833,6 +1863,36 @@ Two consequences:
   caller's object would be stale the moment it was taken and every edit after the first would be refused.
 - Retrying a conflicted save cannot clear it: the page's copy is still the old one. So the refusal names the
   room, and the page offers a reload where it otherwise offers a retry.
+
+### The room switch writes on the press, and takes nothing else with it
+
+A room that is switched on and then left waiting for a Save button resolves nothing and runs nothing, which
+is not what the switch looks like it did. So `HousePageModel.ToggleEnabled` is the one edit on that page that
+writes: it puts that room through `RoomWrite` on the press, and the engine rebuilds around it. `RoomPageModel`
+already wrote on a timer and now commits at once instead, because the quiet window is there for a held
+stepper and a switch is one press.
+
+**It is scoped, so the rest of the draft is untouched.** `RoomWrite` sends one area slot, so a house name or a
+period edited a moment earlier stays unsaved and still needs Save. The save line says which of the two
+happened — a plain *Saved* when the page had nothing else pending, and *Room saved · rest not saved* when it
+had. What it does take with it is any pending edit to **that same room**, since the whole `AreaConfig` object
+goes; on the house page the only other per-room edit is adopting an area, and that case is excluded below.
+
+**Three things make it safe to do on a press.** The write token is taken **before** the flip, so it still
+describes the room as the file holds it and a conflict is still caught. The whole-document stamp is retaken
+from the file afterwards, or the page's next full save would report a conflict against a write the page made
+itself. And the clean baseline is only re-taken when the page matched the file to begin with: with other
+edits pending the page stays dirty, which is the truth.
+
+**Lamplight's room header carries only the way in.** With the switch taking effect on the press, an off room
+needs one button and nothing else, so the header has *Activate adaptive lighting* and the On/Off pair lives
+under "This room". The light pair there also drops its own name and ON/OFF word (`Pair.ShowStatus`), because
+the card's large reading above it is the same fact in bigger type.
+
+**A room with no slot on disk keeps the old behaviour.** No area id, or added or adopted since the last save:
+`RoomWrite` appends where it finds no slot, and for an adopted room that writes the room a second time. Those
+wait for Save, which is what the page already tells a newly added room to do. Switching a whole floor stays
+batched too — it is a bulk edit, not a switch.
 
 The room page's "Set up rooms again" is scoped to that room for the same reason. `AreaSetupService.Plan`
 proposes every unconfigured area it finds, whatever scope it is given, so the plan is stripped of `NewAreas`

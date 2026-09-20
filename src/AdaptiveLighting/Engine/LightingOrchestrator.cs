@@ -530,7 +530,7 @@ public sealed class LightingOrchestrator : IDisposable
 			{
 				// Every room: the scene's contents are unreadable, and a room left out reads the echo as a hand.
 				foreach (AreaController area in _areas)
-					area.ExpectHouseScene();
+					area.ExpectHouseScene(scene);
 
 				_actuator.ActivateScene(scene);
 			}

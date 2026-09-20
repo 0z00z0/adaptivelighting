@@ -11,58 +11,18 @@
 
 @* The layout rules live in BoardView so a test can hold them, and everything this page knows and does lives in
    DashboardPageModel, so a second design puts its own markup over the same rules. What is left here is markup,
-   styling and the wiring of presses to that model. Read-only about configuration: the master switch and the
-   house-mode selector command Home Assistant through ModeService, and nothing here writes the document. The
-   /modes route is kept so old bookmarks land here. *@
+   styling and the wiring of presses to that model. Read-only about configuration: the house-mode selector
+   commands Home Assistant through ModeService, and nothing here writes the document. The master switch itself
+   lives under Configuration &rarr; House, not here — see the "Master switch" fold. The /modes route is kept so
+   old bookmarks land here. *@
 
 <PageTitle>Dashboard &mdash; Adaptive lighting</PageTitle>
 
-@* Off the clock: these three are drawn again only when one of them has actually moved. *@
+@* Off the clock: these two are drawn again only when one of them has actually moved. *@
 <div class="housebar">
 	@* Read at render against the page's own clock, so nothing has to clear it. *@
 	<HouseModePanel HouseMode="_model.HouseMode" Message="@_model.ModeMessage" Confirmation="@_model.ModeConfirmation.TextAt(_model.Now)" OnSelect="_model.SelectMode" />
 	<WhoIsHomePanel People="_model.People" />
-
-	@if (_model.MasterSwitch is { } master)
-	{
-		<div class="housebar-cell housebar-master @MasterClass(master)">
-			<span class="housebar-lab">Adaptive lighting</span>
-			<div class="housebar-main">
-				@if (master.IsAvailable)
-				{
-					@* Same markup and aria as a room's own power switch; the two must stay in step. *@
-					<button type="button"
-							class="switch @(master.AdaptiveLightingOn ? "on" : null)"
-							role="switch"
-							aria-checked="@(master.AdaptiveLightingOn ? "true" : "false")"
-							aria-label="Adaptive lighting for the whole house"
-							disabled="@(!master.Toggle.CanToggle)"
-							title="@_model.MasterTitle"
-							@onclick="_model.ToggleMaster">
-						<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
-						<span class="switch-word">@(master.AdaptiveLightingOn ? "on" : "off")</span>
-					</button>
-				}
-				else
-				{
-					@* No switch when Home Assistant cannot say which way it is set. *@
-					<span class="housebar-value unknown" title="@_model.MasterTitle">unknown</span>
-				}
-			</div>
-			@if (_model.MasterNote is { Length: > 0 } note)
-			{
-				<p class="housebar-note info-host">
-					<span class="info-line">
-						@note
-						@if (_model.MasterNoteMore is { Length: > 0 } more)
-						{
-							<InfoPopover Label="Master switch" Severity="@_model.MasterNoteSeverity">@more</InfoPopover>
-						}
-					</span>
-				</p>
-			}
-		</div>
-	}
 </div>
 
 @if (_model.KillSwitchActive)
@@ -395,12 +355,6 @@ else
 	/// <summary>The first tick hangs off the left edge and the last off the right, so neither is clipped.</summary>
 	private string? TickClass(int index) =>
 		index == 0 ? "board-tick-first" : index == _model.Window.Ticks.Count - 1 ? "board-tick-last" : null;
-
-	/// <summary>Which of the three master states the cell is in, for the panel-edge colour.</summary>
-	/// <remarks>All three are emitted although only two colour anything: a <c>:has()</c> rule matches <c>on</c>
-	/// to leave the edge neutral, and dropping it merges "switched on" with "no master switch at all".</remarks>
-	private static string MasterClass(MasterSwitchView master) =>
-		!master.IsAvailable ? "unknown" : master.AdaptiveLightingOn ? "on" : "off";
 
 	// Invariant, always. Under nb-NO a double renders 62,5 and "left: 62,5%" is not a length, so the
 	// declaration is dropped and every block on the board stacks at the left edge.
