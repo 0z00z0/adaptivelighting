@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+- The rooms list on the house page can be reordered by hand, in both designs: two small arrows at the end of each room row move it up or down its floor, and the new order is saved with the next save like any other edit. Rooms stay grouped by the floor Home Assistant puts them on, so a room only moves against the rooms it shares a floor with, and the arrow is disabled at each end of a floor.
+
 ## [2026.9.21] - 2026-09-20
 
 - Lamplight's top bar gains a "Give feedback" link, next to the theme picker, reusing the first design's `FeedbackUrl.Build` and running version so both designs open the same prefilled GitHub issue.
