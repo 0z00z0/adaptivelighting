@@ -65,16 +65,6 @@
 							</div>
 							break;
 
-						case RoomControl.Entity:
-							<EntityPicker Value="@current.Text"
-										  ValueChanged="@(value => Set(setting, value))"
-										  Options="@current.Picker.Options"
-										  Lookup="@current.Picker.Lookup"
-										  NoneLabel="@current.Picker.NoneLabel"
-										  EmptyNote="@current.Picker.EmptyNote"
-										  Placeholder="@current.Picker.Placeholder" />
-							break;
-
 						default:
 							<Stepper Value="@current.Number"
 									 Text="@(current.Text ?? "")"

@@ -1732,6 +1732,11 @@ public sealed class AreaController : IDisposable
 			return;
 		}
 
+		// A house scene that arrived mid-test is already on these fixtures, so the return owes nothing. Not
+		// re-fired: one room's return would reach every other room that scene names.
+		if (_houseScene is { Length: > 0 })
+			return;
+
 		// The two lit states. PreOff is holding the same target at its warning dim.
 		if ((_state is AreaState.AutoActive or AreaState.PreOff) && ResolveTargets() is { } targets)
 		{
@@ -1750,7 +1755,7 @@ public sealed class AreaController : IDisposable
 	// tick re-applies the room.
 	private void ReassertLights(IReadOnlyCollection<string> lights)
 	{
-		if (_standingScene is { Length: > 0 })
+		if (SceneStanding is { Length: > 0 })
 		{
 			ReassertLights();
 			return;

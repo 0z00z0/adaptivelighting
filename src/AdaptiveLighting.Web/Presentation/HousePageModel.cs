@@ -54,6 +54,10 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	// the whole document.
 	private string _documentStamp = "";
 
+	// Per room, that room's slot as the file last held it. A scoped write's token comes from here and never from
+	// the draft: the token exists to catch somebody else's write, and this page's own pending edit is not one.
+	private readonly Dictionary<string, string> _roomStamps = new(StringComparer.Ordinal);
+
 	// Compared against a serialised snapshot, never set by a flag each edit path remembers: a dozen paths change
 	// this document, and one that forgot the flag would leave an edit with no way to save it.
 	private bool _dirty;
@@ -190,6 +194,9 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		{
 			_config = _engine.Store.Load();
 			_documentStamp = ConfigStamp.OfDocument(_config);
+
+			// Taken here, where the draft still is the file, so no edit made later can reach the anchors.
+			AnchorRoomStamps(_config);
 			LoadError = null;
 		}
 		catch (LightingConfigException exception)
@@ -216,6 +223,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		// Nothing was read, so there is nothing this draft could revert. Only reachable over a file that would
 		// not parse, and this save is the way out of that.
 		_documentStamp = "";
+		_roomStamps.Clear();
 		LoadError = null;
 		LoadCatalog();
 		Revalidate();
@@ -264,6 +272,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 				// Re-read so the page shows what is on disk, formatting and all.
 				_config = _engine.Store.Load();
 				_documentStamp = ConfigStamp.OfDocument(_config);
+				AnchorRoomStamps(_config);
 				LoadCatalog();
 				Revalidate();
 				MarkClean();
@@ -661,10 +670,8 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	public void MoveRoomDown(AreaConfig area) => MoveRoom(area, 1);
 
 	/// <summary>Swaps a room with the one above or below it on its floor.</summary>
-	/// <remarks>An edit like any other: it arms the save bar, it does not save. Within a floor the list follows the
-	/// document, so swapping the two document positions is the move; rows between them sit on other floors and
-	/// keep their own order. Nothing moves across a floor boundary, since the floor's own level decides where a
-	/// group lands.</remarks>
+	// Two document positions swapped, so rows between them sit on other floors and keep their own order. Nothing
+	// crosses a floor boundary: the floor's own level decides where a group lands.
 	private void MoveRoom(AreaConfig area, int step)
 	{
 		IReadOnlyList<AreaConfig> neighbours = NeighboursOf(area);
@@ -693,25 +700,27 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	public string MoveDownLabel(AreaConfig area) => $"Move {RoomName(area)} down";
 
 	/// <summary>Flips a room's power switch, writing an explicit true or false and never null.</summary>
-	/// <remarks>
-	///     The one edit on this page that does not wait for the save bar. A switch is the whole intent, so the room
-	///     is written on the press and the engine rebuilds around it, which is what makes it resolve and run. Only
-	///     that room's slot is sent: every other edit in the draft stays where it is and still needs Save.
-	/// </remarks>
+	/// <remarks>The one edit on this page that does not wait for the save bar: only this room's slot is written,
+	/// and every other edit in the draft still needs Save.</remarks>
 	public void ToggleEnabled(AreaConfig area)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 
-		// Taken before the flip. The scoped write has to match the room as the file holds it, not as the press
-		// leaves it.
-		RoomWriteToken token = RoomWrite.Open(_config, area.AreaId);
+		RoomWriteToken token = RoomOnDisk(area);
 		bool wasClean = !_dirty;
+		bool? before = area.Enabled;
 		bool switchingOn = !IsEnabled(area);
 
 		area.Enabled = switchingOn;
 
-		if (HasSlotOnDisk(area))
-			WriteRoomNow(area, token, wasClean);
+		// A refused write leaves the file saying the opposite of the switch, so the switch goes back with it.
+		if (HasSlotOnDisk(area) && !WriteRoomNow(area, token, wasClean))
+		{
+			area.Enabled = before;
+			Revalidate();
+
+			return;
+		}
 
 		Revalidate();
 
@@ -719,6 +728,24 @@ public sealed class HousePageModel : IPageClock, IDisposable
 			RaiseSwitchOnNote(area);
 		else
 			_switchOnNotes.Remove(KeyOf(area));
+	}
+
+	/// <summary>This room's write token, keyed on the file rather than on the draft.</summary>
+	// Off the draft, an unsaved edit to the same room — a whole floor switched, a setting changed — reads at save
+	// time as somebody else having written the file, and the press is refused for a conflict nobody caused.
+	private RoomWriteToken RoomOnDisk(AreaConfig area) =>
+		area.AreaId is { Length: > 0 } areaId && _roomStamps.TryGetValue(areaId, out string? stamp)
+			? new RoomWriteToken(areaId, stamp)
+			: RoomWrite.Open(_config, area.AreaId);
+
+	/// <summary>Records every room's slot as the document just read from disk holds it.</summary>
+	private void AnchorRoomStamps(AdaptiveLightingConfig onDisk)
+	{
+		_roomStamps.Clear();
+
+		foreach (AreaConfig area in onDisk.Areas)
+			if (area.AreaId is { Length: > 0 } areaId)
+				_roomStamps[areaId] = ConfigStamp.OfArea(onDisk, areaId);
 	}
 
 	/// <summary>Whether this room has a slot on disk for a scoped write to land in.</summary>
@@ -730,7 +757,8 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		&& !_unsaved.Contains(areaId);
 
 	/// <summary>Writes one room through the same save path the whole document takes.</summary>
-	private void WriteRoomNow(AreaConfig area, RoomWriteToken token, bool wasClean)
+	/// <returns><c>true</c> once that room is on disk.</returns>
+	private bool WriteRoomNow(AreaConfig area, RoomWriteToken token, bool wasClean)
 	{
 		// Drop any lingering confirmation, so a refused write is never shown next to a stale one.
 		ClearConfirmation();
@@ -743,14 +771,11 @@ public sealed class HousePageModel : IPageClock, IDisposable
 			{
 				Result = write.Result;
 
-				return;
+				return false;
 			}
 
 			Result = null;
-
-			// The file has moved, so without this the next whole-document save reports a conflict against a write
-			// this page made itself.
-			_documentStamp = ConfigStamp.OfDocument(_engine.Store.Load());
+			RestampAfterWrite(area, write.Token);
 
 			// Only from a draft that already matched the file. With other edits pending the page is still ahead of
 			// it, and saying otherwise would take the save bar away from them.
@@ -758,10 +783,36 @@ public sealed class HousePageModel : IPageClock, IDisposable
 				MarkClean();
 
 			ShowSaveConfirmation(wasClean ? $"Saved ✓ {SavedAt()}" : "Room saved ✓ · rest not saved");
+
+			return true;
 		}
 		catch (LightingConfigException exception)
 		{
 			LoadError = exception.Message;
+
+			return false;
+		}
+	}
+
+	/// <summary>Re-anchors the page's tokens on the file a scoped write has just left.</summary>
+	// The write is on disk before this runs, so a read that fails here costs the page a token and nothing else.
+	// Reporting it as a failed write would send the switch back while the file says the opposite.
+	private void RestampAfterWrite(AreaConfig area, RoomWriteToken written)
+	{
+		if (area.AreaId is { Length: > 0 } areaId)
+			_roomStamps[areaId] = written.Stamp;
+
+		try
+		{
+			// Without this the next whole-document save reports a conflict against a write this page made itself.
+			_documentStamp = ConfigStamp.OfDocument(_engine.Store.Load());
+		}
+		catch (LightingConfigException exception)
+		{
+			_logger.LogWarning(
+				exception,
+				"The room was written, but the document could not be read back to re-stamp the page. The next save "
+				+ "of the whole document may report a conflict that a reload clears.");
 		}
 	}
 

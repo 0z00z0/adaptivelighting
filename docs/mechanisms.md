@@ -352,8 +352,18 @@ observable for the same `GlobalConfig.SunEntity`, matching the calculator each w
 Home Assistant install has exactly one sun entity, and the darkness-by-Sun rule already read straight past a
 per-room choice. `IlluminanceGate` and `LightingOrchestrator` take it as a plain string now, not off the
 resolved `AreaSettings`. An old document naming `SunEntity` per room or under `Defaults` loads that key as
-unmatched and silently drops it, the same as any other retired key; the house then reads its own
-`Global.SunEntity`, `sun.sun` by default.
+unmatched; the house then reads its own `Global.SunEntity`, `sun.sun` by default.
+
+The retirement is **scoped**, which no other retired key is: `SunEntity` is retired on a room and under
+`Defaults` while staying a live key under `Global`, so the flat name match in `LightingConfigDocument.Translate`
+would warn about every document ever written. `RetiredOutsideGlobal` is the second table, and the walk carries
+an `inGlobal` flag set on the way into the `Global` section. `ConfigKeyCollisionTests` guards it from both
+sides: no property outside `GlobalConfig` may take one of those names.
+
+`Global.SunEntity` is validated the way `Global.OutdoorLuxSensor` is — a warning for the wrong domain, a
+warning for an id Home Assistant does not know — and not through `EnumerateGlobalEntities`, which raises
+errors. An error would refuse the save, and the save is the only way to fix the id. Empty stays an error: the
+engine has no default to fall back to at that point.
 
 It runs `OnTick()`, not a bare re-arm. A sun time can move *backwards* past now as easily as forwards, and
 `NextBoundary` answers with the first `Start` strictly after now, so re-arming alone would step straight over a
@@ -1245,6 +1255,11 @@ scene had just darkened straight back on at the new mode's levels.
   house scene re-fired from one room's level-test return would reach every other room it names. A test in a
   room sitting on a house scene therefore captures the fixtures and puts those levels back, through
   `LevelsAreSomebodyElses`.
+- A scene arriving **during** a test is the one case with no capture to put back: the test began with nothing
+  standing, so `LevelsAreSomebodyElses` was false when it read. `ReassertLights` returns without commanding
+  anything there. The scene has already reached the fixtures, so the room is where it belongs, and re-firing
+  it would carry the same cost as above. Re-resolving the room's own levels instead is what the test at the
+  foot of `HouseModeSceneTests` pins.
 - The cost: a room the scene does not actually name stops following the daylight curve until the next thing
   that happens in it — movement, a hand at the switch, the vacancy timeout or the next mode change. The
   scene's contents are unreadable, which is the same assumption `ExpectHouseScene` is already declared on.

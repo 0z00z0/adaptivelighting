@@ -74,16 +74,6 @@
 									</div>
 									break;
 
-								case RoomControl.Entity:
-									<EntityPicker Value="@item.Text"
-												  ValueChanged="@(value => Set.InvokeAsync(Change.OfText(setting, value)))"
-												  Options="@item.Picker.Options"
-												  Lookup="@item.Picker.Lookup"
-												  NoneLabel="@item.Picker.NoneLabel"
-												  EmptyNote="@item.Picker.EmptyNote"
-												  Placeholder="@item.Picker.Placeholder" />
-									break;
-
 								default:
 									<Stepper Value="@item.Number"
 											 Text="@item.Text"
@@ -114,20 +104,6 @@
 </div>
 
 @code {
-	/// <summary>What a picker in an entity row offers, and how it words having nothing to offer.</summary>
-	public sealed record PickerField
-	{
-		public IReadOnlyList<EntityOption> Options { get; init; } = [];
-
-		public EntityLookup? Lookup { get; init; }
-
-		public string NoneLabel { get; init; } = "(none)";
-
-		public string EmptyNote { get; init; } = EntityPicker.DefaultEmptyNote;
-
-		public string Placeholder { get; init; } = "domain.entity_id";
-	}
-
 	/// <summary>One setting and what it currently reads, so the panel works nothing out for itself.</summary>
 	/// <remarks>
 	///     Only one of the value members is drawn, decided by the setting's control. <see cref="Text"/> carries
@@ -146,8 +122,6 @@
 		public string? StepValue { get; init; }
 
 		public string? ChoiceValue { get; init; }
-
-		public PickerField Picker { get; init; } = new();
 
 		/// <summary>Whether this setting is stated here rather than inherited, which paints the row's dot and
 		/// offers the road back.</summary>

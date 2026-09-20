@@ -44,15 +44,6 @@
 						</div>
 						break;
 
-					case RoomControl.Entity:
-						<EntityPicker Value="@item.Text"
-									  ValueChanged="@(value => Model.SetHouseSetting(AllSettingsPanel.Change.OfText(setting, value)))"
-									  Options="@item.Picker.Options"
-									  NoneLabel="@item.Picker.NoneLabel"
-									  EmptyNote="@item.Picker.EmptyNote"
-									  Placeholder="@item.Picker.Placeholder" />
-						break;
-
 					default:
 						<Stepper Value="@item.Number"
 								 Text="@item.Text"

@@ -94,7 +94,7 @@ public sealed class HaCatalog
 	private readonly IHaRegistry _registry;
 	private readonly ILoggerFactory _loggerFactory;
 	private readonly ILogger<HaCatalog> _logger;
-	private readonly HaAreaRegistry _areas;
+	private readonly IAreaRegistry _areas;
 
 	/// <summary>Discovery answers for this load, by area id.</summary>
 	/// <remarks>
@@ -106,16 +106,18 @@ public sealed class HaCatalog
 	/// <summary>The globals the cached discoveries were computed with, so an edit to them cannot go unnoticed.</summary>
 	private string? _discoverySignature;
 
-	public HaCatalog(IHaContext ha, IHaRegistry registry, ILoggerFactory loggerFactory)
+	public HaCatalog(IHaContext ha, IHaRegistry registry, ILoggerFactory loggerFactory, IAreaRegistry? areas = null)
 	{
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_registry = registry ?? throw new ArgumentNullException(nameof(registry));
 		_loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 		_logger = loggerFactory.CreateLogger<HaCatalog>();
-		_areas = new HaAreaRegistry(_registry);
+		_areas = areas ?? new HaAreaRegistry(_registry);
 	}
 
 	/// <summary>The area registry as the engine sees it, for what a page needs beyond pickers: floors, chiefly.</summary>
+	// The constructor takes one so an areas-and-floors layout can be stood up without HassModel's Area, which
+	// cannot be constructed outside its own assembly. Null is the real registry, which is every caller in the app.
 	public IAreaRegistry AreaRegistry => _areas;
 
 	/// <summary>Whether Home Assistant answered the last question asked of it.</summary>

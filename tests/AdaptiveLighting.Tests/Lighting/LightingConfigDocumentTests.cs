@@ -858,6 +858,53 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(read.RetiredKeys.Single(), logger.Warnings.Single());
 	}
 
+	/// <summary>The sun entity is the house's now: a room or Defaults still naming one is told it does nothing.</summary>
+	[TestMethod]
+	public void A_Room_Or_Defaults_Still_Naming_A_Sun_Entity_Loads_With_A_Retired_Key_Warning()
+	{
+		const string yaml = """
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Global:
+			    SunEntity: sun.sun
+			  Defaults:
+			    SunEntity: sun.house
+			  Areas:
+			    - Name: Stue
+			      AreaId: stue
+			      SunEntity: sun.stue
+			  Periods:
+			    - Name: day
+			      Start: "09:00"
+			""";
+		RecordingLogger logger = new();
+
+		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml, logger);
+
+		Assert.AreEqual("sun.sun", read.Config.Global.SunEntity, "the house's own sun entity is still read");
+		StringAssert.Contains(read.RetiredKeys.Single(), "SunEntity");
+		Assert.IsTrue(logger.Warnings.Contains(read.RetiredKeys.Single(), StringComparer.Ordinal),
+			"the log carries the same sentence the browser gets");
+	}
+
+	/// <summary>The control: the same name under Global is a live setting and must say nothing.</summary>
+	[TestMethod]
+	public void The_Houses_Own_Sun_Entity_Is_Not_Reported_As_Retired()
+	{
+		const string yaml = """
+			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
+			  Global:
+			    SunEntity: sun.house
+			  Periods:
+			    - Name: day
+			      Start: "09:00"
+			""";
+
+		DocumentReadResult read = LightingConfigDocument.Deserialize(yaml);
+
+		Assert.AreEqual("sun.house", read.Config.Global.SunEntity);
+		Assert.AreEqual(0, read.RetiredKeys.Count);
+	}
+
 	[TestMethod]
 	public void A_Rooms_Curve_Opt_In_Round_Trips_And_Keeps_Its_Hidden_Percentage()
 	{
