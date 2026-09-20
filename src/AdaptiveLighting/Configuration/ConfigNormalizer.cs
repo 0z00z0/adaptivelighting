@@ -39,6 +39,13 @@ public static class ConfigNormalizer
 				&& !referenced.Contains(option.Key));
 		}
 
+		// Trimmed but never dropped for being unreadable: the validator warns about a typo, and silently deleting
+		// the line the operator is halfway through typing would hide it.
+		for (int i = 0; i < global.EmbedFrom.Count; i++)
+			global.EmbedFrom[i] = global.EmbedFrom[i]?.Trim() ?? string.Empty;
+
+		global.EmbedFrom.RemoveAll(string.IsNullOrEmpty);
+
 		// Drop an empty HouseMode so a never-adopted document acquires no HouseMode: block.
 		if (global.HouseMode is { } houseMode
 			&& string.IsNullOrWhiteSpace(houseMode.Entity)

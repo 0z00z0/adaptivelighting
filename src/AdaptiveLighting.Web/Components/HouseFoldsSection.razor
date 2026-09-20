@@ -430,7 +430,27 @@
 </GroupFold>
 
 <GroupFold Title="This installation"
-		   Description="version, engine, file">
+		   Description="version, engine, file, embedding">
+	<div class="field">
+		<div class="field-head">
+			<span class="field-label"><label for="embed-from">Embed in a dashboard</label>
+				<InfoPopover Label="Embed in a dashboard">
+					Home Assistant's own address, so a dashboard card can show these pages in a frame. Empty means
+					no other site may. Home network only &mdash; a dashboard reached over <code>https</code> refuses
+					a frame served over <code>http</code>. These pages have no login, and a frame adds none.
+				</InfoPopover>
+			</span>
+		</div>
+		<div class="field-control">
+			<EntityListPicker Id="embed-from"
+							  Value="@Model.EmbedFrom"
+							  ValueChanged="@Model.SetEmbedFrom"
+							  EmptyLabel="Nobody"
+							  EmptyNote=""
+							  Placeholder="http://10.0.0.5:8123" />
+		</div>
+	</div>
+
 	<div class="status-row">
 		<span class="status-label">Version</span>
 		<code>@HousePageModel.Version</code>

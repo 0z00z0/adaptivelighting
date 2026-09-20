@@ -98,6 +98,13 @@ public class GlobalConfig
 	/// </remarks>
 	public string? OutdoorLuxSensor { get; set; }
 
+	/// <summary>Addresses allowed to show this UI inside a frame, for a Home Assistant dashboard card. Empty allows none.</summary>
+	/// <remarks>
+	///     Each entry is an origin — scheme, host and port, nothing after it. Empty is the default and leaves the
+	///     framework's own headers untouched, which is what refuses every frame but this site's own.
+	/// </remarks>
+	public List<string> EmbedFrom { get; set; } = [];
+
 	/// <summary>The house's sun entity: what every area's darkness and boundary checks read the sun's height and times from.</summary>
 	/// <remarks>House-wide, not a per-area override: almost every Home Assistant install has exactly one.</remarks>
 	public string SunEntity { get; set; } = "sun.sun";

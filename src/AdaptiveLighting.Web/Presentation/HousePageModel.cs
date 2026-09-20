@@ -1529,6 +1529,23 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		Revalidate();
 	}
 
+	/// <summary>Addresses allowed to show these pages inside a frame.</summary>
+	public IReadOnlyList<string> EmbedFrom => _config.Global.EmbedFrom;
+
+	public void SetEmbedFrom(IReadOnlyList<string> origins)
+	{
+		_config.Global.EmbedFrom = [.. origins];
+		Revalidate();
+	}
+
+	/// <summary>The embed list as a row's one-line value.</summary>
+	public string EmbedFromValue => EmbedFrom.Count switch
+	{
+		0 => "nobody",
+		1 => EmbedFrom[0],
+		_ => $"{EmbedFrom.Count} addresses"
+	};
+
 	public string? KillSwitchEntity => _config.Global.KillSwitchEntity;
 
 	/// <summary>Whether the app's own switch is in use, which is what hides the polarity dropdown.</summary>

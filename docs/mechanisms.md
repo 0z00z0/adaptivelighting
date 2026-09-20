@@ -2022,6 +2022,50 @@ the setting is present.
 - Lamplight constructs the existing page models unchanged. `InvariantNumber` and `AssetToken` are public so it
   uses them instead of carrying copies.
 
+### Embedding the pages in a Home Assistant dashboard
+
+Two response headers refuse a frame, and **neither is set anywhere in this repository**. Both come from the
+framework, measured off a running host rather than read out of the source:
+
+| Header | Value | Written by |
+|---|---|---|
+| `Content-Security-Policy` | `frame-ancestors 'self'` | Blazor's interactive server endpoint, from `ServerComponentsEndpointOptions.ContentSecurityFrameAncestorsPolicy`, whose default is `'self'` |
+| `X-Frame-Options` | `SAMEORIGIN` | ASP.NET Core antiforgery, from `AntiforgeryOptions.SuppressXFrameOptionsHeader`, whose default sends it |
+
+They appear on the component responses only. A static asset and a 404 carry neither. Home Assistant answers on
+its own port, so it is a different origin and an iframe card renders blank.
+
+`Global.EmbedFrom` is the list of addresses allowed to frame these pages, empty by default.
+`FrameEmbedding.UseLightingFrameEmbedding` registers one `OnStarting` callback per request and, **only** when
+the list holds at least one readable address, rewrites the policy to `frame-ancestors 'self'` plus each address
+and removes `X-Frame-Options`. Empty, it touches nothing: the header set is byte-identical to a build without
+the middleware, which is measured by diffing the whole response.
+
+Why each piece is the way it is:
+
+- **`OnStarting`, not plain middleware.** Both headers are written while the endpoint runs, after any
+  middleware has passed the request on. The callback fires when the response starts, which is the only point
+  at which the framework's values are there to replace.
+- **`X-Frame-Options` is removed, not relaxed.** It carries one source and cannot name a cross-origin one, so a
+  browser that reads it refuses the frame however permissive the policy beside it is.
+- **A start-up option would not do.** Both framework levers are set once at start, and this list is edited in
+  a running house. A document saved at 21:00 takes effect on the next request.
+- **One call covers both designs.** It is installed in `UseAdaptiveLighting` before the endpoints, and the
+  pipeline is per process, not per port.
+- **The addresses are read once, by `EmbedOrigin`.** Validation and the header both call it, so the settings
+  page cannot warn about something the header accepts, or the reverse. An entry has to be an absolute address
+  with an `http`/`https` scheme and a host; anything after the port is dropped, because a frame's parent is
+  matched by origin. A default port collapses, so `https://ha.example:443` is stored and sent as
+  `https://ha.example`. An entry that does not read as an address is warned about and left out, never refused:
+  a typo here would otherwise block the page that fixes it.
+
+Two facts about what this does and does not buy:
+
+- **It works on the home network.** A dashboard reached over `https` from outside will not frame a page served
+  over `http`; the browser refuses the mixed content before any of this is consulted.
+- **It adds no protection and removes none.** These pages have no login. Framing them exposes nothing that
+  reaching them directly did not.
+
 ### The shared controls' stylesheet
 
 The leaf controls and charts both designs use (steppers, number boxes, preset sliders, the pickers, the levels

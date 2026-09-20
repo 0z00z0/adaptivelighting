@@ -83,6 +83,9 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 WebApplication app = builder.Build();
 
+// The same call a house gets from UseAdaptiveLighting, so the embed setting can be looked at here too.
+app.UseLightingFrameEmbedding();
+
 app.UseAntiforgery();
 
 // This alone serves the RCL's _content/** and _framework/blazor.web.js. No UseStaticFiles: measured without
