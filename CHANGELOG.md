@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.21] - 2026-09-20
+
 - Lamplight's top bar gains a "Give feedback" link, next to the theme picker, reusing the first design's `FeedbackUrl.Build` and running version so both designs open the same prefilled GitHub issue.
 - A room whose lights cannot dim, or hold no colour of any kind, no longer shows a dimming or a warmth control for it: `ResolvedArea` gains `LightsSupportBrightness`, read off `supported_color_modes` the same way as the existing colour flags, and the room page's shared `LevelsEditor`/`LightLevelsEditor` hide the affected column, row and the warmth-mode selector. Where a room has neither (a plain on/off switch), the whole "Brightness & warmth" card is dropped rather than shown empty, in both designs.
 - Lamplight's Activity page: a long description could spill across the timestamp and room columns, because `.act-room`/`.act-what`/`.act-why` had no floor under their grid track's default minimum width. Fixed with `min-width: 0` and `overflow-wrap: break-word` on all three, matching the equivalent rule already in place on the first design's Activity page.
