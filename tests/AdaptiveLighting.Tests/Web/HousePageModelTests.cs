@@ -109,6 +109,39 @@ public sealed class HousePageModelTests
 		Assert.IsFalse(model.IsActive(HouseSection.Areas));
 	}
 
+	[TestMethod]
+	public void Moving_A_Room_Reaches_The_File_And_Comes_Back_In_That_Order()
+	{
+		HousePageModel model = Model(ThreeRooms());
+		model.Start(null);
+
+		CollectionAssert.AreEqual(new[] { "stue", "kjokken", "bad" }, Listed(model));
+		Assert.IsFalse(model.CanMoveRoomUp(model.Areas[0]), "The first room has nothing above it.");
+		Assert.IsFalse(model.CanMoveRoomDown(model.Areas[2]), "The last room has nothing below it.");
+
+		model.MoveRoomDown(model.Areas[0]);
+
+		CollectionAssert.AreEqual(new[] { "kjokken", "stue", "bad" }, Listed(model));
+		Assert.IsTrue(model.HasUnsavedEdits, "A move is an edit like any other: it arms the save bar.");
+		CollectionAssert.AreEqual(new[] { "stue", "kjokken", "bad" }, OnDisk(), "Nothing reaches the file before the save.");
+
+		model.Save();
+
+		Assert.IsFalse(model.HasUnsavedEdits, "The save was refused: " + (model.Result?.Message ?? model.LoadError));
+		CollectionAssert.AreEqual(new[] { "kjokken", "stue", "bad" }, OnDisk());
+
+		// Re-read from disk, which is what a fresh visit to the page does.
+		model.Reload();
+
+		CollectionAssert.AreEqual(new[] { "kjokken", "stue", "bad" }, Listed(model));
+	}
+
+	/// <summary>The rooms as the page lists them: through the floor groups, which is what both designs draw.</summary>
+	private static string[] Listed(HousePageModel model) =>
+		[.. model.AreaGroups.SelectMany(group => group.Items).Select(area => area.AreaId ?? "")];
+
+	private string[] OnDisk() =>
+		[.. LightingConfigDocument.Deserialize(File.ReadAllText(_path)).Config.Areas.Select(area => area.AreaId ?? "")];
 	/// <summary>
 	///     Switching a room on has to reach the engine on the press. Until it does the room resolves nothing and
 	///     runs nothing, whatever the page shows.
@@ -189,6 +222,20 @@ public sealed class HousePageModelTests
 		Areas =
 		[
 			new AreaConfig { AreaId = "stue", Name = "Stue", Enabled = true, Lights = ["light.stue_taklys"] }
+		]
+	};
+
+	/// <summary>A document a save will accept: the validator refuses one with no periods, and a period with no Id
+	/// is minted a fresh one on every load, which reads as the file having moved under the page.</summary>
+	private static AdaptiveLightingConfig ThreeRooms() => new()
+	{
+		ConfigName = "Preview house",
+		Periods = [new TimePeriodConfig { Id = "day-0000", Name = "day", Start = "07:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
+		Areas =
+		[
+			new AreaConfig { AreaId = "stue", Name = "Stue", Enabled = true, Lights = ["light.stue_taklys"] },
+			new AreaConfig { AreaId = "kjokken", Name = "Kjøkken", Enabled = true, Lights = ["light.kjokken_taklys"] },
+			new AreaConfig { AreaId = "bad", Name = "Bad", Enabled = true, Lights = ["light.bad_taklys"] }
 		]
 	};
 

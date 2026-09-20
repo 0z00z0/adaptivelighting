@@ -628,6 +628,70 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		Revalidate();
 	}
 
+	// ---- the order the rooms are listed in ----
+
+	/// <summary>The rooms this one is ordered against: the floor it is grouped under.</summary>
+	private IReadOnlyList<AreaConfig> NeighboursOf(AreaConfig area) =>
+		AreaGroups.FirstOrDefault(group => PositionIn(group.Items, area) >= 0)?.Items ?? [];
+
+	// AreaConfig is a class and two rooms can hold identical values, so the row is found by identity.
+	private static int PositionIn(IReadOnlyList<AreaConfig> rooms, AreaConfig area)
+	{
+		for (int index = 0; index < rooms.Count; index++)
+		{
+			if (ReferenceEquals(rooms[index], area))
+				return index;
+		}
+
+		return -1;
+	}
+
+	public bool CanMoveRoomUp(AreaConfig area) => PositionIn(NeighboursOf(area), area) > 0;
+
+	public bool CanMoveRoomDown(AreaConfig area)
+	{
+		IReadOnlyList<AreaConfig> neighbours = NeighboursOf(area);
+		int index = PositionIn(neighbours, area);
+
+		return index >= 0 && index < neighbours.Count - 1;
+	}
+
+	public void MoveRoomUp(AreaConfig area) => MoveRoom(area, -1);
+
+	public void MoveRoomDown(AreaConfig area) => MoveRoom(area, 1);
+
+	/// <summary>Swaps a room with the one above or below it on its floor.</summary>
+	/// <remarks>An edit like any other: it arms the save bar, it does not save. Within a floor the list follows the
+	/// document, so swapping the two document positions is the move; rows between them sit on other floors and
+	/// keep their own order. Nothing moves across a floor boundary, since the floor's own level decides where a
+	/// group lands.</remarks>
+	private void MoveRoom(AreaConfig area, int step)
+	{
+		IReadOnlyList<AreaConfig> neighbours = NeighboursOf(area);
+		int index = PositionIn(neighbours, area);
+		int target = index + step;
+
+		if (index < 0 || target < 0 || target >= neighbours.Count)
+			return;
+
+		int from = PositionIn(_config.Areas, area);
+		int to = PositionIn(_config.Areas, neighbours[target]);
+
+		if (from < 0 || to < 0)
+			return;
+
+		(_config.Areas[from], _config.Areas[to]) = (_config.Areas[to], _config.Areas[from]);
+
+		// A note keyed by a row's position would follow the position and not the room it was raised for.
+		ForgetPositionalNotes();
+		Revalidate();
+	}
+
+	/// <summary>What a screen reader calls the two controls that move a room up or down its floor.</summary>
+	public string MoveUpLabel(AreaConfig area) => $"Move {RoomName(area)} up";
+
+	public string MoveDownLabel(AreaConfig area) => $"Move {RoomName(area)} down";
+
 	/// <summary>Flips a room's power switch, writing an explicit true or false and never null.</summary>
 	/// <remarks>
 	///     The one edit on this page that does not wait for the save bar. A switch is the whole intent, so the room

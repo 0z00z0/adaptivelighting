@@ -2140,3 +2140,54 @@
 		min-width: 6.6rem;
 	}
 }
+
+/* ---- the order a room sits in its floor ---- */
+
+/* Two quiet arrows per room. They sit at the tail of a row both designs already build, so they take a fixed
+   size and no colour of their own until pointed at. */
+.roword {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 0.15rem;
+	align-items: center;
+}
+
+.roword-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	padding: 0;
+	background: none;
+	border: var(--rule, 1px solid var(--line));
+	border-radius: var(--radius-control);
+	color: var(--ink-2);
+	cursor: pointer;
+}
+
+.roword-btn svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.roword-btn:hover:not(:disabled) {
+	color: var(--accent);
+	border-color: var(--accent);
+}
+
+.roword-btn:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* The end of a floor: the press would do nothing, so it is refused rather than drawn as available. */
+.roword-btn:disabled {
+	opacity: 0.35;
+	cursor: default;
+}

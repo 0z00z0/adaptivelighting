@@ -269,8 +269,10 @@
 					}
 					else
 					{
-						<span><b>@Model.RoomName(room)</b><span class="area-sum">save to open this room</span></span>
+						<span class="area-shut"><b>@Model.RoomName(room)</b><span class="area-sum">save to open this room</span></span>
 					}
+					@* At the tail of the row, outside the link, as the switch is outside it at the head. *@
+					<RoomOrder Model="@Model" Area="@room" />
 				</div>
 			}
 		}
