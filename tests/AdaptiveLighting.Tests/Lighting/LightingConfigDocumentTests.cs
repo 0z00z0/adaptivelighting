@@ -26,7 +26,8 @@ public sealed class LightingConfigDocumentTests
 			ExcludeLabel = "no-touch",
 			MotionLabel = "is-motion",
 			MotionDeviceClasses = ["motion", "vibration"],
-			IlluminanceDeviceClass = "illuminance"
+			IlluminanceDeviceClass = "illuminance",
+			SunEntity = "sun.house"
 		},
 		Defaults = new AreaSettings
 		{
@@ -39,7 +40,6 @@ public sealed class LightingConfigDocumentTests
 			LuxThreshold = 35,
 			LuxHysteresis = 8,
 			SunElevationThreshold = 2.5,
-			SunEntity = "sun.sun",
 			DayTransitionSeconds = 2,
 			NightTransitionSeconds = 12,
 			RespectSleepMode = true,
@@ -84,7 +84,6 @@ public sealed class LightingConfigDocumentTests
 				LuxThreshold = 10,
 				LuxHysteresis = 2,
 				SunElevationThreshold = 1.0,
-				SunEntity = "sun.other",
 				DayTransitionSeconds = 0.5,
 				NightTransitionSeconds = 20,
 				RespectSleepMode = false,
@@ -118,6 +117,7 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(expected.MotionLabel, actual.MotionLabel);
 		CollectionAssert.AreEqual(expected.MotionDeviceClasses, actual.MotionDeviceClasses);
 		Assert.AreEqual(expected.IlluminanceDeviceClass, actual.IlluminanceDeviceClass);
+		Assert.AreEqual(expected.SunEntity, actual.SunEntity);
 	}
 
 	[TestMethod]
@@ -137,7 +137,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(expected.LuxThreshold, actual.LuxThreshold);
 		Assert.AreEqual(expected.LuxHysteresis, actual.LuxHysteresis);
 		Assert.AreEqual(expected.SunElevationThreshold, actual.SunElevationThreshold);
-		Assert.AreEqual(expected.SunEntity, actual.SunEntity);
 		Assert.AreEqual(expected.DayTransitionSeconds, actual.DayTransitionSeconds);
 		Assert.AreEqual(expected.NightTransitionSeconds, actual.NightTransitionSeconds);
 		Assert.AreEqual(expected.RespectSleepMode, actual.RespectSleepMode);
@@ -371,7 +370,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(expected.LuxThreshold, actual.LuxThreshold);
 		Assert.AreEqual(expected.LuxHysteresis, actual.LuxHysteresis);
 		Assert.AreEqual(expected.SunElevationThreshold, actual.SunElevationThreshold);
-		Assert.AreEqual(expected.SunEntity, actual.SunEntity);
 		Assert.AreEqual(expected.DayTransitionSeconds, actual.DayTransitionSeconds);
 		Assert.AreEqual(expected.NightTransitionSeconds, actual.NightTransitionSeconds);
 		Assert.AreEqual(expected.RespectSleepMode, actual.RespectSleepMode);
@@ -409,7 +407,6 @@ public sealed class LightingConfigDocumentTests
 		Assert.IsNull(area.LuxThreshold);
 		Assert.IsNull(area.LuxHysteresis);
 		Assert.IsNull(area.SunElevationThreshold);
-		Assert.IsNull(area.SunEntity);
 		Assert.IsNull(area.DayTransitionSeconds);
 		Assert.IsNull(area.NightTransitionSeconds);
 		Assert.IsNull(area.SleepBlocksAutoOn);

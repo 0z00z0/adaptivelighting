@@ -79,6 +79,12 @@
 				<EntityPicker Value="@Model.OutdoorLuxSensor" ValueChanged="@Model.SetOutdoorLux" Options="@Model.LuxSensors" NoneLabel="(none)" EmptyNote="@Model.EmptyNote("No light-level sensors — type an id")" Placeholder="sensor.ute_lux" />
 			</ChildContent>
 		</Row>
+		<Row Label="Sun entity" Value="@Model.SunEntity" IsWide="true">
+			<Help>Where the house reads the sun's height, for darkness by Sun and every sun-anchored schedule boundary. A house has exactly one, so no room overrides it.</Help>
+			<ChildContent>
+				<EntityPicker Value="@Model.SunEntity" ValueChanged="@Model.SetSunEntity" Options="@Model.SunEntities" NoneLabel="(none — the engine needs one)" EmptyNote="@Model.EmptyNote("No sun entity — type an id")" Placeholder="sun.sun" />
+			</ChildContent>
+		</Row>
 		<Row Label="What counts as a light-level sensor" Value="@Model.IlluminanceDeviceClass" IsWide="true">
 			<Help>Which kind of sensor a room takes its light reading from. <code>illuminance</code> is nearly always right.</Help>
 			<ChildContent>
@@ -296,7 +302,7 @@
 	private static readonly IReadOnlyList<string> _noOptions = [];
 
 	// Fold-open state this page tracks itself, the same way a room's own page tracks which row is being
-	// edited: HousePageModel only remembers open state for the five RoomSettings groups (Toggle/_openedGroups),
+	// edited: HousePageModel only remembers open state for the four RoomSettings groups (Toggle/_openedGroups),
 	// because those need to survive a rebuild after every edit. Nothing here is model state.
 	private readonly HashSet<string> _openDefault = ["levels", "rooms"];
 	private readonly Dictionary<string, bool> _open = [];

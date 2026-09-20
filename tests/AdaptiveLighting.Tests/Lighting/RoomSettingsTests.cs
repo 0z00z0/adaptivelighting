@@ -120,11 +120,10 @@ public sealed class RoomSettingsTests
 			VacancyTimeoutSeconds = 300,
 			LuxThreshold = 25,
 			WelcomeHome = true,
-			Darkness = DarknessSource.Sun,
-			SunEntity = "sun.other"
+			Darkness = DarknessSource.Sun
 		};
 
-		Assert.AreEqual(5, RoomSettings.OwnCount(room), "an int, a double, a bool, an enum and a string all count");
+		Assert.AreEqual(4, RoomSettings.OwnCount(room), "an int, a double, a bool and an enum all count");
 	}
 
 	[TestMethod]
@@ -206,7 +205,6 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual("no", RoomSettings.Describe(room, House, nameof(AreaSettings.WelcomeHome)));
 		Assert.AreEqual("Sensor", RoomSettings.Describe(room, House, nameof(AreaSettings.Darkness)),
 			"the default darkness source is Lux, which the vocabulary calls Sensor");
-		Assert.AreEqual("sun.sun", RoomSettings.Describe(room, House, nameof(AreaSettings.SunEntity)));
 	}
 
 	// Locale trap: under nb-NO a half written "0,5" and parsed back becomes five.
@@ -542,21 +540,14 @@ public sealed class RoomSettingsTests
 		Assert.AreEqual(1, house.VacancyTimeoutSeconds, "the lights cannot stay on for a negative time");
 	}
 
-	// AreaSettings has no null to fall back to, so "none" is the empty string on the house side.
 	[TestMethod]
-	public void The_House_Writes_Flags_And_Entities()
+	public void The_House_Writes_Flags()
 	{
 		AreaSettings house = House;
 
 		RoomSettings.SetFlag(house, nameof(AreaSettings.WelcomeHome), true);
-		RoomSettings.SetEntity(house, nameof(AreaSettings.SunEntity), "sun.other");
 
 		Assert.IsTrue(house.WelcomeHome);
-		Assert.AreEqual("sun.other", house.SunEntity);
-
-		RoomSettings.SetEntity(house, nameof(AreaSettings.SunEntity), null);
-
-		Assert.AreEqual(string.Empty, house.SunEntity, "the house has no null to fall back to, so none is written as empty");
 	}
 
 	// Keyed on the property: parsing every choice as a darkness rule would write nothing for a warmth and the wrong

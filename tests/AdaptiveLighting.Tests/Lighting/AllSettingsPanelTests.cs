@@ -107,7 +107,7 @@ public sealed class AllSettingsPanelTests
 
 	private static AllSettingsPanel.Item Entity(string id) =>
 		new(new RoomSetting(
-			nameof(AreaSettings.SunEntity),
+			nameof(GlobalConfig.SunEntity),
 			"Sun entity",
 			"Which entity the daylight is read from.",
 			RoomControl.Entity))

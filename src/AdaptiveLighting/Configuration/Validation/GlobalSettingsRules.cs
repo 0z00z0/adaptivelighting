@@ -21,6 +21,9 @@ internal static class GlobalSettingsRules
 		if (global.BlendMinutes < 0)
 			result.AddError($"Global.BlendMinutes must not be negative (is {global.BlendMinutes}).");
 
+		if (string.IsNullOrWhiteSpace(global.SunEntity))
+			result.AddError("Global.SunEntity is empty.");
+
 		// MotionDeviceClasses is not checked for emptiness: empty means GlobalConfig.DefaultMotionDeviceClasses.
 
 		if (knownEntityIds is null)

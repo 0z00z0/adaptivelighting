@@ -74,6 +74,10 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     # lamps, so the curve would chase itself.
     # OutdoorLuxSensor: sensor.outdoor_illuminance
 
+    # Where the house reads the sun's height, for darkness by Sun and every
+    # sun-anchored schedule boundary. House-wide: a room cannot override it.
+    SunEntity: sun.sun
+
     # How long a LIGHT-LEVEL sensor may go without reporting before it stops
     # counting toward a room's average. Zero or less switches the rule off.
     # Illuminance only: a motion sensor that has said nothing for hours is a room
@@ -162,7 +166,6 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     LuxHysteresis: 10           # "Bright again above": extra light needed to
                                 # count as bright again.
     SunElevationThreshold: 3.0  # "Dark when the sun is below", in degrees
-    SunEntity: sun.sun
 
     # The daylight curve, which sets the brightness for whichever periods a room
     # chooses to follow it for (Areas[].Levels[].FollowDaylightCurve, below — not

@@ -195,7 +195,7 @@ public static class AreaSetupService
 		+ (area.LuxBrightnessStartLux is not null ? 1 : 0) + (area.LuxBrightnessFullLux is not null ? 1 : 0)
 		+ (area.LuxBrightnessMinPct is not null ? 1 : 0) + (area.LuxBrightnessMaxPct is not null ? 1 : 0)
 		+ (area.LuxBrightnessGamma is not null ? 1 : 0)
-		+ (area.SunElevationThreshold is not null ? 1 : 0) + (area.SunEntity is not null ? 1 : 0)
+		+ (area.SunElevationThreshold is not null ? 1 : 0)
 		+ (area.DayTransitionSeconds is not null ? 1 : 0) + (area.NightTransitionSeconds is not null ? 1 : 0)
 		+ (area.RespectSleepMode is not null ? 1 : 0) + (area.SleepBlocksAutoOn is not null ? 1 : 0)
 		+ (area.SkipAwaySweep is not null ? 1 : 0) + (area.WelcomeHome is not null ? 1 : 0);

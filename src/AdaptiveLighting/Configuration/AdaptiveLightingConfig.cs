@@ -98,6 +98,10 @@ public class GlobalConfig
 	/// </remarks>
 	public string? OutdoorLuxSensor { get; set; }
 
+	/// <summary>The house's sun entity: what every area's darkness and boundary checks read the sun's height and times from.</summary>
+	/// <remarks>House-wide, not a per-area override: almost every Home Assistant install has exactly one.</remarks>
+	public string SunEntity { get; set; } = "sun.sun";
+
 	/// <summary>Whether areas have been discovered from the HA area registry once.</summary>
 	/// <remarks>Set on the first auto-populate and never reset, so an emptied list stays empty.</remarks>
 	public bool AreasAutoDiscovered { get; set; }
@@ -229,8 +233,6 @@ public class AreaSettings
 	public double LuxBrightnessGamma { get; set; } = 1.0;
 
 	public double SunElevationThreshold { get; set; } = 3.0;
-
-	public string SunEntity { get; set; } = "sun.sun";
 
 	public double DayTransitionSeconds { get; set; } = 1;
 

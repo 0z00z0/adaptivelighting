@@ -357,12 +357,11 @@ public sealed class LightingOrchestrator : IDisposable
 
 	private AreaController BuildArea(ResolvedArea resolved, AreaConfig config, AreaEntityResolver resolver)
 	{
-		// One calculator per area: the periods are house-wide but the sun entity is an area setting, and the wrong
-		// sun places every boundary wrong.
+		// One calculator per area: the periods are house-wide and so, now, is the sun entity.
 		CircadianCalculator circadian = new(
 			_config.Periods,
 			_config.Global,
-			() => ReadSunTimes(resolved.Settings.SunEntity),
+			() => ReadSunTimes(_config.Global.SunEntity),
 			config.Levels,
 			// Null unless Home Assistant owns the periods.
 			_periodSelect?.ReadPeriod,
@@ -379,7 +378,7 @@ public sealed class LightingOrchestrator : IDisposable
 			resolved,
 			circadian,
 			config.AreaId,
-			SunMoved(resolved.Settings.SunEntity),
+			SunMoved(_config.Global.SunEntity),
 			LightCalculators(resolved, config),
 			() => resolver.BatteriesOf(resolved.MotionSensors));
 
@@ -433,7 +432,7 @@ public sealed class LightingOrchestrator : IDisposable
 			calculators[light] = new CircadianCalculator(
 				_config.Periods,
 				_config.Global,
-				() => ReadSunTimes(resolved.Settings.SunEntity),
+				() => ReadSunTimes(_config.Global.SunEntity),
 				LightLevelMerge.MergeOnto(config.Levels, rows),
 				_periodSelect?.ReadPeriod,
 				_motionPeriods!.StateOf);
@@ -470,7 +469,7 @@ public sealed class LightingOrchestrator : IDisposable
 			_loggerFactory.CreateLogger<ModeMonitor>(),
 			_scheduler,
 			_config.Periods,
-			() => ReadSunTimes(_config.Defaults.SunEntity),
+			() => ReadSunTimes(_config.Global.SunEntity),
 			_motionSensorUnion,
 			// The same latch the calculators got, so the rooms and the mode brain agree on whether a period has begun.
 			_motionPeriods!,
@@ -478,7 +477,7 @@ public sealed class LightingOrchestrator : IDisposable
 			// The same reader, so the mode brain acts on the boundary the rooms are lit for.
 			_periodSelect,
 			_motionSensorsByArea,
-			sunMoved: SunMoved(_config.Defaults.SunEntity),
+			sunMoved: SunMoved(_config.Global.SunEntity),
 			afterSave: _afterSave,
 			defaultKillSwitchEntity: _defaultKillSwitchEntity);
 

@@ -18,6 +18,7 @@ public sealed class IlluminanceGate
 	private readonly IHaContext _ha;
 	private readonly LuxReader _reader;
 	private readonly AreaSettings _settings;
+	private readonly string _sunEntity;
 	private readonly ILogger _logger;
 
 	// Guards _isDark and the _last* readings below. Held across a whole verdict so the detail matches it.
@@ -39,6 +40,7 @@ public sealed class IlluminanceGate
 		IHaContext ha,
 		IReadOnlyList<string> luxEntityIds,
 		AreaSettings settings,
+		string sunEntity,
 		TimeSpan staleAfter,
 		Func<DateTimeOffset> now,
 		ILogger logger,
@@ -48,6 +50,7 @@ public sealed class IlluminanceGate
 
 		_ha = ha ?? throw new ArgumentNullException(nameof(ha));
 		_settings = settings ?? throw new ArgumentNullException(nameof(settings));
+		_sunEntity = sunEntity ?? throw new ArgumentNullException(nameof(sunEntity));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
 		_reader = new LuxReader(ha, luxEntityIds, staleAfter, now, lastSeen);
 	}
@@ -98,7 +101,7 @@ public sealed class IlluminanceGate
 
 	private string SunDetail() => _lastElevation is { } degrees
 		? string.Create(CultureInfo.InvariantCulture, $"sun elevation {degrees:0.#}°, dark below {_settings.SunElevationThreshold:0.#}°")
-		: $"no sun elevation from {_settings.SunEntity}";
+		: $"no sun elevation from {_sunEntity}";
 
 	/// <summary>The area's current illuminance, or <c>null</c> when no sensor resolved or none is reporting a usable number.</summary>
 	// The one place the area's darkness reading is taken. Free of side effects, so reading the number cannot
@@ -140,7 +143,7 @@ public sealed class IlluminanceGate
 
 	private bool IsSunDown()
 	{
-		double? elevation = _ha.AttrDouble(_settings.SunEntity, ElevationAttribute);
+		double? elevation = _ha.AttrDouble(_sunEntity, ElevationAttribute);
 		_lastElevation = elevation;
 
 		// No sun entity is not a reason to floodlight the house at noon.

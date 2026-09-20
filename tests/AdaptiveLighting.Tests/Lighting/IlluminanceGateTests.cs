@@ -40,7 +40,7 @@ public sealed class IlluminanceGateTests
 		tweak?.Invoke(settings);
 
 		return new IlluminanceGate(
-			ha, luxSensors, settings, staleAfter ?? TimeSpan.Zero, () => _now, logger ?? NullLogger.Instance, lastSeen);
+			ha, luxSensors, settings, Sun, staleAfter ?? TimeSpan.Zero, () => _now, logger ?? NullLogger.Instance, lastSeen);
 	}
 
 	/// <summary>Counts warnings, the only thing telling a room with dead sensors from one that never had any.</summary>
@@ -96,7 +96,7 @@ public sealed class IlluminanceGateTests
 		Assert.AreEqual(DarknessSource.Lux, untouched.Darkness, "the house-wide default, inherited by every room");
 
 		IlluminanceGate sensorless = new(
-			Ha(sunElevation: 30), [], untouched, TimeSpan.Zero, () => _now, NullLogger.Instance);
+			Ha(sunElevation: 30), [], untouched, Sun, TimeSpan.Zero, () => _now, NullLogger.Instance);
 
 		Assert.IsTrue(sensorless.IsDarkEnough(),
 			"no sensor, high sun: the room counts as dark, so movement lights it");

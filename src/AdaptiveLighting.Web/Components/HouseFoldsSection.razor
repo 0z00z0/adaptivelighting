@@ -132,7 +132,7 @@
 		</div>
 	</div>
 
-	@* The outdoor sensor lives here and not under the all-rooms Darkness group: it is an input the
+	@* The outdoor sensor lives here and not under the all-rooms Darkness and fading group: it is an input the
 	   house discovers darkness with. *@
 	<div class="field">
 		<div class="field-head">
@@ -153,6 +153,27 @@
 						  NoneLabel="(none — no room can follow the house's daylight)"
 						  EmptyNote="@Model.EmptyNote("No light-level sensors — type an id")"
 						  Placeholder="sensor.ute_lux" />
+		</div>
+	</div>
+
+	@* Not under any room's Darkness and fading group: a house has exactly one, so there is no per-room override. *@
+	<div class="field">
+		<div class="field-head">
+			<span class="field-label"><label for="sun-entity">Sun entity</label>
+				<InfoPopover Label="Sun entity">
+					Where the house reads the sun's height, for darkness by Sun and every sun-anchored schedule
+					boundary. Almost every Home Assistant install has exactly one, <code>sun.sun</code>.
+				</InfoPopover>
+			</span>
+		</div>
+		<div class="field-control">
+			<EntityPicker Id="sun-entity"
+						  Value="@Model.SunEntity"
+						  ValueChanged="@Model.SetSunEntity"
+						  Options="@Model.SunEntities"
+						  NoneLabel="(none — the engine needs one)"
+						  EmptyNote="@Model.EmptyNote("No sun entity — type an id")"
+						  Placeholder="sun.sun" />
 		</div>
 	</div>
 

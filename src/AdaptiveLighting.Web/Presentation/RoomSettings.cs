@@ -195,8 +195,8 @@ public static class RoomSettings
 			]),
 
 		new RoomSettingGroup(
-			"Darkness",
-			"when a room counts as dark",
+			"Darkness and fading",
+			"dark detection and fade times",
 			[
 				new RoomSetting(
 					nameof(AreaSettings.Darkness),
@@ -223,7 +223,17 @@ public static class RoomSettings
 
 					// Only the rule that reads the sun: a Sensor room with no reading counts as dark outright, so
 					// there is no sun fallback for this row to serve.
-					AppliesWhen: settings => settings.Darkness is DarknessSource.Sun)
+					AppliesWhen: settings => settings.Darkness is DarknessSource.Sun),
+				new RoomSetting(
+					nameof(AreaSettings.DayTransitionSeconds),
+					"Fade when it's light out",
+					"How many seconds the lights take to reach a new level while the room is not dark. 1 s is brisk; 0 snaps.",
+					RoomControl.Number, Unit: "s", Step: 0.5, Min: 0),
+				new RoomSetting(
+					nameof(AreaSettings.NightTransitionSeconds),
+					"Fade when it's dark out",
+					"The same, for a dark room. Longer than the daytime fade, because dark-adapted eyes notice a step. 15 s is easy on them.",
+					RoomControl.Number, Unit: "s", Step: 0.5, Min: 0)
 			]),
 
 		new RoomSettingGroup(
@@ -282,27 +292,6 @@ public static class RoomSettings
 					"Lights up when the house leaves away mode",
 					"If this room is dark when the house comes out of away mode, it comes on to meet whoever is arriving instead of waiting for a motion sensor to catch them.",
 					RoomControl.Flag)
-			]),
-
-		new RoomSettingGroup(
-			"Rarely needed",
-			"Fade lengths and the sun entity",
-			[
-				new RoomSetting(
-					nameof(AreaSettings.DayTransitionSeconds),
-					"Fade when it's light out",
-					"How many seconds the lights take to reach a new level while the room is not dark. 1 s is brisk; 0 snaps.",
-					RoomControl.Number, Unit: "s", Step: 0.5, Min: 0),
-				new RoomSetting(
-					nameof(AreaSettings.NightTransitionSeconds),
-					"Fade when it's dark out",
-					"The same, for a dark room. Longer than the daytime fade, because dark-adapted eyes notice a step. 15 s is easy on them.",
-					RoomControl.Number, Unit: "s", Step: 0.5, Min: 0),
-				new RoomSetting(
-					nameof(AreaSettings.SunEntity),
-					"Sun entity",
-					"Which entity the sun's height is read from. A house has exactly one, so there is normally no reason to change this.",
-					RoomControl.Entity)
 			])
 	];
 
