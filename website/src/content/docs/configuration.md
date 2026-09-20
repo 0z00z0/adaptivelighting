@@ -254,7 +254,7 @@ option is then tagged here.
 |---|---|---|
 | **House mode** | The `input_select` whose value is the house mode. | `Global.HouseMode.Entity` |
 | **Kind** | What the option means: **Normal**, **Sleep**, **Away** or **Guest**. Mark exactly one option Normal — it is what every reset returns to. | `Kind` |
-| **Activate this scene when entering mode** | A `scene.*` applied on entry. Away with no scene sweeps the lights off instead. | `Scene` |
+| **Activate this scene when entering mode** | A `scene.*` applied on entry, and no room is re-aimed over it. Away with no scene sweeps the lights off instead. Under Normal and Sleep a room takes itself back when somebody moves in it, or when it empties. | `Scene` |
 | **Dim level while asleep** | Sleep only: the period whose dimness sleep-respecting rooms are held to. Falls back to a period that sets this mode, then to one named `night`. | `ClampPeriodId` |
 | **Turn this mode on while …** | While any listed entity is on, this option is the active mode whatever the dropdown says — a bedside "sleep" switch. | `ActivateWhileOn` |
 | **Activate when no movement for** | Switch to this option once the whole house has had no movement for this long. Non-Normal options only. | `ActivateAfterNoMotionMinutes` |
