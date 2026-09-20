@@ -248,7 +248,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 			if (Result.Written)
 			{
 				DateTimeOffset? writtenAfter = _engine.Store.LastWrittenUtc;
-				string savedAt = writtenAfter is { } utc ? utc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture) : "now";
+				string savedAt = SavedAt();
 				bool advanced = writtenAfter is { } after && (writtenBefore is not { } before || after >= before);
 
 				// Result is cleared so the persistent note never restates the toast. A refused save keeps it.
@@ -629,11 +629,26 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	}
 
 	/// <summary>Flips a room's power switch, writing an explicit true or false and never null.</summary>
-	/// <remarks>An edit like any other: it arms the save bar, it does not save.</remarks>
+	/// <remarks>
+	///     The one edit on this page that does not wait for the save bar. A switch is the whole intent, so the room
+	///     is written on the press and the engine rebuilds around it, which is what makes it resolve and run. Only
+	///     that room's slot is sent: every other edit in the draft stays where it is and still needs Save.
+	/// </remarks>
 	public void ToggleEnabled(AreaConfig area)
 	{
+		ArgumentNullException.ThrowIfNull(area);
+
+		// Taken before the flip. The scoped write has to match the room as the file holds it, not as the press
+		// leaves it.
+		RoomWriteToken token = RoomWrite.Open(_config, area.AreaId);
+		bool wasClean = !_dirty;
 		bool switchingOn = !IsEnabled(area);
+
 		area.Enabled = switchingOn;
+
+		if (HasSlotOnDisk(area))
+			WriteRoomNow(area, token, wasClean);
+
 		Revalidate();
 
 		if (switchingOn)
@@ -641,6 +656,54 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		else
 			_switchOnNotes.Remove(KeyOf(area));
 	}
+
+	/// <summary>Whether this room has a slot on disk for a scoped write to land in.</summary>
+	// RoomWrite appends where it finds no slot. A room with no area id has nothing to key on, and one added or
+	// adopted since the last save is not in the file yet, so appending it would write the room a second time.
+	private bool HasSlotOnDisk(AreaConfig area) =>
+		LoadError is not { Length: > 0 }
+		&& area.AreaId is { Length: > 0 } areaId
+		&& !_unsaved.Contains(areaId);
+
+	/// <summary>Writes one room through the same save path the whole document takes.</summary>
+	private void WriteRoomNow(AreaConfig area, RoomWriteToken token, bool wasClean)
+	{
+		// Drop any lingering confirmation, so a refused write is never shown next to a stale one.
+		ClearConfirmation();
+
+		try
+		{
+			RoomWriteResult write = RoomWrite.Save(_engine, token, area, RoomName(area));
+
+			if (!write.Result.Written)
+			{
+				Result = write.Result;
+
+				return;
+			}
+
+			Result = null;
+
+			// The file has moved, so without this the next whole-document save reports a conflict against a write
+			// this page made itself.
+			_documentStamp = ConfigStamp.OfDocument(_engine.Store.Load());
+
+			// Only from a draft that already matched the file. With other edits pending the page is still ahead of
+			// it, and saying otherwise would take the save bar away from them.
+			if (wasClean)
+				MarkClean();
+
+			ShowSaveConfirmation(wasClean ? $"Saved ✓ {SavedAt()}" : "Room saved ✓ · rest not saved");
+		}
+		catch (LightingConfigException exception)
+		{
+			LoadError = exception.Message;
+		}
+	}
+
+	private string SavedAt() => _engine.Store.LastWrittenUtc is { } utc
+		? utc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)
+		: "now";
 
 	/// <summary>Rebuilds every standing note: the note for a room already on, when what it commands looks
 	/// wrong.</summary>

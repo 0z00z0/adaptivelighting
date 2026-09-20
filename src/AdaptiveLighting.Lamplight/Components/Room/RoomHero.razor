@@ -8,7 +8,10 @@
 <TickRegion Clock="@Model">
 	<div class="d2-hero">
 		<LampCard Name="@Model.PageName" LampStyle="@LampStyle" Big="@Big" BigSub="@BigSub">
+			@* No name and no ON/OFF word: the card's own big reading above already says what the lamps are doing,
+			   and the pressed button says which way the switch is set. *@
 			<Pair Name="Lights"
+				  ShowStatus="false"
 				  Word="@(Model.IsLightOn ? "ON" : "OFF")"
 				  WordKind="@(Model.IsLightOn ? "on" : "off")"
 				  Options="@LightOptions"
@@ -16,14 +19,15 @@
 				  OnSelect="OnLightSelect">
 				<Help>@Model.LightTitle</Help>
 			</Pair>
-			<Pair Name="Adaptive lighting"
-				  Word="@(Model.IsEnabled ? "ON" : "OFF")"
-				  WordKind="@(Model.IsEnabled ? "ok" : "off")"
-				  Options="@EnableOptions"
-				  Current="@(Model.IsEnabled ? 0 : 1)"
-				  OnSelect="OnEnableSelect">
-				<Help>@Model.SwitchTitle</Help>
-			</Pair>
+
+			@* Only the way in. Switching a running room off is a rare act and lives under "This room". *@
+			@if (!Model.IsEnabled)
+			{
+				<span class="info-line">
+					<button type="button" class="btn primary" @onclick="Model.ToggleEnabled">Activate adaptive lighting</button>
+					<Info Label="Adaptive lighting">@Model.SwitchTitle</Info>
+				</span>
+			}
 		</LampCard>
 
 		<NowCard Warnings="@Warnings" Facts="@Facts" />
@@ -81,7 +85,6 @@
 	public RoomPageModel Model { get; set; } = default!;
 
 	private static readonly IReadOnlyList<string> LightOptions = ["Light on", "Light off"];
-	private static readonly IReadOnlyList<string> EnableOptions = ["On", "Off"];
 
 	private string? LampStyle => LampPaint.Style(Model.Lamp.IsLit, Model.Lamp.BrightnessPct, Model.Lamp.Kelvin);
 
@@ -127,8 +130,4 @@
 
 		return Task.CompletedTask;
 	}
-
-	// Unlike the light pair, this one flips: pressing the side already pressed must do nothing.
-	private Task OnEnableSelect(int index) =>
-		index == (Model.IsEnabled ? 0 : 1) ? Task.CompletedTask : Model.ToggleEnabled();
 }
