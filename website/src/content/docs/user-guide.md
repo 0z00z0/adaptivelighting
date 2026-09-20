@@ -41,7 +41,7 @@ Then store the token once, so it never ends up in a file you commit:
 dotnet nuget update source 0z00z0 --username YOUR_GITHUB_USERNAME --password YOUR_TOKEN --store-password-in-clear-text
 ```
 
-Latest release: **2026.9.20**. See the
+Latest release: **2026.9.21**. See the
 [releases](https://github.com/0z00z0/adaptivelighting/releases).
 :::
 
