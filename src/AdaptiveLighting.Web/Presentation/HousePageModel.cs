@@ -45,6 +45,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	private readonly ConfigLocation _location;
 	private readonly HomeLocation _homeGeo;
 	private readonly AreaSnapshotCache _cache;
+	private readonly ModeService _modes;
 	private readonly ILogger _logger;
 
 	private AdaptiveLightingConfig _config = new();
@@ -98,6 +99,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		ConfigLocation location,
 		HomeLocation homeGeo,
 		AreaSnapshotCache cache,
+		ModeService modes,
 		ILogger<HousePageModel> logger)
 	{
 		_engine = engine ?? throw new ArgumentNullException(nameof(engine));
@@ -105,6 +107,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		_location = location ?? throw new ArgumentNullException(nameof(location));
 		_homeGeo = homeGeo ?? throw new ArgumentNullException(nameof(homeGeo));
 		_cache = cache ?? throw new ArgumentNullException(nameof(cache));
+		_modes = modes ?? throw new ArgumentNullException(nameof(modes));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
 	}
 
@@ -548,6 +551,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 		_liveStates = states;
 		_lowBatteries = batteries;
+		MasterSwitch = _modes.GetMasterSwitch();
 	}
 
 	/// <summary>What a room's row says about low motion sensor batteries, or <c>null</c> while none is low.</summary>
@@ -1378,6 +1382,81 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	{
 		_config.Global.KillSwitchActiveWhenOff = string.Equals(value, "true", StringComparison.Ordinal);
 		Revalidate();
+	}
+
+	/// <summary>The master switch as this page reads it live, or <c>null</c> before the built-in default resolves.</summary>
+	public MasterSwitchView? MasterSwitch { get; private set; }
+
+	/// <summary>What the master switch says on hover, matching the dashboard's own control.</summary>
+	public string MasterTitle
+	{
+		get
+		{
+			if (MasterSwitch is not { } master)
+				return string.Empty;
+
+			if (!master.IsAvailable)
+			{
+				return master.IsReady
+					? "Home Assistant doesn't know this switch."
+					: "Waiting for Home Assistant.";
+			}
+
+			return master.Toggle.CanToggle
+				? $"Turn adaptive lighting {(master.AdaptiveLightingOn ? "off" : "on")}"
+				: "This entity can't be switched on or off.";
+		}
+	}
+
+	/// <summary>The line under the master switch, or <c>null</c> when the switch is simply on.</summary>
+	public string? MasterNote
+	{
+		get
+		{
+			if (MasterSwitch is not { } master)
+				return null;
+
+			if (!master.IsAvailable)
+				return master.IsReady ? "Switch not found" : "Waiting for Home Assistant";
+
+			return master.AdaptiveLightingOn ? null : "Paused";
+		}
+	}
+
+	/// <summary>What the (i) beside <see cref="MasterNote"/> explains.</summary>
+	public string? MasterNoteMore
+	{
+		get
+		{
+			if (MasterSwitch is not { } master)
+				return null;
+
+			if (!master.IsAvailable)
+			{
+				return master.IsReady
+					? "Home Assistant doesn't know the master switch, so its state can't be shown."
+					: "Home Assistant hasn't answered yet, so the switch's state is unknown.";
+			}
+
+			return master.AdaptiveLightingOn
+				? null
+				: "Nothing was turned off, but no lights will change until it is turned back on.";
+		}
+	}
+
+	/// <summary>How much <see cref="MasterNote"/> matters: a paused house needs attention.</summary>
+	public InfoSeverity MasterNoteSeverity =>
+		MasterSwitch is { IsAvailable: true, AdaptiveLightingOn: false } ? InfoSeverity.Bad : InfoSeverity.Neutral;
+
+	/// <summary>Flips the master switch through the config-resolved toggle, then re-reads it.</summary>
+	/// <remarks>A live Home Assistant call, not a document edit: it never arms the save bar.</remarks>
+	public void ToggleMaster()
+	{
+		if (MasterSwitch is { IsAvailable: true, Toggle.CanToggle: true } master)
+			_modes.Toggle(master.Toggle);
+
+		MasterSwitch = _modes.GetMasterSwitch();
+		Notify();
 	}
 
 	/// <summary>A label for logs and notifications, so two houses can be told apart.</summary>

@@ -12,6 +12,7 @@ against each other.
 
 ## [Unreleased]
 
+- The house-wide adaptive lighting on/off switch no longer sits at the top of the house page. It moved into the existing "Master switch" fold, beside the setting that names which entity it controls: Configuration → House on the first design, Settings → House on Lamplight. (#186)
 - A house-mode scene stands instead of being undone in the same instant it runs. Entering a mode whose option names a scene (a sleep mode switching the house off, say) fired the scene and then, in the same pass, re-aimed every room the engine believed was active — so a room went dark and came straight back on at the new mode's levels. A room now takes up the scene as the look its lights carry: neither the mode change nor the tick behind it re-aims over the top of it, the vacancy countdown settles the room instead of running the warning dim through it, and a level test puts back what the fixtures showed rather than re-firing a house-wide scene. Movement, a hand at the switch or the next mode change hands the room back to the engine as before, and a mode that names no scene still retargets exactly as it did.
 
 ## [2026.9.21] - 2026-09-20
