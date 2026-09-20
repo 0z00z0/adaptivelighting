@@ -211,14 +211,18 @@ public sealed class PageConfirmationTests
 
 	private HousePageModel House()
 	{
-		LightingEngineHost host = Host(OneRoom());
+		AdaptiveLightingConfig document = OneRoom();
+		LightingEngineHost host = Host(document);
+		HaCatalog catalog = Catalog();
+		ModeService modes = new(_ha, new FakeAppConfig(document), catalog, host, NullLogger<ModeService>.Instance);
 
 		return new HousePageModel(
 			host,
-			Catalog(),
+			catalog,
 			new ConfigLocation(_path, ConfigLocationSource.External, null),
 			new HomeLocation(_ha),
 			_cache!,
+			modes,
 			NullLogger<HousePageModel>.Instance);
 	}
 

@@ -123,9 +123,33 @@
 	</div>
 </Fold>
 
-<Fold Id="master" Title="Master switch" Summary="@(Model.UsesBuiltInKillSwitch ? "this app's own switch" : Model.KillSwitchEntity)" Open="@IsOpen("master")" OpenChanged="@(open => SetOpen("master", open))">
+<Fold Id="master" Title="Master switch" Summary="@MasterSummary" Open="@IsOpen("master")" OpenChanged="@(open => SetOpen("master", open))">
+	@* The live control, not just its configuration: moved down from the dashboard card so the switch that
+	   pauses the whole house sits beside the setting that names it, rather than being the first thing on screen. *@
 	<div class="rows">
-		<Row Label="Master switch" Value="@(Model.EffectiveKillSwitchEntity ?? "not connected yet")" IsWide="true">
+		<Row Label="Adaptive lighting" Value="@MasterValue" IsWide="true">
+			<Help>@MasterHelp</Help>
+			<ChildContent>
+				@if (Model.MasterSwitch is { IsAvailable: true } master)
+				{
+					<button type="button"
+							class="toggle @(master.AdaptiveLightingOn ? "on" : null)"
+							role="switch"
+							aria-checked="@(master.AdaptiveLightingOn ? "true" : "false")"
+							aria-label="Adaptive lighting for the whole house"
+							disabled="@(!master.Toggle.CanToggle)"
+							title="@Model.MasterTitle"
+							@onclick="Model.ToggleMaster">
+						<span class="knob"></span>
+					</button>
+				}
+				else
+				{
+					<Chip Kind="idle" Word="unknown" />
+				}
+			</ChildContent>
+		</Row>
+		<Row Label="Which switch" Value="@(Model.EffectiveKillSwitchEntity ?? "not connected yet")" IsWide="true">
 			<Help>Which Home Assistant switch pauses everything. Left unset it uses this app's own switch.</Help>
 			<ChildContent>
 				<EntityPicker Value="@Model.KillSwitchEntity" ValueChanged="@Model.SetKillSwitchEntity" Options="@Model.Switches" NoneLabel="(default — this app's own enable switch)" EmptyNote="@Model.EmptyNote("No switches — type an id")" Placeholder="input_boolean.adaptive_lighting_enabled" />
@@ -304,6 +328,17 @@
 		("Engine", Model.EngineIsRunning ? Model.RoomsManagedLine : Model.EngineFault),
 		("Home Assistant", Model.HomeAssistantIsAnswering ? Model.AreasKnownLine : "not connected")
 	];
+
+	private string MasterSummary => Model.MasterSwitch is { IsAvailable: true } master
+		? (master.AdaptiveLightingOn ? "on" : "off")
+		: Model.UsesBuiltInKillSwitch ? "this app's own switch" : Model.KillSwitchEntity ?? "not connected yet";
+
+	private string MasterValue => Model.MasterSwitch is { IsAvailable: true } master
+		? (master.AdaptiveLightingOn ? "On" : "Off")
+		: "Unknown";
+
+	private string MasterHelp => Model.MasterNoteMore ??
+		"On means lights adjust automatically; off pauses everything at once — nothing is turned off, changes just stop.";
 
 	private string LevelsSummary => Model.Periods.Count switch
 	{
