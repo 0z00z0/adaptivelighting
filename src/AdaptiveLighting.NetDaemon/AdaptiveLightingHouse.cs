@@ -120,6 +120,10 @@ public static class AdaptiveLightingHouse
 	{
 		ArgumentNullException.ThrowIfNull(app);
 
+		// Before the endpoints, so its header rewrite covers every port this process listens on. It does nothing
+		// at all while the document names no address to embed from.
+		app.UseLightingFrameEmbedding();
+
 		// MapStaticAssets serves from the build-time asset manifest, which is what makes the class library's CSS and
 		// Blazor's own _framework/blazor.web.js resolve outside Development.
 		app.MapStaticAssets();

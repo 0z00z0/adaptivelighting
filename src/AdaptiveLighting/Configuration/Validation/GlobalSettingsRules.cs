@@ -24,6 +24,8 @@ internal static class GlobalSettingsRules
 		if (string.IsNullOrWhiteSpace(global.SunEntity))
 			result.AddError("Global.SunEntity is empty.");
 
+		ValidateEmbedFrom(global, result);
+
 		// MotionDeviceClasses is not checked for emptiness: empty means GlobalConfig.DefaultMotionDeviceClasses.
 
 		if (knownEntityIds is null)
@@ -61,6 +63,26 @@ internal static class GlobalSettingsRules
 				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not a sensor entity; the rooms that follow it have no lux reading and count as dark.");
 			else if (!knownEntityIds.Contains(outdoorLux))
 				result.AddWarning($"Global.OutdoorLuxSensor '{outdoorLux}' is not known to Home Assistant; the rooms that follow it count as dark until it appears.");
+		}
+	}
+
+	/// <summary>An address in the embed list that a browser could not match a frame's parent against.</summary>
+	/// <remarks>
+	///     A warning, like every other operator-typed address here: the unreadable entry is simply left out of the
+	///     header, the house runs, and refusing the save would block the page that fixes the typo.
+	/// </remarks>
+	private static void ValidateEmbedFrom(GlobalConfig global, ValidationResult result)
+	{
+		for (int i = 0; i < global.EmbedFrom.Count; i++)
+		{
+			string entry = global.EmbedFrom[i];
+
+			if (EmbedOrigin.TryRead(entry, out _))
+				continue;
+
+			result.AddWarning(string.IsNullOrWhiteSpace(entry)
+				? $"Global.EmbedFrom has an empty address at position {i + 1}; remove it."
+				: $"Global.EmbedFrom entry '{entry}' is not an address a browser can match, so it is left out. Write the scheme, host and port only, as in http://10.0.0.5:8123.");
 		}
 	}
 

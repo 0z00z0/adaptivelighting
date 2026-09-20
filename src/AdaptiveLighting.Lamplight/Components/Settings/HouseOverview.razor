@@ -202,6 +202,12 @@
 			<Help>A label for logs and notifications, so two houses can be told apart.</Help>
 			<ChildContent><input class="cell wide" value="@Model.HouseName" placeholder="Adaptive lighting" @onchange="args => Model.HouseName = args.Value as string" /></ChildContent>
 		</Row>
+		<Row Label="Embed in a dashboard" Value="@Model.EmbedFromValue" IsWide="true">
+			<Help>Home Assistant's own address, so a dashboard card can show these pages in a frame. Empty means no other site may. Home network only — a dashboard reached over https refuses a frame served over http. These pages have no login, and a frame adds none.</Help>
+			<ChildContent>
+				<EntityListPicker Value="@Model.EmbedFrom" ValueChanged="@Model.SetEmbedFrom" EmptyLabel="Nobody" EmptyNote="" Placeholder="http://10.0.0.5:8123" />
+			</ChildContent>
+		</Row>
 	</div>
 	<dl class="facts">
 		<dt>Version</dt><dd>@HousePageModel.Version</dd>

@@ -569,6 +569,16 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .cell.wide { min-width: min(22rem, 100%); max-width: 100%; }
 .unit { color: var(--ink-3); font-size: var(--t-xs); }
 
+/* EntityListPicker's chips are a list, while this sheet's .chip is a state pill with a painted mark in front of
+   it. Without this the picked values arrive bulleted, indented and each wearing a coloured square. */
+.chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chips .chip { background: var(--surface-2); font-weight: var(--w-med); white-space: normal; }
+.chips .chip::before { content: none; }
+.chip-id { font-family: var(--font-num); color: var(--ink-2); }
+.chip-remove { padding: 0 4px; border: 0; background: none; color: var(--ink-3); line-height: 1; }
+.list-empty { color: var(--ink-3); font-size: var(--t-xs); font-style: italic; }
+.picker-addrow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+
 .field { padding: 10px 0; border-top: 1px solid var(--line-soft); }
 .field:first-child { border-top: 0; padding-top: 0; }
 .field-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

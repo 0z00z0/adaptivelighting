@@ -12,7 +12,12 @@
 			@foreach (string entityId in Value)
 			{
 				<li class="chip @(Known(entityId) ? "" : "chip-bad")">
-					<span class="chip-name">@NameOf(entityId)</span>
+					@* An id nothing can name, and a value that is not an entity at all, both name themselves.
+					   Rendering the span too would print the same text twice in one chip. *@
+					@if (NameOf(entityId) is { } name && !string.Equals(name, entityId, StringComparison.Ordinal))
+					{
+						<span class="chip-name">@name</span>
+					}
 					<code class="chip-id">@entityId</code>
 					<button type="button" class="chip-remove" title="Remove" aria-label="@($"Remove {NameOf(entityId)}")" @onclick="() => Remove(entityId)">&times;</button>
 				</li>
@@ -53,11 +58,15 @@
 			</select>
 		}
 
-		<button type="button" class="picker-mode" @onclick="ToggleMode" disabled="@(!HasOptions)">
-			@(_manual ? "Pick from list" : "Type an id")
-		</button>
-
-		@if (!HasOptions)
+		@* Both only mean something where there is a list to pick from. With none, the box is the only way in, and
+		   a disabled toggle beside it says so twice. *@
+		@if (HasOptions)
+		{
+			<button type="button" class="picker-mode" @onclick="ToggleMode">
+				@(_manual ? "Pick from list" : "Type an id")
+			</button>
+		}
+		else if (EmptyNote is { Length: > 0 })
 		{
 			<span class="picker-note">@EmptyNote</span>
 		}
