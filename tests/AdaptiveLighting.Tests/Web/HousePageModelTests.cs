@@ -231,6 +231,7 @@ public sealed class HousePageModelTests
 			_provider.GetRequiredService<IServiceScopeFactory>(),
 			NullLogger<AreaSnapshotCache>.Instance,
 			new ActivityLog());
+		ModeService modes = new(ha, new FakeAppConfig(Document()), catalog, _engine, NullLogger<ModeService>.Instance);
 
 		return new HousePageModel(
 			_engine,
@@ -238,6 +239,7 @@ public sealed class HousePageModelTests
 			new ConfigLocation(_path, ConfigLocationSource.External, null),
 			new HomeLocation(ha),
 			cache,
+			modes,
 			NullLogger<HousePageModel>.Instance);
 	}
 }

@@ -9,6 +9,7 @@
 @inject ConfigLocation Location
 @inject HomeLocation HomeGeo
 @inject AreaSnapshotCache Cache
+@inject ModeService Modes
 @inject ILogger<HousePageModel> Logger
 @inject IJSRuntime Js
 
@@ -174,7 +175,7 @@ else
 	/// <inheritdoc/>
 	protected override void OnInitialized()
 	{
-		_model = new HousePageModel(Engine, Catalog, Location, HomeGeo, Cache, Logger);
+		_model = new HousePageModel(Engine, Catalog, Location, HomeGeo, Cache, Modes, Logger);
 		_model.Changed += Redraw;
 		_model.Start(SectionQuery);
 	}

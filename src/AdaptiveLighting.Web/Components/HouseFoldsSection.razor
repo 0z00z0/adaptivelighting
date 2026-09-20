@@ -246,12 +246,52 @@
 
 <GroupFold Title="Master switch"
 		   Description="pauses everything">
+	@* The live control, not just its configuration: moved down from the dashboard's header so the switch that
+	   pauses the whole house sits beside the setting that names it, rather than being the first thing on screen. *@
 	<div class="field">
 		<div class="field-head">
-			<span class="field-label"><label for="kill-switch-entity">Master switch</label>
-				<InfoPopover Label="Master switch">
+			<span class="field-label">Adaptive lighting</span>
+		</div>
+		<div class="field-control">
+			@if (Model.MasterSwitch is { IsAvailable: true } master)
+			{
+				<button type="button"
+						class="switch @(master.AdaptiveLightingOn ? "on" : null)"
+						role="switch"
+						aria-checked="@(master.AdaptiveLightingOn ? "true" : "false")"
+						aria-label="Adaptive lighting for the whole house"
+						disabled="@(!master.Toggle.CanToggle)"
+						title="@Model.MasterTitle"
+						@onclick="Model.ToggleMaster">
+					<span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+					<span class="switch-word">@(master.AdaptiveLightingOn ? "on" : "off")</span>
+				</button>
+			}
+			else
+			{
+				<span class="badge" title="@Model.MasterTitle">unknown</span>
+			}
+		</div>
+		@if (Model.MasterNote is { Length: > 0 } note)
+		{
+			<div class="field-help info-host">
+				<span class="info-line">
+					@note
+					@if (Model.MasterNoteMore is { Length: > 0 } more)
+					{
+						<InfoPopover Label="Adaptive lighting" Severity="@Model.MasterNoteSeverity">@more</InfoPopover>
+					}
+				</span>
+			</div>
+		}
+	</div>
+
+	<div class="field">
+		<div class="field-head">
+			<span class="field-label"><label for="kill-switch-entity">Which switch</label>
+				<InfoPopover Label="Which switch">
 					Which Home Assistant switch pauses everything. Left unset it uses this app's own switch,
-					which is what the dashboard's On/Off control flips. Point it at your own toggle to gate the
+					which is what the switch above flips. Point it at your own toggle to gate the
 					app on something else &mdash; an alarm state, a holiday helper. On means lights adjust
 					automatically; off pauses everything at once &mdash; nothing is turned off, changes just stop.
 					@if (!Model.UsesBuiltInKillSwitch)

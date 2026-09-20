@@ -303,7 +303,8 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 |---|---|---|---|
 | **Who lives here** | Whose phones are watched, so the dashboard can show who is home. Shown, never acted on — the house mode dropdown decides Home and Away. Empty means everyone Home Assistant knows, including people added later. | empty | `Persons` |
 | **Show the house as empty after** | How long everyone must be gone before the dashboard calls the house empty. Nothing is switched on the strength of it. | 5 min | `AwayDebounceMinutes` |
-| **Master switch** | The entity that pauses everything. Left at the default, the app's own enable switch in Home Assistant is used — turning that one off pauses the app, this page included. | the app's own switch | `KillSwitchEntity` |
+| **Adaptive lighting** | The live on/off control, in the same "Master switch" section: pauses or resumes the entity named below. | on | *(live, not stored)* |
+| **Which switch** | The entity that pauses everything. Left at the default, the app's own enable switch in Home Assistant is used — turning that one off pauses the app, this page included. | the app's own switch | `KillSwitchEntity` |
 | Which way round it reads | Offered only once you pick your own entity: *read as an enabled flag — off kills the engine*, or *read as a kill switch — on kills the engine*. | enabled flag | `KillSwitchActiveWhenOff` |
 | **House name** | A label for logs and notifications, so two houses can be told apart. | "Adaptive lighting" | `ConfigName` |
 
