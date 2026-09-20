@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.9.23] - 2026-09-20
+
 - The lighting pages can be shown inside a Home Assistant dashboard. A new house setting, "Embed in a dashboard" on the house page in both designs (`Global.EmbedFrom`), takes the addresses allowed to frame them — Home Assistant's own, typically. Set, the response allows a frame from this site and from each address given, and stops sending `X-Frame-Options`, which carries one same-origin source and would refuse the frame on its own. Empty, which is the default, every header is exactly what it was. The list is read on each response, so an address added and saved takes effect without a restart, and both designs' ports are covered by the one change. Embedding works on the home network: a dashboard reached over `https` will not frame a page served over `http`. It adds no protection either, since these pages have no login.
 - A picked value in a list no longer prints twice when it has no name of its own to show, and the picker no longer offers a disabled "Type an id" button where there is nothing to pick from. In Lamplight, picked values now render as chips rather than as a bulleted, indented list with a coloured square on each — that stylesheet had no rule for the picker's own list, so its state-pill styling was landing on them.
 
