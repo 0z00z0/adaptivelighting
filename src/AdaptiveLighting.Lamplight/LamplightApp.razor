@@ -4,7 +4,9 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<base href="/" />
+	@* Home Assistant's ingress strips a per-installation prefix and names it in a header, so this is read per
+		request and never configured. Without the header it is "/" and nothing about the page changes. *@
+	<base href="@IngressBasePath.For(HttpContext)" />
 	<title>Adaptive lighting</title>
 	@* Before lamplight.css, so this design's own rules win a tie with a shared control's. *@
 	<link rel="stylesheet" href="@($"_content/AdaptiveLighting.Web/controls.css?v={AssetToken.Text}")" />
@@ -25,3 +27,8 @@
 </body>
 
 </html>
+
+@code {
+	[CascadingParameter]
+	private HttpContext? HttpContext { get; set; }
+}

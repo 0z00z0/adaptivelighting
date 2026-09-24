@@ -2066,6 +2066,42 @@ Two facts about what this does and does not buy:
 - **It adds no protection and removes none.** These pages have no login. Framing them exposes nothing that
   reaching them directly did not.
 
+### Serving Lamplight behind Home Assistant's ingress
+
+Ingress is how Home Assistant puts an add-on's own pages in its sidebar. It proxies them under a path that is
+minted per installation, `/api/hassio_ingress/<token>`, and **strips that path before the request reaches the
+add-on**. So routing is untouched: the app is matched exactly as if it sat at the root of its own address, and
+`UsePathBase` is the wrong tool — it would strip a prefix that has already gone.
+
+What does move is what the browser resolves relative links against. Every stylesheet, font, page link and the
+Blazor circuit's own `_blazor` address is written relative in Lamplight, so with `<base href="/">` they all
+resolve into Home Assistant's own root and nothing loads.
+
+- **The header is `X-Ingress-Path`, and Home Assistant Core sends it, not the Supervisor.**
+  `homeassistant/components/hassio/ingress.py` sets it to `/api/hassio_ingress/<token>`, **with no trailing
+  slash**. The Supervisor's own proxy adds `X-Remote-User-*` and `X-Forwarded-For` and nothing about the path,
+  so looking there alone finds nothing. The developer documentation, "Presenting your add-on", names the same
+  header.
+- **`IngressBasePath` turns that value into the page's base address**, adding the trailing slash the header
+  omits. Without it the last segment of the prefix is dropped from every relative link on the page.
+- **A value outside a narrow shape is treated as absent, never as an error.** It reaches the app from the
+  browser's side of a proxy and these pages have no login, so it has to start with a single `/`, hold nothing
+  but ASCII letters, digits, `-`, `_`, `.`, `~` and `/`, contain no `//` and no `..` segment, and be at most
+  256 characters. Anything else renders `/`, which is what the page did before ingress existed. Failing the
+  page instead would hand a caller a way to break the UI with one header.
+- **The value is read per request**, as a cascading `HttpContext` in `LamplightApp.razor`. The prefix differs
+  per installation and changes when the token is reissued; nothing is configured and nothing is cached. A
+  Blazor Server circuit takes its base address from the page that opened it, so the circuit follows.
+- **A rooted link defeats all of this.** `<a href="/">` leaves the site for Home Assistant's own root whatever
+  the base says. Lamplight writes the dashboard link as `href=""`, which resolves to the base.
+
+**This is one half of the work.** The other half — the Home Assistant add-on that declares `ingress: true` and
+puts Lamplight in the sidebar — lives outside this repository. Nothing here depends on it: without the header
+the served page is byte-identical to what it was, bar `<base href="/">` now rendering as `<base href="/" />`.
+
+**Today's design is not covered.** `AdaptiveLighting.Web` still declares a fixed `<base href="/">` and links
+its dashboard with a rooted `href="/"`, so it is not ingress-ready.
+
 ### The shared controls' stylesheet
 
 The leaf controls and charts both designs use (steppers, number boxes, preset sliders, the pickers, the levels
