@@ -1,9 +1,10 @@
-using AdaptiveLighting.Lamplight;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Primitives;
 
 namespace AdaptiveLighting.Tests.Web;
 
-/// <summary>The base address Lamplight's pages declare. The header arrives from the client's side of a proxy
-/// and this UI has no login of its own, so anything outside the allowed shape has to read as no prefix at all.</summary>
+/// <summary>What the base address resolves to for an ingress header of the right shape, the wrong shape,
+/// absent, or repeated.</summary>
 [TestClass]
 public sealed class IngressBasePathTests
 {
@@ -31,5 +32,32 @@ public sealed class IngressBasePathTests
 		Assert.AreEqual("/api/hassio_ingress/faketoken123/", IngressBasePath.Resolve("/api/hassio_ingress/faketoken123"));
 		Assert.AreEqual("/api/hassio_ingress/faketoken123/", IngressBasePath.Resolve("/api/hassio_ingress/faketoken123/"));
 		Assert.AreEqual("/", IngressBasePath.Resolve("/"));
+	}
+
+	[TestMethod]
+	public void No_Request_And_No_Header_Both_Leave_The_Base_At_The_Root()
+	{
+		Assert.AreEqual("/", IngressBasePath.For(null));
+		Assert.AreEqual("/", IngressBasePath.For(new DefaultHttpContext()));
+	}
+
+	[TestMethod]
+	public void The_Header_Is_Read_Off_The_Request_Under_Its_Own_Name()
+	{
+		// Indexed by the constant, so a header name that drifts from it fails here instead of only in a browser.
+		DefaultHttpContext context = new();
+		context.Request.Headers[IngressBasePath.HeaderName] = "/api/hassio_ingress/faketoken123";
+
+		Assert.AreEqual("/api/hassio_ingress/faketoken123/", IngressBasePath.For(context));
+	}
+
+	[TestMethod]
+	public void A_Header_Sent_Twice_Leaves_The_Base_At_The_Root()
+	{
+		// Two values of one header read back comma-joined, and the comma is outside the allowed characters.
+		DefaultHttpContext context = new();
+		context.Request.Headers[IngressBasePath.HeaderName] = new StringValues(["/a", "/b"]);
+
+		Assert.AreEqual("/", IngressBasePath.For(context));
 	}
 }

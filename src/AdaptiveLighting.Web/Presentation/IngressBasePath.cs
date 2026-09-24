@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Http;
 
-namespace AdaptiveLighting.Lamplight;
+namespace AdaptiveLighting.Web.Presentation;
 
 /// <summary>The address Lamplight's pages declare as their base, taken from Home Assistant's ingress header.</summary>
 /// <remarks>Home Assistant strips the per-installation prefix before the request arrives, so routing is
@@ -24,11 +24,9 @@ public static class IngressBasePath
 		context is null ? Root : Resolve(context.Request.Headers[HeaderName]);
 
 	/// <summary>The base address a header value asks for, or <see cref="Root"/> when it asks for nothing safe.</summary>
-	/// <remarks>The value arrives from the client's side of a proxy and this UI has no login of its own, so
-	/// anything outside the allowed shape is treated as absent and never as an error that breaks the page.</remarks>
 	public static string Resolve(string? header)
 	{
-		if (header is not { Length: > 0 } prefix || prefix.Length > MaxLength)
+		if (header is not { Length: > 0 and <= MaxLength } prefix)
 			return Root;
 
 		if (prefix[0] != '/' || prefix.Contains("//", StringComparison.Ordinal))
@@ -42,11 +40,10 @@ public static class IngressBasePath
 				return Root;
 		}
 
-		foreach (string segment in prefix.Split('/'))
-		{
-			if (string.Equals(segment, "..", StringComparison.Ordinal))
-				return Root;
-		}
+		// Only sound because the leading '/' is already checked above: every segment is slash-delimited on both
+		// sides, or is the last one.
+		if (prefix.Contains("/../", StringComparison.Ordinal) || prefix.EndsWith("/..", StringComparison.Ordinal))
+			return Root;
 
 		return prefix.EndsWith('/') ? prefix : prefix + "/";
 	}
