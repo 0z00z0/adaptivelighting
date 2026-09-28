@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/0z00z0/adaptivelighting/actions/workflows/ci.yml/badge.svg)](https://github.com/0z00z0/adaptivelighting/actions/workflows/ci.yml) &nbsp;·&nbsp; .NET 10 &nbsp;·&nbsp; MIT licence &nbsp;·&nbsp; Preview
 
-<!-- screenshot: a hero shot of the board — room lanes on a shared time axis. Drop it here once captured. -->
+![The dashboard: six rooms on a shared timeline, with the activity log underneath](docs/images/dashboard.png)
 
 Lights come on when you enter a room, dim as a warning before switching off so they never drop on someone sitting still, and back off the moment you touch a switch. When the house empties they sweep off; the first person home is met by the entry lights. A browser UI sets the whole thing up — no hand-edited YAML required.
 
@@ -48,29 +48,43 @@ Lights come on when you enter a room, dim as a warning before switching off so t
 
 ## Install
 
-> **These packages live on GitHub Packages, not on nuget.org.** `dotnet add package` will not find them until you add the feed.
->
-> GitHub asks for a sign-in on every read, even for a public package from an MIT repo, so a [personal access token](https://github.com/settings/tokens) with the **`read:packages`** scope is required, plus one line in your own `nuget.config`:
->
-> ```xml
-> <packageSources>
->   <add key="0z00z0" value="https://nuget.pkg.github.com/0z00z0/index.json" />
-> </packageSources>
-> ```
->
-> Then store the token once, and leave it out of any file you commit:
->
-> ```bash
-> dotnet nuget update source 0z00z0 --username YOUR_GITHUB_USERNAME --password YOUR_TOKEN --store-password-in-clear-text
-> ```
->
-> Latest release: **2026.9.23**, on the feed above. Omit the version to take whatever is newest.
+> [!CAUTION]
+> **The packages are currently private.** A `read:packages` token restores them only for an account the `0z00z0` organisation has explicitly granted — not yet a path anyone else can follow. Tracked as [issue #33](https://github.com/0z00z0/adaptivelighting/issues/33); nothing below works until that's lifted.
+
+Four things, in order.
+
+**1. A Home Assistant instance running the [NetDaemon](https://netdaemon.xyz) V6 add-on.** Install that first if it isn't there already, plus a Home Assistant [long-lived access token](https://www.home-assistant.io/docs/authentication/#your-account-profile).
+
+**2. This repository**, for the smallest working host — three files, already wired up:
+
+```bash
+git clone https://github.com/0z00z0/adaptivelighting
+cd adaptivelighting/samples/MinimalHost
+```
+
+**3. A [personal access token](https://github.com/settings/tokens)** with the **`read:packages`** scope — GitHub asks for a sign-in on every package read, public or not — plus one line in a `nuget.config` beside the project:
+
+```xml
+<packageSources>
+  <add key="0z00z0" value="https://nuget.pkg.github.com/0z00z0/index.json" />
+</packageSources>
+```
+
+Then store the token once, and leave it out of anything committed:
+
+```bash
+dotnet nuget update source 0z00z0 --username YOUR_GITHUB_USERNAME --password YOUR_TOKEN --store-password-in-clear-text
+```
+
+**4. The package.** Latest release: **2026.9.23**. Omit the version to take whatever is newest.
 
 ```bash
 dotnet add package AdaptiveLighting.NetDaemon   # engine + UI + host wiring, one reference
 ```
 
 Or take the pieces on their own — `AdaptiveLighting` for the engine with no web surface at all, `AdaptiveLighting.Web` to add the UI and wire the host yourself.
+
+Wiring the package into a running host — the code, not the feed — is [Quick start](#quick-start) below.
 
 ## Quick start
 
