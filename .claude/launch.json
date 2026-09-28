@@ -6,6 +6,12 @@
 			"runtimeExecutable": "dotnet",
 			"runtimeArgs": ["run", "--project", "tools/uihost"],
 			"port": 5199
+		},
+		{
+			"name": "uihost-lit",
+			"runtimeExecutable": "dotnet",
+			"runtimeArgs": ["run", "--project", "tools/uihost", "--", "--house", "lit"],
+			"port": 5199
 		}
 	]
 }
