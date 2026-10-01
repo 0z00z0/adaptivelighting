@@ -104,11 +104,14 @@ internal sealed class TargetResolver
 	{
 		double brightness = target.Clamp(target.BrightnessPct * brightnessFactor);
 
-		// A level landing on raw 0 goes out as an off. Home Assistant carries out a turn-on at nothing as a
-		// turn-off, so an on-expectation would go unmatched and the area would read its own work as a hand at
-		// the switch.
-		if (RawBrightness.FromPercent(brightness) <= 0)
+		// Zero and nothing else goes out as an off. A positive target below one raw step is floored up to it
+		// instead: Home Assistant turns a light off on a turn-on naming raw 0, so sending that for the first
+		// minutes of a slow fade-in left the room dark until the curve cleared the step on its own.
+		if (brightness <= 0)
 			return LightCommand.TurnOff(_transitionSeconds());
+
+		if (RawBrightness.FromPercent(brightness) <= 0)
+			brightness = RawBrightness.ToPercent(1);
 
 		bool equalChannels = _area.CommandsColour && _area.EffectiveColorControl is ColorControl.EqualChannels;
 
