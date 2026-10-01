@@ -10,8 +10,9 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
-## [Unreleased]
+## [2026.10.0] - 2026-10-01
 
+- A room fading up from off no longer stays dark through the first stretch of a slow fade-in. A target above 0% but below the dimmest brightness a light can report used to be sent as a turn-off, the same as a genuinely configured zero level — and a turn-off a light already satisfies is never sent, so the room stayed off until the fade's own climb happened to clear that rounding step on its own, which could take several minutes on a long fade. The lowest representable step is now sent instead.
 - Lamplight can be served behind Home Assistant's ingress, which puts an add-on's pages under a per-installation address rather than on a port of their own. Home Assistant removes that address from the request and names it in the `X-Ingress-Path` header; Lamplight reads the header on each page load and declares it as the page's base address, so every link, stylesheet, font and the live connection back to the server resolve under it instead of landing in Home Assistant's own root. A header naming anything other than a plain path — a scheme, another host, a `..` segment, a doubled slash, no leading slash, or one longer than 256 characters — is treated as no header at all, because this UI has no login and the header arrives from the browser's side of the proxy. Without the header nothing changes. The help text on Lamplight's House modes tab used to link back to the dashboard with a rooted address, which under ingress left the site; it now resolves against the page's base like every other link. The Home Assistant side of this, the add-on that puts the pages in the sidebar, lives outside this repository.
 
 ## [2026.9.23] - 2026-09-20
