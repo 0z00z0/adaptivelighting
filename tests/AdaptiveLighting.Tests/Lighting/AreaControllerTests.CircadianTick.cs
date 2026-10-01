@@ -124,6 +124,23 @@ public sealed partial class AreaControllerTests
 		Assert.AreEqual(AreaState.AutoActive, t.Area.State, "the area is still running the state machine");
 	}
 
+	/// <summary>A target between zero and one raw step is still a light that should be on, however dim.</summary>
+	[TestMethod]
+	public void A_Positive_Target_Below_One_Raw_Step_Still_Commands_The_Dimmest_Step()
+	{
+		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
+		{
+			new() { Name = "dim", Start = "00:00", BrightnessPct = 0.1, ColorTempKelvin = 2200 }
+		};
+		Fixture t = Build(periods: periods);
+
+		t.Ha.Trigger(Motion, "on");
+
+		Assert.IsTrue(
+			t.Actuator.Applied.Any(a => a.Command.On && a.Command.BrightnessPct == RawBrightness.ToPercent(1)),
+			"0.1% rounds to raw 0 and must not be read as off");
+	}
+
 	[TestMethod]
 	public void A_Tick_That_Changes_Nothing_Sends_Nothing()
 	{
