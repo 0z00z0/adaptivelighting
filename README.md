@@ -76,7 +76,7 @@ Then store the token once, and leave it out of anything committed:
 dotnet nuget update source 0z00z0 --username YOUR_GITHUB_USERNAME --password YOUR_TOKEN --store-password-in-clear-text
 ```
 
-**4. The package.** Latest release: **2026.9.23**. Omit the version to take whatever is newest.
+**4. The package.** Latest release: **2026.10.0**. Omit the version to take whatever is newest.
 
 ```bash
 dotnet add package AdaptiveLighting.NetDaemon   # engine + UI + host wiring, one reference
