@@ -1007,12 +1007,12 @@ engine can get. `ChangeOriginNames` does the naming and nothing else: whether th
 
 | Origin | Words | Read off |
 |---|---|---|
-| Automation | "By automation: <name>" | the `automation_triggered` event whose context id is the change's own, else its parent's |
-| A person using Home Assistant | "By <name>" | the `person` entity whose `user_id` attribute is the context's user |
+| Automation | "By automation: <name>", unnamed "By an automation" | the `automation_triggered` event whose context id is the change's own, else its parent's |
+| A person using Home Assistant | "By <name>", unnamed "By a Home Assistant user" | the `person` entity whose `user_id` attribute is the context's user |
 | A wall switch or the device itself | "At the device or wall switch" | a context with neither user nor parent |
 | The engine | "By adaptive lighting" | the engine's own last command, on the room page's *Last changed* only |
 
-- A name that cannot be found leaves the row worded as before, with no second line. An automation run from
+- A name that cannot be found still names the kind of cause, never a guessed name. An automation run from
   before the engine started, or more than `ChangeOriginNames.RememberedRuns` (256) runs ago, has no name.
 - Home Assistant fires `automation_triggered` as a run starts, before its actions, and NetDaemon hands the app
   events and state changes from one ordered stream. The name is therefore known when the change is classified.
@@ -1031,6 +1031,24 @@ engine can get. `ChangeOriginNames` does the naming and nothing else: whether th
   run's burst of attribute updates is one row.
 - `ChangedBy` and `ChangedAt` ride every snapshot as `changed_by` and `changed_at`. Neither is compared in
   `HasSameMeaningAs`; they describe the report.
+
+### A held room reports the level its lights were found at
+
+In `OverriddenOn` the engine's last command says nothing about the lights, so the snapshot's brightness and
+colour temperature are read off the room's lights as they stand: the mean of the lights that are on, and `null`
+for a value none of them reports. Every other state keeps the last command. `LightLevels` is unchanged.
+
+- **A further manual-on in a room already held is published only once the lights have been still for
+  `AreaController.ManualSettleSeconds` (5 s).** The first manual-on that enters the hold publishes at once. The
+  hold's countdown still restarts on every change.
+- Why: every published snapshot is one activity row, `ActivityLog` keeps 500, and the level is now part of the
+  compared meaning. One group reporting about once a second wrote 6402 manual-change lines in 33 minutes; a row
+  per report would empty the log of everything else within minutes.
+- The periodic re-check still publishes while a device keeps reporting, because the level and the deadline have
+  moved since the last row. On the test scheduler a report every second for 33 minutes gives 33 rows, one per
+  `CircadianTickSeconds` (60 s), and the settled row only once the device goes quiet.
+- A light on with no brightness attribute gives a `null` level, so a room held on such lights alone does not
+  read as lit.
 
 ### A bulb leaving or rejoining its group is not a hand
 
@@ -2624,6 +2642,7 @@ document settles on what both surfaces already show.
 | 10000 | `FakeHaContext.DefaultStateReadBudget` | the suite's busiest legitimate fixture use, a virtual-time simulation polling state every tick, tops out at 2821 reads; the default is on for every fixture and over 3x that widest measured use |
 | unpadded month | version format `YYYY.M.patch` | `2026.08.0` was the first calendar-versioned release, tagged with a zero-padded month for string sort order; the published NuGet packages came back as `2026.8.0` regardless, because NuGet strips a leading zero from each numeric segment on publish. From the next release on, the tag and the packages agree by not padding in the first place |
 | 64 | remembered snapshot timestamps, `OwnUser` | enough to cover every room's opening snapshot in one start |
+| 5 s | `AreaController.ManualSettleSeconds` | long enough to swallow a dimmer being turned or a device reporting every second, short enough that the settled level reaches the log while the person is still looking |
 | 20 % | low battery level | warns with time to replace the battery before most sensors stop reporting; used only where the device has no low-battery flag of its own |
 
 ---

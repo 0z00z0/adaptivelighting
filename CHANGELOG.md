@@ -10,6 +10,10 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
+## [Unreleased]
+
+- When a person, an automation or a device sets a room's lights, the activity rows and the room's history now show the brightness and colour temperature the lights were found at, and such a room reads as lit. The row names the cause even when the user or automation cannot be named ("By a Home Assistant user", "By an automation"). A device that reports every second no longer fills the history with a row per report: further changes are written once the lights have been still for 5 seconds.
+
 ## [2026.10.0] - 2026-10-01
 
 - A room fading up from off no longer stays dark through the first stretch of a slow fade-in. A target above 0% but below the dimmest brightness a light can report used to be sent as a turn-off, the same as a genuinely configured zero level — and a turn-off a light already satisfies is never sent, so the room stayed off until the fade's own climb happened to clear that rounding step on its own, which could take several minutes on a long fade. The lowest representable step is now sent instead.

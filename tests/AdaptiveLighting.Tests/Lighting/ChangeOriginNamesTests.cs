@@ -11,7 +11,7 @@ namespace AdaptiveLighting.Tests.Lighting;
 public sealed class ChangeOriginNamesTests
 {
 	[TestMethod]
-	public void An_Automation_Is_Named_After_The_Run_Whose_Context_The_Change_Carries()
+	public void An_Automation_Is_Named_After_Its_Run_Or_Called_An_Automation_When_The_Run_Was_Not_Seen()
 	{
 		FakeHaContext ha = new();
 		using ChangeOriginNames names = new(ha, NullLogger.Instance);
@@ -26,19 +26,21 @@ public sealed class ChangeOriginNamesTests
 		Assert.AreEqual("By automation: Evening lights",
 			names.Describe(ChangeOrigin.Automation, new Context { Id = "script-run", ParentId = "run" }),
 			"a script the automation called is named after the automation, one level up as the logbook looks");
-		Assert.IsNull(names.Describe(ChangeOrigin.Automation, new Context { Id = "other-run", ParentId = "other-trigger" }),
-			"a run the engine never saw has no name, so the row keeps its old wording rather than naming the wrong one");
+		Assert.AreEqual("By an automation",
+			names.Describe(ChangeOrigin.Automation, new Context { Id = "other-run", ParentId = "other-trigger" }),
+			"a run the engine never saw still names its kind of cause, never the wrong automation");
 	}
 
 	[TestMethod]
-	public void A_Person_Is_Named_After_The_Person_Entity_Carrying_Their_User_Id()
+	public void A_Person_Is_Named_After_Their_Person_Entity_Or_Called_A_Home_Assistant_User_Without_One()
 	{
 		FakeHaContext ha = new();
 		ha.SetState("person.alex", "home", new() { ["user_id"] = "user-1", ["friendly_name"] = "Alex" });
 		using ChangeOriginNames names = new(ha, NullLogger.Instance);
 
 		Assert.AreEqual("By Alex", names.Describe(ChangeOrigin.HaUser, new Context { Id = "c", UserId = "user-1" }));
-		Assert.IsNull(names.Describe(ChangeOrigin.HaUser, new Context { Id = "c", UserId = "user-with-no-person" }));
+		Assert.AreEqual("By a Home Assistant user",
+			names.Describe(ChangeOrigin.HaUser, new Context { Id = "c", UserId = "user-with-no-person" }));
 		Assert.AreEqual("At the device or wall switch", names.Describe(ChangeOrigin.PhysicalDevice, new Context { Id = "c" }));
 	}
 }

@@ -743,7 +743,7 @@ public static class ActivityView
 			: "Movement nearby",
 		TransitionReason.LeadInUnanswered => "Nobody came in — lights off",
 		TransitionReason.AutomationIgnored => "Automation change, not counted as manual",
-		TransitionReason.ManualOn => "Lights set manually",
+		TransitionReason.ManualOn => Lit("Lights set manually", snapshot),
 		TransitionReason.ManualOff => "Lights switched off manually",
 		TransitionReason.OverrideExpired => "The manual change ran its course",
 		TransitionReason.SuppressionLifted => "Quiet long enough — back on automatic",
