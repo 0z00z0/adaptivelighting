@@ -4,6 +4,10 @@ using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Web.Services;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
+using NetDaemon.HassModel;
+
 namespace AdaptiveLighting.Tests.Lighting;
 
 /// <summary>The activity page's buffer and the words it builds, as pure functions outside the markup.</summary>
@@ -643,6 +647,21 @@ public sealed class ActivityLogTests
 			isDark: true, brightness: 70, kelvin: 2700, autoOnBlockedBy: AutoOnBlock.None);
 
 		Assert.AreEqual("Movement — lights on at 70 %, 2700 K", ActivityView.Describe(lit).What);
+	}
+
+	[TestMethod]
+	public void A_Manual_Change_Names_The_Level_Found_And_A_Cause_Even_When_The_User_Is_Unnamed()
+	{
+		using ChangeOriginNames names = new(new FakeHaContext(), NullLogger.Instance);
+		AreaSnapshot held = Report("Stue", AreaState.OverriddenOn, TransitionReason.ManualOn, brightness: 147 / 255.0 * 100) with
+		{
+			ChangedBy = names.Describe(ChangeOrigin.HaUser, new Context { Id = "c", UserId = "user-with-no-person" })
+		};
+
+		ActivityLine line = ActivityView.Describe(held);
+
+		Assert.AreEqual("Lights set manually at 58 %", line.What);
+		Assert.AreEqual("By a Home Assistant user", line.Why);
 	}
 
 	/// <summary>Puts a refused movement into words.</summary>

@@ -52,13 +52,17 @@ public sealed class ChangeOriginNames : IDisposable
 		}
 	}
 
-	/// <summary>Who caused a change, in the activity log's words, or <c>null</c> when no name can be put to it.</summary>
+	public const string ByAnAutomation = "By an automation";
+
+	public const string ByAHomeAssistantUser = "By a Home Assistant user";
+
+	/// <summary>Who caused a change, in the activity log's words, or <c>null</c> for an origin with no words.</summary>
 	public string? Describe(ChangeOrigin origin, Context? context) => origin switch
 	{
 		ChangeOrigin.Self => ByTheEngine,
 		ChangeOrigin.PhysicalDevice => AtTheDevice,
-		ChangeOrigin.Automation => AutomationName(context) is { } automation ? $"By automation: {automation}" : null,
-		ChangeOrigin.HaUser => PersonName(context?.UserId) is { } person ? $"By {person}" : null,
+		ChangeOrigin.Automation => AutomationName(context) is { } automation ? $"By automation: {automation}" : ByAnAutomation,
+		ChangeOrigin.HaUser => PersonName(context?.UserId) is { } person ? $"By {person}" : ByAHomeAssistantUser,
 		_ => null
 	};
 

@@ -1,3 +1,4 @@
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Tests.Common;
 
@@ -155,5 +156,44 @@ public sealed partial class AreaControllerTests
 			start + TimeSpan.FromSeconds(30) + TimeSpan.FromMinutes(2) + TimeSpan.FromMinutes(5),
 			t.Publisher.Snapshots[^1].NextChangeAt,
 			"a deadline that moved has to be republished, or the page counts down to a moment nothing happens at");
+	}
+
+	[TestMethod]
+	public void A_Hand_Lighting_An_Idle_Room_Publishes_The_Level_The_Lights_Were_Found_At()
+	{
+		AreaFixture t = Build();
+
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 147 }, PhysicalDevice());
+
+		AreaSnapshot held = t.Publisher.Snapshots[^1];
+		Assert.AreEqual(AreaState.OverriddenOn, held.State);
+		Assert.AreEqual(57.6, held.BrightnessPct ?? 0, 0.1, "147 of 255 read off the light, which the engine never commanded");
+		Assert.IsTrue(held.IsLit);
+	}
+
+	// One group reporting about once a second for 33 minutes wrote 6402 manual changes.
+	[TestMethod]
+	public void A_Burst_Of_Manual_Changes_Publishes_On_Entry_And_Once_More_When_Settled()
+	{
+		AreaFixture t = Build();
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 100 }, PhysicalDevice());
+		int entered = t.Publisher.Snapshots.Count;
+
+		for (int step = 1; step <= 10; step++)
+		{
+			Advance(t, TimeSpan.FromMilliseconds(400));
+			t.Ha.Trigger(Light, "on", new() { ["brightness"] = 100 + (step * 10) }, PhysicalDevice());
+		}
+
+		Assert.AreEqual(entered, t.Publisher.Snapshots.Count, "nothing is published while the levels are still moving");
+
+		Advance(t, TimeSpan.FromSeconds(4.9));
+		Assert.AreEqual(entered, t.Publisher.Snapshots.Count, "the five seconds run from the last change");
+
+		Advance(t, TimeSpan.FromSeconds(0.1));
+		Assert.AreEqual(2, t.Publisher.Snapshots.Count(snapshot => snapshot.Reason == TransitionReason.ManualOn));
+		AreaSnapshot settled = t.Publisher.Snapshots[^1];
+		Assert.AreEqual(TransitionReason.ManualOn, settled.Reason);
+		Assert.AreEqual(200 / 255.0 * 100, settled.BrightnessPct ?? 0, 0.01, "the settled row carries the last level");
 	}
 }

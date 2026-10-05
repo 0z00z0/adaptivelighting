@@ -49,6 +49,9 @@ public sealed class AreaController : IDisposable
 	private readonly SerialDisposable _vacancyTimer = new();
 	private readonly SerialDisposable _preOffTimer = new();
 	private readonly SerialDisposable _overrideTimer = new();
+
+	// Not a state timer: never arm it through ArmCountdown, which would overwrite the published deadline.
+	private readonly SerialDisposable _settleTimer = new();
 	private readonly SerialDisposable _suppressionTimer = new();
 
 	// The one level test this room may be running, and the return it owes. Never a state of the machine: the
@@ -223,6 +226,9 @@ public sealed class AreaController : IDisposable
 
 	/// <summary>How long a level test holds the room before the engine takes it back.</summary>
 	public const double LevelTestSeconds = 5;
+
+	/// <summary>How long a held room's lights must stay still before a further manual change is published.</summary>
+	public const double ManualSettleSeconds = 5;
 
 	public string Name => _area.Name;
 
@@ -802,16 +808,26 @@ public sealed class AreaController : IDisposable
 			_changedBy = _originNames?.Describe(origin, context);
 			_changedAt = _scheduler.Now;
 
-			_logger.LogInformation("{Area}: manual change on {EntityId} attributed to {Origin} ({By}); light is now {State}.",
-				Name, change.New?.EntityId, origin, _changedBy ?? "not named", turnedOn ? "on" : "off");
+			_logger.LogInformation("{Area}: manual change on {EntityId} attributed to {Origin} ({By}); light is now {State}{Level}.",
+				Name, change.New?.EntityId, origin, _changedBy ?? "not named", turnedOn ? "on" : "off",
+				turnedOn ? DescribeLevel(ObservedLevel()) : "");
 
 			if (turnedOn)
 			{
+				bool alreadyHeld = _state == AreaState.OverriddenOn;
+
 				CancelAutoTimers();
 				Enter(AreaState.OverriddenOn, TransitionReason.ManualOn);
 
 				// Restarted on every manual touch: the override outlasts the last thing the human did.
 				RestartOverrideTimer();
+
+				// A device reporting every second would otherwise write a row per report.
+				if (alreadyHeld)
+				{
+					_settleTimer.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(ManualSettleSeconds), OnManualSettled);
+					return;
+				}
 
 				Publish(TransitionReason.ManualOn);
 				return;
@@ -821,6 +837,17 @@ public sealed class AreaController : IDisposable
 			Enter(AreaState.SuppressedOff, TransitionReason.ManualOff);
 			RestartSuppressionTimer();
 			Publish(TransitionReason.ManualOff);
+		}
+	}
+
+	private void OnManualSettled()
+	{
+		lock (_gate)
+		{
+			if (_disposed || _state != AreaState.OverriddenOn)
+				return;
+
+			Publish(TransitionReason.ManualOn);
 		}
 	}
 
@@ -1649,6 +1676,25 @@ public sealed class AreaController : IDisposable
 		return captured;
 	}
 
+	/// <summary>The mean level of the room's lights that are on, each value <c>null</c> where no such light reports it.</summary>
+	private (double? BrightnessPct, int? ColorTempKelvin) ObservedLevel()
+	{
+		List<LightCommand> on = [.. CaptureLights(_area.Lights).Select(captured => captured.Command).Where(command => command.On)];
+		List<double> brightness = [.. on.Where(command => command.BrightnessPct is not null).Select(command => command.BrightnessPct!.Value)];
+		List<int> kelvin = [.. on.Where(command => command.ColorTempKelvin is not null).Select(command => command.ColorTempKelvin!.Value)];
+
+		return (
+			brightness.Count > 0 ? brightness.Average() : null,
+			kelvin.Count > 0 ? (int)Math.Round(kelvin.Average()) : null);
+	}
+
+	private static string DescribeLevel((double? BrightnessPct, int? ColorTempKelvin) level) => level switch
+	{
+		({ } brightness, { } kelvin) => $" at {brightness:0} %, {kelvin} K",
+		({ } brightness, null) => $" at {brightness:0} %",
+		_ => ""
+	};
+
 	/// <summary>The colour channel vector a fixture currently reports, or <c>null</c> when it reports none.</summary>
 	private static IReadOnlyList<int>? ReadChannels(EntityState state)
 	{
@@ -1843,6 +1889,7 @@ public sealed class AreaController : IDisposable
 	{
 		CancelAutoTimers();
 		_overrideTimer.Disposable = Disposable.Empty;
+		_settleTimer.Disposable = Disposable.Empty;
 		_suppressionTimer.Disposable = Disposable.Empty;
 	}
 
@@ -1867,6 +1914,9 @@ public sealed class AreaController : IDisposable
 
 		if (state != AreaState.PreOff)
 			_leadIn = false;
+
+		if (state != AreaState.OverriddenOn)
+			_settleTimer.Disposable = Disposable.Empty;
 
 		_state = state;
 	}
@@ -1903,6 +1953,11 @@ public sealed class AreaController : IDisposable
 		// disambiguates.
 		LightCommand? standing = _lastCommand is { On: true } ? _lastCommand : null;
 
+		// Held by somebody else, the lights are wherever they were left, not where the engine last sent them.
+		(double? brightness, int? kelvin) = _state == AreaState.OverriddenOn
+			? ObservedLevel()
+			: (standing?.BrightnessPct, standing?.ColorTempKelvin);
+
 		// Against the verdict already read, not a fresh one, so the gate and the reading beside it are the same
 		// moment's answer.
 		AutoOnBlock blocked = AutoOnBlockNow(_lastDarkVerdict ?? false, out string? blocker);
@@ -1921,8 +1976,8 @@ public sealed class AreaController : IDisposable
 			KillSwitchActive: _house.KillSwitchActive,
 			IsDark: _lastDarkVerdict,
 			PeriodName: _resolvedPeriodName,
-			BrightnessPct: standing?.BrightnessPct,
-			ColorTempKelvin: standing?.ColorTempKelvin,
+			BrightnessPct: brightness,
+			ColorTempKelvin: kelvin,
 			Timestamp: _scheduler.Now,
 			LastCommandAt: _lastCommandAt,
 			LastMotionAt: _lastMotionAt,
@@ -2004,6 +2059,7 @@ public sealed class AreaController : IDisposable
 		_vacancyTimer.Dispose();
 		_preOffTimer.Dispose();
 		_overrideTimer.Dispose();
+		_settleTimer.Dispose();
 		_suppressionTimer.Dispose();
 		_levelTest.Dispose();
 	}
