@@ -1030,7 +1030,7 @@ engine can get. `ChangeOriginNames` does the naming and nothing else: whether th
 |---|---|---|
 | Automation | "By automation: <name>", unnamed "By an automation" | the `automation_triggered` event whose context id is the change's own, else its parent's |
 | A person using Home Assistant | "By <name>", unnamed "By a Home Assistant user" | the `person` entity whose `user_id` attribute is the context's user |
-| A wall switch or the device itself | "At the device or wall switch" | a context with neither user nor parent |
+| Home Assistant named no user and no automation | "Unknown source" | a context with neither user nor parent |
 | The engine | "By adaptive lighting" | the engine's own last command, on the room page's *Last changed* only |
 
 - A name that cannot be found still names the kind of cause, never a guessed name. An automation run from
@@ -1042,10 +1042,10 @@ engine can get. `ChangeOriginNames` does the naming and nothing else: whether th
 - A person is named from the person entities because any token can read states. Home Assistant's user list
   (`config/auth/list`) needs an administrator, and the add-on's Supervisor token is not one. This rests on Home
   Assistant's documentation and source; it was not measured on a house.
-- **A device report arriving more than 5 seconds after a service call carries no parent and reads as the
-  device.** Home Assistant reuses the caller's context only for a state the entity writes within 5 seconds of
+- **A device report arriving more than 5 seconds after a service call carries no parent and names no source.**
+  Home Assistant reuses the caller's context only for a state the entity writes within 5 seconds of
   the call. A light that reports later, which Z-Wave JS does, writes a fresh context, so an automation's level
-  arrives as "At the device or wall switch" and counts as manual even in a room that ignores automations. ZHA
+  arrives as "Unknown source" and counts as manual even in a room that ignores automations. ZHA
   writes its state straight after the command and keeps the parent.
 - An automation's change the room leaves alone is published as `AutomationIgnored`, once per context id,
   bypassing the meaning guard as a declined movement does, because nothing the snapshot compares has moved. A
