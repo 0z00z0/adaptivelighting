@@ -13,6 +13,7 @@ against each other.
 ## [Unreleased]
 
 - The configuration, engine and web types that other projects copy moved to three new namespaces: `Adaptive.Settings`, `Adaptive.Engine` and `Adaptive.UI`. The `AdaptiveLighting`, `AdaptiveLighting.Extensions` and `AdaptiveLighting.Web` packages are affected, and code that uses these types needs the matching `using` lines. Package and assembly names are unchanged.
+- The start-up log line and the message after a save no longer count a switched-off room as running, so they read "18 of 18" instead of "19 of 18".
 
 ## [2026.10.1] - 2026-10-08
 

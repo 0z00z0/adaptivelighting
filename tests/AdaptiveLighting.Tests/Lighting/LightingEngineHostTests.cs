@@ -936,4 +936,29 @@ public sealed class LightingEngineHostTests
 		Assert.IsNotNull(host.LightNow("stue"));
 		Assert.IsNotNull(host.LightNowRefusal(null), "a room with no Home Assistant area cannot be lit either");
 	}
+
+	/// <summary>The save message compares rooms switched on with rooms switched on, so it never reads 2 of 1.</summary>
+	[TestMethod]
+	public void Save_WithOneRoomSwitchedOff_CountsRunningRoomsAgainstRoomsSwitchedOn()
+	{
+		FakeHaContext ha = new();
+		ha.SetState("light.room_a", "off");
+		ha.SetState("light.room_b", "off");
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero).Ticks);
+
+		LightingEngineHost host = BuildHost();
+		host.Attach(ha, new FakeHaRegistry(), scheduler);
+
+		AdaptiveLightingConfig config = Valid();
+		config.Areas =
+		[
+			new AreaConfig { Name = "Room A", Lights = ["light.room_a"] },
+			new AreaConfig { Name = "Room B", Lights = ["light.room_b"], Enabled = false }
+		];
+
+		SaveResult result = host.Save(config);
+
+		Assert.AreEqual("Saved: 1 of 1 rooms are running.", result.Message);
+	}
 }
