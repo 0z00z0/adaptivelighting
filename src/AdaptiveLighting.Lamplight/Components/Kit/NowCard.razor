@@ -8,9 +8,16 @@
 			@foreach (Warning warning in Warnings)
 			{
 				<li class="warn-i @warning.Kind">
-					<Bang Kind="@warning.Kind" Title="@warning.Text" />
+					@* One marker per row: the coloured (i) when there is help, the "!" when there is none. *@
+					@if (warning.Help is null)
+					{
+						<Bang Kind="@warning.Kind" Title="@warning.Text" />
+					}
 					<span>@warning.Text</span>
-					<Info Label="@warning.Text" Severity="@(warning.Kind == "bad" ? InfoSeverity.Bad : InfoSeverity.Warn)">@warning.Help</Info>
+					@if (warning.Help is not null)
+					{
+						<Info Label="@warning.Text" Severity="@(warning.Kind == "bad" ? InfoSeverity.Bad : InfoSeverity.Warn)">@warning.Help</Info>
+					}
 				</li>
 			}
 		</ul>

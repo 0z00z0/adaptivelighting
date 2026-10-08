@@ -1150,6 +1150,14 @@ live check, and an explicit sensor list in the document is read as it stands. Th
 to catch here, and the engine's rule is right to leave a steady night reading alone. The state is read from Home
 Assistant on the page's one-second beat, so a warning clears as soon as the sensor answers.
 
+A warning row carries one marker: the coloured (i) when it has help, the yellow `!` only when it has none. Both
+together say the same thing twice, and the (i) already carries the severity in its colour.
+
+Lamplight's help bubbles open one at a time. `lamplight-info.js` listens for clicks on the document in the capture
+phase and clicks the own (i) button of every open bubble that does not contain the click, so `Info`'s component
+state stays the single owner of whether a bubble is open. A click on another (i) therefore closes the first bubble
+and then opens the second in the same gesture.
+
 ### What ends a manual hold
 
 `AreaSettings.OverrideUntilVacant` picks between two clocks and nothing else changes: the manual level stands,
