@@ -10,7 +10,7 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
-## [Unreleased]
+## [2026.10.2] - 2026-10-08
 
 - In Lamplight, a help bubble now closes when a click lands outside it, and opening one closes any other. Two bubbles open side by side used to overlap and cover the text behind them.
 - In Lamplight, a warning row shows one icon instead of two: the coloured (i) when it has help, the yellow `!` only when it has none.
