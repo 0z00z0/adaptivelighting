@@ -18,6 +18,8 @@
 	<script src="@($"_content/AdaptiveLighting.Lamplight/lamplight-theme.js?v={AssetToken.Text}")"
 		data-themes="@LamplightThemes.DataThemeIds" data-dark="@LamplightThemes.DarkDefault.Id"
 		data-light="@LamplightThemes.LightDefault.Id"></script>
+	@* Closes an open help bubble on an outside click; deferred, nothing inline. *@
+	<script defer src="@($"_content/AdaptiveLighting.Lamplight/lamplight-info.js?v={AssetToken.Text}")"></script>
 	<HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
