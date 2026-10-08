@@ -197,7 +197,15 @@ static void SeedLights(FakeHaContext ha)
 	// One ceiling bulb off the network, so a room naming the ceiling group shows the not-responding warning.
 	ha.SetState("light.stue_tak_2", "unavailable", new() { ["friendly_name"] = "Taklys 2" });
 	ha.SetState("binary_sensor.stue_bevegelse", "off", new() { ["device_class"] = "motion", ["friendly_name"] = "Stue bevegelse" });
-	ha.SetState("sensor.stue_lux", "18", new() { ["device_class"] = "illuminance", ["friendly_name"] = "Stue lysnivå" });
+
+	// A second motion sensor that has dropped off, and a light-level sensor that has held one value for a day:
+	// the two things the room page's sensor warnings exist to show.
+	ha.SetState("binary_sensor.stue_bevegelse_2", "unavailable", new() { ["device_class"] = "motion", ["friendly_name"] = "Stue bevegelse 2" });
+	ha.SetStateReportedAt(
+		"sensor.stue_lux",
+		"18",
+		DateTimeOffset.Now.AddHours(-25),
+		new() { ["device_class"] = "illuminance", ["friendly_name"] = "Stue lysnivå" });
 
 	SeedMoreRooms(ha);
 }
@@ -289,7 +297,7 @@ static List<AreaConfig> CommissioningRooms(bool enabled) =>
 	{
 		Name = "Stue",
 		Lights = ["light.stue_taklys", "light.stue_leselampe", "light.stue_gulvlampe"],
-		MotionSensors = ["binary_sensor.stue_bevegelse"],
+		MotionSensors = ["binary_sensor.stue_bevegelse", "binary_sensor.stue_bevegelse_2"],
 		LuxSensor = "sensor.stue_lux",
 		Enabled = enabled
 	},

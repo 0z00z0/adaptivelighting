@@ -829,6 +829,14 @@ public sealed class AreaEntityResolver
 		if (areaId is null)
 			return [];
 
+		List<string> candidates = [.. MotionCandidates(areaId).Where(IsLive)];
+
+		return PreferGroups(areaId, candidates, GroupRules.Motion, id => id.HasDomain(BinarySensorDomain));
+	}
+
+	// Everything discovery would take as a motion source, before the live check.
+	private IEnumerable<string> MotionCandidates(string areaId)
+	{
 		IReadOnlyList<string> inArea = _registry.EntitiesInArea(areaId);
 
 		IEnumerable<string> byDeviceClass = inArea
@@ -839,13 +847,36 @@ public sealed class AreaEntityResolver
 		// household says "this one counts".
 		IEnumerable<string> byLabel = inArea.Where(id => HasLabel(id, _global.MotionLabel));
 
-		List<string> candidates = [.. byDeviceClass.Concat(byLabel)
+		return byDeviceClass.Concat(byLabel)
 			.Where(id => !IsExcluded(id))
-			.Where(IsLive)
-			.Distinct(StringComparer.Ordinal)];
-
-		return PreferGroups(areaId, candidates, GroupRules.Motion, id => id.HasDomain(BinarySensorDomain));
+			.Distinct(StringComparer.Ordinal);
 	}
+
+	/// <summary>The room's motion and light-level sensors that read <c>unavailable</c> or <c>unknown</c> now:
+	/// the explicit ones, or else the ones discovery would take but for that reading.</summary>
+	// The engine never sees the discovered ones: IsLive drops them at resolution, so the room runs on the others
+	// and nothing afterwards says a sensor is missing. Lights is always empty.
+	public AreaDiscovery DiscoverSilentSensors(AreaConfig area)
+	{
+		ArgumentNullException.ThrowIfNull(area);
+
+		bool discover = area.AreaId is { Length: > 0 } areaId && !IsExcludedArea(areaId);
+
+		List<string> motion = area.MotionSensors is { Count: > 0 } explicitMotion
+			? [.. explicitMotion.Where(IsSilent)]
+			: discover ? WithoutExcluded([.. MotionCandidates(area.AreaId!).Where(IsSilent)], area) : [];
+
+		List<string> lux = area.LuxSensor is { Length: > 0 } explicitLux
+			? [.. new[] { explicitLux }.Where(IsSilent)]
+			: discover ? WithoutExcluded([.. LuxCandidates(area.AreaId!).Where(IsSilent)], area) : [];
+
+		return new AreaDiscovery([], motion, lux);
+	}
+
+	private bool IsSilent(string entityId) =>
+		_ha.GetState(entityId) is { } state
+		&& (string.Equals(state.State, UnavailableState, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(state.State, UnknownState, StringComparison.OrdinalIgnoreCase));
 
 	// Two passes settle false plurality before anything counts the candidates: a group beats the sensors inside
 	// it, and the device rule keeps one entity per instrument. What survives both is genuinely several
@@ -855,14 +886,16 @@ public sealed class AreaEntityResolver
 		if (areaId is null)
 			return [];
 
-		List<string> candidates = [.. _registry.EntitiesInArea(areaId)
-			.Where(IsIlluminance)
-			.Where(id => !IsExcluded(id))
-			.Where(IsLive)
-			.Distinct(StringComparer.Ordinal)];
+		List<string> candidates = [.. LuxCandidates(areaId).Where(IsLive)];
 
 		return PreferGroups(areaId, candidates, GroupRules.Illuminance, IsIlluminance);
 	}
+
+	private IEnumerable<string> LuxCandidates(string areaId) =>
+		_registry.EntitiesInArea(areaId)
+			.Where(IsIlluminance)
+			.Where(id => !IsExcluded(id))
+			.Distinct(StringComparer.Ordinal);
 
 	private bool IsIlluminance(string entityId) =>
 		entityId.HasDomain(SensorDomain)

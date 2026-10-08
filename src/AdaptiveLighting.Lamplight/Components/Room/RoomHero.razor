@@ -106,9 +106,15 @@
 			foreach (string battery in Model.LowBatteries)
 				warnings.Add(new NowCard.Warning("warn", battery, BatteryHelp));
 
+			foreach (SensorWarning sensor in Model.SensorWarnings)
+				warnings.Add(new NowCard.Warning("warn", sensor.Text, SensorHelp(sensor)));
+
 			return warnings;
 		}
 	}
+
+	private static RenderFragment SensorHelp(SensorWarning sensor) =>
+		builder => builder.AddContent(0, $"{string.Join(", ", sensor.Names)}. {sensor.Advice}");
 
 	private static readonly RenderFragment NotRespondingHelp = @<text>
 		The room reads on or off from the lights that still answer, so a light that dropped out while it was lit

@@ -1118,6 +1118,17 @@ battery rather than only its first, because Home Assistant can send the new enti
 entry names the device. The cost is one registry lookup per room for each report of a battery the room does
 not use; no timer and no request is added.
 
+### Silent sensors on the room page
+
+Lamplight's room page warns when a motion sensor of the room reads `unavailable` or `unknown`, and when a
+light-level sensor does, or has held one state for more than 24 hours. Discovery drops an unavailable sensor at
+resolution (`AreaEntityResolver.IsLive`), so a room keeps running on the others and nothing the engine publishes
+says one is missing; `AreaEntityResolver.DiscoverSilentSensors` asks the same discovery rules again without the
+live check, and an explicit sensor list in the document is read as it stands. The light-level rule reads
+`LastChanged` where `LuxReader.IsStale` reads `LastUpdated`: a sensor that keeps re-reporting one value is the case
+to catch here, and the engine's rule is right to leave a steady night reading alone. The state is read from Home
+Assistant on the page's one-second beat, so a warning clears as soon as the sensor answers.
+
 ### What ends a manual hold
 
 `AreaSettings.OverrideUntilVacant` picks between two clocks and nothing else changes: the manual level stands,
@@ -2643,6 +2654,7 @@ document settles on what both surfaces already show.
 | unpadded month | version format `YYYY.M.patch` | `2026.08.0` was the first calendar-versioned release, tagged with a zero-padded month for string sort order; the published NuGet packages came back as `2026.8.0` regardless, because NuGet strips a leading zero from each numeric segment on publish. From the next release on, the tag and the packages agree by not padding in the first place |
 | 64 | remembered snapshot timestamps, `OwnUser` | enough to cover every room's opening snapshot in one start |
 | 5 s | `AreaController.ManualSettleSeconds` | long enough to swallow a dimmer being turned or a device reporting every second, short enough that the settled level reaches the log while the person is still looking |
+| 24 h | `RoomFacts.LightSensorStuckAfter` | a sensor with any daylight changes through every dawn and dusk, so a day with no change is one that has stopped measuring; a windowless room that sits at 0 lx also trips it |
 | 20 % | low battery level | warns with time to replace the battery before most sensors stop reporting; used only where the device has no low-battery flag of its own |
 
 ---
