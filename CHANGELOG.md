@@ -14,6 +14,7 @@ against each other.
 
 - In Lamplight, a help bubble now closes when a click lands outside it, and opening one closes any other. Two bubbles open side by side used to overlap and cover the text behind them.
 - In Lamplight, a warning row shows one icon instead of two: the coloured (i) when it has help, the yellow `!` only when it has none.
+- In Lamplight, the three Fine tuning settings can be changed again: re-check interval, own-change window and whether other automations count as manual changes. Their rows did not open.
 
 - The configuration, engine and web types that other projects copy moved to three new namespaces: `Adaptive.Settings`, `Adaptive.Engine` and `Adaptive.UI`. The `AdaptiveLighting`, `AdaptiveLighting.Extensions` and `AdaptiveLighting.Web` packages are affected, and code that uses these types needs the matching `using` lines. Package and assembly names are unchanged.
 - The start-up log line and the message after a save no longer count a switched-off room as running, so they read "18 of 18" instead of "19 of 18".
