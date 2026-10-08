@@ -10,7 +10,7 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
-## [Unreleased]
+## [2026.10.1] - 2026-10-08
 
 - Lamplight's room page now shows a small yellow icon when one of the room's motion sensors is unavailable, or when a light-level sensor is unavailable or has not changed for a day. Opening the icon names the sensors. Until now a room could run for days on the sensors that still answered, with nothing on screen saying so.
 - When a person, an automation or a device sets a room's lights, the activity rows and the room's history now show the brightness and colour temperature the lights were found at, and such a room reads as lit. The row names the cause even when the user or automation cannot be named ("By a Home Assistant user", "By an automation"). A device that reports every second no longer fills the history with a row per report: further changes are written once the lights have been still for 5 seconds.
