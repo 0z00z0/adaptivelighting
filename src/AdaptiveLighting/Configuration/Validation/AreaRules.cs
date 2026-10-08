@@ -1,3 +1,5 @@
+using Adaptive.Settings;
+
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>The rooms: their names, the entities they refer to, their scenes, and the levels they state.</summary>

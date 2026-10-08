@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>
 ///     A Home Assistant dropdown's live options set against what the document stores for them: which are still

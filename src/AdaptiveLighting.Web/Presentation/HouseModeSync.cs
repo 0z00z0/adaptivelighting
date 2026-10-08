@@ -1,6 +1,6 @@
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>How the configured house-mode options stand against the options the dropdown helper offers.</summary>
 /// <param name="CanCompare">

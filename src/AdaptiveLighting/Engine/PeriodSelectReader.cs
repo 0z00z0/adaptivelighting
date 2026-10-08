@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
 
+using Adaptive.Settings;
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>The one object standing between the period <c>input_select</c> and the engine, in whichever direction <see cref="PeriodAuthority"/> names.</summary>
 public sealed class PeriodSelectReader

@@ -1,3 +1,5 @@
+using Adaptive.Settings;
+
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>

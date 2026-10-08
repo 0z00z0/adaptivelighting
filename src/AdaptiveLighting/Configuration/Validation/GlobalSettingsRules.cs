@@ -1,3 +1,5 @@
+using Adaptive.Settings;
+
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>The house-wide settings: the numbers, the entities they name, the labels, and the outdoor lux sensor.</summary>

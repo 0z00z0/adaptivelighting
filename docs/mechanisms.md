@@ -7,6 +7,27 @@ re-derived by reading the code is here.
 
 ---
 
+## Shared namespaces
+
+The heating project copies these files verbatim, so the shared code lives in one of three neutral namespaces and a
+copy diffs empty against its source:
+
+- `Adaptive.Settings`: the configuration document's period and select types, its validation result, stable ids,
+  and the store that holds the document's bytes.
+- `Adaptive.Engine`: periods, the house-mode detector, the wall clock, the select mirror, the area registry and the
+  Home Assistant helper extensions of `AdaptiveLighting.Extensions`.
+- `Adaptive.UI`: the shared components (entity picker, stepper, preset slider, period-start editor, select
+  authority panel) and the page-model helpers behind them.
+
+Lighting-only code keeps `AdaptiveLighting.*`. Assembly and package names are unchanged, so a package still carries
+its old name while some of its types sit in a neutral namespace. A shared file that needs a lighting-only type
+imports the old namespace or names it in full; it never moves the lighting-only type. A string-typed key stays as it
+is: the document's root key is still `AdaptiveLighting.Configuration.AdaptiveLightingConfig`.
+
+Logger categories follow the namespace, so a moved type logs under its new full name.
+
+---
+
 ## Configuration
 
 ### Two readers bind the config type, and only one of them can be fixed

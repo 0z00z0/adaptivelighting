@@ -1,6 +1,6 @@
 using YamlDotNet.Serialization;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>Which side owns the time of day: this application's schedule, or a Home Assistant dropdown.</summary>
 /// <remarks>
@@ -76,14 +76,14 @@ public class PeriodSelectOptionConfig
 	/// <summary>The exact option string as the select reports it. Compared case-insensitively, whitespace-trimmed.</summary>
 	public string Value { get; set; } = "";
 
-	/// <summary>The engine period this option means, by <see cref="TimePeriodConfig.Id"/>.</summary>
+	/// <summary>The engine period this option means, by <see cref="AdaptiveLighting.Configuration.TimePeriodConfig.Id"/>.</summary>
 	/// <remarks>
 	///     An id matching no period is an error here where the same shape is only a warning on a room's levels: an
 	///     unresolvable mapping leaves the whole house unable to place the selected time of day.
 	/// </remarks>
 	public string PeriodId { get; set; } = "";
 
-	/// <summary>Whether this row says nothing, so <see cref="ConfigNormalizer"/> can drop it on save.</summary>
+	/// <summary>Whether this row says nothing, so <see cref="AdaptiveLighting.Configuration.ConfigNormalizer"/> can drop it on save.</summary>
 	[YamlIgnore]
 	public bool IsEmpty => string.IsNullOrWhiteSpace(Value) && string.IsNullOrWhiteSpace(PeriodId);
 }

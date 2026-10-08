@@ -1,5 +1,6 @@
 using System.Reactive.Concurrency;
 
+using Adaptive.Settings;
 using AdaptiveLighting.LastSeen;
 
 using Microsoft.Extensions.Configuration;

@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>
 ///     Generates the ids this document's own cross-references use: a slug of the name at creation, plus a random

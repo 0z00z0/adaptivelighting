@@ -1,7 +1,7 @@
 using NetDaemon.HassModel;
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Extensions;
+namespace Adaptive.Engine;
 
 /// <summary>The <see cref="IHaRegistry"/> questions the engine asks, each in one expression.</summary>
 public static class RegistryExtensions

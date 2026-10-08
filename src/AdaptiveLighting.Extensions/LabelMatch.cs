@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Extensions;
+namespace Adaptive.Engine;
 
 /// <summary>A Home Assistant label in both its forms.</summary>
 /// <remarks>

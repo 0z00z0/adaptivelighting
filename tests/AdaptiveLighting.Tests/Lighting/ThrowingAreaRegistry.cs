@@ -1,5 +1,5 @@
+using Adaptive.Engine;
 using AdaptiveLighting.Abstractions;
-using AdaptiveLighting.Extensions;
 
 namespace AdaptiveLighting.Tests.Lighting;
 

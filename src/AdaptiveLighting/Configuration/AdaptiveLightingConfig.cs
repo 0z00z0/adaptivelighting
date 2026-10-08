@@ -1,3 +1,5 @@
+using Adaptive.Settings;
+
 using YamlDotNet.Serialization;
 
 namespace AdaptiveLighting.Configuration;

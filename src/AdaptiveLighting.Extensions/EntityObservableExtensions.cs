@@ -1,6 +1,6 @@
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Extensions;
+namespace Adaptive.Engine;
 
 /// <summary>Edge-triggered on/off subscriptions, on <c>SubscribeSafe</c> so a thrown handler is logged, not fatal.</summary>
 /// <remarks>

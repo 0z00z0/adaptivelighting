@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Extensions;
+namespace Adaptive.Engine;
 
 /// <summary>Home Assistant domains as an enum, for <see cref="EntityIdExtensions.DomainEnum"/>.</summary>
 /// <remarks>Members are parsed from the entity id by name, so a rename changes what parses.</remarks>

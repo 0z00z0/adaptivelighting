@@ -1,3 +1,4 @@
+using Adaptive.Settings;
 using AdaptiveLighting.Configuration;
 
 namespace AdaptiveLighting.Engine;

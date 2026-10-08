@@ -1,3 +1,5 @@
+using Adaptive.Settings;
+
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>The physical bounds and the period lookups the validation sections share.</summary>

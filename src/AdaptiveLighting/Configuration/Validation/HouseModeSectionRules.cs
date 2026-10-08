@@ -1,3 +1,5 @@
+using Adaptive.Settings;
+
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>The house-mode rules: structural problems are document-level errors, classification quirks warnings.</summary>

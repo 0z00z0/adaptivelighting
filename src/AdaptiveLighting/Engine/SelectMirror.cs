@@ -1,9 +1,7 @@
-using AdaptiveLighting.Extensions;
-
 using NetDaemon.HassModel;
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>One <c>input_select</c> the engine may drive: whether it is the engine's to write, and the call itself.</summary>
 // The rules stay with the callers; only the writing lives here, so a new rule cannot forget the ownership test

@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Web.Components;
+namespace Adaptive.UI;
 
 /// <summary>What a picker needs to know about an id it did not offer: what to call it, and whether it exists.</summary>
 /// <remarks>
