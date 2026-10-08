@@ -1,7 +1,7 @@
+using Adaptive.Engine;
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
-using AdaptiveLighting.Extensions;
 using AdaptiveLighting.Ha;
 
 using NetDaemon.HassModel.Entities;

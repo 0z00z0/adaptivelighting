@@ -34,7 +34,7 @@
 
   <ItemGroup>
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
-    <Using Include="AdaptiveLighting.Extensions" />
+    <Using Include="Adaptive.Engine" />
   </ItemGroup>
 
 </Project>

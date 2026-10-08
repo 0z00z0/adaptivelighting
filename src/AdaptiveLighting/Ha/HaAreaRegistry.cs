@@ -1,7 +1,6 @@
 using AdaptiveLighting.Abstractions;
-using AdaptiveLighting.Extensions;
 
-namespace AdaptiveLighting.Ha;
+namespace Adaptive.Engine;
 
 /// <summary>The real <see cref="IAreaRegistry"/>, reading <see cref="IHaRegistry"/> live so no snapshot can go stale.</summary>
 public sealed class HaAreaRegistry : IAreaRegistry

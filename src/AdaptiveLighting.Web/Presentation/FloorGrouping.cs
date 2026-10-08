@@ -1,6 +1,6 @@
-using AdaptiveLighting.Abstractions;
+using Adaptive.Engine;
 
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>One floor's rooms, ordered for display. Shared by the dashboard and the Areas section.</summary>
 /// <param name="Floor">The floor these items sit on, or <c>null</c> for the trailing floorless group.</param>

@@ -2,14 +2,14 @@ using System.Text;
 
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Hosting;
+namespace Adaptive.Settings;
 
 /// <summary>The one file the lighting UI is allowed to write, and the only way it writes it.</summary>
 /// <remarks>
 ///     The path is resolved once, server-side, and is immutable. Nothing on the write path takes a path or a
 ///     fragment of one from a request. Writes go to a temp file and are moved into place, so a process death
 ///     mid-write cannot leave a half-written config; one previous generation is kept as <c>.bak</c>.
-///     Bytes only: normalising and validating belong to <see cref="LightingEngineHost"/>, which is the only caller
+///     Bytes only: normalising and validating belong to <see cref="AdaptiveLighting.Hosting.LightingEngineHost"/>, which is the only caller
 ///     of <see cref="Write"/>.
 /// </remarks>
 public sealed class LightingConfigStore
@@ -53,7 +53,7 @@ public sealed class LightingConfigStore
 
 	/// <summary>
 	///     Reads the document and reports whether it had to be translated out of the pre-2.0 schema to be read at all.
-	///     Only <see cref="LightingEngineHost.Reload"/> acts on the flag.
+	///     Only <see cref="AdaptiveLighting.Hosting.LightingEngineHost.Reload"/> acts on the flag.
 	/// </summary>
 	/// <exception cref="LightingConfigException">The file is missing, unreadable, or not a valid document.</exception>
 	public DocumentReadResult Read()

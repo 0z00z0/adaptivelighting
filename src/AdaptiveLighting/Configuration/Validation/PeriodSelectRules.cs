@@ -1,3 +1,5 @@
+using Adaptive.Settings;
+
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>The <c>input_select</c> tied to the period table, in whichever direction its authority names.</summary>

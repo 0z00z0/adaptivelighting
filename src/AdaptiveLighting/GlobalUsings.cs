@@ -8,5 +8,5 @@ global using Microsoft.Extensions.Logging;
 global using NetDaemon.AppModel;
 global using NetDaemon.HassModel;
 
-global using AdaptiveLighting.Extensions;
+global using Adaptive.Engine;
 global using AdaptiveLighting.Persistence;

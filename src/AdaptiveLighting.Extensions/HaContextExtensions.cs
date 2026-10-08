@@ -1,6 +1,6 @@
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Extensions;
+namespace Adaptive.Engine;
 
 /// <summary>Verbs and one-hop questions on <see cref="IHaContext"/>, with the domain derived from the entity id.</summary>
 public static class HaContextExtensions

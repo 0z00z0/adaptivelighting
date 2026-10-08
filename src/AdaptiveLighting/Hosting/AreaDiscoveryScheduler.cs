@@ -1,5 +1,6 @@
 using System.Reactive.Concurrency;
 
+using Adaptive.Settings;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;

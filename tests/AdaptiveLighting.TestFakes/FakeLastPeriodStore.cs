@@ -1,4 +1,4 @@
-using AdaptiveLighting.Engine;
+using Adaptive.Engine;
 
 namespace AdaptiveLighting.TestFakes;
 

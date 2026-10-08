@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>A sun event a period boundary can be anchored to.</summary>
 public enum SunEvent
@@ -14,7 +14,7 @@ public enum SunEvent
 }
 
 /// <summary>
-///     A parsed <see cref="TimePeriodConfig.Start"/>. Resolving a sun event needs the day's sun times, which is why
+///     A parsed <see cref="AdaptiveLighting.Configuration.TimePeriodConfig.Start"/>. Resolving a sun event needs the day's sun times, which is why
 ///     parsing and resolution are split.
 /// </summary>
 /// <param name="FixedTime">The clock time, when <paramref name="SunEvent"/> is <see cref="SunEvent.None"/>.</param>

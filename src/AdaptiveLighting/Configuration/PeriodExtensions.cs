@@ -1,4 +1,7 @@
-namespace AdaptiveLighting.Configuration;
+using Adaptive.Engine;
+using AdaptiveLighting.Configuration;
+
+namespace Adaptive.Settings;
 
 /// <summary>Resolving a period out of the schedule.</summary>
 /// <remarks>Cannot live in <c>AdaptiveLighting.Extensions</c>: that package is host-agnostic and knows no configuration type.</remarks>

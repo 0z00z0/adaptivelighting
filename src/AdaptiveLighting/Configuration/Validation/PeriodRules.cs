@@ -1,3 +1,5 @@
+using Adaptive.Settings;
+
 namespace AdaptiveLighting.Configuration;
 
 /// <summary>The circadian table: ids, starts, targets, and the rooms whose movement may begin a period.</summary>

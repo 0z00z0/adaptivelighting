@@ -1,3 +1,5 @@
+using Adaptive.Settings;
+
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;

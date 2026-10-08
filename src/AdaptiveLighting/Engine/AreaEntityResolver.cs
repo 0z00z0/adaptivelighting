@@ -1,8 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 
+using Adaptive.Engine;
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
-using AdaptiveLighting.Extensions;
 using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Engine;

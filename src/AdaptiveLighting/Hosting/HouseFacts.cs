@@ -86,7 +86,7 @@ internal sealed record HouseFacts(
 
 	/// <summary>Every label at least one entity carries, by id and by name.</summary>
 	/// <remarks>
-	///     Both forms, because <see cref="AdaptiveLighting.Extensions.RegistryExtensions.LabelsOf"/> matches either
+	///     Both forms, because <see cref="Adaptive.Engine.RegistryExtensions.LabelsOf"/> matches either
 	///     way. Labels nobody carries are left out: one on no entity filters every light out as thoroughly as a typo.
 	/// </remarks>
 	private static IReadOnlyCollection<string>? ReadLabelsInUse(IHaRegistry? registry)

@@ -1,7 +1,7 @@
 using System.Reactive.Disposables;
 using System.Text.Json;
 
-using AdaptiveLighting.Extensions;
+using Adaptive.Engine;
 
 using NetDaemon.HassModel.Entities;
 

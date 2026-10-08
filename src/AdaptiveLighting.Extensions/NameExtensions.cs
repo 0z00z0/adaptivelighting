@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Extensions;
+namespace Adaptive.Engine;
 
 /// <summary>Comparing the names a person types: helper options, period keys, mode values, device classes.</summary>
 /// <remarks>Trimmed and case-insensitive, because each of them reaches the engine through a hand-filled field.</remarks>

@@ -1,5 +1,6 @@
 using System.Reactive.Concurrency;
 
+using Adaptive.Settings;
 using AdaptiveLighting.Hosting;
 
 using Microsoft.Extensions.DependencyInjection;

@@ -1,6 +1,6 @@
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>Finds the Home Assistant dropdown that is obviously the house mode, and says what each option means.</summary>
 // Adoption writes kinds and nothing else: no scene, no reset trigger, no period switching to it, so an adopted

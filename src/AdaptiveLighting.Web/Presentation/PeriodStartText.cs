@@ -1,6 +1,7 @@
+using Adaptive.Settings;
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>Text helpers for <see cref="TimePeriodConfig.Start"/>: composing start strings, and describing what the engine makes of one.</summary>
 /// <remarks>

@@ -2,10 +2,11 @@ using System.Collections.Concurrent;
 using System.Reactive.Concurrency;
 using System.Reactive.Subjects;
 
+using Adaptive.Engine;
+using Adaptive.Settings;
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
-using AdaptiveLighting.Extensions;
 using AdaptiveLighting.Ha;
 using AdaptiveLighting.LastSeen;
 

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Components;
 
-namespace AdaptiveLighting.Web.Components;
+namespace Adaptive.UI;
 
 /// <summary>Every word the selection-authority panel puts on screen, gathered so the panel's own parameters are
 /// the state it draws and nothing else.</summary>

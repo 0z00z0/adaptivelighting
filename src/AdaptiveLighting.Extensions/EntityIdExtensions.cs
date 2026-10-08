@@ -1,6 +1,6 @@
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Extensions;
+namespace Adaptive.Engine;
 
 /// <summary>Domain questions on raw entity ids, so a call site never re-declares a <c>"light."</c> prefix constant.</summary>
 public static class EntityIdExtensions

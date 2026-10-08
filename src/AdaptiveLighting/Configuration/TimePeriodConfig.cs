@@ -33,7 +33,7 @@ public class TimePeriodConfig
 
 	/// <summary>
 	///     When this period begins: a clock time (<c>06:30</c>) or a sun event with an optional offset
-	///     (<c>sunrise</c>, <c>sunset-01:00</c>). See <see cref="PeriodStart.TryParse"/>.
+	///     (<c>sunrise</c>, <c>sunset-01:00</c>). See <see cref="Adaptive.Settings.PeriodStart.TryParse"/>.
 	/// </summary>
 	public string Start { get; set; } = "";
 

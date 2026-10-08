@@ -71,6 +71,13 @@ public sealed class ConfigKeyCollisionTests
 			+ $"document stating one gets a warning about a setting that still works: {string.Join(", ", collisions)}.");
 	}
 
+	// The period-select types moved to Adaptive.Settings; the rest of the document stays in AdaptiveLighting.Configuration.
+	private static readonly string[] ConfigurationNamespaces =
+	[
+		typeof(AdaptiveLightingConfig).Namespace!,
+		typeof(PeriodSelectConfig).Namespace!
+	];
+
 	/// <summary>Every configuration class reachable from the document root, walked once each.</summary>
 	private static IEnumerable<Type> ConfigurationTypes()
 	{
@@ -89,7 +96,7 @@ public sealed class ConfigKeyCollisionTests
 			{
 				Type elementType = ElementTypeOf(property.PropertyType);
 
-				if (elementType.Namespace == typeof(AdaptiveLightingConfig).Namespace && elementType.IsClass)
+				if (elementType.Namespace is { } ns && ConfigurationNamespaces.Contains(ns) && elementType.IsClass)
 					pending.Enqueue(elementType);
 			}
 		}

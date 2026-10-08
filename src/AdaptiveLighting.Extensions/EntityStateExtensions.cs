@@ -3,7 +3,7 @@ using System.Text.Json;
 
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Extensions;
+namespace Adaptive.Engine;
 
 /// <summary>Reads values out of an <see cref="EntityState"/> and its attribute bag, tolerantly.</summary>
 /// <remarks>

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>Remembers the circadian period last run in, so a restart can tell whether a boundary went by.</summary>
 // A null store reads the same as an empty one: unknown, never "a boundary was crossed".

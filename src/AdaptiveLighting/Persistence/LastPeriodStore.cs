@@ -1,6 +1,6 @@
 using AdaptiveLighting.Engine;
 
-namespace AdaptiveLighting.Persistence;
+namespace Adaptive.Engine;
 
 /// <summary><see cref="ILastPeriodStore"/> over one declared state file in the state folder.</summary>
 // Written on every change and never batched: the write a flush timer would delay is the one a restart is about

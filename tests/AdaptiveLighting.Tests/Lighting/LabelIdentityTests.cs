@@ -1,6 +1,6 @@
+using Adaptive.Engine;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
-using AdaptiveLighting.Extensions;
 
 using Microsoft.Extensions.Logging.Abstractions;
 

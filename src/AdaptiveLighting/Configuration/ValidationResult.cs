@@ -1,11 +1,11 @@
 using System.Text;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>A configuration problem scoped to one area: the area is skipped and the rest of the house keeps working.</summary>
 public sealed record AreaError(string AreaName, string Message);
 
-/// <summary>The outcome of <see cref="ConfigValidator.Validate"/>.</summary>
+/// <summary>The outcome of <see cref="AdaptiveLighting.Configuration.ConfigValidator.Validate"/>.</summary>
 /// <remarks>
 ///     Document-level <see cref="Errors"/> are fatal; <see cref="AreaErrors"/> are not, because an entity renamed in
 ///     HA must not black out the whole house.

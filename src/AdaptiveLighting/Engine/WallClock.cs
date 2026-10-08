@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 // IScheduler.Now is a DateTimeOffset at +00:00, so its TimeOfDay is UTC. Every Start in the document is a
 // household wall clock, so the conversion has to happen before the two are compared.

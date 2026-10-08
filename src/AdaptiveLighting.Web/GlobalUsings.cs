@@ -11,7 +11,9 @@ global using NetDaemon.HassModel;
 global using System.Globalization;
 global using System.Threading.Tasks;
 
-global using AdaptiveLighting.Extensions;
+global using Adaptive.Engine;
+global using Adaptive.Settings;
+global using Adaptive.UI;
 
 // The view helpers moved out of Services into their own namespace. Global rather than per file because a razor
 // @using resolves relative to the generated AdaptiveLighting.* namespace and binds to the wrong thing.

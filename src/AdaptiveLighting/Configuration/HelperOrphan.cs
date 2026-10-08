@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>What to call a stored row whose Home Assistant dropdown no longer offers its value.</summary>
 /// <remarks>A rename and a removal are indistinguishable from here, so no wording claims which one happened.</remarks>

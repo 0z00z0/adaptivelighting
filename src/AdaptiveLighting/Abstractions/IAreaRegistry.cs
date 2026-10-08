@@ -1,6 +1,4 @@
-using AdaptiveLighting.Extensions;
-
-namespace AdaptiveLighting.Abstractions;
+namespace Adaptive.Engine;
 
 /// <summary>A floor as the engine and UI need it: identity, display name, and stacking order.</summary>
 /// <remarks><c>Level</c> is HA's own number and orders floors; null when the house never set one.</remarks>
@@ -17,7 +15,7 @@ public interface IAreaRegistry
 
 	bool AreaExists(string areaId);
 
-	/// <remarks>Read, never stored. <see cref="Engine.AreaNaming"/> is the only place the fallback order lives.</remarks>
+	/// <remarks>Read, never stored. <see cref="AdaptiveLighting.Engine.AreaNaming"/> is the only place the fallback order lives.</remarks>
 	string? NameOf(string areaId);
 
 	/// <summary>The entity ids assigned to <paramref name="areaId"/>, directly or through a device.</summary>

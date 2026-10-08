@@ -10,6 +10,10 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
+## [Unreleased]
+
+- The configuration, engine and web types that other projects copy moved to three new namespaces: `Adaptive.Settings`, `Adaptive.Engine` and `Adaptive.UI`. The `AdaptiveLighting`, `AdaptiveLighting.Extensions` and `AdaptiveLighting.Web` packages are affected, and code that uses these types needs the matching `using` lines. Package and assembly names are unchanged.
+
 ## [2026.10.1] - 2026-10-08
 
 - Lamplight's room page now shows a small yellow icon when one of the room's motion sensors is unavailable, or when a light-level sensor is unavailable or has not changed for a day. Opening the icon names the sensors. Until now a room could run for days on the sensors that still answered, with nothing on screen saying so.

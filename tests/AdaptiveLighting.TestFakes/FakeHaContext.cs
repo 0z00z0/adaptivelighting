@@ -1,7 +1,7 @@
 using System.Reactive.Subjects;
 using System.Text.Json;
 
-using AdaptiveLighting.Extensions;
+using Adaptive.Engine;
 
 using NetDaemon.HassModel;
 using NetDaemon.HassModel.Entities;

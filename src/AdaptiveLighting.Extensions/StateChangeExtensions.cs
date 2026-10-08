@@ -1,6 +1,6 @@
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Extensions;
+namespace Adaptive.Engine;
 
 /// <summary>Questions about a non-generic <see cref="StateChange"/>, the shape the engine subscribes in.</summary>
 /// <remarks>Null-tolerant: a change with no <c>New</c> answers false or null, never throws.</remarks>
