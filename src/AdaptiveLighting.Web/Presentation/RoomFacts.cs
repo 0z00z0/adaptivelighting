@@ -6,6 +6,15 @@ namespace AdaptiveLighting.Web.Presentation;
 /// <summary>One line of the room page's evidence table.</summary>
 public sealed record RoomFact(string Label, string Value, string? Title = null, string? Detail = null, bool IsProse = false);
 
+public enum SensorWarningKind
+{
+	MotionUnavailable,
+	LightNotChanging
+}
+
+/// <summary>A sensor of the room that is silent: the badge's few words, the sensors' names, and what it means.</summary>
+public sealed record SensorWarning(SensorWarningKind Kind, string Text, IReadOnlyList<string> Names, string Advice);
+
 /// <summary>What the room page says about a room now: the present-tense line, what happens next, and what the engine saw.</summary>
 /// <remarks>
 ///     Every reading is passed through from the snapshot, never worked out again: only the engine knows which
@@ -15,6 +24,9 @@ public static class RoomFacts
 {
 	/// <summary>How far past a deadline a room goes before the page says it has lost touch instead of counting down.</summary>
 	public static readonly TimeSpan OverdueAfter = TimeSpan.FromSeconds(90);
+
+	/// <summary>How long a light-level sensor may keep one state before the page says it is not changing.</summary>
+	public static readonly TimeSpan LightSensorStuckAfter = TimeSpan.FromHours(24);
 
 	/// <summary>What the engine saw, as the room page's evidence table.</summary>
 	public static IReadOnlyList<RoomFact> For(AreaSnapshot snapshot, DateTimeOffset now, Func<string, string>? nameOf = null)
@@ -267,6 +279,29 @@ public static class RoomFacts
 			{ LightsNotResponding: { } missing, LightCount: { } total } => $"{missing} of {total} lights are not responding.",
 			{ LightsNotResponding: 1 } => "1 light is not responding.",
 			{ LightsNotResponding: { } missing } => $"{missing} lights are not responding."
+		};
+	}
+
+	/// <summary>The wording for a room's silent sensors; <c>null</c> when none is named.</summary>
+	public static SensorWarning? SensorWarningFor(SensorWarningKind kind, IReadOnlyList<string> names)
+	{
+		ArgumentNullException.ThrowIfNull(names);
+
+		if (names.Count == 0)
+			return null;
+
+		return kind switch
+		{
+			SensorWarningKind.MotionUnavailable => new SensorWarning(
+				kind,
+				names.Count == 1 ? "Motion sensor unavailable" : $"{names.Count} motion sensors unavailable",
+				names,
+				"The room runs on the sensors that still answer, so movement near this one may be missed."),
+			_ => new SensorWarning(
+				kind,
+				names.Count == 1 ? "Light sensor not changing" : $"{names.Count} light sensors not changing",
+				names,
+				"The room may count as dark or bright whatever the light really is.")
 		};
 	}
 

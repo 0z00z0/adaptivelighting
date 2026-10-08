@@ -216,6 +216,75 @@ public sealed class RoomPageModelTests
 		model.Dispose();
 	}
 
+	[TestMethod]
+	public void ASilentSensorIsNamedWhereAHealthyRoomIsLeftAlone()
+	{
+		DateTimeOffset recently = DateTimeOffset.Now.AddHours(-1);
+
+		_ha.SetStateReportedAt("light.stue_taklys", "off", recently);
+		_ha.SetStateReportedAt("binary_sensor.stue_motion_a", "off", recently, SensorAttributes("Motion A", "motion"));
+		_ha.SetStateReportedAt("binary_sensor.stue_motion_b", "off", recently, SensorAttributes("Motion B", "motion"));
+		_ha.SetStateReportedAt("sensor.stue_lux_a", "120", recently, SensorAttributes("Lux A", "illuminance"));
+
+		RoomPageModel healthy = OpenRoomWithSensors();
+		Assert.AreEqual(0, healthy.SensorWarnings.Count, "a room whose sensors all answer and move has nothing to say");
+		healthy.Dispose();
+
+		// Discovered, not listed in the document: the engine drops it at resolution, so only this warning shows it.
+		_ha.SetStateReportedAt("binary_sensor.stue_motion_b", "unavailable", recently, SensorAttributes("Motion B", "motion"));
+		_ha.SetStateReportedAt("sensor.stue_lux_a", "120", DateTimeOffset.Now.AddHours(-25), SensorAttributes("Lux A", "illuminance"));
+
+		RoomPageModel silent = OpenRoomWithSensors();
+
+		Assert.AreEqual(2, silent.SensorWarnings.Count, "one warning per kind");
+
+		SensorWarning motion = silent.SensorWarnings.Single(warning => warning.Kind == SensorWarningKind.MotionUnavailable);
+		CollectionAssert.AreEqual(new[] { "Motion B" }, motion.Names.ToArray(), "only the dead sensor is named");
+		Assert.IsFalse(silent.Resolved!.MotionSensors.Contains("binary_sensor.stue_motion_b"), "the engine does not see it");
+
+		SensorWarning light = silent.SensorWarnings.Single(warning => warning.Kind == SensorWarningKind.LightNotChanging);
+		CollectionAssert.AreEqual(new[] { "Lux A" }, light.Names.ToArray(), "a sensor that kept one state for 25 hours is named");
+
+		silent.Dispose();
+	}
+
+	private static Dictionary<string, object> SensorAttributes(string name, string deviceClass) =>
+		new() { ["friendly_name"] = name, ["device_class"] = deviceClass };
+
+	/// <summary>Opens the room with discovery doing the finding: two motion sensors and one light-level sensor in its area.</summary>
+	private RoomPageModel OpenRoomWithSensors()
+	{
+		LightingEngineHost host = new(
+			new LightingConfigStore(_path, NullLogger<LightingConfigStore>.Instance),
+			NullLoggerFactory.Instance);
+
+		Assert.IsTrue(host.Save(OneRoom()).Written, "the test document has to reach the disk first");
+
+		FakeAreaRegistry areas = new();
+		areas.Areas[AreaId] =
+		[
+			"light.stue_taklys", "binary_sensor.stue_motion_a", "binary_sensor.stue_motion_b", "sensor.stue_lux_a"
+		];
+
+		RoomPageModel model = new(
+			host,
+			new HaCatalog(_ha, new FakeHaRegistry(), NullLoggerFactory.Instance, areas),
+			_cache!,
+			_activity,
+			NullLogger.Instance,
+			work =>
+			{
+				work();
+
+				return Task.CompletedTask;
+			});
+
+		model.Start();
+		model.Show(AreaId);
+
+		return model;
+	}
+
 	/// <summary>A document the validator accepts, holding the one room these tests work on.</summary>
 	private static AdaptiveLightingConfig OneRoom() => new()
 	{

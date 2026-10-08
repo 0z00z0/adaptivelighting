@@ -190,6 +190,45 @@ public sealed class HaCatalog
 			Describe(discovered.LuxSensors));
 	}
 
+	/// <summary>The room's motion and light-level sensors that read <c>unavailable</c> or <c>unknown</c> now.</summary>
+	/// <remarks>Includes the discovered ones the engine drops at resolution. Read live every call, never cached.</remarks>
+	public AreaEntities SilentSensorsOf(AreaConfig area, GlobalConfig global)
+	{
+		ArgumentNullException.ThrowIfNull(area);
+		ArgumentNullException.ThrowIfNull(global);
+
+		try
+		{
+			AreaDiscovery silent = Resolver(global).DiscoverSilentSensors(area);
+
+			return new AreaEntities([], Describe(silent.MotionSensors), Describe(silent.LuxSensors));
+		}
+		catch (InvalidOperationException exception)
+		{
+			IsHomeAssistantReady = false;
+			_logger.LogDebug(exception, "Silent sensors for area {Area} are not available yet.", area.AreaId);
+
+			return AreaEntities.Empty;
+		}
+	}
+
+	/// <summary>Whether an entity reads <c>unavailable</c> or <c>unknown</c>, and when its state last changed.</summary>
+	/// <returns>Neither when Home Assistant knows no such entity.</returns>
+	public (bool Silent, DateTimeOffset? LastChanged) ReadingOf(string entityId)
+	{
+		EntityState? state = TryGetState(entityId);
+
+		if (state is null)
+			return (false, null);
+
+		// Home Assistant publishes UTC; a kindless value lost its label in the JSON reader and is never local time.
+		DateTimeOffset? changed = state.LastChanged is { } raw
+			? new DateTimeOffset(raw.Kind is DateTimeKind.Local ? raw.ToUniversalTime() : DateTime.SpecifyKind(raw, DateTimeKind.Utc), TimeSpan.Zero)
+			: null;
+
+		return (state.StateIs("unavailable") || state.StateIs("unknown"), changed);
+	}
+
 	/// <summary>What the area holds besides what discovery settled on, for the fold that overrules discovery.</summary>
 	/// <remarks>
 	///     Derived by subtraction, never by re-deciding: group membership, device identity and the label rules stay

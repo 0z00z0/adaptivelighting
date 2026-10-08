@@ -307,6 +307,9 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	/// <summary>How many of the room's lights have stopped answering, when any have.</summary>
 	public string? NotResponding => Snapshot is { } snapshot ? RoomFacts.NotResponding(snapshot) : null;
 
+	/// <summary>The room's motion and light-level sensors that have gone silent, one entry per kind.</summary>
+	public IReadOnlyList<SensorWarning> SensorWarnings { get; private set; } = [];
+
 	/// <summary>One sentence per motion sensor with a low battery.</summary>
 	public IReadOnlyList<string> LowBatteries => Snapshot is { } snapshot ? RoomFacts.LowBatteries(snapshot, NameOf) : [];
 
@@ -1378,6 +1381,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 			Schedule.PeriodHoldRule(_engine)).Period;
 
 		_daylightLux = _catalog.LuxOf(DaylightSensorId);
+		SensorWarnings = ReadSensorWarnings(room);
 
 		// Asked of the engine on the ticker, not composed here, so a room that falls under somebody's hand while
 		// the page sits open has its Test buttons closed within the second.
@@ -1386,6 +1390,40 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		_engineKnows = _engine.TryReadLevelTest(room.AreaId, out _engineTest);
 
 		return Still != before;
+	}
+
+	/// <summary>Motion sensors reading unavailable or unknown, and light-level sensors doing that or holding one state
+	/// past <see cref="RoomFacts.LightSensorStuckAfter"/>.</summary>
+	// The silent list carries the discovered sensors the engine dropped at resolution; the resolved list carries the
+	// ones it still reads, which are the only ones a stuck value can be found on.
+	private List<SensorWarning> ReadSensorWarnings(AreaConfig room)
+	{
+		AreaEntities silent = _catalog.SilentSensorsOf(room, Document.Global);
+
+		List<string> motion = [.. silent.MotionSensors.Select(option => option.EntityId)];
+
+		IEnumerable<string> luxCandidates = silent.LuxSensors.Select(option => option.EntityId)
+			.Concat(Preview.Resolved?.LuxSensors ?? [])
+			.Distinct(StringComparer.Ordinal);
+
+		List<string> lux = [];
+
+		foreach (string entityId in luxCandidates)
+		{
+			(bool isSilent, DateTimeOffset? changed) = _catalog.ReadingOf(entityId);
+
+			if (isSilent || (changed is { } since && Now - since > RoomFacts.LightSensorStuckAfter))
+				lux.Add(entityId);
+		}
+
+		return
+		[
+			.. new[]
+			{
+				RoomFacts.SensorWarningFor(SensorWarningKind.MotionUnavailable, [.. motion.Select(NameOf)]),
+				RoomFacts.SensorWarningFor(SensorWarningKind.LightNotChanging, [.. lux.Select(NameOf)])
+			}.OfType<SensorWarning>()
+		];
 	}
 
 	/// <summary>Everything the levels table, the curve and the pickers draw that the clock can change under them.</summary>
