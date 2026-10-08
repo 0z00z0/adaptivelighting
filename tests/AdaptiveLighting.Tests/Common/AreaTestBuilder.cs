@@ -4,6 +4,7 @@ using System.Reactive.Subjects;
 
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Ha;
 using AdaptiveLighting.Tests.Lighting;
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -69,6 +70,8 @@ public sealed class AreaTestBuilder
 	private HouseState? _houseBeforeStart = new(true, ModeKind.Normal, false);
 	private HouseState? _houseAfterStart;
 	private Func<IReadOnlyList<MotionBattery>>? _findBatteries;
+	private CommandLog? _commandLog;
+	private bool _throughHomeAssistant;
 
 	/// <summary>Day, evening and night, so 20:00 sits in "evening" at 70 % and 2700 K.</summary>
 	public static List<TimePeriodConfig> StandardPeriods() =>
@@ -96,6 +99,15 @@ public sealed class AreaTestBuilder
 		OverrideUntilVacant = false,
 		VacancyResetMinutes = 10
 	};
+
+	/// <summary>Writes every command the area sends to <paramref name="log"/>.</summary>
+	/// <remarks>With <paramref name="throughHomeAssistant"/> the real actuator carries them, so a light that already matches is not sent to.</remarks>
+	public AreaTestBuilder LogsCommandsTo(CommandLog log, bool throughHomeAssistant = false)
+	{
+		_commandLog = log;
+		_throughHomeAssistant = throughHomeAssistant;
+		return this;
+	}
 
 	/// <summary>Replaces the standard world of motion off, light off and lux 5.</summary>
 	public AreaTestBuilder States(Action<FakeHaContext> states)
@@ -305,13 +317,14 @@ public sealed class AreaTestBuilder
 			_wrapScheduler(scheduler),
 			global,
 			table,
-			actuator,
+			_throughHomeAssistant ? new HaLightActuator(ha, NullLogger.Instance) : actuator,
 			publisher,
 			house,
 			NullLoggerFactory.Instance,
 			LastSeen: null,
 			OriginNames: _nameOrigins ? new ChangeOriginNames(ha, NullLogger.Instance) : null,
-			OwnUserId: static () => null);
+			OwnUserId: static () => null,
+			CommandLog: _commandLog);
 
 		AreaController controller = new(
 			wiring,

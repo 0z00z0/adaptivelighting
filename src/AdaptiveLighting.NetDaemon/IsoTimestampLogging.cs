@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using Serilog;
+using Serilog.Core;
 using Serilog.Debugging;
 using Serilog.Events;
 using Serilog.Sinks.SystemConsole.Themes;
@@ -24,13 +25,17 @@ public static class IsoTimestampLogging
 	{
 		ArgumentNullException.ThrowIfNull(builder);
 
+		// The document's LogLevel moves this switch at run time; unset puts minimumLevel back.
+		LoggingLevelSwitch levelSwitch = new(minimumLevel);
+		SerilogLevelControl.Adopt(levelSwitch);
+
 		// Levels are set here, never read from configuration: this replaces the logger the host built from
 		// Logging:LogLevel, and Serilog's ReadFrom.Configuration wants a "Serilog" section most hosts do not have,
 		// leaving Information and silently dropping every Debug line.
 		return builder.UseSerilog((context, logger) =>
 		{
 			logger
-				.MinimumLevel.Is(minimumLevel)
+				.MinimumLevel.ControlledBy(levelSwitch)
 				.MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
 				.Enrich.FromLogContext()
 				.WriteTo.Console(

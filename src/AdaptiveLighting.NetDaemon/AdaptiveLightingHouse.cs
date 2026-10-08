@@ -1,3 +1,4 @@
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Lamplight;
 using AdaptiveLighting.Web;
 
@@ -48,6 +49,7 @@ public static class AdaptiveLightingHouse
 		ArgumentNullException.ThrowIfNull(builder);
 
 		builder.Services.AddLightingWeb();
+		builder.Services.AddSingleton<ILogLevelControl, SerilogLevelControl>();
 		builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 		// Static web assets are wired up automatically only in Development. Without this the class library's

@@ -2515,6 +2515,47 @@ characters flattened to spaces. A value carrying a newline therefore cannot forg
 running a test can be in any time zone, so the tests assert the *shape* of the timestamp, or compare against the
 same projection of a fixed `DateTimeOffset` — never a wall clock.
 
+### The log level moves at run time
+
+`UseIsoTimestampLogging` builds the logger on a Serilog `LoggingLevelSwitch`, created once for the process at
+the `minimumLevel` it is given; the `Microsoft` override stays at Warning. `Global.LogLevel` moves that switch:
+`Debug`, `Information` or `Warning`, ignoring case. Unset puts back the level the host started with. Any other
+word is a validation warning and changes nothing, because an unrecognised word must never stop a house starting.
+
+The engine never sees Serilog. `LightingEngineHost` talks to `ILogLevelControl`, applied after the first load and
+after every save. `AddAdaptiveLighting()` registers the Serilog one, which is supported only once
+`UseIsoTimestampLogging` has adopted its switch; every other host gets `NoLogLevelControl`, keeps its own
+logging untouched, and both pages show the row as *set by the host*.
+
+### The light command log
+
+With `Global.CommandLog` on, every command the engine puts on a light is written to
+`log/commands/<area>/<light>.log` beside the document. `<area>` is the Home Assistant area id; a room configured
+without one uses its name, so renaming such a room starts a new folder. `<light>` is the entity id. Both are
+lower-cased, with anything outside `a-z 0-9 . _ -` written as `_`. A new file starts with one `# ` line naming
+the room. A room's scenes go to `_scene.log` in its folder; a house-mode scene, which no room owns, to
+`_house/_scene.log`.
+
+One line per command:
+
+    2026-01-15T20:00:00.000+01:00 reason=Motion state=AutoActive action=turn_on brightness_pct=70 color_temp_kelvin=2700 transition=2 outcome=sent
+    2026-01-15T20:05:00.000+01:00 reason=CircadianTick state=AutoActive action=turn_on brightness_pct=70 color_temp_kelvin=2700 transition=2 outcome=not-sent-already-matches
+
+**The seam is the actuator.** `ILightActuator.Apply` reports whether a call went out and the data it carried, so
+a sent line records what Home Assistant was actually asked; a not-sent line records the command the engine
+worked out. The not-sent outcome is logged on purpose: a computed command that never reached the light is what
+this log exists to show. The area wraps its actuator where its fan-out is built, and reads the reason and state
+through a delegate. Every send path in `AreaController` goes through `SendFor`, which sets the reason for the
+duration of the send; a line reading `reason=unknown` is a path that skipped it.
+
+The writer takes one lock, appends and closes per line, UTF-8 without a BOM. An I/O failure is logged once per
+engine build through the ordinary logger and swallowed: the log must never reach the lighting path, which runs
+inside the area's lock. Nothing is created while the switch is off, and switching it off deletes nothing.
+
+**No rotation.** The measured volume on a live house is well under 100 lines per room per day, so a file grows
+by a few kilobytes a day. The durable log's retention matches its own file names only and never touches
+`commands/`.
+
 ---
 
 ## Dark theme contrast

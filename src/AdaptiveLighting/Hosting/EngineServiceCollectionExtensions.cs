@@ -1,6 +1,7 @@
 using System.Reactive.Concurrency;
 
 using Adaptive.Settings;
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.LastSeen;
 
 using Microsoft.Extensions.Configuration;
@@ -45,7 +46,8 @@ public static class EngineServiceCollectionExtensions
 			provider.GetRequiredService<LightingConfigStore>(),
 			provider.GetRequiredService<ILoggerFactory>(),
 			provider.GetService<IEntityLastSeen>(),
-			provider.GetRequiredService<StateStoreRegistry>()));
+			provider.GetRequiredService<StateStoreRegistry>(),
+			provider.GetService<ILogLevelControl>()));
 
 		// After the store: the last-seen cache derives its file names from the document's path.
 		services.AddEntityLastSeen();

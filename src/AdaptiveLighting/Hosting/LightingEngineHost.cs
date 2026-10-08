@@ -80,6 +80,9 @@ public sealed class LightingEngineHost : IDisposable
 	// comes from the store. Null and every room's history is lost across a restart, never a reason to have no engine.
 	private readonly IRoomHistoryStore? _roomHistory;
 
+	// NoLogLevelControl where the host provides none, so the document's level is then ignored.
+	private readonly ILogLevelControl _logLevel;
+
 	private readonly StateStoreRegistry _stateStores;
 
 	// Set only where the host built the registry itself; one the container supplies is the container's to dispose.
@@ -113,14 +116,20 @@ public sealed class LightingEngineHost : IDisposable
 
 	/// <summary>Creates the host. Nothing runs until <see cref="Attach"/> and <see cref="Reload"/>.</summary>
 	/// <remarks>Without <c>lastSeen</c> the gates use Home Assistant's own timestamps, which reset on its restart.</remarks>
-	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen = null)
-		: this(store, loggerFactory, lastSeen, stateStores: null)
+	public LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen = null, ILogLevelControl? logLevel = null)
+		: this(store, loggerFactory, lastSeen, stateStores: null, logLevel)
 	{
 	}
 
 	/// <summary>Creates the host on a registry the container owns; without one the host builds and disposes its own.</summary>
-	internal LightingEngineHost(LightingConfigStore store, ILoggerFactory loggerFactory, IEntityLastSeen? lastSeen, StateStoreRegistry? stateStores)
+	internal LightingEngineHost(
+		LightingConfigStore store,
+		ILoggerFactory loggerFactory,
+		IEntityLastSeen? lastSeen,
+		StateStoreRegistry? stateStores,
+		ILogLevelControl? logLevel = null)
 	{
+		_logLevel = logLevel ?? NoLogLevelControl.Instance;
 		_lastSeen = lastSeen;
 		_store = store ?? throw new ArgumentNullException(nameof(store));
 		_loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
@@ -185,6 +194,9 @@ public sealed class LightingEngineHost : IDisposable
 	public bool IsAttached => _ha is not null;
 
 	public bool IsRunning => _orchestrator is not null;
+
+	/// <summary>Whether the document's log level takes effect here; <c>false</c> where the host sets it.</summary>
+	public bool CanSetLogLevel => _logLevel.IsSupported;
 
 	/// <summary>How many areas resolved and are being commanded. Zero while faulted.</summary>
 	public int RunningAreaCount => _orchestrator?.Areas.Count ?? 0;
@@ -605,6 +617,8 @@ public sealed class LightingEngineHost : IDisposable
 			"Applying lighting configuration update: {Areas} areas, {Periods} periods, house-mode select {Select}.",
 			config.Areas.Count, config.Periods.Count, config.Global.HouseMode?.Entity ?? "(none)");
 
+		ApplyLogLevel(config.Global);
+
 		ValidationResult validation = Validate(config);
 		LastValidation = validation;
 
@@ -685,7 +699,10 @@ public sealed class LightingEngineHost : IDisposable
 				// the two apart on its own.
 				afterSave: notice is EngineNoticeKind.SettingsSaved,
 				defaultKillSwitchEntity: _defaultKillSwitchEntity,
-				carried: carried);
+				carried: carried,
+				commandLog: config.Global.CommandLog
+					? new CommandLog(CommandLog.DirectoryBeside(_store.FilePath), _loggerFactory.CreateLogger<CommandLog>())
+					: null);
 
 			orchestrator.Start();
 
@@ -714,6 +731,18 @@ public sealed class LightingEngineHost : IDisposable
 
 			return new SaveResult(SaveStatus.Failed, validation, Fault);
 		}
+	}
+
+	// Unset or unrecognised puts back the level the host started with.
+	private void ApplyLogLevel(GlobalConfig global)
+	{
+		if (!_logLevel.IsSupported)
+			return;
+
+		if (LogLevelSetting.Read(global.LogLevel) is { } level)
+			_logLevel.Apply(level);
+		else
+			_logLevel.RestoreInitial();
 	}
 
 	private void StopCore()

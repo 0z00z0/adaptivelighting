@@ -47,7 +47,7 @@ internal sealed class HaLightActuator : ILightActuator
 	}
 
 	/// <inheritdoc/>
-	public void Apply(string entityId, LightCommand command)
+	public ActuatorOutcome Apply(string entityId, LightCommand command)
 	{
 		ArgumentNullException.ThrowIfNull(command);
 
@@ -56,10 +56,9 @@ internal sealed class HaLightActuator : ILightActuator
 		if (!command.On)
 		{
 			if (state?.IsOff() == true)
-				return;
+				return ActuatorOutcome.AlreadyMatches;
 
-			Call(entityId, TurnOffService, BuildOffData(command));
-			return;
+			return Call(entityId, TurnOffService, BuildOffData(command));
 		}
 
 		// The one place the channel key is chosen, off the state already read here. No extra round trip.
@@ -71,10 +70,10 @@ internal sealed class HaLightActuator : ILightActuator
 		if (AlreadyMatches(state, command, channelKey))
 		{
 			_logger.LogTrace("{EntityId} already matches {Command}; not calling.", entityId, command);
-			return;
+			return ActuatorOutcome.AlreadyMatches;
 		}
 
-		Call(entityId, TurnOnService, BuildOnData(command, channelKey));
+		return Call(entityId, TurnOnService, BuildOnData(command, channelKey));
 	}
 
 	/// <inheritdoc/>
@@ -200,12 +199,14 @@ internal sealed class HaLightActuator : ILightActuator
 		return data;
 	}
 
-	private void Call(string entityId, string service, Dictionary<string, object> data)
+	private ActuatorOutcome Call(string entityId, string service, Dictionary<string, object> data)
 	{
 		_logger.LogDebug("light.{Service} {EntityId} {Data}", service, entityId,
 			string.Join(", ", data.Select(pair => string.Create(CultureInfo.InvariantCulture, $"{pair.Key}={Describe(pair.Value)}"))));
 
 		_ha.CallService(LightDomain, service, ServiceTarget.FromEntity(entityId), data);
+
+		return new ActuatorOutcome(Sent: true, service, data);
 	}
 
 	// A colour value is an array, and the default formatting of one is its type name.

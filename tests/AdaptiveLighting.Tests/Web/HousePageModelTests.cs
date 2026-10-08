@@ -297,6 +297,27 @@ public sealed class HousePageModelTests
 		CollectionAssert.AreEqual(new[] { "kjokken" }, Floor(model, 1), "no room crossed the boundary");
 	}
 
+	/// <summary>Both logging settings reach the file, and an empty level is stored as unset, never as "".</summary>
+	[TestMethod]
+	public void The_Logging_Settings_Reach_The_File()
+	{
+		HousePageModel model = Model(ThreeRooms());
+		model.Start(null);
+
+		model.CommandLog = true;
+		model.LogLevelValue = "Warning";
+		model.Save();
+
+		GlobalConfig saved = LightingConfigDocument.Deserialize(File.ReadAllText(_path)).Config.Global;
+		Assert.IsTrue(saved.CommandLog);
+		Assert.AreEqual("Warning", saved.LogLevel);
+
+		model.LogLevelValue = "";
+		model.Save();
+
+		Assert.IsNull(LightingConfigDocument.Deserialize(File.ReadAllText(_path)).Config.Global.LogLevel);
+	}
+
 	/// <summary>Two rooms on the ground floor and one above, with the upper floor's room sitting between them in
 	/// the document, so a move that ignored the grouping would be visible.</summary>
 	private static FakeAreaRegistry TwoFloors()

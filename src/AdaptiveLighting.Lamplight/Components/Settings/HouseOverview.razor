@@ -195,6 +195,31 @@
 	</div>
 </Fold>
 
+<Fold Id="logging" Title="Logging" Summary="@LoggingSummary" Open="@IsOpen("logging")" OpenChanged="@(open => SetOpen("logging", open))">
+	<div class="rows">
+		<Row Label="Log level" Value="@Model.LogLevelText" IsEditing="@(_editingRow == "log-level")" OnToggleEdit="@(() => ToggleRow("log-level"))">
+			<Help>Takes effect only where the house uses this package's logging.</Help>
+			<ChildContent>
+				<select class="cell" disabled="@(!Model.CanSetLogLevel)" aria-label="Log level" @bind:get="Model.LogLevelValue" @bind:set="SetLogLevel">
+					<option value="">As the host sets it</option>
+					@foreach (string level in HousePageModel.LogLevels)
+					{
+						<option value="@level">@level</option>
+					}
+				</select>
+			</ChildContent>
+		</Row>
+		<Row Label="Log every light command" Value="@(Model.CommandLog ? "On" : "Off")" IsEditing="@(_editingRow == "command-log")" OnToggleEdit="@(() => ToggleRow("command-log"))">
+			<Help>One file per light, in log/commands beside the settings file. The files grow until this is switched off, and nothing deletes them.</Help>
+			<ChildContent>
+				<button type="button" class="toggle @(Model.CommandLog ? "on" : null)" role="switch" aria-checked="@(Model.CommandLog ? "true" : "false")" aria-label="Log every light command" @onclick="() => Model.CommandLog = !Model.CommandLog">
+					<span class="knob"></span>
+				</button>
+			</ChildContent>
+		</Row>
+	</div>
+</Fold>
+
 <Fold Id="install" Title="This house" Summary="@HousePageModel.Version" Open="@IsOpen("install")" OpenChanged="@(open => SetOpen("install", open))">
 	<div class="rows">
 		<Row Label="House name" Value="@(Model.HouseName ?? "Adaptive lighting")" IsWide="true">
@@ -361,6 +386,15 @@
 
 	private string SensorsSummary => Model.IncludeLabel ?? Model.OutdoorLuxSensor ?? "every light found";
 
+	private string LoggingSummary => $"{Model.LogLevelText} · {(Model.CommandLog ? "commands on" : "commands off")}";
+
+	private void SetLogLevel(string? value) => Model.LogLevelValue = value ?? "";
+
+	// The one Logging row whose control is open, or null.
+	private string? _editingRow;
+
+	private void ToggleRow(string row) => _editingRow = _editingRow == row ? null : row;
+
 	private string PeopleSummary => Model.Persons.Count == 0 ? "everyone" : $"{Model.Persons.Count} named";
 
 	private string RoomsSummary => $"{Model.Areas.Count(Model.IsEnabled)} of {Model.Areas.Count} on";
@@ -377,6 +411,7 @@
 		new("people", "People"),
 		new("master", "Master switch"),
 		new("tuning", "Fine tuning"),
+		new("logging", "Logging"),
 		new("install", "This house")
 	];
 
