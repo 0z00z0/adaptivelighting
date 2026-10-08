@@ -311,6 +311,13 @@ Illuminance only — a motion sensor that has said nothing for hours is a room n
 | **Recognise own changes for** | How long the app's own commands are recognised as its own rather than as a person at a switch. | 8 s | `SelfEchoWindowSeconds` |
 | **Other automations count as manual changes** | Whether a change made by another automation counts as a manual change. On means your other automations win. A room can answer this for itself on its own page; every room that does not follows this. | on | `TreatAutomationsAsManual` |
 
+### Logging
+
+| Setting | What it does | Default | In the file |
+|---|---|---|---|
+| **Log level** | *Debug*, *Information* or *Warning*, applied on save without a restart. Works only where the house uses this package's logging; elsewhere the row reads *set by the host*. Any other word is a warning and is ignored. | as the host sets it | `LogLevel` |
+| **Log every light command** | One line for every command the app works out for a light, sent or not, in a file per light under `log/commands/<room>/` beside the settings file. The files grow until this is switched off, and nothing deletes them. | off | `CommandLog` |
+
 ---
 
 ## Lamplight

@@ -11,7 +11,7 @@ namespace AdaptiveLighting.NetDaemon;
 internal static class DurableLogFile
 {
 	/// <summary>The subdirectory the log lives in, beside the document instead of on top of it.</summary>
-	public const string FolderName = "log";
+	public const string FolderName = AdaptiveLighting.Engine.CommandLog.LogFolderName;
 
 	/// <summary>What one day's file may reach before the day rolls early.</summary>
 	public const long MaxFileBytes = 4L * 1024 * 1024;

@@ -1684,6 +1684,39 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		}
 	}
 
+	// ---- logging ----
+
+	public bool CommandLog
+	{
+		get => _config.Global.CommandLog;
+		set
+		{
+			_config.Global.CommandLog = value;
+			Revalidate();
+		}
+	}
+
+	/// <summary>The document's log level, or empty for the host's own.</summary>
+	public string LogLevelValue
+	{
+		get => _config.Global.LogLevel ?? "";
+		set
+		{
+			_config.Global.LogLevel = value is { Length: > 0 } ? value : null;
+			Revalidate();
+		}
+	}
+
+	public static IReadOnlyList<string> LogLevels => LogLevelSetting.Accepted;
+
+	/// <summary>Whether the level chosen here takes effect; <c>false</c> where the host sets it.</summary>
+	public bool CanSetLogLevel => _engine.CanSetLogLevel;
+
+	public string LogLevelText =>
+		!CanSetLogLevel ? "set by the host"
+		: _config.Global.LogLevel is { Length: > 0 } level ? level
+		: "as the host sets it";
+
 	// ---- this installation ----
 
 	public bool EngineIsRunning => _engine.IsRunning;

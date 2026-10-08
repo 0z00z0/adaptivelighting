@@ -27,12 +27,14 @@ public sealed class FakeLightActuator : ILightActuator
 		_echoUserId = userId;
 	}
 
-	public void Apply(string entityId, LightCommand command)
+	public ActuatorOutcome Apply(string entityId, LightCommand command)
 	{
 		Applied.Add((entityId, command));
 
+		ActuatorOutcome sent = new(Sent: true, command.On ? "turn_on" : "turn_off");
+
 		if (_echoInto is null)
-			return;
+			return sent;
 
 		Dictionary<string, object>? attributes = command is { On: true, BrightnessPct: double pct }
 			? new() { ["brightness"] = (int)Math.Round(pct * 2.55) }
@@ -40,6 +42,8 @@ public sealed class FakeLightActuator : ILightActuator
 
 		_echoInto.Trigger(entityId, command.On ? "on" : "off", attributes,
 			new Context { Id = $"echo-{++_echoes}", UserId = _echoUserId });
+
+		return sent;
 	}
 
 	public void ActivateScene(string sceneId) => Scenes.Add(sceneId);

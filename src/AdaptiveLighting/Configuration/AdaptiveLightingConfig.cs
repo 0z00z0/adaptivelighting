@@ -126,6 +126,13 @@ public class GlobalConfig
 	/// <summary>Whether a change carrying a parent context (another automation) counts as a manual override.</summary>
 	public bool TreatAutomationsAsManual { get; set; } = true;
 
+	/// <summary>Whether every light command is written to a file per light under <c>log/commands</c> beside the document.</summary>
+	public bool CommandLog { get; set; }
+
+	/// <summary>The minimum log level, one of <see cref="LogLevelSetting.Accepted"/>; <c>null</c> keeps the host's own.</summary>
+	/// <remarks>Any other text is a warning and is ignored. Takes effect only where the host's logging can be changed live.</remarks>
+	public string? LogLevel { get; set; }
+
 	public bool SmoothTransitions { get; set; } = true;
 
 	public int BlendMinutes { get; set; } = 30;

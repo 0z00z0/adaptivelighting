@@ -28,6 +28,11 @@ internal static class GlobalSettingsRules
 
 		ValidateEmbedFrom(global, result);
 
+		// A warning: an unrecognised word must never stop a house starting.
+		if (global.LogLevel is { Length: > 0 } logLevel && LogLevelSetting.Read(logLevel) is null)
+			result.AddWarning(
+				$"Global.LogLevel '{logLevel}' is not one of {string.Join(", ", LogLevelSetting.Accepted)}, so the host's own level stays in force.");
+
 		// MotionDeviceClasses is not checked for emptiness: empty means GlobalConfig.DefaultMotionDeviceClasses.
 
 		if (knownEntityIds is null)

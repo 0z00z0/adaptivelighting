@@ -56,6 +56,9 @@ public sealed class LightingOrchestrator : IDisposable
 
 	// The app's built-in enable switch, the kill switch when the document names none. Known to the host only.
 	private readonly string? _defaultKillSwitchEntity;
+
+	// Null while the document's switch is off. A house-mode scene is written under its own folder, since no room owns it.
+	private readonly CommandLog? _commandLog;
 	private readonly ILogger _logger;
 
 	private readonly BehaviorSubject<HouseState> _house = new(HouseState.Initial);
@@ -109,10 +112,12 @@ public sealed class LightingOrchestrator : IDisposable
 		IAreaSetupMemory? setupMemory = null,
 		bool afterSave = false,
 		string? defaultKillSwitchEntity = null,
-		IReadOnlyDictionary<string, AreaCarryOver>? carried = null)
+		IReadOnlyDictionary<string, AreaCarryOver>? carried = null,
+		CommandLog? commandLog = null)
 	{
 		_afterSave = afterSave;
 		_carried = carried;
+		_commandLog = commandLog;
 		_defaultKillSwitchEntity = defaultKillSwitchEntity;
 		_lastSeen = lastSeen;
 		_lastPeriod = lastPeriod;
@@ -228,7 +233,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_loggerFactory,
 			_lastSeen,
 			_originNames,
-			() => ownUser.UserId);
+			() => ownUser.UserId,
+			_commandLog);
 
 		HaAreaRegistry registry = new(_registry);
 		AreaEntityResolver resolver = new(
@@ -532,7 +538,7 @@ public sealed class LightingOrchestrator : IDisposable
 				foreach (AreaController area in _areas)
 					area.ExpectHouseScene(scene);
 
-				_actuator.ActivateScene(scene);
+				HouseSceneActuator().ActivateScene(scene);
 			}
 		}
 
@@ -548,6 +554,12 @@ public sealed class LightingOrchestrator : IDisposable
 
 		_house.OnNext(state);
 	}
+
+	private ILightActuator HouseSceneActuator() =>
+		_commandLog is { } log
+			? log.Wrap(_actuator, CommandLog.HouseFolder, "House-mode scenes", () => _scheduler.Now.ToLocalTime(),
+				static () => new CommandContext(TransitionReason.HouseModeChanged, State: null))
+			: _actuator;
 
 	/// <summary>Raises one card naming every room that is switched on but could not be set up, the first time each is seen.</summary>
 	// Recorded even when nothing failed: forgetting a room that now resolves is what lets a later regression notify

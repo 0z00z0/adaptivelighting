@@ -133,6 +133,9 @@ public sealed class AreaController : IDisposable
 	// room it names.
 	private string? _houseScene;
 
+	// The reason the command log writes beside a command going out. Null outside SendFor.
+	private TransitionReason? _sendingFor;
+
 	// The orchestrator composes and publishes the opening house state before any room starts, so the first thing
 	// this controller reads off that stream is it. The mode it carries was read, not changed, and every rebuild
 	// would otherwise report a mode change nobody made.
@@ -170,10 +173,15 @@ public sealed class AreaController : IDisposable
 		_global = house.Global;
 		IReadOnlyList<TimePeriodConfig> schedule = house.Periods;
 		CircadianCalculator calculator = circadian ?? throw new ArgumentNullException(nameof(circadian));
-		ILightActuator lights = house.Actuator;
 		_publisher = house.Publisher;
 		_houseChanged = house.HouseChanged;
 		_areaId = areaId is { Length: > 0 } ? areaId : null;
+
+		ILightActuator lights = house.CommandLog is { } commandLog
+			? commandLog.Wrap(house.Actuator, CommandLog.FolderFor(_areaId, area.Name), area.Name,
+				() => _scheduler.Now.ToLocalTime(), () => new CommandContext(_sendingFor, _state))
+			: house.Actuator;
+
 		IEntityLastSeen? lastSeen = house.LastSeen;
 
 		_logger = house.LoggerFactory.CreateLogger($"{typeof(AreaController).FullName}.{area.Name}");
@@ -318,7 +326,8 @@ public sealed class AreaController : IDisposable
 			// The engine's own answer for that period, curve included, so the room shows what it would really do
 			// and no second reading of the settings can drift from this one. Resolved per light too, or a test
 			// would show every lamp at the room's level and the room would look wrong when the engine took over.
-			_fanOut.Send(_targets.PeriodCommand(target), _targets.LightCommandsFor(periodKey));
+			SendFor(TransitionReason.LevelTestStarted,
+				() => _fanOut.Send(_targets.PeriodCommand(target), _targets.LightCommandsFor(periodKey)));
 
 			_logger.LogInformation("{Area}: testing period '{Period}' for {Seconds}s.", Name, target.PeriodName, LevelTestSeconds);
 
@@ -362,7 +371,7 @@ public sealed class AreaController : IDisposable
 				_levelTest.Append(CaptureLights([lightEntityId]));
 			}
 
-			_fanOut.SendToLight(lightEntityId, _targets.PeriodCommand(target));
+			SendFor(TransitionReason.LevelTestStarted, () => _fanOut.SendToLight(lightEntityId, _targets.PeriodCommand(target)));
 
 			_logger.LogInformation("{Area}: testing period '{Period}' on {Light} for {Seconds}s.",
 				Name, target.PeriodName, lightEntityId, LevelTestSeconds);
@@ -1503,7 +1512,7 @@ public sealed class AreaController : IDisposable
 		// Before every command: it picks the fade length and it is what the snapshot reports.
 		RefreshDarkness();
 
-		Send(_targets.TargetCommand(targets.Room, brightnessFactor), _targets.LightCommands(targets, brightnessFactor));
+		Send(reason, _targets.TargetCommand(targets.Room, brightnessFactor), _targets.LightCommands(targets, brightnessFactor));
 
 		_lightsMoved = reason is TransitionReason.CircadianTick ? LightsMovedAlone(targets, previous) : null;
 		Publish(reason);
@@ -1562,7 +1571,7 @@ public sealed class AreaController : IDisposable
 	private void ApplyScene(string sceneId, TransitionReason reason)
 	{
 		RefreshDarkness();
-		_fanOut.RunScene(sceneId, TransitionSeconds());
+		SendFor(reason, () => _fanOut.RunScene(sceneId, TransitionSeconds()));
 
 		_standingScene = sceneId;
 		_houseScene = null;
@@ -1579,20 +1588,36 @@ public sealed class AreaController : IDisposable
 		RefreshDarkness();
 
 		LightCommand command = LightCommand.TurnOff(TransitionSeconds());
-		Send(command);
+		Send(reason, command);
 		Publish(reason);
 	}
 
-	private void Send(LightCommand command, IReadOnlyDictionary<string, LightCommand>? lightCommands = null)
+	private void Send(TransitionReason reason, LightCommand command, IReadOnlyDictionary<string, LightCommand>? lightCommands = null)
 	{
 		_standingScene = null;
 		_houseScene = null;
-		_fanOut.Send(command, lightCommands);
+		SendFor(reason, () => _fanOut.Send(command, lightCommands));
 
 		// The standing command, so a republish keeps the levels that are actually holding instead of blanking them.
 		_lastCommand = command;
 		_lastLightCommands = lightCommands;
 		_lastCommandAt = _scheduler.Now;
+	}
+
+	// Every command this room sends goes out inside one of these, so its log line carries the reason.
+	private void SendFor(TransitionReason reason, Action send)
+	{
+		TransitionReason? outer = _sendingFor;
+		_sendingFor = reason;
+
+		try
+		{
+			send();
+		}
+		finally
+		{
+			_sendingFor = outer;
+		}
 	}
 
 	/// <summary>Why a level test cannot run here, or <c>null</c> when one can.</summary>
@@ -1728,7 +1753,9 @@ public sealed class AreaController : IDisposable
 	}
 
 	/// <summary>Ends a running level test by giving the levels back to whoever owns them.</summary>
-	private void EndLevelTest()
+	private void EndLevelTest() => SendFor(TransitionReason.LevelTestEnded, ReturnFromLevelTest);
+
+	private void ReturnFromLevelTest()
 	{
 		// Taken before any of it is used, so a second return cannot apply the same capture twice.
 		if (_levelTest.Take() is not { } finished)
@@ -1789,11 +1816,11 @@ public sealed class AreaController : IDisposable
 			_lastTargets = targets;
 
 			double factor = _state is AreaState.PreOff ? _area.Settings.PreOffBrightnessFactor : 1.0;
-			Send(_targets.TargetCommand(targets.Room, factor), _targets.LightCommands(targets, factor));
+			Send(TransitionReason.LevelTestEnded, _targets.TargetCommand(targets.Room, factor), _targets.LightCommands(targets, factor));
 			return;
 		}
 
-		Send(LightCommand.TurnOff(TransitionSeconds()));
+		Send(TransitionReason.LevelTestEnded, LightCommand.TurnOff(TransitionSeconds()));
 	}
 
 	/// <summary>Re-sends what the engine wants for <paramref name="lights"/> alone: the return a light test owes.</summary>
