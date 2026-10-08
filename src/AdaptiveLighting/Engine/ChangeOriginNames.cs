@@ -18,7 +18,7 @@ public sealed class ChangeOriginNames : IDisposable
 
 	public const string ByTheEngine = "By adaptive lighting";
 
-	public const string AtTheDevice = "At the device or wall switch";
+	public const string UnknownSource = "Unknown source";
 
 	// The change arrives right behind its event, so this only has to outlast a burst.
 	internal const int RememberedRuns = 256;
@@ -60,7 +60,7 @@ public sealed class ChangeOriginNames : IDisposable
 	public string? Describe(ChangeOrigin origin, Context? context) => origin switch
 	{
 		ChangeOrigin.Self => ByTheEngine,
-		ChangeOrigin.PhysicalDevice => AtTheDevice,
+		ChangeOrigin.PhysicalDevice => UnknownSource,
 		ChangeOrigin.Automation => AutomationName(context) is { } automation ? $"By automation: {automation}" : ByAnAutomation,
 		ChangeOrigin.HaUser => PersonName(context?.UserId) is { } person ? $"By {person}" : ByAHomeAssistantUser,
 		_ => null

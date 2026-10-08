@@ -32,7 +32,7 @@ public sealed class ChangeOriginNamesTests
 	}
 
 	[TestMethod]
-	public void A_Person_Is_Named_After_Their_Person_Entity_Or_Called_A_Home_Assistant_User_Without_One()
+	public void A_Person_Is_Named_After_Their_Person_Entity_Or_Called_A_Home_Assistant_User_Without_One_And_A_Change_With_Neither_Is_An_Unknown_Source()
 	{
 		FakeHaContext ha = new();
 		ha.SetState("person.alex", "home", new() { ["user_id"] = "user-1", ["friendly_name"] = "Alex" });
@@ -41,6 +41,6 @@ public sealed class ChangeOriginNamesTests
 		Assert.AreEqual("By Alex", names.Describe(ChangeOrigin.HaUser, new Context { Id = "c", UserId = "user-1" }));
 		Assert.AreEqual("By a Home Assistant user",
 			names.Describe(ChangeOrigin.HaUser, new Context { Id = "c", UserId = "user-with-no-person" }));
-		Assert.AreEqual("At the device or wall switch", names.Describe(ChangeOrigin.PhysicalDevice, new Context { Id = "c" }));
+		Assert.AreEqual("Unknown source", names.Describe(ChangeOrigin.PhysicalDevice, new Context { Id = "c" }));
 	}
 }
