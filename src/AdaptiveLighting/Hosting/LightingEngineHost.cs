@@ -693,13 +693,16 @@ public sealed class LightingEngineHost : IDisposable
 			Fault = null;
 			LastStartedUtc = DateTimeOffset.UtcNow;
 
+			// A switched-off room still has a controller, so it is counted out here to match ManagedAreaCount.
+			int running = orchestrator.Areas.Count(area => area.State is not AreaState.Disabled);
+
 			_logger.LogInformation(
 				"Adaptive lighting is running: {Areas} of {Configured} areas resolved.",
-				orchestrator.Areas.Count, config.ManagedAreaCount);
+				running, config.ManagedAreaCount);
 
 			_notices.OnNext(new EngineNotice(notice, DateTimeOffset.Now));
 
-			return new SaveResult(SaveStatus.Saved, validation, $"Saved: {orchestrator.Areas.Count} of {config.ManagedAreaCount} rooms are running.");
+			return new SaveResult(SaveStatus.Saved, validation, $"Saved: {running} of {config.ManagedAreaCount} rooms are running.");
 		}
 		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
 		{
