@@ -176,15 +176,15 @@
 
 <Fold Id="tuning" Title="Fine tuning" Summary="@($"{Model.CircadianTickSeconds} s · {Model.SelfEchoWindowSeconds} s")" Open="@IsOpen("tuning")" OpenChanged="@(open => SetOpen("tuning", open))">
 	<div class="rows">
-		<Row Label="Re-check the rooms every" Value="@($"{Model.CircadianTickSeconds} s")">
+		<Row Label="Re-check the rooms every" Value="@($"{Model.CircadianTickSeconds} s")" IsEditing="@(_editingRow == "re-check")" OnToggleEdit="@(() => ToggleRow("re-check"))">
 			<Help>How often each room re-reads the time of day and the light outside. 60 is plenty.</Help>
 			<ChildContent><Stepper Value="@Model.CircadianTickSeconds" Text="@($"{Model.CircadianTickSeconds} s")" Label="Re-check the rooms every" Step="5" Min="1" ValueChanged="@(value => Model.CircadianTickSeconds = (int)value)" /></ChildContent>
 		</Row>
-		<Row Label="Recognise own changes for" Value="@($"{Model.SelfEchoWindowSeconds} s")">
+		<Row Label="Recognise own changes for" Value="@($"{Model.SelfEchoWindowSeconds} s")" IsEditing="@(_editingRow == "own-changes")" OnToggleEdit="@(() => ToggleRow("own-changes"))">
 			<Help>A light that changes within this many seconds of one of the app's own commands is read as its echo, not as somebody at a switch. 8 s suits most houses.</Help>
 			<ChildContent><Stepper Value="@Model.SelfEchoWindowSeconds" Text="@($"{Model.SelfEchoWindowSeconds} s")" Label="Recognise own changes for" Step="1" Min="0" ValueChanged="@(value => Model.SelfEchoWindowSeconds = (int)value)" /></ChildContent>
 		</Row>
-		<Row Label="Other automations count as manual changes" Value="@(Model.TreatAutomationsAsManual ? "Yes" : "No")">
+		<Row Label="Other automations count as manual changes" Value="@(Model.TreatAutomationsAsManual ? "Yes" : "No")" IsEditing="@(_editingRow == "automations-manual")" OnToggleEdit="@(() => ToggleRow("automations-manual"))">
 			<Help>Ticked, a light another automation changes is treated as a manual change. A room can answer this for itself under Movement and timing.</Help>
 			<ChildContent>
 				<button type="button" class="toggle @(Model.TreatAutomationsAsManual ? "on" : null)" role="switch" aria-checked="@(Model.TreatAutomationsAsManual ? "true" : "false")" aria-label="Other automations count as manual changes" @onclick="() => Model.TreatAutomationsAsManual = !Model.TreatAutomationsAsManual">
