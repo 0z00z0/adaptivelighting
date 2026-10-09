@@ -25,6 +25,9 @@
 
 <body>
 	<LamplightRoutes @rendermode="InteractiveServer" />
+	@* Shared components call these through JS interop; without them the fine brightness control and the curve drag never attach. *@
+	<script src="@($"_content/AdaptiveLighting.Web/lux-curve.js?v={AssetToken.Text}")"></script>
+	<script src="@($"_content/AdaptiveLighting.Web/preset-slider.js?v={AssetToken.Text}")"></script>
 	<script src="_framework/blazor.web.js"></script>
 </body>
 
