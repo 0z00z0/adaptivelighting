@@ -159,18 +159,22 @@ public sealed class ZeroBrightnessTests
 	}
 
 	[TestMethod]
-	public void A_Dim_Deep_Enough_To_Land_On_Raw_Zero_Is_An_Off_Too()
+	public void A_Dim_Below_One_Raw_Step_Is_Commanded_On_At_The_Lowest_Step_And_Never_As_An_Off()
 	{
-		// 70 % dimmed by 0.002 is 0.14 %, which Home Assistant stores as raw 0 and carries out as a turn-off.
+		// 70 % dimmed by 0.002 is 0.14 %, under one raw step. Raw 1 is 0.39 %.
 		Fixture room = Build(preOffFactor: 0.002, vacancySeconds: 600);
 		LightTheRoom(room);
 
 		room.Scheduler.AdvanceBy(TimeSpan.FromSeconds(600).Ticks);
 
+		string[] recorded = [.. Recorded(room.Actuator)];
+
 		CollectionAssert.AreEqual(
-			new[] { "light.stue_taklys off", "light.stue_leselampe off" },
-			Recorded(room.Actuator).ToArray(),
-			"the rule is what the byte comes out as, not whether the percentage is above zero");
+			new[] { "light.stue_taklys on 0.39% 2700K", "light.stue_leselampe on 0.39% 2700K" },
+			recorded,
+			"a positive level is floored to the lowest step a light can show");
+		CollectionAssert.DoesNotContain(recorded, "light.stue_taklys off", "only 0 % is an off");
+		CollectionAssert.DoesNotContain(recorded, "light.stue_leselampe off", "only 0 % is an off");
 	}
 
 	[TestMethod]

@@ -906,11 +906,15 @@ not land until the room has been quiet for `VacancyResetMinutes`.
 after the curve, the dim factor and the sleep clamp have all had their say, so it judges the number actually
 sent.
 
-**Off is raw 0, not percent 0.** A document stores brightness as the 0-255 byte and Home Assistant converts a
-percentage back to that byte, so anything below half a step — under 0.196 % — reaches a lamp as raw 0 and is
-carried out as a turn-off. The rule asks `RawBrightness.FromPercent`, which is that same arithmetic, instead of
-comparing the percentage against zero: a warning-dim factor of 0.01 on a 15 % night resolves to 0.15 %, and a
-percent-zero test sends it as a turn-on that the lamp obeys by going dark.
+**Only 0 % is an off, and a positive level is never sent below one raw step.** A document stores brightness as
+the 0-255 byte and Home Assistant converts a percentage back to that byte, so anything below half a step — under
+0.196 % — would reach a lamp as raw 0, which Home Assistant carries out as a turn-off. `TargetResolver.TargetCommand`
+sends an off only for 0 % or less. A positive level that `RawBrightness.FromPercent` puts at raw 0 goes out as
+raw 1, about 0.39 %: a warning-dim factor of 0.01 on a 15 % night resolves to 0.15 % and is sent as a turn-on
+at 0.39 %. The case behind the rule is a slow fade-in from off. Its first minutes resolve to a fraction of a
+percent, and sent as an off, which the dark light already matched and so was never sent, they left the room dark
+until the curve climbed past one step on its own. The readouts show such a level as 1 %, never 0 %, while the
+room is lit.
 
 **A group is expected to be what its lamps are told.** An entry whose lamps are commanded one by one is not
 commanded itself, and the expectation declared on it follows the polarity of those commands: on while any lamp
