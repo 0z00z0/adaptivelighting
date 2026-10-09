@@ -1,3 +1,4 @@
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
@@ -223,5 +224,44 @@ public sealed partial class AreaControllerTests
 			"a capture from before the test must not overwrite what the person has just set");
 		Assert.IsFalse(t.Area.IsTestingLevels);
 		Assert.AreEqual(AreaState.OverriddenOn, t.Area.State);
+	}
+
+	[TestMethod]
+	public void A_Held_Room_Reports_Its_Own_Level_Again_Once_The_Return_From_A_Test_Has_Landed()
+	{
+		Fixture t = BuildHeldByHand();
+
+		t.Area.TestPeriod("day");
+		ReportTestLevels(t);
+		Advance(t, TestRun);
+		Assert.AreEqual(90, t.Publisher.Snapshots[^1].BrightnessPct ?? 0, 0.01,
+			"the control: the test-end report reads the lights before the return has landed");
+
+		// The return's echo, which the room reads as its own and drops.
+		t.Ha.SetState(Light, "on", HandSetLevels());
+		Advance(t, TimeSpan.FromSeconds(AreaController.ManualSettleSeconds));
+
+		AreaSnapshot last = t.Publisher.Snapshots[^1];
+		Assert.AreEqual(80, last.BrightnessPct ?? 0, 0.01, "the room reads its lights again once the return is on them");
+		Assert.AreNotEqual(TransitionReason.ManualOn, last.Reason, "the engine's own return is not a person's change");
+	}
+
+	[TestMethod]
+	public void A_Test_Started_Before_A_Manual_Change_Settles_Credits_The_Person_With_Their_Own_Level()
+	{
+		Fixture t = BuildHeldByHand();
+
+		// 102 of 255 is 40 %.
+		Advance(t, TimeSpan.FromSeconds(1));
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 102.0, ["color_temp_kelvin"] = 3000.0 }, PhysicalDevice());
+
+		Assert.IsNull(t.Area.TestPeriod("day"));
+		ReportTestLevels(t);
+		Advance(t, TestRun);
+
+		AreaSnapshot[] manual = [.. t.Publisher.Snapshots.Where(snapshot => snapshot.Reason == TransitionReason.ManualOn)];
+		Assert.AreEqual(40, manual[^1].BrightnessPct ?? 0, 0.01, "the person's row carries the level the person set");
+		Assert.IsFalse(manual.Any(snapshot => Math.Abs((snapshot.BrightnessPct ?? 0) - 90) < 0.01),
+			"the test's level is never credited to a person");
 	}
 }

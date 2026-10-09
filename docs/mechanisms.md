@@ -1068,6 +1068,13 @@ for a value none of them reports. Every other state keeps the last command. `Lig
 - The periodic re-check still publishes while a device keeps reporting, because the level and the deadline have
   moved since the last row. On the test scheduler a report every second for 33 minutes gives 33 rows, one per
   `CircadianTickSeconds` (60 s), and the settled row only once the device goes quiet.
+- The settled row skips the identical-news guard. A re-check or movement inside the 5 s already carries the new
+  level and deadline, and the guard would drop the person's row as a repeat of it.
+- A level test started while a settled row is pending publishes that row first, so the test's level is never
+  read as the person's.
+- After a level test's return the room is read again `ManualSettleSeconds` later, once the return's echoes are
+  in. The report at the return itself still reads the test's level, and the echoes are the engine's own, so
+  nothing else would publish the correction before the next re-check.
 - A light on with no brightness attribute gives a `null` level, so a room held on such lights alone does not
   read as lit.
 

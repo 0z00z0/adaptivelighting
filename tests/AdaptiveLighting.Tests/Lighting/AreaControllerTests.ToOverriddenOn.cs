@@ -171,7 +171,6 @@ public sealed partial class AreaControllerTests
 		Assert.IsTrue(held.IsLit);
 	}
 
-	// One group reporting about once a second for 33 minutes wrote 6402 manual changes.
 	[TestMethod]
 	public void A_Burst_Of_Manual_Changes_Publishes_On_Entry_And_Once_More_When_Settled()
 	{
@@ -195,5 +194,24 @@ public sealed partial class AreaControllerTests
 		AreaSnapshot settled = t.Publisher.Snapshots[^1];
 		Assert.AreEqual(TransitionReason.ManualOn, settled.Reason);
 		Assert.AreEqual(200 / 255.0 * 100, settled.BrightnessPct ?? 0, 0.01, "the settled row carries the last level");
+	}
+
+	[TestMethod]
+	public void A_Settled_Manual_Change_Is_Published_Even_When_A_Recheck_Already_Carried_Its_Level()
+	{
+		AreaFixture t = Build();
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 100 }, PhysicalDevice());
+
+		Advance(t, TimeSpan.FromSeconds(58));
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 200 }, PhysicalDevice());
+
+		Advance(t, TimeSpan.FromSeconds(2));
+		Assert.AreEqual(TransitionReason.CircadianTick, t.Publisher.Snapshots[^1].Reason,
+			"the control: the minute's re-check lands inside the five seconds and already carries the new level");
+
+		Advance(t, TimeSpan.FromSeconds(3));
+		AreaSnapshot settled = t.Publisher.Snapshots[^1];
+		Assert.AreEqual(TransitionReason.ManualOn, settled.Reason, "the person's change still gets its own row");
+		Assert.AreEqual(200 / 255.0 * 100, settled.BrightnessPct ?? 0, 0.01);
 	}
 }
