@@ -10,6 +10,10 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
+## [Unreleased]
+
+- In Lamplight, the fine brightness control and the daylight curve readout now work; the two scripts they need were not loaded on its pages.
+
 ## [2026.10.2] - 2026-10-08
 
 - In Lamplight, a help bubble now closes when a click lands outside it, and opening one closes any other. Two bubbles open side by side used to overlap and cover the text behind them.
