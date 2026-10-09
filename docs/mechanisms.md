@@ -2551,7 +2551,9 @@ One line per command:
 **The seam is the actuator.** `ILightActuator.Apply` reports whether a call went out and the data it carried, so
 a sent line records what Home Assistant was actually asked; a not-sent line records the command the engine
 worked out. The not-sent outcome is logged on purpose: a computed command that never reached the light is what
-this log exists to show. The area wraps its actuator where its fan-out is built, and reads the reason and state
+this log exists to show. A call that throws, as NetDaemon's does while the connection to Home Assistant is down,
+is written as `outcome=failed exception=<type name>` with the command the engine worked out, and the exception is
+thrown on unchanged. The area wraps its actuator where its fan-out is built, and reads the reason and state
 through a delegate. Every send path in `AreaController` goes through `SendFor`, which sets the reason for the
 duration of the send; a line reading `reason=unknown` is a path that skipped it.
 
