@@ -233,7 +233,8 @@ how many lines switching it off takes away, and the eight add up to what the pag
 A manual change says who made it, the way Home Assistant's own logbook does: *By automation: Evening
 lights*, *By Alex* for somebody using Home Assistant, or *Unknown source*. A change an
 automation made that the room leaves alone gets a row of its own, so a light that did not stay where
-an automation put it can be traced. Where no name can be found, the row simply says what happened.
+an automation put it can be traced. Where the user or automation cannot be named, the row says *By a Home
+Assistant user* or *By an automation*.
 
 New entries are counted as they arrive but are not inserted under you; a button adds them when you
 are ready.
@@ -290,6 +291,7 @@ sensors"]
   including people added later.
 - **Master switch** — the one switch that pauses everything.
 - **House name**, and a **Fine tuning** fold for the things you set once.
+- **Logging** — the log level, and whether every command sent to a light is written to a file.
 - **This installation** — whether the engine is running, whether Home Assistant is answering, and
   where your settings file is kept.
 

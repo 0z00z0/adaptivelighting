@@ -24,6 +24,12 @@ its old name while some of its types sit in a neutral namespace. A shared file t
 imports the old namespace or names it in full; it never moves the lighting-only type. A string-typed key stays as it
 is: the document's root key is still `AdaptiveLighting.Configuration.AdaptiveLightingConfig`.
 
+Twelve of the 35 files in the neutral namespaces still reach lighting-only types. Six name the lighting namespace
+in a `using` (the config store, the period-select reader, the house-mode detector and sync, the period extensions
+and the last-period store); the other six (five shared components and the last-period note) reach them through
+`_Imports.razor` or a project's global usings with no line of their own, so a verbatim copy of those fails to
+compile on names the file never mentions.
+
 Logger categories follow the namespace, so a moved type logs under its new full name.
 
 ---
@@ -547,9 +553,10 @@ pin nothing about what goes out.
 
 ### One record wires every room
 
-`HouseWiring` carries the ten house-wide instances every area controller is built on: the Home Assistant
+`HouseWiring` carries the twelve house-wide instances every area controller is built on: the Home Assistant
 context, the scheduler, the global settings, the periods, the actuator, the publisher, the house-state stream,
-the logger factory, the last-seen cache and the origin names. The orchestrator composes it once, before the
+the logger factory, the last-seen cache, the origin names, the engine's own Home Assistant user id (`OwnUserId`) and the light
+command log (`CommandLog`). The orchestrator composes it once, before the
 first room, and hands the same object to every room, so no room can end up on a different actuator, publisher
 or house-state stream. No member carries a default, so a wiring that omits one does not compile.
 
