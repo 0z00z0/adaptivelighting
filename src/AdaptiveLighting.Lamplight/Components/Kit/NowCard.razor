@@ -5,9 +5,13 @@
 	@if (Warnings.Count > 0)
 	{
 		<ul class="warns">
+			@* Keyed so an open bubble stays with its warning. Two batteries can share a name, so the count of earlier
+			   rows with the same text makes the key unique. *@
+			@{ Dictionary<string, int> seen = new(StringComparer.Ordinal); }
 			@foreach (Warning warning in Warnings)
 			{
-				<li class="warn-i @warning.Kind">
+				int occurrence = seen[warning.Text] = seen.GetValueOrDefault(warning.Text) + 1;
+				<li @key="(warning.Text, occurrence)" class="warn-i @warning.Kind">
 					@* One marker per row: the coloured (i) when there is help, the "!" when there is none. *@
 					@if (warning.Help is null)
 					{

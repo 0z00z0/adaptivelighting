@@ -7,7 +7,8 @@
 				class="info-i @InfoSeverityClass.Of(Severity)"
 				aria-expanded="@(_open ? "true" : "false")"
 				aria-label="@($"About {Label}")"
-				@onclick="Toggle">i</button>
+				@onclick="Toggle"
+				@onclick:stopPropagation="true">i</button>
 
 		@if (_open)
 		{
