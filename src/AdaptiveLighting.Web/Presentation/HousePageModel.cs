@@ -1696,10 +1696,11 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		}
 	}
 
-	/// <summary>The document's log level, or empty for the host's own.</summary>
+	/// <summary>The accepted word the document's log level reads as, or empty for the host's own.</summary>
 	public string LogLevelValue
 	{
-		get => _config.Global.LogLevel ?? "";
+		// Each accepted word is its LogLevel's name.
+		get => LogLevelSetting.Read(_config.Global.LogLevel)?.ToString() ?? "";
 		set
 		{
 			_config.Global.LogLevel = value is { Length: > 0 } ? value : null;
@@ -1714,7 +1715,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 	public string LogLevelText =>
 		!CanSetLogLevel ? "set by the host"
-		: _config.Global.LogLevel is { Length: > 0 } level ? level
+		: LogLevelValue is { Length: > 0 } level ? level
 		: "as the host sets it";
 
 	// ---- this installation ----
