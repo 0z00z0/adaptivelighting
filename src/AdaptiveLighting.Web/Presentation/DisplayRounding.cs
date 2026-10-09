@@ -8,4 +8,8 @@ public static class DisplayRounding
 	// and 62.5 reading 62 in one place and 63 in another is the disagreement this exists to close.
 	public static double Whole(double value) =>
 		double.IsFinite(value) ? Math.Round(value, MidpointRounding.AwayFromZero) : value;
+
+	/// <summary>A lit level as a whole number, never 0 while it is above zero.</summary>
+	// Readouts only: the lowest step a light takes is about 0.39 %. The editors keep Whole.
+	public static double WholeLit(double value) => value > 0 ? Math.Max(1, Whole(value)) : Whole(value);
 }

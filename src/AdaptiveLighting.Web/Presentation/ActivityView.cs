@@ -921,7 +921,7 @@ public static class ActivityView
 			return headline;
 
 		return snapshot.ColorTempKelvin is { } kelvin
-			? $"{headline} at {brightness:0} %, {kelvin} K"
-			: $"{headline} at {brightness:0} %";
+			? $"{headline} at {DisplayRounding.WholeLit(brightness):0} %, {kelvin} K"
+			: $"{headline} at {DisplayRounding.WholeLit(brightness):0} %";
 	}
 }

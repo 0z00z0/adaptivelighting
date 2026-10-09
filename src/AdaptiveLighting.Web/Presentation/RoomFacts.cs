@@ -384,8 +384,8 @@ public static class RoomFacts
 		}
 
 		return snapshot.ColorTempKelvin is { } kelvin
-			? $"{brightness:0} % · {Warmth(kelvin)}"
-			: $"{brightness:0} %";
+			? $"{DisplayRounding.WholeLit(brightness):0} % · {Warmth(kelvin)}"
+			: $"{DisplayRounding.WholeLit(brightness):0} %";
 	}
 
 	private static string LightsTitle(AreaSnapshot snapshot)
@@ -415,8 +415,8 @@ public static class RoomFacts
 		}
 
 		return snapshot.ColorTempKelvin is { } kelvin
-			? $"{prefix} {brightness:0} %{suffix} · {kelvin} K"
-			: $"{prefix} {brightness:0} %{suffix}";
+			? $"{prefix} {DisplayRounding.WholeLit(brightness):0} %{suffix} · {kelvin} K"
+			: $"{prefix} {DisplayRounding.WholeLit(brightness):0} %{suffix}";
 	}
 
 	private static string Warmth(int kelvin) => kelvin switch
