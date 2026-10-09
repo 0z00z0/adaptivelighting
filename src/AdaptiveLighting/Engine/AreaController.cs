@@ -249,6 +249,9 @@ public sealed class AreaController : IDisposable
 	/// <summary>The Home Assistant area this controller was built for, or <c>null</c> for one configured without.</summary>
 	public string? AreaId => _areaId;
 
+	/// <summary>Whether this room's own setting has it switched on, whatever the master switch says.</summary>
+	public bool Enabled => _area.Settings.Enabled;
+
 	/// <summary>The current state, for tests and diagnostics only; the engine drives itself.</summary>
 	public AreaState State
 	{

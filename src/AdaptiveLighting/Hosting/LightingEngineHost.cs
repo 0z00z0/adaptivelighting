@@ -198,8 +198,8 @@ public sealed class LightingEngineHost : IDisposable
 	/// <summary>Whether the document's log level takes effect here; <c>false</c> where the host sets it.</summary>
 	public bool CanSetLogLevel => _logLevel.IsSupported;
 
-	/// <summary>How many areas resolved and are being commanded. Zero while faulted.</summary>
-	public int RunningAreaCount => _orchestrator?.Areas.Count ?? 0;
+	/// <summary>How many rooms resolved and are switched on in the document; a paused room still counts. Zero while faulted.</summary>
+	public int RunningAreaCount => _orchestrator?.Areas.Count(area => area.Enabled) ?? 0;
 
 	/// <summary>The bulbs more than one room commands, found once at engine start. Empty while faulted.</summary>
 	public IReadOnlyList<SuspectLight> SharedLights => _orchestrator?.SharedLights ?? [];
@@ -710,16 +710,13 @@ public sealed class LightingEngineHost : IDisposable
 			Fault = null;
 			LastStartedUtc = DateTimeOffset.UtcNow;
 
-			// A switched-off room still has a controller, so it is counted out here to match ManagedAreaCount.
-			int running = orchestrator.Areas.Count(area => area.State is not AreaState.Disabled);
-
 			_logger.LogInformation(
 				"Adaptive lighting is running: {Areas} of {Configured} areas resolved.",
-				running, config.ManagedAreaCount);
+				RunningAreaCount, config.ManagedAreaCount);
 
 			_notices.OnNext(new EngineNotice(notice, DateTimeOffset.Now));
 
-			return new SaveResult(SaveStatus.Saved, validation, $"Saved: {running} of {config.ManagedAreaCount} rooms are running.");
+			return new SaveResult(SaveStatus.Saved, validation, $"Saved: {RunningAreaCount} of {config.ManagedAreaCount} rooms are running.");
 		}
 		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
 		{
