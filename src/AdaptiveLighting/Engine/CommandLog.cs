@@ -113,8 +113,24 @@ public sealed class CommandLog
 		return line.ToString();
 	}
 
+	internal static string FailedLine(DateTimeOffset at, CommandContext context, LightCommand command, Exception exception)
+	{
+		StringBuilder line = Start(at, context).Append(" action=").Append(command.On ? "turn_on" : "turn_off");
+		AppendCommand(line, command);
+		return Failed(line, exception);
+	}
+
 	internal static string SceneLine(DateTimeOffset at, CommandContext context, string sceneId) =>
-		Start(at, context).Append(" action=scene.turn_on scene=").Append(sceneId).Append(" outcome=sent").ToString();
+		SceneStart(at, context, sceneId).Append(" outcome=sent").ToString();
+
+	internal static string FailedSceneLine(DateTimeOffset at, CommandContext context, string sceneId, Exception exception) =>
+		Failed(SceneStart(at, context, sceneId), exception);
+
+	private static StringBuilder SceneStart(DateTimeOffset at, CommandContext context, string sceneId) =>
+		Start(at, context).Append(" action=scene.turn_on scene=").Append(sceneId);
+
+	private static string Failed(StringBuilder line, Exception exception) =>
+		line.Append(" outcome=failed exception=").Append(exception.GetType().Name).ToString();
 
 	private static StringBuilder Start(DateTimeOffset at, CommandContext context) =>
 		new StringBuilder()
@@ -191,14 +207,34 @@ internal sealed class CommandLogActuator : ILightActuator
 
 	public ActuatorOutcome Apply(string entityId, LightCommand command)
 	{
-		ActuatorOutcome outcome = _inner.Apply(entityId, command);
+		ActuatorOutcome outcome;
+
+		try
+		{
+			outcome = _inner.Apply(entityId, command);
+		}
+		catch (Exception exception)
+		{
+			_log.Write(_folder, CommandLog.SafeName(entityId), _header, () => CommandLog.FailedLine(_now(), _context(), command, exception));
+			throw;
+		}
+
 		_log.Write(_folder, CommandLog.SafeName(entityId), _header, () => CommandLog.Line(_now(), _context(), command, outcome));
 		return outcome;
 	}
 
 	public void ActivateScene(string sceneId)
 	{
-		_inner.ActivateScene(sceneId);
+		try
+		{
+			_inner.ActivateScene(sceneId);
+		}
+		catch (Exception exception)
+		{
+			_log.Write(_folder, CommandLog.SceneFile, _header, () => CommandLog.FailedSceneLine(_now(), _context(), sceneId, exception));
+			throw;
+		}
+
 		_log.Write(_folder, CommandLog.SceneFile, _header, () => CommandLog.SceneLine(_now(), _context(), sceneId));
 	}
 }

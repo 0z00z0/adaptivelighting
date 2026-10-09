@@ -27,13 +27,15 @@ public static class IsoTimestampLogging
 
 		// The document's LogLevel moves this switch at run time; unset puts minimumLevel back.
 		LoggingLevelSwitch levelSwitch = new(minimumLevel);
-		SerilogLevelControl.Adopt(levelSwitch);
 
 		// Levels are set here, never read from configuration: this replaces the logger the host built from
 		// Logging:LogLevel, and Serilog's ReadFrom.Configuration wants a "Serilog" section most hosts do not have,
 		// leaving Information and silently dropping every Debug line.
 		return builder.UseSerilog((context, logger) =>
 		{
+			// Adopted when this logger is built, so a logger replaced by a later UseSerilog never adopts.
+			SerilogLevelControl.Adopt(levelSwitch);
+
 			logger
 				.MinimumLevel.ControlledBy(levelSwitch)
 				.MinimumLevel.Override("Microsoft", LogEventLevel.Warning)

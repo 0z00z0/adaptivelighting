@@ -538,7 +538,7 @@ public sealed class LightingOrchestrator : IDisposable
 				foreach (AreaController area in _areas)
 					area.ExpectHouseScene(scene);
 
-				HouseSceneActuator().ActivateScene(scene);
+				HouseSceneActuator(opening).ActivateScene(scene);
 			}
 		}
 
@@ -555,10 +555,10 @@ public sealed class LightingOrchestrator : IDisposable
 		_house.OnNext(state);
 	}
 
-	private ILightActuator HouseSceneActuator() =>
+	private ILightActuator HouseSceneActuator(bool opening) =>
 		_commandLog is { } log
 			? log.Wrap(_actuator, CommandLog.HouseFolder, "House-mode scenes", () => _scheduler.Now.ToLocalTime(),
-				static () => new CommandContext(TransitionReason.HouseModeChanged, State: null))
+				() => new CommandContext(opening ? TransitionReason.Startup : TransitionReason.HouseModeChanged, State: null))
 			: _actuator;
 
 	/// <summary>Raises one card naming every room that is switched on but could not be set up, the first time each is seen.</summary>

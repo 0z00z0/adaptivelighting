@@ -31,8 +31,8 @@ public static class LightReadout
 			return $"{name} off";
 
 		return light.ColorTempKelvin is { } kelvin
-			? $"{name} {brightness:0} %, {kelvin} K"
-			: $"{name} {brightness:0} %";
+			? $"{name} {DisplayRounding.WholeLit(brightness):0} %, {kelvin} K"
+			: $"{name} {DisplayRounding.WholeLit(brightness):0} %";
 	}
 
 	// Compared as the page prints them, whole percentages, so a light is never named beside a room showing the same number.

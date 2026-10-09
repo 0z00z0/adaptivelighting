@@ -13,6 +13,18 @@ against each other.
 ## [Unreleased]
 
 - In Lamplight, the fine brightness control and the daylight curve readout now work; the two scripts they need were not loaded on its pages.
+- A further manual change in a room already held by hand now always gets its row once the lights settle; a re-check or movement in the same five seconds no longer swallows it.
+- After a level test in a room held by hand, the room reads its lights again five seconds after they are put back, instead of showing the test's level until the next re-check.
+- A level test started within five seconds of a manual change now writes the person's row first, so the test's level is never credited to a person.
+- The save message, the start-up log line and the rooms-managed count now agree, and count every room switched on even while the master switch pauses lighting. A paused house no longer reports "0 of 18".
+- In Lamplight, opening a help bubble no longer opens or closes the row it sits in, and closing one by clicking that row's control leaves the control open.
+- A lit room at the lowest brightness step now reads 1 % instead of 0 %.
+- The light command log writes a line with `outcome=failed` and the exception type when a call to Home Assistant throws, for example while the connection is down.
+- The log level select is shown as set by the host when a later logging call replaces this package's logger, instead of offering a choice that changes nothing.
+- The house-mode scene fired at start-up or after a save is logged with reason `Startup`, as the rooms are, instead of `HouseModeChanged`.
+- A hand-written log level in another case, such as `debug`, now shows as chosen in the select; an unrecognised word shows as the host's own level.
+- In Lamplight, a warning's open help bubble stays with that warning when another warning appears or goes above it, and a quick second click no longer reopens a bubble just closed.
+- The published room event's `changed_by` field carries "Unknown source", "By an automation" or "By a Home Assistant user" where it used to carry the device-switch text or nothing.
 
 ## [2026.10.2] - 2026-10-08
 

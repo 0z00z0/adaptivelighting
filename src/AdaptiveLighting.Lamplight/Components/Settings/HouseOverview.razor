@@ -390,7 +390,7 @@
 
 	private void SetLogLevel(string? value) => Model.LogLevelValue = value ?? "";
 
-	// The one Logging row whose control is open, or null.
+	// The one row whose control is open, or null.
 	private string? _editingRow;
 
 	private void ToggleRow(string row) => _editingRow = _editingRow == row ? null : row;

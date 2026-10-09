@@ -52,6 +52,12 @@ public sealed class AreaController : IDisposable
 
 	// Not a state timer: never arm it through ArmCountdown, which would overwrite the published deadline.
 	private readonly SerialDisposable _settleTimer = new();
+
+	// True while _settleTimer holds a manual row back. Cleared wherever the timer is.
+	private bool _settlePending;
+
+	// Re-reads a held room once a test's return has landed. Not the settle path: the return is not a person.
+	private readonly SerialDisposable _returnTimer = new();
 	private readonly SerialDisposable _suppressionTimer = new();
 
 	// The one level test this room may be running, and the return it owes. Never a state of the machine: the
@@ -243,6 +249,9 @@ public sealed class AreaController : IDisposable
 	/// <summary>The Home Assistant area this controller was built for, or <c>null</c> for one configured without.</summary>
 	public string? AreaId => _areaId;
 
+	/// <summary>Whether this room's own setting has it switched on, whatever the master switch says.</summary>
+	public bool Enabled => _area.Settings.Enabled;
+
 	/// <summary>The current state, for tests and diagnostics only; the engine drives itself.</summary>
 	public AreaState State
 	{
@@ -283,6 +292,7 @@ public sealed class AreaController : IDisposable
 
 			EndLevelTest();
 			Publish(TransitionReason.LevelTestEnded);
+			RepublishAfterReturn();
 		}
 	}
 
@@ -292,7 +302,7 @@ public sealed class AreaController : IDisposable
 	/// </summary>
 	/// <returns><c>null</c> once the test is running, or the sentence saying why it is not.</returns>
 	/// <remarks>
-	///     The room's own state machine is untouched: no hold is started or cleared, and no timer is armed,
+	///     The room's own state machine is untouched: no hold is started or cleared, and no state timer is armed,
 	///     cancelled or restarted. The return is scheduled on the engine's own scheduler, so it happens whether or
 	///     not whoever pressed is still watching. A snapshot is published regardless, carrying <paramref
 	///     name="periodKey"/> and the deadline: the only way a page that reloads or navigates back mid-test can
@@ -309,6 +319,8 @@ public sealed class AreaController : IDisposable
 
 			if (_targets.PeriodTarget(periodKey) is not { } target)
 				return "That period is no longer in the schedule.";
+
+			PublishPendingSettle();
 
 			// A lamp tested alone is owed a narrower return than a room test gives, so it is settled first and this
 			// test starts from the room as it stood.
@@ -361,6 +373,7 @@ public sealed class AreaController : IDisposable
 			if (_targets.PeriodTarget(lightEntityId, periodKey) is not { } target)
 				return "That period is no longer in the schedule.";
 
+			PublishPendingSettle();
 			RefreshDarkness();
 
 			if (_levelTest.Start(periodKey, lightEntityId, _area.Lights.Any(_ha.IsOn)))
@@ -834,6 +847,7 @@ public sealed class AreaController : IDisposable
 				// A device reporting every second would otherwise write a row per report.
 				if (alreadyHeld)
 				{
+					_settlePending = true;
 					_settleTimer.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(ManualSettleSeconds), OnManualSettled);
 					return;
 				}
@@ -856,8 +870,37 @@ public sealed class AreaController : IDisposable
 			if (_disposed || _state != AreaState.OverriddenOn)
 				return;
 
-			Publish(TransitionReason.ManualOn);
+			PublishPendingSettle();
 		}
+	}
+
+	// Unguarded: a tick or a motion edge inside the window already carries the same level and deadline.
+	private void PublishPendingSettle()
+	{
+		if (!_settlePending)
+			return;
+
+		_settlePending = false;
+		_settleTimer.Disposable = Disposable.Empty;
+		PublishUnguarded(TransitionReason.ManualOn);
+	}
+
+	// A held room's level is read off the lights, so it is read again once the return's echoes are in.
+	private void RepublishAfterReturn()
+	{
+		if (_state != AreaState.OverriddenOn)
+			return;
+
+		_returnTimer.Disposable = _scheduler.Schedule(TimeSpan.FromSeconds(ManualSettleSeconds), () =>
+		{
+			lock (_gate)
+			{
+				if (_disposed || _state != AreaState.OverriddenOn || _levelTest.IsRunning)
+					return;
+
+				Publish(TransitionReason.LevelTestEnded);
+			}
+		});
 	}
 
 	/// <summary>Reports an automation's change this room leaves alone, once per automation run.</summary>
@@ -1749,6 +1792,7 @@ public sealed class AreaController : IDisposable
 
 			// The report stops naming the test, so a page reading it does not wait on the clock.
 			Publish(TransitionReason.LevelTestEnded);
+			RepublishAfterReturn();
 		}
 	}
 
@@ -1917,6 +1961,7 @@ public sealed class AreaController : IDisposable
 		CancelAutoTimers();
 		_overrideTimer.Disposable = Disposable.Empty;
 		_settleTimer.Disposable = Disposable.Empty;
+		_settlePending = false;
 		_suppressionTimer.Disposable = Disposable.Empty;
 	}
 
@@ -1943,7 +1988,10 @@ public sealed class AreaController : IDisposable
 			_leadIn = false;
 
 		if (state != AreaState.OverriddenOn)
+		{
 			_settleTimer.Disposable = Disposable.Empty;
+			_settlePending = false;
+		}
 
 		_state = state;
 	}
@@ -2087,6 +2135,7 @@ public sealed class AreaController : IDisposable
 		_preOffTimer.Dispose();
 		_overrideTimer.Dispose();
 		_settleTimer.Dispose();
+		_returnTimer.Dispose();
 		_suppressionTimer.Dispose();
 		_levelTest.Dispose();
 	}

@@ -20,7 +20,7 @@ public sealed class LightingOrchestratorTests
 	private sealed record Fixture(TestScheduler Scheduler, FakeHaContext Ha, FakeLightActuator Actuator, LightingOrchestrator Orchestrator);
 
 	// paused wires the master switch as an enabled flag: off is the app muzzled.
-	private static Fixture Build(HouseModeConfig houseMode, string selectState, bool paused = false)
+	private static Fixture Build(HouseModeConfig houseMode, string selectState, bool paused = false, CommandLog? commandLog = null)
 	{
 		TestScheduler scheduler = new TestScheduler();
 		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
@@ -46,7 +46,7 @@ public sealed class LightingOrchestratorTests
 		FakeLightActuator actuator = new FakeLightActuator();
 		LightingOrchestrator orchestrator = new LightingOrchestrator(
 			ha, new FakeHaRegistry(), scheduler, config,
-			actuator, new FakeStatePublisher(), new FakeNotifier(), NullLoggerFactory.Instance);
+			actuator, new FakeStatePublisher(), new FakeNotifier(), NullLoggerFactory.Instance, commandLog: commandLog);
 
 		orchestrator.Start();
 		return new Fixture(scheduler, ha, actuator, orchestrator);
@@ -102,6 +102,29 @@ public sealed class LightingOrchestratorTests
 
 		Assert.AreEqual(1, t.Actuator.Scenes.Count, "leaving the scene mode for Normal applies nothing new");
 		CollectionAssert.DoesNotContain(t.Actuator.Scenes, "scene.normal");
+	}
+
+	[TestMethod]
+	public void The_Scene_Found_At_Start_Is_Logged_As_Start_Up_And_A_Later_Change_As_A_Mode_Change()
+	{
+		string directory = Path.Combine(Path.GetTempPath(), $"house-scene-log-tests-{Guid.NewGuid():N}");
+
+		try
+		{
+			Fixture t = Build(WithScenes(), selectState: "Borte", commandLog: new CommandLog(directory, NullLogger.Instance));
+			t.Ha.Trigger(Select, "Gjester");
+
+			string[] lines = File.ReadAllLines(Path.Combine(directory, CommandLog.HouseFolder, "_scene.log"));
+
+			Assert.AreEqual(3, lines.Length, string.Join(Environment.NewLine, lines));
+			StringAssert.Contains(lines[1], " reason=Startup state=none action=scene.turn_on scene=scene.borte ");
+			StringAssert.Contains(lines[2], " reason=HouseModeChanged state=none action=scene.turn_on scene=scene.gjest ");
+		}
+		finally
+		{
+			if (Directory.Exists(directory))
+				Directory.Delete(directory, recursive: true);
+		}
 	}
 
 	[TestMethod]

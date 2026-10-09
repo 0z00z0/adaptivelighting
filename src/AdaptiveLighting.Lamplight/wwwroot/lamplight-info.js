@@ -20,6 +20,8 @@
 			var bubble = button.closest('.info');
 			if (!bubble || !(target instanceof Node) || !bubble.contains(target)) {
 				button.click();
+				// Closed now, so a second click in the same task does not reopen it before the render lands.
+				button.setAttribute('aria-expanded', 'false');
 			}
 		}
 	}, true);

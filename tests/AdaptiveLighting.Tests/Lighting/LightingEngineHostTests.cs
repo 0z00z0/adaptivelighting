@@ -960,5 +960,35 @@ public sealed class LightingEngineHostTests
 		SaveResult result = host.Save(config);
 
 		Assert.AreEqual("Saved: 1 of 1 rooms are running.", result.Message);
+		Assert.AreEqual(1, host.RunningAreaCount, "the page's count agrees with the save message");
+	}
+
+	[TestMethod]
+	public void Save_WhileTheMasterSwitchPausesLighting_StillCountsEveryRoomSwitchedOnAsRunning()
+	{
+		const string Master = "input_boolean.lighting_enabled";
+
+		FakeHaContext ha = new();
+		ha.SetState("light.room_a", "off");
+		ha.SetState("light.room_b", "off");
+		ha.SetState(Master, "off");
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero).Ticks);
+
+		LightingEngineHost host = BuildHost();
+		host.Attach(ha, new FakeHaRegistry(), scheduler);
+
+		AdaptiveLightingConfig config = Valid();
+		config.Global.KillSwitchEntity = Master;
+		config.Areas =
+		[
+			new AreaConfig { Name = "Room A", Lights = ["light.room_a"] },
+			new AreaConfig { Name = "Room B", Lights = ["light.room_b"] }
+		];
+
+		SaveResult result = host.Save(config);
+
+		Assert.AreEqual("Saved: 2 of 2 rooms are running.", result.Message, "paused is not failed to start");
+		Assert.AreEqual(2, host.RunningAreaCount);
 	}
 }

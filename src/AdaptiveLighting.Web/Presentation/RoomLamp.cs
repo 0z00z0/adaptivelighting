@@ -21,7 +21,7 @@ public readonly record struct RoomLamp(bool IsLit, int? BrightnessPct, int? Kelv
 
 		return new RoomLamp(
 			true,
-			lit.BrightnessPct is { } pct ? (int)DisplayRounding.Whole(pct) : null,
+			lit.BrightnessPct is { } pct ? (int)DisplayRounding.WholeLit(pct) : null,
 			lit.ColorTempKelvin,
 			lit.State is AreaState.OverriddenOn);
 	}

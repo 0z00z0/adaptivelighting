@@ -24,6 +24,12 @@ its old name while some of its types sit in a neutral namespace. A shared file t
 imports the old namespace or names it in full; it never moves the lighting-only type. A string-typed key stays as it
 is: the document's root key is still `AdaptiveLighting.Configuration.AdaptiveLightingConfig`.
 
+Twelve of the 35 files in the neutral namespaces still reach lighting-only types. Six name the lighting namespace
+in a `using` (the config store, the period-select reader, the house-mode detector and sync, the period extensions
+and the last-period store); the other six (five shared components and the last-period note) reach them through
+`_Imports.razor` or a project's global usings with no line of their own, so a verbatim copy of those fails to
+compile on names the file never mentions.
+
 Logger categories follow the namespace, so a moved type logs under its new full name.
 
 ---
@@ -547,9 +553,10 @@ pin nothing about what goes out.
 
 ### One record wires every room
 
-`HouseWiring` carries the ten house-wide instances every area controller is built on: the Home Assistant
+`HouseWiring` carries the twelve house-wide instances every area controller is built on: the Home Assistant
 context, the scheduler, the global settings, the periods, the actuator, the publisher, the house-state stream,
-the logger factory, the last-seen cache and the origin names. The orchestrator composes it once, before the
+the logger factory, the last-seen cache, the origin names, the engine's own Home Assistant user id (`OwnUserId`) and the light
+command log (`CommandLog`). The orchestrator composes it once, before the
 first room, and hands the same object to every room, so no room can end up on a different actuator, publisher
 or house-state stream. No member carries a default, so a wiring that omits one does not compile.
 
@@ -906,11 +913,15 @@ not land until the room has been quiet for `VacancyResetMinutes`.
 after the curve, the dim factor and the sleep clamp have all had their say, so it judges the number actually
 sent.
 
-**Off is raw 0, not percent 0.** A document stores brightness as the 0-255 byte and Home Assistant converts a
-percentage back to that byte, so anything below half a step — under 0.196 % — reaches a lamp as raw 0 and is
-carried out as a turn-off. The rule asks `RawBrightness.FromPercent`, which is that same arithmetic, instead of
-comparing the percentage against zero: a warning-dim factor of 0.01 on a 15 % night resolves to 0.15 %, and a
-percent-zero test sends it as a turn-on that the lamp obeys by going dark.
+**Only 0 % is an off, and a positive level is never sent below one raw step.** A document stores brightness as
+the 0-255 byte and Home Assistant converts a percentage back to that byte, so anything below half a step — under
+0.196 % — would reach a lamp as raw 0, which Home Assistant carries out as a turn-off. `TargetResolver.TargetCommand`
+sends an off only for 0 % or less. A positive level that `RawBrightness.FromPercent` puts at raw 0 goes out as
+raw 1, about 0.39 %: a warning-dim factor of 0.01 on a 15 % night resolves to 0.15 % and is sent as a turn-on
+at 0.39 %. The case behind the rule is a slow fade-in from off. Its first minutes resolve to a fraction of a
+percent, and sent as an off, which the dark light already matched and so was never sent, they left the room dark
+until the curve climbed past one step on its own. The readouts show such a level as 1 %, never 0 %, while the
+room is lit.
 
 **A group is expected to be what its lamps are told.** An entry whose lamps are commanded one by one is not
 commanded itself, and the expectation declared on it follows the polarity of those commands: on while any lamp
@@ -1068,6 +1079,13 @@ for a value none of them reports. Every other state keeps the last command. `Lig
 - The periodic re-check still publishes while a device keeps reporting, because the level and the deadline have
   moved since the last row. On the test scheduler a report every second for 33 minutes gives 33 rows, one per
   `CircadianTickSeconds` (60 s), and the settled row only once the device goes quiet.
+- The settled row skips the identical-news guard. A re-check or movement inside the 5 s already carries the new
+  level and deadline, and the guard would drop the person's row as a repeat of it.
+- A level test started while a settled row is pending publishes that row first, so the test's level is never
+  read as the person's.
+- After a level test's return the room is read again `ManualSettleSeconds` later, once the return's echoes are
+  in. The report at the return itself still reads the test's level, and the echoes are the engine's own, so
+  nothing else would publish the correction before the next re-check.
 - A light on with no brightness attribute gives a `null` level, so a room held on such lights alone does not
   read as lit.
 
@@ -2544,7 +2562,9 @@ One line per command:
 **The seam is the actuator.** `ILightActuator.Apply` reports whether a call went out and the data it carried, so
 a sent line records what Home Assistant was actually asked; a not-sent line records the command the engine
 worked out. The not-sent outcome is logged on purpose: a computed command that never reached the light is what
-this log exists to show. The area wraps its actuator where its fan-out is built, and reads the reason and state
+this log exists to show. A call that throws, as NetDaemon's does while the connection to Home Assistant is down,
+is written as `outcome=failed exception=<type name>` with the command the engine worked out, and the exception is
+thrown on unchanged. The area wraps its actuator where its fan-out is built, and reads the reason and state
 through a delegate. Every send path in `AreaController` goes through `SendFor`, which sets the reason for the
 duration of the send; a line reading `reason=unknown` is a path that skipped it.
 

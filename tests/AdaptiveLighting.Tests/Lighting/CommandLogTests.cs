@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 
+using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Hosting;
@@ -58,6 +59,30 @@ public sealed class CommandLogTests
 		Assert.AreEqual(3, lines.Length, string.Join(Environment.NewLine, lines));
 		StringAssert.Matches(lines[2], new Regex(
 			$"^{Stamp} reason=LevelTestStarted state=\\w+ action=turn_on brightness_pct=70 color_temp_kelvin=2700 .*outcome=not-sent-already-matches$"));
+	}
+
+	[TestMethod]
+	public void A_Command_Whose_Call_Throws_Is_Logged_As_Failed_And_The_Exception_Still_Reaches_The_Caller()
+	{
+		ILightActuator actuator = new CommandLog(_directory, NullLogger.Instance).Wrap(
+			new ThrowingActuator(), "room", "Room", () => DateTimeOffset.Now,
+			() => new CommandContext(TransitionReason.Motion, AreaState.AutoActive));
+
+		Assert.ThrowsException<InvalidOperationException>(() => actuator.Apply("light.lamp", new LightCommand(true, 70, 2700)));
+
+		string[] lines = File.ReadAllLines(Path.Combine(_directory, "room", "light.lamp.log"));
+
+		Assert.AreEqual(2, lines.Length, string.Join(Environment.NewLine, lines));
+		StringAssert.Matches(lines[1], new Regex(
+			$"^{Stamp} reason=Motion state=AutoActive action=turn_on brightness_pct=70 color_temp_kelvin=2700 outcome=failed exception=InvalidOperationException$"));
+	}
+
+	private sealed class ThrowingActuator : ILightActuator
+	{
+		public ActuatorOutcome Apply(string entityId, LightCommand command) =>
+			throw new InvalidOperationException("No connection to Home Assistant");
+
+		public void ActivateScene(string sceneId) => throw new InvalidOperationException("No connection to Home Assistant");
 	}
 
 	[TestMethod]

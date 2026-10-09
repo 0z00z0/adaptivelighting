@@ -104,9 +104,7 @@ internal sealed class TargetResolver
 	{
 		double brightness = target.Clamp(target.BrightnessPct * brightnessFactor);
 
-		// Zero and nothing else goes out as an off. A positive target below one raw step is floored up to it
-		// instead: Home Assistant turns a light off on a turn-on naming raw 0, so sending that for the first
-		// minutes of a slow fade-in left the room dark until the curve cleared the step on its own.
+		// Only 0 % is an off. A positive level under one raw step is floored to it: HA carries out a raw-0 turn-on as an off.
 		if (brightness <= 0)
 			return LightCommand.TurnOff(_transitionSeconds());
 
