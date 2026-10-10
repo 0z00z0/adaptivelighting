@@ -10,7 +10,7 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
-## [Unreleased]
+## [2026.10.3] - 2026-10-10
 
 - In Lamplight, the fine brightness control and the daylight curve readout now work; the two scripts they need were not loaded on its pages.
 - A further manual change in a room already held by hand now always gets its row once the lights settle; a re-check or movement in the same five seconds no longer swallows it.
