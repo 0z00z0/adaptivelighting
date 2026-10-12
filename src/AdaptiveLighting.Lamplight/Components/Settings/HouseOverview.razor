@@ -350,7 +350,7 @@
 	private RenderFragment EngineChip => @<Chip Kind="@(Model.EngineIsRunning ? "ok" : "idle")" Word="@(Model.EngineIsRunning ? "running" : "stopped")" />;
 
 	private IReadOnlyList<NowCard.Warning> Warnings => Model.SharedLights.Count > 0
-		? [new NowCard.Warning("warn", Model.SharedLightsHeadline, SharedLightsHelp)]
+		? [new NowCard.Warning("shared-lights", "warn", Model.SharedLightsHeadline, SharedLightsHelp)]
 		: [];
 
 	// Id beside the name, as SwitchOnNoteView orders it: the reason ends in advice.

@@ -5,13 +5,10 @@
 	@if (Warnings.Count > 0)
 	{
 		<ul class="warns">
-			@* Keyed so an open bubble stays with its warning. Two batteries can share a name, so the count of earlier
-			   rows with the same text makes the key unique. *@
-			@{ Dictionary<string, int> seen = new(StringComparer.Ordinal); }
+			@* Keyed so an open bubble stays with its warning while a number in its text changes. *@
 			@foreach (Warning warning in Warnings)
 			{
-				int occurrence = seen[warning.Text] = seen.GetValueOrDefault(warning.Text) + 1;
-				<li @key="(warning.Text, occurrence)" class="warn-i @warning.Kind">
+				<li @key="warning.Key" class="warn-i @warning.Kind">
 					@* One marker per row: the coloured (i) when there is help, the "!" when there is none. *@
 					@if (warning.Help is null)
 					{
@@ -40,8 +37,8 @@
 </section>
 
 @code {
-	/// <summary>A warning line: "warn" or "bad", the sentence, and optional (i) help.</summary>
-	public sealed record Warning(string Kind, string Text, RenderFragment? Help = null);
+	/// <summary>A warning line: a key unique within the card, "warn" or "bad", the sentence, and optional (i) help.</summary>
+	public sealed record Warning(string Key, string Kind, string Text, RenderFragment? Help = null);
 
 	[Parameter, EditorRequired]
 	public IReadOnlyList<Warning> Warnings { get; set; } = [];
