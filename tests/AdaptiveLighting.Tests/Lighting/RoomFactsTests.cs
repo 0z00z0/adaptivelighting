@@ -137,6 +137,25 @@ public sealed class RoomFactsTests
 		StringAssert.Contains(lit.Title!, "2700 K");
 	}
 
+	[TestMethod]
+	public void A_Room_Lit_At_The_Lowest_Step_Reads_One_Percent()
+	{
+		Assert.AreEqual("1 %", ValueOf(RoomFacts.For(Report(state: AreaState.AutoActive, brightness: 0.39, lastCommand: Now), Now), "Lights"));
+	}
+
+	// Named apart exactly when the two readouts print different numbers.
+	[TestMethod]
+	[DataRow(0.4, 0.6, false)]
+	[DataRow(62.5, 63.4, false)]
+	[DataRow(1.5, 2.5, true)]
+	public void A_Light_Is_Named_Apart_Only_When_It_Prints_A_Different_Level_From_The_Room(double light, double room, bool namedApart)
+	{
+		AreaSnapshot snapshot = Report(state: AreaState.AutoActive, brightness: room, lastCommand: Now)
+			with { LightLevels = [new LightStanding("light.lamp", light, null)] };
+
+		Assert.AreEqual(namedApart, LightReadout.Line(snapshot) is not null);
+	}
+
 	// ===================== would movement light this room? =====================
 
 	/// <summary>A bedroom that will not light itself while the house sleeps sits in the same state as one waiting for movement, so the state alone cannot answer.</summary>
