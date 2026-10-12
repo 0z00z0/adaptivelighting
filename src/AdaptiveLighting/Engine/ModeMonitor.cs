@@ -130,6 +130,9 @@ public sealed class ModeMonitor : IDisposable
 	// engine; on Normal and Sleep it is a one-shot the ordinary commands may override.
 	public string? ActiveScene => _modes.ActiveScene;
 
+	/// <summary>The effective option's own name as written in the document, or <c>null</c> when nothing classifies.</summary>
+	public string? ActiveModeName => _modes.ActiveModeName;
+
 	/// <summary>Subscribes and starts the evaluation tick.</summary>
 	public void Start()
 	{

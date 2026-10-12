@@ -517,6 +517,7 @@ public sealed class LightingOrchestrator : IDisposable
 		{
 			ModeValue = _modes?.CurrentModeValue,
 			ActiveScene = _modes?.ActiveScene,
+			ActiveModeName = _modes?.ActiveModeName,
 			Forced = _modes?.Forced
 		};
 

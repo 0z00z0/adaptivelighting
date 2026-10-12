@@ -1,6 +1,7 @@
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
+using AdaptiveLighting.Web.Presentation;
 
 using Fixture = AdaptiveLighting.Tests.Common.AreaFixture;
 
@@ -114,6 +115,21 @@ public sealed partial class AreaControllerTests
 		Assert.AreEqual(AutoOnBlock.SceneHold,
 			FirstDeclined(Build(), t => t.House.OnNext(House(kind: ModeKind.Guest, modeValue: "Gjester", scene: "scene.gjest"))),
 			"the fourth silent refusal: a guest scene holds the room, and saying 'not dark enough' would be a lie");
+	}
+
+	[TestMethod]
+	public void A_Refused_Movement_Under_A_Sleep_Option_Names_The_Option_By_Its_Own_Name()
+	{
+		Fixture t = Build(s => s.SleepBlocksAutoOn = true);
+		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Night", modeName: "Night"));
+		t.Publisher.Snapshots.Clear();
+
+		t.Ha.Trigger(Motion, "on");
+
+		string row = ActivityView.Describe(t.Publisher.Snapshots.Single(s => s.Reason == TransitionReason.Motion)).What;
+
+		StringAssert.Contains(row, "Night mode");
+		Assert.IsFalse(row.Contains("asleep", StringComparison.Ordinal), "the generic wording is gone from the row");
 	}
 
 	/// <summary>Arranges a block, walks through the room once, and hands back the gate the report named.</summary>

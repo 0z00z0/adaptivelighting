@@ -10,6 +10,10 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
+## [Unreleased]
+
+- A movement refused because the house is in a sleep-kind mode now names that mode by its own name, in the activity row and in the log, instead of "the house is asleep".
+
 ## [2026.10.3] - 2026-10-10
 
 - In Lamplight, the fine brightness control and the daylight curve readout now work; the two scripts they need were not loaded on its pages.

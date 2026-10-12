@@ -78,8 +78,9 @@ public sealed partial class AreaControllerTests
 		bool killed = false,
 		string? modeValue = null,
 		string? scene = null,
-		ForcedMode? forced = null) =>
-		new(home, kind, killed) { ModeValue = modeValue, ActiveScene = scene, Forced = forced };
+		ForcedMode? forced = null,
+		string? modeName = null) =>
+		new(home, kind, killed) { ModeValue = modeValue, ActiveScene = scene, Forced = forced, ActiveModeName = modeName };
 
 	/// <summary>The house set to away, with the trackers still reading home: the selector is the only cause.</summary>
 	private static HouseState AwayHouse() => House(kind: ModeKind.Away, modeValue: "Borte");

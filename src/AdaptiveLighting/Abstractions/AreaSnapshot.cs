@@ -48,7 +48,8 @@ public sealed record AreaSnapshot(
 	string? ChangedBy = null,
 	DateTimeOffset? ChangedAt = null,
 	bool? IsLeadIn = null,
-	IReadOnlyList<SensorBattery>? LowBatteries = null)
+	IReadOnlyList<SensorBattery>? LowBatteries = null,
+	string? ActiveModeName = null)
 {
 	/// <summary>Whether the room's lights are on: lit by the engine, dimming before off, or held on by hand, at a
 	/// brightness above zero.</summary>

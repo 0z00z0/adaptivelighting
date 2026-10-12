@@ -1388,7 +1388,7 @@ public sealed class AreaController : IDisposable
 			AutoOnBlock.Away => _house.Forced is { Kind: ModeKind.Away } forced ? forced.Describe()
 				: "the house is set to away",
 			AutoOnBlock.SceneHold => $"a guest scene ({_house.ActiveScene}) is holding this area",
-			AutoOnBlock.Sleep => "sleep mode blocks auto-on for this area",
+			AutoOnBlock.Sleep => $"{_house.ActiveModeName ?? "sleep"} mode blocks auto-on for this area",
 			AutoOnBlock.EntityOn => $"{blocker} is on",
 			_ => $"not dark enough ({_gateSensor.DarknessDetail()})"
 		};
@@ -2080,7 +2080,8 @@ public sealed class AreaController : IDisposable
 			ChangedAt: _changedAt,
 			// Enter clears _leadIn on leaving PreOff.
 			IsLeadIn: _leadIn,
-			LowBatteries: _lowBatteries);
+			LowBatteries: _lowBatteries,
+			ActiveModeName: _house.ActiveModeName);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>
