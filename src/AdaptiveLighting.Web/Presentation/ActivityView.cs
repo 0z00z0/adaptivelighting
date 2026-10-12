@@ -830,7 +830,7 @@ public static class ActivityView
 
 		AutoOnBlock.Away => "Movement, but the house is in away mode",
 		AutoOnBlock.SceneHold => "Movement, but a guest scene has this room",
-		AutoOnBlock.Sleep => $"Movement blocked: {ModeWord(snapshot)} mode",
+		AutoOnBlock.Sleep => $"Movement blocked: {HouseModeName.SleepPhrase(snapshot.ActiveModeName)}",
 		AutoOnBlock.EntityOn => snapshot.AutoOnBlockingEntity is { Length: > 0 } blocker
 			? $"Movement, but {blocker} is on"
 			: "Movement, but something here is on",
@@ -840,10 +840,6 @@ public static class ActivityView
 		// thrown, so a bad report costs a vaguer row instead of a page that will not render.
 		_ => "Movement"
 	};
-
-	// The option's own name; the kind word only when the document gives none.
-	private static string ModeWord(AreaSnapshot snapshot) =>
-		snapshot.ActiveModeName is { Length: > 0 } name ? name : "sleep";
 
 	/// <summary>
 	///     The gate that turned a movement down, as a clause for the board's mark: <c>18:04 movement, too
