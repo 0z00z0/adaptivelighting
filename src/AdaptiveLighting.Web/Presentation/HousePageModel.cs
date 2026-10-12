@@ -1726,8 +1726,14 @@ public sealed class HousePageModel : IPageClock, IDisposable
 	public string EngineFault => _engine.Fault ?? "Not started yet.";
 
 	/// <summary>How many rooms the engine is managing, in words.</summary>
-	public string RoomsManagedLine =>
-		$"{_engine.RunningAreaCount} {(_engine.RunningAreaCount == 1 ? "room" : "rooms")} managed.";
+	public string RoomsManagedLine
+	{
+		get
+		{
+			int count = _engine.RunningAreaCount;
+			return $"{count} {(count == 1 ? "room" : "rooms")} managed.";
+		}
+	}
 
 	/// <summary>How many areas Home Assistant has told this page about, in words.</summary>
 	public string AreasKnownLine => $"{_areas.Count} {(_areas.Count == 1 ? "area" : "areas")} known.";

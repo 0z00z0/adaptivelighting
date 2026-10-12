@@ -173,8 +173,6 @@ public sealed class ZeroBrightnessTests
 			new[] { "light.stue_taklys on 0.39% 2700K", "light.stue_leselampe on 0.39% 2700K" },
 			recorded,
 			"a positive level is floored to the lowest step a light can show");
-		CollectionAssert.DoesNotContain(recorded, "light.stue_taklys off", "only 0 % is an off");
-		CollectionAssert.DoesNotContain(recorded, "light.stue_leselampe off", "only 0 % is an off");
 	}
 
 	[TestMethod]

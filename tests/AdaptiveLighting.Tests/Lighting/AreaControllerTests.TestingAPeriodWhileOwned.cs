@@ -247,6 +247,35 @@ public sealed partial class AreaControllerTests
 	}
 
 	[TestMethod]
+	public void A_Manual_Change_Just_After_A_Test_Ends_Is_Not_Credited_To_The_Tests_Return()
+	{
+		// A short echo window and no fade, so the dim two seconds after the return reads as a hand.
+		Fixture t = BuildHeldByHand(
+			s =>
+			{
+				s.NightTransitionSeconds = 0;
+				s.DayTransitionSeconds = 0;
+			},
+			g => g.SelfEchoWindowSeconds = 1);
+
+		Assert.IsNull(t.Area.TestPeriod("day"));
+		ReportTestLevels(t);
+		Advance(t, TestRun);
+
+		// 102 of 255 is 40 %.
+		Advance(t, TimeSpan.FromSeconds(2));
+		int before = t.Publisher.Snapshots.Count;
+		t.Ha.Trigger(Light, "on", new() { ["brightness"] = 102.0, ["color_temp_kelvin"] = 3000.0 }, PhysicalDevice());
+
+		Advance(t, TimeSpan.FromSeconds(AreaController.ManualSettleSeconds + 1));
+
+		AreaSnapshot[] after = [.. t.Publisher.Snapshots.Skip(before)];
+		Assert.AreEqual(1, after.Length, string.Join(", ", after.Select(snapshot => $"{snapshot.Reason} {snapshot.BrightnessPct}")));
+		Assert.AreEqual(TransitionReason.ManualOn, after[0].Reason, "the person's dim is the person's row");
+		Assert.AreEqual(40, after[0].BrightnessPct ?? 0, 0.01);
+	}
+
+	[TestMethod]
 	public void A_Test_Started_Before_A_Manual_Change_Settles_Credits_The_Person_With_Their_Own_Level()
 	{
 		Fixture t = BuildHeldByHand();

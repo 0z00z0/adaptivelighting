@@ -64,10 +64,10 @@ public sealed class CarryOverOnSaveTests
 		return new House(host, ha, scheduler);
 	}
 
-	private static AdaptiveLightingConfig Document(int overrideMinutes) => new()
+	private static AdaptiveLightingConfig Document(int overrideMinutes, string periodId = "day") => new()
 	{
 		ConfigName = "Adaptive lighting [test]",
-		Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
+		Periods = [new TimePeriodConfig { Id = periodId, Name = periodId, Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
 		Areas =
 		[
 			new AreaConfig
@@ -158,6 +158,28 @@ public sealed class CarryOverOnSaveTests
 		Assert.IsTrue(house.Ha.Calls.Skip(calls).Any(call => call.Domain == "light" && call.Service == "turn_off"),
 			"the room goes back to dark at the test's own deadline");
 		Assert.IsNull(Field(Latest(house.Ha), "testing_period_id"));
+	}
+
+	[TestMethod]
+	public void AHeldRoomWhoseTestNoLongerFitsAfterASave_ReadsItsLightsAgainOnceTheyArePutBack()
+	{
+		using House house = Running(lightState: "off");
+
+		// 102 of 255 is 40 %; the test shows the day period's 80 %.
+		house.Ha.Trigger(Light, "on", new() { ["brightness"] = 102.0 }, AtTheSwitch());
+		Assert.IsNull(house.Host.RunningAreas[0].TestPeriod("day"));
+		house.Ha.SetState(Light, "on", new() { ["brightness"] = 204.0 });
+
+		house.Advance(TimeSpan.FromSeconds(2));
+		house.Host.Save(Document(overrideMinutes: 60, periodId: "evening"));
+		Assert.AreEqual(nameof(AreaState.OverriddenOn), Field(Latest(house.Ha), "state"));
+
+		// The return's echo, which the rebuilt room reads as its own.
+		house.Ha.SetState(Light, "on", new() { ["brightness"] = 102.0 });
+		house.Advance(TimeSpan.FromSeconds(AreaController.ManualSettleSeconds));
+
+		Assert.AreEqual(40, Latest(house.Ha).GetProperty("brightness_pct").GetDouble(), 0.01,
+			"the room reads the person's level once the return is on the lights");
 	}
 
 	[TestMethod]

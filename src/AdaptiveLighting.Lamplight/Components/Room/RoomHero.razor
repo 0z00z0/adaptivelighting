@@ -1,3 +1,4 @@
+@using AdaptiveLighting.Abstractions
 @using AdaptiveLighting.Lamplight.Components.Kit
 @using AdaptiveLighting.Web.Components
 
@@ -101,13 +102,14 @@
 			List<NowCard.Warning> warnings = [];
 
 			if (Model.NotResponding is { Length: > 0 } notResponding)
-				warnings.Add(new NowCard.Warning("warn", notResponding, NotRespondingHelp));
+				warnings.Add(new NowCard.Warning("not-responding", "warn", notResponding, NotRespondingHelp));
 
-			foreach (string battery in Model.LowBatteries)
-				warnings.Add(new NowCard.Warning("warn", battery, BatteryHelp));
+			// The sentences come from the snapshot's batteries in the same order.
+			foreach ((string battery, SensorBattery sensor) in Model.LowBatteries.Zip(Model.Snapshot?.LowBatteries ?? []))
+				warnings.Add(new NowCard.Warning($"battery-{sensor.SensorId}", "warn", battery, BatteryHelp));
 
 			foreach (SensorWarning sensor in Model.SensorWarnings)
-				warnings.Add(new NowCard.Warning("warn", sensor.Text, SensorHelp(sensor)));
+				warnings.Add(new NowCard.Warning($"sensor-{sensor.Kind}", "warn", sensor.Text, SensorHelp(sensor)));
 
 			return warnings;
 		}

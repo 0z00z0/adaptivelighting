@@ -209,6 +209,28 @@ public sealed class HaStatePublisherTests
 		Assert.AreEqual("scene.stue_natt", rebuilt!.SceneApplied);
 	}
 
+	[TestMethod]
+	public void The_Options_Own_Name_Survives_The_Serialize_Event_ToSnapshot_Round_Trip()
+	{
+		FakeHaContext ha = new();
+		HaStatePublisher publisher = new(ha, NullLogger.Instance);
+
+		AreaSnapshot snapshot = new(
+			"Stue", AreaState.AutoVacant, TransitionReason.Motion, ModeKind.Sleep,
+			KillSwitchActive: false, IsDark: true, PeriodName: "evening", BrightnessPct: null, ColorTempKelvin: null,
+			Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
+			NextChangeFrom: null, HouseModeValue: "night", AreaId: "stue", AutoOnBlockedBy: AutoOnBlock.Sleep,
+			ActiveModeName: "Night");
+
+		publisher.Publish(snapshot);
+
+		string json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(json)!.ToSnapshot();
+
+		Assert.IsNotNull(rebuilt);
+		Assert.AreEqual("Night", rebuilt!.ActiveModeName, "the refusal row reads the option's name off the event");
+	}
+
 	// The pair a page reads to redraw the countdown after a reload or a navigate-back. See Room.razor's
 	// TestingPeriod. Without this round trip, only the page that clicked Test ever draws it.
 	[TestMethod]

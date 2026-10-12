@@ -39,6 +39,6 @@ public static class LightReadout
 	private static bool SameAsRoom(LightStanding light, AreaSnapshot snapshot) =>
 		light.BrightnessPct is { } brightness
 		&& snapshot.BrightnessPct is { } room
-		&& Math.Round(brightness) == Math.Round(room)
+		&& DisplayRounding.WholeLit(brightness) == DisplayRounding.WholeLit(room)
 		&& light.ColorTempKelvin == snapshot.ColorTempKelvin;
 }

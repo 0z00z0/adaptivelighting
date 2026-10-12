@@ -13,6 +13,14 @@ against each other.
 ## [Unreleased]
 
 - A movement refused because the house is in a sleep-kind mode now names that mode by its own name, in the activity row and in the log, instead of "the house is asleep".
+- The published room event carries that name in a new `active_mode_name` field, which is where both designs' activity rows read it.
+- An option whose name already ends in "mode" is no longer written as "Night mode mode".
+- After a level test in a room held by hand, a change by hand within five seconds of the test ending is written as the person's own row, never as "Test ended, lights back" with the person's level.
+- A room held by hand whose running test no longer fits a save reads its lights again five seconds after they are put back, instead of showing the test's level.
+- A light is named beside its room only when the two readouts print different levels: a lamp at 0.4 % no longer shows as "1 %" beside a room reading 1 %.
+- In Lamplight, an open help bubble on a warning stays open when a number in the warning changes, such as a battery level or a count of lights not responding.
+- The rooms-managed count on the house page can no longer fail while a save is rebuilding the rooms.
+- The log line for a manual change reads 1 % at the lowest brightness step, as the pages do, instead of 0 %.
 
 ## [2026.10.3] - 2026-10-10
 
@@ -28,7 +36,6 @@ against each other.
 - The house-mode scene fired at start-up or after a save is logged with reason `Startup`, as the rooms are, instead of `HouseModeChanged`.
 - A hand-written log level in another case, such as `debug`, now shows as chosen in the select; an unrecognised word shows as the host's own level.
 - In Lamplight, a warning's open help bubble stays with that warning when another warning appears or goes above it, and a quick second click no longer reopens a bubble just closed.
-- The published room event's `changed_by` field carries "Unknown source", "By an automation" or "By a Home Assistant user" where it used to carry the device-switch text or nothing.
 
 ## [2026.10.2] - 2026-10-08
 
@@ -37,6 +44,7 @@ against each other.
 - In Lamplight, the three Fine tuning settings can be changed again: re-check interval, own-change window and whether other automations count as manual changes. Their rows did not open.
 
 - A light change with no named source now reads "Unknown source" in the history instead of "At the device or wall switch".
+- The published room event's `changed_by` field carries "Unknown source", "By an automation" or "By a Home Assistant user" where it used to carry the device-switch text or nothing.
 - The configuration, engine and web types that other projects copy moved to three new namespaces: `Adaptive.Settings`, `Adaptive.Engine` and `Adaptive.UI`. The `AdaptiveLighting`, `AdaptiveLighting.Extensions` and `AdaptiveLighting.Web` packages are affected, and code that uses these types needs the matching `using` lines. Package and assembly names are unchanged.
 - The start-up log line and the message after a save no longer count a switched-off room as running, so they read "18 of 18" instead of "19 of 18".
 - A new Logging group in the house settings of both designs can write every command sent to a light, one file per light in a folder per room under `log/commands` beside the settings file. A command the light already matched, and so was never sent, is written too. It is off by default, and the files stay until deleted by hand.

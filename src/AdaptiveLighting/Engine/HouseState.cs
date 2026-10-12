@@ -17,6 +17,12 @@ public static class HouseModeName
 	/// <summary>The kind <paramref name="name"/> stands for, or <see cref="ModeKind.Normal"/> for anything else.</summary>
 	public static ModeKind Parse(string? name) =>
 		Enum.TryParse(name, out ModeKind kind) ? kind : ModeKind.Normal;
+
+	/// <summary>A sleep option's name as a mode: <c>Night mode</c>, the name alone when it already ends in "mode", <c>sleep mode</c> when it has none.</summary>
+	public static string SleepPhrase(string? optionName) =>
+		string.IsNullOrWhiteSpace(optionName) ? "sleep mode"
+		: optionName.EndsWith("mode", StringComparison.OrdinalIgnoreCase) ? optionName
+		: optionName + " mode";
 }
 
 /// <summary>Which of the engine's own activation rules put the house on its mode, as opposed to a person choosing it.</summary>

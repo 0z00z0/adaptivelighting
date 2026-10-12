@@ -608,7 +608,10 @@ public sealed class AreaController : IDisposable
 		_levelTest.Resume(carried.Test);
 
 		if (!StillApplies(carried.Test))
+		{
 			EndLevelTest();
+			RepublishAfterReturn();
+		}
 	}
 
 	private bool StillApplies(RunningLevelTest test)
@@ -822,8 +825,10 @@ public sealed class AreaController : IDisposable
 				return;
 			}
 
-			// A hand at the switch is the newest word on these levels, so a running test's return is dropped.
+			// A hand at the switch is the newest word on these levels, so a running test's return is dropped, and so
+			// is the re-read after one that has ended.
 			AbandonLevelTest();
+			_returnTimer.Disposable = Disposable.Empty;
 
 			bool turnedOn = change.TurnedOn();
 
@@ -874,7 +879,7 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
-	// Unguarded: a tick or a motion edge inside the window already carries the same level and deadline.
+	// Skips the identical-news guard.
 	private void PublishPendingSettle()
 	{
 		if (!_settlePending)
@@ -895,7 +900,7 @@ public sealed class AreaController : IDisposable
 		{
 			lock (_gate)
 			{
-				if (_disposed || _state != AreaState.OverriddenOn || _levelTest.IsRunning)
+				if (_disposed || _state != AreaState.OverriddenOn || _levelTest.IsRunning || _settlePending)
 					return;
 
 				Publish(TransitionReason.LevelTestEnded);
@@ -1388,7 +1393,7 @@ public sealed class AreaController : IDisposable
 			AutoOnBlock.Away => _house.Forced is { Kind: ModeKind.Away } forced ? forced.Describe()
 				: "the house is set to away",
 			AutoOnBlock.SceneHold => $"a guest scene ({_house.ActiveScene}) is holding this area",
-			AutoOnBlock.Sleep => $"{_house.ActiveModeName ?? "sleep"} mode blocks auto-on for this area",
+			AutoOnBlock.Sleep => $"{HouseModeName.SleepPhrase(_house.ActiveModeName)} blocks auto-on for this area",
 			AutoOnBlock.EntityOn => $"{blocker} is on",
 			_ => $"not dark enough ({_gateSensor.DarknessDetail()})"
 		};
@@ -1756,12 +1761,16 @@ public sealed class AreaController : IDisposable
 			kelvin.Count > 0 ? (int)Math.Round(kelvin.Average()) : null);
 	}
 
-	private static string DescribeLevel((double? BrightnessPct, int? ColorTempKelvin) level) => level switch
+	private static string DescribeLevel((double? BrightnessPct, int? ColorTempKelvin) level)
 	{
-		({ } brightness, { } kelvin) => $" at {brightness:0} %, {kelvin} K",
-		({ } brightness, null) => $" at {brightness:0} %",
-		_ => ""
-	};
+		if (level.BrightnessPct is not { } brightness)
+			return "";
+
+		// 1 %, never 0 %, while lit, as the pages read it.
+		double shown = brightness > 0 ? Math.Max(1, Math.Round(brightness, MidpointRounding.AwayFromZero)) : brightness;
+
+		return level.ColorTempKelvin is { } kelvin ? $" at {shown:0} %, {kelvin} K" : $" at {shown:0} %";
+	}
 
 	/// <summary>The colour channel vector a fixture currently reports, or <c>null</c> when it reports none.</summary>
 	private static IReadOnlyList<int>? ReadChannels(EntityState state)
@@ -1991,6 +2000,7 @@ public sealed class AreaController : IDisposable
 		{
 			_settleTimer.Disposable = Disposable.Empty;
 			_settlePending = false;
+			_returnTimer.Disposable = Disposable.Empty;
 		}
 
 		_state = state;
