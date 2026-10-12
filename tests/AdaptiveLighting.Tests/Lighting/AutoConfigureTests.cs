@@ -17,13 +17,13 @@ public sealed class AutoConfigureTests
 	}
 
 	[TestMethod]
-	public void A_Bedroom_Is_Held_To_Night_Levels_And_Never_Lights_Itself()
+	public void A_Bedroom_Is_Held_To_Night_Levels_But_Still_Lights()
 	{
 		foreach (string areaId in new[] { "soverom", "sov_1", "soverom_samuel", "bedroom" })
 		{
 			AreaConfig area = Role(areaId);
 			Assert.IsTrue(area.RespectSleepMode, $"{areaId} should follow sleep mode");
-			Assert.IsTrue(area.SleepBlocksAutoOn, $"{areaId} should not light itself while the house sleeps");
+			Assert.IsNull(area.SleepBlocksAutoOn, $"{areaId} must still light on movement while the house sleeps");
 		}
 	}
 

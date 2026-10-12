@@ -10,6 +10,10 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
+## [Unreleased]
+
+- A bedroom found by set-up now dims at night but still lights on movement; rooms already in the document keep their settings, and **Dims and stays off** stays available as a step.
+
 ## [2026.10.3] - 2026-10-10
 
 - In Lamplight, the fine brightness control and the daylight curve readout now work; the two scripts they need were not loaded on its pages.

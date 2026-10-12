@@ -52,15 +52,14 @@ internal static class AreaAutoDiscovery
 
 		List<string> roles = [];
 
+		// Bedroom and bathroom dim at night; SleepBlocksAutoOn stays off: a 03:00 trip must still light.
 		if (Matches(areaId, Bedroom))
 		{
 			area.RespectSleepMode = true;
-			area.SleepBlocksAutoOn = true;
 			roles.Add("bedroom");
 		}
 		else if (Matches(areaId, Bathroom))
 		{
-			// Dim at night, but SleepBlocksAutoOn stays off: a 03:00 trip must still light.
 			area.RespectSleepMode = true;
 			roles.Add("bathroom");
 		}

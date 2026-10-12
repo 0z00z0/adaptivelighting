@@ -66,8 +66,8 @@ authenticating reverse proxy.
 About thirty seconds after the connection settles, set-up runs once and:
 
 - writes down **every Home Assistant area that has both a light and a motion sensor**;
-- **guesses each room's role from its name** — a bedroom is held to night levels and never lights
-  itself, a bathroom gets the night levels but still lights, a hallway or stairwell lights on
+- **guesses each room's role from its name** — a bedroom or bathroom is held to night levels
+  but still lights, a hallway or stairwell lights on
   arrival, and a terrace or garage stays on when the house empties;
 - **adopts a house-mode dropdown** if it finds an obvious one;
 - **fills in the list of people** from Home Assistant.
