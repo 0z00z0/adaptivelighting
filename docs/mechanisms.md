@@ -24,9 +24,9 @@ its old name while some of its types sit in a neutral namespace. A shared file t
 imports the old namespace or names it in full; it never moves the lighting-only type. A string-typed key stays as it
 is: the document's root key is still `AdaptiveLighting.Configuration.AdaptiveLightingConfig`.
 
-Twelve of the 35 files in the neutral namespaces still reach lighting-only types. Six name the lighting namespace
-in a `using` (the config store, the period-select reader, the house-mode detector and sync, the period extensions
-and the last-period store); the other six (five shared components and the last-period note) reach them through
+Fourteen of the 35 files in the neutral namespaces still reach lighting-only types. Eight name the lighting namespace
+in a `using` (the config store, the period-select reader, the house-mode detector and sync, the period extensions,
+the last-period store, the period start text and the area registry); the other six (five shared components and the last-period note) reach them through
 `_Imports.razor` or a project's global usings with no line of their own, so a verbatim copy of those fails to
 compile on names the file never mentions.
 
@@ -1875,7 +1875,8 @@ under a hand-set off produces dozens of reports minutes apart. That is why the b
 a **pixel-gap test** (about 3 px on a phone track) rather than a gate-keyed one.
 
 `Sleep` refusals carry the house-mode option's own name (`AreaSnapshot.ActiveModeName`, from the effective option's
-`Value`), so the row and the log read "Night mode" for an option the document calls Night. The name is display only and
+`Value`), so the row and the log read "Night mode" for an option the document calls Night, and "Night mode" for one
+already called that. The pages read it from the event's `active_mode_name` field. The name is display only and
 stays out of `HasSameMeaningAs`: renaming an option under an unchanged gate adds no row.
 
 ### Auto-on gate order, and which refusals are worth hoisting
