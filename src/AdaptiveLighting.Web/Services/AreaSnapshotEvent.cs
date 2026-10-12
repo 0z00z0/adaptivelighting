@@ -134,6 +134,10 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("mode_forced_by_state")]
 	public string? ModeForcedByState { get; init; }
 
+	/// <summary>The effective option's own name as written in the document, or <c>null</c> when nothing classifies.</summary>
+	[JsonPropertyName("active_mode_name")]
+	public string? ActiveModeName { get; init; }
+
 	/// <summary>The period a running level test is showing, or <c>null</c> when none is.</summary>
 	[JsonPropertyName("testing_period_id")]
 	public string? TestingPeriodId { get; init; }
@@ -227,7 +231,8 @@ public sealed record AreaSnapshotEvent
 			IsLeadIn: IsLeadIn,
 			LowBatteries: MotionSensorsLowBattery is { Count: > 0 } low
 				? [.. low.Where(battery => battery.EntityId is { Length: > 0 }).Select(battery => new SensorBattery(battery.EntityId!, battery.LevelPct))]
-				: null);
+				: null,
+			ActiveModeName: ActiveModeName);
 	}
 }
 
