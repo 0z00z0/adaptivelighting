@@ -264,6 +264,10 @@ internal sealed class HouseModeRules : IDisposable
 	internal string? ActiveScene =>
 		EffectiveOption is { Scene: { Length: > 0 } scene } ? scene : null;
 
+	/// <summary>The effective option's own name as written in the document, trimmed; <c>null</c> when nothing classifies.</summary>
+	internal string? ActiveModeName =>
+		EffectiveOption is { Value: { } value } && value.Trim() is { Length: > 0 } name ? name : null;
+
 	// An unreadable state is "not on", so a vanished sensor stops forcing its mode instead of pinning it.
 	private bool IsOn(string entityId) =>
 		!string.IsNullOrWhiteSpace(entityId) && (_ha.GetState(entityId)?.IsOn() ?? false);

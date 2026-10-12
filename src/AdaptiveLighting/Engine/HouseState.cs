@@ -64,6 +64,10 @@ public sealed record HouseState(
 	/// <summary>The active option's <c>scene.*</c> when it names one, whatever its kind.</summary>
 	public string? ActiveScene { get; init; }
 
+	/// <summary>The effective option's own name as written in the document, or <c>null</c> when nothing classifies.</summary>
+	// Display only, never a key.
+	public string? ActiveModeName { get; init; }
+
 	/// <summary>What is forcing <see cref="ActiveKind"/>, or <c>null</c> when the select's own value is the answer.</summary>
 	// Part of the record equality, so the orchestrator republishes when a forcing entity flips even though
 	// ActiveKind and ModeValue have not moved.

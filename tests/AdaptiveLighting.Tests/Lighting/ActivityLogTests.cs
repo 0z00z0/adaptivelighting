@@ -518,7 +518,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual("Movement, but the room is bright enough",
 			Declined(AutoOnBlock.NotDark, isDark: false).What);
 
-		Assert.AreEqual("Movement, but the house is asleep",
+		Assert.AreEqual("Movement blocked: sleep mode",
 			Declined(AutoOnBlock.Sleep).What);
 
 		Assert.AreEqual("Movement, but media_player.stue_tv is on",
@@ -1062,7 +1062,7 @@ public sealed class ActivityLogTests
 
 			StringAssert.Contains(
 				$"{line.What} {line.Why}",
-				"the house is asleep",
+				reason is TransitionReason.Motion ? "sleep mode" : "the house is asleep",
 				$"{reason}: filed under 'nothing happened' with no word about what was in the way");
 		}
 

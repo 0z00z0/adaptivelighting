@@ -1874,6 +1874,10 @@ The suppressed-off path is the exception: it republishes on **every** movement, 
 under a hand-set off produces dozens of reports minutes apart. That is why the board's mark de-duplication is
 a **pixel-gap test** (about 3 px on a phone track) rather than a gate-keyed one.
 
+`Sleep` refusals carry the house-mode option's own name (`AreaSnapshot.ActiveModeName`, from the effective option's
+`Value`), so the row and the log read "Night mode" for an option the document calls Night. The name is display only and
+stays out of `HasSameMeaningAs`: renaming an option under an unchanged gate adds no row.
+
 ### Auto-on gate order, and which refusals are worth hoisting
 
 The engine refuses auto-on in this order: kill switch, disabled, away, sleep, entity.
