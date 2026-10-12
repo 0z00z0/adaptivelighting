@@ -10,7 +10,7 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
-## [Unreleased]
+## [2026.10.4] - 2026-10-12
 
 - A movement refused because the house is in a sleep-kind mode now names that mode by its own name, in the activity row and in the log, instead of "the house is asleep".
 - The published room event carries that name in a new `active_mode_name` field, which is where both designs' activity rows read it.
