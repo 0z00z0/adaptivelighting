@@ -263,6 +263,59 @@ public sealed class LightingOrchestratorTests
 		engine.Dispose();
 	}
 
+	// The refusal row and the engine's log line read this name; the select's spelling is Home Assistant's, not the document's.
+	[TestMethod]
+	public void The_House_Carries_The_Sleep_Options_Own_Name_Not_The_Selects_Spelling()
+	{
+		const string Nap = "input_boolean.nap";
+
+		FakeHaContext ha = new();
+		ha.SetState(Person, "home");
+		ha.SetState(Select, "night");
+		ha.SetState(Master, "on");
+		ha.SetState(Nap, "off");
+		ha.SetState(Stue, "off");
+		ha.SetState(StueMotion, "off");
+
+		AdaptiveLightingConfig config = new()
+		{
+			Global = new GlobalConfig
+			{
+				Persons = [Person],
+				HouseMode = new HouseModeConfig
+				{
+					Entity = Select,
+					Options =
+					[
+						new() { Value = "Normal", Kind = ModeKind.Normal },
+						new() { Value = " Night ", Kind = ModeKind.Sleep },
+						new() { Value = " Nap ", Kind = ModeKind.Sleep, ActivateWhileOn = [Nap] }
+					]
+				},
+				KillSwitchEntity = Master
+			},
+			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+		};
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(new DateTimeOffset(2026, 1, 15, 20, 0, 0, TimeSpan.Zero).Ticks);
+
+		FakeStatePublisher publisher = new();
+		using LightingOrchestrator engine = new(
+			ha, new FakeHaRegistry(), scheduler, config,
+			new FakeLightActuator(), publisher, new FakeNotifier(), NullLoggerFactory.Instance);
+		engine.Start();
+
+		Assert.AreEqual("Night", publisher.Snapshots[^1].ActiveModeName, "the option's trimmed name, not the select's 'night'");
+
+		// The forced option wins over the select, and its name goes with it.
+		ha.Trigger(Nap, "on");
+		scheduler.AdvanceBy(TimeSpan.FromSeconds(config.Global.CircadianTickSeconds + 1).Ticks);
+
+		Assert.AreEqual("Nap", publisher.Snapshots[^1].ActiveModeName);
+	}
+
 	// ===================== the opening house state =====================
 
 	/// <summary>One lit room, with the select and the master switch wherever a test puts them.</summary>

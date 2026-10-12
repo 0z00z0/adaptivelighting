@@ -77,6 +77,22 @@ public sealed class CommandLogTests
 			$"^{Stamp} reason=Motion state=AutoActive action=turn_on brightness_pct=70 color_temp_kelvin=2700 outcome=failed exception=InvalidOperationException$"));
 	}
 
+	[TestMethod]
+	public void A_Scene_Whose_Call_Throws_Is_Logged_As_Failed_And_The_Exception_Still_Reaches_The_Caller()
+	{
+		ILightActuator actuator = new CommandLog(_directory, NullLogger.Instance).Wrap(
+			new ThrowingActuator(), "room", "Room", () => DateTimeOffset.Now,
+			() => new CommandContext(TransitionReason.HouseModeChanged, State: null));
+
+		Assert.ThrowsException<InvalidOperationException>(() => actuator.ActivateScene("scene.evening"));
+
+		string[] lines = File.ReadAllLines(Path.Combine(_directory, "room", "_scene.log"));
+
+		Assert.AreEqual(2, lines.Length, string.Join(Environment.NewLine, lines));
+		StringAssert.Matches(lines[1], new Regex(
+			$"^{Stamp} reason=HouseModeChanged state=none action=scene\\.turn_on scene=scene\\.evening outcome=failed exception=InvalidOperationException$"));
+	}
+
 	private sealed class ThrowingActuator : ILightActuator
 	{
 		public ActuatorOutcome Apply(string entityId, LightCommand command) =>

@@ -24,7 +24,7 @@ public sealed class RootScriptTests
 		Dictionary<string, string> definedIn = ScriptDefinitions(root);
 		HashSet<string> called = CalledGlobals(root);
 
-		// A scan that finds nothing would pass; these two are known to exist.
+		// Non-empty guard: both are called today.
 		CollectionAssert.IsSubsetOf(
 			new[] { "adaptiveLightingPresetSlider", "adaptiveLightingCurve" },
 			called.ToArray());
@@ -44,7 +44,7 @@ public sealed class RootScriptTests
 				if (OwnRoot.TryGetValue(global, out string? owner) && owner != page)
 					continue;
 
-				string html = File.ReadAllText(Path.Combine(root, page));
+				string html = WithoutComments(File.ReadAllText(Path.Combine(root, page)));
 
 				if (!html.Contains(script, StringComparison.Ordinal))
 					missing.Add($"{Path.GetFileName(page)} does not load {script}, which defines {global}");
@@ -93,7 +93,11 @@ public sealed class RootScriptTests
 		return map;
 	}
 
-	// Walks up from the test binary. Failing loudly beats a scan that quietly finds no files and passes.
+	// A commented-out tag still names its path.
+	private static string WithoutComments(string page) =>
+		Regex.Replace(page, @"@\*.*?\*@|<!--.*?-->", "", RegexOptions.Singleline | RegexOptions.CultureInvariant);
+
+	// Walks up from the test binary to the solution file.
 	private static string RepositoryRoot()
 	{
 		DirectoryInfo? at = new(AppContext.BaseDirectory);
