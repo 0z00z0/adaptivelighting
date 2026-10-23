@@ -1,6 +1,6 @@
 using System.Reactive.Concurrency;
 
-using AdaptiveLighting.Hosting;
+using Adaptive.Settings;
 
 using NetDaemon.AppModel;
 using NetDaemon.HassModel;

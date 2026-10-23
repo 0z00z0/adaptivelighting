@@ -76,7 +76,7 @@ Then store the token once, and leave it out of anything committed:
 dotnet nuget update source 0z00z0 --username YOUR_GITHUB_USERNAME --password YOUR_TOKEN --store-password-in-clear-text
 ```
 
-**4. The package.** Latest release: **2026.10.4**. Omit the version to take whatever is newest.
+**4. The package.** Latest release: **2026.10.5**. Omit the version to take whatever is newest.
 
 ```bash
 dotnet add package AdaptiveLighting.NetDaemon   # engine + UI + host wiring, one reference
@@ -101,6 +101,8 @@ Three things: point the engine at a config file, hand it Home Assistant, and (op
 **2. A NetDaemon app** that hands the engine its Home Assistant connection:
 
 ```csharp
+using Adaptive.Settings;
+
 [NetDaemonApp(Id = "adaptive_lighting")]
 internal sealed class AdaptiveLightingApp : IAsyncDisposable
 {
