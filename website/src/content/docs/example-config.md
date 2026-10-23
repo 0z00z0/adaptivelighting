@@ -21,7 +21,7 @@ The two things you cannot do from the browser are `FollowOutdoorLux` on a room a
 ## A worked document
 
 ```yaml
-# The top-level key must stay the fully qualified class name. The filename does not matter.
+# The top-level key must stay exactly as written. The filename does not matter.
 AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 
   # A label for logs and notifications, so two houses can be told apart.
