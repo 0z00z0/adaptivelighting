@@ -1,10 +1,11 @@
 using System.Reactive.Concurrency;
 
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Engine;
 
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>Who caused a light to change.</summary>
 public enum ChangeOrigin

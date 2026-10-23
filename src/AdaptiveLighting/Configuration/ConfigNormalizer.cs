@@ -1,4 +1,6 @@
-namespace AdaptiveLighting.Configuration;
+using AdaptiveLighting.Configuration;
+
+namespace Adaptive.Settings;
 
 /// <summary>The save-time normaliser: drops deprecated and empty fields once they are provably redundant.</summary>
 /// <remarks>Runs on write only, before validation. The load path must never rewrite a hand-edited file.</remarks>

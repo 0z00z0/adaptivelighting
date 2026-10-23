@@ -1,7 +1,7 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Hosting;
 
-namespace AdaptiveLighting.Web.Services;
+namespace Adaptive.Settings;
 
 /// <summary>The settings editor's write: the whole document, refused when the file has moved on since it loaded.</summary>
 /// <remarks>

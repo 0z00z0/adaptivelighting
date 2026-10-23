@@ -1,7 +1,7 @@
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>Proposes a starting set of areas from the rooms the area registry says could plausibly be lit.</summary>
 // Only AreaId and Enabled are written; everything else resolves at run time, so a proposal survives a rename.

@@ -3,7 +3,7 @@ using System.Reactive.Disposables;
 
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.LastSeen;
+namespace Adaptive.Engine;
 
 /// <summary>Records when each Home Assistant entity was last genuinely heard from, across a restart of either side.</summary>
 /// <remarks>

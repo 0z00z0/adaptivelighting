@@ -1,7 +1,6 @@
 using System.Globalization;
 
 using AdaptiveLighting.Configuration;
-using AdaptiveLighting.LastSeen;
 
 using NetDaemon.HassModel.Entities;
 

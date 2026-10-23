@@ -1,4 +1,6 @@
-namespace AdaptiveLighting.Engine;
+using AdaptiveLighting.Engine;
+
+namespace Adaptive.Engine;
 
 /// <summary>What a room shows of its recent past. Read by people, never by a rule.</summary>
 public sealed record AreaHistory(DateTimeOffset? LastMotionAt, DateTimeOffset? ChangedAt, string? ChangedBy);

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reactive.Concurrency;
 
+using Adaptive.Settings;
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;

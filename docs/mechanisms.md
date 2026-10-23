@@ -9,26 +9,40 @@ re-derived by reading the code is here.
 
 ## Shared namespaces
 
-The heating project copies these files verbatim, so the shared code lives in one of three neutral namespaces and a
-copy diffs empty against its source:
+The heating project copies code from here, so that code lives in one of three neutral namespaces and keeps the same
+names in both repositories:
 
-- `Adaptive.Settings`: the configuration document's period and select types, its validation result, stable ids,
-  and the store that holds the document's bytes.
-- `Adaptive.Engine`: periods, the house-mode detector, the wall clock, the select mirror, the area registry and the
-  Home Assistant helper extensions of `AdaptiveLighting.Extensions`.
-- `Adaptive.UI`: the shared components (entity picker, stepper, preset slider, period-start editor, select
-  authority panel) and the page-model helpers behind them.
+- `Adaptive.Settings`, 26 files: the configuration document and its root `AdaptiveLightingConfig`, the period,
+  house-mode and period-select types, validation and normalising, the document's path and store, the engine host
+  that saves it, and the web write path.
+- `Adaptive.Engine`, 47 files: periods, house mode and house state, the clock, area discovery and naming, the
+  override detector, the state-store files, the room-history and last-period stores, the last-seen cache, the mode
+  service, and the Home Assistant helper extensions of `AdaptiveLighting.Extensions`.
+- `Adaptive.UI`, 34 files: the shared components, the house page model and its helpers, the commissioning board,
+  the Home Assistant catalogue, and the Lamplight settings page and tabs.
 
 Lighting-only code keeps `AdaptiveLighting.*`. Assembly and package names are unchanged, so a package still carries
-its old name while some of its types sit in a neutral namespace. A shared file that needs a lighting-only type
-imports the old namespace or names it in full; it never moves the lighting-only type. A string-typed key stays as it
-is: the document's root key is still `AdaptiveLighting.Configuration.AdaptiveLightingConfig`.
+its old name while some of its types sit in a neutral namespace.
 
-Fourteen of the 35 files in the neutral namespaces still reach lighting-only types. Eight name the lighting namespace
-in a `using` (the config store, the period-select reader, the house-mode detector and sync, the period extensions,
-the last-period store, the period start text and the area registry); the other six (five shared components and the last-period note) reach them through
-`_Imports.razor` or a project's global usings with no line of their own, so a verbatim copy of those fails to
-compile on names the file never mentions.
+- **A verbatim copy diffs empty against its source; an adapted copy carries the heating side's changes.** Which file
+  is which is the heating project's list.
+- **A type a verbatim file names sits in a neutral namespace**, apart from the five below, so the copy's `using`
+  lines resolve in both repositories. That is why the configuration types are in `Adaptive.Settings`.
+- **A verbatim file imports only the three neutral namespaces and framework or package namespaces**, never an
+  `AdaptiveLighting.*` one. The lighting-only types it still needs (`InvariantNumber`, `RawBrightnessStep`,
+  `RoomSettings`, `TypedNumber`, `InfoPopover`) arrive through a project's global usings or `_Imports.razor`, and
+  the heating side supplies its own.
+- **A shared type beside lighting-only ones gets its own file**: `PresetChoice` is in `PresetChoice.cs`, the preset
+  lists stay in `Presets.cs`.
+
+The document's root key is the literal `AdaptiveLighting.Configuration.AdaptiveLightingConfig`, stored in every
+document, and does not follow the class. NetDaemon binds the app config by the class's full name, so a house's app
+YAML needs the key `Adaptive.Settings.AdaptiveLightingConfig`; without it, the settings used while the document does
+not load are empty, silently.
+
+**The in-tree fallback document is the app YAML file itself.** On a host without a usable
+`AdaptiveLighting:ConfigPath`, one file needs the document's key to load and NetDaemon's key to seed. Set
+`AdaptiveLighting:ConfigPath`, so the document and the app YAML are two files.
 
 Logger categories follow the namespace, so a moved type logs under its new full name.
 

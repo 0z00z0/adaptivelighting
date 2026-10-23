@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>How much the text behind an (i) matters, which is the colour the icon wears.</summary>
 public enum InfoSeverity

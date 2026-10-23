@@ -3,14 +3,13 @@ using System.Reactive.Concurrency;
 using System.Reactive.Subjects;
 
 using Adaptive.Engine;
-using Adaptive.Settings;
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
-using AdaptiveLighting.LastSeen;
+using AdaptiveLighting.Hosting;
 
-namespace AdaptiveLighting.Hosting;
+namespace Adaptive.Settings;
 
 /// <summary>How a call to <see cref="LightingEngineHost.Save"/> ended.</summary>
 public enum SaveStatus

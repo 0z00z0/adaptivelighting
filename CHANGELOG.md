@@ -10,6 +10,11 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
+## [Unreleased]
+
+- The rest of the code the heating project copies moved to `Adaptive.Settings`, `Adaptive.Engine` and `Adaptive.UI`, among it `AdaptiveLightingConfig`, `LightingEngineHost`, `NetDaemonAppSwitch`, the state stores and the last-seen cache, so code that uses these types needs the matching `using` lines; log lines from `LightingEngineHost`, `ConfigLocation`, `AreaDiscoveryScheduler`, `AreaEntityResolver`, `ChangeOriginNames`, `ModeMonitor`, `ModeService`, `StateStoreRegistry`, `RoomHistoryStore`, `LastSeenService`, `LastSeenStore`, `LastSeenTracker`, `HaCatalog`, `HousePageModel` and `CommissioningBoard` carry the new namespace. Package and assembly names, the settings file and its top-level key are unchanged.
+- Each house's NetDaemon app YAML needs its top-level key renamed from `AdaptiveLighting.Configuration.AdaptiveLightingConfig` to `Adaptive.Settings.AdaptiveLightingConfig`, or the settings used while the lighting document does not load are empty.
+
 ## [2026.10.4] - 2026-10-12
 
 - A movement refused because the house is in a sleep-kind mode now names that mode by its own name, in the activity row and in the log, instead of "the house is asleep".

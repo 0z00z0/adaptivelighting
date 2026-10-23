@@ -7,7 +7,6 @@ using System.Reactive.Subjects;
 using Adaptive.Settings;
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
-using AdaptiveLighting.LastSeen;
 using AdaptiveLighting.Ha;
 
 using NetDaemon.HassModel.Entities;

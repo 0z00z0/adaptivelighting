@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace AdaptiveLighting.Persistence;
+namespace Adaptive.Engine;
 
 /// <summary>One small machine-written JSON note beside the configuration document, read and written without throwing.</summary>
 // The configuration document's directory is the only one on a Home Assistant box that survives a redeploy.

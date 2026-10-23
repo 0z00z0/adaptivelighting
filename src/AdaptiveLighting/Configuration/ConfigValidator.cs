@@ -1,6 +1,4 @@
-using Adaptive.Settings;
-
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>
 ///     Checks an <see cref="AdaptiveLightingConfig"/> before the engine is built. Pure: what Home Assistant knows is

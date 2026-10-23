@@ -1,5 +1,3 @@
-using AdaptiveLighting.LastSeen;
-
 using NetDaemon.HassModel.Entities;
 
 namespace AdaptiveLighting.Engine;

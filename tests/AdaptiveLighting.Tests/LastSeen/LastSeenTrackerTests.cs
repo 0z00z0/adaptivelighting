@@ -1,7 +1,5 @@
 using System.Text.Json;
 
-using AdaptiveLighting.LastSeen;
-
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
 

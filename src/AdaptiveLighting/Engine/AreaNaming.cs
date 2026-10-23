@@ -1,7 +1,7 @@
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>What a room is called, decided once for every surface that has to say it.</summary>
 // A lookup, never a write: the document stores only an area id, so a rename in Home Assistant arrives on the

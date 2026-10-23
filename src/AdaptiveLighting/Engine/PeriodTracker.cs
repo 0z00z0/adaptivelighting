@@ -1,7 +1,8 @@
 using Adaptive.Settings;
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Engine;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>The period half of the mode brain: entry, the note that survives a restart, the period select mirror and motion starts.</summary>
 // The gate is ModeMonitor's own, shared with HouseModeRules: reading which period is in force and claiming the

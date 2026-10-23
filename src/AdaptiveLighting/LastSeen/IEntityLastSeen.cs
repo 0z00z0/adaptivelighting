@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.LastSeen;
+namespace Adaptive.Engine;
 
 /// <summary>When each Home Assistant entity was last genuinely heard from.</summary>
 /// <remarks>Null means unknown throughout this interface, never dead. A deleted cache or a recent restart gives null.</remarks>

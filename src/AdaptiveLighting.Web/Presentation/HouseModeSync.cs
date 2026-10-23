@@ -1,4 +1,4 @@
-using AdaptiveLighting.Configuration;
+using Adaptive.Settings;
 
 namespace Adaptive.UI;
 

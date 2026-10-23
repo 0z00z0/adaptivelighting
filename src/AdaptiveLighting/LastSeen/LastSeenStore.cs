@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.LastSeen;
+namespace Adaptive.Engine;
 
 /// <summary>One entity as it came off disk, with the bucket it was filed in and the file's own write time.</summary>
 /// <remarks><c>SavedAt</c> is what settles a duplicate.</remarks>

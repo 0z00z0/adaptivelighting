@@ -1,7 +1,7 @@
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>What one setup run will do, itemised so the warning dialog can be concrete about losses.</summary>
 // NoLongerQualifying rooms are reported and never removed; removing a room stays the owner's act.

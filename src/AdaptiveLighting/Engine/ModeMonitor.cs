@@ -5,10 +5,11 @@ using System.Reactive.Subjects;
 
 using Adaptive.Settings;
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Engine;
 
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>The mode brain: reads the house-mode select, derives the active kind and scene, and owns the set, retain and reset lifecycle.</summary>
 // The front of two rule sets that share one lock and one motion latch: HouseModeRules holds the select read, the

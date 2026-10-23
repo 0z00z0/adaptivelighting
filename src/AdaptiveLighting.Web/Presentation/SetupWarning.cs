@@ -1,7 +1,7 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>One room's line in the re-setup warning: what it is called and what the rebuild costs it.</summary>
 public sealed record SetupWarningLine(string Name, string Consequence, string? Note);

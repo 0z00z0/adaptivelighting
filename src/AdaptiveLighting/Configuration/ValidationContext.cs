@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>What the validator is told about the world outside the document.</summary>
 /// <remarks>

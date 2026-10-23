@@ -1,6 +1,6 @@
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.LastSeen;
+namespace Adaptive.Engine;
 
 /// <summary>The knobs behind <see cref="LastSeenTracker"/>, none of them exposed in the configuration document.</summary>
 public sealed class LastSeenOptions

@@ -3,7 +3,7 @@ using System.Text;
 
 using NetDaemon.AppModel;
 
-namespace AdaptiveLighting.Hosting;
+namespace Adaptive.Settings;
 
 /// <summary>Derives the entity id of the enable helper NetDaemon's state manager publishes for an app.</summary>
 /// <remarks>

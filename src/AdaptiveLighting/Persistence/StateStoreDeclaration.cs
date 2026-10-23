@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Persistence;
+namespace Adaptive.Engine;
 
 /// <summary>When a store's file is written.</summary>
 internal enum StateWritePolicy

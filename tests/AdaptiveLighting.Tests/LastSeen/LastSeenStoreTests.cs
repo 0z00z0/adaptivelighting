@@ -1,7 +1,5 @@
 using System.Globalization;
 
-using AdaptiveLighting.LastSeen;
-
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AdaptiveLighting.Tests.LastSeen;

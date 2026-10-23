@@ -1,6 +1,8 @@
+using AdaptiveLighting.Configuration;
+
 using YamlDotNet.Serialization;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>One entry in the circadian table: the target the lights hold from <see cref="Start"/> until the next period.</summary>
 public class TimePeriodConfig

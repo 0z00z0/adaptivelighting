@@ -1,6 +1,7 @@
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Engine;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>What the mode brain says about itself once, at start-up: the rules that cannot fire and why.</summary>
 // Silence here sends somebody hunting an automation that is working as configured, so each dormant or unreachable
