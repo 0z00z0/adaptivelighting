@@ -83,6 +83,8 @@ One more class hands the engine its Home Assistant connection — the whole of
 `samples/MinimalHost/AdaptiveLightingApp.cs`:
 
 ```csharp
+using Adaptive.Settings;
+
 [NetDaemonApp(Id = "adaptive_lighting")]
 internal sealed class AdaptiveLightingApp : IAsyncDisposable
 {
