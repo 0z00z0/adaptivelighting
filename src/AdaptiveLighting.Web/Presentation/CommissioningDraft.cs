@@ -1,6 +1,6 @@
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>Every answer the commissioning board has taken, held in circuit memory until the one commit.</summary>
 /// <remarks>

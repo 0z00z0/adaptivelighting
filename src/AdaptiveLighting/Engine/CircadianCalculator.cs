@@ -1,7 +1,8 @@
 using Adaptive.Settings;
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Engine;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>Which of a target's two values the room replaced instead of taking from the schedule.</summary>
 // Flags, because a room may replace one value and inherit the other.

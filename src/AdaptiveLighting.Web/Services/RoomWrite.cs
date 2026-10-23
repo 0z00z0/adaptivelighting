@@ -1,7 +1,7 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Hosting;
 
-namespace AdaptiveLighting.Web.Services;
+namespace Adaptive.Settings;
 
 /// <summary>The slot of the document the room page owns, and that slot as it stood on disk when the page read it.</summary>
 public sealed record RoomWriteToken(string? AreaId, string Stamp);

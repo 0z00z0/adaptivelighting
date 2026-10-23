@@ -1,11 +1,10 @@
 using System.Reactive.Concurrency;
 
 using Adaptive.Settings;
-using AdaptiveLighting.Hosting;
 
 using Microsoft.Extensions.DependencyInjection;
 
-namespace AdaptiveLighting.LastSeen;
+namespace Adaptive.Engine;
 
 /// <summary>Registers the last-seen cache.</summary>
 public static class LastSeenServiceCollectionExtensions

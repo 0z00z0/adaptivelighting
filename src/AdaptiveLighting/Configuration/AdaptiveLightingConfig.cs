@@ -1,12 +1,13 @@
-using Adaptive.Settings;
+using AdaptiveLighting.Configuration;
 
 using YamlDotNet.Serialization;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>
-///     Root of the adaptive lighting configuration document. One per NetDaemon host, bound from a YAML file whose
-///     top-level key is the fully qualified name of this class.
+///     Root of the adaptive lighting configuration document. One per NetDaemon host, read from a YAML file whose
+///     top-level key is <see cref="LightingConfigDocument.RootKey"/>. NetDaemon's app config binds it by this
+///     class's full name, a different key.
 /// </summary>
 public class AdaptiveLightingConfig
 {

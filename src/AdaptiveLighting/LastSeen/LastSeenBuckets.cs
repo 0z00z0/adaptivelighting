@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace AdaptiveLighting.LastSeen;
+namespace Adaptive.Engine;
 
 /// <summary>Decides which file an entity's record belongs in, and turns that decision into a file name.</summary>
 /// <remarks>

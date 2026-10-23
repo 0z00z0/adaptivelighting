@@ -2,7 +2,7 @@ using AdaptiveLighting.Configuration;
 
 using Microsoft.Extensions.Configuration;
 
-namespace AdaptiveLighting.Hosting;
+namespace Adaptive.Settings;
 
 /// <summary>Where a resolved configuration document came from, so the UI can say which file it is editing.</summary>
 public enum ConfigLocationSource

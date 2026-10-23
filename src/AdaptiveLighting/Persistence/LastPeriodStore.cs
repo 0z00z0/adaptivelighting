@@ -1,5 +1,3 @@
-using AdaptiveLighting.Engine;
-
 namespace Adaptive.Engine;
 
 /// <summary><see cref="ILastPeriodStore"/> over one declared state file in the state folder.</summary>

@@ -4,7 +4,6 @@ using System.Reactive.Disposables;
 
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
-using AdaptiveLighting.LastSeen;
 
 using NetDaemon.HassModel.Entities;
 

@@ -1,4 +1,4 @@
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>How a stored value is rounded for a person to read.</summary>
 public static class DisplayRounding

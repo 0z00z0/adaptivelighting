@@ -1,12 +1,13 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Hosting;
+using AdaptiveLighting.Web.Services;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Web.Services;
+namespace Adaptive.Engine;
 
 public sealed record ModeToggle(
 	string Label,

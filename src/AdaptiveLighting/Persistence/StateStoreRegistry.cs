@@ -1,7 +1,7 @@
 using System.Reactive.Concurrency;
 using System.Text.Json;
 
-namespace AdaptiveLighting.Persistence;
+namespace Adaptive.Engine;
 
 /// <summary>Where every engine-owned state file is declared, flushed and reported.</summary>
 /// <remarks>

@@ -3,7 +3,7 @@ using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Web.Services;
 
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>The dashboard's footer line about switched-off rooms, split where its link goes.</summary>
 /// <param name="Lead">The sentence up to the link, ending in the dash the link follows.</param>

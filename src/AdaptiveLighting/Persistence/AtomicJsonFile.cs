@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 
-namespace AdaptiveLighting.Persistence;
+namespace Adaptive.Engine;
 
 /// <summary>The one way every engine-owned JSON file is written and read: whole, through a temporary name, flushed to disk.</summary>
 // One copy, because three hand-written ones drifted: only the configuration document used to flush before the

@@ -1,6 +1,6 @@
-using Adaptive.Settings;
+using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>The house-wide settings: the numbers, the entities they name, the labels, and the outdoor lux sensor.</summary>
 internal static class GlobalSettingsRules

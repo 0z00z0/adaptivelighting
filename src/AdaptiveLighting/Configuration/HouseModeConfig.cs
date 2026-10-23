@@ -1,8 +1,6 @@
-using Adaptive.Settings;
-
 using YamlDotNet.Serialization;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>The one behaviour a house-mode option carries.</summary>
 public enum ModeKind

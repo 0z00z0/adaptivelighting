@@ -71,11 +71,11 @@ public sealed class ConfigKeyCollisionTests
 			+ $"document stating one gets a warning about a setting that still works: {string.Join(", ", collisions)}.");
 	}
 
-	// The period-select types moved to Adaptive.Settings; the rest of the document stays in AdaptiveLighting.Configuration.
+	// The document spans both: most of it in Adaptive.Settings, the level rows in AdaptiveLighting.Configuration.
 	private static readonly string[] ConfigurationNamespaces =
 	[
 		typeof(AdaptiveLightingConfig).Namespace!,
-		typeof(PeriodSelectConfig).Namespace!
+		typeof(RoomLevelOverride).Namespace!
 	];
 
 	/// <summary>Every configuration class reachable from the document root, walked once each.</summary>

@@ -1,11 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
 
-using Adaptive.Engine;
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
+using AdaptiveLighting.Engine;
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>An area with every entity reference turned into a concrete id, ready to build a controller from.</summary>
 // Lights are never empty; MotionSensors and LuxSensors may be. FollowOutdoorLux stays unresolved so a room that

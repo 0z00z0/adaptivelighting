@@ -1,6 +1,8 @@
+using AdaptiveLighting.Configuration;
+
 using YamlDotNet.Serialization;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>One managed area, declaring explicit entity lists only where HA's area assignments are wrong.</summary>
 /// <remarks>Every settings property is a nullable twin of <see cref="AreaSettings"/>, where <c>null</c> means inherit.</remarks>

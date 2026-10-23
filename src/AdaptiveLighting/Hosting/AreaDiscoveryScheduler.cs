@@ -5,7 +5,7 @@ using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
 
-namespace AdaptiveLighting.Hosting;
+namespace Adaptive.Engine;
 
 /// <summary>Proposes rooms from the Home Assistant area registry, once, on a house that has none.</summary>
 /// <remarks>

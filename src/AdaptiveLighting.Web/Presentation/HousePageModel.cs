@@ -5,7 +5,7 @@ using AdaptiveLighting.Hosting;
 using AdaptiveLighting.Web.Components;
 using AdaptiveLighting.Web.Services;
 
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>The house page's four sections, one shown at a time.</summary>
 public enum HouseSection

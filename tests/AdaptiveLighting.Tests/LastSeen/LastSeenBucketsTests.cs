@@ -1,7 +1,5 @@
 using System.Text.RegularExpressions;
 
-using AdaptiveLighting.LastSeen;
-
 namespace AdaptiveLighting.Tests.LastSeen;
 
 /// <summary>Which file a record is written to: three curated rules, then device class, then domain.</summary>

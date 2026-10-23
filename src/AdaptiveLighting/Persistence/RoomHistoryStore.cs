@@ -1,6 +1,4 @@
-using AdaptiveLighting.Engine;
-
-namespace AdaptiveLighting.Persistence;
+namespace Adaptive.Engine;
 
 /// <summary><see cref="IRoomHistoryStore"/> over one declared state file in the state folder.</summary>
 /// <remarks>

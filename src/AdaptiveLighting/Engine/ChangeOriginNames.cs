@@ -1,11 +1,9 @@
 using System.Reactive.Disposables;
 using System.Text.Json;
 
-using Adaptive.Engine;
-
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>Names whoever caused a light change, as closely as Home Assistant's own logbook does.</summary>
 // A label and nothing more: whether a change is manual is OverrideDetector's question, never this one's.

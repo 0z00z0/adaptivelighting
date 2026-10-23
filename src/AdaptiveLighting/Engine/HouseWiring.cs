@@ -2,7 +2,6 @@ using System.Reactive.Concurrency;
 
 using AdaptiveLighting.Abstractions;
 using AdaptiveLighting.Configuration;
-using AdaptiveLighting.LastSeen;
 
 namespace AdaptiveLighting.Engine;
 

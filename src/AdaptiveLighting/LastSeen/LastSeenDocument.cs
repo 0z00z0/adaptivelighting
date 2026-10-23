@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace AdaptiveLighting.LastSeen;
+namespace Adaptive.Engine;
 
 /// <summary>One entity's line in the cache.</summary>
 /// <param name="LastSeen">When there was last trustworthy evidence the entity is alive, or <c>null</c> for never.</param>

@@ -1,5 +1,3 @@
-using AdaptiveLighting.Abstractions;
-
 namespace Adaptive.Engine;
 
 /// <summary>The real <see cref="IAreaRegistry"/>, reading <see cref="IHaRegistry"/> live so no snapshot can go stale.</summary>

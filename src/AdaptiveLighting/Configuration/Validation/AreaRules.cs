@@ -1,6 +1,6 @@
-using Adaptive.Settings;
+using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>The rooms: their names, the entities they refer to, their scenes, and the levels they state.</summary>
 internal static class AreaRules

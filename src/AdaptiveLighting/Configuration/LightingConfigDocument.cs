@@ -1,10 +1,10 @@
-using Adaptive.Settings;
+using AdaptiveLighting.Configuration;
 
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
-namespace AdaptiveLighting.Configuration;
+namespace Adaptive.Settings;
 
 /// <summary>
 ///     What reading a document produced: the bound configuration, and whether the file had to be translated out of
@@ -15,7 +15,7 @@ public sealed record DocumentReadResult(
 	bool UsedLegacyKeys,
 	bool MintedStableKeys = false)
 {
-	/// <summary>Whether the file on disk is behind the schema, so <see cref="Hosting.LightingEngineHost.Reload"/> writes it back once.</summary>
+	/// <summary>Whether the file on disk is behind the schema, so <see cref="LightingEngineHost.Reload"/> writes it back once.</summary>
 	public bool NeedsMigratingWrite => UsedLegacyKeys || MintedStableKeys;
 
 	/// <summary>One sentence per retired setting the file still carries, as the reader found them.</summary>
@@ -50,8 +50,8 @@ public sealed class LightingConfigException : Exception
 public static class LightingConfigDocument
 {
 	/// <summary>
-	///     The document's single top-level key: the fully qualified name of <see cref="AdaptiveLightingConfig"/>, and
-	///     also how the .NET configuration binder binds it.
+	///     The document's single top-level key. A fixed literal stored in every document; it does not follow the
+	///     class's namespace.
 	/// </summary>
 	public const string RootKey = "AdaptiveLighting.Configuration.AdaptiveLightingConfig";
 
@@ -150,7 +150,7 @@ public static class LightingConfigDocument
 		#
 		#      https://adaptivelighting.netlify.app
 		#
-		#  The top-level key must stay the fully qualified config class name.
+		#  The top-level key must stay exactly as written.
 		# ============================================================================
 
 		""";
@@ -241,7 +241,7 @@ public static class LightingConfigDocument
 	/// <summary>Puts back the collections and sub-objects the model says are never <c>null</c>.</summary>
 	/// <remarks>
 	///     A bare <c>Areas:</c> line is valid YAML for "this key is null", and YamlDotNet assigns that null over the
-	///     property initialiser. Unrepaired it throws out of <see cref="Hosting.LightingEngineHost.Reload"/>, which is
+	///     property initialiser. Unrepaired it throws out of <see cref="LightingEngineHost.Reload"/>, which is
 	///     documented never to throw and whose caller dying takes the HA connection and the web UI with it. Blank list
 	///     elements are dropped, so a stray <c>-</c> does not become a nameless room.
 	/// </remarks>

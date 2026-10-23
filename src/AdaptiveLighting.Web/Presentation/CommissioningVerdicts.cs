@@ -1,7 +1,7 @@
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 
-namespace AdaptiveLighting.Web.Presentation;
+namespace Adaptive.UI;
 
 /// <summary>Which colour a roll-call note carries.</summary>
 public enum VerdictTone

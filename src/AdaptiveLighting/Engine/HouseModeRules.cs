@@ -6,7 +6,7 @@ using AdaptiveLighting.Configuration;
 
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>The house-mode half of the mode brain: the select read, what forces a mode, the resets, the presence grace and auto-away.</summary>
 // HouseState is never mutated here: every mode change is an input_select.select_option that flows back through

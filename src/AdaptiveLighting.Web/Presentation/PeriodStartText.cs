@@ -1,5 +1,4 @@
 using Adaptive.Settings;
-using AdaptiveLighting.Configuration;
 
 namespace Adaptive.UI;
 

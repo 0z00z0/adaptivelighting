@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>Remembers each room's history, so a restart does not forget it.</summary>
 // Keyed the same way carry-over on save is: by area id where there is one, else by name.

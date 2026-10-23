@@ -1,5 +1,4 @@
 using AdaptiveLighting.Configuration;
-using AdaptiveLighting.LastSeen;
 
 namespace AdaptiveLighting.Tests.LastSeen;
 

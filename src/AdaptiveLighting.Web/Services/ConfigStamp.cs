@@ -3,7 +3,7 @@ using System.Text;
 
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Web.Services;
+namespace Adaptive.Settings;
 
 /// <summary>
 ///     A token over the part of the document a page is allowed to write, taken when the page loads and compared

@@ -1,8 +1,5 @@
 namespace AdaptiveLighting.Web.Presentation;
 
-/// <summary>One choice in a preset dropdown: the number the config stores, and the words a person picks it by.</summary>
-public sealed record PresetChoice(double Value, string Label);
-
 /// <summary>The preset lists the period editor offers, shared so every brightness and colour dropdown agrees.</summary>
 /// <remarks>Choices, not limits: a stored value off the list is shown as its own entry, never snapped to a neighbour.</remarks>
 public static class Presets

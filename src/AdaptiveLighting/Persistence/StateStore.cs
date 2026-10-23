@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace AdaptiveLighting.Persistence;
+namespace Adaptive.Engine;
 
 /// <summary>One declared state file: reads it once with the declaration's rules, and writes it under its own lock.</summary>
 /// <remarks>

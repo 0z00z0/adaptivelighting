@@ -1,6 +1,6 @@
 using AdaptiveLighting.Configuration;
 
-namespace AdaptiveLighting.Engine;
+namespace Adaptive.Engine;
 
 /// <summary>The word a house mode is published and logged under.</summary>
 // ModeKind.Normal goes out as "Home". Home Assistant automations match on this text, so nothing else may

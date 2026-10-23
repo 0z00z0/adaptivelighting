@@ -6,7 +6,7 @@ using AdaptiveLighting.Ha;
 
 using NetDaemon.HassModel.Entities;
 
-namespace AdaptiveLighting.Web.Services;
+namespace Adaptive.UI;
 
 /// <summary>
 ///     One area, as a picker offers it. The counts are the resolver's, after discovery and the ghost filter, never

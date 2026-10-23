@@ -3,7 +3,7 @@ using System.Reactive.Concurrency;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace AdaptiveLighting.LastSeen;
+namespace Adaptive.Engine;
 
 /// <summary>Gives <see cref="LastSeenTracker"/> a lifetime and a Home Assistant connection, and answers before it has one.</summary>
 /// <remarks>
