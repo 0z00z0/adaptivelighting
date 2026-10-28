@@ -460,12 +460,11 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	public bool HasRefusedEdit => Dirty && Failure is not null;
 
 	/// <summary>The validator's complaint about this room, when it has one.</summary>
-	/// <remarks>Matched on <see cref="AreaConfig.DisplayName"/>, never <see cref="RoomName"/>: the validator is
-	/// pure and files errors under the document's own name, so joining on the resolved name finds nothing.</remarks>
+	// Matched on the area id: two rooms on different areas may share a name.
 	public AreaError? AreaError =>
 		Validation is { } validation && Area is { } room
 			? validation.AreaErrors.FirstOrDefault(error =>
-				string.Equals(error.AreaName, room.DisplayName, StringComparison.OrdinalIgnoreCase))
+				string.Equals(error.AreaId, room.AreaId, StringComparison.Ordinal))
 			: null;
 
 	/// <summary>Records that the document has moved ahead of the file, and starts the timer that catches it up.</summary>
@@ -1208,7 +1207,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 	/// <summary>This room's reports, sifted; the card and its footer both read it, so the two counts agree.</summary>
 	private IReadOnlyList<ActivityEntry> RoomReports =>
-		Area is null ? [] : ActivityView.Shown(ActivityView.InRoom(_log.Entries, RoomName));
+		Area?.AreaId is { Length: > 0 } areaId ? ActivityView.Shown(ActivityView.InRoomByKey(_log.Entries, areaId)) : [];
 
 	/// <summary>The rows the log card draws.</summary>
 	public IReadOnlyList<ActivityRow> RoomLog => ActivityView.Rows(RoomReports, LogRows);

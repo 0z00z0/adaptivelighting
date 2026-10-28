@@ -11,7 +11,8 @@ public sealed record SuspectLight(string EntityId, string Name, string Reason);
 /// <summary>One room as the cross-room half of the audit reads it.</summary>
 // Lights holds bulbs with groups already followed down to their members, because two rooms reaching one bulb
 // through two different groups settle on two different ids and have nothing in common to compare.
-public sealed record RoomUnderReview(string Room, IReadOnlyList<LightUnderReview> Lights);
+// Key tells two rooms apart that share a name; null falls back to Room.
+public sealed record RoomUnderReview(string Room, IReadOnlyList<LightUnderReview> Lights, string? Key = null);
 
 /// <summary>Looks over the lights a room would command and points at the ones that are probably not room lighting.</summary>
 // Advice, never a filter. Home Assistant's entity_category, the field that would settle it, is not exposed by
@@ -102,20 +103,20 @@ public static class LightAudit
 		ArgumentNullException.ThrowIfNull(rooms);
 		ArgumentNullException.ThrowIfNull(hasOwnArea);
 
-		Dictionary<string, (LightUnderReview Light, List<string> Rooms)> commanded = new(StringComparer.Ordinal);
+		Dictionary<string, (LightUnderReview Light, List<string> Rooms, HashSet<string> Keys)> commanded = new(StringComparer.Ordinal);
 		List<string> order = [];
 
 		foreach (RoomUnderReview room in rooms)
 			foreach (LightUnderReview light in room.Lights)
 			{
-				if (!commanded.TryGetValue(light.EntityId, out (LightUnderReview Light, List<string> Rooms) seen))
+				if (!commanded.TryGetValue(light.EntityId, out (LightUnderReview Light, List<string> Rooms, HashSet<string> Keys) seen))
 				{
-					commanded[light.EntityId] = seen = (light, []);
+					commanded[light.EntityId] = seen = (light, [], new HashSet<string>(StringComparer.Ordinal));
 					order.Add(light.EntityId);
 				}
 
 				// One room holding the same bulb twice, through a group and again on its own, is one room.
-				if (!seen.Rooms.Contains(room.Room, StringComparer.Ordinal))
+				if (seen.Keys.Add(room.Key ?? room.Room))
 					seen.Rooms.Add(room.Room);
 			}
 
@@ -123,7 +124,7 @@ public static class LightAudit
 
 		foreach (string entityId in order)
 		{
-			(LightUnderReview light, List<string> claimants) = commanded[entityId];
+			(LightUnderReview light, List<string> claimants, _) = commanded[entityId];
 
 			if (claimants.Count < 2 || hasOwnArea(entityId))
 				continue;

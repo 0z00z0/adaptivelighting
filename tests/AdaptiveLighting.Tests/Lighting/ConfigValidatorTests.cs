@@ -629,15 +629,51 @@ public sealed class ConfigValidatorTests
 	// ===================== areas =====================
 
 	[TestMethod]
-	public void Duplicate_Area_Names_Are_Rejected()
+	public void Two_Rooms_On_Different_Areas_May_Share_A_Name()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Areas = [new() { Name = "Z", AreaId = "a" }, new() { Name = "Z", AreaId = "b" }];
+		config.Areas = [new() { Name = "Soverom", AreaId = "a" }, new() { Name = "soverom", AreaId = "b" }];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, result.ToString());
+	}
+
+	[TestMethod]
+	public void Two_Rooms_On_One_Area_Are_Refused_Whatever_They_Are_Called()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas = [new() { Name = "Z", AreaId = "a" }, new() { Name = "Y", AreaId = " A" }];
 
 		ValidationResult result = ConfigValidator.Validate(config);
 
 		Assert.IsFalse(result.IsValid);
-		StringAssert.Contains(result.ToString(), "Duplicate");
+		Assert.AreEqual(1, result.Errors.Count, result.ToString());
+		StringAssert.Contains(result.Errors[0], "'a'");
+	}
+
+	[TestMethod]
+	public void Two_Rooms_Without_An_Area_May_Not_Share_A_Name()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas = [new() { Name = "Z", Lights = ["light.a"] }, new() { Name = "z", Lights = ["light.b"] }];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		Assert.AreEqual(1, result.Errors.Count, result.ToString());
+		StringAssert.Contains(result.Errors[0], "'Z'");
+	}
+
+	[TestMethod]
+	public void A_Room_Without_An_Area_May_Share_A_Name_With_A_Room_That_Has_One()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas = [new() { Name = "Z", AreaId = "a" }, new() { Name = "Z", Lights = ["light.b"] }];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsTrue(result.IsValid, result.ToString());
 	}
 
 	[TestMethod]
@@ -684,10 +720,10 @@ public sealed class ConfigValidatorTests
 		config.Areas =
 		[
 			new() { Name = "Z", AreaId = "stue", IgnoreWhenOn = ["input_boolean.ghost"] },
-			new() { Name = "Y", AreaId = "stue", KeepLitWhenOn = ["input_boolean.ghost"] }
+			new() { Name = "Y", AreaId = "kjokken", KeepLitWhenOn = ["input_boolean.ghost"] }
 		];
 
-		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["input_boolean.real"], KnownAreaIds = ["stue"] });
+		ValidationResult result = ConfigValidator.Validate(config, new ValidationContext { KnownEntityIds = ["input_boolean.real"], KnownAreaIds = ["stue", "kjokken"] });
 
 		Assert.IsTrue(result.IsValid, "neither list can take the house down");
 		Assert.AreEqual(2, result.AreaErrors.Count, "the room that holds its lights on is checked like the one that blocks them");

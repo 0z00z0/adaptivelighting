@@ -363,7 +363,7 @@ than either.
 
 Some problems stop the engine commanding anything and are listed on the Configuration page: no
 periods, a `Start` that cannot be parsed, two periods with the same name or the same start,
-duplicate room names, negative timeouts, a warning dim longer than the time the lights stay on, a
+two rooms on one area, two rooms with no area under one name, negative timeouts, a warning dim longer than the time the lights stay on, a
 value out of range.
 
 Others only cost you one room: an `AreaId` that is not in the registry, an entity id Home Assistant

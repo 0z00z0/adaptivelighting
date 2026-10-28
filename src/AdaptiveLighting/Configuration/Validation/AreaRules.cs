@@ -19,12 +19,23 @@ internal static class AreaRules
 		}
 
 		IEnumerable<string> duplicateAreas = config.Areas
+			.Where(z => !string.IsNullOrWhiteSpace(z.AreaId))
+			.GroupBy(z => z.AreaId!.Trim(), StringComparer.OrdinalIgnoreCase)
+			.Where(g => g.Count() > 1)
+			.Select(g => g.Key);
+
+		foreach (string areaId in duplicateAreas)
+			result.AddError($"Duplicate area '{areaId}' — two rooms cannot use one area. Point one of them at another area.");
+
+		// A room with no area is keyed by its name (history, command log). Lifted once such rooms get ids of their own.
+		IEnumerable<string> duplicateNames = config.Areas
+			.Where(z => string.IsNullOrWhiteSpace(z.AreaId))
 			.GroupBy(z => z.DisplayName, StringComparer.OrdinalIgnoreCase)
 			.Where(g => g.Count() > 1)
 			.Select(g => g.Key);
 
-		foreach (string? name in duplicateAreas)
-			result.AddError($"Duplicate area name '{name}' — two rooms cannot share one name. Rename one of them.");
+		foreach (string name in duplicateNames)
+			result.AddError($"Duplicate room name '{name}' — two rooms with no area cannot share one name. Rename one of them.");
 
 		foreach (AreaConfig area in config.Areas)
 		{
@@ -149,12 +160,12 @@ internal static class AreaRules
 
 		if (string.IsNullOrWhiteSpace(area.AreaId) && !hasExplicitLights)
 		{
-			result.AddAreaError(area.DisplayName, "This room names no Home Assistant area and lists no lights, so nothing can be found for it. Pick an area, or name its lights by hand.");
+			result.AddAreaError(area, "This room names no Home Assistant area and lists no lights, so nothing can be found for it. Pick an area, or name its lights by hand.");
 			return;
 		}
 
 		if (knownAreaIds is not null && area.AreaId is { Length: > 0 } areaId && !knownAreaIds.Contains(areaId))
-			result.AddAreaError(area.DisplayName,
+			result.AddAreaError(area,
 				$"AreaId '{areaId}' is not a registry area id. AreaId is the slug, not the display name. Known area ids: {string.Join(", ", knownAreaIds.Order(StringComparer.Ordinal))}.");
 
 		ValidateScenes(area, knownEntityIds, result);
@@ -164,7 +175,7 @@ internal static class AreaRules
 
 		foreach (string entityId in EnumerateAreaEntities(area))
 			if (!knownEntityIds.Contains(entityId))
-				result.AddAreaError(area.DisplayName, $"Names '{entityId}', which Home Assistant does not know. Check it for typos, or remove it.");
+				result.AddAreaError(area, $"Names '{entityId}', which Home Assistant does not know. Check it for typos, or remove it.");
 	}
 
 	/// <summary>The two per-room scenes. A bad one warns: the room still lights, by its own levels.</summary>
