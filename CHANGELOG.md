@@ -10,6 +10,10 @@ The packages —
 `AdaptiveLighting.Lamplight` and `AdaptiveLighting.NetDaemon` — ship as a matched set under one version, because they are compiled
 against each other.
 
+## [Unreleased]
+
+- Two rooms on different Home Assistant areas may share a name; two rooms on the same area are refused instead, and rooms with no area still need names of their own.
+
 ## [2026.10.5] - 2026-10-23
 
 - The rest of the code the heating project copies moved to `Adaptive.Settings`, `Adaptive.Engine` and `Adaptive.UI`, among it `AdaptiveLightingConfig`, `LightingEngineHost`, `NetDaemonAppSwitch`, the state stores and the last-seen cache, so code that uses these types needs the matching `using` lines; log lines from `LightingEngineHost`, `ConfigLocation`, `AreaDiscoveryScheduler`, `AreaEntityResolver`, `ChangeOriginNames`, `ModeMonitor`, `ModeService`, `StateStoreRegistry`, `RoomHistoryStore`, `LastSeenService`, `LastSeenStore`, `LastSeenTracker`, `HaCatalog`, `HousePageModel` and `CommissioningBoard` carry the new namespace. Package and assembly names, the settings file and its top-level key are unchanged.

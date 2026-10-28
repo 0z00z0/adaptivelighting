@@ -205,8 +205,7 @@ public static class ActivityView
 		return entry.Snapshot is { } snapshot ? Describe(snapshot) : Describe(entry.Notice!);
 	}
 
-	// Ordinal on the display name, as the verdict collapse in Rows is. The activity page's own filter goes through
-	// InRoomByKey instead; this one serves a caller that has a name and no id.
+	// By display name, so two rooms sharing a name both match. Pages filter through InRoomByKey.
 	public static IReadOnlyList<ActivityEntry> InRoom(IEnumerable<ActivityEntry> entries, string? room)
 	{
 		ArgumentNullException.ThrowIfNull(entries);
@@ -613,6 +612,9 @@ public static class ActivityView
 		{
 			DateTimeOffset at = ordered[from].At;
 
+			// By room key: two rooms on different areas may share a name and still count as two.
+			HashSet<string?> seen = new(StringComparer.OrdinalIgnoreCase) { RoomKey(ordered[from]) };
+
 			for (int scan = from + 1; scan < ordered.Count; scan++)
 			{
 				// A notice ends the run whatever it says: it belongs to no room, so it has nothing to add to one.
@@ -626,10 +628,8 @@ public static class ActivityView
 					return;
 				}
 
-				string room = snapshot.AreaName;
-
-				if (!rooms.Contains(room, StringComparer.OrdinalIgnoreCase))
-					rooms.Add(room);
+				if (seen.Add(RoomKey(ordered[scan])))
+					rooms.Add(snapshot.AreaName);
 
 				swallowed[scan] = true;
 			}
@@ -637,13 +637,15 @@ public static class ActivityView
 
 		void SwallowRepeatedVerdict(int from, ActivityLine line)
 		{
-			// Ordinal on the display name, as InRoom is. A rename splits a run of repeats, which is honest: the
-			// rows either side of it say different things.
+			// Same room key and same name. Two rooms may share a name; a rename splits a run of repeats, which is
+			// honest: the rows either side of it say different things.
+			string? key = RoomKey(ordered[from]);
 			string? room = ordered[from].AreaName;
 
 			for (int scan = from + 1; scan < ordered.Count; scan++)
 			{
-				if (!string.Equals(ordered[scan].AreaName, room, StringComparison.OrdinalIgnoreCase))
+				if (!string.Equals(RoomKey(ordered[scan]), key, StringComparison.OrdinalIgnoreCase)
+					|| !string.Equals(ordered[scan].AreaName, room, StringComparison.OrdinalIgnoreCase))
 					continue;
 
 				if (ordered[scan].Snapshot is not { } snapshot

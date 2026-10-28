@@ -51,19 +51,19 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 
 	public bool HasData => !_snapshots.IsEmpty;
 
-	/// <summary>A room's newest snapshot, by area id first and display name second, or <c>null</c> when it has not
-	/// reported.</summary>
-	/// <remarks>The name covers a room configured with explicit entities, which reports no area id. Names are
-	/// matched in <see cref="Snapshots"/> order, so two rooms sharing a name resolve the same way every time.</remarks>
+	/// <summary>A room's newest snapshot, by area id, or by display name for a room with no area; <c>null</c> when it
+	/// has not reported.</summary>
+	// Never the name for a room with an area: another room on another area may carry the same name.
 	public AreaSnapshot? Find(string? areaId, string? name)
 	{
-		if (areaId is { Length: > 0 } id
-			&& _snapshots.TryGetValue(id, out AreaSnapshot? byId)
-			&& string.Equals(byId.AreaId, id, StringComparison.Ordinal))
-			return byId;
+		if (areaId is { Length: > 0 } id)
+			return _snapshots.TryGetValue(id, out AreaSnapshot? byId) && string.Equals(byId.AreaId, id, StringComparison.Ordinal)
+				? byId
+				: null;
 
 		return name is { Length: > 0 }
-			? Snapshots.FirstOrDefault(snapshot => string.Equals(snapshot.AreaName, name, StringComparison.OrdinalIgnoreCase))
+			? Snapshots.FirstOrDefault(snapshot =>
+				snapshot.AreaId is not { Length: > 0 } && string.Equals(snapshot.AreaName, name, StringComparison.OrdinalIgnoreCase))
 			: null;
 	}
 

@@ -242,7 +242,7 @@ public sealed class LightingOrchestrator : IDisposable
 			_config.Global,
 			_loggerFactory.CreateLogger<AreaEntityResolver>());
 		List<AreaSetupFault> failures = [];
-		List<ResolvedArea> running = [];
+		List<(ResolvedArea Area, string Key)> running = [];
 
 		foreach (AreaConfig areaConfig in _config.Areas)
 		{
@@ -290,7 +290,7 @@ public sealed class LightingOrchestrator : IDisposable
 			if (areaConfig.AreaId is { Length: > 0 } areaId && areaId.Trim() is { Length: > 0 } trimmed)
 				_motionSensorsByArea[trimmed] = resolved.MotionSensors;
 
-			running.Add(resolved);
+			running.Add((resolved, CarryOverKey(areaConfig.AreaId, resolved.Name)));
 			_areas.Add(BuildArea(resolved, areaConfig, resolver));
 		}
 
@@ -310,7 +310,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 	/// <summary>Every bulb an area will actually put a command on, named the way Home Assistant names it.</summary>
 	// Down to the leaves: two rooms sharing a bulb through two different groups hold no id in common.
-	private RoomUnderReview BulbsOf(ResolvedArea area, AreaEntityResolver resolver)
+	private RoomUnderReview BulbsOf(ResolvedArea area, string key, AreaEntityResolver resolver)
 	{
 		List<LightUnderReview> bulbs = [];
 		HashSet<string> seen = new(StringComparer.Ordinal);
@@ -320,12 +320,12 @@ public sealed class LightingOrchestrator : IDisposable
 				if (seen.Add(bulb))
 					bulbs.Add(new LightUnderReview(bulb, _ha.AttrString(bulb, FriendlyNameAttribute) ?? bulb));
 
-		return new RoomUnderReview(area.Name, bulbs);
+		return new RoomUnderReview(area.Name, bulbs, key);
 	}
 
 	/// <summary>Finds the bulbs two rooms will both be commanding, and says so once for each.</summary>
 	// Runs after every room is resolved and built, so a failure here costs the advice and never the lighting.
-	private void ReportSharedLights(IReadOnlyList<ResolvedArea> running, AreaEntityResolver resolver, IAreaRegistry registry)
+	private void ReportSharedLights(IReadOnlyList<(ResolvedArea Area, string Key)> running, AreaEntityResolver resolver, IAreaRegistry registry)
 	{
 		try
 		{
@@ -335,7 +335,7 @@ public sealed class LightingOrchestrator : IDisposable
 			bool HasOwnArea(string entityId) => (assigned ??= EntitiesWithAnArea(registry)).Contains(entityId);
 
 			_sharedLights.AddRange(LightAudit.SharedBetweenRooms(
-				[.. running.Select(area => BulbsOf(area, resolver))], HasOwnArea));
+				[.. running.Select(room => BulbsOf(room.Area, room.Key, resolver))], HasOwnArea));
 		}
 		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
 		{

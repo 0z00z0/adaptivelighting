@@ -427,7 +427,7 @@ public sealed class LightingEngineHostTests
 		Assert.IsTrue(File.Exists(_path));
 	}
 
-	/// <summary>A room with no <c>Name</c> is identified by its area id, so re-pointing it at a taken area gives two rows one <see cref="AreaConfig.DisplayName"/>.</summary>
+	/// <summary>Re-pointing a room at an area another room already uses.</summary>
 	// Room.razor navigates to the new area only on SaveResult.Written; downgrading this refusal to a warning makes
 	// that guard dead code.
 	[TestMethod]
@@ -449,8 +449,8 @@ public sealed class LightingEngineHostTests
 		Assert.IsFalse(result.Written);
 		Assert.IsFalse(result.Validation.IsValid);
 		Assert.IsTrue(
-			result.Validation.Errors.Any(error => error.Contains("Duplicate area name", StringComparison.Ordinal)),
-			$"Expected the validator's duplicate-name message, got: {result.Validation}");
+			result.Validation.Errors.Any(error => error.Contains("Duplicate area 'stue'", StringComparison.Ordinal)),
+			$"Expected the validator's duplicate-area message, got: {result.Validation}");
 		Assert.AreEqual(before, File.ReadAllText(_path), "a refused save leaves the document exactly as it was");
 	}
 
