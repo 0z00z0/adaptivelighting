@@ -2541,6 +2541,13 @@ button.mode-pill:disabled {
 	font-size: var(--text-xs);
 	color: var(--muted);
 	font-variant-numeric: tabular-nums;
+	/* --away is the hour's distance from now in % of the track; the hour collapses where the now tag would cover part of it. */
+	max-width: clamp(0px, (var(--away) * 1cqw - 5ch - 8px) * 999, 10ch);
+	overflow: hidden;
+}
+
+.board-axis .board-track {
+	container-type: inline-size;
 }
 
 /* The end ticks hang inward instead of centring, so neither is half-clipped by

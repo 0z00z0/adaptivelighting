@@ -441,7 +441,9 @@ body { color: var(--ink); font-family: var(--font-body); font-size: var(--t-md);
 .tl-name span { overflow: hidden; text-overflow: ellipsis; }
 .tl-track { position: relative; height: 34px; border-left: 1px solid var(--line-soft); border-top: 1px solid var(--line-soft); overflow: hidden; }
 .tl-axis .tl-track, .tl-band .tl-track { border-top: 0; }
-.tl-axis .tl-track { height: 22px; }
+.tl-axis .tl-track { height: 22px; container-type: inline-size; }
+/* --away is the hour's distance from now in % of the track; the hour collapses where the now label would cover part of it. */
+.tl-axis .tick:not(.now) { max-width: clamp(0px, (var(--away) * 1cqw - 5ch - 5px) * 999, 10ch); overflow: hidden; }
 .tick { position: absolute; top: 3px; transform: translateX(-50%); font-family: var(--font-num); font-size: 11px; color: var(--ink-3); white-space: nowrap; }
 /* The window's first and last hour sit on the track's edges; hung inwards so neither is clipped. */
 .tl-axis .tick:first-child { transform: none; }
