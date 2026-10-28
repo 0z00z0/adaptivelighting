@@ -12,6 +12,7 @@ against each other.
 
 ## [Unreleased]
 
+- The studio theme's typeface is Cascadia Code, with ligatures.
 - Two rooms on different Home Assistant areas may share a name; two rooms on the same area are refused instead, and rooms with no area still need names of their own.
 
 ## [2026.10.5] - 2026-10-23
