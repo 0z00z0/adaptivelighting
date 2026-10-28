@@ -14,6 +14,7 @@ against each other.
 
 - The studio theme's typeface is Cascadia Code, with ligatures.
 - Two rooms on different Home Assistant areas may share a name; two rooms on the same area are refused instead, and rooms with no area still need names of their own.
+- On both dashboard timelines an hour label the current-time label would overlap is hidden, at every screen width.
 
 ## [2026.10.5] - 2026-10-23
 

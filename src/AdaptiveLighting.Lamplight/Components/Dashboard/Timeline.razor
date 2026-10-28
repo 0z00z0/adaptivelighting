@@ -9,7 +9,7 @@
 			<span class="tl-track">
 				@foreach (DateTimeOffset tick in Model.Ticks)
 				{
-					<span class="tick" style="@At(Model.Window.PercentAt(tick))">@BoardView.Clock(tick)</span>
+					<span class="tick" style="@Tick(tick)">@BoardView.Clock(tick)</span>
 				}
 				<span class="tick now" style="@At(Model.NowPercent)">@Model.NowClock</span>
 			</span>
@@ -102,6 +102,12 @@
 
 	// Invariant: under nb-NO a double renders 62,5 and the declaration is dropped.
 	private static string At(double pct) => $"left:{InvariantNumber.Format(pct, 3)}%";
+
+	private string Tick(DateTimeOffset tick)
+	{
+		double at = Model.Window.PercentAt(tick);
+		return $"{At(at)};--away:{InvariantNumber.Format(Math.Abs(at - Model.NowPercent), 3)}";
+	}
 
 	// Warmth through LampPaint at full weight, so a block and a band draw the same six-step ramp a tile does.
 	private static string Span(double left, double width, int? kelvin) =>

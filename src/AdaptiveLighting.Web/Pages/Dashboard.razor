@@ -128,17 +128,13 @@ else
 				<div class="board-axis">
 					<div class="board-gutter"></div>
 					<div class="board-track board-track-bare">
-						@* An hour the now-tag sits on is skipped, so the two do not overlap. *@
 						@for (int index = 0; index < _model.Ticks.Count; index++)
 						{
 							double at = index * 100.0 / _model.Window.Hours;
 
-							@if (Math.Abs(at - _model.NowPercent) >= 3.5)
-							{
-								<span class="board-tick @TickClass(index)" style="left: @Pct(at)%">
-									@_model.Ticks[index].ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture)
-								</span>
-							}
+							<span class="board-tick @TickClass(index)" style="left: @Pct(at)%; --away: @Pct(Math.Abs(at - _model.NowPercent))">
+								@_model.Ticks[index].ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture)
+							</span>
 						}
 					</div>
 				</div>
