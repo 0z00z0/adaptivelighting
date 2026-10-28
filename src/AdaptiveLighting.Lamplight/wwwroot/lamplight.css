@@ -92,7 +92,7 @@
 	--font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 	--font-num: "Martian Mono", Consolas, monospace;
 }
-/* 0z0: the studio palette, the studio face Cascadia Mono, light weights throughout. Teal accent, blue for
+/* 0z0: the studio palette, the studio face Cascadia Code, light weights throughout. Teal accent, blue for
    running, purple for manual, amber for a warning; the error red is pushed redder than the amber beside it. */
 :root[data-theme="0z0"] {
 	color-scheme: dark;
@@ -118,9 +118,9 @@
 	/* The studio's own face, everywhere: headings, text and figures are one family. A monospace sets its own
 	   width, so the display tracking is dropped and the scale comes in a step to keep the same words on the
 	   same number of lines. */
-	--font-head: "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
-	--font-body: "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
-	--font-num: "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+	--font-head: "Cascadia Code","JetBrains Mono", Consolas, "Courier New", monospace;
+	--font-body: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+	--font-num: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
 }
 :root[data-theme="paper"] {
 	color-scheme: light;
@@ -666,7 +666,7 @@ details.panel[open] > summary .area-chevron { transform: rotate(-135deg); margin
 @font-face { font-family: "Space Grotesk"; src: url("fonts/spacegrotesk/space-grotesk-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
 @font-face { font-family: "IBM Plex Sans"; src: url("fonts/ibmplexsans/ibm-plex-sans-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
 @font-face { font-family: "Martian Mono"; src: url("fonts/martianmono/martian-mono-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
-@font-face { font-family: "Cascadia Mono"; src: url("fonts/cascadiamono/cascadia-mono-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 200 700; font-display: swap; }
+@font-face { font-family: "Cascadia Code"; src: url("fonts/cascadiacode/cascadia-code-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 200 700; font-display: swap; }
 @font-face { font-family: "Lora"; src: url("fonts/lora/lora-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
 @font-face { font-family: "Source Sans 3"; src: url("fonts/sourcesans3/source-sans-3-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 800; font-display: swap; }
 @font-face { font-family: "Source Code Pro"; src: url("fonts/sourcecodepro/source-code-pro-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 400 700; font-display: swap; }
