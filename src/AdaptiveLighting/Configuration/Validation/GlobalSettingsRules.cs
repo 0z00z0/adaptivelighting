@@ -9,7 +9,7 @@ internal static class GlobalSettingsRules
 	{
 		IReadOnlyCollection<string>? knownEntityIds = context.KnownEntityIds;
 
-		ValidateIncludeLabel(global, context.LabelsInUse, result);
+		ValidateIncludeLabel(global, context, result);
 
 		if (global.AwayDebounceMinutes < 0)
 			result.AddError($"Global.AwayDebounceMinutes must not be negative (is {global.AwayDebounceMinutes}).");
@@ -93,27 +93,42 @@ internal static class GlobalSettingsRules
 		}
 	}
 
-	/// <summary>A label setting still holding a name, which the start-up write could not turn into a label id.</summary>
-	/// <remarks>It keeps working, by name, until the label is renamed in Home Assistant. Saying so is the only warning there is about it.</remarks>
+	/// <summary>A label setting whose value is not a label id the house has. That rule matches nothing.</summary>
+	// A warning, like an unknown sun or lux sensor: the house runs, and refusing the save would block the fix.
 	internal static void ValidateLabelsAreIds(
 		GlobalConfig global,
 		IReadOnlyCollection<string>? knownLabelIds,
 		ValidationResult result)
 	{
-		foreach ((string setting, string value) in LabelTranslation.NotIds(global, knownLabelIds))
-			result.AddWarning(
-				$"Global.{setting} is '{value}', which Home Assistant does not know as a label id. It still matches by name, "
-				+ "but it stops matching if that label is renamed. Pick the label again on the settings page to store its id.");
+		if (knownLabelIds is null)
+			return;
+
+		foreach ((string setting, string? value) in LabelSettings(global))
+			if (value is { Length: > 0 } && !knownLabelIds.Contains(value, StringComparer.OrdinalIgnoreCase))
+				result.AddWarning(
+					$"Global.{setting} is '{value}', which is not a label id in Home Assistant, so this rule matches nothing. "
+					+ "Pick the label on the settings page, or clear it.");
+	}
+
+	private static IEnumerable<(string Setting, string? Value)> LabelSettings(GlobalConfig global)
+	{
+		yield return (nameof(GlobalConfig.ExcludeLabel), global.ExcludeLabel);
+		yield return (nameof(GlobalConfig.IncludeLabel), global.IncludeLabel);
+		yield return (nameof(GlobalConfig.MotionLabel), global.MotionLabel);
 	}
 
 	/// <summary>The include label, when nothing in Home Assistant carries it.</summary>
 	/// <remarks>The filter fails closed room by room, so this says once that one typo at the top of the file is behind every per-room message.</remarks>
 	private static void ValidateIncludeLabel(
 		GlobalConfig global,
-		IReadOnlyCollection<string>? labelsInUse,
+		ValidationContext context,
 		ValidationResult result)
 	{
-		if (labelsInUse is null || global.IncludeLabel is not { Length: > 0 } include)
+		if (context.LabelsInUse is not { } labelsInUse || global.IncludeLabel is not { Length: > 0 } include)
+			return;
+
+		// An unknown id is already reported by ValidateLabelsAreIds.
+		if (context.KnownLabelIds is { } known && !known.Contains(include, StringComparer.OrdinalIgnoreCase))
 			return;
 
 		if (!labelsInUse.Contains(include, StringComparer.OrdinalIgnoreCase))

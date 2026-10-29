@@ -46,73 +46,44 @@ public sealed class LabelIdentityTests
 			"the id is what Home Assistant keeps, so a rename must not start commanding a lamp left alone on purpose");
 	}
 
-	// ===================== a stored name becomes an id, once =====================
+	// ===================== a name matches nothing =====================
 
-	/// <summary>
-	///     The motion rule, through the translation the start-up normalise-and-write step runs. The host's own
-	///     registry read cannot be faked, because HassModel's Label has no public constructor, so the step is
-	///     exercised at the boundary the host calls.
-	/// </summary>
+	/// <summary>The motion rule: a stored name is not an id.</summary>
 	[TestMethod]
-	public void A_Stored_Motion_Label_Name_Becomes_Its_Id_And_Still_Matches()
+	public void A_Stored_Label_Name_No_Longer_Matches()
 	{
-		GlobalConfig global = new() { MotionLabel = "Counts as motion" };
-		IReadOnlyList<RegistryLabel> known = [new RegistryLabel("adaptive_motion", "Counts as motion")];
-
-		Assert.IsTrue(LabelTranslation.Apply(global, known), "a stored name the house knows has to be rewritten");
-		Assert.AreEqual("adaptive_motion", global.MotionLabel, "the stored value must become the id, not stay the name");
-
 		FakeHaContext ha = new();
 		FakeAreaRegistry registry = new();
 		registry.Areas["stue"] = ["light.l", "binary_sensor.mmwave"];
-		registry.Labels["binary_sensor.mmwave"] = ["adaptive_motion"];
-		registry.LabelNames["adaptive_motion"] = "Counts as motion";
+		registry.Labels["binary_sensor.mmwave"] = ["presence_rule"];
+		registry.LabelNames["presence_rule"] = "Counts as motion";
 		ha.SetState("light.l", "off");
 		ha.SetState("binary_sensor.mmwave", "off", new() { ["device_class"] = "sound" });
 
+		GlobalConfig global = new() { MotionLabel = "Counts as motion" };
+
 		Resolver(ha, registry, global).TryResolve(
 			new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
 
 		Assert.IsNotNull(area, error);
-		CollectionAssert.AreEqual(new[] { "binary_sensor.mmwave" }, area.MotionSensors.ToArray(),
-			"the translated id must find the same sensor the name found");
+		Assert.AreEqual(0, area.MotionSensors.Count, "a label's name must never stand in for its id");
 	}
 
-	// ===================== a name nothing answers to is left alone =====================
-
-	/// <summary>The include rule. A label made after the document keeps working, and the warning is the only word said about it.</summary>
+	/// <summary>An unknown label value warns and names the setting; it never stops the house.</summary>
 	[TestMethod]
-	public void An_Untranslatable_Include_Label_Stays_Matches_By_Name_And_Warns()
+	public void A_Label_Setting_That_Is_Not_A_Label_Id_Is_A_Warning_Naming_The_Setting()
 	{
-		GlobalConfig global = new() { IncludeLabel = "adaptive" };
-
-		Assert.IsFalse(LabelTranslation.Apply(global, [new RegistryLabel("other_label", "Something else")]),
-			"a name no label answers to must be left exactly as written");
-		Assert.AreEqual("adaptive", global.IncludeLabel);
-
-		FakeHaContext ha = new();
-		FakeAreaRegistry registry = new();
-		registry.Areas["stue"] = ["light.blessed", "light.plain"];
-		registry.Labels["light.blessed"] = ["adaptive"];
-		ha.SetState("light.blessed", "off");
-		ha.SetState("light.plain", "off");
-
-		Resolver(ha, registry, global).TryResolve(
-			new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out string? error);
-
-		Assert.IsNotNull(area, error);
-		CollectionAssert.AreEqual(new[] { "light.blessed" }, area.Lights.ToArray(),
-			"an untranslated value has to keep matching by name, or a house loses its lights on the first start");
-
 		AdaptiveLightingConfig config = Minimal();
-		config.Global.IncludeLabel = "adaptive";
+		config.Global.ExcludeLabel = "Never touch";
 
 		ValidationResult result = ConfigValidator.Validate(
-			config, new ValidationContext { LabelsInUse = ["adaptive"], KnownLabelIds = ["other_label"] });
+			config, new ValidationContext { LabelsInUse = ["other_label"], KnownLabelIds = ["other_label"] });
 
-		Assert.IsTrue(result.IsValid, "a label stored by name still works, so it can never stop a save");
-		Assert.IsTrue(result.Warnings.Any(warning => warning.Contains("adaptive", StringComparison.Ordinal)),
-			"the warning has to name the label, or nobody can tell which of the three it means");
+		Assert.IsTrue(result.IsValid, "an unknown label must never stop the house or a save");
+		Assert.IsTrue(result.Warnings.Any(warning =>
+				warning.Contains("Global.ExcludeLabel", StringComparison.Ordinal)
+				&& warning.Contains("matches nothing", StringComparison.Ordinal)),
+			"the warning has to name the setting and say the rule matches nothing");
 	}
 
 	// ===================== a reused name is a different label =====================
