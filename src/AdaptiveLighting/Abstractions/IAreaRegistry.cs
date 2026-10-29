@@ -22,7 +22,7 @@ public interface IAreaRegistry
 	IReadOnlyList<string> EntitiesInArea(string areaId);
 
 	/// <summary>Every label the house has, whether or not anything carries it.</summary>
-	/// <remarks>What decides whether a stored value is an id or a name. Empty while the registry is unreadable.</remarks>
+	/// <remarks>Names for display. Empty while the registry is unreadable.</remarks>
 	IReadOnlyList<RegistryLabel> KnownLabels { get; }
 
 	/// <summary>The registry labels on <paramref name="entityId"/>.</summary>

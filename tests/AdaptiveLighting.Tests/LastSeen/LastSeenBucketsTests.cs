@@ -6,7 +6,7 @@ namespace AdaptiveLighting.Tests.LastSeen;
 [TestClass]
 public sealed class LastSeenBucketsTests
 {
-	private static readonly LastSeenOptions Options = new();
+	private static readonly LastSeenOptions Options = new() { MotionLabel = "adaptive_motion" };
 
 	// ===================== the three curated buckets, unchanged =====================
 

@@ -138,28 +138,20 @@ public class GlobalConfig
 
 	public int BlendMinutes { get; set; } = 30;
 
-	/// <summary>The exclude label a document gets when nothing says otherwise.</summary>
-	// Underscores, so the value can be the label id Home Assistant generates: it slugs a hyphen to an underscore,
-	// and a hyphenated default could only ever match by name.
-	public const string DefaultExcludeLabel = "adaptive_exclude";
-
-	/// <summary>The motion label a document gets when nothing says otherwise. Read by the last-seen cache too.</summary>
-	public const string DefaultMotionLabel = "adaptive_motion";
-
 	/// <summary>The illuminance device class a document gets when nothing says otherwise. Read by the last-seen cache too.</summary>
 	public const string DefaultIlluminanceDeviceClass = "illuminance";
 
-	/// <summary>Registry label marking an entity the engine must never touch.</summary>
-	public string ExcludeLabel { get; set; } = DefaultExcludeLabel;
+	/// <summary>Id of the registry label marking an entity the engine must never touch. Empty: none.</summary>
+	public string ExcludeLabel { get; set; } = string.Empty;
 
 	/// <summary>
-	///     Registry label a light must carry to be managed; <c>null</c> manages every light discovery finds. Applied to
-	///     light discovery only, never to sensors, and the exclude label always wins over it.
+	///     Id of the registry label a light must carry to be managed; <c>null</c> manages every light discovery finds.
+	///     Applied to light discovery only, never to sensors, and the exclude label always wins over it.
 	/// </summary>
 	public string? IncludeLabel { get; set; }
 
-	/// <summary>Registry label marking an entity as a motion source regardless of its device class.</summary>
-	public string MotionLabel { get; set; } = DefaultMotionLabel;
+	/// <summary>Id of the registry label marking an entity as a motion source regardless of its device class. Empty: none.</summary>
+	public string MotionLabel { get; set; } = string.Empty;
 
 	public static readonly IReadOnlyList<string> DefaultMotionDeviceClasses = ["motion", "occupancy", "presence"];
 

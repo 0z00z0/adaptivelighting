@@ -104,7 +104,7 @@ lower-case `areas:` can never win over `Zones:`.
 ### Readable ids are given once, at the first start
 
 `ReadableIdConversion.Apply` is lighting only; the shared files never call it. It runs in
-`LightingEngineHost.Reload` beside the label translation, so one write covers both and the single `.bak` keeps
+`LightingEngineHost.Reload` beside the label conversion, so one write covers both and the single `.bak` keeps
 the file as it was before either.
 
 - Every period whose id is not `period_NNN` is renumbered in document order, and every reference matching its old
@@ -1577,24 +1577,31 @@ it the shared registry; the web layer's activity record sees only `IActivityJour
 to the newest 500 rows by sequence before writing, so the file never grows without end regardless of what the
 caller passes in.
 
-### Labels are matched by id
+### Labels are matched by id only
 
 Home Assistant keeps a label's `label_id` when the label is renamed, and gives a reused name to a new label
-under a fresh id. A rule stored by name therefore changes meaning on a rename, and a stored name can match two
-labels at once.
+under a fresh id. The three label settings (`ExcludeLabel`, `IncludeLabel`, `MotionLabel`) hold label ids.
 
-A value the house knows as a label id matches that id alone. Any other value matches by name, which is what
-keeps a document written before this change working, and what lets a label created later start matching.
+- `LabelMatch.Carries` compares ids and nothing else. A value that is not a label id matches nothing.
+- The engine, the catalog and the last-seen cache all match through ids; no path falls back to a name.
+- A set value that is not a label id the house has raises one validator warning naming the setting. Never an
+  error: like an unknown sun or lux sensor, the house keeps running and that one rule matches nothing.
+- The pickers offer Home Assistant's labels only and store the id. A stored value no label has keeps an option
+  of its own, so a briefly unreadable registry never empties the field.
+- Anywhere a label is shown to a person it shows the label's name, resolved from the id.
+- The defaults are empty: no exclude label, no include label, no motion label.
 
-Stored names are turned into ids by the start-up normalise-and-write step, the single path every writer goes
-through. A hand-edited document is changed only there. A value nothing is named is left exactly as written and
-raises one validator warning. It is a warning and never an error: a label stored by name still works, so it
-can never stop a save.
+### Label names become ids once, at the first start
 
-The shipped defaults are `adaptive_exclude` and `adaptive_motion`. A slug turns a hyphen into an underscore,
-so the previous hyphenated defaults could only ever match by name.
+`LabelIdConversion.Apply` is lighting only. It runs in `LightingEngineHost.Reload` beside the readable-id
+conversion and joins its one write, so the `.bak` keeps the file as it was before both.
 
-Anywhere a label is shown to a person it shows the label's name, resolved from the id.
+- A known id is left alone. A name exactly one label has (ignoring case) becomes that label's id.
+- The retired defaults `adaptive-exclude` and `adaptive-motion` are cleared when no label has that name. A slug
+  never holds a hyphen, so neither can be an id.
+- A name no label has, or several share, is left as written; the validator warns about it. Never guessed.
+- While the registry cannot be read nothing changes and nothing is written; the next start tries again.
+- A converted document reports no change, so it is written once.
 
 ### Entity resolution
 

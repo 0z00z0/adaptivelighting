@@ -16,6 +16,7 @@ against each other.
 - Two rooms may share a name, with or without a Home Assistant area; two rooms on the same area are refused instead.
 - Periods have readable ids such as `period_001`, and rooms without a Home Assistant area have ids such as `room_001`, each issued once from a counter in the settings file; a house-mode option is known by its own text, nothing is looked up by name any more, and a sleep option dims to the period it names or the period that switches the house to it, never to one because it is called night, and the event's `testing_period_id` carries the new ids. The first start after the update rewrites each settings file once, and the old file stays as the backup copy. The log line reporting that rewrite now comes from `LightingEngineHost`, not `LightingConfigStore`.
 - On both dashboard timelines an hour label the current-time label would overlap is hidden, at every screen width.
+- The three label settings hold Home Assistant label ids only: a label's name never matches, the pickers choose from Home Assistant's labels without free text, a value that is not a label id matches nothing and shows a warning, and the exclude and motion labels default to none. The first start after the update rewrites the label fields once, and the old file stays as the backup copy.
 
 ## [2026.10.5] - 2026-10-23
 

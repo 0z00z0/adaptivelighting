@@ -384,14 +384,14 @@ public sealed class LightingEngineHost : IDisposable
 			_retiredKeys = read.RetiredKeys;
 
 			// Every reason takes the same one write, so the .bak slot keeps the file as it was before all of them.
-			bool translated = LabelTranslation.Apply(config.Global, KnownLabels());
+			bool labelled = LabelIdConversion.Apply(config.Global, KnownLabels());
 			bool converted = ReadableIdConversion.Apply(config);
 
-			if (read.NeedsMigratingWrite || translated || converted)
+			if (read.NeedsMigratingWrite || labelled || converted)
 				RewriteInCurrentSchema(config,
 					read.NeedsMigratingWrite ? "it was written against an older schema"
 					: converted ? "its periods and rooms were given readable ids, and every reference follows them"
-					: "it stored label names, which are now stored as label ids");
+					: "its label settings now hold label ids");
 
 			_discovery.ArmIfNeeded(config, _ha, _registry, _scheduler);
 
@@ -408,7 +408,7 @@ public sealed class LightingEngineHost : IDisposable
 		}
 	}
 
-	/// <summary>Writes a document that loaded through a superseded schema, stored label names or old-shape ids, back out.</summary>
+	/// <summary>Writes a document that loaded through a superseded schema, label names or old-shape ids, back out.</summary>
 	/// <remarks>
 	///     On first load, before the engine is built, so a house that never opens the web UI does not depend on the
 	///     translation tables for ever. The write goes through <see cref="NormaliseValidateAndWrite"/>, so the
@@ -531,8 +531,7 @@ public sealed class LightingEngineHost : IDisposable
 	}
 
 	/// <summary>Every label the house has, or <c>null</c> while the registry cannot be asked.</summary>
-	// Null and empty mean different things here: null leaves stored values alone, empty would too, but only null
-	// says the question was never put.
+	// Null skips the label conversion; empty is a house with no labels, where the retired defaults are cleared.
 	private IReadOnlyList<RegistryLabel>? KnownLabels()
 	{
 		if (_registry is null)
@@ -560,7 +559,6 @@ public sealed class LightingEngineHost : IDisposable
 	{
 		// In place, so the caller's own object carries the drops: the page and the scan both look at it afterwards.
 		ConfigNormalizer.Normalize(config);
-		LabelTranslation.Apply(config.Global, KnownLabels());
 
 		ValidationResult validation = Validate(config);
 

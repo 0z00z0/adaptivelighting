@@ -18,12 +18,12 @@ public sealed record ValidationContext
 	// Kept apart from LivePeriodSelectOptions: crossing two different helpers would report renames that never happened.
 	public IReadOnlyCollection<string>? LiveSelectOptions { get; init; }
 
-	/// <summary>Labels at least one entity carries, by id and by name, matching either way as the resolver does.</summary>
+	/// <summary>The ids of labels at least one entity carries.</summary>
 	public IReadOnlyCollection<string>? LabelsInUse { get; init; }
 
 	public IReadOnlyCollection<string>? LivePeriodSelectOptions { get; init; }
 
-	/// <summary>Every label id the house has, carried or not. Only an id set can tell a stored id from a stored name.</summary>
+	/// <summary>Every label id the house has, carried or not.</summary>
 	public IReadOnlyCollection<string>? KnownLabelIds { get; init; }
 
 	/// <summary>The app's built-in enable switch, the kill switch when the document names none.</summary>

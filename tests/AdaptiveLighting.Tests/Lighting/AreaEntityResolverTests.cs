@@ -23,7 +23,10 @@ public sealed class AreaEntityResolverTests
 		FakeAreaRegistry registry,
 		GlobalConfig? global = null,
 		ILogger? logger = null) =>
-		new(ha, registry, global ?? new GlobalConfig(), logger ?? NullLogger.Instance);
+		new(ha, registry, global ?? Labelled(), logger ?? NullLogger.Instance);
+
+	// The defaults are no labels, so a test of a label rule names its label ids.
+	private static GlobalConfig Labelled() => new() { ExcludeLabel = "adaptive_exclude", MotionLabel = "adaptive_motion" };
 
 	// ===================== the happy path =====================
 
@@ -845,7 +848,7 @@ public sealed class AreaEntityResolverTests
 		ha.SetState("light.blessed", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		GlobalConfig global = new() { IncludeLabel = "adaptive" };
+		GlobalConfig global = new() { IncludeLabel = "adaptive", ExcludeLabel = "adaptive_exclude" };
 		Resolver(ha, registry, global).TryResolve(new AreaConfig { AreaId = "stue" }, new AreaSettings(), out ResolvedArea? area, out _);
 
 		CollectionAssert.AreEqual(new[] { "light.blessed" }, area!.Lights.ToArray());
@@ -862,7 +865,7 @@ public sealed class AreaEntityResolverTests
 		ha.SetState("light.excluded", "off");
 		ha.SetState("binary_sensor.m", "off", new() { ["device_class"] = "motion" });
 
-		GlobalConfig global = new() { IncludeLabel = "adaptive" };
+		GlobalConfig global = new() { IncludeLabel = "adaptive", ExcludeLabel = "adaptive_exclude" };
 		Resolver(ha, registry, global).TryResolve(
 			new AreaConfig { AreaId = "stue", Lights = ["light.unlabelled", "light.excluded"] },
 			new AreaSettings(), out ResolvedArea? area, out string? error);
@@ -1311,7 +1314,7 @@ public sealed class AreaEntityResolverTests
 		ha.SetState("binary_sensor.vibration", "off", new() { ["device_class"] = "vibration" });
 		ha.SetState("binary_sensor.door", "off", new() { ["device_class"] = "door" });
 
-		GlobalConfig global = new GlobalConfig { MotionDeviceClasses = ["vibration"] };
+		GlobalConfig global = new GlobalConfig { MotionDeviceClasses = ["vibration"], MotionLabel = "adaptive_motion" };
 		AreaDiscovery found = Resolver(ha, registry, global).DiscoverArea("stue");
 
 		CollectionAssert.AreEquivalent(new[] { "binary_sensor.vibration", "binary_sensor.mmwave" }, found.MotionSensors.ToArray());

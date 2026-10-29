@@ -10,7 +10,7 @@ namespace AdaptiveLighting.Tests.Lighting;
 public sealed class AreaAutoDiscoveryTests
 {
 	private static AreaEntityResolver Resolver(FakeHaContext ha, FakeAreaRegistry registry) =>
-		new(ha, registry, new GlobalConfig(), NullLogger.Instance);
+		new(ha, registry, new GlobalConfig { ExcludeLabel = "adaptive_exclude" }, NullLogger.Instance);
 
 	[TestMethod]
 	public void Any_Area_With_A_Light_Is_Proposed_And_One_Without_Is_Not()

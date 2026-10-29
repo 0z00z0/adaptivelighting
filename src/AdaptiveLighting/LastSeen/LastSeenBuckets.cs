@@ -40,7 +40,7 @@ public static class LastSeenBuckets
 	/// <summary>Works out which bucket <paramref name="entityId"/> belongs in; never throws, never returns empty.</summary>
 	/// <remarks>
 	///     The motion label is checked before the motion device class: the label exists for hardware whose class is
-	///     wrong. <paramref name="labels"/> carries each label by id and by name, so a document storing either files.
+	///     wrong. <paramref name="labels"/> holds label ids.
 	/// </remarks>
 	public static string Classify(
 		string? entityId,

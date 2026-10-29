@@ -252,7 +252,7 @@ public sealed class HaCatalog
 		bool Offered(string entityId) =>
 			!labelledOnly
 			|| global.IncludeLabel is not { Length: > 0 } include
-			|| LabelMatch.Carries(_areas.LabelsOf(entityId), _areas.KnownLabels, include);
+			|| LabelMatch.Carries(_areas.LabelsOf(entityId), include);
 
 		IReadOnlyList<EntityOption> Rest(IReadOnlyList<string> claimed, Func<string, bool> qualifies)
 		{

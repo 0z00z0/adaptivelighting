@@ -1,36 +1,19 @@
-@* Stores the label's id and shows its name, because Home Assistant keeps the id through a rename. A stored
-   value matching no live label stays selected, since Home Assistant can be briefly unreadable and a typed
-   value may name a label that does not exist yet. *@
+@* Chooses from Home Assistant's labels only: stores the id, shows the name. A stored value matching no live
+   label keeps an option of its own, since Home Assistant can be briefly unreadable. *@
 
 <div class="picker">
-	@if (_manual || !HasOptions)
-	{
-		<input type="text"
-			   id="@Id"
-			   class="picker-text"
-			   placeholder="@Placeholder"
-			   value="@Value"
-			   @onchange="OnTyped" />
-	}
-	else
-	{
-		<select id="@Id" class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
-			<option value="">@NoneLabel</option>
-			@foreach (LabelOption option in Options)
-			{
-				<option value="@option.Id">@option.Name</option>
-			}
-			@if (NeedsOwnOption)
-			{
-				@* Never dropped: the stored value is the one thing this field must not lose. *@
-				<option value="@Value">@StoredText</option>
-			}
-		</select>
-	}
-
-	<button type="button" class="picker-mode" @onclick="ToggleMode" disabled="@(!HasOptions)">
-		@(_manual ? "Pick from list" : "Type a label")
-	</button>
+	<select id="@Id" class="picker-select" @bind:get="Value ?? string.Empty" @bind:set="OnPicked">
+		<option value="">@NoneLabel</option>
+		@foreach (LabelOption option in Options)
+		{
+			<option value="@option.Id">@option.Name</option>
+		}
+		@if (IsUnlisted)
+		{
+			@* Never dropped: the stored value is the one thing this field must not lose. *@
+			<option value="@Value">@Value</option>
+		}
+	</select>
 
 	@if (!HasOptions)
 	{
@@ -48,7 +31,7 @@
 </div>
 
 @code {
-	/// <summary>The id of the text box or list, for a label's for attribute.</summary>
+	/// <summary>The id of the list, for a label's for attribute.</summary>
 	[Parameter]
 	public string? Id { get; set; }
 
@@ -65,9 +48,6 @@
 	[Parameter]
 	public string NoneLabel { get; set; } = "(none)";
 
-	[Parameter]
-	public string Placeholder { get; set; } = "adaptive";
-
 	/// <summary>What to say when the house has made no labels at all.</summary>
 	[Parameter]
 	public string EmptyNote { get; set; } =
@@ -77,36 +57,16 @@
 	[Parameter]
 	public string UnknownNote { get; set; } = "No such label yet";
 
-	private bool _manual;
-
 	private bool HasOptions => Options.Count > 0;
 
-	/// <summary>The label the stored value names, when it is a name rather than an id.</summary>
-	// A document written before ids were stored still holds a name, and it keeps working until the start-up
-	// write translates it.
-	private LabelOption? ByName =>
-		Value is { Length: > 0 }
-			? Options.FirstOrDefault(option => string.Equals(option.Name, Value, StringComparison.OrdinalIgnoreCase))
-			: null;
-
 	// The list's values are ids, so anything else needs an option of its own or the field would show as empty.
-	private bool NeedsOwnOption =>
+	private bool IsUnlisted =>
 		Value is { Length: > 0 } && !Options.Any(option => string.Equals(option.Id, Value, StringComparison.Ordinal));
 
-	private string StoredText => ByName?.Name ?? Value ?? string.Empty;
-
-	private bool IsUnlisted => NeedsOwnOption && ByName is null;
-
-	private Task OnPicked(string picked) => Commit(picked);
-
-	private Task OnTyped(ChangeEventArgs args) => Commit(args.Value as string);
-
-	private void ToggleMode() => _manual = !_manual;
-
-	private Task Commit(string? raw)
+	private Task OnPicked(string picked)
 	{
 		// "" normalises to null at the edge, as the entity pickers do; the schema uses null for "not set".
-		string? value = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+		string? value = string.IsNullOrWhiteSpace(picked) ? null : picked;
 		Value = value;
 		return ValueChanged.InvokeAsync(value);
 	}
