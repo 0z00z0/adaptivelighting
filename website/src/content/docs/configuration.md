@@ -280,8 +280,10 @@ as Normal and keeps managing its rooms. There is no fallback to the trackers.
 | Setting | What it does | Default | In the file |
 |---|---|---|---|
 | **Only manage lights with (label)** | When set, only lights carrying this Home Assistant label are managed. Leave empty to manage every light that's found. Lights only — filtering sensors would make a half-labelled house deaf. | none | `IncludeLabel` |
-| **Never touch (label)** | Anything carrying this label is invisible to the app. Always wins over the include label. | `adaptive_exclude` | `ExcludeLabel` |
-| **Counts as motion (label)** | A sensor with this label is treated as a motion sensor whatever its type. | `adaptive_motion` | `MotionLabel` |
+| **Never touch (label)** | Anything carrying this label is invisible to the app. Always wins over the include label. | none | `ExcludeLabel` |
+| **Counts as motion (label)** | A sensor with this label is treated as a motion sensor whatever its type. | none | `MotionLabel` |
+
+The three labels are picked from Home Assistant's labels, and the file stores each label's id (`label_id`), never its name. A label id that Home Assistant does not have matches nothing and shows a warning.
 | **Outdoor light sensor** | The house's outdoor sensor. The daylight curve reads it in any room that follows it, unless that room names its own Daylight sensor; for darkness a room reads it only if it asks to. | none | `OutdoorLuxSensor` |
 | **Sun entity** | Where the house reads the sun's height, for darkness by Sun and every sun-anchored schedule boundary. A house has exactly one, so no room overrides it. | `sun.sun` | `SunEntity` |
 | **What counts as a motion sensor** | Device classes that qualify a `binary_sensor`. Listing any **replaces** the built-in set rather than adding to it. | motion, occupancy, presence | `MotionDeviceClasses` |

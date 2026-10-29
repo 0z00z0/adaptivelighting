@@ -110,16 +110,18 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     #   Periods: 4
     #   Rooms: 0
 
-    # Labels — the "Finding lights & sensors" group.
+    # Labels — the "Finding lights & sensors" group. Each holds a Home
+    # Assistant label id (label_id), never a label's name, and is empty by
+    # default. A value that is not a label id matches nothing and warns.
     #   ExcludeLabel — never let the app touch it. Always wins.
-    #   IncludeLabel — manage ONLY lights carrying this label. Empty, the
-    #                  default, manages every light that is found. Lights only:
-    #                  filtering sensors too would make a half-labelled house
-    #                  deaf. An explicit Lights list bypasses both labels.
+    #   IncludeLabel — manage ONLY lights carrying this label. Empty manages
+    #                  every light that is found. Lights only: filtering
+    #                  sensors too would make a half-labelled house deaf. An
+    #                  explicit Lights list bypasses both labels.
     #   MotionLabel  — treat it as a motion source whatever its device class.
-    ExcludeLabel: adaptive_exclude
-    # IncludeLabel: room-light
-    MotionLabel: adaptive_motion
+    # ExcludeLabel: leave_alone
+    # IncludeLabel: room_light
+    # MotionLabel: counts_as_motion
 
     # Which device classes qualify during discovery. MotionDeviceClasses is
     # empty by default, and empty means [motion, occupancy, presence]. Listing
