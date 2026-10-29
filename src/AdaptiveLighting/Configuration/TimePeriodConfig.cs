@@ -23,7 +23,7 @@ public class TimePeriodConfig
 	public string Key => Id is { Length: > 0 } id ? id.Trim() : Name.Trim();
 
 	/// <summary>
-	///     The <see cref="HouseModeOptionConfig.Id"/> the house mode is set to when this period starts; <c>null</c>
+	///     The <see cref="HouseModeOptionConfig.Value"/> the house mode is set to when this period starts; <c>null</c>
 	///     leaves the mode unchanged.
 	/// </summary>
 	/// <remarks>

@@ -99,12 +99,9 @@ public class HouseModeConfig
 	/// <summary>
 	///     The period a sleep option clamps to, by the one chain the engine and the UI both use: the option's
 	///     <see cref="HouseModeOptionConfig.ClampPeriodId"/>, else the first period whose
-	///     <see cref="TimePeriodConfig.SetsModeId"/> sets this option, else a period named <c>night</c>, else <c>null</c>.
+	///     <see cref="TimePeriodConfig.SetsModeId"/> sets this option, else <c>null</c>. Never a period's name.
 	/// </summary>
-	/// <remarks>
-	///     The last link is a guess at what was meant, not a reference, so it stays a name match. An explicit clamp
-	///     naming no period answers <c>null</c>, which is what the validator errors on.
-	/// </remarks>
+	/// <remarks>An explicit clamp naming no period answers <c>null</c>, which is what the validator errors on.</remarks>
 	public static TimePeriodConfig? SleepClampPeriodFor(HouseModeOptionConfig option, IReadOnlyList<TimePeriodConfig> periods)
 	{
 		ArgumentNullException.ThrowIfNull(option);
@@ -113,29 +110,22 @@ public class HouseModeConfig
 		if (option.ClampPeriodId is { Length: > 0 } clamp)
 			return periods.ByKey(clamp);
 
-		TimePeriodConfig? bySetsMode = periods.FirstOrDefault(p =>
-			p.SetsModeId is { Length: > 0 } && p.SetsModeId.SameName(option.Key));
-		if (bySetsMode is not null)
-			return bySetsMode;
-
-		return periods.ByName("night");
+		return periods.FirstOrDefault(p => p.SetsModeId is { Length: > 0 } && p.SetsModeId.SameName(option.Key));
 	}
 }
 
 /// <summary>One option value of the house-mode select, and the behaviour and reset triggers it carries.</summary>
 public class HouseModeOptionConfig
 {
-	/// <summary>What a reference from inside this document names. Minted once, never shown, never changed.</summary>
-	/// <remarks>Only this document's own references use it. Matching what Home Assistant reports is <see cref="Value"/>'s job.</remarks>
+	/// <summary>Retired: an option's own text is its id. Read only by the lighting conversion, which clears it.</summary>
 	public string? Id { get; set; }
 
-	/// <summary>The exact option string as the select reports it. Compared case-insensitively, whitespace-trimmed.</summary>
+	/// <summary>The exact option string as the select reports it, and the option's id. Compared case-insensitively, whitespace-trimmed.</summary>
 	public string Value { get; set; } = "";
 
-	/// <summary>What a reference from inside this document resolves by.</summary>
-	// Falls back to Value for the binder that has no migration; see TimePeriodConfig.Key.
+	/// <summary>What a reference from inside this document resolves by: <see cref="Value"/>, trimmed.</summary>
 	[YamlIgnore]
-	public string Key => Id is { Length: > 0 } id ? id.Trim() : Value.Trim();
+	public string Key => Value.Trim();
 
 	/// <summary>The option's one behaviour. One option should be <see cref="ModeKind.Normal"/>, the reset target.</summary>
 	public ModeKind Kind { get; set; } = ModeKind.Normal;

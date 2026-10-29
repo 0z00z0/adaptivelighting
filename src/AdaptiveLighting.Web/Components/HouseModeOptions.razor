@@ -419,9 +419,8 @@
 	/// <summary>The empty-clamp label: the period the fallback chain resolves to when no explicit clamp is set.</summary>
 	private string ClampDefaultLabel(HouseModeOptionConfig option)
 	{
-		// Carries the option's Id, so the "a period switches to this option" link still resolves, and no explicit
-		// clamp, so the fallback is what shows.
-		HouseModeOptionConfig probe = new HouseModeOptionConfig { Id = option.Id, Value = option.Value };
+		// No explicit clamp, so the "a period switches to this option" link is what shows.
+		HouseModeOptionConfig probe = new HouseModeOptionConfig { Value = option.Value };
 		TimePeriodConfig? resolved = HouseModeConfig.SleepClampPeriodFor(probe, [.. Periods]);
 		return resolved is not null
 			? $"(default: {PeriodName(resolved)})"
