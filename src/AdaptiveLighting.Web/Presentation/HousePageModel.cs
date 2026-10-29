@@ -1432,6 +1432,12 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 	public string? OutdoorLuxSensor => _config.Global.OutdoorLuxSensor;
 
+	/// <summary>A stored label id as a person reads it: the label's name, "none" when unset.</summary>
+	public string LabelShown(string? stored) =>
+		stored is not { Length: > 0 } ? "none"
+		: LabelOptions.FirstOrDefault(option => string.Equals(option.Id, stored, StringComparison.OrdinalIgnoreCase))?.Name
+			?? "No such label yet";
+
 	public void SetIncludeLabel(string? value) => SetLabel(() => _config.Global.IncludeLabel = value);
 
 	// Exclude and motion are non-nullable in the model, so "none" is written as an empty string. The resolver

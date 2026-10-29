@@ -56,22 +56,22 @@
 	}
 
 	<div class="rows">
-		<Row Label="Only manage lights with (label)" Value="@(Model.IncludeLabel ?? "none")" IsWide="true">
+		<Row Label="Only manage lights with (label)" Value="@Model.LabelShown(Model.IncludeLabel)" IsWide="true">
 			<Help>Set it and every light without this label stops being managed, in every room. Lights named by hand in a room are managed either way.</Help>
 			<ChildContent>
-				<LabelPicker Value="@Model.IncludeLabel" ValueChanged="@Model.SetIncludeLabel" Options="@Model.LabelOptions" NoneLabel="(none — manage every light that's found)" Placeholder="adaptive" />
+				<LabelPicker Value="@Model.IncludeLabel" ValueChanged="@Model.SetIncludeLabel" Options="@Model.LabelOptions" NoneLabel="(none — manage every light that's found)" />
 			</ChildContent>
 		</Row>
-		<Row Label="Never touch (label)" Value="@(Model.ExcludeLabel ?? "none")" IsWide="true">
+		<Row Label="Never touch (label)" Value="@Model.LabelShown(Model.ExcludeLabel)" IsWide="true">
 			<Help>Anything carrying this label is never discovered, commanded or counted.</Help>
 			<ChildContent>
-				<LabelPicker Value="@Model.ExcludeLabel" ValueChanged="@Model.SetExcludeLabel" Options="@Model.LabelOptions" NoneLabel="(none — nothing is excluded)" Placeholder="adaptive_exclude" />
+				<LabelPicker Value="@Model.ExcludeLabel" ValueChanged="@Model.SetExcludeLabel" Options="@Model.LabelOptions" NoneLabel="(none — nothing is excluded)" />
 			</ChildContent>
 		</Row>
-		<Row Label="Counts as motion (label)" Value="@(Model.MotionLabel ?? "none")" IsWide="true">
+		<Row Label="Counts as motion (label)" Value="@Model.LabelShown(Model.MotionLabel)" IsWide="true">
 			<Help>A sensor carrying this label wakes the lights in its room whatever Home Assistant thinks it measures.</Help>
 			<ChildContent>
-				<LabelPicker Value="@Model.MotionLabel" ValueChanged="@Model.SetMotionLabel" Options="@Model.LabelOptions" NoneLabel="(none — device classes decide)" Placeholder="adaptive_motion" />
+				<LabelPicker Value="@Model.MotionLabel" ValueChanged="@Model.SetMotionLabel" Options="@Model.LabelOptions" NoneLabel="(none — device classes decide)" />
 			</ChildContent>
 		</Row>
 		<Row Label="Outdoor light-level sensor" Value="@(Model.OutdoorLuxSensor ?? "none")" IsWide="true">
@@ -386,7 +386,8 @@
 		_ => string.Join(" · ", Model.Periods.Take(2).Select(period => TokenFormat.Percent(period.BrightnessPct)))
 	};
 
-	private string SensorsSummary => Model.IncludeLabel ?? Model.OutdoorLuxSensor ?? "every light found";
+	private string SensorsSummary =>
+		(Model.IncludeLabel is { Length: > 0 } ? Model.LabelShown(Model.IncludeLabel) : null) ?? Model.OutdoorLuxSensor ?? "every light found";
 
 	private string LoggingSummary => $"{Model.LogLevelText} · {(Model.CommandLog ? "commands on" : "commands off")}";
 
