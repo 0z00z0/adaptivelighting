@@ -51,28 +51,20 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 
 	public bool HasData => !_snapshots.IsEmpty;
 
-	/// <summary>A room's newest snapshot, by area id, or by display name for a room with no area; <c>null</c> when it
-	/// has not reported.</summary>
-	// Never the name for a room with an area: another room on another area may carry the same name.
-	public AreaSnapshot? Find(string? areaId, string? name)
-	{
-		if (areaId is { Length: > 0 } id)
-			return _snapshots.TryGetValue(id, out AreaSnapshot? byId) && string.Equals(byId.AreaId, id, StringComparison.Ordinal)
-				? byId
-				: null;
-
-		return name is { Length: > 0 }
-			? Snapshots.FirstOrDefault(snapshot =>
-				snapshot.AreaId is not { Length: > 0 } && string.Equals(snapshot.AreaName, name, StringComparison.OrdinalIgnoreCase))
+	/// <summary>A room's newest snapshot by its room key (<see cref="AreaConfig.Key"/>); <c>null</c> when it has not reported.</summary>
+	public AreaSnapshot? Find(string? roomKey) =>
+		roomKey is { Length: > 0 } key
+		&& _snapshots.TryGetValue(key, out AreaSnapshot? found)
+		&& string.Equals(found.RoomKey, key, StringComparison.Ordinal)
+			? found
 			: null;
-	}
 
-	/// <summary>What a snapshot is filed under: its area id, or its name when it has none.</summary>
+	/// <summary>What a snapshot is filed under: its area id, else its room id.</summary>
 	public static string KeyOf(AreaSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 
-		return snapshot.AreaId is { Length: > 0 } areaId ? areaId : snapshot.AreaName;
+		return snapshot.RoomKey;
 	}
 
 	public Task StartAsync(CancellationToken cancellationToken)

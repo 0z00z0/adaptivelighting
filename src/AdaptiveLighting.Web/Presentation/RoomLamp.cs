@@ -30,4 +30,4 @@ public readonly record struct RoomLamp(bool IsLit, int? BrightnessPct, int? Kelv
 /// <summary>One room as the dashboard's grid draws it: its name, its route, and what its lamps are doing.</summary>
 /// <param name="AreaId">The room's Home Assistant area, or <c>null</c> for a room named by entities alone —
 /// <see cref="HouseView.RoomHref"/> already turns that into no link.</param>
-public sealed record RoomTile(string Name, string? AreaId, RoomLamp Lamp);
+public sealed record RoomTile(string Name, string? AreaId, RoomLamp Lamp, string Key);

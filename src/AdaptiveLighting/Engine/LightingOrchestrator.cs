@@ -50,7 +50,7 @@ public sealed class LightingOrchestrator : IDisposable
 	// from a start from nothing.
 	private readonly bool _afterSave;
 
-	// What each room of the engine this one replaces handed on, by CarryOverKey. Null on a start from nothing.
+	// What each room of the engine this one replaces handed on, by room key (AreaConfig.Key). Null on a start from nothing.
 	private readonly IReadOnlyDictionary<string, AreaCarryOver>? _carried;
 
 	// The app's built-in enable switch, the kill switch when the document names none. Known to the host only.
@@ -146,7 +146,7 @@ public sealed class LightingOrchestrator : IDisposable
 	// "not begun" for every held period.
 	public MotionPeriodLatch? MotionPeriods => _motionPeriods;
 
-	/// <summary>What each running room hands to its replacement, by <see cref="CarryOverKey"/>.</summary>
+	/// <summary>What each running room hands to its replacement, by room key (<see cref="AreaConfig.Key"/>).</summary>
 	/// <param name="next">
 	///     The document the replacement will run. A running level test goes only to a room it keeps enabled; any
 	///     other test returns its lights when this engine stops.
@@ -158,7 +158,7 @@ public sealed class LightingOrchestrator : IDisposable
 
 		foreach (AreaController area in _areas)
 		{
-			string key = CarryOverKey(area.AreaId, area.Name);
+			string key = area.RoomKey;
 			carried[key] = area.CarryOver(handOnTest: kept.Contains(key));
 		}
 
@@ -167,28 +167,21 @@ public sealed class LightingOrchestrator : IDisposable
 
 	private HashSet<string> KeptRooms(AdaptiveLightingConfig next)
 	{
-		HaAreaRegistry registry = new(_registry);
-
 		return new HashSet<string>(
 			next.Areas
 				.Where(area => area.Effective(next.Defaults).Enabled)
-				.Select(area => CarryOverKey(area.AreaId, AreaNaming.DisplayName(area, registry))),
+				.Select(area => area.Key),
 			StringComparer.OrdinalIgnoreCase);
 	}
 
-	/// <summary>Every room's <see cref="CarryOverKey"/> as <paramref name="config"/> declares it now, enabled or not.</summary>
+	/// <summary>Every room key as <paramref name="config"/> declares it now, enabled or not.</summary>
 	/// <remarks>Lets the host prune a room-history entry once its room leaves the document entirely; a disabled room keeps its key.</remarks>
-	internal static HashSet<string> DocumentRoomKeys(AdaptiveLightingConfig config, IHaRegistry hassRegistry)
+	internal static HashSet<string> DocumentRoomKeys(AdaptiveLightingConfig config)
 	{
-		HaAreaRegistry registry = new(hassRegistry);
-
 		return new HashSet<string>(
-			config.Areas.Select(area => CarryOverKey(area.AreaId, AreaNaming.DisplayName(area, registry))),
+			config.Areas.Select(area => area.Key),
 			StringComparer.OrdinalIgnoreCase);
 	}
-
-	// The area id where there is one, so a room renamed in the same save keeps its history.
-	private static string CarryOverKey(string? areaId, string name) => areaId is { Length: > 0 } ? areaId : name;
 
 	/// <summary>Resolves the areas and starts the engine.</summary>
 	// Areas that fail to resolve are skipped and reported in one notification, so an entity renamed in HA costs
@@ -274,9 +267,8 @@ public sealed class LightingOrchestrator : IDisposable
 
 				_logger.LogError("Area {Area} could not be set up: {Error}", areaConfig.DisplayName, error);
 
-				// Keyed on the area id where there is one, so renaming a room in the document does not re-report it.
 				failures.Add(new AreaSetupFault(
-					areaConfig.AreaId is { Length: > 0 } key ? key : areaConfig.DisplayName,
+					areaConfig.Key,
 					areaConfig.DisplayName,
 					error ?? "It could not be set up."));
 
@@ -290,7 +282,7 @@ public sealed class LightingOrchestrator : IDisposable
 			if (areaConfig.AreaId is { Length: > 0 } areaId && areaId.Trim() is { Length: > 0 } trimmed)
 				_motionSensorsByArea[trimmed] = resolved.MotionSensors;
 
-			running.Add((resolved, CarryOverKey(areaConfig.AreaId, resolved.Name)));
+			running.Add((resolved, areaConfig.Key));
 			_areas.Add(BuildArea(resolved, areaConfig, resolver));
 		}
 
@@ -386,9 +378,10 @@ public sealed class LightingOrchestrator : IDisposable
 			config.AreaId,
 			SunMoved(_config.Global.SunEntity),
 			LightCalculators(resolved, config),
-			() => resolver.BatteriesOf(resolved.MotionSensors));
+			() => resolver.BatteriesOf(resolved.MotionSensors),
+			config.Id);
 
-		if (_carried is not null && _carried.TryGetValue(CarryOverKey(area.AreaId, area.Name), out AreaCarryOver? carried))
+		if (_carried is not null && _carried.TryGetValue(area.RoomKey, out AreaCarryOver? carried))
 			area.Inherit(carried);
 		else if (NewestMotionSensorChange(resolved.MotionSensors) is { } approximate)
 			// No note entry for this room: the sensor's own last-changed stands in, and who changed it stays empty.

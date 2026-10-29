@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Adaptive.Engine;
 
 /// <summary>Remembers each room's history, so a restart does not forget it.</summary>
-// Keyed the same way carry-over on save is: by area id where there is one, else by name.
+// Keyed the same way carry-over on save is: by area id, else by the room id of a room without an area.
 public interface IRoomHistoryStore
 {
 	/// <summary>What was on disk at start, or empty when there is none.</summary>
@@ -41,7 +41,7 @@ public sealed class RoomHistoryDocument
 	[JsonPropertyName(JsonNoteFile.SavedAtProperty)]
 	public DateTimeOffset SavedAt { get; set; }
 
-	/// <summary>Room key (area id, or name where there is none) to its history.</summary>
+	/// <summary>Room key (area id, else room id) to its history.</summary>
 	[JsonPropertyName("rooms")]
 	public Dictionary<string, AreaHistory> Rooms { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 

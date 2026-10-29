@@ -402,7 +402,7 @@ public sealed class DashboardPageModel : IPageClock, IDisposable
 		_roomTiles =
 		[
 			.. _rooms.Where(room => room.IsEnabled)
-				.Select(room => new RoomTile(room.Name, room.AreaId, RoomLamp.Of(_cache.Find(room.AreaId, room.Name))))
+				.Select(room => new RoomTile(room.Name, room.AreaId, RoomLamp.Of(_cache.Find(room.Key)), room.Key))
 		];
 		Window = BoardWindow.Around(Now, BoardView.LookBack, BoardView.LookAhead);
 		Ticks = Window.Ticks;

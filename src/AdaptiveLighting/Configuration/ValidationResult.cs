@@ -3,7 +3,8 @@ using System.Text;
 namespace Adaptive.Settings;
 
 /// <summary>A configuration problem scoped to one area: the area is skipped and the rest of the house keeps working.</summary>
-public sealed record AreaError(string AreaName, string Message, string? AreaId = null);
+/// <remarks><c>AreaName</c> is for showing; the room is identified by <c>AreaId</c>, else <c>RoomId</c>.</remarks>
+public sealed record AreaError(string AreaName, string Message, string? AreaId = null, string? RoomId = null);
 
 /// <summary>The outcome of <see cref="ConfigValidator.Validate"/>.</summary>
 /// <remarks>
@@ -31,7 +32,7 @@ public sealed class ValidationResult
 	public void AddError(string message) => _errors.Add(message);
 
 	public void AddAreaError(AreaConfig area, string message) =>
-		_areaErrors.Add(new AreaError(area.DisplayName, message, area.AreaId));
+		_areaErrors.Add(new AreaError(area.DisplayName, message, area.AreaId, area.AreaId is { Length: > 0 } ? null : area.Id));
 
 	public void AddWarning(string message) => _warnings.Add(message);
 

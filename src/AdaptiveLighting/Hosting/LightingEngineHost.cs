@@ -670,7 +670,7 @@ public sealed class LightingEngineHost : IDisposable
 			{
 				// A person's save, so a room no longer in the document at all loses its history here, not on the
 				// next room that happens to publish. Disabled-but-still-declared rooms keep their key.
-				HashSet<string> stillDocumented = LightingOrchestrator.DocumentRoomKeys(config, _registry);
+				HashSet<string> stillDocumented = LightingOrchestrator.DocumentRoomKeys(config);
 				PersistRoomHistory(carried, flushNow: true, prune: stillDocumented);
 			}
 		}

@@ -266,10 +266,8 @@ public static class ActivityView
 		return [.. byKey.Values.OrderBy(option => option.Name, StringComparer.CurrentCulture)];
 	}
 
-	// The area id where there is one. A room the document gives no area has only its name to be known by, as the
-	// snapshot cache and the fault memory already assume.
-	private static string? RoomKey(ActivityEntry entry) =>
-		entry.AreaId is { Length: > 0 } areaId ? areaId : entry.AreaName;
+	// The area id, else the room id of a room without an area. Never the name.
+	private static string? RoomKey(ActivityEntry entry) => entry.Snapshot?.RoomKey is { Length: > 0 } key ? key : null;
 
 	// ===================== what is not an event at all =====================
 

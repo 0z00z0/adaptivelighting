@@ -39,9 +39,8 @@ public sealed class CommandLog
 	public static string DirectoryBeside(string documentPath) =>
 		Path.Combine(Path.GetDirectoryName(Path.GetFullPath(documentPath)) ?? ".", LogFolderName, FolderName);
 
-	/// <summary>An area's folder: its Home Assistant area id, or its name where it has none.</summary>
-	public static string FolderFor(string? areaId, string areaName) =>
-		SafeName(areaId is { Length: > 0 } ? areaId : areaName);
+	/// <summary>A room's folder: its Home Assistant area id, or its room id where it has none.</summary>
+	public static string FolderFor(string roomKey) => SafeName(roomKey);
 
 	/// <summary>Lower case, with everything outside <c>a-z 0-9 . _ -</c> as <c>_</c>.</summary>
 	public static string SafeName(string name)

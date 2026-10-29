@@ -549,7 +549,7 @@ public sealed class HousePageModel : IPageClock, IDisposable
 
 		foreach (AreaConfig area in _config.Areas)
 		{
-			if (_cache.Find(area.AreaId, RoomName(area)) is not { } snapshot)
+			if (_cache.Find(area.Key) is not { } snapshot)
 				continue;
 
 			states[area] = snapshot.State;
@@ -883,11 +883,10 @@ public sealed class HousePageModel : IPageClock, IDisposable
 		Notify();
 	}
 
-	/// <summary>How a room is keyed while the page is open: its area id, or its position for a row that names
-	/// none.</summary>
+	/// <summary>How a room is keyed while the page is open: its room key, or its position for a row that has none.</summary>
 	/// <remarks>A positional key moves when a row is removed. See <see cref="ForgetPositionalNotes"/>.</remarks>
 	private string KeyOf(AreaConfig area) =>
-		area.AreaId is { Length: > 0 } areaId ? areaId : $"#{_config.Areas.IndexOf(area)}";
+		area.Key is { Length: > 0 } key ? key : $"#{_config.Areas.IndexOf(area)}";
 
 	// ---- adding, adopting and removing a room ----
 
