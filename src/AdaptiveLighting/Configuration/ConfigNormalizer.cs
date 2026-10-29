@@ -13,10 +13,6 @@ public static class ConfigNormalizer
 
 		GlobalConfig global = config.Global;
 
-		// Before anything that reads a key: a period or option added since the last save has no id yet, and the
-		// referenced-options scan below and the whole engine resolve by one.
-		StableKeyMigration.Apply(config);
-
 		// Written out as Lux, so a file passes through here on its first save and never says Either again.
 		if (config.Defaults.Darkness is DarknessSource.Either)
 			config.Defaults.Darkness = DarknessSource.Lux;

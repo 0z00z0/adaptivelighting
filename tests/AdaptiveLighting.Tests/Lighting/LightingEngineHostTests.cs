@@ -675,48 +675,52 @@ public sealed class LightingEngineHostTests
 		Assert.AreEqual(migrated, File.ReadAllText(_path), "a reload that writes nothing normalises nothing");
 	}
 
-	/// <summary>A document in the current key names but written before periods had ids.</summary>
-	private const string SchemaWithoutIds =
+	/// <summary>A document whose period carries a slug-and-random id.</summary>
+	private const string SchemaWithOldIds =
 		"""
 		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 		  ConfigName: "Adaptive lighting [test]"
 		  Periods:
-		    - Name: dag
+		    - Id: day-ab12
+		      Name: day
 		      Start: "06:00"
 		      BrightnessPct: 80
 		      ColorTempKelvin: 3500
 		  Areas:
-		    - Name: Stue
-		      AreaId: stue
+		    - Name: Living room
+		      AreaId: living_room
 		      Levels:
-		        - PeriodId: dag
+		        - PeriodId: day-ab12
 		          BrightnessPct: 40
 		""";
 
 	[TestMethod]
-	public void Reload_OfADocumentWithoutIds_MintsThemOnce_AndKeepsTheRoomsOwnLevel()
+	public void Reload_OfADocumentWithOldIds_ConvertsItOnce_AndTheBackupIsTheOriginal()
 	{
-		File.WriteAllText(_path, SchemaWithoutIds);
+		File.WriteAllText(_path, SchemaWithOldIds);
 		string original = File.ReadAllText(_path);
 
 		LightingEngineHost host = BuildHost();
 
 		Assert.AreEqual(SaveStatus.Saved, host.Reload().Status);
 
-		string migrated = File.ReadAllText(_path);
+		string converted = File.ReadAllText(_path);
 		AdaptiveLightingConfig config = host.Store.Load();
 
-		Assert.AreEqual(config.Periods.Single().Id, config.Areas.Single().Levels.Single().PeriodId,
-			"the row that named the period by name now names it by id");
-		Assert.AreEqual(40d, config.Areas.Single().Levels.Single().BrightnessPct, "and still says what it said");
-		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath), "the backup is the pre-migration file");
+		Assert.AreEqual("period_001", config.Periods.Single().Id);
+		Assert.AreEqual("period_001", config.Areas.Single().Levels.Single().PeriodId);
+		Assert.AreEqual(40d, config.Areas.Single().Levels.Single().BrightnessPct, "and the row still says what it said");
+		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath), "the backup is the file before the conversion");
+
+		// The root key is a literal every document stores; it must not follow the class's namespace.
+		Assert.IsTrue(converted.Contains("AdaptiveLighting.Configuration.AdaptiveLightingConfig:", StringComparison.Ordinal));
+		Assert.IsFalse(converted.Contains("Adaptive.Settings.AdaptiveLightingConfig", StringComparison.Ordinal));
 
 		host.Reload();
 
-		Assert.AreEqual(migrated, File.ReadAllText(_path), "nothing to mint the second time");
+		Assert.AreEqual(converted, File.ReadAllText(_path), "nothing to convert the second time");
 		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath), "so the one backup slot still holds it");
 	}
-
 	/// <summary><see cref="LightingEngineHost.Reload"/> never throws: its caller is the <c>[NetDaemonApp]</c> bootstrap, and an app that throws takes its DI scope and <c>IHaContext</c> with it.</summary>
 	[TestMethod]
 	public void Reload_OfADocumentWithASectionEmptiedByHand_LoadsItRatherThanThrowing()

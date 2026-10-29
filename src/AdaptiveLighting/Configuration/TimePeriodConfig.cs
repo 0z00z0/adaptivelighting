@@ -10,8 +10,7 @@ public class TimePeriodConfig
 	/// <summary>What a period holds where nobody has said otherwise: 80 %.</summary>
 	private const int DefaultBrightness = 204;
 
-	/// <summary>What every reference to this period names. Minted once, never shown, never changed.</summary>
-	/// <remarks>Filled in on load by <see cref="StableKeyMigration"/>. Editing it by hand orphans every reference to the old value.</remarks>
+	/// <summary>What every reference to this period names: <c>period_001</c>. Issued once by <see cref="ReadableId"/>, never shown, never changed.</summary>
 	public string? Id { get; set; }
 
 	/// <summary>Free-form name: <c>morning</c>, <c>day</c>, <c>evening</c>, <c>night</c>. Reported in logs and snapshots. Two periods may share one.</summary>
