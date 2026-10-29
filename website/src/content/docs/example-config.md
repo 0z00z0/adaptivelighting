@@ -91,21 +91,24 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
     #   Entity: input_select.husmodus
     #   Options:
     #     # Value is Home Assistant's string and must match the helper exactly.
-    #     # Id is ours, minted once, and is what a period's SetsModeId names.
-    #     - Id: hjemme-r4wd
-    #       Value: Hjemme
+    #     # It is also the option's id: a period's SetsModeId names this text.
+    #     - Value: Hjemme
     #       Kind: Normal
-    #     - Id: borte-k9lz
-    #       Value: Borte
+    #     - Value: Borte
     #       Kind: Away
     #       Scene: scene.borte_belysning
     #       ResetOnPresence: true
     #       ResetPresenceGraceMinutes: 15
     #       ActivateAfterNoMotionMinutes: 360
-    #     - Id: sover-b6t1
-    #       Value: Sover
+    #     - Value: Sover
     #       Kind: Sleep
-    #       ClampPeriodId: night-3c9f
+    #       ClampPeriodId: period_004
+
+    # The highest period and room id numbers ever issued, so a deleted id is
+    # never handed out again. Kept by the app; never lower them by hand.
+    # IdCounters:
+    #   Periods: 4
+    #   Rooms: 0
 
     # Labels — the "Finding lights & sensors" group.
     #   ExcludeLabel — never let the app touch it. Always wins.
@@ -212,7 +215,7 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
   # --------------------------------------------------------------------------
   Periods:
 
-    - Id: morning-7k2q       # minted once when the period is created; never edit it
+    - Id: period_001        # issued once when the period is created; never edit it
       Name: morning          # rename freely — nothing points at the name
       Start: "06:30"
       Brightness: 153        # 0-255, the scale HA uses; shown on screen as 60 %
@@ -226,26 +229,26 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
         - kjokken
         - gang
 
-    - Id: day-1x8m
+    - Id: period_002
       Name: day
       Start: sunrise+00:45
       Brightness: 230        # 90 %
       ColorTempKelvin: 4500
 
-    - Id: evening-4pb3
+    - Id: period_003
       Name: evening
       Start: sunset-01:00
       Brightness: 179        # 70 %
       ColorTempKelvin: 2700
 
-    - Id: night-3c9f
+    - Id: period_004
       Name: night
       Start: "22:30"
       Brightness: 38         # 15 %
       ColorTempKelvin: 2200
       # SetsModeId switches the house to a mode option when the period starts.
-      # It names the option's Id, not the text the dropdown shows.
-      # SetsModeId: sover-b6t1
+      # It names the option's text, exactly as the dropdown has it.
+      # SetsModeId: Sover
 
   # --------------------------------------------------------------------------
   #  Areas — opt-in. An area that is not listed here is never touched, and a
@@ -322,11 +325,11 @@ AdaptiveLighting.Configuration.AdaptiveLightingConfig:
       FollowOutdoorLux: true
       LuxBrightnessMinPct: 25
       DaylightSensor: sensor.nord_illuminance
-      # This room runs "day" (id day-1x8m, above) off the curve instead of the
+      # This room runs "day" (id period_002, above) off the curve instead of the
       # schedule's stated 90 %; Brightness is kept here and does nothing while
       # FollowDaylightCurve is true, so turning it off restores 65 %.
       Levels:
-        - PeriodId: day-1x8m
+        - PeriodId: period_002
           FollowDaylightCurve: true
           Brightness: 166      # 65 %
 

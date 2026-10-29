@@ -129,6 +129,7 @@ These belong to one room and have no house-wide baseline. They live on the room'
 |---|---|---|
 | The room's name | Left alone, the room is called whatever Home Assistant calls its area, so a rename over there arrives here. | `Name` |
 | Home Assistant area | Which area the room is. Everything else is found from it. | `AreaId` |
+| *(not on screen)* | A room with no Home Assistant area only: its id, such as `room_001`, given once. A room with an area is known by its area. | `Id` |
 | **Not right? Pick by hand → Lights / Motion sensors / Light-level sensor** | Each list you fill in replaces the automatic choice for that list alone, and ignores the labels. Leave empty to use whatever is found. | `Lights`, `MotionSensors`, `LuxSensor` |
 | **Not right? Pick by hand → Daylight sensor** | Which reading the daylight curve follows here. Left alone it is the house's outdoor sensor; an indoor one measures this room's own lamps, so the curve would chase itself. Any light-level sensor in the house can be picked. | `DaylightSensor` |
 | The **×** on a found chip | Leaves one entity out of this room — a fridge's own light sensor, a hallway lamp filed under the wrong room. Listed afterwards so you can put it back. | `ExcludeEntities` |
@@ -173,7 +174,7 @@ A period runs from its start until the next period begins.
 | Setting | What it does | In the file |
 |---|---|---|
 | **Period name** | `morning`, `day`, `evening`, `night` — free-form, and what the board and the logs call it. Rename it whenever you like; nothing points at the name. | `Name` |
-| *(not on screen)* | The period's id, minted once when it is created. Everything that refers to a period refers to this. | `Id` |
+| *(not on screen)* | The period's id, such as `period_001`, given once when it is created and never handed out again. Everything that refers to a period refers to this. | `Id` |
 | **Starts** | A clock time (`22:30`) or a sun event with an optional offset (`sunrise`, `sunset-01:00`, `sunrise+00:45`). | `Start` |
 | **Brightness** | The level every room holds during this period, unless a room replaces it with the daylight curve for itself — see [A room's own periods](#a-rooms-own-periods-a-number-or-the-daylight-curve). Shown as a percentage, written in the file as the 0-255 value Home Assistant accepts — see [How brightness is written](#how-brightness-is-written). | `Brightness` |
 | **Colour temperature** | The target warmth, in kelvin. | `ColorTempKelvin` |
@@ -249,7 +250,7 @@ option is then tagged here.
 | **House mode** | The `input_select` whose value is the house mode. | `Global.HouseMode.Entity` |
 | **Kind** | What the option means: **Normal**, **Sleep**, **Away** or **Guest**. Mark exactly one option Normal — it is what every reset returns to. | `Kind` |
 | **Activate this scene when entering mode** | A `scene.*` applied on entry, and no room is re-aimed over it. Away with no scene sweeps the lights off instead. Under Normal and Sleep a room takes itself back when somebody moves in it, or when it empties. | `Scene` |
-| **Dim level while asleep** | Sleep only: the period whose dimness sleep-respecting rooms are held to. Falls back to a period that sets this mode, then to one named `night`. | `ClampPeriodId` |
+| **Dim level while asleep** | Sleep only: the period whose dimness sleep-respecting rooms are held to. Left empty, it is the period that switches the house to this mode. | `ClampPeriodId` |
 | **Turn this mode on while …** | While any listed entity is on, this option is the active mode whatever the dropdown says — a bedside "sleep" switch. | `ActivateWhileOn` |
 | **Activate when no movement for** | Switch to this option once the whole house has had no movement for this long. Non-Normal options only. | `ActivateAfterNoMotionMinutes` |
 | **Reset when a period starts** | Back to Normal when the named period begins. | `ResetOnPeriodStartId` |
@@ -344,16 +345,16 @@ A document that says `Zones:` still loads. The old keys are translated as it is 
 written back in the new schema on the first start after the upgrade, with the previous version kept
 beside it. Nothing needs doing by hand.
 
-The same happens to a file whose periods and house-mode options have no `Id`. Each gets one on the
-first start, and everything that pointed at a period or a mode **by name** is repointed at its id:
-`SetsMode` becomes `SetsModeId`, `ClampPeriod` becomes `ClampPeriodId`, `ResetOnPeriodStart` becomes
-`ResetOnPeriodStartId`, and a room's own levels follow. That is what makes renaming a period safe. A
-reference naming something that does not exist is left exactly as written, so a typo still shows up
-as a warning.
+A file whose periods carry ids of an older shape, or none, gets readable ones such as `period_001` on the
+first start. Every levels row, dropdown mapping, dim period and reset trigger follows its period in the same
+write, and the file as it was stays beside it as the backup. The old key names still load: `SetsMode`
+becomes `SetsModeId`, `ClampPeriod` becomes `ClampPeriodId`, `ResetOnPeriodStart` becomes
+`ResetOnPeriodStartId`. A reference is matched by id and never by name, so one naming a period by its
+name, or naming nothing, is left exactly as written and shows up as a warning or an error.
 
-Two things do not become ids. `Value` on a house-mode option stays the text your `input_select`
-reports, because that is how the two are matched. And `Global.HouseMode.Entity` is still an entity
-id.
+Two things are not given ids. `Value` on a house-mode option is the text your `input_select` reports,
+and it is the option's id: a period's `SetsModeId` names that text. And `Global.HouseMode.Entity` is
+still an entity id.
 
 Your own Home Assistant automations do not migrate: the published event is `adaptive_lighting_area`
 with an `area` field, and nothing publishes the old `laget_lighting_zone` any more.
