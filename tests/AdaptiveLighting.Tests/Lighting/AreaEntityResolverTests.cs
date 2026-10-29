@@ -789,7 +789,8 @@ public sealed class AreaEntityResolverTests
 			  Global:
 			    ExcludeLabel: adaptive_exclude
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "07:00"
 			  Areas:
 			    - Name: Stue

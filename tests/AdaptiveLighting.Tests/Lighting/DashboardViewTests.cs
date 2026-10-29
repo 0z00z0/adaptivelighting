@@ -55,17 +55,16 @@ public sealed class DashboardViewTests
 		Assert.AreEqual(0, visible.Count, "the switched-off room was recognised by its id, not its old name");
 	}
 
-	// A room configured with explicit entities has no area id. The display name is the fallback join, the same
-	// one the snapshot cache and the settings list use.
+	// A room configured with explicit entities has no area id. Its report is never matched to a room by name,
+	// so a switched-off room that shares the name of a report does not hide it.
 	[TestMethod]
-	public void A_Report_With_No_Area_Id_Falls_Back_To_The_Name()
+	public void A_Report_With_No_Area_Id_Is_Never_Matched_By_Name()
 	{
-		RoomView[] rooms = [new(null, "Loftstue", false, 2), new(null, "Bod", true, 1)];
+		RoomView[] rooms = [new(null, "Loftstue", false, 2, "room_001"), new(null, "Bod", true, 1, "room_002")];
 
 		IReadOnlyList<AreaSnapshot> visible = AreaView.VisibleCards([Report("Loftstue"), Report("Bod")], rooms);
 
-		Assert.AreEqual(1, visible.Count);
-		Assert.AreEqual("Bod", visible[0].AreaName);
+		Assert.AreEqual(2, visible.Count, "a report matching no room by key is shown, never hidden by a name");
 	}
 
 	[TestMethod]

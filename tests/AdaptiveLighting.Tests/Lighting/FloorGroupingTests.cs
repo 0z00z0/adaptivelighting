@@ -116,7 +116,7 @@ public sealed class FloorGroupingTests
 		registry.Floors["stue"] = new AreaFloor("ground", "Ground floor", 0);
 
 		IReadOnlyList<FloorGroup<AreaConfig>> groups = FloorGrouping.Group(
-			[Area("stue"), new AreaConfig { Name = "Hand-listed", Lights = ["light.l"] }],
+			[Area("stue"), new AreaConfig { Id = "hand_listed", Name = "Hand-listed", Lights = ["light.l"] }],
 			area => area.AreaId,
 			registry);
 

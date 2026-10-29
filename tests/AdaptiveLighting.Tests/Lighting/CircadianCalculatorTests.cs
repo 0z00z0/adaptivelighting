@@ -11,9 +11,9 @@ public sealed class CircadianCalculatorTests
 {
 	private static readonly List<TimePeriodConfig> Table =
 	[
-		new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-		new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
+		new() { Id = "day", Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
+		new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+		new() { Id = "night", Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
 	];
 
 	// At() builds an instant at +00:00, so every calculator below is told the household is UTC too. Left to
@@ -108,8 +108,8 @@ public sealed class CircadianCalculatorTests
 	{
 		List<TimePeriodConfig> table = new List<TimePeriodConfig>
 		{
-			new() { Name = "broken", Start = "half past tea", BrightnessPct = 1 },
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90 }
+			new() { Id = "broken", Name = "broken", Start = "half past tea", BrightnessPct = 1 },
+			new() { Id = "day", Name = "day", Start = "07:00", BrightnessPct = 90 }
 		};
 
 		Assert.AreEqual("day", Stepped(table).GetTarget(At(20))!.PeriodName);
@@ -122,8 +122,8 @@ public sealed class CircadianCalculatorTests
 	{
 		List<TimePeriodConfig> table = new List<TimePeriodConfig>
 		{
-			new() { Name = "day", Start = "sunrise", BrightnessPct = 90 },
-			new() { Name = "evening", Start = "sunset-01:00", BrightnessPct = 70 }
+			new() { Id = "day", Name = "day", Start = "sunrise", BrightnessPct = 90 },
+			new() { Id = "evening", Name = "evening", Start = "sunset-01:00", BrightnessPct = 70 }
 		};
 		SunTimes sun = new SunTimes(new TimeOnly(9, 15), new TimeOnly(15, 45));
 		CircadianCalculator calc = Stepped(table, sun);
@@ -138,8 +138,8 @@ public sealed class CircadianCalculatorTests
 	{
 		List<TimePeriodConfig> table = new List<TimePeriodConfig>
 		{
-			new() { Name = "day", Start = "sunrise", BrightnessPct = 90 },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15 }
+			new() { Id = "day", Name = "day", Start = "sunrise", BrightnessPct = 90 },
+			new() { Id = "night", Name = "night", Start = "22:30", BrightnessPct = 15 }
 		};
 
 		// Polar night: no sunrise to anchor to, so the fixed period covers the day alone.
@@ -151,9 +151,9 @@ public sealed class CircadianCalculatorTests
 	{
 		List<TimePeriodConfig> table = new List<TimePeriodConfig>
 		{
-			new() { Name = "broken", Start = "half past tea", BrightnessPct = 1 },
-			new() { Name = "dawn", Start = "sunrise", BrightnessPct = 90 },
-			new() { Name = "night", Start = "22:30", BrightnessPct = 15 }
+			new() { Id = "broken", Name = "broken", Start = "half past tea", BrightnessPct = 1 },
+			new() { Id = "dawn", Name = "dawn", Start = "sunrise", BrightnessPct = 90 },
+			new() { Id = "night", Name = "night", Start = "22:30", BrightnessPct = 15 }
 		};
 
 		List<DroppedPeriod> raised = new List<DroppedPeriod>();
@@ -183,7 +183,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void An_All_Sun_Table_During_Polar_Night_Resolves_Nothing()
 	{
-		List<TimePeriodConfig> table = new List<TimePeriodConfig> { new() { Name = "day", Start = "sunrise" } };
+		List<TimePeriodConfig> table = new List<TimePeriodConfig> { new() { Id = "day", Name = "day", Start = "sunrise" } };
 
 		Assert.IsNull(Stepped(table, SunTimes.Unknown).GetTarget(At(12)),
 			"a caller that gets null must command nothing; guessing a target here would be worse than doing nothing");
@@ -479,8 +479,8 @@ public sealed class CircadianCalculatorTests
 		// An all-sun-anchored table with unknown sun times (polar night): nothing can be placed.
 		List<TimePeriodConfig> polar = new List<TimePeriodConfig>
 		{
-			new() { Name = "day", Start = "sunrise", BrightnessPct = 90 },
-			new() { Name = "night", Start = "sunset", BrightnessPct = 10 }
+			new() { Id = "day", Name = "day", Start = "sunrise", BrightnessPct = 90 },
+			new() { Id = "night", Name = "night", Start = "sunset", BrightnessPct = 10 }
 		};
 		CircadianCalculator calc = Stepped(polar, SunTimes.Unknown);
 
@@ -930,7 +930,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void NextBoundary_OnTheDayTheClocksGoForward_ArrivesWhenTheGapEnds()
 	{
-		List<TimePeriodConfig> table = [new() { Name = "night", Start = "02:30", BrightnessPct = 15 }];
+		List<TimePeriodConfig> table = [new() { Id = "night", Name = "night", Start = "02:30", BrightnessPct = 15 }];
 
 		// On 2026-03-29 the clock jumps 02:00 to 03:00, so the 02:30 this period is written at never happens.
 		Assert.AreEqual(
@@ -941,7 +941,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void NextBoundary_OnTheDayTheClocksGoBack_TakesTheStandardTimeReading()
 	{
-		List<TimePeriodConfig> table = [new() { Name = "night", Start = "02:30", BrightnessPct = 15 }];
+		List<TimePeriodConfig> table = [new() { Id = "night", Name = "night", Start = "02:30", BrightnessPct = 15 }];
 
 		// On 2026-10-25 02:30 happens at 00:30Z on summer time and again at 01:30Z on standard time.
 		Assert.AreEqual(
@@ -1002,8 +1002,8 @@ public sealed class CircadianCalculatorTests
 	{
 		List<TimePeriodConfig> table =
 		[
-			new() { Name = "dawn", Start = "sunrise", BrightnessPct = 90 },
-			new() { Name = "dusk", Start = "sunset", BrightnessPct = 20 }
+			new() { Id = "dawn", Name = "dawn", Start = "sunrise", BrightnessPct = 90 },
+			new() { Id = "dusk", Name = "dusk", Start = "sunset", BrightnessPct = 20 }
 		];
 		SunTimes sun = new(new TimeOnly(9, 15), new TimeOnly(15, 45));
 
@@ -1051,7 +1051,7 @@ public sealed class CircadianCalculatorTests
 	[TestMethod]
 	public void PeriodsAcross_ASinglePeriodScheduleCoversTheWholeStretchAsOneSpan()
 	{
-		List<TimePeriodConfig> table = [new() { Name = "always", Start = "00:00", BrightnessPct = 50 }];
+		List<TimePeriodConfig> table = [new() { Id = "always", Name = "always", Start = "00:00", BrightnessPct = 50 }];
 
 		IReadOnlyList<PeriodSpan> spans = Stepped(table).PeriodsAcross(At(10), At(14));
 
@@ -1119,7 +1119,7 @@ public sealed class CircadianCalculatorTests
 		[
 			.. Enumerable.Range(0, Anchors)
 				.Select(i => new TimePeriodConfig { Name = $"dawn-{i}", Start = "sunrise", BrightnessPct = 50 }),
-			new TimePeriodConfig { Name = "night", Start = "22:30", BrightnessPct = 15 }
+			new TimePeriodConfig { Id = "night", Name = "night", Start = "22:30", BrightnessPct = 15 }
 		];
 
 		CircadianCalculator calc = new(

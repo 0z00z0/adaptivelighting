@@ -57,8 +57,8 @@ public sealed class ModeMonitorRaceTests
 
 		List<TimePeriodConfig> periods =
 		[
-			new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 }
+			new() { Id = "morning", Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
+			new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 }
 		];
 
 		GlobalConfig global = new() { CircadianTickSeconds = 60, HouseMode = mode };

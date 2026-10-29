@@ -89,7 +89,7 @@ public sealed partial class AreaControllerTests
 	private static ForcedMode ForcedAway(string entityId = "input_boolean.occupancy") =>
 		new(ModeKind.Away, "Borte", ModeForceSource.WhileEntityOn, entityId, "on");
 
-	/// <summary>Normal, Borte (away) and Sover (sleep, carrying no ClampPeriodId).</summary>
+	/// <summary>Normal, Borte (away) and Sover (sleep, dimming to the period with id "night").</summary>
 	private static HouseModeConfig SoverMode() => new()
 	{
 		Entity = "input_select.husmodus",
@@ -97,7 +97,7 @@ public sealed partial class AreaControllerTests
 		[
 			new() { Value = "Normal", Kind = ModeKind.Normal },
 			new() { Value = "Borte", Kind = ModeKind.Away },
-			new() { Value = "Sover", Kind = ModeKind.Sleep }
+			new() { Value = "Sover", Kind = ModeKind.Sleep, ClampPeriodId = "night" }
 		]
 	};
 

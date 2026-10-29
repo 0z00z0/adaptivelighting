@@ -68,7 +68,7 @@ public sealed class ConfigNormalizerTests
 		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
 			Global = new GlobalConfig { HouseMode = mode },
-			Periods = [new() { Name = "day", Start = "07:00", SetsModeId = "Dag" }, new() { Name = "night", Start = "22:30" }],
+			Periods = [new() { Id = "day", Name = "day", Start = "07:00", SetsModeId = "Dag" }, new() { Id = "night", Name = "night", Start = "22:30" }],
 			Areas = [new() { Name = "Stue", AreaId = "stue" }]
 		};
 
@@ -178,7 +178,7 @@ public sealed class ConfigNormalizerTests
 	{
 		AdaptiveLightingConfig config = new AdaptiveLightingConfig
 		{
-			Periods = [new() { Name = "morning", Start = "06:00", StartsOnMotionAreas = ["kjokken"] }]
+			Periods = [new() { Id = "morning", Name = "morning", Start = "06:00", StartsOnMotionAreas = ["kjokken"] }]
 		};
 
 		ConfigNormalizer.Normalize(config);
@@ -194,7 +194,7 @@ public sealed class ConfigNormalizerTests
 		{
 			Periods =
 			[
-				new() { Name = "morning", Start = "06:00", StartsOnMotion = true, StartsOnMotionAreas = [" ", ""] }
+				new() { Id = "morning", Name = "morning", Start = "06:00", StartsOnMotion = true, StartsOnMotionAreas = [" ", ""] }
 			]
 		};
 

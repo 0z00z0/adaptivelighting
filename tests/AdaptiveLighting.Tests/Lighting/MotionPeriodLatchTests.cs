@@ -15,8 +15,8 @@ public sealed class MotionPeriodLatchTests
 
 	private static List<TimePeriodConfig> Periods() =>
 	[
-		new() { Name = "morning", Start = "06:30", StartsOnMotion = true },
-		new() { Name = "day", Start = "09:00" }
+		new() { Id = "morning", Name = "morning", Start = "06:30", StartsOnMotion = true },
+		new() { Id = "day", Name = "day", Start = "09:00" }
 	];
 
 	[TestMethod]

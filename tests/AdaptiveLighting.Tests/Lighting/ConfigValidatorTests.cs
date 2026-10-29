@@ -154,7 +154,7 @@ public sealed class ConfigValidatorTests
 	public void An_Unparseable_Start_Is_Rejected_With_The_Grammar()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Periods = [new() { Name = "x", Start = "half past tea" }];
+		config.Periods = [new() { Id = "x", Name = "x", Start = "half past tea" }];
 
 		ValidationResult result = ConfigValidator.Validate(config);
 
@@ -168,9 +168,9 @@ public sealed class ConfigValidatorTests
 		AdaptiveLightingConfig config = Minimal();
 		config.Periods =
 		[
-			new() { Name = "day", Start = "sunrise" },
-			new() { Name = "evening", Start = "sunset-01:00" },
-			new() { Name = "night", Start = "22:30" }
+			new() { Id = "day", Name = "day", Start = "sunrise" },
+			new() { Id = "evening", Name = "evening", Start = "sunset-01:00" },
+			new() { Id = "night", Name = "night", Start = "22:30" }
 		];
 
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid);
@@ -211,7 +211,7 @@ public sealed class ConfigValidatorTests
 	public void Two_Periods_Starting_At_The_Same_Clock_Time_Are_Rejected()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Periods = [new() { Name = "a", Start = "07:00" }, new() { Name = "b", Start = "07:00" }];
+		config.Periods = [new() { Id = "a", Name = "a", Start = "07:00" }, new() { Id = "b", Name = "b", Start = "07:00" }];
 
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
@@ -220,7 +220,7 @@ public sealed class ConfigValidatorTests
 	public void Two_Sun_Anchored_Periods_Are_Not_Rejected_As_Overlapping()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Periods = [new() { Name = "a", Start = "sunrise" }, new() { Name = "b", Start = "sunset" }];
+		config.Periods = [new() { Id = "a", Name = "a", Start = "sunrise" }, new() { Id = "b", Name = "b", Start = "sunset" }];
 
 		Assert.IsTrue(ConfigValidator.Validate(config).IsValid,
 			"sun boundaries move daily; an overlap between them cannot be decided at validation time");
@@ -230,7 +230,7 @@ public sealed class ConfigValidatorTests
 	public void Brightness_Outside_The_Range_A_Byte_Can_Hold_Is_Rejected()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Periods = [new() { Name = "d", Start = "07:00", BrightnessPct = 400 }];
+		config.Periods = [new() { Id = "d", Name = "d", Start = "07:00", BrightnessPct = 400 }];
 
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
@@ -239,7 +239,7 @@ public sealed class ConfigValidatorTests
 	public void A_Colour_Temperature_No_Lamp_Can_Make_Is_Rejected()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Periods = [new() { Name = "d", Start = "07:00", ColorTempKelvin = 42 }];
+		config.Periods = [new() { Id = "d", Name = "d", Start = "07:00", ColorTempKelvin = 42 }];
 
 		Assert.IsFalse(ConfigValidator.Validate(config).IsValid);
 	}
@@ -302,7 +302,7 @@ public sealed class ConfigValidatorTests
 		AdaptiveLightingConfig config = Minimal();
 		config.Periods =
 		[
-			new() { Name = "morning", Start = "half past tea", StartsOnMotion = true, StartsOnMotionAreas = ["ghost"] }
+			new() { Id = "morning", Name = "morning", Start = "half past tea", StartsOnMotion = true, StartsOnMotionAreas = ["ghost"] }
 		];
 
 		ValidationResult result = ConfigValidator.Validate(config);
@@ -670,15 +670,14 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void A_Room_Without_An_Area_And_Without_An_Id_Is_Refused()
+	public void A_Room_Without_An_Area_And_Without_An_Id_Is_An_Area_Error()
 	{
 		AdaptiveLightingConfig config = Minimal();
 		config.Areas = [new() { Name = "Z", Lights = ["light.a"] }];
 
 		ValidationResult result = ConfigValidator.Validate(config);
 
-		Assert.IsFalse(result.IsValid);
-		StringAssert.Contains(result.ToString(), "has no area and no Id");
+		StringAssert.Contains(result.AreaErrors.Single().Message, "has no area and no Id");
 	}
 
 	[TestMethod]
@@ -931,11 +930,11 @@ public sealed class ConfigValidatorTests
 	public void SetsMode_MustMatchAConfiguredOption_AndRequireASelect()
 	{
 		AdaptiveLightingConfig unmatched = WithHouseMode();
-		unmatched.Periods.Add(new TimePeriodConfig { Name = "film", SetsModeId = "Film", Start = "20:00" });
+		unmatched.Periods.Add(new TimePeriodConfig { Id = "film", Name = "film", SetsModeId = "Film", Start = "20:00" });
 		Assert.IsFalse(ConfigValidator.Validate(unmatched).IsValid, "a SetsModeId matching no configured option value");
 
 		AdaptiveLightingConfig noSelect = Minimal();
-		noSelect.Periods.Add(new TimePeriodConfig { Name = "late", SetsModeId = "Sover", Start = "23:00" });
+		noSelect.Periods.Add(new TimePeriodConfig { Id = "late", Name = "late", SetsModeId = "Sover", Start = "23:00" });
 		Assert.IsFalse(ConfigValidator.Validate(noSelect).IsValid, "a SetsModeId while no HouseMode is configured matches nothing");
 	}
 
@@ -943,7 +942,7 @@ public sealed class ConfigValidatorTests
 	public void SetsMode_MatchingALiveSelectOption_IsAccepted_EvenWhenNotYetTagged()
 	{
 		AdaptiveLightingConfig config = WithHouseMode();
-		config.Periods.Add(new TimePeriodConfig { Name = "film", SetsModeId = "Film", Start = "20:00" });
+		config.Periods.Add(new TimePeriodConfig { Id = "film", Name = "film", SetsModeId = "Film", Start = "20:00" });
 
 		// Requiring the option be tagged first would deadlock the save: tagging is itself a save.
 		Assert.IsTrue(ConfigValidator.Validate(config, new ValidationContext { LiveSelectOptions = ["Film"] }).IsValid,
@@ -956,7 +955,7 @@ public sealed class ConfigValidatorTests
 	public void SetsMode_NamingANormalOption_Warns_ButDoesNotRefuse()
 	{
 		AdaptiveLightingConfig config = WithHouseMode();
-		config.Periods.Add(new TimePeriodConfig { Name = "reset", SetsModeId = "Normal", Start = "06:00" });
+		config.Periods.Add(new TimePeriodConfig { Id = "reset", Name = "reset", SetsModeId = "Normal", Start = "06:00" });
 
 		ValidationResult result = ConfigValidator.Validate(config);
 
@@ -1120,25 +1119,30 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void SleepClamp_MustResolveWhenLoadBearing()
+	public void SleepClamp_MustResolveByIdWhenLoadBearing_NeverByANightName()
 	{
-		AdaptiveLightingConfig resolvable = WithHouseMode();
-		resolvable.Areas[0].RespectSleepMode = true;
-		Assert.IsTrue(ConfigValidator.Validate(resolvable).IsValid, "the 'night' period resolves the clamp");
+		AdaptiveLightingConfig byName = WithHouseMode();
+		byName.Areas[0].RespectSleepMode = true;
+		Assert.IsFalse(ConfigValidator.Validate(byName).IsValid, "a period named night is not the dim period by its name");
 
-		// Nothing resolves the clamp: no ClampPeriodId, no SetsModeId period, no "night".
+		AdaptiveLightingConfig bySetsMode = WithHouseMode();
+		bySetsMode.Areas[0].RespectSleepMode = true;
+		bySetsMode.Periods[1].SetsModeId = "Sover";
+		Assert.IsTrue(ConfigValidator.Validate(bySetsMode).IsValid, "the period that switches the house to sleep resolves it");
+
+		// Nothing resolves the clamp: no ClampPeriodId, no SetsModeId period.
 		AdaptiveLightingConfig unresolvable = WithHouseMode();
 		unresolvable.Areas[0].RespectSleepMode = true;
-		unresolvable.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" }];
+		unresolvable.Periods = [new() { Id = "day", Name = "day", Start = "07:00" }, new() { Id = "evening", Name = "evening", Start = "18:00" }];
 		Assert.IsFalse(ConfigValidator.Validate(unresolvable).IsValid, "nothing resolves the clamp for a load-bearing sleep path");
 
 		AdaptiveLightingConfig notBearing = WithHouseMode();
-		notBearing.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" }];
+		notBearing.Periods = [new() { Id = "day", Name = "day", Start = "07:00" }, new() { Id = "evening", Name = "evening", Start = "18:00" }];
 		Assert.IsTrue(ConfigValidator.Validate(notBearing).IsValid, "sleep is not load-bearing, so the missing clamp is inert");
 
 		AdaptiveLightingConfig viaClamp = WithHouseMode();
 		viaClamp.Areas[0].RespectSleepMode = true;
-		viaClamp.Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "dim", Start = "22:00" }];
+		viaClamp.Periods = [new() { Id = "day", Name = "day", Start = "07:00" }, new() { Id = "dim", Name = "dim", Start = "22:00" }];
 		viaClamp.Global.HouseMode!.OptionFor("Sover")!.ClampPeriodId = "dim";
 		Assert.IsTrue(ConfigValidator.Validate(viaClamp).IsValid, "an explicit ClampPeriodId resolves the clamp");
 	}
@@ -1172,9 +1176,9 @@ public sealed class ConfigValidatorTests
 		AdaptiveLightingConfig colliding = WithHouseMode();
 		colliding.Periods =
 		[
-			new() { Name = "a", Start = "07:00" },
-			new() { Name = "b", Start = "07:00" },
-			new() { Name = "night", Start = "22:30" }
+			new() { Id = "a", Name = "a", Start = "07:00" },
+			new() { Id = "b", Name = "b", Start = "07:00" },
+			new() { Id = "night", Name = "night", Start = "22:30" }
 		];
 		Assert.IsFalse(ConfigValidator.Validate(colliding).IsValid, "a fixed-start collision is rejected");
 	}
@@ -1202,9 +1206,11 @@ public sealed class ConfigValidatorTests
 			    Persons:
 			      - person.alex
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "07:00"
-			    - Name: night
+			    - Id: night
+			      Name: night
 			      Start: "22:30"
 			      MaxBrightnessPct: 30
 			  Areas:
@@ -1508,7 +1514,8 @@ public sealed class ConfigValidatorTests
 				  Defaults:
 				    {retired.Key}: 30
 				  Periods:
-				    - Name: day
+				    - Id: day
+				      Name: day
 				      Start: "09:00"
 				  Areas:
 				    - Name: Stue

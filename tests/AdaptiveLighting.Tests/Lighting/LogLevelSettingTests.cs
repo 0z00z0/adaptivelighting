@@ -33,7 +33,7 @@ public sealed class LogLevelSettingTests
 	{
 		ConfigName = "Adaptive lighting [test]",
 		Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
-		Areas = [new AreaConfig { Name = "Room A", Lights = ["light.room_lamp"] }]
+		Areas = [new AreaConfig { Id = "room_a", Name = "Room A", Lights = ["light.room_lamp"] }]
 	};
 
 	private sealed class RecordingLevelControl : ILogLevelControl

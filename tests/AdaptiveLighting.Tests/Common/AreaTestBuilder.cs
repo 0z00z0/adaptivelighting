@@ -76,9 +76,9 @@ public sealed class AreaTestBuilder
 	/// <summary>Day, evening and night, so 20:00 sits in "evening" at 70 % and 2700 K.</summary>
 	public static List<TimePeriodConfig> StandardPeriods() =>
 	[
-		new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-		new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
+		new() { Id = "day", Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
+		new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+		new() { Id = "night", Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 }
 	];
 
 	private static void StandardStates(FakeHaContext ha)

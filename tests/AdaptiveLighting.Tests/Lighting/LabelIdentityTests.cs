@@ -18,7 +18,7 @@ public sealed class LabelIdentityTests
 
 	private static AdaptiveLightingConfig Minimal() => new()
 	{
-		Periods = [new() { Name = "day", Start = "07:00" }],
+		Periods = [new() { Id = "day", Name = "day", Start = "07:00" }],
 		Areas = [new() { Name = "Stue", AreaId = "stue" }]
 	};
 

@@ -20,10 +20,10 @@ public sealed class ScheduleTests
 
 	private static List<TimePeriodConfig> Day() =>
 	[
-		new TimePeriodConfig { Name = "morgen", Start = "06:30" },
-		new TimePeriodConfig { Name = "dag", Start = "09:00" },
-		new TimePeriodConfig { Name = "kveld", Start = "sunset-01:00" },
-		new TimePeriodConfig { Name = "natt", Start = "23:00" }
+		new TimePeriodConfig { Id = "morgen", Name = "morgen", Start = "06:30" },
+		new TimePeriodConfig { Id = "dag", Name = "dag", Start = "09:00" },
+		new TimePeriodConfig { Id = "kveld", Name = "kveld", Start = "sunset-01:00" },
+		new TimePeriodConfig { Id = "natt", Name = "natt", Start = "23:00" }
 	];
 
 	private static PeriodInForce InForce(
@@ -67,14 +67,14 @@ public sealed class ScheduleTests
 	{
 		List<TimePeriodConfig> broken =
 		[
-			new TimePeriodConfig { Name = "dag", Start = "09:00" },
-			new TimePeriodConfig { Name = "tull", Start = "not a time" }
+			new TimePeriodConfig { Id = "dag", Name = "dag", Start = "09:00" },
+			new TimePeriodConfig { Id = "tull", Name = "tull", Start = "not a time" }
 		];
 
 		Assert.AreEqual("dag", InForce(broken, At(23)).Period?.Name);
 
 		// Polar night: the sun-anchored boundary has nowhere to sit, so only the clock period resolves.
-		List<TimePeriodConfig> sunOnly = [new TimePeriodConfig { Name = "kveld", Start = "sunset" }];
+		List<TimePeriodConfig> sunOnly = [new TimePeriodConfig { Id = "kveld", Name = "kveld", Start = "sunset" }];
 
 		Assert.IsNull(InForce(sunOnly, At(12), sun: SunTimes.Unknown).Period);
 	}
@@ -190,9 +190,9 @@ public sealed class ScheduleTests
 
 	private static List<TimePeriodConfig> WaitsForMovement() =>
 	[
-		new TimePeriodConfig { Name = "natt", Start = "23:00" },
-		new TimePeriodConfig { Name = "morgen", Start = "06:30", StartsOnMotion = true },
-		new TimePeriodConfig { Name = "dag", Start = "09:00" }
+		new TimePeriodConfig { Id = "natt", Name = "natt", Start = "23:00" },
+		new TimePeriodConfig { Id = "morgen", Name = "morgen", Start = "06:30", StartsOnMotion = true },
+		new TimePeriodConfig { Id = "dag", Name = "dag", Start = "09:00" }
 	];
 
 	[TestMethod]
@@ -242,9 +242,9 @@ public sealed class ScheduleTests
 		{
 			Periods =
 			[
-				new TimePeriodConfig { Name = "previous", Start = Clock(local.AddHours(-2)), BrightnessPct = 20 },
-				new TimePeriodConfig { Name = "held", Start = Clock(local.AddHours(-1)), BrightnessPct = 80, StartsOnMotion = true },
-				new TimePeriodConfig { Name = "next", Start = Clock(local.AddHours(1)), BrightnessPct = 50 }
+				new TimePeriodConfig { Id = "previous", Name = "previous", Start = Clock(local.AddHours(-2)), BrightnessPct = 20 },
+				new TimePeriodConfig { Id = "held", Name = "held", Start = Clock(local.AddHours(-1)), BrightnessPct = 80, StartsOnMotion = true },
+				new TimePeriodConfig { Id = "next", Name = "next", Start = Clock(local.AddHours(1)), BrightnessPct = 50 }
 			]
 		};
 

@@ -40,7 +40,7 @@ public sealed class DocumentWriteTests
 	private static AdaptiveLightingConfig House() => new()
 	{
 		ConfigName = "Adaptive lighting [test]",
-		Periods = [new TimePeriodConfig { Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
+		Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
 		Areas = [new AreaConfig { AreaId = "stue" }]
 	};
 

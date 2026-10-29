@@ -304,19 +304,19 @@ public sealed class CommissioningDraftTests
 		Assert.IsFalse(draft.IncludesAll([]), "with no rooms drawn there is nothing to have included");
 	}
 
-	// A room with explicit entities has no area id, so the key falls back to the display name.
+	// A room with explicit entities has no area id, so it is keyed by its own room id and never its name.
 	[TestMethod]
-	public void A_Room_Without_An_Area_Id_Is_Keyed_By_Name()
+	public void A_Room_Without_An_Area_Id_Is_Keyed_By_Its_Room_Id()
 	{
-		AreaConfig loft = new() { Name = "Loftet", Lights = ["light.loft"] };
+		AreaConfig loft = new() { Id = "room_001", Name = "Loftet", Lights = ["light.loft"] };
 
-		Assert.AreEqual("Loftet", CommissioningDraft.RoomKey(loft));
+		Assert.AreEqual("room_001", CommissioningDraft.RoomKey(loft));
 
 		AdaptiveLightingConfig config = Discovered();
 		config.Areas.Add(loft);
 
 		CommissioningDraft draft = new();
-		draft.ToggleRoom("Loftet");
+		draft.ToggleRoom("room_001");
 		draft.Apply(config, Watched);
 
 		Assert.IsTrue(loft.Enabled);

@@ -465,8 +465,8 @@ public sealed class ColorControlTests
 
 		List<TimePeriodConfig> table =
 		[
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
+			new() { Id = "day", Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
+			new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
 		];
 
 		FakeLightActuator actuator = new();

@@ -27,9 +27,9 @@ public sealed partial class AreaControllerTests
 		mode.OptionFor("Sover")!.ClampPeriodId = "dim";
 		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "dim", Start = "22:00", BrightnessPct = 5, ColorTempKelvin = 2000 },
-			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
+			new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Id = "dim", Name = "dim", Start = "22:00", BrightnessPct = 5, ColorTempKelvin = 2000 },
+			new() { Id = "night", Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
 		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = mode, periods: periods);
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
@@ -37,17 +37,17 @@ public sealed partial class AreaControllerTests
 		t.Ha.Trigger(Motion, "on");
 
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
-			"the explicit ClampPeriodId 'dim' (its own 5 %) drives the clamp, not the 'night' fallback");
+			"the explicit ClampPeriodId 'dim' (its own 5 %) drives the clamp, not the 'night' period");
 	}
 
 	[TestMethod]
 	public void Sleep_RespectingArea_WithNoResolvableClamp_LeavesTheTargetAlone()
 	{
-		// Sover has no ClampPeriodId, and there is no 'night' period nor one that SetsModeId Sover, so nothing resolves.
+		// Sover names a "night" period that does not exist, and no period SetsModeId Sover, so nothing resolves.
 		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
+			new() { Id = "day", Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
+			new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
 		};
 		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode(), periods: periods);
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
@@ -58,7 +58,7 @@ public sealed partial class AreaControllerTests
 			"with no clamp period resolving, the respecting area is left on the plain evening target");
 	}
 
-	/// <summary>Sover clamps to "dim" (5 %) while the "night" fallback any other option lands on says 15 %.</summary>
+	/// <summary>Sover clamps to "dim" (5 %) while the "night" period any other chain would reach says 15 %.</summary>
 	// The two chains have to give different answers, or a clamp resolved from the wrong option passes by luck.
 	private static (HouseModeConfig Mode, List<TimePeriodConfig> Periods) SleepChainsThatDiffer()
 	{
@@ -67,9 +67,9 @@ public sealed partial class AreaControllerTests
 
 		return (mode,
 		[
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "dim", Start = "22:00", BrightnessPct = 5, ColorTempKelvin = 2000 },
-			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
+			new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Id = "dim", Name = "dim", Start = "22:00", BrightnessPct = 5, ColorTempKelvin = 2000 },
+			new() { Id = "night", Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		]);
 	}
 
@@ -88,7 +88,7 @@ public sealed partial class AreaControllerTests
 		t.Ha.Trigger(Motion, "on");
 
 		Assert.IsTrue(t.Actuator.Last is { On: true, BrightnessPct: 5 },
-			"Sover is the mode in force, so its own 'dim' ceiling applies — not the 'night' fallback Normal lands on");
+			"Sover is the mode in force, so its own 'dim' ceiling applies, never another option's");
 	}
 
 	[TestMethod]
@@ -127,8 +127,8 @@ public sealed partial class AreaControllerTests
 	{
 		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
+			new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Id = "night", Name = "night", Start = "23:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
 		AreaFixture t = Build(
 			s => s.RespectSleepMode = true,

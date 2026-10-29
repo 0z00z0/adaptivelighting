@@ -42,7 +42,7 @@ public sealed class LightingEngineHostTests
 	private static AdaptiveLightingConfig Valid() => new()
 	{
 		ConfigName = "Adaptive lighting [test]",
-		Periods = [new TimePeriodConfig { Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
+		Periods = [new TimePeriodConfig { Id = "period_001", Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
 		Areas = [new AreaConfig { Name = "Stue", AreaId = "stue" }]
 	};
 
@@ -205,7 +205,7 @@ public sealed class LightingEngineHostTests
 
 		AdaptiveLightingConfig config = Roomless();
 
-		// Ids, not names: the latch keys on Key, and a save without one mints a random-suffixed id.
+		// Ids, not names: the latch keys on Key.
 		config.Periods[0].Id = "day";
 		config.Periods.Add(new TimePeriodConfig
 		{
@@ -248,15 +248,15 @@ public sealed class LightingEngineHostTests
 			Entity = ModeSelect,
 			Options =
 			[
-				new() { Id = "hjemme", Value = "Hjemme", Kind = ModeKind.Normal },
-				new() { Id = "sover", Value = "Sover", Kind = ModeKind.Sleep }
+				new() { Value = "Hjemme", Kind = ModeKind.Normal },
+				new() { Value = "Sover", Kind = ModeKind.Sleep }
 			]
 		};
 
 		config.Periods =
 		[
-			new TimePeriodConfig { Id = "evening", Name = "evening", Start = eveningStart, BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new TimePeriodConfig { Id = "night", Name = "night", Start = nightStart, BrightnessPct = 15, ColorTempKelvin = 2200, SetsModeId = "sover" }
+			new TimePeriodConfig { Id = "period_001", Name = "evening", Start = eveningStart, BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new TimePeriodConfig { Id = "period_002", Name = "night", Start = nightStart, BrightnessPct = 15, ColorTempKelvin = 2200, SetsModeId = "Sover" }
 		];
 
 		return config;
@@ -470,7 +470,8 @@ public sealed class LightingEngineHostTests
 		  Global:
 		    ZonesAutoDiscovered: true
 		  Periods:
-		    - Name: day
+		    - Id: day
+		      Name: day
 		      Start: "06:00"
 		      BrightnessPct: 80
 		      ColorTempKelvin: 3500
@@ -575,7 +576,8 @@ public sealed class LightingEngineHostTests
 		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 		  ConfigName: "Adaptive lighting [test]"
 		  Periods:
-		    - Name: day
+		    - Id: day
+		      Name: day
 		      Start: "06:00"
 		      BrightnessPct: 500
 		      ColorTempKelvin: 3500
@@ -733,7 +735,8 @@ public sealed class LightingEngineHostTests
 			  Defaults:
 			  Areas:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "06:00"
 			      BrightnessPct: 80
 			      ColorTempKelvin: 3500
@@ -756,7 +759,8 @@ public sealed class LightingEngineHostTests
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "06:00"
 			      BrightnessPct: 80
 			      ColorTempKelvin: 3500
@@ -783,7 +787,8 @@ public sealed class LightingEngineHostTests
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "06:00"
 			      BrightnessPct: 80
 			      ColorTempKelvin: 3500
@@ -810,7 +815,8 @@ public sealed class LightingEngineHostTests
 		"""
 		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 		  Periods:
-		    - Name: day
+		    - Id: day
+		      Name: day
 		      Start: "06:00"
 		      BrightnessPct: 80
 		      ColorTempKelvin: 3500
@@ -957,8 +963,8 @@ public sealed class LightingEngineHostTests
 		AdaptiveLightingConfig config = Valid();
 		config.Areas =
 		[
-			new AreaConfig { Name = "Room A", Lights = ["light.room_a"] },
-			new AreaConfig { Name = "Room B", Lights = ["light.room_b"], Enabled = false }
+			new AreaConfig { Id = "room_a", Name = "Room A", Lights = ["light.room_a"] },
+			new AreaConfig { Id = "room_b", Name = "Room B", Lights = ["light.room_b"], Enabled = false }
 		];
 
 		SaveResult result = host.Save(config);
@@ -986,8 +992,8 @@ public sealed class LightingEngineHostTests
 		config.Global.KillSwitchEntity = Master;
 		config.Areas =
 		[
-			new AreaConfig { Name = "Room A", Lights = ["light.room_a"] },
-			new AreaConfig { Name = "Room B", Lights = ["light.room_b"] }
+			new AreaConfig { Id = "room_a", Name = "Room A", Lights = ["light.room_a"] },
+			new AreaConfig { Id = "room_b", Name = "Room B", Lights = ["light.room_b"] }
 		];
 
 		SaveResult result = host.Save(config);

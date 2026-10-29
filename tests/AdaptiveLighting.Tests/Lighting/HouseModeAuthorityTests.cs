@@ -9,8 +9,8 @@ public sealed class HouseModeAuthorityTests
 {
 	private static List<TimePeriodConfig> Day() =>
 	[
-		new TimePeriodConfig { Name = "dag", Start = "09:00" },
-		new TimePeriodConfig { Name = "natt", Start = "23:00", SetsModeId = "Sover" }
+		new TimePeriodConfig { Id = "dag", Name = "dag", Start = "09:00" },
+		new TimePeriodConfig { Id = "natt", Name = "natt", Start = "23:00", SetsModeId = "Sover" }
 	];
 
 	private static GlobalConfig House(HouseModeAuthority authority, string? entity = "input_select.husmodus") =>
@@ -127,7 +127,7 @@ public sealed class HouseModeAuthorityTests
 			}
 		};
 
-		List<TimePeriodConfig> plain = [new TimePeriodConfig { Name = "dag", Start = "09:00" }];
+		List<TimePeriodConfig> plain = [new TimePeriodConfig { Id = "dag", Name = "dag", Start = "09:00" }];
 
 		DormantModeRules dormant = ModeAuthority.Dormant(global, plain);
 
