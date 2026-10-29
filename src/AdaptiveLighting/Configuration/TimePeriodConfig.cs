@@ -16,11 +16,9 @@ public class TimePeriodConfig
 	/// <summary>Free-form name: <c>morning</c>, <c>day</c>, <c>evening</c>, <c>night</c>. Reported in logs and snapshots. Two periods may share one.</summary>
 	public string Name { get; set; } = "";
 
-	/// <summary>What this period is resolved by, everywhere.</summary>
-	// Falls back to Name for the one reader that can never be migrated: NetDaemon's ConfigurationBinder, against a
-	// house's app YAML, has no pre-pass and so no ids.
+	/// <summary>What this period is resolved by, everywhere: <see cref="Id"/>, trimmed. Empty without one, which the validator reports.</summary>
 	[YamlIgnore]
-	public string Key => Id is { Length: > 0 } id ? id.Trim() : Name.Trim();
+	public string Key => Id?.Trim() ?? "";
 
 	/// <summary>
 	///     The <see cref="HouseModeOptionConfig.Value"/> the house mode is set to when this period starts; <c>null</c>

@@ -54,7 +54,15 @@ internal static class ReadableIdConversion
 				roomsChanged = true;
 			}
 
-		return oldShape || roomsChanged;
+		// A hand-written document may carry readable ids and no counter; raised, never lowered.
+		int periodsInUse = ReadableId.HighestInUse(ReadableId.PeriodPrefix, periods.Select(period => period.Id));
+		int roomsInUse = ReadableId.HighestInUse(ReadableId.RoomPrefix, config.Areas.Select(area => area.Id));
+		bool countersRaised = counters.Periods < periodsInUse || counters.Rooms < roomsInUse;
+
+		counters.Periods = Math.Max(counters.Periods, periodsInUse);
+		counters.Rooms = Math.Max(counters.Rooms, roomsInUse);
+
+		return oldShape || roomsChanged || countersRaised;
 	}
 
 	// The old chain: an explicit clamp, else the period whose SetsModeId names the option, else a period named night.

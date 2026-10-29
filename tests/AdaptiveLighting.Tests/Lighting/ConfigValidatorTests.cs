@@ -12,7 +12,7 @@ public sealed class ConfigValidatorTests
 {
 	private static AdaptiveLightingConfig Minimal() => new()
 	{
-		Periods = [new() { Name = "day", Start = "07:00" }, new() { Name = "night", Start = "22:30" }],
+		Periods = [new() { Id = "day", Name = "day", Start = "07:00" }, new() { Id = "night", Name = "night", Start = "22:30" }],
 		Areas = [new() { Name = "Stue", AreaId = "stue" }]
 	};
 
@@ -653,27 +653,46 @@ public sealed class ConfigValidatorTests
 	}
 
 	[TestMethod]
-	public void Two_Rooms_Without_An_Area_May_Not_Share_A_Name()
+	public void Two_Rooms_Without_An_Area_May_Share_A_Name_Since_Each_Has_Its_Own_Id()
 	{
 		AdaptiveLightingConfig config = Minimal();
-		config.Areas = [new() { Name = "Z", Lights = ["light.a"] }, new() { Name = "z", Lights = ["light.b"] }];
-
-		ValidationResult result = ConfigValidator.Validate(config);
-
-		Assert.IsFalse(result.IsValid);
-		Assert.AreEqual(1, result.Errors.Count, result.ToString());
-		StringAssert.Contains(result.Errors[0], "'Z'");
-	}
-
-	[TestMethod]
-	public void A_Room_Without_An_Area_May_Share_A_Name_With_A_Room_That_Has_One()
-	{
-		AdaptiveLightingConfig config = Minimal();
-		config.Areas = [new() { Name = "Z", AreaId = "a" }, new() { Name = "Z", Lights = ["light.b"] }];
+		config.Global.IdCounters.Rooms = 2;
+		config.Areas =
+		[
+			new() { Name = "Z", Id = "room_001", Lights = ["light.a"] },
+			new() { Name = "z", Id = "room_002", Lights = ["light.b"] },
+			new() { Name = "Z", AreaId = "a" }
+		];
 
 		ValidationResult result = ConfigValidator.Validate(config);
 
 		Assert.IsTrue(result.IsValid, result.ToString());
+	}
+
+	[TestMethod]
+	public void A_Room_Without_An_Area_And_Without_An_Id_Is_Refused()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Areas = [new() { Name = "Z", Lights = ["light.a"] }];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		StringAssert.Contains(result.ToString(), "has no area and no Id");
+	}
+
+	[TestMethod]
+	public void A_Period_Without_An_Id_Is_An_Error_And_Its_Name_Resolves_Nothing()
+	{
+		AdaptiveLightingConfig config = Minimal();
+		config.Periods.Add(new TimePeriodConfig { Name = "evening", Start = "18:00" });
+		config.Areas[0].Levels = [new RoomLevelOverride { PeriodId = "evening", BrightnessPct = 20 }];
+
+		ValidationResult result = ConfigValidator.Validate(config);
+
+		Assert.IsFalse(result.IsValid);
+		StringAssert.Contains(result.ToString(), "Period 'evening' has no Id");
+		Assert.IsNull(config.Periods.ByKey("evening"), "a reference by name finds no period");
 	}
 
 	[TestMethod]

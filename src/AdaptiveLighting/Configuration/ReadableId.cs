@@ -50,6 +50,16 @@ public static class ReadableId
 		return ids.Select(id => NumberOf(prefix, id?.Trim()) ?? 0).DefaultIfEmpty(0).Max();
 	}
 
+	/// <summary>An error when <paramref name="counter"/> is below an id already in use, so the next one issued would collide.</summary>
+	internal static void ValidateCounter(string kind, string prefix, int counter, IEnumerable<string?> ids, ValidationResult result)
+	{
+		int highest = HighestInUse(prefix, ids);
+
+		if (counter < highest)
+			result.AddError(
+				$"The {kind} id counter is {counter}, below {Format(prefix, highest)}, which is in use. It only ever goes up; set it back to {highest} or higher.");
+	}
+
 	/// <summary>A new period id; <see cref="IdCounters.Periods"/> then holds its number.</summary>
 	public static string NextPeriod(IdCounters counters, IEnumerable<TimePeriodConfig> periods)
 	{
