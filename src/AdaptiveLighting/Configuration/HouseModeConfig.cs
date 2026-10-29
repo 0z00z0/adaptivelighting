@@ -80,6 +80,19 @@ public class HouseModeConfig
 			? OptionWithKey(key)?.Value?.Trim() ?? key.Trim()
 			: null;
 
+	/// <summary>Moves <paramref name="option"/> onto another select option, and every period's mode switch with it.</summary>
+	// The option's text is its id, so a SetsModeId left on the old text would name nothing.
+	public static void Repoint(HouseModeOptionConfig option, string value, IEnumerable<TimePeriodConfig> periods)
+	{
+		ArgumentNullException.ThrowIfNull(option);
+		ArgumentNullException.ThrowIfNull(periods);
+
+		foreach (TimePeriodConfig period in periods.Where(period => period.SetsModeId.SameName(option.Key)))
+			period.SetsModeId = value.Trim();
+
+		option.Value = value.Trim();
+	}
+
 	/// <summary>
 	///     The single reset target: the first option marked <see cref="ModeKind.Normal"/>. It never falls back to a
 	///     tagged option, so with nothing Normal every reset is a no-op.
