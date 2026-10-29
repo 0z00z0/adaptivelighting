@@ -314,14 +314,13 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 			_dirty.Add(tracked.Bucket);
 	}
 
-	// Both forms, as the engine matches: the document stores the id once translated, and an untranslated name has to
-	// keep filing. Reading names only was why a motion label stored as an id filed nothing.
+	// Label ids only, as the engine matches.
 	private IEnumerable<string>? LabelsOf(string entityId)
 	{
 		try
 		{
 			return _ha.GetEntityRegistration(entityId)?.Labels?
-				.SelectMany(label => new[] { label.Id, label.Name })
+				.Select(label => label.Id)
 				.OfType<string>();
 		}
 		catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)

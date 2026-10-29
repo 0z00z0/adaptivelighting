@@ -16,7 +16,6 @@ public sealed class LastSeenOptionsTests
 		LastSeenOptions options = new();
 		AdaptiveLightingConfig config = new();
 
-		Assert.AreEqual(GlobalConfig.DefaultMotionLabel, options.MotionLabel);
 		Assert.AreEqual(config.Global.MotionLabel, options.MotionLabel);
 	}
 

@@ -939,7 +939,7 @@ public sealed class AreaEntityResolver
 	/// <summary>Whether the area's own registration carries the exclude label, which reads as the area not existing.</summary>
 	public bool IsExcludedArea(string? areaId) =>
 		areaId is { Length: > 0 }
-		&& LabelMatch.Carries(_registry.LabelsOfArea(areaId), _registry.KnownLabels, _global.ExcludeLabel);
+		&& LabelMatch.Carries(_registry.LabelsOfArea(areaId), _global.ExcludeLabel);
 
 	// No label configured means everything passes. Checked after the exclusion, never instead of it, so a light
 	// carrying both labels stays out.
@@ -947,9 +947,8 @@ public sealed class AreaEntityResolver
 		_global.IncludeLabel is not { Length: > 0 } include || HasLabel(entityId, include);
 
 	private bool HasLabel(string entityId, string label) =>
-		LabelMatch.Carries(_registry.LabelsOf(entityId), _registry.KnownLabels, label);
+		LabelMatch.Carries(_registry.LabelsOf(entityId), label);
 
-	/// <summary>What to call <paramref name="label"/> in a sentence a person reads.</summary>
-	// The document stores an id once it has been translated, and an id is not what the house sees in HA.
+	/// <summary>What to call <paramref name="label"/> in a sentence a person reads: its name, not its id.</summary>
 	private string LabelText(string label) => LabelMatch.DisplayName(_registry.KnownLabels, label);
 }

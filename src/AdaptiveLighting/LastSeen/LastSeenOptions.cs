@@ -35,11 +35,11 @@ public sealed class LastSeenOptions
 	/// <remarks>Only absent entities count against it; dropping a present one would have the next census re-add it.</remarks>
 	public int MaxTracked { get; init; } = 5000;
 
-	// The three below read the engine's own defaults. A second copy here would file entities under one rule while
+	// The three below match the engine's own defaults. A second copy here would file entities under one rule while
 	// the engine discovers them under another, and nothing would report the drift.
 
-	/// <summary>The label that files an entity as motion, the engine's escape hatch for odd presence hardware.</summary>
-	public string MotionLabel { get; init; } = GlobalConfig.DefaultMotionLabel;
+	/// <summary>Id of the label that files an entity as motion. Empty, as the engine's default: none.</summary>
+	public string MotionLabel { get; init; } = string.Empty;
 
 	/// <summary>The binary-sensor device classes filed as motion.</summary>
 	public IReadOnlyList<string> MotionDeviceClasses { get; init; } = GlobalConfig.DefaultMotionDeviceClasses;

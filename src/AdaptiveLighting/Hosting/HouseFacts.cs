@@ -37,7 +37,6 @@ internal sealed record HouseFacts(
 	}
 
 	/// <summary>Every label id the house has, carried or not.</summary>
-	/// <remarks>Apart from <see cref="LabelsInUse"/>, which mixes both forms: only an id set can tell a stored id from a stored name.</remarks>
 	private static IReadOnlyCollection<string>? ReadLabelIds(IHaRegistry? registry)
 	{
 		if (registry is null)
@@ -84,11 +83,8 @@ internal sealed record HouseFacts(
 		}
 	}
 
-	/// <summary>Every label at least one entity carries, by id and by name.</summary>
-	/// <remarks>
-	///     Both forms, because <see cref="Adaptive.Engine.RegistryExtensions.LabelsOf"/> matches either
-	///     way. Labels nobody carries are left out: one on no entity filters every light out as thoroughly as a typo.
-	/// </remarks>
+	/// <summary>The id of every label at least one entity carries.</summary>
+	/// <remarks>Labels nobody carries are left out: one on no entity filters every light out as thoroughly as a typo.</remarks>
 	private static IReadOnlyCollection<string>? ReadLabelsInUse(IHaRegistry? registry)
 	{
 		if (registry is null)
@@ -100,7 +96,7 @@ internal sealed record HouseFacts(
 			[
 				.. registry.Labels
 					.Where(label => label.Entities.Any())
-					.SelectMany(label => new[] { label.Id, label.Name })
+					.Select(label => label.Id)
 					.OfType<string>()
 					.Where(value => value.Length > 0)
 			];

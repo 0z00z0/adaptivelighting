@@ -31,23 +31,20 @@ public static class RegistryExtensions
 	/// <summary>Every label the house has, id and name, whether or not anything carries it.</summary>
 	public static IReadOnlyList<RegistryLabel> KnownLabels(this IHaRegistry registry) => Pairs(registry.Labels);
 
-	/// <summary>The labels on <paramref name="entityId"/>, each in both forms.</summary>
 	public static IReadOnlyList<RegistryLabel> LabelsOf(this IHaRegistry registry, string entityId) =>
 		Pairs(registry.GetEntityRegistration(entityId)?.Labels);
 
-	/// <summary>Whether <paramref name="entityId"/> carries <paramref name="label"/>, by id when the house knows that id.</summary>
-	public static bool HasLabel(this IHaRegistry registry, string entityId, string label) =>
-		LabelMatch.Carries(registry.LabelsOf(entityId), registry.KnownLabels(), label);
+	public static bool HasLabel(this IHaRegistry registry, string entityId, string labelId) =>
+		LabelMatch.Carries(registry.LabelsOf(entityId), labelId);
 
-	/// <summary>The labels on area <paramref name="areaId"/> itself, each in both forms.</summary>
+	/// <summary>The labels on area <paramref name="areaId"/> itself, not on its entities.</summary>
 	public static IReadOnlyList<RegistryLabel> LabelsOfArea(this IHaRegistry registry, string areaId) =>
 		Pairs(registry.GetArea(areaId)?.Labels);
 
-	/// <summary>Whether area <paramref name="areaId"/> carries <paramref name="label"/>, by id when the house knows that id.</summary>
-	public static bool AreaHasLabel(this IHaRegistry registry, string areaId, string label) =>
-		LabelMatch.Carries(registry.LabelsOfArea(areaId), registry.KnownLabels(), label);
+	public static bool AreaHasLabel(this IHaRegistry registry, string areaId, string labelId) =>
+		LabelMatch.Carries(registry.LabelsOfArea(areaId), labelId);
 
-	// A label with no id cannot be matched or translated, so it is dropped. An unnamed one reads as its own id.
+	// A label with no id cannot be matched, so it is dropped. An unnamed one reads as its own id.
 	private static IReadOnlyList<RegistryLabel> Pairs(IEnumerable<Label>? labels) =>
 		labels is null
 			? []
