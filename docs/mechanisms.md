@@ -76,48 +76,58 @@ lower-case `areas:` can never win over `Zones:`.
 
 ### Nothing in the document points at a name
 
-A period and a house-mode option each carry an `Id`, minted once when they are created and never derived from
-the current name. Every reference from inside the document is to that id: `RoomLevelOverride.PeriodId`,
-`HouseModeOptionConfig.ClampPeriodId` and `ResetOnPeriodStartId`, `PeriodSelectOptionConfig.PeriodId`, and
-`TimePeriodConfig.SetsModeId`. Renaming is therefore free, and two periods may share a display name.
+- **A period carries an `Id` such as `period_001`**: a prefix and a running number of three digits, widening past
+  999 without renaming an earlier one. `ReadableId` issues it once; it is never edited and never shown.
+- **A room without a Home Assistant area carries `room_001`** the same way. A room with an area is known by its
+  area id and carries no `Id`. `AreaConfig.Key` answers either, and every room-keyed store, the command-log folder,
+  the snapshot cache, the dashboard, the activity filter and the commissioning board key by it.
+- **One counter per kind**, `Global.IdCounters.Periods` and `.Rooms`, holds the highest number ever issued. A new
+  id is one past the higher of the counter and every id in use, so a deleted number never comes back and a dangling
+  levels row, kept on purpose, never re-attaches to a new period. A save raises a counter to the highest id in use;
+  the validator errors on one below it.
+- **The counter keys are `Periods` and `Rooms`, never `Period`.** `Period` is a legacy key and is renamed to
+  `PeriodId` on every read, so a counter under that name reads back as 0 and every start rewrites the file.
+- **Every reference is an id**: `RoomLevelOverride.PeriodId` (room and single-light rows),
+  `HouseModeOptionConfig.ClampPeriodId` and `ResetOnPeriodStartId`, `PeriodSelectOptionConfig.PeriodId`.
+- **A house-mode option has no minted id.** `HouseModeOptionConfig.Value` is Home Assistant's option text and is the
+  option's id, so `TimePeriodConfig.SetsModeId` names that text. Renaming the option in Home Assistant needs the
+  row re-pointed here; `HouseModeConfig.Repoint` moves every period's `SetsModeId` with the row. An option's `Id`
+  is read only by the conversion below.
+- **Nothing resolves by name.** `TimePeriodConfig.Key` is the id, and empty without one. A period without an id is
+  a document error; a room without an area and without an id is that room's error. A sleep option's dim period is
+  its `ClampPeriodId`, else the period whose `SetsModeId` names the option, and never a period called night.
+- **Names repeat freely**, for periods and for rooms with or without an area. Two rows sharing an id, or two rooms
+  naming one area, are refused.
+- **The Home Assistant event carries no room id.** The web side keys a report by area id, else room id, so the
+  reports of rooms without an area cannot be told apart there. Such a room has no room page either.
 
-`HouseModeOptionConfig.Value` is the exception and stays the match key. That string belongs to Home
-Assistant: the engine has to write what the `input_select` will accept and classify what it reports. Renaming
-the option **in Home Assistant** still needs re-pointing here; renaming anything on this side does not.
+### Readable ids are given once, at the first start
 
-The id is a slug of the creation-time name plus four random base-36 characters — `night-3c9f` — so a
-hand-edited file stays readable. The slug is frozen at creation, so it is a hint about where the row came from
-and never a fact about what it is called now.
+`ReadableIdConversion.Apply` is lighting only; the shared files never call it. It runs in
+`LightingEngineHost.Reload` beside the label translation, so one write covers both and the single `.bak` keeps
+the file as it was before either.
 
-Two accessors carry the fallback the ids cannot cover: `TimePeriodConfig.Key` and `HouseModeOptionConfig.Key`
-answer the id when there is one and the name (or value) when there is not. That is the second binder's path,
-the one with no pre-pass, so a house's app YAML bound by NetDaemon's `ConfigurationBinder` still resolves by
-name.
-
-### The migration off names runs once, on load
-
-`StableKeyMigration.Apply` mints the missing ids and rewrites every reference that resolves by name onto the
-id it resolved to. It runs from `LightingConfigDocument.Deserialize`, which is the load path and is otherwise
-forbidden from rewriting a hand-edited file. Without it, a reference no longer read by name reads as nothing at
-all.
-
-Two things make it terminate. It repoints a reference **only** when the reference is not already some
-period's id, so a migrated document changes nothing; and it reports whether it wrote anything, through
-`DocumentReadResult.MintedStableKeys`, so `LightingEngineHost.Reload` takes the migrating write exactly once.
-That single write matters because `LightingConfigStore` keeps one backup slot: a second rewrite would push the
-only pre-migration copy of the file out of it.
-
-A name that resolves to nothing is left exactly as it was, so the validator's existing severities still land
-on it: a dangling levels row warns and survives, a dangling select mapping errors. Adding a period by hand and
-reloading mints an id for it and leaves every other reference alone.
+- Every period whose id is not `period_NNN` is renumbered in document order, and every reference matching its old
+  id follows in the same write.
+- A `SetsModeId` naming an option's old minted id becomes that option's text, and the option's `Id` is cleared.
+- A sleep option whose dim period came only from a period named night gets that period as an explicit
+  `ClampPeriodId`, read before anything moves, so the dim level does not change.
+- A room without an area and without a readable id gets `room_NNN`; a counter below an id in use is raised.
+- A reference is matched by old id only, never by name. One that matches nothing stays as it is, so the
+  validator still reports it: a dangling levels row warns and survives, a dangling select mapping errors.
+- It reports whether it wrote anything, and a converted document reports nothing, so the rewrite happens once.
+  A second rewrite would push the original out of the store's one backup slot.
 
 The old key names — `Period`, `SetsMode`, `ClampPeriod`, `ResetOnPeriodStart` — go through `LegacyKeys`, not a
 property rename. Both binders ignore an unknown key, so a plain property rename is silent data loss for
 anyone on an older file.
 
-`LastPeriodStore` writes a period id. A note written before ids holds a name, and `ModeMonitor` resolves that
-by name on read; without it the first start after the upgrade compares a name against an id and acts on a
-boundary crossing that never happened.
+`LastPeriodStore` writes a period id. An id naming no period, after the renumbering or a deletion, reads as
+unknown. Read as a crossed boundary, it would set the house mode at the first start.
+
+A level-test row in the activity record names the tested period. The web side receives only
+`testing_period_id` from the event, so `AreaSnapshotCache` looks the name up in the document when such a report
+arrives.
 
 ### Normalisation runs on save, never on load
 
@@ -224,8 +234,8 @@ The store underneath the step writes bytes and keeps one backup; it holds no val
 what it is given. Only the host can ask Home Assistant anything, which is why the referential rules live with
 the step and not with the store.
 
-A document written without going through the step carries no minted ids, and every load of it mints fresh
-ones, so nothing that compares two loads can hold.
+A period added by hand without an id is a validation error, never a lookup by name; the load path gives it an
+id once, as part of the conversion above.
 
 The rebuild that follows a save is total, so **every settings save re-asserts the house mode and
 re-runs every area's startup path.** A mode being forced by an entity is therefore re-applied on
@@ -2380,7 +2390,7 @@ suite on request, or when something is wrong.
 About a tenth of the suite: **258 cases of 2115** (2026-09-18). A test earns a place when its
 failure would reach a person in a house, or when it guards a stored value that must never change: the auto-on
 gates, away and the house mode, vacancy and the warning dim, override detection, the sleep clamp, loading,
-validating and round-tripping the document (raw brightness bytes, retired keys, stable ids), and what a
+validating and round-tripping the document (raw brightness bytes, retired keys, readable ids), and what a
 configuration sends to the lights. Tests of wording, layout or appearance stay in the full suite only.
 
 The filter lives in `tests/core.runsettings`, never in attributes on the tests, so changing the set touches no
@@ -2765,6 +2775,7 @@ document settles on what both surfaces already show.
 | 5 s | `AreaController.ManualSettleSeconds` | long enough to swallow a dimmer being turned or a device reporting every second, short enough that the settled level reaches the log while the person is still looking |
 | 24 h | `RoomFacts.LightSensorStuckAfter` | a sensor with any daylight changes through every dawn and dusk, so a day with no change is one that has stopped measuring; a windowless room that sits at 0 lx also trips it |
 | 20 % | low battery level | warns with time to replace the battery before most sensors stop reporting; used only where the device has no low-battery flag of its own |
+| 3 digits, widening | readable id number, `ReadableId.Format` | sorts and reads at a glance in a hand-edited file; widening past 999 renames nothing already issued |
 
 ---
 

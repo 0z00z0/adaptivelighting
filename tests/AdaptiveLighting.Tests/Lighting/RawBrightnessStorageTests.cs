@@ -36,7 +36,8 @@ public sealed class RawBrightnessStorageTests
 		$"""
 		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 		  Periods:
-		  - Name: night
+		  - Id: night
+		    Name: night
 		    Start: 22:30
 		    {level}
 		    ColorTempKelvin: 2700
@@ -149,7 +150,7 @@ public sealed class RawBrightnessStorageTests
 	{
 		AdaptiveLightingConfig config = new()
 		{
-			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = RawBrightnessStep.ToPercent(108) }]
+			Periods = [new TimePeriodConfig { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = RawBrightnessStep.ToPercent(108) }]
 		};
 
 		ConfigNormalizer.Normalize(config);
@@ -163,7 +164,7 @@ public sealed class RawBrightnessStorageTests
 	{
 		AdaptiveLightingConfig config = new()
 		{
-			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = RawBrightnessStep.ToPercent(108) }]
+			Periods = [new TimePeriodConfig { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = RawBrightnessStep.ToPercent(108) }]
 		};
 
 		ConfigNormalizer.Normalize(config);

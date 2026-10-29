@@ -34,7 +34,7 @@ public sealed class AreaSetupServiceTests
 	private static AdaptiveLightingConfig Document(params AreaConfig[] areas) => new()
 	{
 		ConfigName = "Adaptive lighting [test]",
-		Periods = [new TimePeriodConfig { Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
+		Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
 		Areas = [.. areas]
 	};
 
@@ -316,15 +316,15 @@ public sealed class AreaSetupServiceTests
 	{
 		House house = Build("stue");
 
-		// Everything a rebuild can take. AreaId, Enabled and Levels are the three it gives back, so they are not
-		// losses.
+		// Everything a rebuild can take. AreaId, Enabled and Levels are what it gives back, so they are not
+		// losses; Id belongs only to a room without an area, which is never rebuilt.
 		IReadOnlyList<PropertyInfo> destructible =
 		[.. typeof(AreaConfig)
 			.GetProperties(BindingFlags.Public | BindingFlags.Instance)
 			.Where(property => property.CanWrite)
 			.Where(property => property.Name is not
 				(nameof(AreaConfig.AreaId) or nameof(AreaConfig.Enabled) or nameof(AreaConfig.Levels)
-					or nameof(AreaConfig.LightLevels)))];
+					or nameof(AreaConfig.LightLevels) or nameof(AreaConfig.Id)))];
 
 		AreaConfig before = new() { AreaId = "stue" };
 
@@ -601,6 +601,7 @@ public sealed class AreaSetupServiceTests
 	{
 		nameof(AreaConfig.Name),
 		nameof(AreaConfig.AreaId),
+		nameof(AreaConfig.Id),
 		nameof(AreaConfig.Lights),
 		nameof(AreaConfig.MotionSensors),
 		nameof(AreaConfig.LeadInSensors),

@@ -419,9 +419,8 @@
 	/// <summary>The empty-clamp label: the period the fallback chain resolves to when no explicit clamp is set.</summary>
 	private string ClampDefaultLabel(HouseModeOptionConfig option)
 	{
-		// Carries the option's Id, so the "a period switches to this option" link still resolves, and no explicit
-		// clamp, so the fallback is what shows.
-		HouseModeOptionConfig probe = new HouseModeOptionConfig { Id = option.Id, Value = option.Value };
+		// No explicit clamp, so the "a period switches to this option" link is what shows.
+		HouseModeOptionConfig probe = new HouseModeOptionConfig { Value = option.Value };
 		TimePeriodConfig? resolved = HouseModeConfig.SleepClampPeriodFor(probe, [.. Periods]);
 		return resolved is not null
 			? $"(default: {PeriodName(resolved)})"
@@ -513,14 +512,14 @@
 	/// <summary>Live options nothing is stored against: what an orphan can be moved onto in one pick.</summary>
 	private IReadOnlyList<string> UnmappedLiveValues => Helper.Unmapped;
 
-	/// <summary>Re-points an orphaned option at a live one, keeping everything the row carries.</summary>
+	/// <summary>Re-points an orphaned option at a live one, keeping everything the row carries and every period naming it.</summary>
 	/// <remarks>Only ever offered an unmapped value, so it cannot collide with an option that already exists.</remarks>
 	private async Task Remap(string orphanValue, string? live)
 	{
 		if (live?.Trim() is not { Length: > 0 } target || Find(orphanValue) is not { } option)
 			return;
 
-		option.Value = target;
+		HouseModeConfig.Repoint(option, target, Periods);
 		Reorder();
 		await Changed.InvokeAsync().ConfigureAwait(false);
 	}

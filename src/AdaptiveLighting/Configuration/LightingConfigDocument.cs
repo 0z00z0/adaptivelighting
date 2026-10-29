@@ -12,11 +12,10 @@ namespace Adaptive.Settings;
 /// </summary>
 public sealed record DocumentReadResult(
 	AdaptiveLightingConfig Config,
-	bool UsedLegacyKeys,
-	bool MintedStableKeys = false)
+	bool UsedLegacyKeys)
 {
 	/// <summary>Whether the file on disk is behind the schema, so <see cref="LightingEngineHost.Reload"/> writes it back once.</summary>
-	public bool NeedsMigratingWrite => UsedLegacyKeys || MintedStableKeys;
+	public bool NeedsMigratingWrite => UsedLegacyKeys;
 
 	/// <summary>One sentence per retired setting the file still carries, as the reader found them.</summary>
 	// Only the parse can see one: both binders drop an unmatched key. Empty again once a save rewrites the file.
@@ -59,7 +58,7 @@ public static class LightingConfigDocument
 	/// <remarks>
 	///     Deleting this is silent data loss: <see cref="Deserialize"/> binds with <c>IgnoreUnmatchedProperties</c>, so
 	///     an unknown key is silence and not an error, and a document still saying <c>Zones:</c> would load as zero
-	///     areas. The rename only moves the value across; <see cref="StableKeyMigration"/> turns a name into an id.
+	///     areas. The rename only moves the value across.
 	///     Internal so a test can guard it against a future property sharing one of these names.
 	/// </remarks>
 	internal static readonly Dictionary<string, string> LegacyKeys = new(StringComparer.OrdinalIgnoreCase)
@@ -226,16 +225,8 @@ public static class LightingConfigDocument
 
 		RepairStructuralNulls(config, logger);
 
-		// After the repair, so the migration walks lists it can rely on. Without it every name reference resolves to nothing, silently.
-		bool mintedStableKeys = StableKeyMigration.Apply(config);
-
-		if (mintedStableKeys)
-			logger?.LogInformation(
-				"The configuration document referred to periods and house modes by name. Each has been given an id "
-				+ "and every reference repointed at it, so renaming one no longer breaks what pointed at it.");
-
 		// The key is gone by the time the binder is done with it, so this is the only place it can be carried out of.
-		return new DocumentReadResult(config, usedLegacyKeys, mintedStableKeys) { RetiredKeys = [.. retired.Values] };
+		return new DocumentReadResult(config, usedLegacyKeys) { RetiredKeys = [.. retired.Values] };
 	}
 
 	/// <summary>Puts back the collections and sub-objects the model says are never <c>null</c>.</summary>
@@ -253,6 +244,9 @@ public static class LightingConfigDocument
 		config.Defaults ??= new AreaSettings();
 
 		GlobalConfig global = config.Global;
+
+		repaired |= global.IdCounters is null;
+		global.IdCounters ??= new IdCounters();
 
 		repaired |= NullSafeList(config.Periods, out List<TimePeriodConfig> periods);
 		config.Periods = periods;

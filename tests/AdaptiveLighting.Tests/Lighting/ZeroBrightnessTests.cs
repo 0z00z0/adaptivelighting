@@ -29,9 +29,9 @@ public sealed class ZeroBrightnessTests
 
 	private static List<TimePeriodConfig> Schedule() =>
 	[
-		new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-		new() { Name = "late", Start = "21:00", BrightnessPct = 40, ColorTempKelvin = 2400 },
-		new() { Name = "night", Start = "22:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
+		new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+		new() { Id = "late", Name = "late", Start = "21:00", BrightnessPct = 40, ColorTempKelvin = 2400 },
+		new() { Id = "night", Name = "night", Start = "22:00", BrightnessPct = 15, ColorTempKelvin = 2200 }
 	];
 
 	/// <summary>A group of two bulbs and one lamp, started at 20:00 inside "evening".</summary>

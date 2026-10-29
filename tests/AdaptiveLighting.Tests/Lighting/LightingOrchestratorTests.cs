@@ -40,7 +40,7 @@ public sealed class LightingOrchestratorTests
 				KillSwitchEntity = Master
 			},
 			// A baseline period so the document is otherwise ordinary; no areas, so the registry is never touched.
-			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }]
+			Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "07:00" }]
 		};
 
 		FakeLightActuator actuator = new FakeLightActuator();
@@ -233,7 +233,7 @@ public sealed class LightingOrchestratorTests
 				HouseMode = WithScenes(),
 				KillSwitchEntity = Master
 			},
-			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }]
+			Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "07:00" }]
 		};
 
 		TestScheduler scheduler = new();
@@ -294,8 +294,8 @@ public sealed class LightingOrchestratorTests
 				},
 				KillSwitchEntity = Master
 			},
-			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
-			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+			Periods = [new TimePeriodConfig { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Id = "stue", Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
 		};
 
 		TestScheduler scheduler = new();
@@ -346,8 +346,8 @@ public sealed class LightingOrchestratorTests
 				KillSwitchEntity = Master,
 				CircadianTickSeconds = 600
 			},
-			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
-			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+			Periods = [new TimePeriodConfig { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Id = "stue", Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
 		};
 
 		TestScheduler scheduler = new();
@@ -426,8 +426,8 @@ public sealed class LightingOrchestratorTests
 		AdaptiveLightingConfig config = new()
 		{
 			Global = new GlobalConfig { Persons = [Person], HouseMode = mode, CircadianTickSeconds = 60 },
-			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
-			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+			Periods = [new TimePeriodConfig { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Id = "stue", Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
 		};
 
 		TestScheduler scheduler = new();
@@ -485,8 +485,8 @@ public sealed class LightingOrchestratorTests
 		AdaptiveLightingConfig config = new()
 		{
 			Global = new GlobalConfig { Persons = [Person], HouseMode = mode, CircadianTickSeconds = 60 },
-			Periods = [new TimePeriodConfig { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
-			Areas = [new AreaConfig { Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
+			Periods = [new TimePeriodConfig { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }],
+			Areas = [new AreaConfig { Id = "stue", Name = "Stue", Lights = [Stue], MotionSensors = [StueMotion] }]
 		};
 
 		TestScheduler scheduler = new();
@@ -534,17 +534,19 @@ public sealed class LightingOrchestratorTests
 		// areas, so nothing has a room of its own.
 		AdaptiveLightingConfig config = new()
 		{
-			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }],
+			Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "07:00" }],
 			Areas =
 			[
 				new AreaConfig
 				{
+					Id = "stue",
 					Name = "Stue",
 					Lights = ["light.stue_taklys", "light.benklys"],
 					MotionSensors = ["binary_sensor.stue_m"]
 				},
 				new AreaConfig
 				{
+					Id = "kjokken",
 					Name = "Kjøkken",
 					Lights = ["light.kjokken_taklys", "light.benklys"],
 					MotionSensors = ["binary_sensor.kjokken_m"]
@@ -583,11 +585,11 @@ public sealed class LightingOrchestratorTests
 
 		AdaptiveLightingConfig config = new()
 		{
-			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }],
+			Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "07:00" }],
 			Areas =
 			[
-				new AreaConfig { Name = "Stue", Lights = ["light.stue_taklys"], MotionSensors = ["binary_sensor.stue_m"] },
-				new AreaConfig { Name = "Kjøkken", Lights = ["light.kjokken_taklys"], MotionSensors = ["binary_sensor.kjokken_m"] }
+				new AreaConfig { Id = "stue", Name = "Stue", Lights = ["light.stue_taklys"], MotionSensors = ["binary_sensor.stue_m"] },
+				new AreaConfig { Id = "kjokken", Name = "Kjøkken", Lights = ["light.kjokken_taklys"], MotionSensors = ["binary_sensor.kjokken_m"] }
 			]
 		};
 
@@ -639,8 +641,8 @@ public sealed class LightingOrchestratorTests
 			},
 			Periods =
 			[
-				new TimePeriodConfig { Name = "evening", Start = localNow.AddMinutes(-30).ToString("HH:mm"), BrightnessPct = 60 },
-				new TimePeriodConfig { Name = "night", Start = "sunset", BrightnessPct = 10, SetsModeId = "Sover" }
+				new TimePeriodConfig { Id = "evening", Name = "evening", Start = localNow.AddMinutes(-30).ToString("HH:mm"), BrightnessPct = 60 },
+				new TimePeriodConfig { Id = "night", Name = "night", Start = "sunset", BrightnessPct = 10, SetsModeId = "Sover" }
 			],
 			// One room, so the per-area sun the areas are built with is exercised beside the house-wide one.
 			Areas =

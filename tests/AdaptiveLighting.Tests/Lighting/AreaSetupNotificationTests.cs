@@ -41,7 +41,7 @@ public sealed class AreaSetupNotificationTests
 	private static AdaptiveLightingConfig Config(params AreaConfig[] areas) => new()
 	{
 		Global = new GlobalConfig(),
-		Periods = [new TimePeriodConfig { Name = "day", Start = "07:00" }],
+		Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "07:00" }],
 		Areas = [.. areas]
 	};
 
@@ -123,7 +123,7 @@ public sealed class AreaSetupNotificationTests
 		using TempDirectory temp = new();
 
 		Assert.AreEqual(0,
-			Start(Config(new AreaConfig { Name = "Soverom", Lights = ["light.soverom"] }), temp.Memory()).Count,
+			Start(Config(new AreaConfig { Id = "soverom", Name = "Soverom", Lights = ["light.soverom"] }), temp.Memory()).Count,
 			"a room with lights and no motion sensor is set up and running, not a room that failed");
 	}
 
@@ -133,7 +133,7 @@ public sealed class AreaSetupNotificationTests
 		using TempDirectory temp = new();
 
 		List<(string Title, string Message)> raised = Start(
-			Config(new AreaConfig { Name = "Boden", MotionSensors = ["binary_sensor.bod"] }), temp.Memory());
+			Config(new AreaConfig { Id = "boden", Name = "Boden", MotionSensors = ["binary_sensor.bod"] }), temp.Memory());
 
 		Assert.AreEqual(1, raised.Count);
 		StringAssert.Contains(raised[0].Message, "Boden");
@@ -147,14 +147,14 @@ public sealed class AreaSetupNotificationTests
 	{
 		using TempDirectory temp = new();
 
-		Assert.AreEqual(1, Start(Config(new AreaConfig { Name = "Soverom" }), temp.Memory()).Count);
+		Assert.AreEqual(1, Start(Config(new AreaConfig { Id = "soverom", Name = "Soverom" }), temp.Memory()).Count);
 
 		Assert.AreEqual(0,
-			Start(Config(new AreaConfig { Name = "Soverom", Lights = ["light.soverom"] }), temp.Memory()).Count,
+			Start(Config(new AreaConfig { Id = "soverom", Name = "Soverom", Lights = ["light.soverom"] }), temp.Memory()).Count,
 			"the room resolves now, so there is nothing to say");
 
 		Assert.AreEqual(1,
-			Start(Config(new AreaConfig { Name = "Soverom" }), temp.Memory()).Count,
+			Start(Config(new AreaConfig { Id = "soverom", Name = "Soverom" }), temp.Memory()).Count,
 			"and a room that breaks again is reported again, which only a forgotten note allows");
 	}
 

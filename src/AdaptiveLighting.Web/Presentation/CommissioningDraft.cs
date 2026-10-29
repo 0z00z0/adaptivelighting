@@ -29,16 +29,12 @@ public sealed class CommissioningDraft
 	public bool HasAnswers =>
 		HouseName is not null || AwayDebounceMinutes is not null || KeepHouseMode is not null || _dropped.Count > 0;
 
-	/// <summary>How a room is identified across the board, the draft and the document.</summary>
-	/// <remarks>
-	///     Area id when there is one, display name otherwise: the same fallback <c>AreaView.VisibleCards</c> and
-	///     the snapshot cache use, so a room with explicit entities and no area id is still pickable.
-	/// </remarks>
+	/// <summary>How a room is identified across the board, the draft and the document: <see cref="AreaConfig.Key"/>.</summary>
 	public static string RoomKey(AreaConfig area)
 	{
 		ArgumentNullException.ThrowIfNull(area);
 
-		return area.AreaId is { Length: > 0 } areaId ? areaId : area.DisplayName;
+		return area.Key;
 	}
 
 	/// <summary>Stages the house name. An empty or blank box is an answer, "no name", not an unanswered sheet.</summary>

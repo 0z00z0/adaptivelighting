@@ -5,7 +5,7 @@ namespace Adaptive.Settings;
 /// <summary>The circadian table: ids, starts, targets, and the rooms whose movement may begin a period.</summary>
 internal static class PeriodRules
 {
-	internal static void Validate(List<TimePeriodConfig> periods, ValidationResult result)
+	internal static void Validate(List<TimePeriodConfig> periods, IdCounters counters, ValidationResult result)
 	{
 		if (periods.Count == 0)
 		{
@@ -22,7 +22,13 @@ internal static class PeriodRules
 			.Select(g => g.Key);
 
 		foreach (string key in duplicateKeys)
-			result.AddError($"Two periods share the id '{key}'. Give one of them an Id of its own, or delete it and add it again.");
+			result.AddError($"Two periods share the id '{key}'. Ids are issued once and never edited; give one of them back its own, or delete it and add it again.");
+
+		// A missing id is an error, never a lookup by name.
+		foreach (TimePeriodConfig period in periods.Where(p => p.Key.Length == 0))
+			result.AddError($"Period '{period.Name}' has no Id. Delete it and add it again, or give it an Id such as period_001.");
+
+		ReadableId.ValidateCounter("period", ReadableId.PeriodPrefix, counters.Periods, periods.Select(p => p.Id), result);
 
 		Dictionary<TimeOnly, string> fixedStarts = new();
 

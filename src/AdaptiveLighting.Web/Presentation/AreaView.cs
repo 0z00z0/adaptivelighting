@@ -105,8 +105,7 @@ public static class AreaView
 	/// <summary>The live reports the dashboard gives a card to: those from rooms switched on in the document.</summary>
 	/// <remarks>
 	///     The engine keeps observing and publishing switched-off rooms, so this is a question about the document,
-	///     not about the report. Matched by area id first and display name second, as the snapshot cache and the
-	///     settings list match.
+	///     not about the report. Matched by room key, as the snapshot cache matches.
 	/// </remarks>
 	/// <param name="snapshots">Everything the cache has heard, in the order it should render.</param>
 	/// <param name="rooms">The document's rooms, as <c>ModeService.GetRooms</c> projects them.</param>
@@ -115,18 +114,14 @@ public static class AreaView
 		ArgumentNullException.ThrowIfNull(snapshots);
 		ArgumentNullException.ThrowIfNull(rooms);
 
-		Dictionary<string, bool> byId = new(StringComparer.Ordinal);
-		Dictionary<string, bool> byName = new(StringComparer.OrdinalIgnoreCase);
+		Dictionary<string, bool> byKey = new(StringComparer.Ordinal);
 
 		foreach (RoomView room in rooms)
-		{
-			if (room.AreaId is { Length: > 0 } areaId)
-				byId[areaId] = room.IsEnabled;
+			if (room.Key is { Length: > 0 } key)
+				byKey[key] = room.IsEnabled;
 
-			byName[room.Name] = room.IsEnabled;
-		}
-
-		return [.. snapshots.Where(snapshot => IsShown(snapshot, byId, byName))];
+		// A report matching no room is shown: a card dropped because the document changed under it looks like a fault.
+		return [.. snapshots.Where(snapshot => !byKey.TryGetValue(snapshot.RoomKey, out bool enabled) || enabled)];
 	}
 
 	/// <summary>How many rooms are switched off, for the footer under the grid.</summary>
@@ -164,15 +159,5 @@ public static class AreaView
 		List<RoomView> configured = [.. rooms];
 
 		return engineIsAttached && configured.Count > 0 && configured.TrueForAll(room => !room.IsEnabled);
-	}
-
-	// A report matching no room is shown, never hidden: a card dropped because the document changed underneath it
-	// is indistinguishable from a fault.
-	private static bool IsShown(AreaSnapshot snapshot, Dictionary<string, bool> byId, Dictionary<string, bool> byName)
-	{
-		if (snapshot.AreaId is { Length: > 0 } areaId && byId.TryGetValue(areaId, out bool enabledById))
-			return enabledById;
-
-		return !byName.TryGetValue(snapshot.AreaName, out bool enabledByName) || enabledByName;
 	}
 }

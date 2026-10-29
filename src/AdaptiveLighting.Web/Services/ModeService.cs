@@ -63,7 +63,11 @@ public sealed record PersonView(string EntityId, string Name, bool IsHome, bool 
 ///     an edit outside the save pipeline, which is the only write path. Reports are matched back by area id, which
 ///     survives a rename mid-session where a name does not.
 /// </remarks>
-public sealed record RoomView(string? AreaId, string Name, bool IsEnabled, int LightCount);
+public sealed record RoomView(string? AreaId, string Name, bool IsEnabled, int LightCount, string? RoomId = null)
+{
+	/// <summary>What the room is known by: its area id, else its room id.</summary>
+	public string Key => AreaId is { Length: > 0 } areaId ? areaId : RoomId ?? "";
+}
 
 /// <summary>Reads and flips the house mode entities named in the configuration document.</summary>
 /// <remarks>
@@ -357,7 +361,8 @@ public sealed class ModeService
 				area.AreaId,
 				AreaNaming.DisplayName(area, _catalog.AreaRegistry),
 				AreaView.IsEnabled(area, config.Defaults),
-				LightCountOf(area, config.Global)))
+				LightCountOf(area, config.Global),
+				area.AreaId is { Length: > 0 } ? null : area.Id))
 		];
 	}
 

@@ -35,6 +35,7 @@ public sealed class MotionPeriodTests
 	[
 		new()
 		{
+			Id = "morning",
 			Name = "morning",
 			Start = "06:30",
 			SetsModeId = "Hjemme",
@@ -43,9 +44,9 @@ public sealed class MotionPeriodTests
 			BrightnessPct = 60,
 			ColorTempKelvin = 3000
 		},
-		new() { Name = "day", Start = "09:00", BrightnessPct = 90, ColorTempKelvin = 4000 },
-		new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "23:00", SetsModeId = "Sover", BrightnessPct = 10, ColorTempKelvin = 2200 }
+		new() { Id = "day", Name = "day", Start = "09:00", BrightnessPct = 90, ColorTempKelvin = 4000 },
+		new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
+		new() { Id = "night", Name = "night", Start = "23:00", SetsModeId = "Sover", BrightnessPct = 10, ColorTempKelvin = 2200 }
 	];
 
 	private sealed record Rig(FakeHaContext Ha, TestScheduler Scheduler, ModeMonitor Monitor, CircadianCalculator Rooms);

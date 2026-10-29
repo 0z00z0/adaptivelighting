@@ -413,9 +413,8 @@ internal sealed class PeriodTracker
 
 	/// <summary>Reads the previous run's period, treating any failure as unknown.</summary>
 	// LastPeriodStore promises never to throw, and this catches anyway: the store is an interface a host
-	// supplies, and this runs inside the start, where a throw takes the engine down. A note written before periods
-	// had ids holds a name, and without translating it a start compares a name against a key and reads a
-	// boundary crossing that never happened.
+	// supplies, and this runs inside the start, where a throw takes the engine down. A stored id naming no period
+	// (one renumbered or deleted since) is unknown, or the start reads a boundary crossing and sets the house mode.
 	private string? ReadPeriodAtLastRun()
 	{
 		if (_lastPeriod is null)
@@ -426,10 +425,7 @@ internal sealed class PeriodTracker
 			if (_lastPeriod.Load() is not { Length: > 0 } stored)
 				return null;
 
-			if (PeriodWithKey(stored) is not null)
-				return stored;
-
-			return _periods.ByName(stored)?.Key ?? stored;
+			return PeriodWithKey(stored) is not null ? stored : null;
 		}
 		catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException))
 		{

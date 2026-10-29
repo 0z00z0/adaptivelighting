@@ -21,7 +21,7 @@ public sealed partial class AreaControllerTests
 	[TestMethod]
 	public void RespectSleepMode_Holds_The_Evening_Target_To_The_Night_Level()
 	{
-		// Sover is Sleep-kind with no ClampPeriodId, so the clamp falls back to the period named "night".
+		// Sover is Sleep-kind and dims to the period with id "night".
 		AreaFixture t = Build(s => s.RespectSleepMode = true, g => g.HouseMode = SoverMode());
 		t.House.OnNext(House(kind: ModeKind.Sleep, modeValue: "Sover"));
 

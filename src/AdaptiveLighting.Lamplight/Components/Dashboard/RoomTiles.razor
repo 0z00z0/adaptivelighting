@@ -8,7 +8,7 @@
 		{
 			@if (room.Lamp.IsLit)
 			{
-				<a class="tile lit lamp-glow" href="@HouseView.RoomHref(room.AreaId)" style="@Paint(room.Lamp)" @key="@(room.AreaId ?? room.Name)">
+				<a class="tile lit lamp-glow" href="@HouseView.RoomHref(room.AreaId)" style="@Paint(room.Lamp)" @key="@room.Key">
 					<b>@room.Name</b>
 					@if (room.Lamp.IsHandHeld)
 					{
@@ -33,7 +33,7 @@
 			}
 			else
 			{
-				<a class="tile dark" href="@HouseView.RoomHref(room.AreaId)" @key="@(room.AreaId ?? room.Name)">
+				<a class="tile dark" href="@HouseView.RoomHref(room.AreaId)" @key="@room.Key">
 					<b>@room.Name</b>
 					<span class="pct"><i class="lampdot dark" aria-hidden="true"></i>off</span>
 				</a>

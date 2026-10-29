@@ -49,7 +49,7 @@ public sealed class ActivityLogTests
 			null,
 			houseModeValue,
 			darknessDetail,
-			null,
+			area.ToLowerInvariant(),
 			autoOnBlockedBy,
 			autoOnBlockingEntity,
 			null,

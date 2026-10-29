@@ -69,7 +69,7 @@ public sealed class ConfiguredAwayTests
 		AdaptiveLightingConfig config = new()
 		{
 			Global = global,
-			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00", BrightnessPct = 60, ColorTempKelvin = 3000 }],
+			Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "07:00", BrightnessPct = 60, ColorTempKelvin = 3000 }],
 			Areas = [area]
 		};
 

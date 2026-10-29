@@ -10,21 +10,18 @@ public class TimePeriodConfig
 	/// <summary>What a period holds where nobody has said otherwise: 80 %.</summary>
 	private const int DefaultBrightness = 204;
 
-	/// <summary>What every reference to this period names. Minted once, never shown, never changed.</summary>
-	/// <remarks>Filled in on load by <see cref="StableKeyMigration"/>. Editing it by hand orphans every reference to the old value.</remarks>
+	/// <summary>What every reference to this period names: <c>period_001</c>. Issued once by <see cref="ReadableId"/>, never shown, never changed.</summary>
 	public string? Id { get; set; }
 
 	/// <summary>Free-form name: <c>morning</c>, <c>day</c>, <c>evening</c>, <c>night</c>. Reported in logs and snapshots. Two periods may share one.</summary>
 	public string Name { get; set; } = "";
 
-	/// <summary>What this period is resolved by, everywhere.</summary>
-	// Falls back to Name for the one reader that can never be migrated: NetDaemon's ConfigurationBinder, against a
-	// house's app YAML, has no pre-pass and so no ids.
+	/// <summary>What this period is resolved by, everywhere: <see cref="Id"/>, trimmed. Empty without one, which the validator reports.</summary>
 	[YamlIgnore]
-	public string Key => Id is { Length: > 0 } id ? id.Trim() : Name.Trim();
+	public string Key => Id?.Trim() ?? "";
 
 	/// <summary>
-	///     The <see cref="HouseModeOptionConfig.Id"/> the house mode is set to when this period starts; <c>null</c>
+	///     The <see cref="HouseModeOptionConfig.Value"/> the house mode is set to when this period starts; <c>null</c>
 	///     leaves the mode unchanged.
 	/// </summary>
 	/// <remarks>

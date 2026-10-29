@@ -157,7 +157,8 @@ public sealed class LightingConfigDocumentTests
 			"""
 			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "07:00"
 			  Areas:
 			    - Name: Stue
@@ -178,7 +179,8 @@ public sealed class LightingConfigDocumentTests
 			  Global:
 			    OutdoorLuxSensor: sensor.outdoor_illuminance
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "07:00"
 			  Areas:
 			    - Name: Stue
@@ -193,7 +195,7 @@ public sealed class LightingConfigDocumentTests
 
 		AdaptiveLightingConfig opted = new()
 		{
-			Periods = [new() { Name = "day", Start = "07:00" }],
+			Periods = [new() { Id = "day", Name = "day", Start = "07:00" }],
 			Areas = [new() { Name = "Gang", AreaId = "gang", FollowOutdoorLux = true }]
 		};
 
@@ -210,8 +212,8 @@ public sealed class LightingConfigDocumentTests
 		{
 			Periods =
 			[
-				new() { Name = "day", Start = "07:00" },
-				new() { Name = "morning", Start = "06:00", StartsOnMotion = true }
+				new() { Id = "day", Name = "day", Start = "07:00" },
+				new() { Id = "morning", Name = "morning", Start = "06:00", StartsOnMotion = true }
 			],
 			Areas = [new() { Name = "Stue", AreaId = "stue" }]
 		};
@@ -232,7 +234,7 @@ public sealed class LightingConfigDocumentTests
 			[
 				new()
 				{
-					Name = "morning", Start = "06:00", StartsOnMotion = true, StartsOnMotionAreas = ["kjokken", "gang"]
+					Id = "morning", Name = "morning", Start = "06:00", StartsOnMotion = true, StartsOnMotionAreas = ["kjokken", "gang"]
 				}
 			],
 			Areas = [new() { Name = "Kjøkken", AreaId = "kjokken" }, new() { Name = "Gang", AreaId = "gang" }]
@@ -283,7 +285,8 @@ public sealed class LightingConfigDocumentTests
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  Periods:
-			    - Name: morning
+			    - Id: morning
+			      Name: morning
 			      Start: "06:30"
 			      StartsOnMotion: true
 			      StartsOnMotionAreas: []
@@ -314,7 +317,8 @@ public sealed class LightingConfigDocumentTests
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  Periods:
-			    - Name: morning
+			    - Id: morning
+			      Name: morning
 			      Start: "06:30"
 			      StartsOnMotion: true
 			  Areas:
@@ -565,7 +569,8 @@ public sealed class LightingConfigDocumentTests
 			"""
 			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "07:00"
 			  Areas:
 			    - Name: Stue
@@ -585,7 +590,8 @@ public sealed class LightingConfigDocumentTests
 			"""
 			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "07:00"
 			  Areas:
 			    - Name: Stue
@@ -604,7 +610,8 @@ public sealed class LightingConfigDocumentTests
 			"""
 			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "07:00"
 			  Areas:
 			    - Name: Stue
@@ -642,10 +649,9 @@ public sealed class LightingConfigDocumentTests
 		Assert.AreEqual(ModeKind.Sleep, reloaded.Global.HouseMode.OptionFor("Sover")!.Kind, "Kind survives the round trip");
 		Assert.AreEqual(ModeKind.Away, reloaded.Global.HouseMode.OptionFor("Borte")!.Kind);
 		Assert.AreEqual("scene.borte", reloaded.Global.HouseMode.OptionFor("Borte")!.Scene, "the option's Scene survives");
-		// The reference arrived naming the option's Value; the migration repoints it at the minted Id.
 		string? setsMode = reloaded.Periods.Single(p => string.Equals(p.Name, "late", StringComparison.Ordinal)).SetsModeId;
 
-		Assert.AreEqual(reloaded.Global.HouseMode.OptionFor("Sover")!.Id, setsMode, "the period's mode switch resolves by id");
+		Assert.AreEqual("Sover", setsMode, "the period's mode switch names the option's own text, its id");
 		Assert.AreEqual("Sover", reloaded.Global.HouseMode.OptionValueFor(setsMode), "and still writes 'Sover' to the select");
 	}
 
@@ -682,7 +688,8 @@ public sealed class LightingConfigDocumentTests
 			    Darkness: Either
 			    LuxThreshold: 40
 			  Periods:
-			    - Name: night
+			    - Id: night
+			      Name: night
 			      Start: "22:30"
 			      BrightnessPct: 15
 			      ColorTempKelvin: 2200
@@ -709,7 +716,8 @@ public sealed class LightingConfigDocumentTests
 			Laget.NetDaemon.AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 			  ConfigName: "Adaptive lighting [Home]"
 			  Periods:
-			    - Name: evening
+			    - Id: evening
+			      Name: evening
 			      Start: "18:00"
 			      BrightnessPct: 70
 			      ColorTempKelvin: 2700
@@ -742,11 +750,13 @@ public sealed class LightingConfigDocumentTests
 		    LuxThreshold: 35
 		    Darkness: Sun
 		  Periods:
-		    - Name: day
+		    - Id: day
+		      Name: day
 		      Start: "06:00"
 		      BrightnessPct: 80
 		      ColorTempKelvin: 3500
-		    - Name: night
+		    - Id: night
+		      Name: night
 		      Start: "22:30"
 		      BrightnessPct: 15
 		      ColorTempKelvin: 2200
@@ -827,7 +837,8 @@ public sealed class LightingConfigDocumentTests
 		const string yaml = """
 			AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 			  Periods:
-			    - Name: evening
+			    - Id: evening
+			      Name: evening
 			      Start: "18:00"
 			      BrightnessPct: 70
 			      UseDaylightCurve: true
@@ -873,7 +884,8 @@ public sealed class LightingConfigDocumentTests
 			      AreaId: stue
 			      SunEntity: sun.stue
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "09:00"
 			""";
 		RecordingLogger logger = new();
@@ -895,7 +907,8 @@ public sealed class LightingConfigDocumentTests
 			  Global:
 			    SunEntity: sun.house
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "09:00"
 			""";
 
@@ -912,8 +925,8 @@ public sealed class LightingConfigDocumentTests
 		{
 			Periods =
 			[
-				new() { Name = "day", Start = "09:00", BrightnessPct = 90 },
-				new() { Name = "night", Start = "22:30", BrightnessPct = 15 }
+				new() { Id = "day", Name = "day", Start = "09:00", BrightnessPct = 90 },
+				new() { Id = "night", Name = "night", Start = "22:30", BrightnessPct = 15 }
 			],
 			Areas =
 			[
@@ -955,7 +968,8 @@ public sealed class LightingConfigDocumentTests
 			    LuxBrightnessEnabled: true
 			    LuxBrightnessStartLux: 250
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "09:00"
 			  Areas:
 			    - Name: Stue
@@ -1031,7 +1045,8 @@ public sealed class LightingConfigDocumentTests
 			    ZonesAutoDiscovered: false
 			    AreasAutoDiscovered: true
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "06:00"
 			      BrightnessPct: 80
 			      ColorTempKelvin: 3500
@@ -1165,7 +1180,8 @@ public sealed class LightingConfigDocumentTests
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  Periods:
-			    - Name: morning
+			    - Id: morning
+			      Name: morning
 			      Start: "06:30"
 			      StartsOnMotion: true
 			      StartsOnMotionAreas:
@@ -1269,7 +1285,8 @@ public sealed class LightingConfigDocumentTests
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "07:00"
 			""").Config;
 
@@ -1290,7 +1307,8 @@ public sealed class LightingConfigDocumentTests
 			      - person.alex
 			  Periods:
 			    -
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "06:00"
 			      BrightnessPct: 80
 			      ColorTempKelvin: 3500
@@ -1364,7 +1382,8 @@ public sealed class LightingConfigDocumentTests
 		  Defaults:
 		    {key}: 30
 		  Periods:
-		    - Name: day
+		    - Id: day
+		      Name: day
 		      Start: "09:00"
 		""";
 
@@ -1405,16 +1424,20 @@ public sealed class LightingConfigDocumentTests
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  Periods:
-			    - Name: morning
+			    - Id: morning
+			      Name: morning
 			      Start: "06:30"
 			      MaxBrightnessPct: 40
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "09:00"
 			      maxbrightnesspct: 90
-			    - Name: evening
+			    - Id: evening
+			      Name: evening
 			      Start: "18:00"
 			      MaxBrightnessPct: 60
-			    - Name: night
+			    - Id: night
+			      Name: night
 			      Start: "22:30"
 			      MaxBrightnessPct: 30
 			""");

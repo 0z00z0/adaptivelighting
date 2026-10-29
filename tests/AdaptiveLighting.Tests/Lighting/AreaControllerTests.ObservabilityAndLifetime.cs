@@ -57,7 +57,7 @@ public sealed partial class AreaControllerTests
 			.Settings(settings => settings.Darkness = DarknessSource.Lux)
 			.Periods(new List<TimePeriodConfig>
 			{
-				new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
+				new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
 			})
 			.Named("Test", areaId: null)
 			.OpeningHouse(null)
@@ -108,7 +108,7 @@ public sealed partial class AreaControllerTests
 			.Global(global => global.OutdoorLuxSensor = Outdoor)
 			.Periods(new List<TimePeriodConfig>
 			{
-				new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
+				new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
 			})
 			.Named("Test", areaId: null)
 			.LuxSensors([])

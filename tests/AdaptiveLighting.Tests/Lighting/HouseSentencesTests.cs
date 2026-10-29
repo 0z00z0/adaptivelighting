@@ -165,10 +165,10 @@ public sealed class HouseSentencesTests
 		HouseModeConfig modes = new()
 		{
 			Entity = "input_select.husmodus",
-			Options = [new HouseModeOptionConfig { Value = "Natt", Kind = ModeKind.Sleep }]
+			Options = [new HouseModeOptionConfig { Value = "Natt", Kind = ModeKind.Sleep, ClampPeriodId = "Night" }]
 		};
 
-		List<TimePeriodConfig> periods = [new TimePeriodConfig { Name = "Night", Start = "23:00" }];
+		List<TimePeriodConfig> periods = [new TimePeriodConfig { Id = "Night", Name = "Night", Start = "23:00" }];
 
 		StringAssert.Contains(Text(HouseSentences.Modes(modes, periods).Single().Sentences.Single()), "to Night levels");
 		StringAssert.Contains(Text(HouseSentences.Modes(modes, []).Single().Sentences.Single()), "no period named");

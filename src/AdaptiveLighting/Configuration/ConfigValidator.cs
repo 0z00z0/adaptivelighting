@@ -21,7 +21,7 @@ public static class ConfigValidator
 
 		GlobalSettingsRules.Validate(config.Global, known, result);
 		GlobalSettingsRules.ValidateLabelsAreIds(config.Global, known.KnownLabelIds, result);
-		PeriodRules.Validate(config.Periods, result);
+		PeriodRules.Validate(config.Periods, config.Global.IdCounters, result);
 		PeriodRules.ValidateStartsOnMotion(config, result);
 		HouseModeSectionRules.Validate(config, known.KnownEntityIds, known.LiveSelectOptions, result);
 		PeriodSelectRules.Validate(config, known.KnownEntityIds, known.LivePeriodSelectOptions, result);

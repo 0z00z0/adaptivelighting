@@ -10,10 +10,10 @@ public sealed class RoomLevelsTests
 {
 	private static List<TimePeriodConfig> Day() =>
 	[
-		new TimePeriodConfig { Name = "morgen", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 2700 },
-		new TimePeriodConfig { Name = "dag", Start = "09:00", BrightnessPct = 100, ColorTempKelvin = 4500 },
-		new TimePeriodConfig { Name = "kveld", Start = "sunset", BrightnessPct = 70, ColorTempKelvin = 2700 },
-		new TimePeriodConfig { Name = "natt", Start = "23:00", BrightnessPct = 30, ColorTempKelvin = 2200 }
+		new TimePeriodConfig { Id = "morgen", Name = "morgen", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 2700 },
+		new TimePeriodConfig { Id = "dag", Name = "dag", Start = "09:00", BrightnessPct = 100, ColorTempKelvin = 4500 },
+		new TimePeriodConfig { Id = "kveld", Name = "kveld", Start = "sunset", BrightnessPct = 70, ColorTempKelvin = 2700 },
+		new TimePeriodConfig { Id = "natt", Name = "natt", Start = "23:00", BrightnessPct = 30, ColorTempKelvin = 2200 }
 	];
 
 	private static AreaConfig Room() => new() { AreaId = "kontor" };

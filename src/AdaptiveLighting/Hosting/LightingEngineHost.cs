@@ -383,12 +383,15 @@ public sealed class LightingEngineHost : IDisposable
 			AdaptiveLightingConfig config = read.Config;
 			_retiredKeys = read.RetiredKeys;
 
-			// Both reasons take the same write. Translation runs first, so one rewrite covers a document that needs
-			// both, and its result is what decides whether a document in the current schema is written at all.
+			// Every reason takes the same one write, so the .bak slot keeps the file as it was before all of them.
 			bool translated = LabelTranslation.Apply(config.Global, KnownLabels());
+			bool converted = ReadableIdConversion.Apply(config);
 
-			if (read.NeedsMigratingWrite || translated)
-				RewriteInCurrentSchema(config, read.NeedsMigratingWrite);
+			if (read.NeedsMigratingWrite || translated || converted)
+				RewriteInCurrentSchema(config,
+					read.NeedsMigratingWrite ? "it was written against an older schema"
+					: converted ? "its periods and rooms were given readable ids, and every reference follows them"
+					: "it stored label names, which are now stored as label ids");
 
 			_discovery.ArmIfNeeded(config, _ha, _registry, _scheduler);
 
@@ -405,14 +408,14 @@ public sealed class LightingEngineHost : IDisposable
 		}
 	}
 
-	/// <summary>Writes a document that loaded through a superseded schema, or that still stores label names, back out.</summary>
+	/// <summary>Writes a document that loaded through a superseded schema, stored label names or old-shape ids, back out.</summary>
 	/// <remarks>
 	///     On first load, before the engine is built, so a house that never opens the web UI does not depend on the
 	///     translation tables for ever. The write goes through <see cref="NormaliseValidateAndWrite"/>, so the
 	///     pre-migration file survives at <see cref="LightingConfigStore.BackupPath"/>. Once only, because the store
 	///     keeps one backup slot. A document the engine cannot run is rewritten all the same, with the errors reported.
 	/// </remarks>
-	private void RewriteInCurrentSchema(AdaptiveLightingConfig config, bool olderSchema)
+	private void RewriteInCurrentSchema(AdaptiveLightingConfig config, string reason)
 	{
 		try
 		{
@@ -420,7 +423,7 @@ public sealed class LightingEngineHost : IDisposable
 
 			_logger.LogInformation(
 				"The configuration file has been rewritten: {Reason}. The file as it was is at {Backup}.",
-				olderSchema ? "it was written against an older schema" : "it stored label names, which are now stored as label ids",
+				reason,
 				_store.BackupPath);
 
 			ReportForcedWrite(write.Validation,
@@ -667,7 +670,7 @@ public sealed class LightingEngineHost : IDisposable
 			{
 				// A person's save, so a room no longer in the document at all loses its history here, not on the
 				// next room that happens to publish. Disabled-but-still-declared rooms keep their key.
-				HashSet<string> stillDocumented = LightingOrchestrator.DocumentRoomKeys(config, _registry);
+				HashSet<string> stillDocumented = LightingOrchestrator.DocumentRoomKeys(config);
 				PersistRoomHistory(carried, flushNow: true, prune: stillDocumented);
 			}
 		}

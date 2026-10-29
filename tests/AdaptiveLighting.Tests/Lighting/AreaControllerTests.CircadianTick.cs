@@ -28,8 +28,8 @@ public sealed partial class AreaControllerTests
 	{
 		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night", Start = "20:03", BrightnessPct = 15, ColorTempKelvin = 2200 }
+			new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Id = "night", Name = "night", Start = "20:03", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
 		Fixture t = Build(s => s.VacancyTimeoutSeconds = 60 * 60 * 5, g => g.CircadianTickSeconds = 300, periods: periods);
 		t.Ha.Trigger(Motion, "on");
@@ -48,8 +48,8 @@ public sealed partial class AreaControllerTests
 	{
 		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new() { Name = "night", Start = "sunset", BrightnessPct = 15, ColorTempKelvin = 2200 }
+			new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new() { Id = "night", Name = "night", Start = "sunset", BrightnessPct = 15, ColorTempKelvin = 2200 }
 		};
 		Fixture t = Build(
 			s => s.VacancyTimeoutSeconds = 60 * 60 * 5,
@@ -130,7 +130,7 @@ public sealed partial class AreaControllerTests
 	{
 		List<TimePeriodConfig> periods = new List<TimePeriodConfig>
 		{
-			new() { Name = "dim", Start = "00:00", BrightnessPct = 0.1, ColorTempKelvin = 2200 }
+			new() { Id = "dim", Name = "dim", Start = "00:00", BrightnessPct = 0.1, ColorTempKelvin = 2200 }
 		};
 		Fixture t = Build(periods: periods);
 

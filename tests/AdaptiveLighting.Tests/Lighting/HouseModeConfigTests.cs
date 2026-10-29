@@ -19,9 +19,9 @@ public sealed class HouseModeConfigTests
 
 	private static List<TimePeriodConfig> Periods() =>
 	[
-		new() { Name = "day", Start = "07:00" },
-		new() { Name = "evening", Start = "18:00" },
-		new() { Name = "night", Start = "22:30" }
+		new() { Id = "day", Name = "day", Start = "07:00" },
+		new() { Id = "evening", Name = "evening", Start = "18:00" },
+		new() { Id = "night", Name = "night", Start = "22:30" }
 	];
 
 	// ===================== OptionFor null-safety =====================
@@ -118,54 +118,54 @@ public sealed class HouseModeConfigTests
 	}
 
 	[TestMethod]
-	public void SleepClampPeriodFor_ThenAPeriodLiterallyNamedNight()
+	public void SleepClampPeriodFor_NeverFallsBackToAPeriodNamedNight()
 	{
 		HouseModeOptionConfig option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
 
-		Assert.AreEqual("night", HouseModeConfig.SleepClampPeriodFor(option, Periods())?.Name,
-			"absent an explicit clamp and a SetsModeId period, a period named 'night' is the fallback");
+		Assert.IsNull(HouseModeConfig.SleepClampPeriodFor(option, Periods()),
+			"a period called night is not the dim period by its name; only an id or a period that sets the mode is");
 	}
 
 	[TestMethod]
 	public void SleepClampPeriodFor_IsNull_WhenNothingResolves()
 	{
 		HouseModeOptionConfig option = new HouseModeOptionConfig { Value = "Sover", Kind = ModeKind.Sleep };
-		List<TimePeriodConfig> periods = new List<TimePeriodConfig> { new() { Name = "day", Start = "07:00" }, new() { Name = "evening", Start = "18:00" } };
+		List<TimePeriodConfig> periods = new List<TimePeriodConfig> { new() { Id = "day", Name = "day", Start = "07:00" }, new() { Id = "evening", Name = "evening", Start = "18:00" } };
 
 		Assert.IsNull(HouseModeConfig.SleepClampPeriodFor(option, periods),
 			"no clamp, no SetsModeId period, no 'night' → nothing resolves");
 	}
 
 	/// <summary>Re-pointing an option's Value at a renamed helper option breaks nothing that referred to it.</summary>
-	/// <remarks>A period names a mode by <c>SetsModeId</c>, which is the option's id, so the value underneath can move.</remarks>
+	/// <remarks>A period names a mode by its text, so moving the row moves every <c>SetsModeId</c> with it.</remarks>
 	[TestMethod]
 	public void Repointing_An_Options_Value_Keeps_Everything_That_Named_It()
 	{
 		HouseModeOptionConfig option = new()
 		{
-			Id = "sover-1gz0",
 			Value = "Sover",
 			Kind = ModeKind.Sleep,
 			Scene = "scene.natt",
-			ClampPeriodId = "natt-t1mj",
+			ClampPeriodId = "period_001",
 			ResetOnPresence = true,
 			ActivateWhileOn = ["input_boolean.sengelys"]
 		};
 
-		HouseModeConfig house = new() { Entity = "input_select.house_state", Options = [option] };
-		TimePeriodConfig night = new() { Id = "natt-t1mj", Name = "Natt", Start = "22:30", SetsModeId = option.Id };
+		HouseModeConfig house = new() { Entity = "input_select.house_mode", Options = [option] };
+		TimePeriodConfig night = new() { Id = "period_001", Name = "Natt", Start = "22:30", SetsModeId = "Sover" };
 
 		Assert.AreEqual("Sover", house.OptionValueFor(night.SetsModeId));
 
 		// What the control does: the household renamed the option in Home Assistant, and moves the row onto it.
-		option.Value = "Nattmodus";
+		HouseModeConfig.Repoint(option, "Nattmodus", [night]);
 
+		Assert.AreEqual("Nattmodus", night.SetsModeId);
 		Assert.AreEqual("Nattmodus", house.OptionValueFor(night.SetsModeId),
 			"the period still switches this mode on, and now writes the name Home Assistant will accept");
 
 		Assert.AreEqual(ModeKind.Sleep, option.Kind);
 		Assert.AreEqual("scene.natt", option.Scene);
-		Assert.AreEqual("natt-t1mj", option.ClampPeriodId);
+		Assert.AreEqual("period_001", option.ClampPeriodId);
 		Assert.IsTrue(option.ResetOnPresence);
 		CollectionAssert.AreEqual(new[] { "input_boolean.sengelys" }, option.ActivateWhileOn.ToArray(),
 			"a mode option carries far more than a period mapping, which is why rebuilding it by hand was the cost");

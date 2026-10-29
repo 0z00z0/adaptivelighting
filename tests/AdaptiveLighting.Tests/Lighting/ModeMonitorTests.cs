@@ -37,9 +37,9 @@ public sealed class ModeMonitorTests
 
 	private static List<TimePeriodConfig> Periods() =>
 	[
-		new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
-		new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsModeId = "Sover" }
+		new() { Id = "morning", Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
+		new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
+		new() { Id = "night", Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsModeId = "Sover" }
 	];
 
 	/// <summary>The latch the orchestrator would build for this schedule, which the monitor now requires.</summary>
@@ -328,8 +328,8 @@ public sealed class ModeMonitorTests
 	/// <summary>A table whose sleep boundary is anchored to sunset, so moving the sun moves the boundary.</summary>
 	private static List<TimePeriodConfig> SunAnchoredNight() =>
 	[
-		new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "sunset", BrightnessPct = 10, ColorTempKelvin = 2200, SetsModeId = "Sover" }
+		new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
+		new() { Id = "night", Name = "night", Start = "sunset", BrightnessPct = 10, ColorTempKelvin = 2200, SetsModeId = "Sover" }
 	];
 
 	[TestMethod]
@@ -473,24 +473,24 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "same period as when it stopped: nothing happened to act on");
 	}
 
-	// The note is written by key, and a note from before ids holds a name: read as-is it looks like a period the
-	// table does not have.
+	// The first start after the ids are renumbered: the note holds an id no period has any more.
 	[TestMethod]
-	public void StartWithANoteFromBeforeIdsExisted_ReadsTheNameAsThatPeriodsId()
+	public void StartWithANoteNamingNoPeriod_ReadsAsUnknown_AndSetsNoMode()
 	{
 		List<TimePeriodConfig> keyed =
 		[
-			new() { Id = "morning-aaaa", Name = "morning", Start = "06:30" },
-			new() { Id = "evening-bbbb", Name = "evening", Start = "18:00" },
-			new() { Id = "night-cccc", Name = "night", Start = "23:00", SetsModeId = "Sover" }
+			new() { Id = "period_001", Name = "morning", Start = "06:30" },
+			new() { Id = "period_002", Name = "evening", Start = "18:00" },
+			new() { Id = "period_003", Name = "night", Start = "23:00", SetsModeId = "Sover" }
 		];
 
-		Rig rig = Started(startAt: HalfPastNight, periods: keyed, initialSelect: "Gjester", lastPeriod: EndedIn("night"));
+		Rig rig = Started(startAt: HalfPastNight, periods: keyed, initialSelect: "Gjester", lastPeriod: EndedIn("evening-bbbb"));
 
 		Advance(rig, TimeSpan.FromMinutes(30));
 
-		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "the note names the period the engine is already in");
-		CollectionAssert.AreEqual(Array.Empty<string>(), rig.LastPeriod.Saved, "and nothing needs rewriting");
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "an id naming no period is unknown, not a boundary crossed while stopped");
+		Assert.AreEqual(0, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"),
+			"the mode a person chose is left alone");
 	}
 
 	[TestMethod]
@@ -818,7 +818,7 @@ public sealed class ModeMonitorTests
 
 	// A single all-day period, so period entry and SetsModeId never interfere with the idle-timer tests.
 	private static List<TimePeriodConfig> FlatPeriod() =>
-		[new() { Name = "all", Start = "00:00", BrightnessPct = 50, ColorTempKelvin = 3000 }];
+		[new() { Id = "all", Name = "all", Start = "00:00", BrightnessPct = 50, ColorTempKelvin = 3000 }];
 
 	[TestMethod]
 	public void NoMotionActivation_AfterIdleWindow_SwitchesToTheMode_Once()
@@ -1136,10 +1136,10 @@ public sealed class ModeMonitorTests
 	/// <summary>A schedule carrying a daytime period, for the tests that need an option the clock disagrees with.</summary>
 	private static List<TimePeriodConfig> PeriodsWithDay() =>
 	[
-		new() { Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
-		new() { Name = "day", Start = "10:00", BrightnessPct = 80, ColorTempKelvin = 4000 },
-		new() { Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
-		new() { Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsModeId = "Sover" }
+		new() { Id = "morning", Name = "morning", Start = "06:30", BrightnessPct = 60, ColorTempKelvin = 3000 },
+		new() { Id = "day", Name = "day", Start = "10:00", BrightnessPct = 80, ColorTempKelvin = 4000 },
+		new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 60, ColorTempKelvin = 2700 },
+		new() { Id = "night", Name = "night", Start = "23:00", BrightnessPct = 10, ColorTempKelvin = 2200, SetsModeId = "Sover" }
 	];
 
 	/// <summary>Every period of <see cref="PeriodsWithDay"/>, mapped: no option here folds to nothing.</summary>

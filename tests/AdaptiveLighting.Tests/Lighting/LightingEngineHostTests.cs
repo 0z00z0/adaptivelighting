@@ -42,7 +42,7 @@ public sealed class LightingEngineHostTests
 	private static AdaptiveLightingConfig Valid() => new()
 	{
 		ConfigName = "Adaptive lighting [test]",
-		Periods = [new TimePeriodConfig { Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
+		Periods = [new TimePeriodConfig { Id = "period_001", Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
 		Areas = [new AreaConfig { Name = "Stue", AreaId = "stue" }]
 	};
 
@@ -205,7 +205,7 @@ public sealed class LightingEngineHostTests
 
 		AdaptiveLightingConfig config = Roomless();
 
-		// Ids, not names: the latch keys on Key, and a save without one mints a random-suffixed id.
+		// Ids, not names: the latch keys on Key.
 		config.Periods[0].Id = "day";
 		config.Periods.Add(new TimePeriodConfig
 		{
@@ -248,15 +248,15 @@ public sealed class LightingEngineHostTests
 			Entity = ModeSelect,
 			Options =
 			[
-				new() { Id = "hjemme", Value = "Hjemme", Kind = ModeKind.Normal },
-				new() { Id = "sover", Value = "Sover", Kind = ModeKind.Sleep }
+				new() { Value = "Hjemme", Kind = ModeKind.Normal },
+				new() { Value = "Sover", Kind = ModeKind.Sleep }
 			]
 		};
 
 		config.Periods =
 		[
-			new TimePeriodConfig { Id = "evening", Name = "evening", Start = eveningStart, BrightnessPct = 70, ColorTempKelvin = 2700 },
-			new TimePeriodConfig { Id = "night", Name = "night", Start = nightStart, BrightnessPct = 15, ColorTempKelvin = 2200, SetsModeId = "sover" }
+			new TimePeriodConfig { Id = "period_001", Name = "evening", Start = eveningStart, BrightnessPct = 70, ColorTempKelvin = 2700 },
+			new TimePeriodConfig { Id = "period_002", Name = "night", Start = nightStart, BrightnessPct = 15, ColorTempKelvin = 2200, SetsModeId = "Sover" }
 		];
 
 		return config;
@@ -470,7 +470,8 @@ public sealed class LightingEngineHostTests
 		  Global:
 		    ZonesAutoDiscovered: true
 		  Periods:
-		    - Name: day
+		    - Id: day
+		      Name: day
 		      Start: "06:00"
 		      BrightnessPct: 80
 		      ColorTempKelvin: 3500
@@ -575,7 +576,8 @@ public sealed class LightingEngineHostTests
 		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 		  ConfigName: "Adaptive lighting [test]"
 		  Periods:
-		    - Name: day
+		    - Id: day
+		      Name: day
 		      Start: "06:00"
 		      BrightnessPct: 500
 		      ColorTempKelvin: 3500
@@ -675,48 +677,52 @@ public sealed class LightingEngineHostTests
 		Assert.AreEqual(migrated, File.ReadAllText(_path), "a reload that writes nothing normalises nothing");
 	}
 
-	/// <summary>A document in the current key names but written before periods had ids.</summary>
-	private const string SchemaWithoutIds =
+	/// <summary>A document whose period carries a slug-and-random id.</summary>
+	private const string SchemaWithOldIds =
 		"""
 		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 		  ConfigName: "Adaptive lighting [test]"
 		  Periods:
-		    - Name: dag
+		    - Id: day-ab12
+		      Name: day
 		      Start: "06:00"
 		      BrightnessPct: 80
 		      ColorTempKelvin: 3500
 		  Areas:
-		    - Name: Stue
-		      AreaId: stue
+		    - Name: Living room
+		      AreaId: living_room
 		      Levels:
-		        - PeriodId: dag
+		        - PeriodId: day-ab12
 		          BrightnessPct: 40
 		""";
 
 	[TestMethod]
-	public void Reload_OfADocumentWithoutIds_MintsThemOnce_AndKeepsTheRoomsOwnLevel()
+	public void Reload_OfADocumentWithOldIds_ConvertsItOnce_AndTheBackupIsTheOriginal()
 	{
-		File.WriteAllText(_path, SchemaWithoutIds);
+		File.WriteAllText(_path, SchemaWithOldIds);
 		string original = File.ReadAllText(_path);
 
 		LightingEngineHost host = BuildHost();
 
 		Assert.AreEqual(SaveStatus.Saved, host.Reload().Status);
 
-		string migrated = File.ReadAllText(_path);
+		string converted = File.ReadAllText(_path);
 		AdaptiveLightingConfig config = host.Store.Load();
 
-		Assert.AreEqual(config.Periods.Single().Id, config.Areas.Single().Levels.Single().PeriodId,
-			"the row that named the period by name now names it by id");
-		Assert.AreEqual(40d, config.Areas.Single().Levels.Single().BrightnessPct, "and still says what it said");
-		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath), "the backup is the pre-migration file");
+		Assert.AreEqual("period_001", config.Periods.Single().Id);
+		Assert.AreEqual("period_001", config.Areas.Single().Levels.Single().PeriodId);
+		Assert.AreEqual(40d, config.Areas.Single().Levels.Single().BrightnessPct, "and the row still says what it said");
+		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath), "the backup is the file before the conversion");
+
+		// The root key is a literal every document stores; it must not follow the class's namespace.
+		Assert.IsTrue(converted.Contains("AdaptiveLighting.Configuration.AdaptiveLightingConfig:", StringComparison.Ordinal));
+		Assert.IsFalse(converted.Contains("Adaptive.Settings.AdaptiveLightingConfig", StringComparison.Ordinal));
 
 		host.Reload();
 
-		Assert.AreEqual(migrated, File.ReadAllText(_path), "nothing to mint the second time");
+		Assert.AreEqual(converted, File.ReadAllText(_path), "nothing to convert the second time");
 		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath), "so the one backup slot still holds it");
 	}
-
 	/// <summary><see cref="LightingEngineHost.Reload"/> never throws: its caller is the <c>[NetDaemonApp]</c> bootstrap, and an app that throws takes its DI scope and <c>IHaContext</c> with it.</summary>
 	[TestMethod]
 	public void Reload_OfADocumentWithASectionEmptiedByHand_LoadsItRatherThanThrowing()
@@ -729,7 +735,8 @@ public sealed class LightingEngineHostTests
 			  Defaults:
 			  Areas:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "06:00"
 			      BrightnessPct: 80
 			      ColorTempKelvin: 3500
@@ -752,7 +759,8 @@ public sealed class LightingEngineHostTests
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "06:00"
 			      BrightnessPct: 80
 			      ColorTempKelvin: 3500
@@ -779,7 +787,8 @@ public sealed class LightingEngineHostTests
 			$"""
 			{LightingConfigDocument.RootKey}:
 			  Periods:
-			    - Name: day
+			    - Id: day
+			      Name: day
 			      Start: "06:00"
 			      BrightnessPct: 80
 			      ColorTempKelvin: 3500
@@ -806,7 +815,8 @@ public sealed class LightingEngineHostTests
 		"""
 		AdaptiveLighting.Configuration.AdaptiveLightingConfig:
 		  Periods:
-		    - Name: day
+		    - Id: day
+		      Name: day
 		      Start: "06:00"
 		      BrightnessPct: 80
 		      ColorTempKelvin: 3500
@@ -953,8 +963,8 @@ public sealed class LightingEngineHostTests
 		AdaptiveLightingConfig config = Valid();
 		config.Areas =
 		[
-			new AreaConfig { Name = "Room A", Lights = ["light.room_a"] },
-			new AreaConfig { Name = "Room B", Lights = ["light.room_b"], Enabled = false }
+			new AreaConfig { Id = "room_a", Name = "Room A", Lights = ["light.room_a"] },
+			new AreaConfig { Id = "room_b", Name = "Room B", Lights = ["light.room_b"], Enabled = false }
 		];
 
 		SaveResult result = host.Save(config);
@@ -982,8 +992,8 @@ public sealed class LightingEngineHostTests
 		config.Global.KillSwitchEntity = Master;
 		config.Areas =
 		[
-			new AreaConfig { Name = "Room A", Lights = ["light.room_a"] },
-			new AreaConfig { Name = "Room B", Lights = ["light.room_b"] }
+			new AreaConfig { Id = "room_a", Name = "Room A", Lights = ["light.room_a"] },
+			new AreaConfig { Id = "room_b", Name = "Room B", Lights = ["light.room_b"] }
 		];
 
 		SaveResult result = host.Save(config);

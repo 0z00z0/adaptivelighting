@@ -25,7 +25,7 @@ public sealed class CurveBlendTests
 	private static DateTimeOffset At(int hour, int minute = 0) => new(2026, 1, 15, hour, minute, 0, TimeSpan.Zero);
 
 	private static TimePeriodConfig Period(string name, string start, double brightnessPct) =>
-		new() { Name = name, Start = start, BrightnessPct = brightnessPct, ColorTempKelvin = 2700 };
+		new() { Id = name, Name = name, Start = start, BrightnessPct = brightnessPct, ColorTempKelvin = 2700 };
 
 	// A row for whichever periods this one room follows the curve for; the room named nowhere else in this
 	// file, so its own PeriodId is enough to key the row.
@@ -132,8 +132,8 @@ public sealed class CurveBlendTests
 	{
 		List<TimePeriodConfig> table =
 		[
-			new() { Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
-			new() { Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
+			new() { Id = "day", Name = "day", Start = "07:00", BrightnessPct = 90, ColorTempKelvin = 4500 },
+			new() { Id = "evening", Name = "evening", Start = "18:00", BrightnessPct = 70, ColorTempKelvin = 2700 }
 		];
 
 		CircadianCalculator calculator = new(

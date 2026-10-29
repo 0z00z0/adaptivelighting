@@ -376,15 +376,13 @@
 		Set(() => period.StartsOnMotionAreas = areaIds.Count > 0 ? [.. areaIds] : null);
 
 	/// <summary>What a period starts as, in the one place that decides it.</summary>
-	// The id is minted here and never left to the save-time migration: a room level set before the first save
-	// would be written against a period with no id and orphan itself the moment one is assigned. The name is
-	// numbered apart, because three rows called "new period" all at 12:00 is an unreadable table.
-	public static TimePeriodConfig NewPeriod(IReadOnlyList<TimePeriodConfig>? existing = null)
+	// The id is issued here, from the document's counter: a room level set before the first save names it. The name
+	// is numbered apart, because three rows called "new period" all at 12:00 is an unreadable table.
+	public static TimePeriodConfig NewPeriod(IReadOnlyList<TimePeriodConfig>? existing = null, IdCounters? counters = null)
 	{
 		const string Stem = "new period";
 
 		string name = Stem;
-		HashSet<string> takenIds = new(StringComparer.OrdinalIgnoreCase);
 
 		if (existing is { Count: > 0 })
 		{
@@ -394,14 +392,11 @@
 
 			for (int suffix = 2; taken.Contains(name); suffix++)
 				name = $"{Stem} {suffix}";
-
-			foreach (TimePeriodConfig period in existing)
-				takenIds.Add(period.Key);
 		}
 
 		return new TimePeriodConfig
 		{
-			Id = StableId.Create(name, takenIds),
+			Id = ReadableId.NextPeriod(counters ?? new IdCounters(), existing ?? []),
 			Name = name,
 			Start = "12:00",
 			BrightnessPct = 80,
@@ -411,7 +406,7 @@
 
 	private async Task Add()
 	{
-		Periods.Add(NewPeriod(Periods));
+		Periods.Add(NewPeriod(Periods, Global?.IdCounters));
 		await Changed.InvokeAsync().ConfigureAwait(false);
 	}
 

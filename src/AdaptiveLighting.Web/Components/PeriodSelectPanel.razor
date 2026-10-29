@@ -334,7 +334,7 @@
 
 	/// <summary>Appends a period, so a helper with more options than periods can be finished here.</summary>
 	// PeriodsEditor.NewPeriod's row and never one built here: the two "add a period" buttons must agree.
-	private Task AddPeriod() => Set(() => Periods.Add(PeriodsEditor.NewPeriod(Periods)));
+	private Task AddPeriod() => Set(() => Periods.Add(PeriodsEditor.NewPeriod(Periods, Global.IdCounters)));
 
 	/// <summary>The block to write into, created on first use.</summary>
 	// Creating it here is safe: ConfigNormalizer drops a block that ends up saying nothing.

@@ -21,6 +21,7 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 	private readonly IServiceScopeFactory _scopeFactory;
 	private readonly ILogger<AreaSnapshotCache> _logger;
 	private readonly ActivityLog _activity;
+	private readonly LightingEngineHost? _engine;
 	private readonly ConcurrentDictionary<string, AreaSnapshot> _snapshots = new(StringComparer.Ordinal);
 	private readonly Subject<AreaSnapshot> _changes = new();
 
@@ -34,11 +35,13 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 	///     The history the activity page reads. Fed from here, not by a second subscriber, so both views come off
 	///     the one subscription and the history starts at process start.
 	/// </param>
-	public AreaSnapshotCache(IServiceScopeFactory scopeFactory, ILogger<AreaSnapshotCache> logger, ActivityLog activity)
+	/// <param name="engine">Names the period of a level test from the document; the event carries only its id.</param>
+	public AreaSnapshotCache(IServiceScopeFactory scopeFactory, ILogger<AreaSnapshotCache> logger, ActivityLog activity, LightingEngineHost? engine = null)
 	{
 		_scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
 		_activity = activity ?? throw new ArgumentNullException(nameof(activity));
+		_engine = engine;
 	}
 
 	/// <summary>Every area the cache has heard from, newest state per area, ordered by name.</summary>
@@ -51,28 +54,20 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 
 	public bool HasData => !_snapshots.IsEmpty;
 
-	/// <summary>A room's newest snapshot, by area id, or by display name for a room with no area; <c>null</c> when it
-	/// has not reported.</summary>
-	// Never the name for a room with an area: another room on another area may carry the same name.
-	public AreaSnapshot? Find(string? areaId, string? name)
-	{
-		if (areaId is { Length: > 0 } id)
-			return _snapshots.TryGetValue(id, out AreaSnapshot? byId) && string.Equals(byId.AreaId, id, StringComparison.Ordinal)
-				? byId
-				: null;
-
-		return name is { Length: > 0 }
-			? Snapshots.FirstOrDefault(snapshot =>
-				snapshot.AreaId is not { Length: > 0 } && string.Equals(snapshot.AreaName, name, StringComparison.OrdinalIgnoreCase))
+	/// <summary>A room's newest snapshot by its room key (<see cref="AreaConfig.Key"/>); <c>null</c> when it has not reported.</summary>
+	public AreaSnapshot? Find(string? roomKey) =>
+		roomKey is { Length: > 0 } key
+		&& _snapshots.TryGetValue(key, out AreaSnapshot? found)
+		&& string.Equals(found.RoomKey, key, StringComparison.Ordinal)
+			? found
 			: null;
-	}
 
-	/// <summary>What a snapshot is filed under: its area id, or its name when it has none.</summary>
+	/// <summary>What a snapshot is filed under: its area id, else its room id.</summary>
 	public static string KeyOf(AreaSnapshot snapshot)
 	{
 		ArgumentNullException.ThrowIfNull(snapshot);
 
-		return snapshot.AreaId is { Length: > 0 } areaId ? areaId : snapshot.AreaName;
+		return snapshot.RoomKey;
 	}
 
 	public Task StartAsync(CancellationToken cancellationToken)
@@ -127,6 +122,9 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		if (snapshot is null)
 			return;
 
+		if (snapshot.TestingPeriodId is { Length: > 0 } tested && PeriodName(tested) is { } name)
+			snapshot = snapshot with { TestingPeriodName = name };
+
 		// Keyed on the registry area id, the stable half: a room renamed while a page is open replaces itself
 		// instead of arriving as a second entry.
 		_snapshots[KeyOf(snapshot)] = snapshot;
@@ -136,5 +134,18 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		_activity.Record(snapshot);
 
 		_changes.OnNext(snapshot);
+	}
+
+	// Read only on a level test, a few times a day, so the file is parsed then and not on every report.
+	private string? PeriodName(string periodId)
+	{
+		try
+		{
+			return _engine?.Store.Load().Periods.ByKey(periodId)?.Name;
+		}
+		catch (LightingConfigException)
+		{
+			return null;
+		}
 	}
 }

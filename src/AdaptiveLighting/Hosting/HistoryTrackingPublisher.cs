@@ -21,7 +21,7 @@ internal sealed class HistoryTrackingPublisher(
 	{
 		inner.Publish(snapshot);
 
-		string key = snapshot.AreaId is { Length: > 0 } id ? id : snapshot.AreaName;
+		string key = snapshot.RoomKey;
 		live[key] = new AreaHistory(snapshot.LastMotionAt, snapshot.ChangedAt, snapshot.ChangedBy);
 
 		// Coalesced: this only marks the file dirty. The registry's own flusher writes it, at most once a minute.

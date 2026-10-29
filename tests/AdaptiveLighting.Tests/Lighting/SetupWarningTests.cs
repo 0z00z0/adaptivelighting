@@ -30,7 +30,7 @@ public sealed class SetupWarningTests
 
 	private static AdaptiveLightingConfig Document(params AreaConfig[] areas) => new()
 	{
-		Periods = [new TimePeriodConfig { Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
+		Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
 		Areas = [.. areas]
 	};
 

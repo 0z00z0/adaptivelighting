@@ -36,8 +36,8 @@ public sealed class HouseModeSceneTests
 		{
 			// No lux sensor anywhere, so the room always counts as dark and the darkness gate is never the reason.
 			Global = new GlobalConfig { HouseMode = houseMode, SmoothTransitions = false },
-			Periods = [new TimePeriodConfig { Name = "day", Start = "07:00", BrightnessPct = 60, ColorTempKelvin = 3000 }],
-			Areas = [new AreaConfig { Name = "Rom", Lights = [Light], MotionSensors = [Motion] }]
+			Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "07:00", BrightnessPct = 60, ColorTempKelvin = 3000 }],
+			Areas = [new AreaConfig { Id = "rom", Name = "Rom", Lights = [Light], MotionSensors = [Motion] }]
 		};
 
 		return new AreaTestBuilder()

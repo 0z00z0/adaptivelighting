@@ -8,8 +8,8 @@ namespace Adaptive.Engine;
 public interface ILastPeriodStore
 {
 	/// <summary>The period the previous run recorded, or <c>null</c> when there is none to be had.</summary>
-	// A first run, a deleted file and a corrupt one all answer null. The value is a TimePeriodConfig.Id, or a
-	// period name in a file written before ids existed; ModeMonitor translates the older shape.
+	// A first run, a deleted file and a corrupt one all answer null. The value is a TimePeriodConfig.Id; one naming
+	// no period reads as unknown.
 	string? Load();
 
 	/// <summary>Records the period now current, by key, reporting failure and never throwing.</summary>

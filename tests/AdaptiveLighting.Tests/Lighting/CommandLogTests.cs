@@ -127,6 +127,7 @@ public sealed class CommandLogTests
 			[
 				new AreaConfig
 				{
+					Id = "room_a",
 					Name = "Room A",
 					Lights = ["light.room_lamp"],
 					MotionSensors = ["binary_sensor.room_motion"],

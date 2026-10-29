@@ -31,8 +31,7 @@ public class AdaptiveLightingConfig
 	/// <summary>The document a fresh installation starts from.</summary>
 	/// <remarks>
 	///     Names no entities. The placeholder area id is one Home Assistant does not know, so a fresh install fails
-	///     validation instead of having discovery quietly fill the field in. Period ids are minted here, so a seed
-	///     document is already in the shape the migration produces and never takes the migrating write.
+	///     validation instead of having discovery quietly fill the field in. Period ids are minted here.
 	/// </remarks>
 	public static AdaptiveLightingConfig CreateDefault()
 	{
@@ -51,7 +50,8 @@ public class AdaptiveLightingConfig
 			Areas = [],
 		};
 
-		StableKeyMigration.Apply(config);
+		foreach (TimePeriodConfig period in config.Periods)
+			period.Id = ReadableId.NextPeriod(config.Global.IdCounters, config.Periods);
 
 		return config;
 	}
@@ -184,6 +184,9 @@ public class GlobalConfig
 	///     never be generalised to it. Zero or less switches the rule off.
 	/// </remarks>
 	public int LuxSensorStaleAfterMinutes { get; set; } = 120;
+
+	/// <summary>The highest period and room number ever issued. Raised by <see cref="ReadableId"/>, never lowered by hand.</summary>
+	public IdCounters IdCounters { get; set; } = new();
 }
 
 /// <summary>

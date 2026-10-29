@@ -27,15 +27,18 @@ internal static class AreaRules
 		foreach (string areaId in duplicateAreas)
 			result.AddError($"Duplicate area '{areaId}' — two rooms cannot use one area. Point one of them at another area.");
 
-		// A room with no area is keyed by its name (history, command log). Lifted once such rooms get ids of their own.
-		IEnumerable<string> duplicateNames = config.Areas
-			.Where(z => string.IsNullOrWhiteSpace(z.AreaId))
-			.GroupBy(z => z.DisplayName, StringComparer.OrdinalIgnoreCase)
-			.Where(g => g.Count() > 1)
+		// Names may repeat: a room is known by its area id, else its own Id.
+		IEnumerable<string> duplicateRoomIds = config.Areas
+			.Where(z => string.IsNullOrWhiteSpace(z.AreaId) && z.Key.Length > 0)
+			.GroupBy(z => z.Key, StringComparer.OrdinalIgnoreCase)
+			.Where(g => g.Count() > 1 || config.Areas.Any(other => string.Equals(other.AreaId?.Trim(), g.Key, StringComparison.OrdinalIgnoreCase)))
 			.Select(g => g.Key);
 
-		foreach (string name in duplicateNames)
-			result.AddError($"Duplicate room name '{name}' — two rooms with no area cannot share one name. Rename one of them.");
+		foreach (string roomId in duplicateRoomIds)
+			result.AddError($"Two rooms share the id '{roomId}'. Ids are issued once and never edited; give one of them back its own.");
+
+		ReadableId.ValidateCounter(
+			"room", ReadableId.RoomPrefix, config.Global.IdCounters.Rooms, config.Areas.Select(z => z.Id), result);
 
 		foreach (AreaConfig area in config.Areas)
 		{
@@ -163,6 +166,9 @@ internal static class AreaRules
 			result.AddAreaError(area, "This room names no Home Assistant area and lists no lights, so nothing can be found for it. Pick an area, or name its lights by hand.");
 			return;
 		}
+
+		if (area.Key.Length == 0)
+			result.AddAreaError(area, "This room has no area and no Id. Give it an Id such as room_001, or pick an area.");
 
 		if (knownAreaIds is not null && area.AreaId is { Length: > 0 } areaId && !knownAreaIds.Contains(areaId))
 			result.AddAreaError(area,

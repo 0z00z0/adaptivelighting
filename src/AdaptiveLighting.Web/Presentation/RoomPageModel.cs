@@ -1355,7 +1355,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 		StillState before = Still;
 
-		Snapshot = _cache.Find(room.AreaId, RoomName);
+		Snapshot = _cache.Find(room.Key);
 
 		// Resolved here and never taken from the snapshot's PeriodName: the levels table has to be right for a
 		// room that has never reported, and a stale snapshot would leave the now badge on last night's period.

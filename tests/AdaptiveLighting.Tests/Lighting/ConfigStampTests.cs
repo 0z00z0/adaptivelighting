@@ -10,7 +10,7 @@ public sealed class ConfigStampTests
 {
 	private static AdaptiveLightingConfig TwoRooms() => new()
 	{
-		Periods = [new TimePeriodConfig { Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
+		Periods = [new TimePeriodConfig { Id = "day", Name = "day", Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
 		Areas =
 		[
 			new AreaConfig { AreaId = "stue" },
@@ -91,7 +91,7 @@ public sealed class ConfigStampTests
 		AdaptiveLightingConfig two = TwoRooms();
 
 		two.ConfigName = "somebody renamed the house";
-		two.Periods.Add(new TimePeriodConfig { Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 });
+		two.Periods.Add(new TimePeriodConfig { Id = "night", Name = "night", Start = "22:30", BrightnessPct = 15, ColorTempKelvin = 2200 });
 		Room(two, "kjokken").Lights = ["light.kjokken"];
 
 		Assert.AreEqual(ConfigStamp.OfArea(one, "stue"), ConfigStamp.OfArea(two, "stue"));

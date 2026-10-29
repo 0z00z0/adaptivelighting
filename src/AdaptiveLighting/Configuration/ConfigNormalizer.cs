@@ -13,9 +13,11 @@ public static class ConfigNormalizer
 
 		GlobalConfig global = config.Global;
 
-		// Before anything that reads a key: a period or option added since the last save has no id yet, and the
-		// referenced-options scan below and the whole engine resolve by one.
-		StableKeyMigration.Apply(config);
+		// An id in use was issued, so a hand-written one raises its counter; never lowered.
+		global.IdCounters.Periods = Math.Max(
+			global.IdCounters.Periods, ReadableId.HighestInUse(ReadableId.PeriodPrefix, config.Periods.Select(p => p.Id)));
+		global.IdCounters.Rooms = Math.Max(
+			global.IdCounters.Rooms, ReadableId.HighestInUse(ReadableId.RoomPrefix, config.Areas.Select(a => a.Id)));
 
 		// Written out as Lux, so a file passes through here on its first save and never says Either again.
 		if (config.Defaults.Darkness is DarknessSource.Either)

@@ -14,6 +14,15 @@ public class AreaConfig
 	/// <summary>HA registry area id (the slug), not the display name. Drives discovery.</summary>
 	public string? AreaId { get; set; }
 
+	/// <summary>A room without an area only: <c>room_001</c>. Issued once, never edited; a room with an area has none.</summary>
+	public string? Id { get; set; }
+
+	/// <summary>What this room is known by: its area id, else <see cref="Id"/>; empty when it has neither.</summary>
+	[YamlIgnore]
+	public string Key => AreaId is { Length: > 0 } areaId && areaId.Trim() is { Length: > 0 } trimmed
+		? trimmed
+		: Id?.Trim() ?? "";
+
 	public List<string>? Lights { get; set; }
 
 	public List<string>? MotionSensors { get; set; }

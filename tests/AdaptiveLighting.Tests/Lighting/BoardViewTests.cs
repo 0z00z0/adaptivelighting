@@ -628,9 +628,9 @@ public sealed class BoardViewTests
 		IReadOnlyList<BandSegment> band = BoardView.Band(
 			Table(
 			[
-				new TimePeriodConfig { Name = "Day", Start = "06:00", ColorTempKelvin = 4300 },
-				new TimePeriodConfig { Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
-				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
+				new TimePeriodConfig { Id = "Day", Name = "Day", Start = "06:00", ColorTempKelvin = 4300 },
+				new TimePeriodConfig { Id = "Evening", Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
+				new TimePeriodConfig { Id = "Night", Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
 			]),
 			Window());
 
@@ -647,8 +647,8 @@ public sealed class BoardViewTests
 		IReadOnlyList<BandSegment> band = BoardView.Band(
 			Table(
 			[
-				new TimePeriodConfig { Name = "Evening", Start = "sunset-01:00", ColorTempKelvin = 2700 },
-				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
+				new TimePeriodConfig { Id = "Evening", Name = "Evening", Start = "sunset-01:00", ColorTempKelvin = 2700 },
+				new TimePeriodConfig { Id = "Night", Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
 			]),
 			Window());
 
@@ -660,7 +660,7 @@ public sealed class BoardViewTests
 	public void An_Unparseable_Start_Is_Left_Out()
 	{
 		IReadOnlyList<BandSegment> band = BoardView.Band(
-			Table([new TimePeriodConfig { Name = "Broken", Start = "half past whenever", ColorTempKelvin = 2700 }]),
+			Table([new TimePeriodConfig { Id = "Broken", Name = "Broken", Start = "half past whenever", ColorTempKelvin = 2700 }]),
 			Window());
 
 		Assert.AreEqual(0, band.Count);
@@ -673,8 +673,8 @@ public sealed class BoardViewTests
 		IReadOnlyList<BandSegment> band = BoardView.Band(
 			Table(
 			[
-				new TimePeriodConfig { Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
-				new TimePeriodConfig { Name = "Small hours", Start = "01:00", ColorTempKelvin = 2200 }
+				new TimePeriodConfig { Id = "Evening", Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
+				new TimePeriodConfig { Id = "Small hours", Name = "Small hours", Start = "01:00", ColorTempKelvin = 2200 }
 			]),
 			Window());
 
@@ -695,8 +695,8 @@ public sealed class BoardViewTests
 		IReadOnlyList<BandSegment> band = BoardView.Band(
 			Table(
 			[
-				new TimePeriodConfig { Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
-				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200, StartsOnMotion = true }
+				new TimePeriodConfig { Id = "Evening", Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
+				new TimePeriodConfig { Id = "Night", Name = "Night", Start = "22:30", ColorTempKelvin = 2200, StartsOnMotion = true }
 			],
 			heldBack: (period, _) => new PeriodHold(period == "Night", null)),
 			Window());
@@ -728,8 +728,8 @@ public sealed class BoardViewTests
 		IReadOnlyList<BandSegment> band = BoardView.Band(
 			Table(
 			[
-				new TimePeriodConfig { Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
-				new TimePeriodConfig { Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
+				new TimePeriodConfig { Id = "Evening", Name = "Evening", Start = "20:45", ColorTempKelvin = 2700 },
+				new TimePeriodConfig { Id = "Night", Name = "Night", Start = "22:30", ColorTempKelvin = 2200 }
 			],
 			global: global,
 			selectValue: "Vinter"),
@@ -756,9 +756,9 @@ public sealed class BoardViewTests
 		IReadOnlyList<BandSegment> band = BoardView.Band(
 			Table(
 			[
-				new TimePeriodConfig { Name = "Night", Start = "00:00", ColorTempKelvin = 2200 },
-				new TimePeriodConfig { Name = "Small hours", Start = "01:30", ColorTempKelvin = 2500 },
-				new TimePeriodConfig { Name = "Morning", Start = "05:00", ColorTempKelvin = 4300 }
+				new TimePeriodConfig { Id = "Night", Name = "Night", Start = "00:00", ColorTempKelvin = 2200 },
+				new TimePeriodConfig { Id = "Small hours", Name = "Small hours", Start = "01:30", ColorTempKelvin = 2500 },
+				new TimePeriodConfig { Id = "Morning", Name = "Morning", Start = "05:00", ColorTempKelvin = 4300 }
 			]),
 			window);
 
@@ -780,9 +780,9 @@ public sealed class BoardViewTests
 		IReadOnlyList<BandSegment> band = BoardView.Band(
 			Table(
 			[
-				new TimePeriodConfig { Name = "Night", Start = "00:00", ColorTempKelvin = 2200 },
-				new TimePeriodConfig { Name = "Small hours", Start = "01:30", ColorTempKelvin = 2500 },
-				new TimePeriodConfig { Name = "Morning", Start = "04:00", ColorTempKelvin = 4300 }
+				new TimePeriodConfig { Id = "Night", Name = "Night", Start = "00:00", ColorTempKelvin = 2200 },
+				new TimePeriodConfig { Id = "Small hours", Name = "Small hours", Start = "01:30", ColorTempKelvin = 2500 },
+				new TimePeriodConfig { Id = "Morning", Name = "Morning", Start = "04:00", ColorTempKelvin = 4300 }
 			]),
 			window);
 
