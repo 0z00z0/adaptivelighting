@@ -21,6 +21,7 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 	private readonly IServiceScopeFactory _scopeFactory;
 	private readonly ILogger<AreaSnapshotCache> _logger;
 	private readonly ActivityLog _activity;
+	private readonly LightingEngineHost? _engine;
 	private readonly ConcurrentDictionary<string, AreaSnapshot> _snapshots = new(StringComparer.Ordinal);
 	private readonly Subject<AreaSnapshot> _changes = new();
 
@@ -34,11 +35,13 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 	///     The history the activity page reads. Fed from here, not by a second subscriber, so both views come off
 	///     the one subscription and the history starts at process start.
 	/// </param>
-	public AreaSnapshotCache(IServiceScopeFactory scopeFactory, ILogger<AreaSnapshotCache> logger, ActivityLog activity)
+	/// <param name="engine">Names the period of a level test from the document; the event carries only its id.</param>
+	public AreaSnapshotCache(IServiceScopeFactory scopeFactory, ILogger<AreaSnapshotCache> logger, ActivityLog activity, LightingEngineHost? engine = null)
 	{
 		_scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
 		_activity = activity ?? throw new ArgumentNullException(nameof(activity));
+		_engine = engine;
 	}
 
 	/// <summary>Every area the cache has heard from, newest state per area, ordered by name.</summary>
@@ -119,6 +122,9 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		if (snapshot is null)
 			return;
 
+		if (snapshot.TestingPeriodId is { Length: > 0 } tested && PeriodName(tested) is { } name)
+			snapshot = snapshot with { TestingPeriodName = name };
+
 		// Keyed on the registry area id, the stable half: a room renamed while a page is open replaces itself
 		// instead of arriving as a second entry.
 		_snapshots[KeyOf(snapshot)] = snapshot;
@@ -128,5 +134,18 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		_activity.Record(snapshot);
 
 		_changes.OnNext(snapshot);
+	}
+
+	// Read only on a level test, a few times a day, so the file is parsed then and not on every report.
+	private string? PeriodName(string periodId)
+	{
+		try
+		{
+			return _engine?.Store.Load().Periods.ByKey(periodId)?.Name;
+		}
+		catch (LightingConfigException)
+		{
+			return null;
+		}
 	}
 }

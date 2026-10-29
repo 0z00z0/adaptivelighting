@@ -775,7 +775,7 @@ public static class ActivityView
 		TransitionReason.SensorBattery => snapshot.LowBatteries is { Count: > 0 }
 			? "Motion sensor battery low"
 			: "Motion sensor batteries fine again",
-		TransitionReason.LevelTestStarted => snapshot.TestingPeriodId is { Length: > 0 } tested
+		TransitionReason.LevelTestStarted => snapshot.TestingPeriodName is { Length: > 0 } tested
 			? $"Testing '{tested}' on the lights"
 			: "Testing a period on the lights",
 		TransitionReason.LevelTestEnded => "Test ended, lights back",

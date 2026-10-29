@@ -21,7 +21,6 @@ public sealed class AreaController : IDisposable
 	private readonly ResolvedArea _area;
 	private readonly string? _areaId;
 	private readonly string? _roomId;
-	private readonly IReadOnlyList<TimePeriodConfig> _schedule;
 	private readonly GlobalConfig _global;
 
 	private readonly IlluminanceGate _gateSensor;
@@ -180,7 +179,6 @@ public sealed class AreaController : IDisposable
 		_batteries = area.MotionBatteries;
 		_global = house.Global;
 		IReadOnlyList<TimePeriodConfig> schedule = house.Periods;
-		_schedule = schedule;
 		CircadianCalculator calculator = circadian ?? throw new ArgumentNullException(nameof(circadian));
 		_publisher = house.Publisher;
 		_houseChanged = house.HouseChanged;
@@ -2099,8 +2097,7 @@ public sealed class AreaController : IDisposable
 			IsLeadIn: _leadIn,
 			LowBatteries: _lowBatteries,
 			ActiveModeName: _house.ActiveModeName,
-			RoomId: _roomId,
-			TestingPeriodName: _levelTest.PeriodId is { } tested ? _schedule.ByKey(tested)?.Name : null);
+			RoomId: _roomId);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>

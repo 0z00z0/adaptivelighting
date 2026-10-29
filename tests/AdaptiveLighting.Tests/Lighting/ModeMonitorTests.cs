@@ -473,24 +473,24 @@ public sealed class ModeMonitorTests
 		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "same period as when it stopped: nothing happened to act on");
 	}
 
-	// The note is written by key, and a note from before ids holds a name: read as-is it looks like a period the
-	// table does not have.
+	// The first start after the ids are renumbered: the note holds an id no period has any more.
 	[TestMethod]
-	public void StartWithANoteFromBeforeIdsExisted_ReadsTheNameAsThatPeriodsId()
+	public void StartWithANoteNamingNoPeriod_ReadsAsUnknown_AndSetsNoMode()
 	{
 		List<TimePeriodConfig> keyed =
 		[
-			new() { Id = "morning-aaaa", Name = "morning", Start = "06:30" },
-			new() { Id = "evening-bbbb", Name = "evening", Start = "18:00" },
-			new() { Id = "night-cccc", Name = "night", Start = "23:00", SetsModeId = "Sover" }
+			new() { Id = "period_001", Name = "morning", Start = "06:30" },
+			new() { Id = "period_002", Name = "evening", Start = "18:00" },
+			new() { Id = "period_003", Name = "night", Start = "23:00", SetsModeId = "Sover" }
 		];
 
-		Rig rig = Started(startAt: HalfPastNight, periods: keyed, initialSelect: "Gjester", lastPeriod: EndedIn("night"));
+		Rig rig = Started(startAt: HalfPastNight, periods: keyed, initialSelect: "Gjester", lastPeriod: EndedIn("evening-bbbb"));
 
 		Advance(rig, TimeSpan.FromMinutes(30));
 
-		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "the note names the period the engine is already in");
-		CollectionAssert.AreEqual(Array.Empty<string>(), rig.LastPeriod.Saved, "and nothing needs rewriting");
+		Assert.AreEqual(0, SelectCalls(rig.Ha, "Sover"), "an id naming no period is unknown, not a boundary crossed while stopped");
+		Assert.AreEqual(0, rig.Ha.Calls.Count(c => c.Domain == "input_select" && c.Service == "select_option"),
+			"the mode a person chose is left alone");
 	}
 
 	[TestMethod]
