@@ -16,13 +16,13 @@ public sealed class ReadableIdTests
 		periods.RemoveAt(2);
 
 		Assert.AreEqual("period_004", ReadableId.NextPeriod(counters, periods));
-		Assert.AreEqual(4, counters.Period);
+		Assert.AreEqual(4, counters.Periods);
 	}
 
 	[TestMethod]
 	public void An_Id_Widens_Past_999_And_Earlier_Ids_Keep_Their_Shape()
 	{
-		IdCounters counters = new() { Room = 999 };
+		IdCounters counters = new() { Rooms = 999 };
 
 		Assert.AreEqual("room_1000", ReadableId.NextRoom(counters, []));
 		Assert.AreEqual("room_007", ReadableId.Format(ReadableId.RoomPrefix, 7));

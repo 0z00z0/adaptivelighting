@@ -82,7 +82,7 @@ public sealed class ReadableIdConversionTests
 
 		Assert.IsTrue(changed, "the read has to report the conversion, or the file is never written back");
 		CollectionAssert.AreEqual(new[] { "period_001", "period_002", "period_003" }, config.Periods.Select(p => p.Id).ToArray());
-		Assert.AreEqual(3, config.Global.IdCounters.Period);
+		Assert.AreEqual(3, config.Global.IdCounters.Periods);
 
 		AreaConfig living = config.Areas[0];
 		HouseModeConfig mode = config.Global.HouseMode!;
@@ -134,7 +134,7 @@ public sealed class ReadableIdConversionTests
 		Assert.AreEqual("living_room", config.Areas[0].Key);
 		Assert.IsNull(config.Areas[0].Id);
 		Assert.AreEqual("room_001", config.Areas[1].Key);
-		Assert.AreEqual(1, config.Global.IdCounters.Room);
+		Assert.AreEqual(1, config.Global.IdCounters.Rooms);
 	}
 
 	[TestMethod]

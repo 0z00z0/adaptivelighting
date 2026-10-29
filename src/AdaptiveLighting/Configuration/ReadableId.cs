@@ -5,10 +5,10 @@ namespace Adaptive.Settings;
 /// <summary>The highest number ever issued for each kind of id. Only ever raised, so a deleted id is never issued again.</summary>
 public sealed class IdCounters
 {
-	public int Period { get; set; }
+	public int Periods { get; set; }
 
 	/// <summary>Rooms without a Home Assistant area only; a room with one is known by its area id.</summary>
-	public int Room { get; set; }
+	public int Rooms { get; set; }
 }
 
 /// <summary>The ids this document's own references use: a prefix and a running number, <c>period_001</c>.</summary>
@@ -50,25 +50,25 @@ public static class ReadableId
 		return ids.Select(id => NumberOf(prefix, id?.Trim()) ?? 0).DefaultIfEmpty(0).Max();
 	}
 
-	/// <summary>A new period id; <see cref="IdCounters.Period"/> then holds its number.</summary>
+	/// <summary>A new period id; <see cref="IdCounters.Periods"/> then holds its number.</summary>
 	public static string NextPeriod(IdCounters counters, IEnumerable<TimePeriodConfig> periods)
 	{
 		ArgumentNullException.ThrowIfNull(counters);
 		ArgumentNullException.ThrowIfNull(periods);
 
-		counters.Period = Math.Max(counters.Period, HighestInUse(PeriodPrefix, periods.Select(period => period.Id))) + 1;
+		counters.Periods = Math.Max(counters.Periods, HighestInUse(PeriodPrefix, periods.Select(period => period.Id))) + 1;
 
-		return Format(PeriodPrefix, counters.Period);
+		return Format(PeriodPrefix, counters.Periods);
 	}
 
-	/// <summary>A new id for a room without an area; <see cref="IdCounters.Room"/> then holds its number.</summary>
+	/// <summary>A new id for a room without an area; <see cref="IdCounters.Rooms"/> then holds its number.</summary>
 	public static string NextRoom(IdCounters counters, IEnumerable<AreaConfig> areas)
 	{
 		ArgumentNullException.ThrowIfNull(counters);
 		ArgumentNullException.ThrowIfNull(areas);
 
-		counters.Room = Math.Max(counters.Room, HighestInUse(RoomPrefix, areas.Select(area => area.Id))) + 1;
+		counters.Rooms = Math.Max(counters.Rooms, HighestInUse(RoomPrefix, areas.Select(area => area.Id))) + 1;
 
-		return Format(RoomPrefix, counters.Room);
+		return Format(RoomPrefix, counters.Rooms);
 	}
 }
