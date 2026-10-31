@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.10.6] - 2026-10-31
+
 - The studio theme's typeface is Cascadia Code, with ligatures.
 - Two rooms may share a name, with or without a Home Assistant area; two rooms on the same area are refused instead.
 - Periods have readable ids such as `period_001`, and rooms without a Home Assistant area have ids such as `room_001`, each issued once from a counter in the settings file; a house-mode option is known by its own text, nothing is looked up by name any more, and a sleep option dims to the period it names or the period that switches the house to it, never to one because it is called night, and the event's `testing_period_id` carries the new ids. The first start after the update rewrites each settings file once, and the old file stays as the backup copy. The log line reporting that rewrite now comes from `LightingEngineHost`, not `LightingConfigStore`.
