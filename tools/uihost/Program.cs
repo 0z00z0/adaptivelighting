@@ -275,7 +275,12 @@ static void AttachEngineAndSeedActivity(FakeHaContext ha, FakeHaRegistry registr
 	engine.Attach(ha, registry, DefaultScheduler.Instance);
 
 	AdaptiveLightingConfig config = AdaptiveLightingConfig.CreateDefault();
-	config.Areas.AddRange(CommissioningRooms(litHouse));
+	// No area here, so each room needs its own id: the board and the room tiles key on it.
+	foreach (AreaConfig room in CommissioningRooms(litHouse))
+	{
+		room.Id = ReadableId.NextRoom(config.Global.IdCounters, config.Areas);
+		config.Areas.Add(room);
+	}
 
 	SaveResult result = engine.Save(config);
 

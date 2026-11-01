@@ -20,6 +20,28 @@ public static class LabelMatch
 
 	public static bool IsKnownId(IReadOnlyList<RegistryLabel>? knownLabels, string? stored) => Carries(knownLabels, stored);
 
+	public static T? WithId<T>(IEnumerable<T> labels, Func<T, string> idOf, string? stored)
+		where T : class
+	{
+		ArgumentNullException.ThrowIfNull(labels);
+		ArgumentNullException.ThrowIfNull(idOf);
+
+		return stored is { Length: > 0 } ? labels.FirstOrDefault(label => string.Equals(idOf(label), stored, StringComparison.Ordinal)) : null;
+	}
+
+	/// <summary>The label's name; the stored value while no label is known, as when the registry is unreadable; else <c>null</c>.</summary>
+	public static string? ShownName<T>(IReadOnlyCollection<T> labels, Func<T, string> idOf, Func<T, string> nameOf, string stored)
+		where T : class
+	{
+		ArgumentNullException.ThrowIfNull(labels);
+		ArgumentNullException.ThrowIfNull(nameOf);
+
+		if (labels.Count == 0)
+			return stored;
+
+		return WithId(labels, idOf, stored) is { } label ? nameOf(label) : null;
+	}
+
 	/// <summary>The name to show for <paramref name="stored"/>, falling back to the stored value itself.</summary>
 	public static string DisplayName(IReadOnlyList<RegistryLabel>? knownLabels, string stored)
 	{

@@ -61,7 +61,7 @@
 
 	// The list's values are ids, so anything else needs an option of its own or the field would show as empty.
 	private bool IsUnlisted =>
-		Value is { Length: > 0 } && !Options.Any(option => string.Equals(option.Id, Value, StringComparison.Ordinal));
+		Value is { Length: > 0 } && LabelMatch.WithId(Options, option => option.Id, Value) is null;
 
 	private Task OnPicked(string picked)
 	{
