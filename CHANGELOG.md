@@ -12,6 +12,16 @@ against each other.
 
 ## [Unreleased]
 
+- The note of the last period crossed follows the periods to their new ids at the first start after the update, so the house still knows which period it is in; an older build discards the newer note.
+- A period added by hand to an older settings file no longer gives a sleep option the period called night as its dim period.
+- The label conversion runs once, at the first start, stores a label id in the label's own spelling, and also clears the retired defaults `adaptive_exclude` and `adaptive_motion`.
+- A save gives an id to a period, or to a room without a Home Assistant area, that has none.
+- Two periods sharing an old id leave the settings file unconverted, so the duplicate is still reported as an error.
+- A label setting shows its stored value while Home Assistant's labels cannot be read, instead of "No such label yet".
+- The sleep-option error and the documentation no longer advise adding a period named night.
+- The Web design uses Cascadia Code, with ligatures.
+- Rooms without a Home Assistant area keep their own card and tiles: the published event carries the room's key in a new `room_id` field, and an event without it is filed under `area_id`.
+
 ## [2026.10.6] - 2026-10-31
 
 - The studio theme's typeface is Cascadia Code, with ligatures.

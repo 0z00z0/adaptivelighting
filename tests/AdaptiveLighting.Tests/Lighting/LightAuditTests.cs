@@ -147,7 +147,7 @@ public sealed class LightAuditTests
 	// ===================== a bulb two rooms both command =====================
 
 	private static RoomUnderReview Room(string name, params string[] entityIds) =>
-		new(name, [.. entityIds.Select(entityId => Light(entityId))]);
+		new(name, [.. entityIds.Select(entityId => Light(entityId))], name);
 
 	/// <summary>No light has an area of its own, which every assertion below turns on.</summary>
 	private static bool Homeless(string entityId) => false;
@@ -212,7 +212,7 @@ public sealed class LightAuditTests
 	public void A_Bulb_Reached_Twice_By_One_Room_Is_Not_Shared()
 	{
 		IReadOnlyList<SuspectLight> shared = LightAudit.SharedBetweenRooms(
-			[new RoomUnderReview("Stue", [Light("light.benklys"), Light("light.benklys")])], Homeless);
+			[new RoomUnderReview("Stue", [Light("light.benklys"), Light("light.benklys")], "stue")], Homeless);
 
 		Assert.AreEqual(0, shared.Count, "one room commanding it twice is still one room");
 	}

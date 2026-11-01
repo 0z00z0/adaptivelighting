@@ -118,7 +118,7 @@ options is tagged with one behaviour:
 | Kind | What it does |
 |---|---|
 | **Normal** | Everyday lighting, and the option every reset returns to. Mark exactly one option Normal. |
-| **Sleep** | Rooms set to **Dims** while the house sleeps are held to one period's dimness — the one the option names, or `night` if it names none. Rooms on **Dims and stays off** stay dark. |
+| **Sleep** | Rooms set to **Dims** while the house sleeps are held to one period's dimness — the one the option names, or the period that switches the house to it. Rooms on **Dims and stays off** stay dark. |
 | **Away** | Runs a Home Assistant scene, or sweeps the lights off when no scene is named, and stands back until a reset fires. |
 | **Guest** | Runs a scene and holds the rooms. The engine commands nothing until the mode resets. |
 

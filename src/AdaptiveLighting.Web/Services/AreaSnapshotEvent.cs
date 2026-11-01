@@ -27,6 +27,10 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("area_id")]
 	public string? AreaId { get; init; }
 
+	/// <summary>The room's key: its area id, else its <c>room_001</c> id; <c>null</c> from a build that never published it.</summary>
+	[JsonPropertyName("room_id")]
+	public string? RoomId { get; init; }
+
 	/// <summary>The <see cref="AreaState"/> name.</summary>
 	[JsonPropertyName("state")]
 	public string? State { get; init; }
@@ -232,7 +236,8 @@ public sealed record AreaSnapshotEvent
 			LowBatteries: MotionSensorsLowBattery is { Count: > 0 } low
 				? [.. low.Where(battery => battery.EntityId is { Length: > 0 }).Select(battery => new SensorBattery(battery.EntityId!, battery.LevelPct))]
 				: null,
-			ActiveModeName: ActiveModeName);
+			ActiveModeName: ActiveModeName,
+			RoomId: RoomId);
 	}
 }
 

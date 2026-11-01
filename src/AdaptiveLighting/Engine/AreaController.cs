@@ -20,7 +20,7 @@ public sealed class AreaController : IDisposable
 	private readonly IScheduler _scheduler;
 	private readonly ResolvedArea _area;
 	private readonly string? _areaId;
-	private readonly string? _roomId;
+	private readonly string _roomKey;
 	private readonly GlobalConfig _global;
 
 	private readonly IlluminanceGate _gateSensor;
@@ -155,11 +155,11 @@ public sealed class AreaController : IDisposable
 		HouseWiring house,
 		ResolvedArea area,
 		CircadianCalculator circadian,
+		string roomKey,
 		string? areaId = null,
 		IObservable<Unit>? sunMoved = null,
 		IReadOnlyDictionary<string, CircadianCalculator>? lightCalculators = null,
-		Func<IReadOnlyList<MotionBattery>>? findBatteries = null,
-		string? roomId = null)
+		Func<IReadOnlyList<MotionBattery>>? findBatteries = null)
 	{
 		ArgumentNullException.ThrowIfNull(house);
 		ArgumentNullException.ThrowIfNull(house.LoggerFactory);
@@ -183,7 +183,7 @@ public sealed class AreaController : IDisposable
 		_publisher = house.Publisher;
 		_houseChanged = house.HouseChanged;
 		_areaId = areaId is { Length: > 0 } ? areaId : null;
-		_roomId = _areaId is null && roomId is { Length: > 0 } ? roomId : null;
+		_roomKey = roomKey;
 
 		ILightActuator lights = house.CommandLog is { } commandLog
 			? commandLog.Wrap(house.Actuator, CommandLog.FolderFor(RoomKey), area.Name,
@@ -251,8 +251,8 @@ public sealed class AreaController : IDisposable
 	/// <summary>The Home Assistant area this controller was built for, or <c>null</c> for one configured without.</summary>
 	public string? AreaId => _areaId;
 
-	/// <summary>What the room is known by: its area id, else its room id.</summary>
-	public string RoomKey => _areaId ?? _roomId ?? "";
+	/// <summary>What the room is known by: <see cref="AreaConfig.Key"/>.</summary>
+	public string RoomKey => _roomKey;
 
 	/// <summary>Whether this room's own setting has it switched on, whatever the master switch says.</summary>
 	public bool Enabled => _area.Settings.Enabled;
@@ -2097,7 +2097,7 @@ public sealed class AreaController : IDisposable
 			IsLeadIn: _leadIn,
 			LowBatteries: _lowBatteries,
 			ActiveModeName: _house.ActiveModeName,
-			RoomId: _roomId);
+			RoomId: _roomKey);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>

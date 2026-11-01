@@ -207,9 +207,9 @@ public sealed class ActivityLogTests
 	{
 		ActivityEntry[] entries = [Entry(2, Report("Stue")), Entry(1, Report("Kjøkken"))];
 
-		Assert.AreEqual(2, ActivityView.InRoom(entries, ActivityView.AllRooms).Count);
-		Assert.AreEqual(2, ActivityView.InRoom(entries, null).Count);
-		Assert.AreEqual(2, ActivityView.InRoom(entries, "   ").Count);
+		Assert.AreEqual(2, ActivityView.InRoomByKey(entries, ActivityView.AllRooms).Count);
+		Assert.AreEqual(2, ActivityView.InRoomByKey(entries, null).Count);
+		Assert.AreEqual(2, ActivityView.InRoomByKey(entries, "   ").Count);
 	}
 
 	[TestMethod]
@@ -223,7 +223,7 @@ public sealed class ActivityLogTests
 			Entry(1, Report("Bad", at: Noon))
 		];
 
-		IReadOnlyList<ActivityEntry> filtered = ActivityView.InRoom(entries, "Stue");
+		IReadOnlyList<ActivityEntry> filtered = ActivityView.InRoomByKey(entries, "stue");
 
 		CollectionAssert.AreEqual(new long[] { 4, 2 }, filtered.Select(entry => entry.Sequence).ToArray());
 	}
@@ -233,7 +233,7 @@ public sealed class ActivityLogTests
 	{
 		ActivityEntry[] entries = [Entry(1, Report("Stue"))];
 
-		Assert.AreEqual(1, ActivityView.InRoom(entries, "stue").Count);
+		Assert.AreEqual(1, ActivityView.InRoomByKey(entries, "STUE").Count);
 	}
 
 	[TestMethod]
@@ -241,7 +241,7 @@ public sealed class ActivityLogTests
 	{
 		ActivityEntry[] entries = [Entry(1, Report("Stue"))];
 
-		Assert.AreEqual(0, ActivityView.InRoom(entries, "Loft").Count);
+		Assert.AreEqual(0, ActivityView.InRoomByKey(entries, "loft").Count);
 	}
 
 	/// <summary>Alphabetical, and only rooms that have reported.</summary>
@@ -269,7 +269,7 @@ public sealed class ActivityLogTests
 		IReadOnlyList<string> rooms = ActivityView.Rooms(entries);
 
 		Assert.AreEqual(1, rooms.Count, "the dropdown offers a room once, not once per spelling");
-		Assert.AreEqual(2, ActivityView.InRoom(entries, rooms[0]).Count,
+		Assert.AreEqual(2, ActivityView.InRoomByKey(entries, "stue").Count,
 			"and choosing it finds everything the room reported under either spelling");
 	}
 
@@ -1226,13 +1226,13 @@ public sealed class ActivityLogTests
 		];
 
 		IReadOnlyList<ActivityEntry> both =
-			ActivityView.InCategories(ActivityView.InRoom(entries, "Stue"), ActivityCategory.Movement);
+			ActivityView.InCategories(ActivityView.InRoomByKey(entries, "stue"), ActivityCategory.Movement);
 
 		CollectionAssert.AreEqual(new long[] { 4 }, both.Select(entry => entry.Sequence).ToArray());
 
 		CollectionAssert.AreEqual(
 			both.Select(entry => entry.Sequence).ToArray(),
-			ActivityView.InRoom(ActivityView.InCategories(entries, ActivityCategory.Movement), "Stue")
+			ActivityView.InRoomByKey(ActivityView.InCategories(entries, ActivityCategory.Movement), "stue")
 				.Select(entry => entry.Sequence).ToArray(),
 			"the two filters have to be independent, or the page's order of operations would be a decision");
 	}
@@ -1256,7 +1256,7 @@ public sealed class ActivityLogTests
 		Assert.AreEqual(0, Chip(whole, ActivityCategory.House).Count);
 
 		IReadOnlyList<ActivityFilterChip> stue =
-			ActivityView.Chips(ActivityView.InRoom(entries, "Stue"), ActivityView.DefaultCategories);
+			ActivityView.Chips(ActivityView.InRoomByKey(entries, "stue"), ActivityView.DefaultCategories);
 
 		Assert.AreEqual(2, Chip(stue, ActivityCategory.Movement).Count);
 		Assert.AreEqual(0, Chip(stue, ActivityCategory.ManualChange).Count,
@@ -1807,10 +1807,10 @@ public sealed class ActivityLogTests
 		CollectionAssert.AreEqual(new[] { "Stue" }, ActivityView.Rooms(entries).ToArray(),
 			"a row no room reported must not add a nameless option to the dropdown");
 
-		IReadOnlyList<ActivityEntry> inRoom = ActivityView.InRoom(entries, "Stue");
+		IReadOnlyList<ActivityEntry> inRoom = ActivityView.InRoomByKey(entries, "stue");
 
 		Assert.AreEqual(1, inRoom.Count, "the rebuild belongs to no room, so choosing one leaves it out");
-		Assert.AreEqual(2, ActivityView.InRoom(entries, ActivityView.AllRooms).Count);
+		Assert.AreEqual(2, ActivityView.InRoomByKey(entries, ActivityView.AllRooms).Count);
 
 		Assert.AreEqual(1, ActivityView.InCategories(entries, ActivityCategory.Background).Count,
 			"and the category filter still reaches it when no room is chosen");

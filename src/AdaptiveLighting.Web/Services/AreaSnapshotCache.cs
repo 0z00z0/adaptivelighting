@@ -6,6 +6,7 @@ using AdaptiveLighting.Ha;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AdaptiveLighting.Web.Services;
 
@@ -21,7 +22,7 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 	private readonly IServiceScopeFactory _scopeFactory;
 	private readonly ILogger<AreaSnapshotCache> _logger;
 	private readonly ActivityLog _activity;
-	private readonly LightingEngineHost? _engine;
+	private readonly DocumentCache? _documents;
 	private readonly ConcurrentDictionary<string, AreaSnapshot> _snapshots = new(StringComparer.Ordinal);
 	private readonly Subject<AreaSnapshot> _changes = new();
 
@@ -41,7 +42,7 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		_scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 		_logger = logger ?? throw new ArgumentNullException(nameof(logger));
 		_activity = activity ?? throw new ArgumentNullException(nameof(activity));
-		_engine = engine;
+		_documents = engine is null ? null : new DocumentCache(engine, NullLogger<DocumentCache>.Instance);
 	}
 
 	/// <summary>Every area the cache has heard from, newest state per area, ordered by name.</summary>
@@ -125,7 +126,7 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		if (snapshot.TestingPeriodId is { Length: > 0 } tested && PeriodName(tested) is { } name)
 			snapshot = snapshot with { TestingPeriodName = name };
 
-		// Keyed on the registry area id, the stable half: a room renamed while a page is open replaces itself
+		// Keyed on the room key, the stable half: a room renamed while a page is open replaces itself
 		// instead of arriving as a second entry.
 		_snapshots[KeyOf(snapshot)] = snapshot;
 
@@ -136,16 +137,5 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		_changes.OnNext(snapshot);
 	}
 
-	// Read only on a level test, a few times a day, so the file is parsed then and not on every report.
-	private string? PeriodName(string periodId)
-	{
-		try
-		{
-			return _engine?.Store.Load().Periods.ByKey(periodId)?.Name;
-		}
-		catch (LightingConfigException)
-		{
-			return null;
-		}
-	}
+	private string? PeriodName(string periodId) => _documents?.Read()?.Periods.ByKey(periodId)?.Name;
 }

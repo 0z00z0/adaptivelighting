@@ -65,4 +65,38 @@ public sealed class LabelIdConversionTests
 		Assert.AreEqual(string.Empty, global.MotionLabel);
 		Assert.IsFalse(LabelIdConversion.Apply(global, House), "the second start must change nothing");
 	}
+
+	[TestMethod]
+	public void The_Retired_Underscore_Defaults_Are_Cleared_Unless_A_Label_Has_That_Id()
+	{
+		GlobalConfig global = new() { ExcludeLabel = "adaptive_exclude", MotionLabel = "adaptive_motion" };
+
+		Assert.IsTrue(LabelIdConversion.Apply(global, House));
+		Assert.AreEqual(string.Empty, global.ExcludeLabel);
+		Assert.AreEqual(string.Empty, global.MotionLabel);
+
+		GlobalConfig labelled = new() { MotionLabel = "adaptive_motion" };
+
+		LabelIdConversion.Apply(labelled, [.. House, new RegistryLabel("adaptive_motion", "Motion")]);
+		Assert.AreEqual("adaptive_motion", labelled.MotionLabel, "a house that has the label keeps it");
+	}
+
+	[TestMethod]
+	public void An_Id_Differing_Only_In_Case_Is_Stored_As_The_Labels_Own_Id()
+	{
+		GlobalConfig global = new() { IncludeLabel = "Lamp_Rule" };
+
+		Assert.IsTrue(LabelIdConversion.Apply(global, House));
+		Assert.AreEqual("lamp_rule", global.IncludeLabel);
+	}
+
+	[TestMethod]
+	public void A_Document_That_Already_Has_Readable_Ids_Is_Not_Converted_Again()
+	{
+		// A stale id that is now another label's name: matching it by name would move the rule to a different label.
+		GlobalConfig global = new() { IncludeLabel = "light", IdCounters = new IdCounters { Periods = 3 } };
+
+		Assert.IsFalse(LabelIdConversion.Apply(global, [new RegistryLabel("light_2", "Light")]));
+		Assert.AreEqual("light", global.IncludeLabel);
+	}
 }

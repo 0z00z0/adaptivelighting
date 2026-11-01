@@ -2,7 +2,7 @@ using AdaptiveLighting.Configuration;
 
 namespace Adaptive.Settings;
 
-/// <summary>The save-time normaliser: drops deprecated and empty fields once they are provably redundant.</summary>
+/// <summary>The save-time normaliser: issues missing ids, drops deprecated and empty fields once they are provably redundant.</summary>
 /// <remarks>Runs on write only, before validation. The load path must never rewrite a hand-edited file.</remarks>
 public static class ConfigNormalizer
 {
@@ -13,11 +13,14 @@ public static class ConfigNormalizer
 
 		GlobalConfig global = config.Global;
 
-		// An id in use was issued, so a hand-written one raises its counter; never lowered.
-		global.IdCounters.Periods = Math.Max(
-			global.IdCounters.Periods, ReadableId.HighestInUse(ReadableId.PeriodPrefix, config.Periods.Select(p => p.Id)));
-		global.IdCounters.Rooms = Math.Max(
-			global.IdCounters.Rooms, ReadableId.HighestInUse(ReadableId.RoomPrefix, config.Areas.Select(a => a.Id)));
+		// An id in use was issued, so a hand-written one raises its counter. A row with no id gets one, or its key is empty.
+		ReadableId.RaiseCounters(global.IdCounters, config.Periods, config.Areas);
+
+		foreach (TimePeriodConfig period in config.Periods.Where(period => string.IsNullOrWhiteSpace(period.Id)))
+			period.Id = ReadableId.NextPeriod(global.IdCounters, config.Periods);
+
+		foreach (AreaConfig area in config.Areas.Where(area => string.IsNullOrWhiteSpace(area.AreaId) && string.IsNullOrWhiteSpace(area.Id)))
+			area.Id = ReadableId.NextRoom(global.IdCounters, config.Areas);
 
 		// Written out as Lux, so a file passes through here on its first save and never says Either again.
 		if (config.Defaults.Darkness is DarknessSource.Either)

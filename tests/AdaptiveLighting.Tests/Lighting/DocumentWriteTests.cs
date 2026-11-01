@@ -31,9 +31,7 @@ public sealed class DocumentWriteTests
 	private LightingConfigStore BuildStore() =>
 		new(_path, NullLogger<LightingConfigStore>.Instance);
 
-	// The store writes bytes and nothing else, so a test that puts a document on disk normalises it first, exactly as
-	// the host's write step does. Without that the file carries no period ids, and every load mints fresh ones, which
-	// no stamp can survive.
+	// The store writes bytes and nothing else, so a test normalises first, as the host's write step does.
 	private static void Write(LightingConfigStore store, AdaptiveLightingConfig config) =>
 		store.Write(ConfigNormalizer.Normalize(config));
 

@@ -325,23 +325,6 @@ public sealed class HaCatalog
 		_discoverySignature = null;
 	}
 
-	public IReadOnlyList<string> Labels()
-	{
-		try
-		{
-			return [.. _registry.Labels
-				.Select(label => label.Name)
-				.OfType<string>()
-				.Distinct(StringComparer.Ordinal)
-				.OrderBy(name => name, StringComparer.CurrentCulture)];
-		}
-		catch (InvalidOperationException)
-		{
-			IsHomeAssistantReady = false;
-			return [];
-		}
-	}
-
 	/// <summary>Every registry label with both its id and its name, for the label pickers.</summary>
 	/// <remarks>
 	///     Empty is a real answer, not a failure: most houses have never made a label. A picker built on this has

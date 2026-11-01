@@ -38,14 +38,9 @@ public static class LastSeenBuckets
 	public static bool IsCurated(string? bucket) => bucket is not null && CuratedSet.Contains(bucket);
 
 	/// <summary>Works out which bucket <paramref name="entityId"/> belongs in; never throws, never returns empty.</summary>
-	/// <remarks>
-	///     The motion label is checked before the motion device class: the label exists for hardware whose class is
-	///     wrong. <paramref name="labels"/> holds label ids.
-	/// </remarks>
 	public static string Classify(
 		string? entityId,
 		string? deviceClass,
-		IEnumerable<string>? labels,
 		LastSeenOptions options)
 	{
 		ArgumentNullException.ThrowIfNull(options);
@@ -55,11 +50,6 @@ public static class LastSeenBuckets
 
 		if (entityId.HasDomain(LightDomain))
 			return Light;
-
-		if (labels is not null
-			&& options.MotionLabel is { Length: > 0 } motionLabel
-			&& labels.Contains(motionLabel, StringComparer.OrdinalIgnoreCase))
-			return Motion;
 
 		if (entityId.HasDomain(BinarySensorDomain)
 			&& deviceClass is { Length: > 0 }

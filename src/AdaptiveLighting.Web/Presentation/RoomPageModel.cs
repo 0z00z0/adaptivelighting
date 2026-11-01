@@ -1044,14 +1044,9 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 	/// <summary>The house's include label as stored, or empty when it manages every light it finds.</summary>
 	private string IncludeLabel => Document.Global.IncludeLabel ?? string.Empty;
 
-	/// <summary>The include label as a reader knows it: a stored label id shows the label's name.</summary>
-	// The document may hold an id or a name. A name is shown as it stands, so an unreadable registry changes
-	// nothing on screen.
+	/// <summary>The include label as a reader knows it: the label's name, else the stored id.</summary>
 	public string IncludeLabelName =>
-		_catalog.LabelOptions().FirstOrDefault(label => string.Equals(label.Id, IncludeLabel, StringComparison.Ordinal))
-			is { } known
-			? known.Name
-			: IncludeLabel;
+		LabelMatch.ShownName(_catalog.LabelOptions(), label => label.Id, label => label.Name, IncludeLabel) ?? IncludeLabel;
 
 	/// <summary>Whether the label filter is worth offering: with no include label both states of the control show
 	/// the same list.</summary>

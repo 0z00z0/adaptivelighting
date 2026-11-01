@@ -6,7 +6,10 @@ using AdaptiveLighting.Engine;
 using AdaptiveLighting.Ha;
 using AdaptiveLighting.Web.Services;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+
+using NetDaemon.HassModel;
 
 namespace AdaptiveLighting.Tests.Lighting;
 
@@ -348,5 +351,51 @@ public sealed class HaStatePublisherTests
 		string json = JsonSerializer.Serialize(ha.SentEvents.Single().Data);
 
 		Assert.IsNull(JsonSerializer.Deserialize<AreaSnapshotEvent>(json)!.ToSnapshot()!.AreaId);
+	}
+
+	[TestMethod]
+	public async Task Two_Rooms_Without_An_Area_Keep_Their_Own_Cache_Entries_Through_The_Event()
+	{
+		FakeHaContext ha = new();
+		await using ServiceProvider provider = new ServiceCollection().AddSingleton<IHaContext>(ha).BuildServiceProvider();
+		AreaSnapshotCache cache = new(provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<AreaSnapshotCache>.Instance, new ActivityLog());
+		await cache.StartAsync(CancellationToken.None);
+		HaStatePublisher publisher = new(ha, NullLogger.Instance);
+
+		foreach ((string name, string roomId) in new[] { ("Shed", "room_001"), ("Porch", "room_002") })
+		{
+			publisher.Publish(new AreaSnapshot(
+				name, AreaState.AutoVacant, TransitionReason.Startup, ModeKind.Normal,
+				KillSwitchActive: false, IsDark: null, PeriodName: null, BrightnessPct: null, ColorTempKelvin: null,
+				Timestamp: DateTimeOffset.UnixEpoch, LastCommandAt: null, LastMotionAt: null, NextChangeAt: null,
+				NextChangeFrom: null, RoomId: roomId));
+			(string type, object? data) = ha.SentEvents[^1];
+			ha.RaiseEvent(type, data);
+		}
+
+		Assert.AreEqual(2, cache.Snapshots.Count, "two rooms without an area must not overwrite each other");
+		Assert.AreEqual("Porch", cache.Find("room_002")?.AreaName);
+		Assert.AreEqual("Shed", cache.Find("room_001")?.AreaName);
+
+		await cache.DisposeAsync();
+	}
+
+	[TestMethod]
+	public void An_Event_From_A_Build_Without_A_Room_Id_Is_Known_By_Its_Area_Id()
+	{
+		const string OldEvent =
+			"""
+			{
+			  "area": "Living room",
+			  "area_id": "living_room",
+			  "state": "AutoActive",
+			  "timestamp": "1970-01-01T00:00:00+00:00"
+			}
+			""";
+
+		AreaSnapshot? rebuilt = JsonSerializer.Deserialize<AreaSnapshotEvent>(OldEvent)!.ToSnapshot();
+
+		Assert.IsNull(rebuilt!.RoomId);
+		Assert.AreEqual("living_room", rebuilt.RoomKey);
 	}
 }

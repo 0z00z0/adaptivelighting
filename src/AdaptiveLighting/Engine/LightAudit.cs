@@ -11,8 +11,8 @@ public sealed record SuspectLight(string EntityId, string Name, string Reason);
 /// <summary>One room as the cross-room half of the audit reads it.</summary>
 // Lights holds bulbs with groups already followed down to their members, because two rooms reaching one bulb
 // through two different groups settle on two different ids and have nothing in common to compare.
-// Key tells two rooms apart that share a name; null falls back to Room.
-public sealed record RoomUnderReview(string Room, IReadOnlyList<LightUnderReview> Lights, string? Key = null);
+// Key tells two rooms apart that share a name.
+public sealed record RoomUnderReview(string Room, IReadOnlyList<LightUnderReview> Lights, string Key);
 
 /// <summary>Looks over the lights a room would command and points at the ones that are probably not room lighting.</summary>
 // Advice, never a filter. Home Assistant's entity_category, the field that would settle it, is not exposed by
@@ -116,7 +116,7 @@ public static class LightAudit
 				}
 
 				// One room holding the same bulb twice, through a group and again on its own, is one room.
-				if (seen.Keys.Add(room.Key ?? room.Room))
+				if (seen.Keys.Add(room.Key))
 					seen.Rooms.Add(room.Room);
 			}
 

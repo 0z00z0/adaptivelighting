@@ -10,7 +10,9 @@ internal static class ReadableIdConversion
 	private const string RetiredNightName = "night";
 
 	/// <summary>Mutates <paramref name="config"/> in place. <c>true</c> when anything was written.</summary>
-	public static bool Apply(AdaptiveLightingConfig config)
+	/// <param name="config">The document as read.</param>
+	/// <param name="periodIds">Each renumbered period's old id and its new one, compared ignoring case.</param>
+	public static bool Apply(AdaptiveLightingConfig config, out IReadOnlyDictionary<string, string> periodIds)
 	{
 		ArgumentNullException.ThrowIfNull(config);
 
@@ -18,13 +20,27 @@ internal static class ReadableIdConversion
 		IdCounters counters = config.Global.IdCounters;
 		List<HouseModeOptionConfig> options = config.Global.HouseMode?.Options ?? [];
 
-		bool oldShape = periods.Any(period => ReadableId.NumberOf(ReadableId.PeriodPrefix, period.Id?.Trim()) is null)
-			|| options.Any(option => option.Id is not null);
+		Dictionary<string, string> renumbered = new(StringComparer.OrdinalIgnoreCase);
+		periodIds = renumbered;
+
+		List<string> oldIds =
+		[
+			.. periods
+				.Select(period => period.Id?.Trim())
+				.OfType<string>()
+				.Where(id => id.Length > 0 && ReadableId.NumberOf(ReadableId.PeriodPrefix, id) is null)
+		];
+
+		// A shared old id cannot say which period a reference meant, so nothing moves and the validator reports it.
+		if (oldIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() < oldIds.Count)
+			return false;
+
+		// Only an option written before readable ids carries an Id, and only those documents had the night name link.
+		bool oldOptions = options.Any(option => option.Id is not null);
+		bool oldShape = oldOptions || periods.Any(period => ReadableId.NumberOf(ReadableId.PeriodPrefix, period.Id?.Trim()) is null);
 
 		// Read before anything moves: the dim period the retired name link gave a sleep option, set explicitly below.
-		Dictionary<HouseModeOptionConfig, TimePeriodConfig> nightClamps = oldShape ? NightClamps(periods, options) : [];
-
-		Dictionary<string, string> periodIds = new(StringComparer.OrdinalIgnoreCase);
+		Dictionary<HouseModeOptionConfig, TimePeriodConfig> nightClamps = oldOptions ? NightClamps(periods, options) : [];
 
 		foreach (TimePeriodConfig period in periods)
 		{
@@ -34,12 +50,12 @@ internal static class ReadableIdConversion
 			string fresh = ReadableId.NextPeriod(counters, periods);
 
 			if (period.Id?.Trim() is { Length: > 0 } old)
-				periodIds.TryAdd(old, fresh);
+				renumbered.Add(old, fresh);
 
 			period.Id = fresh;
 		}
 
-		RepointPeriodReferences(config, options, periodIds);
+		RepointPeriodReferences(config, options, renumbered);
 		RepointModeReferences(periods, options);
 
 		foreach ((HouseModeOptionConfig option, TimePeriodConfig night) in nightClamps)
@@ -54,13 +70,8 @@ internal static class ReadableIdConversion
 				roomsChanged = true;
 			}
 
-		// A hand-written document may carry readable ids and no counter; raised, never lowered.
-		int periodsInUse = ReadableId.HighestInUse(ReadableId.PeriodPrefix, periods.Select(period => period.Id));
-		int roomsInUse = ReadableId.HighestInUse(ReadableId.RoomPrefix, config.Areas.Select(area => area.Id));
-		bool countersRaised = counters.Periods < periodsInUse || counters.Rooms < roomsInUse;
-
-		counters.Periods = Math.Max(counters.Periods, periodsInUse);
-		counters.Rooms = Math.Max(counters.Rooms, roomsInUse);
+		// A hand-written document may carry readable ids and no counter.
+		bool countersRaised = ReadableId.RaiseCounters(counters, periods, config.Areas);
 
 		return oldShape || roomsChanged || countersRaised;
 	}

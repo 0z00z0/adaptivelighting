@@ -98,8 +98,9 @@ lower-case `areas:` can never win over `Zones:`.
   its `ClampPeriodId`, else the period whose `SetsModeId` names the option, and never a period called night.
 - **Names repeat freely**, for periods and for rooms with or without an area. Two rows sharing an id, or two rooms
   naming one area, are refused.
-- **The Home Assistant event carries no room id.** The web side keys a report by area id, else room id, so the
-  reports of rooms without an area cannot be told apart there. Such a room has no room page either.
+- **The Home Assistant event's `room_id` is the room key**: the area id, else the room's own id. The web side
+  files each report under it, so every room keeps its own card. An event without the field is filed under
+  `area_id`. A room without an area has no room page.
 
 ### Readable ids are given once, at the first start
 
@@ -242,7 +243,7 @@ re-runs every area's startup path.** A mode being forced by an entity is therefo
 every edit, so an away-kind force sweeps the house again on each save.
 
 What a room knows of its own recent past is handed over, not rebuilt. Before the old engine is
-disposed, each room gives its replacement (same area id, or same name) its last movement, last
+disposed, each room gives its replacement (same room key: its area id, else its own id) its last movement, last
 change and who made it, and any hold made at the switch. The hold's deadline counts from when the
 hold last started, under the saved hold length, so a save neither lengthens nor restarts it; one
 already passed ends at once. A carried hold is dropped when the opening house state leaves the room
@@ -1505,7 +1506,7 @@ problem reads as a new entry and is announced again.
 
 Only the problems standing at that start are written back, so a room that resolves is forgotten and the file is
 removed once every room resolves. Without that clearing, a problem could never be reported twice. The key is
-the area id where the document gives one, else the display name.
+the area id where the document gives one, else the room's own id.
 
 Every failure degrades to announcing rather than to silence: an unreadable or wrong-shaped file, a failed write,
 and a path with no writable directory beside it all leave the standing problems announced, so the cost is a
@@ -1565,7 +1566,7 @@ A room deleted from the document keeps no entry either, once a person saves. `Li
 own settings-save path, prunes the live dictionary against `LightingOrchestrator.DocumentRoomKeys` right after
 folding the carry-over in and before the write, so a house that renames and deletes rooms often does not grow
 this file for ever. The key compared is the same one the room is stored under - its area id where it has one,
-else its name - so a rename that keeps the area id is not mistaken for a deletion, and a disabled-but-still-
+else its own id - so a rename is never mistaken for a deletion, and a disabled-but-still-
 declared room keeps its key. `Reload` and `Dispose` do not prune: only a person's own save has a fresh document
 to prune against.
 
@@ -2585,7 +2586,7 @@ logging untouched, and both pages show the row as *set by the host*.
 
 With `Global.CommandLog` on, every command the engine puts on a light is written to
 `log/commands/<area>/<light>.log` beside the document. `<area>` is the Home Assistant area id; a room configured
-without one uses its name, so renaming such a room starts a new folder. `<light>` is the entity id. Both are
+without one uses its own id, so renaming it keeps its folder. `<light>` is the entity id. Both are
 lower-cased, with anything outside `a-z 0-9 . _ -` written as `_`. A new file starts with one `# ` line naming
 the room. A room's scenes go to `_scene.log` in its folder; a house-mode scene, which no room owns, to
 `_house/_scene.log`.

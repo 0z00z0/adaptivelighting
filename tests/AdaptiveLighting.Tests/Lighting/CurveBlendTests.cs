@@ -166,9 +166,9 @@ public sealed class CurveBlendTests
 		Assert.AreEqual(70, RoundTrip(calculator, At(18)), 1e-9);
 	}
 
-	/// <summary>The sleep clamp and the level test reach a period by name, and that answer carries no blend.</summary>
+	/// <summary>The sleep clamp and the level test reach a period by its id, and that answer carries no blend.</summary>
 	[TestMethod]
-	public void A_Period_Reached_By_Name_Carries_No_Blend()
+	public void A_Period_Reached_By_Id_Carries_No_Blend()
 	{
 		CircadianCalculator calculator = Blended(dayOnCurve: true, eveningOnCurve: false, nightOnCurve: false);
 
