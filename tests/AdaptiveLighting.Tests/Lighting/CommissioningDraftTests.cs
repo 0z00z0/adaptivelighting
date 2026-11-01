@@ -229,7 +229,7 @@ public sealed class CommissioningDraftTests
 	public void A_Fresh_Board_Has_Picked_Nothing()
 	{
 		AdaptiveLightingConfig config = Discovered();
-		string[] keys = [.. config.Areas.Select(CommissioningDraft.RoomKey)];
+		string[] keys = [.. config.Areas.Select(area => area.Key)];
 
 		CommissioningDraft draft = new();
 
@@ -243,7 +243,7 @@ public sealed class CommissioningDraftTests
 	public void Include_All_Picks_Every_Room_And_Leaves_None_Behind()
 	{
 		AdaptiveLightingConfig config = Discovered();
-		string[] keys = [.. config.Areas.Select(CommissioningDraft.RoomKey)];
+		string[] keys = [.. config.Areas.Select(area => area.Key)];
 
 		CommissioningDraft draft = new();
 		draft.PickAll(keys);
@@ -261,7 +261,7 @@ public sealed class CommissioningDraftTests
 	public void Clearing_Include_All_Drops_Every_Room()
 	{
 		AdaptiveLightingConfig config = Discovered();
-		string[] keys = [.. config.Areas.Select(CommissioningDraft.RoomKey)];
+		string[] keys = [.. config.Areas.Select(area => area.Key)];
 
 		CommissioningDraft draft = new();
 		draft.PickAll(keys);
@@ -279,7 +279,7 @@ public sealed class CommissioningDraftTests
 	public void Include_All_Goes_Clear_The_Moment_One_Room_Is_Dropped()
 	{
 		AdaptiveLightingConfig config = Discovered();
-		string[] keys = [.. config.Areas.Select(CommissioningDraft.RoomKey)];
+		string[] keys = [.. config.Areas.Select(area => area.Key)];
 
 		CommissioningDraft draft = new();
 		draft.PickAll(keys);
@@ -310,7 +310,7 @@ public sealed class CommissioningDraftTests
 	{
 		AreaConfig loft = new() { Id = "room_001", Name = "Loftet", Lights = ["light.loft"] };
 
-		Assert.AreEqual("room_001", CommissioningDraft.RoomKey(loft));
+		Assert.AreEqual("room_001", loft.Key);
 
 		AdaptiveLightingConfig config = Discovered();
 		config.Areas.Add(loft);

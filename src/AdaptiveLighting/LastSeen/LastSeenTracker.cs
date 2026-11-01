@@ -305,30 +305,13 @@ public sealed class LastSeenTracker : IEntityLastSeen, IDisposable
 	}
 
 	private string BucketOf(EntitySample sample) =>
-		LastSeenBuckets.Classify(sample.EntityId, sample.State.AttrString(DeviceClassAttribute), LabelsOf(sample.EntityId), _options);
+		LastSeenBuckets.Classify(sample.EntityId, sample.State.AttrString(DeviceClassAttribute), _options);
 
 	/// <summary>Marks every bucket that currently holds something; there is no list of possible buckets.</summary>
 	private void DirtyEveryBucket()
 	{
 		foreach (TrackedEntity tracked in _entities.Values)
 			_dirty.Add(tracked.Bucket);
-	}
-
-	// Label ids only, as the engine matches.
-	private IEnumerable<string>? LabelsOf(string entityId)
-	{
-		try
-		{
-			return _ha.GetEntityRegistration(entityId)?.Labels?
-				.Select(label => label.Id)
-				.OfType<string>();
-		}
-		catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException)
-		{
-			// NetDaemon's registry throws until its first connection completes; filing then falls back to the device class.
-			_logger.LogDebug(exception, "Could not read the labels of {EntityId} for filing.", entityId);
-			return null;
-		}
 	}
 
 	/// <summary>Drops records that have outlived their entity.</summary>

@@ -1508,7 +1508,7 @@ public sealed class AreaEntityResolverTests
 				if (seen.Add(bulb))
 					bulbs.Add(new LightUnderReview(bulb, ha.AttrString(bulb, "friendly_name") ?? bulb));
 
-		return new RoomUnderReview(room, bulbs);
+		return new RoomUnderReview(room, bulbs, room);
 	}
 
 	[TestMethod]

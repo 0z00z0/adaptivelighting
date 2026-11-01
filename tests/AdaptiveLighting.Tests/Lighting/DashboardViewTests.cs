@@ -10,7 +10,7 @@ namespace AdaptiveLighting.Tests.Lighting;
 public sealed class DashboardViewTests
 {
 	private static RoomView Room(string name, bool enabled, string? areaId = null, int lights = 1) =>
-		new(areaId ?? name, name, enabled, lights);
+		new(areaId ?? name, name, enabled, lights, areaId ?? name);
 
 	private static AreaSnapshot Report(string name, string? areaId = null) =>
 		new(
@@ -48,7 +48,7 @@ public sealed class DashboardViewTests
 	[TestMethod]
 	public void A_Report_Is_Matched_By_Area_Id_First()
 	{
-		RoomView[] rooms = [new("stue", "Living room", false, 3)];
+		RoomView[] rooms = [new("stue", "Living room", false, 3, "stue")];
 
 		IReadOnlyList<AreaSnapshot> visible = AreaView.VisibleCards([Report("Stue", "stue")], rooms);
 

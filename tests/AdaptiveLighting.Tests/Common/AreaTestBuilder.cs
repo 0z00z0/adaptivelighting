@@ -330,6 +330,7 @@ public sealed class AreaTestBuilder
 			wiring,
 			area,
 			new CircadianCalculator(table, global, _sun, _roomLevels, zone: _zone),
+			_areaId ?? "",
 			areaId: _areaId,
 			sunMoved: _sunMoved,
 			lightCalculators: perLight.Count > 0 ? perLight : null,

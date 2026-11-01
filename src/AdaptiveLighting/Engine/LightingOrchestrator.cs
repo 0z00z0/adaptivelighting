@@ -246,7 +246,7 @@ public sealed class LightingOrchestrator : IDisposable
 				// and the choice is visible without DBG logging switched on.
 				if (resolver.IsExcludedArea(areaConfig.AreaId))
 				{
-					// The stored value is a label id once translated, so show the name the owner sees in HA.
+					// The stored value is a label id; show the name the owner sees in HA.
 					_logger.LogInformation(
 						"Area {Area} carries the label '{Label}' in Home Assistant and is treated as not there.",
 						areaConfig.DisplayName,
@@ -375,11 +375,11 @@ public sealed class LightingOrchestrator : IDisposable
 			_wiring!,
 			resolved,
 			circadian,
+			config.Key,
 			config.AreaId,
 			SunMoved(_config.Global.SunEntity),
 			LightCalculators(resolved, config),
-			() => resolver.BatteriesOf(resolved.MotionSensors),
-			config.Id);
+			() => resolver.BatteriesOf(resolved.MotionSensors));
 
 		if (_carried is not null && _carried.TryGetValue(area.RoomKey, out AreaCarryOver? carried))
 			area.Inherit(carried);

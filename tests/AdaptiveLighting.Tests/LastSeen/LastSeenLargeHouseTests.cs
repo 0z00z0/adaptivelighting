@@ -189,7 +189,7 @@ public sealed class LastSeenLargeHouseTests
 			{
 				population++;
 
-				string bucket = LastSeenBuckets.Classify(entityId, deviceClass, null, Options);
+				string bucket = LastSeenBuckets.Classify(entityId, deviceClass, Options);
 
 				Add(split, bucket, entityId);
 
