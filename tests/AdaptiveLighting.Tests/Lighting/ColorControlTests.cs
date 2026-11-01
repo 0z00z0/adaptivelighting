@@ -477,7 +477,7 @@ public sealed class ColorControlTests
 			LastSeen: null, OriginNames: null, OwnUserId: static () => null, CommandLog: null);
 
 		using AreaController controller = new(
-			wiring, area, new CircadianCalculator(table, global, () => SunTimes.Unknown));
+			wiring, area, new CircadianCalculator(table, global, () => SunTimes.Unknown), "");
 
 		controller.Start();
 		ha.Trigger(Motion, "on");

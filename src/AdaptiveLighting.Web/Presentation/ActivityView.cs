@@ -205,17 +205,6 @@ public static class ActivityView
 		return entry.Snapshot is { } snapshot ? Describe(snapshot) : Describe(entry.Notice!);
 	}
 
-	// By display name, so two rooms sharing a name both match. Pages filter through InRoomByKey.
-	public static IReadOnlyList<ActivityEntry> InRoom(IEnumerable<ActivityEntry> entries, string? room)
-	{
-		ArgumentNullException.ThrowIfNull(entries);
-
-		if (string.IsNullOrWhiteSpace(room))
-			return [.. entries];
-
-		return [.. entries.Where(entry => string.Equals(entry.AreaName, room, StringComparison.OrdinalIgnoreCase))];
-	}
-
 	/// <summary>
 	///     The rooms that have reported. De-duplicated ordinally, never by the culture, which could collapse two
 	///     names into one option the filter then half-matches. Sorted by culture.

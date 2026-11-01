@@ -375,7 +375,7 @@ public sealed class LuxBrightnessControllerTests
 			new BehaviorSubject<HouseState>(HouseState.Initial), NullLoggerFactory.Instance,
 			LastSeen: null, OriginNames: null, OwnUserId: static () => null, CommandLog: null);
 
-		AreaController controller = new(wiring, area, circadian, areaId: "hallway");
+		AreaController controller = new(wiring, area, circadian, "hallway", areaId: "hallway");
 
 		controller.Start();
 		ha.Trigger(Motion, "on");

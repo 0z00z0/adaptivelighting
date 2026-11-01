@@ -29,14 +29,6 @@ public sealed class CommissioningDraft
 	public bool HasAnswers =>
 		HouseName is not null || AwayDebounceMinutes is not null || KeepHouseMode is not null || _dropped.Count > 0;
 
-	/// <summary>How a room is identified across the board, the draft and the document: <see cref="AreaConfig.Key"/>.</summary>
-	public static string RoomKey(AreaConfig area)
-	{
-		ArgumentNullException.ThrowIfNull(area);
-
-		return area.Key;
-	}
-
 	/// <summary>Stages the house name. An empty or blank box is an answer, "no name", not an unanswered sheet.</summary>
 	public void SetHouseName(string? typed) => HouseName = typed ?? string.Empty;
 
@@ -57,10 +49,10 @@ public sealed class CommissioningDraft
 			_dropped.Add(entityId);
 	}
 
-	/// <param name="key">The room's <see cref="RoomKey"/>.</param>
+	/// <param name="key">The room's <see cref="AreaConfig.Key"/>.</param>
 	public bool IsPicked(string key) => _picked.Contains(key);
 
-	/// <param name="key">The room's <see cref="RoomKey"/>.</param>
+	/// <param name="key">The room's <see cref="AreaConfig.Key"/>.</param>
 	public void ToggleRoom(string key)
 	{
 		ArgumentNullException.ThrowIfNull(key);
@@ -138,7 +130,7 @@ public sealed class CommissioningDraft
 		// Picked rooms are written explicitly, as AreaView.SwitchAll writes them. Unpicked rooms are untouched, so
 		// abandoning the board halfway leaves the document as discovery left it.
 		foreach (AreaConfig area in config.Areas)
-			if (_picked.Contains(RoomKey(area)))
+			if (_picked.Contains(area.Key))
 				area.Enabled = true;
 	}
 }

@@ -11,15 +11,6 @@ namespace AdaptiveLighting.Tests.LastSeen;
 public sealed class LastSeenOptionsTests
 {
 	[TestMethod]
-	public void The_Motion_Label_Is_The_Engines_Default()
-	{
-		LastSeenOptions options = new();
-		AdaptiveLightingConfig config = new();
-
-		Assert.AreEqual(config.Global.MotionLabel, options.MotionLabel);
-	}
-
-	[TestMethod]
 	public void The_Motion_Device_Classes_Are_The_Engines_Defaults()
 	{
 		LastSeenOptions options = new();

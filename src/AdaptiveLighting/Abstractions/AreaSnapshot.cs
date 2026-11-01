@@ -53,9 +53,9 @@ public sealed record AreaSnapshot(
 	string? RoomId = null,
 	string? TestingPeriodName = null)
 {
-	/// <summary>What the room is known by: its area id, else the room id of a room without an area.</summary>
+	/// <summary>What the room is known by: the key the document gives it, else the area id. A snapshot rebuilt from the Home Assistant event carries no <c>RoomId</c>.</summary>
 	[System.Text.Json.Serialization.JsonIgnore]
-	public string RoomKey => AreaId is { Length: > 0 } areaId ? areaId : RoomId ?? "";
+	public string RoomKey => RoomId is { Length: > 0 } key ? key : AreaId ?? "";
 
 	/// <summary>Whether the room's lights are on: lit by the engine, dimming before off, or held on by hand, at a
 	/// brightness above zero.</summary>
