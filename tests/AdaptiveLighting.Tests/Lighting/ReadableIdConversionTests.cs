@@ -36,6 +36,10 @@ public sealed class ReadableIdConversionTests
 		        - Id: nap-kl12
 		          Value: Nap
 		          Kind: Sleep
+		        - Id: siesta-op56
+		          Value: Siesta
+		          Kind: Sleep
+		          ClampPeriodId: early-ab12
 		        - Id: guests-mn34
 		          Value: Guests
 		          Kind: Guest
@@ -54,6 +58,8 @@ public sealed class ReadableIdConversionTests
 		          BrightnessPct: 8
 		        - PeriodId: early-ab12
 		          BrightnessPct: 50
+		        - PeriodId: gone-zz99
+		          BrightnessPct: 20
 		      LightLevels:
 		        - EntityId: light.reading_lamp
 		          Levels:
@@ -67,7 +73,7 @@ public sealed class ReadableIdConversionTests
 	private static AdaptiveLightingConfig Converted(out bool changed)
 	{
 		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(OldShapeYaml()).Config;
-		changed = ReadableIdConversion.Apply(config);
+		changed = ReadableIdConversion.Apply(config, out _);
 
 		return config;
 	}
@@ -106,7 +112,7 @@ public sealed class ReadableIdConversionTests
 
 		string written = LightingConfigDocument.Serialize(config);
 
-		foreach (string old in (string[])["ab12", "cd34", "ef56", "gh78", "ij90", "kl12", "mn34"])
+		foreach (string old in (string[])["ab12", "cd34", "ef56", "gh78", "ij90", "kl12", "mn34", "op56"])
 			Assert.IsFalse(written.Contains(old, StringComparison.Ordinal), $"old id ending {old} is still in the file");
 	}
 
@@ -145,7 +151,7 @@ public sealed class ReadableIdConversionTests
 
 		AdaptiveLightingConfig reread = LightingConfigDocument.Deserialize(written).Config;
 
-		Assert.IsFalse(ReadableIdConversion.Apply(reread), "a second start must not push the original out of the backup slot");
+		Assert.IsFalse(ReadableIdConversion.Apply(reread, out _),"a second start must not push the original out of the backup slot");
 		Assert.AreEqual(written, LightingConfigDocument.Serialize(reread));
 	}
 
@@ -171,5 +177,64 @@ public sealed class ReadableIdConversionTests
 
 		Assert.IsFalse(result.IsValid, "an unresolvable mapping costs the whole house its time of day");
 		StringAssert.Contains(result.ToString(), "period_099");
+	}
+
+	[TestMethod]
+	public void An_Explicit_Dim_Period_Follows_Its_Period_And_Is_Not_Replaced_By_Night()
+	{
+		AdaptiveLightingConfig config = Converted(out _);
+
+		Assert.AreEqual("period_001", config.Global.HouseMode!.OptionFor("Siesta")!.ClampPeriodId);
+	}
+
+	[TestMethod]
+	public void A_Reference_Matching_No_Old_Id_Is_Left_As_Written()
+	{
+		AdaptiveLightingConfig config = Converted(out _);
+
+		Assert.AreEqual("gone-zz99", config.Areas[0].Levels[2].PeriodId, "so the validator still reports it");
+	}
+
+	[TestMethod]
+	public void A_Later_Start_With_A_Hand_Added_Period_Adds_No_Night_Dim_Period()
+	{
+		AdaptiveLightingConfig config = Converted(out _);
+		HouseModeOptionConfig nap = config.Global.HouseMode!.OptionFor("Nap")!;
+		nap.ClampPeriodId = null;
+
+		AdaptiveLightingConfig reread = LightingConfigDocument.Deserialize(LightingConfigDocument.Serialize(config)).Config;
+		reread.Periods.Add(new TimePeriodConfig { Id = "evening", Name = "Late", Start = "21:00" });
+
+		Assert.IsTrue(ReadableIdConversion.Apply(reread, out _), "the stray id is still renumbered");
+		Assert.AreEqual("period_004", reread.Periods[^1].Id);
+		Assert.IsNull(reread.Global.HouseMode!.OptionFor("Nap")!.ClampPeriodId, "no fallback to a period called night");
+	}
+
+	[TestMethod]
+	public void Two_Periods_Sharing_An_Old_Id_Are_Not_Converted_So_The_Duplicate_Is_Still_Reported()
+	{
+		AdaptiveLightingConfig config = LightingConfigDocument.Deserialize(
+			$"""
+			{Root}:
+			  Periods:
+			    - Id: evening-ab12
+			      Name: Evening
+			      Start: "19:00"
+			    - Id: Evening-AB12
+			      Name: Late
+			      Start: "22:00"
+			  Areas:
+			    - AreaId: living_room
+			      Levels:
+			        - PeriodId: evening-ab12
+			          BrightnessPct: 30
+
+			""").Config;
+
+		Assert.IsFalse(ReadableIdConversion.Apply(config, out IReadOnlyDictionary<string, string> periodIds));
+		Assert.AreEqual(0, periodIds.Count);
+		CollectionAssert.AreEqual(new[] { "evening-ab12", "Evening-AB12" }, config.Periods.Select(p => p.Id).ToArray());
+		Assert.AreEqual("evening-ab12", config.Areas[0].Levels[0].PeriodId);
+		StringAssert.Contains(ConfigValidator.Validate(config).ToString(), "Two periods share the id");
 	}
 }

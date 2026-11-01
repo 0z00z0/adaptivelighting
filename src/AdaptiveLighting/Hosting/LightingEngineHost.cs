@@ -383,9 +383,12 @@ public sealed class LightingEngineHost : IDisposable
 			AdaptiveLightingConfig config = read.Config;
 			_retiredKeys = read.RetiredKeys;
 
-			// Every reason takes the same one write, so the .bak slot keeps the file as it was before all of them.
+			// One write for every reason. The .bak slot then holds the file as it was, until any later write rotates it.
+			// Labels first: the id conversion raises the counter the label conversion reads as its marker.
 			bool labelled = LabelIdConversion.Apply(config.Global, KnownLabels());
-			bool converted = ReadableIdConversion.Apply(config);
+			bool converted = ReadableIdConversion.Apply(config, out IReadOnlyDictionary<string, string> periodIds);
+
+			RepointLastPeriod(periodIds);
 
 			if (read.NeedsMigratingWrite || labelled || converted)
 				RewriteInCurrentSchema(config,
@@ -410,10 +413,9 @@ public sealed class LightingEngineHost : IDisposable
 
 	/// <summary>Writes a document that loaded through a superseded schema, label names or old-shape ids, back out.</summary>
 	/// <remarks>
-	///     On first load, before the engine is built, so a house that never opens the web UI does not depend on the
-	///     translation tables for ever. The write goes through <see cref="NormaliseValidateAndWrite"/>, so the
-	///     pre-migration file survives at <see cref="LightingConfigStore.BackupPath"/>. Once only, because the store
-	///     keeps one backup slot. A document the engine cannot run is rewritten all the same, with the errors reported.
+	///     On load, before the engine is built; once per document that needed it, since the result reports no change.
+	///     The file as it was sits at <see cref="LightingConfigStore.BackupPath"/> until any later write rotates it.
+	///     A document the engine cannot run is rewritten all the same, with the errors reported.
 	/// </remarks>
 	private void RewriteInCurrentSchema(AdaptiveLightingConfig config, string reason)
 	{
@@ -436,6 +438,15 @@ public sealed class LightingEngineHost : IDisposable
 				"Could not rewrite {Path} in the current schema. The engine is running on it either way; the migration will be run again on the next start.",
 				_store.FilePath);
 		}
+	}
+
+	// A note naming an old id names no period once the periods are renumbered, and would read as unknown.
+	private void RepointLastPeriod(IReadOnlyDictionary<string, string> periodIds)
+	{
+		if (periodIds.Count == 0 || _lastPeriod?.Load() is not { } stored || !periodIds.TryGetValue(stored, out string? renumbered))
+			return;
+
+		_lastPeriod.TrySave(renumbered);
 	}
 
 	/// <summary>The person's write: refuse a document the engine cannot run, then re-read and rebuild every area.</summary>
@@ -543,7 +554,7 @@ public sealed class LightingEngineHost : IDisposable
 		}
 		catch (InvalidOperationException)
 		{
-			// NetDaemon's registry throws until its first connection to HA completes.
+			// NetDaemon's list never throws and is loaded before any app is constructed; another host's registry may throw.
 			return null;
 		}
 	}

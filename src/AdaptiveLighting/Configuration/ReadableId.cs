@@ -22,7 +22,7 @@ public static class ReadableId
 	public static string Format(string prefix, int number) =>
 		prefix + number.ToString("D3", CultureInfo.InvariantCulture);
 
-	/// <summary>The number in <paramref name="id"/> when it is written exactly as <see cref="Format"/> writes it, else <c>null</c>.</summary>
+	/// <summary>The number in <paramref name="id"/> when it is written the way <see cref="Format"/> writes it, else <c>null</c>.</summary>
 	public static int? NumberOf(string prefix, string? id)
 	{
 		ArgumentNullException.ThrowIfNull(prefix);
@@ -48,6 +48,23 @@ public static class ReadableId
 		ArgumentNullException.ThrowIfNull(ids);
 
 		return ids.Select(id => NumberOf(prefix, id?.Trim()) ?? 0).DefaultIfEmpty(0).Max();
+	}
+
+	/// <summary>Raises each counter to the highest id of its kind in use, never lowering it. <c>true</c> when one moved.</summary>
+	public static bool RaiseCounters(IdCounters counters, IEnumerable<TimePeriodConfig> periods, IEnumerable<AreaConfig> areas)
+	{
+		ArgumentNullException.ThrowIfNull(counters);
+		ArgumentNullException.ThrowIfNull(periods);
+		ArgumentNullException.ThrowIfNull(areas);
+
+		int periodsInUse = HighestInUse(PeriodPrefix, periods.Select(period => period.Id));
+		int roomsInUse = HighestInUse(RoomPrefix, areas.Select(area => area.Id));
+		bool raised = counters.Periods < periodsInUse || counters.Rooms < roomsInUse;
+
+		counters.Periods = Math.Max(counters.Periods, periodsInUse);
+		counters.Rooms = Math.Max(counters.Rooms, roomsInUse);
+
+		return raised;
 	}
 
 	/// <summary>An error when <paramref name="counter"/> is below an id already in use, so the next one issued would collide.</summary>

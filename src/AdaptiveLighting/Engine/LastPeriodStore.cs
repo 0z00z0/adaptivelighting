@@ -26,8 +26,9 @@ public sealed class LastPeriodDocument
 		+ "here is edited by hand, and deleting this file is safe: the only cost is that the first start after "
 		+ "deleting it will not re-apply a period's house mode.";
 
-	// Bumped only when an older file could be misread.
-	public const int CurrentVersion = 1;
+	// Raised when an older build would misread the file, which it then discards. A version 1 reader takes an id it
+	// does not know for a crossed boundary.
+	public const int CurrentVersion = 2;
 
 	[JsonPropertyName(JsonNoteFile.CommentProperty)]
 	[JsonPropertyOrder(JsonNoteFile.CommentOrder)]

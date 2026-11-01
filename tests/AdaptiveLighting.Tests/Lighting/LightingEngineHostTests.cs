@@ -723,6 +723,20 @@ public sealed class LightingEngineHostTests
 		Assert.AreEqual(converted, File.ReadAllText(_path), "nothing to convert the second time");
 		Assert.AreEqual(original, File.ReadAllText(host.Store.BackupPath), "so the one backup slot still holds it");
 	}
+
+	[TestMethod]
+	public void Reload_OfADocumentWithOldIds_RepointsTheLastPeriodNote()
+	{
+		File.WriteAllText(_path, SchemaWithOldIds);
+		new LastPeriodStore(_path, NullLogger<LastPeriodStore>.Instance).TrySave("day-ab12");
+
+		LightingEngineHost host = BuildHost();
+		host.Reload();
+		host.Dispose();
+
+		Assert.AreEqual("period_001", new LastPeriodStore(_path, NullLogger<LastPeriodStore>.Instance).Load(),
+			"an old id names no period after the renumbering, so the start would read the period as unknown");
+	}
 	/// <summary><see cref="LightingEngineHost.Reload"/> never throws: its caller is the <c>[NetDaemonApp]</c> bootstrap, and an app that throws takes its DI scope and <c>IHaContext</c> with it.</summary>
 	[TestMethod]
 	public void Reload_OfADocumentWithASectionEmptiedByHand_LoadsItRatherThanThrowing()
