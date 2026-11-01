@@ -171,6 +171,7 @@
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ReadableIdConversionTests.Every_Period_Reference_Follows_Its_Period_Onto_A_Readable_Id
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ReadableIdConversionTests.A_Mode_Switch_Names_The_Option_Text_And_No_Option_Keeps_A_Minted_Id
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ReadableIdConversionTests.A_Converted_Document_Is_Not_Converted_Again
+			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ReadableIdConversionTests.Renaming_A_Period_Keeps_Every_Reference_Pointing_At_It
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.ReadableIdTests.A_Deleted_Newest_Period_Number_Is_Never_Issued_Again
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.SleepStepsTests.Each_Step_Stores_The_Pair_Of_Flags_It_Always_Meant
 			| FullyQualifiedName=AdaptiveLighting.Tests.Lighting.SleepStepsTests.A_Saved_Step_Reads_Back_As_The_Same_Step

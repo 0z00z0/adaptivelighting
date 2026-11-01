@@ -217,6 +217,54 @@ public sealed class RoomHistoryPersistenceTests
 		Assert.IsFalse(rooms.TryGetProperty("room_002", out _), "the room removed from the document loses its history on the next save");
 	}
 
+	[TestMethod]
+	public void Renaming_A_Room_Without_An_Area_Keeps_Its_History_And_Its_Command_Log()
+	{
+		FakeHaContext ha = new();
+		ha.SetState(Light, "off");
+		ha.SetState(Motion, "off");
+
+		TestScheduler scheduler = new();
+		scheduler.AdvanceTo(Start.Ticks);
+
+		AdaptiveLightingConfig document = Document();
+		document.Global.CommandLog = true;
+		document.Areas[0].Darkness = DarknessSource.Always;
+
+		using LightingEngineHost host = new(
+			new LightingConfigStore(ConfigPath, NullLogger<LightingConfigStore>.Instance),
+			NullLoggerFactory.Instance);
+		host.Attach(ha, new FakeHaRegistry(), scheduler);
+		SaveResult saved = host.Save(document);
+		Assert.AreEqual(1, host.RunningAreaCount, saved.Message);
+
+		ha.Trigger(Motion, "on");
+		scheduler.AdvanceBy(TimeSpan.FromMinutes(1).Ticks);
+		ha.Trigger(Motion, "off");
+
+		string? motionBefore = Field(Latest(ha), "last_motion_at");
+		Assert.IsNotNull(motionBefore);
+
+		string commandsFolder = Path.Combine(_directory, "log", "commands");
+		string logFile = Path.Combine(commandsFolder, "room_001", "light.test_room.log");
+		Assert.IsTrue(File.Exists(logFile), "the first command is logged under the room id");
+
+		document.Areas[0].Name = "Renamed room";
+		SaveResult renamedSave = host.Save(document);
+		Assert.AreEqual(1, host.RunningAreaCount, renamedSave.Message);
+
+		Assert.AreEqual(motionBefore, Field(Latest(ha), "last_motion_at"), "the history follows the room through the rename");
+
+		ha.Trigger(Motion, "on");
+
+		// The shutdown write is unpruned, so a history filed under the new name would show beside the room id.
+		host.Dispose();
+		CollectionAssert.AreEqual(new[] { "room_001" }, RoomsInHistoryFile().EnumerateObject().Select(room => room.Name).ToArray(), "and is not filed under a second key");
+
+		CollectionAssert.AreEqual(new[] { "room_001" }, Directory.GetDirectories(commandsFolder).Select(Path.GetFileName).ToArray());
+		Assert.AreEqual(3, File.ReadAllLines(logFile).Length, "the next command lands in the same file: header and two lines");
+	}
+
 	/// <summary>What <see cref="LightingEngineHost"/> prunes by: a room's area id, else its room id, so a rename is never a removal.</summary>
 	[TestMethod]
 	public void DocumentRoomKeys_DoNotChangeWhenOnlyARoomsNameDoes_WithOrWithoutAnArea()
