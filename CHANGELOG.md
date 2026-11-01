@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+## [2026.10.7] - 2026-11-01
+
 - The note of the last period crossed follows the periods to their new ids at the first start after the update, so the house still knows which period it is in; an older build discards the newer note.
 - A period added by hand to an older settings file no longer gives a sleep option the period called night as its dim period.
 - The label conversion runs once, at the first start, stores a label id in the label's own spelling, and also clears the retired defaults `adaptive_exclude` and `adaptive_motion`.
