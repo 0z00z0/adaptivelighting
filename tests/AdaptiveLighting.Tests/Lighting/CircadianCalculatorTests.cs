@@ -639,9 +639,9 @@ public sealed class CircadianCalculatorTests
 		Assert.AreEqual("night", calc.ActivePeriodId(At(8)), "and what is in force is what the hold left behind");
 	}
 
-	/// <summary>The sleep clamp asks for a period by name and must still get it while it is being held back.</summary>
+	/// <summary>The sleep clamp asks for a period by its id and must still get it while it is being held back.</summary>
 	[TestMethod]
-	public void AHeldPeriod_IsStillReachableByName()
+	public void AHeldPeriod_IsStillReachableById()
 	{
 		CircadianCalculator calc = Holding((_, _) => true);
 

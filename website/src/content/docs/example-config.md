@@ -367,9 +367,9 @@ than either.
 ## What refuses to save
 
 Some problems stop the engine commanding anything and are listed on the Configuration page: no
-periods, a `Start` that cannot be parsed, two periods with the same name or the same start,
-two rooms on one area, two rooms with no area under one name, negative timeouts, a warning dim longer than the time the lights stay on, a
-value out of range.
+periods, a `Start` that cannot be parsed, two periods with the same id or the same start,
+a period without an id, two rooms on one area, negative timeouts, a warning dim longer than the time the lights stay on, a
+value out of range. Two periods or two rooms may share a name.
 
 Others only cost you one room: an `AreaId` that is not in the registry, an entity id Home Assistant
 does not know, a room that resolves no lights or no motion sensors. That room is skipped, the rest

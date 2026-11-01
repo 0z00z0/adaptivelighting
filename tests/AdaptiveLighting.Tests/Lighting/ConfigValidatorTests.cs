@@ -523,8 +523,7 @@ public sealed class ConfigValidatorTests
 		StringAssert.Contains(result.ToString(), "Gang", "the household needs to know which room to go and fix");
 	}
 
-	// The room-level opt-in this warning is now driven by; "day" is Minimal()'s first period, keyed by name
-	// since neither carries an Id.
+	// The room-level opt-in this warning is driven by; "day" is the id of Minimal()'s first period.
 	private static RoomLevelOverride OnCurve() => new() { PeriodId = "day", FollowDaylightCurve = true };
 
 	/// <summary>The curve reads the house's outdoor sensor, so a room following it for a period with none named has nothing to read.</summary>

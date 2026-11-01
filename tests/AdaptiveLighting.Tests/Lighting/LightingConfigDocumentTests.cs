@@ -251,8 +251,7 @@ public sealed class LightingConfigDocumentTests
 	}
 
 	/// <summary>A document naming rooms keeps them, and is then byte-identical through any further load and save.</summary>
-	// Compared from the first save and not from the hand-written text, because the loader mints a period id the
-	// hand-written file has not got.
+	// Compared from the first save: the serialiser writes keys the hand-written text leaves out.
 	[TestMethod]
 	public void RoundTrip_LeavesAWrittenRoomListByteIdentical()
 	{

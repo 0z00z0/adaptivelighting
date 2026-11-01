@@ -243,7 +243,7 @@ internal static class HouseModeSectionRules
 			if (HouseModeConfig.SleepClampPeriodFor(option, config.Periods) is null)
 				result.AddError(
 					$"Sleep option '{option.Value}' is load-bearing (an area respects sleep) but no clamp period resolves: " +
-					"set its ClampPeriodId, have a period switch to this option, or add a period named 'night'.");
+					"set its ClampPeriodId or have a period switch to this option.");
 		}
 	}
 

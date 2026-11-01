@@ -132,7 +132,7 @@
 									<InfoPopover Label="Hold sleeping rooms to this period">
 										While the house is in this mode, every room that dims while the house sleeps is held
 										to this period's levels instead of the clock's. Left on the default it picks the period
-										that switches this mode on, or one named "night" — usually right.
+										that switches this mode on.
 									</InfoPopover>
 								</span>
 								<select class="cell wide" @bind:get="boundOption.ClampPeriodId ?? string.Empty"
@@ -424,7 +424,7 @@
 		TimePeriodConfig? resolved = HouseModeConfig.SleepClampPeriodFor(probe, [.. Periods]);
 		return resolved is not null
 			? $"(default: {PeriodName(resolved)})"
-			: "(default: none found — name a period)";
+			: "(default: none — pick a period)";
 	}
 
 	/// <summary>The empty-picker note, worded by whether Home Assistant is answering.</summary>
