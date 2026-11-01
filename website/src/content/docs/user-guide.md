@@ -365,7 +365,8 @@ running. The message names the real Home Assistant ids.
 **My own Home Assistant automation stopped firing.** From 2.0 the published event is
 `adaptive_lighting_area` with an `area` field, not `laget_lighting_zone` with a `zone` field.
 Nothing publishes the old name. Update the automation or dashboard card by hand, and match on the
-`area_id` field rather than the display name, which is editable.
+`area_id` field rather than the display name, which is editable. A room without a Home Assistant
+area has no `area_id`; match it on the `room_id` field, which holds its id such as `room_001`.
 
 **My edits disappeared after a deploy.** The live configuration file must live outside your deploy
 folder. **Configuration → House → This installation** shows where it is.

@@ -126,7 +126,7 @@ public sealed class AreaSnapshotCache : IHostedService, IAsyncDisposable
 		if (snapshot.TestingPeriodId is { Length: > 0 } tested && PeriodName(tested) is { } name)
 			snapshot = snapshot with { TestingPeriodName = name };
 
-		// Keyed on the registry area id, the stable half: a room renamed while a page is open replaces itself
+		// Keyed on the room key, the stable half: a room renamed while a page is open replaces itself
 		// instead of arriving as a second entry.
 		_snapshots[KeyOf(snapshot)] = snapshot;
 

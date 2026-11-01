@@ -98,8 +98,9 @@ lower-case `areas:` can never win over `Zones:`.
   its `ClampPeriodId`, else the period whose `SetsModeId` names the option, and never a period called night.
 - **Names repeat freely**, for periods and for rooms with or without an area. Two rows sharing an id, or two rooms
   naming one area, are refused.
-- **The Home Assistant event carries no room id.** The web side keys a report by area id, else room id, so the
-  reports of rooms without an area cannot be told apart there. Such a room has no room page either.
+- **The Home Assistant event's `room_id` is the room key**: the area id, else the room's own id. The web side
+  files each report under it, so every room keeps its own card. An event without the field is filed under
+  `area_id`. A room without an area has no room page.
 
 ### Readable ids are given once, at the first start
 

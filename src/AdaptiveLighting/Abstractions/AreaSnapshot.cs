@@ -53,7 +53,7 @@ public sealed record AreaSnapshot(
 	string? RoomId = null,
 	string? TestingPeriodName = null)
 {
-	/// <summary>What the room is known by: the key the document gives it, else the area id. A snapshot rebuilt from the Home Assistant event carries no <c>RoomId</c>.</summary>
+	/// <summary>What the room is known by: the key the document gives it, else the area id. An event from a build without <c>room_id</c> carries no <c>RoomId</c>.</summary>
 	[System.Text.Json.Serialization.JsonIgnore]
 	public string RoomKey => RoomId is { Length: > 0 } key ? key : AreaId ?? "";
 

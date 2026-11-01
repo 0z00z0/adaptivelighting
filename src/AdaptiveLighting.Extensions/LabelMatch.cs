@@ -18,8 +18,6 @@ public static class LabelMatch
 		return false;
 	}
 
-	public static bool IsKnownId(IReadOnlyList<RegistryLabel>? knownLabels, string? stored) => Carries(knownLabels, stored);
-
 	public static T? WithId<T>(IEnumerable<T> labels, Func<T, string> idOf, string? stored)
 		where T : class
 	{
