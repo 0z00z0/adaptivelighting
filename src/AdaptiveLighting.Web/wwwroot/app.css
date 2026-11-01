@@ -255,9 +255,9 @@
    The language calls it "a deliberate, load-bearing choice ... not just a
    code-block convention", covering "headings, navigation and body copy", so a
    0z0 theme in a proportional face would be a recolour instead of the
-   language. --font-sans becomes the existing --mono stack, which already lists
-   Cascadia Mono first and degrades to ui-monospace where it is not installed,
-   the language's own zero-dependency rule for its typeface on the web.
+   language. --font-sans becomes the existing --mono stack, which lists the
+   bundled Cascadia Code first (ligatures at the font's default) and degrades
+   to ui-monospace if the font fails to load.
    ============================================================================ */
 :root[data-theme="0z0"] {
 	/* ---- surfaces. bg / bg2 / bg3 verbatim from the palette table. --chip,
@@ -368,7 +368,7 @@
 
 	/* ---- type ---- */
 	--font-sans: Seravek, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
-	--mono: "Cascadia Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+	--mono: "Cascadia Code", ui-monospace, Consolas, monospace;
 	--text-xs: 12.5px;        /* the uppercase section label */
 	--text-sm: 14px;          /* help lines, meta, timestamps */
 	--text-md: 15px;          /* dense body: settings rows, log lines */
@@ -401,6 +401,8 @@
 	--t-md: var(--text-md);
 	--r: var(--radius-panel);
 }
+
+@font-face { font-family: "Cascadia Code"; src: url("fonts/cascadiacode/cascadia-code-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 200 700; font-display: swap; }
 
 * {
 	box-sizing: border-box;
