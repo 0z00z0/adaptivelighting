@@ -156,6 +156,27 @@ public sealed class ReadableIdConversionTests
 	}
 
 	[TestMethod]
+	public void Renaming_A_Period_Keeps_Every_Reference_Pointing_At_It()
+	{
+		AdaptiveLightingConfig config = Converted(out _);
+		TimePeriodConfig night = PeriodNamed(config, "night");
+		HouseModeConfig mode = config.Global.HouseMode!;
+
+		night.Name = "bedtime";
+
+		Assert.AreEqual("period_002", night.Key, "the id does not move with the name");
+		Assert.AreEqual("period_002", config.Areas[0].Levels[0].PeriodId, "a room's levels row");
+		Assert.AreEqual("period_002", config.Global.PeriodSelect!.Options[1].PeriodId, "a select mapping");
+		Assert.AreEqual(night, HouseModeConfig.SleepClampPeriodFor(mode.OptionFor("Nap")!, config.Periods), "a dim period");
+		Assert.AreEqual("period_001", mode.OptionFor("Guests")!.ResetOnPeriodStartId, "a reset trigger on another period");
+
+		CircadianCalculator calculator = new(config.Periods, config.Global, () => SunTimes.Unknown, config.Areas[0].Levels);
+
+		Assert.AreEqual(8d, calculator.GetPeriodTarget(night.Key)!.BrightnessPct, "the room still replaces this period");
+		Assert.IsTrue(ConfigValidator.Validate(config).IsValid);
+	}
+
+	[TestMethod]
 	public void A_Dangling_Levels_Row_Still_Warns_And_Survives()
 	{
 		AdaptiveLightingConfig config = Converted(out _);
