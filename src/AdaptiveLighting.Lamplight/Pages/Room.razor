@@ -54,19 +54,19 @@ else
 
 	<RoomLevelsFold Model="@_model" Open="@IsOpen(LevelsId)" OpenChanged="@(open => SetOpen(LevelsId, open))" />
 
-	<RoomSettingsFold Id="@MovementId" Model="@_model" Group="@MovementGroup" Open="@IsOpen(MovementId)" OpenChanged="@(open => SetOpen(MovementId, open))">
+	<RoomSettingsFold Id="@MovementId" Model="@_model" Group="@MovementGroup" Edited="@StateHasChanged" Open="@IsOpen(MovementId)" OpenChanged="@(open => SetOpen(MovementId, open))">
 		<RoomMovementExtra Model="@_model" />
 	</RoomSettingsFold>
 
 	<RoomSensorsFold Model="@_model" Open="@IsOpen(SensorsId)" OpenChanged="@(open => SetOpen(SensorsId, open))" />
 
-	<RoomSettingsFold Id="@DarknessId" Model="@_model" Group="@DarknessGroup" Open="@IsOpen(DarknessId)" OpenChanged="@(open => SetOpen(DarknessId, open))" />
+	<RoomSettingsFold Id="@DarknessId" Model="@_model" Group="@DarknessGroup" Edited="@StateHasChanged" Open="@IsOpen(DarknessId)" OpenChanged="@(open => SetOpen(DarknessId, open))" />
 
-	<RoomSettingsFold Id="@CurveId" Model="@_model" Group="@CurveGroup" Open="@IsOpen(CurveId)" OpenChanged="@(open => SetOpen(CurveId, open))">
+	<RoomSettingsFold Id="@CurveId" Model="@_model" Group="@CurveGroup" Edited="@StateHasChanged" Open="@IsOpen(CurveId)" OpenChanged="@(open => SetOpen(CurveId, open))">
 		<RoomDaylightExtra Model="@_model" />
 	</RoomSettingsFold>
 
-	<RoomSettingsFold Id="@BehaviourId" Model="@_model" Group="@BehaviourGroup" Open="@IsOpen(BehaviourId)" OpenChanged="@(open => SetOpen(BehaviourId, open))" />
+	<RoomSettingsFold Id="@BehaviourId" Model="@_model" Group="@BehaviourGroup" Edited="@StateHasChanged" Open="@IsOpen(BehaviourId)" OpenChanged="@(open => SetOpen(BehaviourId, open))" />
 
 	<RoomTail Model="@_model"
 			  IdentityOpen="@IsOpen(IdentityId)" IdentityOpenChanged="@(open => SetOpen(IdentityId, open))"

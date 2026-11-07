@@ -27,7 +27,7 @@
 				 HouseText="@current.HouseText"
 				 IsEditing="@editing"
 				 OnToggleEdit="@(() => ToggleEdit(setting.Key))"
-				 OnRevert="@(() => Model.RevertSetting(setting))">
+				 OnRevert="@(() => Apply(Model.RevertSetting(setting)))">
 				<Help>@setting.Help</Help>
 				<ChildContent>
 					@switch (setting.Control)
@@ -110,14 +110,25 @@
 	[Parameter]
 	public RenderFragment? ChildContent { get; set; }
 
+	// Group is the page's snapshot from before the press. Asking the page to redraw hands the next press the new
+	// number; redrawing only this fold would show and step from the old one until the save redraws the page.
+	[Parameter]
+	public EventCallback Edited { get; set; }
+
 	private string? _editingKey;
 
 	private void ToggleEdit(string key) =>
 		_editingKey = string.Equals(_editingKey, key, StringComparison.Ordinal) ? null : key;
 
-	private Task Set(RoomSetting setting, string? value) => Model.SetSetting(AllSettingsPanel.Change.OfText(setting, value));
+	private Task Set(RoomSetting setting, string? value) => Apply(Model.SetSetting(AllSettingsPanel.Change.OfText(setting, value)));
 
-	private Task SetFlag(RoomSetting setting, bool value) => Model.SetSetting(AllSettingsPanel.Change.OfFlag(setting, value));
+	private Task SetFlag(RoomSetting setting, bool value) => Apply(Model.SetSetting(AllSettingsPanel.Change.OfFlag(setting, value)));
 
-	private Task SetNumber(RoomSetting setting, double value) => Model.SetSetting(AllSettingsPanel.Change.OfNumber(setting, value));
+	private Task SetNumber(RoomSetting setting, double value) => Apply(Model.SetSetting(AllSettingsPanel.Change.OfNumber(setting, value)));
+
+	private async Task Apply(Task edit)
+	{
+		await edit;
+		await Edited.InvokeAsync();
+	}
 }
