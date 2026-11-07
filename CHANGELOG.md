@@ -12,6 +12,9 @@ against each other.
 
 ## [Unreleased]
 
+- A settings save no longer extends the stay-on time of lit rooms or lifts a dimming room back to full; rooms rebuilt by a save read "Configuration updated", and the room event carries a new `after_save` field.
+- A copied activity row keeps a space after the time.
+
 ## [2026.10.7] - 2026-11-01
 
 - The note of the last period crossed follows the periods to their new ids at the first start after the update, so the house still knows which period it is in; an older build discards the newer note.
