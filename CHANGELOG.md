@@ -13,6 +13,7 @@ against each other.
 ## [Unreleased]
 
 - The Test button counts down to the end of the test on the room page.
+- A period row that follows the daylight curve shows the level the curve gives now, with a link to the curve; the chart's figure is rounded the same way.
 
 ## [2026.10.7] - 2026-11-01
 
