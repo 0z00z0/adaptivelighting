@@ -723,6 +723,12 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 			.Select(period => period.Name is { Length: > 0 } name ? name : "unnamed period")
 	];
 
+	/// <summary>Whether the page draws the daylight curve: some period follows it and brightness reaches the lights.</summary>
+	public bool ShowsCurve => ShowBrightnessControls && RoomLevels.CurvePeriods(Periods, Area).Count > 0;
+
+	/// <summary>The level the curve gives at the reading now, the figure the chart's caption shows; <c>null</c> without a reading.</summary>
+	public double? CurveNowPct => LuxCurve.LevelNow(Effective, _daylightLux);
+
 	/// <summary>The daylight reading behind the chart. Read on the tick, never in a getter: the page redraws
 	/// every second.</summary>
 	public double? DaylightLux => _daylightLux;

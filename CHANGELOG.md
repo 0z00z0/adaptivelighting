@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+- A period row that follows the daylight curve shows the level the curve gives now, with a link to the curve; the chart's figure is rounded the same way.
+
 ## [2026.10.7] - 2026-11-01
 
 - The note of the last period crossed follows the periods to their new ids at the first start after the update, so the house still knows which period it is in; an older build discards the newer note.

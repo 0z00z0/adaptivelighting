@@ -149,6 +149,15 @@ public static class LuxCurve
 		return Math.Clamp((across - GrabMargin) / length, 0, 1);
 	}
 
+	/// <summary>The level the curve gives at a reading, as the whole number a readout shows; <c>null</c> without a reading.</summary>
+	// The chart's caption and the period rows both read this, so their figures cannot differ.
+	public static double? LevelNow(AreaSettings settings, double? reading)
+	{
+		ArgumentNullException.ThrowIfNull(settings);
+
+		return reading is { } lux ? Adaptive.UI.DisplayRounding.Whole(LuxBrightnessCurve.Brightness(lux, settings)) : null;
+	}
+
 	/// <summary>The engine's curve across the whole axis, as an SVG <c>d</c> in the plot's own user units.</summary>
 	public static string Path(AreaSettings settings, double axisMaxLux, int samples = 112)
 	{

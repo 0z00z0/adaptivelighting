@@ -133,6 +133,8 @@ else
 						  Resolved="@_model.Resolved"
 						  ActivePeriod="@_model.ActivePeriodId"
 						  NameOf="@_model.NameOf"
+						  CurveNowPct="@_model.CurveNowPct"
+						  CurveHref="@(_model.ShowsCurve ? $"{HouseView.RoomHref(AreaId)}#daylight-curve" : null)"
 						  TestRefusal="@_model.TestRefusal"
 						  TestingPeriodId="@_model.TestingPeriod"
 						  TestSecondsLeft="@_model.TestSecondsLeft"
@@ -145,9 +147,9 @@ else
 
 			@* Only where this room asked for it, for at least one period, and only where brightness reaches its
 			   lights at all: the curve has nothing but a brightness number to hand out. *@
-			@if (_model.ShowBrightnessControls && _model.CurvePeriodNames.Count > 0)
+			@if (_model.ShowsCurve)
 			{
-				<div class="lvl-daylight">
+				<div class="lvl-daylight" id="daylight-curve">
 					<div class="lvl-daylight-head">
 						<span class="lvl-daylight-title">Daylight curve</span>
 					</div>
