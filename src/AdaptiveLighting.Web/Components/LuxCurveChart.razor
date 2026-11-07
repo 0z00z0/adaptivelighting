@@ -402,8 +402,8 @@
 	};
 
 	/// <summary>The caption on the page: where the curve stands now, in a few words.</summary>
-	private string ShortCaption => Reading is { } now
-		? $"Now {LuxCurve.Lux(now)} → {TokenFormat.Percent(Math.Round(LuxBrightnessCurve.Brightness(now, Settings)))}"
+	private string ShortCaption => Reading is { } now && LuxCurve.LevelNow(Settings, now) is { } level
+		? $"Now {LuxCurve.Lux(now)} → {TokenFormat.Percent(level)}"
 		: "No outdoor reading — dark-end level";
 
 	/// <summary>The chart in words, used for the accessible name and behind the caption's (i).</summary>
@@ -417,10 +417,9 @@
 				+ $"{TokenFormat.Percent(Settings.LuxBrightnessMaxPct)} from "
 				+ $"{LuxCurve.Lux(Settings.LuxBrightnessFullLux)} — {Shape}.";
 
-			if (Reading is { } reading)
+			if (Reading is { } reading && LuxCurve.LevelNow(Settings, reading) is { } level)
 			{
-				double brightness = LuxBrightnessCurve.Brightness(reading, Settings);
-				line += $" It reads {LuxCurve.Lux(reading)} outside now, so {TokenFormat.Percent(Math.Round(brightness))}.";
+				line += $" It reads {LuxCurve.Lux(reading)} outside now, so {TokenFormat.Percent(level)}.";
 			}
 			else
 			{

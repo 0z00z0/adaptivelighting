@@ -29,6 +29,17 @@ public sealed class LuxCurveTests
 	];
 
 	[TestMethod]
+	public void Level_Now_Is_The_Engines_Figure_Rounded_Like_Every_Readout_And_Absent_Without_A_Reading()
+	{
+		AreaSettings settings = Settings();
+		double raw = LuxBrightnessCurve.Brightness(300, settings);
+
+		Assert.AreNotEqual(Math.Round(raw), raw, "The reading has to land between two whole percentages for this to prove the rounding.");
+		Assert.AreEqual(Math.Round(raw, MidpointRounding.AwayFromZero), LuxCurve.LevelNow(settings, 300));
+		Assert.IsNull(LuxCurve.LevelNow(settings, null));
+	}
+
+	[TestMethod]
 	public void Every_Decade_Takes_The_Same_Width()
 	{
 		Assert.AreEqual(0.00, LuxCurve.FractionOf(1, 10_000), 1e-9);

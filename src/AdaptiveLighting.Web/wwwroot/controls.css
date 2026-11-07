@@ -1362,10 +1362,26 @@
 	grid-column: 1 / -1;
 }
 
-/* The rail is gone with the curve ticked, and with it the row's second line. The cell stays only where the
-   table has columns to hold. */
-.lvl-cell-curve {
-	display: none;
+/* With the curve ticked the rail gives way to one small line: the curve's level now, and the way to the
+   curve. The elbow glyph and the number are the borrowed readout's own, so the two read as one family. */
+.lvl-curve-hint {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.1rem 0.35rem;
+	min-width: 0;
+}
+
+.lvl-curve-says {
+	color: var(--off);
+}
+
+.lvl-curve-link {
+	margin-inline-start: var(--space-2);
+	font-size: var(--t-xs);
+	color: var(--accent);
+	text-decoration: underline;
+	white-space: nowrap;
 }
 
 /* Test says what it does; a heading above one button is a line every row pays for. */
@@ -1444,11 +1460,6 @@
 	.lvl-act {
 		grid-column: auto;
 		grid-row: auto;
-	}
-
-	/* An empty cell still has to hold its column, or the warmth rail slides under the Period heading. */
-	.lvl-cell-curve {
-		display: block;
 	}
 
 	/* Room enough for the words again once the table has columns, and the readout goes back above the rail so a

@@ -1,0 +1,34 @@
+@namespace Adaptive.UI
+@* The line a period row shows in place of its rail while it follows the daylight curve: the level the curve
+   gives now, and the way to the curve. No number while there is no reading, and no link where the page
+   draws no curve. *@
+
+@if (NowPct is not null || Href is { Length: > 0 })
+{
+	<span class="lvl-curve-hint">
+		<span class="psl-glyph" aria-hidden="true"></span>
+		@if (NowPct is { } pct)
+		{
+			<span class="lvl-curve-says">the curve's</span>
+			<span class="psl-borrowed">@InvariantNumber.Format(pct, 2) %</span>
+		}
+		@if (Href is { Length: > 0 })
+		{
+			<a class="lvl-curve-link" href="@Href" @onclick="Clicked" @onclick:preventDefault="@Clicked.HasDelegate">Change the curve</a>
+		}
+	</span>
+}
+
+@code {
+	/// <summary>The level the curve gives now, already rounded; <c>null</c> while no light reading is known.</summary>
+	[Parameter]
+	public double? NowPct { get; set; }
+
+	/// <summary>The in-page address of the curve section, or <c>null</c> where the page has none.</summary>
+	[Parameter]
+	public string? Href { get; set; }
+
+	/// <summary>Raised on a press of the link; a page whose curve sits in a closed fold opens it here.</summary>
+	[Parameter]
+	public EventCallback Clicked { get; set; }
+}

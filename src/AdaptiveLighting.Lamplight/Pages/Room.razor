@@ -52,7 +52,7 @@ else
 
 	<SectionIndex Items="@IndexItems" OnJump="JumpTo" />
 
-	<RoomLevelsFold Model="@_model" Open="@IsOpen(LevelsId)" OpenChanged="@(open => SetOpen(LevelsId, open))" />
+	<RoomLevelsFold Model="@_model" Open="@IsOpen(LevelsId)" OpenChanged="@(open => SetOpen(LevelsId, open))" ShowCurve="@(() => JumpTo(CurveId))" />
 
 	<RoomSettingsFold Id="@MovementId" Model="@_model" Group="@MovementGroup" Open="@IsOpen(MovementId)" OpenChanged="@(open => SetOpen(MovementId, open))">
 		<RoomMovementExtra Model="@_model" />
@@ -146,10 +146,13 @@ else
 		new(LogId, "What happened here")
 	];
 
-	// Opens the target fold and scrolls it into view; the fold's own id is already on its <section>.
+	// Opens the target fold and scrolls it into view; the fold's own id is already on its <section>. Rendered
+	// before the scroll starts: scrolling while the fold is still closed clamps to the shorter page.
 	private async Task JumpTo(string id)
 	{
 		SetOpen(id, true);
+		StateHasChanged();
+		await Task.Yield();
 		await Js.InvokeVoidAsync("eval", $"document.getElementById('{id}')?.scrollIntoView({{behavior:'smooth',block:'start'}})");
 	}
 

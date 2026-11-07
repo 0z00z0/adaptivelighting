@@ -124,6 +124,42 @@ public sealed class RoomPageModelTests
 		model.Dispose();
 	}
 
+	// Real time on the model's own one-second ticker. The levels editor sits outside every clock region, so the
+	// Test button counts down only if the model raises Changed as the seconds move.
+	[TestMethod]
+	public async Task ARunningTestRedrawsEverySecondAndClearsAtTheDeadline()
+	{
+		Report(TestingUntil(DateTimeOffset.Now.AddSeconds(4)));
+
+		RoomPageModel model = OpenRoom(out _);
+		List<int> secondsDrawn = [];
+
+		model.Changed += () =>
+		{
+			lock (secondsDrawn)
+				secondsDrawn.Add(model.TestSecondsLeft);
+		};
+
+		Assert.IsTrue(model.TestSecondsLeft > 0, "the test has to be running when the page opens");
+
+		await WaitUntil(() => model.TestingPeriod is null, attempts: 80);
+
+		// The model's value clears before its beat has raised Changed for it.
+		await Task.Delay(300);
+
+		lock (secondsDrawn)
+		{
+			Assert.IsTrue(secondsDrawn.Count >= 2, $"the clock alone has to redraw the page, saw {secondsDrawn.Count}");
+			Assert.IsTrue(secondsDrawn[0] > secondsDrawn[^1], "the drawn value has to move down");
+			Assert.AreEqual(0, secondsDrawn[^1], "the last redraw is the one that clears the countdown");
+		}
+
+		Assert.AreEqual(0, model.TestSecondsLeft);
+		Assert.IsNull(model.TestingLight, "the lone light clears with the period");
+
+		model.Dispose();
+	}
+
 	[TestMethod]
 	public void ARefusedPressArmsNothingAndLeavesTheReportToDecide()
 	{
@@ -364,9 +400,9 @@ public sealed class RoomPageModelTests
 		TestingLightId: "light.stue_taklys");
 
 	/// <summary>Waits for the model's own timer, with a ceiling well above the quiet window it is waiting on.</summary>
-	private static async Task WaitUntil(Func<bool> settled)
+	private static async Task WaitUntil(Func<bool> settled, int attempts = 100)
 	{
-		for (int attempt = 0; attempt < 100; attempt++)
+		for (int attempt = 0; attempt < attempts; attempt++)
 		{
 			if (settled())
 				return;

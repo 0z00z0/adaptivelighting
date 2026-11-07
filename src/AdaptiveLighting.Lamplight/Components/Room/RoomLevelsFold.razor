@@ -21,6 +21,9 @@
 					  Resolved="@Model.Resolved"
 					  ActivePeriod="@Model.ActivePeriodId"
 					  NameOf="@Model.NameOf"
+					  CurveNowPct="@Model.CurveNowPct"
+					  CurveHref="@(Model.ShowsCurve ? $"{HouseView.RoomHref(Model.AreaId)}#curve" : null)"
+					  CurveLinkClicked="@ShowCurve"
 					  TestRefusal="@Model.TestRefusal"
 					  TestingPeriodId="@Model.TestingPeriod"
 					  TestSecondsLeft="@Model.TestSecondsLeft"
@@ -42,6 +45,10 @@
 
 	[Parameter]
 	public EventCallback<bool> OpenChanged { get; set; }
+
+	/// <summary>Raised to open the curve's fold and scroll to it.</summary>
+	[Parameter]
+	public EventCallback ShowCurve { get; set; }
 
 	// Room is null only when Area itself is null, which the page already gates on before this fold is drawn.
 	private AreaConfig Room => Model.Area!;
