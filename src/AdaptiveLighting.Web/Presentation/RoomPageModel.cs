@@ -158,9 +158,13 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 
 	private void Beat() => _ = _dispatch(() =>
 	{
+		// Taken before the clock moves: the countdown depends on the clock alone, so a picture taken after it
+		// always matches the one ReadLiveState compares against.
+		StillState before = Still;
+
 		Now = DateTimeOffset.Now;
 
-		if (ReadLiveState())
+		if (ReadLiveState() || Still != before)
 			Changed?.Invoke();
 
 		Tick?.Invoke();
