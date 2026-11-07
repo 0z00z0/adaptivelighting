@@ -12,6 +12,8 @@ against each other.
 
 ## [Unreleased]
 
+- The Test button counts down to the end of the test on the room page.
+
 ## [2026.10.7] - 2026-11-01
 
 - The note of the last period crossed follows the periods to their new ids at the first start after the update, so the house still knows which period it is in; an older build discards the newer note.
