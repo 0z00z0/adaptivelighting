@@ -5,7 +5,7 @@
    only where brightness reaches the room's lights at all: the curve has nothing but a brightness number to hand
    out. *@
 
-@if (Model.ShowBrightnessControls && Model.CurvePeriodNames.Count > 0)
+@if (Model.ShowsCurve)
 {
 	<LuxCurveChart Settings="@Model.Effective"
 				   PeriodNames="@Model.CurvePeriodNames"

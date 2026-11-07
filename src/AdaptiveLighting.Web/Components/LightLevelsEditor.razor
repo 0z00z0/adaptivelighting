@@ -104,6 +104,18 @@
 	[Parameter]
 	public Func<string, string>? NameOf { get; set; }
 
+	/// <summary>The level the daylight curve gives now, shown on a row that follows it; <c>null</c> while no reading is known.</summary>
+	[Parameter]
+	public double? CurveNowPct { get; set; }
+
+	/// <summary>Where the page draws the daylight curve, as an in-page address; <c>null</c> where it draws none.</summary>
+	[Parameter]
+	public string? CurveHref { get; set; }
+
+	/// <summary>Raised on a press of the curve link, for a page whose curve sits in a closed fold.</summary>
+	[Parameter]
+	public EventCallback CurveLinkClicked { get; set; }
+
 	/// <summary>Raised after any change, so the page can re-validate and start its save timer.</summary>
 	[Parameter]
 	public EventCallback Changed { get; set; }
@@ -234,6 +246,10 @@
 								</Mark>
 							</PresetSlider>
 						}
+						else
+						{
+							<CurveHint NowPct="@CurveNowPct" Href="@CurveHref" Clicked="@CurveLinkClicked" />
+						}
 					</div>
 				}
 
@@ -328,6 +344,10 @@
 									}
 								</Mark>
 							</PresetSlider>
+						}
+						else
+						{
+							<CurveHint NowPct="@CurveNowPct" Href="@CurveHref" Clicked="@CurveLinkClicked" />
 						}
 					</div>
 				}

@@ -96,9 +96,9 @@
 				}
 			</div>
 
-			@* Dropped, not replaced by a sentence, while this room follows the curve: the row shrinks to its one
-			   line. Anything the room pinned stays in the document and comes back with the control. The empty cell
-			   still holds its column where the table has columns. *@
+			@* While this room follows the curve the rail is dropped for the curve's own level and the way to it.
+			   Anything the room pinned stays in the document and comes back with the control. The cell holds its
+			   column where the table has columns. *@
 			@if (!NoBrightness)
 			{
 				<div class="lvl-cell @(current.FollowsDaylightCurve ? "lvl-cell-curve" : null)">
@@ -121,6 +121,10 @@
 								}
 							</Mark>
 						</PresetSlider>
+					}
+					else
+					{
+						<CurveHint NowPct="@CurveNowPct" Href="@CurveHref" Clicked="@CurveLinkClicked" />
 					}
 				</div>
 			}
@@ -225,6 +229,9 @@
 					   NoColourTemperature="@NoColourTemperature"
 					   NoBrightness="@NoBrightness"
 					   NameOf="@NameOf"
+					   CurveNowPct="@CurveNowPct"
+					   CurveHref="@CurveHref"
+					   CurveLinkClicked="@CurveLinkClicked"
 					   TestRefusal="@TestRefusal"
 					   TestingLightId="@TestingLightId"
 					   TestingPeriodId="@TestingPeriodId"
@@ -260,6 +267,18 @@
 	/// <summary>Home Assistant's own name for an entity, for the light list beneath the table.</summary>
 	[Parameter]
 	public Func<string, string>? NameOf { get; set; }
+
+	/// <summary>The level the daylight curve gives now, shown on a row that follows it; <c>null</c> while no reading is known.</summary>
+	[Parameter]
+	public double? CurveNowPct { get; set; }
+
+	/// <summary>Where the page draws the daylight curve, as an in-page address; <c>null</c> where it draws none.</summary>
+	[Parameter]
+	public string? CurveHref { get; set; }
+
+	/// <summary>Raised on a press of the curve link, for a page whose curve sits in a closed fold.</summary>
+	[Parameter]
+	public EventCallback CurveLinkClicked { get; set; }
 
 	/// <summary>Raised after any change, so the page can re-validate and start its save timer.</summary>
 	[Parameter]
