@@ -16,6 +16,7 @@ against each other.
 - A copied activity row keeps a space after the time.
 - The Test button counts down to the end of the test on the room page.
 - A period row that follows the daylight curve shows the level the curve gives now, with a link to the curve; the chart's figure is rounded the same way.
+- Each Test button on the room page shows the level Test sets now, with "= now" when the lights already show it.
 - On the room page in Lamplight, the five exact curve values sit in a closed "Exact values" fold under the chart; its header counts the ones this room overrides.
 - In Lamplight a setting's number follows every press at once, and quick presses count.
 

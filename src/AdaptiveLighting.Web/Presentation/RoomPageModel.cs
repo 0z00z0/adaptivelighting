@@ -542,6 +542,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 				DateTimeOffset saved = DateTimeOffset.Now;
 
 				Dirty = false;
+				_saves++;
 				_saved = TransientMessage.For(
 					$"Saved {saved.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture)}",
 					saved,
@@ -674,6 +675,44 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		: null;
 
 	private LevelTestNow? RunningTest() => _engineTest is { } test && test.EndsAt > Now ? test : null;
+
+	/// <summary>What Test would set for each period now, by period id; <c>null</c> where Test is refused.</summary>
+	public IReadOnlyDictionary<string, LevelTestLevels>? TestLevels { get; private set; }
+
+	/// <summary>The figure beside a period's Test button, or <c>null</c> where there is none.</summary>
+	public string? TestLevelOf(string periodId) =>
+		TestLevels?.GetValueOrDefault(periodId) is { } levels ? TestLevelText.Of(levels.Room, levels.AllShown) : null;
+
+	/// <summary>The same for one light's Test button.</summary>
+	public string? LightTestLevelOf(string lightId, string periodId) =>
+		TestLevels?.GetValueOrDefault(periodId)?.Lights.GetValueOrDefault(lightId) is { } light
+			? TestLevelText.Of(light.Command, light.Shown)
+			: null;
+
+	// Asked again only when an input moved: the reading a curve period follows, a report (the engine's own
+	// commands and a hand at the switch both publish one), the refusal, a running test, or a save.
+	private void ReadTestLevels(string? areaId)
+	{
+		TestLevelsKey key = new(areaId, Snapshot, _daylightLux, TestRefusal, TestingPeriod, TestingLight, _saves);
+
+		if (key == _testLevelsFor)
+			return;
+
+		_testLevelsFor = key;
+		TestLevels = TestRefusal is null ? _engine.TestLevels(areaId, Periods.Select(period => period.Key)) : null;
+	}
+
+	private TestLevelsKey? _testLevelsFor;
+	private int _saves;
+
+	private readonly record struct TestLevelsKey(
+		string? AreaId,
+		AreaSnapshot? Snapshot,
+		double? DaylightLux,
+		string? TestRefusal,
+		string? TestingPeriod,
+		string? TestingLight,
+		int Saves);
 
 	/// <summary>Asks the engine to put one period on this room's real lights for a few seconds.</summary>
 	/// <remarks>A press while one is already running moves the test to the new row: the engine drops the pending
@@ -1392,6 +1431,7 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		TestRefusal = _engine.LevelTestRefusal(room.AreaId);
 		RefreshLightRefusals(room.AreaId);
 		_engineKnows = _engine.TryReadLevelTest(room.AreaId, out _engineTest);
+		ReadTestLevels(room.AreaId);
 
 		return Still != before;
 	}
@@ -1440,7 +1480,8 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		TestRefusal,
 		TestingPeriod,
 		TestSecondsLeft,
-		TestingLight);
+		TestingLight,
+		TestLevels);
 
 	private readonly record struct StillState(
 		AreaSnapshot? Snapshot,
@@ -1449,7 +1490,8 @@ public sealed class RoomPageModel : IPageClock, IDisposable
 		string? TestRefusal,
 		string? TestingPeriod,
 		int TestSecondsLeft,
-		string? TestingLight);
+		string? TestingLight,
+		IReadOnlyDictionary<string, LevelTestLevels>? TestLevels);
 
 	/// <summary>Which sensor the curve reads here: this room's own, or the house's outdoor one.</summary>
 	private string? DaylightSensorId =>

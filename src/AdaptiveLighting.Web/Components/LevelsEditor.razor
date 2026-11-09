@@ -69,6 +69,7 @@
 		}
 	}
 
+	@{ bool explained = false; }
 	@foreach (RoomLevelRow row in RoomLevels.Rows(Periods, Room))
 	{
 		RoomLevelRow current = row;
@@ -160,6 +161,18 @@
 			   here has to survive the page being closed. *@
 			<div class="lvl-cell lvl-act">
 				<span class="lvl-cell-label">In the room</span>
+				@* Once per table: the same (i) on every row is a column of icons saying one thing. *@
+				@if (TestLevelOf?.Invoke(current.PeriodId) is { Length: > 0 } level)
+				{
+					<span class="lvl-test-level">
+						@level
+						@if (!explained)
+						{
+							explained = true;
+							<span class="info-host"><InfoPopover Label="Level beside Test">@TestLevelNote</InfoPopover></span>
+						}
+					</span>
+				}
 				@if (IsTesting(current.PeriodId))
 				{
 					<button type="button" class="lvl-test lvl-test-on" disabled
@@ -238,6 +251,7 @@
 					   TestSecondsLeft="@TestSecondsLeft"
 					   TestSeconds="@TestSeconds"
 					   Test="@TestLight"
+					   TestLevelOf="@LightTestLevelOf"
 					   LevelEdited="@LevelEdited"
 					   Changed="@Changed" />
 </div>
@@ -316,6 +330,16 @@
 	/// <summary>Raised when one light's Test button is pressed in the light list.</summary>
 	[Parameter]
 	public EventCallback<LightTest> TestLight { get; set; }
+
+	/// <summary>What Test sets for a period now, shown before its button; <c>null</c> shows nothing.</summary>
+	[Parameter]
+	public Func<string, string?>? TestLevelOf { get; set; }
+
+	/// <summary>The same for one light, by light id and period id.</summary>
+	[Parameter]
+	public Func<string, string, string?>? LightTestLevelOf { get; set; }
+
+	private const string TestLevelNote = "What Test sets. A curve period uses the outdoor light now. = now: the lights already show it.";
 
 	private bool Untestable => TestRefusal is { Length: > 0 };
 

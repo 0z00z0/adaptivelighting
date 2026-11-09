@@ -293,6 +293,45 @@ public sealed class AreaController : IDisposable
 			return RefuseLevelTest();
 	}
 
+	/// <summary>What a level test of each period would send now, by period id; <c>null</c> where a test would be refused.</summary>
+	public IReadOnlyDictionary<string, LevelTestLevels>? TestLevels(IEnumerable<string> periodKeys)
+	{
+		ArgumentNullException.ThrowIfNull(periodKeys);
+
+		lock (_gate)
+		{
+			if (RefuseLevelTest() is not null)
+				return null;
+
+			Dictionary<string, LevelTestLevels> levels = new(StringComparer.OrdinalIgnoreCase);
+
+			foreach (string periodKey in periodKeys)
+				if (_targets.PeriodTarget(periodKey) is { } target)
+					levels[periodKey] = LevelsShown(PeriodTestCommands(target, periodKey));
+
+			return levels;
+		}
+	}
+
+	// The one place a period test's commands are built: TestPeriod sends these and the page shows them.
+	private TestCommands PeriodTestCommands(LightTarget target, string periodKey) =>
+		new(_targets.PeriodCommand(target), _targets.LightCommandsFor(periodKey));
+
+	private LevelTestLevels LevelsShown(TestCommands commands)
+	{
+		Dictionary<string, LightLevelNow> lights = new(StringComparer.OrdinalIgnoreCase);
+
+		foreach (string leaf in _fanOut.Leaves)
+		{
+			LightCommand own = commands.Lights?.GetValueOrDefault(leaf) ?? commands.Room;
+			lights[leaf] = new LightLevelNow(own, LightMatch.AlreadyShows(_ha.GetState(leaf), own));
+		}
+
+		return new LevelTestLevels(commands.Room, lights);
+	}
+
+	private sealed record TestCommands(LightCommand Room, IReadOnlyDictionary<string, LightCommand>? Lights);
+
 	/// <summary>Ends a running level test now, putting back what the lights showed before it.</summary>
 	/// <remarks>Nothing happens when no test is running.</remarks>
 	public void EndTest()
@@ -350,8 +389,11 @@ public sealed class AreaController : IDisposable
 			// The engine's own answer for that period, curve included, so the room shows what it would really do
 			// and no second reading of the settings can drift from this one. Resolved per light too, or a test
 			// would show every lamp at the room's level and the room would look wrong when the engine took over.
-			SendFor(TransitionReason.LevelTestStarted,
-				() => _fanOut.Send(_targets.PeriodCommand(target), _targets.LightCommandsFor(periodKey)));
+			SendFor(TransitionReason.LevelTestStarted, () =>
+			{
+				TestCommands commands = PeriodTestCommands(target, periodKey);
+				_fanOut.Send(commands.Room, commands.Lights);
+			});
 
 			_logger.LogInformation("{Area}: testing period '{Period}' for {Seconds}s.", Name, target.PeriodName, LevelTestSeconds);
 

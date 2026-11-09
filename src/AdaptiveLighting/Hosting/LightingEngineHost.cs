@@ -231,6 +231,14 @@ public sealed class LightingEngineHost : IDisposable
 			return RunningArea(areaId) is { } area ? area.LevelTestRefusal() : NotRunningRefusal();
 	}
 
+	/// <summary>What a level test of each period would put on <paramref name="areaId"/>'s lights now, by period id.</summary>
+	/// <returns><c>null</c> where a test would be refused or the room is not running.</returns>
+	public IReadOnlyDictionary<string, LevelTestLevels>? TestLevels(string? areaId, IEnumerable<string> periodKeys)
+	{
+		lock (_gate)
+			return RunningArea(areaId)?.TestLevels(periodKeys);
+	}
+
 	/// <summary>Puts a period's levels on one room's lights for <see cref="AreaController.LevelTestSeconds"/> seconds, then hands the room back.</summary>
 	/// <returns><c>null</c> once the test is running, or the sentence saying why it is not.</returns>
 	/// <remarks>The engine schedules the return, so closing the page cannot strand a room on test levels.</remarks>
