@@ -17,12 +17,12 @@
 		  OpenChanged="@OpenChanged">
 		<RoomDaylightExtra Model="@Model" />
 
-		<RoomSettingsFold Id="@ExactId" Model="@Model" Group="@ExactGroup" Open="@ExactOpen" OpenChanged="@ExactOpenChanged" />
+		<RoomSettingsFold Id="@ExactId" Model="@Model" Group="@ExactGroup" Edited="@Edited" Open="@ExactOpen" OpenChanged="@ExactOpenChanged" />
 	</Fold>
 }
 else
 {
-	<RoomSettingsFold Id="@Id" Model="@Model" Group="@Group" Open="@Open" OpenChanged="@OpenChanged" />
+	<RoomSettingsFold Id="@Id" Model="@Model" Group="@Group" Edited="@Edited" Open="@Open" OpenChanged="@OpenChanged" />
 }
 
 @code {
@@ -40,6 +40,9 @@ else
 
 	[Parameter]
 	public EventCallback<bool> OpenChanged { get; set; }
+
+	[Parameter]
+	public EventCallback Edited { get; set; }
 
 	[Parameter]
 	public bool ExactOpen { get; set; }
