@@ -31,6 +31,10 @@ public sealed record AreaSnapshotEvent
 	[JsonPropertyName("room_id")]
 	public string? RoomId { get; init; }
 
+	/// <summary>The room's opening report on settings just saved; <c>false</c> from a build that never published it.</summary>
+	[JsonPropertyName("after_save")]
+	public bool AfterSave { get; init; }
+
 	/// <summary>The <see cref="AreaState"/> name.</summary>
 	[JsonPropertyName("state")]
 	public string? State { get; init; }
@@ -237,7 +241,8 @@ public sealed record AreaSnapshotEvent
 				? [.. low.Where(battery => battery.EntityId is { Length: > 0 }).Select(battery => new SensorBattery(battery.EntityId!, battery.LevelPct))]
 				: null,
 			ActiveModeName: ActiveModeName,
-			RoomId: RoomId);
+			RoomId: RoomId,
+			AfterSave: AfterSave);
 	}
 }
 

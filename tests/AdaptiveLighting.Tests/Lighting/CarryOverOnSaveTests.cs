@@ -3,6 +3,8 @@ using System.Text.Json;
 using AdaptiveLighting.Configuration;
 using AdaptiveLighting.Engine;
 using AdaptiveLighting.Hosting;
+using AdaptiveLighting.Web.Presentation;
+using AdaptiveLighting.Web.Services;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Reactive.Testing;
@@ -44,7 +46,7 @@ public sealed class CarryOverOnSaveTests
 		public void Dispose() => Host.Dispose();
 	}
 
-	private House Running(string lightState, int overrideMinutes = 60)
+	private House Running(string lightState, int overrideMinutes = 60, int? vacancySeconds = null)
 	{
 		FakeHaContext ha = new();
 		ha.SetState(Light, lightState);
@@ -58,13 +60,13 @@ public sealed class CarryOverOnSaveTests
 			NullLoggerFactory.Instance);
 		host.Attach(ha, new FakeHaRegistry(), scheduler);
 
-		SaveResult result = host.Save(Document(overrideMinutes));
+		SaveResult result = host.Save(Document(overrideMinutes, vacancySeconds: vacancySeconds));
 		Assert.AreEqual(1, host.RunningAreaCount, result.Message);
 
 		return new House(host, ha, scheduler);
 	}
 
-	private static AdaptiveLightingConfig Document(int overrideMinutes, string periodId = "day") => new()
+	private static AdaptiveLightingConfig Document(int overrideMinutes, string periodId = "day", int? vacancySeconds = null) => new()
 	{
 		ConfigName = "Adaptive lighting [test]",
 		Periods = [new TimePeriodConfig { Id = periodId, Name = periodId, Start = "06:00", BrightnessPct = 80, ColorTempKelvin = 3500 }],
@@ -76,7 +78,9 @@ public sealed class CarryOverOnSaveTests
 				Lights = [Light],
 				MotionSensors = [Motion],
 				OverrideDurationMinutes = overrideMinutes,
-				OverrideUntilVacant = false
+				OverrideUntilVacant = false,
+				VacancyTimeoutSeconds = vacancySeconds,
+				PreOffSeconds = vacancySeconds is null ? null : 60
 			}
 		]
 	};
@@ -204,5 +208,61 @@ public sealed class CarryOverOnSaveTests
 
 		house.Advance(TimeSpan.FromMinutes(2));
 		Assert.AreNotEqual(nameof(AreaState.OverriddenOn), Field(Latest(house.Ha), "state"), "the hold ends at its own deadline");
+	}
+
+	private static string Headline(JsonElement report) =>
+		ActivityView.Describe(report.Deserialize<AreaSnapshotEvent>()!.ToSnapshot()!).What;
+
+	[TestMethod]
+	public void ALitRoomAtASave_KeepsItsNoMovementDeadline_AndReadsConfigurationUpdated()
+	{
+		using House house = Running(lightState: "on", vacancySeconds: 600);
+
+		DateTimeOffset deadline = Latest(house.Ha).GetProperty("next_change_at").GetDateTimeOffset();
+		house.Advance(TimeSpan.FromMinutes(3));
+		house.Host.Save(Document(overrideMinutes: 60, vacancySeconds: 600));
+
+		JsonElement after = Latest(house.Ha);
+		Assert.AreEqual(nameof(AreaState.AutoActive), Field(after, "state"));
+		Assert.AreEqual(deadline, after.GetProperty("next_change_at").GetDateTimeOffset(), "a save must not extend the stay-on time");
+		Assert.IsTrue(after.GetProperty("after_save").GetBoolean());
+		Assert.AreEqual("Configuration updated", Headline(after));
+	}
+
+	[TestMethod]
+	public void ARoomInItsDimWarningAtASave_StaysDimmed_AndGoesOffAtItsOwnDeadline()
+	{
+		using House house = Running(lightState: "on", vacancySeconds: 120);
+
+		house.Advance(TimeSpan.FromSeconds(130));
+		JsonElement before = Latest(house.Ha);
+		Assert.AreEqual(nameof(AreaState.PreOff), Field(before, "state"));
+		DateTimeOffset deadline = before.GetProperty("next_change_at").GetDateTimeOffset();
+
+		int onCommands = LightOnCommands(house.Ha);
+		house.Host.Save(Document(overrideMinutes: 60, vacancySeconds: 120));
+
+		JsonElement after = Latest(house.Ha);
+		Assert.AreEqual(nameof(AreaState.PreOff), Field(after, "state"), "a save must not lift a dimming room back to full");
+		Assert.AreEqual(deadline, after.GetProperty("next_change_at").GetDateTimeOffset());
+		Assert.AreEqual(onCommands, LightOnCommands(house.Ha), "the save sends the lights nowhere");
+
+		house.Advance(deadline - house.Scheduler.Now + TimeSpan.FromSeconds(1));
+		Assert.IsTrue(house.Ha.Calls.Any(call => call.Domain == "light" && call.Service == "turn_off"), "off at the warning's own deadline");
+	}
+
+	[TestMethod]
+	public void LightsFoundOnAtARealStart_StartTheCountdownThen_AndReadStartedNotConfigurationUpdated()
+	{
+		using House house = Running(lightState: "on", vacancySeconds: 600);
+
+		house.Advance(TimeSpan.FromMinutes(3));
+		house.Host.Reload();
+
+		JsonElement after = Latest(house.Ha);
+		Assert.AreEqual(nameof(TransitionReason.AdoptedAtStartup), Field(after, "reason"));
+		Assert.AreEqual(house.Scheduler.Now + TimeSpan.FromSeconds(600), after.GetProperty("next_change_at").GetDateTimeOffset());
+		Assert.IsFalse(after.GetProperty("after_save").GetBoolean());
+		Assert.AreEqual("Started — lights already on", Headline(after));
 	}
 }

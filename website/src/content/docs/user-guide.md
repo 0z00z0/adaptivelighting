@@ -367,6 +367,8 @@ running. The message names the real Home Assistant ids.
 Nothing publishes the old name. Update the automation or dashboard card by hand, and match on the
 `area_id` field rather than the display name, which is editable. A room without a Home Assistant
 area has no `area_id`; match it on the `room_id` field, which holds its id such as `room_001`.
+The `after_save` field is `true` on the report a room sends when it was rebuilt by a settings save,
+so an automation can tell that report from lights taken over at a start.
 
 **My edits disappeared after a deploy.** The live configuration file must live outside your deploy
 folder. **Configuration → House → This installation** shows where it is.
