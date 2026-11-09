@@ -127,6 +127,12 @@ public sealed class AreaController : IDisposable
 	// A level test handed over the same way. Until Start settles it, the room's lit state is read from here.
 	private CarriedLevelTest? _carriedTest;
 
+	// A lit room's countdown handed over the same way, so a save neither extends it nor lifts a dim warning.
+	private AreaCountdown? _carriedCountdown;
+
+	// Set for the opening report of a room rebuilt by a save, and cleared once that report is out.
+	private bool _openingAfterSave;
+
 	// The automation run whose change was last reported as left alone, so one run's burst of updates is one row.
 	private string? _ignoredContextId;
 
@@ -167,6 +173,7 @@ public sealed class AreaController : IDisposable
 		_sunMoved = sunMoved;
 		_findBatteries = findBatteries;
 		_originNames = house.OriginNames;
+		_openingAfterSave = house.AfterSave;
 
 		IReadOnlyDictionary<string, CircadianCalculator> calculators = lightCalculators is { Count: > 0 } stated
 			? stated
@@ -589,12 +596,13 @@ public sealed class AreaController : IDisposable
 			// The last command cannot be known yet, so it stays null instead of being guessed.
 			RefreshDarkness();
 			TransitionReason opening = ResumeCarriedHold() ? TransitionReason.Startup
-				: AdoptIfLit() ? TransitionReason.AdoptedAtStartup
+				: ResumeCarriedCountdown() || AdoptIfLit() ? TransitionReason.AdoptedAtStartup
 				: TransitionReason.Startup;
 
 			// After the hold and adoption, which read the room's lit state from the carried test.
 			TakeUpCarriedTest();
 			Publish(opening);
+			_openingAfterSave = false;
 
 			// Same gate as every other reach into the calculator: the tick above is already subscribed.
 			_boundary.Arm();
@@ -623,7 +631,11 @@ public sealed class AreaController : IDisposable
 				})
 				: null;
 
-			return new AreaCarryOver(new AreaHistory(_lastMotionAt, _changedAt, _changedBy), hold) { Test = test };
+			AreaCountdown? countdown = _state is AreaState.AutoActive or AreaState.PreOff && _nextChangeFrom is { } from
+				? new AreaCountdown(_state, from, _leadIn)
+				: null;
+
+			return new AreaCarryOver(new AreaHistory(_lastMotionAt, _changedAt, _changedBy), hold) { Test = test, Countdown = countdown };
 		}
 	}
 
@@ -639,6 +651,7 @@ public sealed class AreaController : IDisposable
 			_changedBy = carried.History.ChangedBy;
 			_carriedHold = carried.Hold;
 			_carriedTest = carried.Test;
+			_carriedCountdown = carried.Countdown;
 		}
 	}
 
@@ -704,6 +717,38 @@ public sealed class AreaController : IDisposable
 		}
 	}
 
+	// Adoption with the countdown the replaced room was running, from its own start under the new length.
+	// Commands nothing: a dim warning is already on the lights.
+	private bool ResumeCarriedCountdown()
+	{
+		AreaCountdown? countdown = _carriedCountdown;
+		_carriedCountdown = null;
+
+		if (countdown is null || !IsEngineAllowed() || _state != AreaState.AutoVacant || !LitWithoutTest())
+			return false;
+
+		_logger.LogInformation(
+			"{Area}: lights on after a configuration save; taking them over in {State} and continuing the countdown from {Started}.",
+			Name, countdown.State, countdown.StartedAt);
+
+		_lastTargets = ResolveTargets();
+		_offHeldBack = false;
+
+		if (countdown.State == AreaState.PreOff)
+		{
+			Enter(AreaState.PreOff, TransitionReason.AdoptedAtStartup);
+			_leadIn = countdown.LeadIn;
+			ArmCountdown(_preOffTimer, TimeSpan.FromSeconds(_area.Settings.PreOffSeconds), OnPreOffElapsed, countdown.StartedAt);
+		}
+		else
+		{
+			Enter(AreaState.AutoActive, TransitionReason.AdoptedAtStartup);
+			ArmCountdown(_vacancyTimer, TimeSpan.FromSeconds(_area.Settings.VacancyTimeoutSeconds), OnVacancyTimeout, countdown.StartedAt);
+		}
+
+		return true;
+	}
+
 	// Adoption is no auto-on, so darkness does not gate it: any lit area is adopted, or a lamp burns through a
 	// bright afternoon because AutoVacant arms no vacancy timer. It observes and never commands, and the target is
 	// seeded from the period so the first tick already matches it. A muzzled or disabled area adopts nothing,
@@ -725,8 +770,8 @@ public sealed class AreaController : IDisposable
 			return false;
 
 		_logger.LogInformation(
-			"{Area}: found lights already on ({Reason}); adopting them without commanding, and arming the vacancy timeout.",
-			Name, reason);
+			"{Area}: found lights already on ({Reason}{AfterSave}); adopting them without commanding, and arming the vacancy timeout.",
+			Name, reason, _openingAfterSave ? ", after a configuration save" : "");
 
 		// Seeded, not commanded: this stops the first tick correcting levels nobody asked it to.
 		_lastTargets = ResolveTargets();
@@ -2139,7 +2184,8 @@ public sealed class AreaController : IDisposable
 			IsLeadIn: _leadIn,
 			LowBatteries: _lowBatteries,
 			ActiveModeName: _house.ActiveModeName,
-			RoomId: _roomKey);
+			RoomId: _roomKey,
+			AfterSave: _openingAfterSave);
 	}
 
 	/// <summary>What each light on levels of its own was last commanded, or <c>null</c> for a room with none.</summary>

@@ -5,12 +5,12 @@
 	<div class="log-when">
 		@if (RoomCard)
 		{
-			<time class="log-time" datetime="@Row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(Row.At)</time>
+			<time class="log-time" datetime="@Row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(Row.At)&nbsp;</time>
 		}
 		else
 		{
 			<time class="log-time" datetime="@Row.At.ToString("o", CultureInfo.InvariantCulture)"
-				  title="@Full(Row.At)">@Clock(Row.At)</time>
+				  title="@Full(Row.At)">@Clock(Row.At)&nbsp;</time>
 			@if (Row.IsAboutTheHouse)
 			{
 				@* Every switched-on room published this one change, so the row names none of them. *@

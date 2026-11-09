@@ -6,7 +6,7 @@
 @using System.Globalization
 
 <li class="act">
-	<time datetime="@Row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(Row.At)</time>
+	<time datetime="@Row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(Row.At)&nbsp;</time>
 
 	@if (Row.IsAboutTheHouse)
 	{

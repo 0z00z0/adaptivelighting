@@ -12,9 +12,12 @@ against each other.
 
 ## [Unreleased]
 
+- A settings save no longer extends the stay-on time of lit rooms or lifts a dimming room back to full; rooms rebuilt by a save read "Configuration updated", and the room event carries a new `after_save` field.
+- A copied activity row keeps a space after the time.
 - The Test button counts down to the end of the test on the room page.
 - A period row that follows the daylight curve shows the level the curve gives now, with a link to the curve; the chart's figure is rounded the same way.
 - Each Test button on the room page shows the level Test sets now, with "= now" when the lights already show it.
+- On the room page in Lamplight, the five exact curve values sit in a closed "Exact values" fold under the chart; its header counts the ones this room overrides.
 
 ## [2026.10.7] - 2026-11-01
 

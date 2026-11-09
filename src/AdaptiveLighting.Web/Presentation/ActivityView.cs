@@ -717,7 +717,7 @@ public static class ActivityView
 		TransitionReason.Startup => snapshot.State == AreaState.Away
 			? "Started — house already away"
 			: "Started — took the room as it was",
-		TransitionReason.AdoptedAtStartup => "Started — lights already on",
+		TransitionReason.AdoptedAtStartup => snapshot.AfterSave ? "Configuration updated" : "Started — lights already on",
 		TransitionReason.Motion => snapshot.State switch
 		{
 			AreaState.AutoActive => Lit("Movement — lights on", snapshot),

@@ -85,7 +85,8 @@ public sealed class HaStatePublisher : IStatePublisher
 				mode_forced_by = snapshot.Forced?.EntityId,
 				mode_forced_by_state = snapshot.Forced?.EntityState,
 				active_mode_name = snapshot.ActiveModeName,
-				room_id = snapshot.RoomId
+				room_id = snapshot.RoomId,
+				after_save = snapshot.AfterSave
 			});
 		}
 		catch (Exception exception)

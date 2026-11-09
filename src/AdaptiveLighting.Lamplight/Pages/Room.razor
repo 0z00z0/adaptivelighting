@@ -62,9 +62,7 @@ else
 
 	<RoomSettingsFold Id="@DarknessId" Model="@_model" Group="@DarknessGroup" Open="@IsOpen(DarknessId)" OpenChanged="@(open => SetOpen(DarknessId, open))" />
 
-	<RoomSettingsFold Id="@CurveId" Model="@_model" Group="@CurveGroup" Open="@IsOpen(CurveId)" OpenChanged="@(open => SetOpen(CurveId, open))">
-		<RoomDaylightExtra Model="@_model" />
-	</RoomSettingsFold>
+	<RoomCurveFold Id="@CurveId" Model="@_model" Group="@CurveGroup" Open="@IsOpen(CurveId)" OpenChanged="@(open => SetOpen(CurveId, open))" ExactOpen="@IsOpen(CurveExactId)" ExactOpenChanged="@(open => SetOpen(CurveExactId, open))" />
 
 	<RoomSettingsFold Id="@BehaviourId" Model="@_model" Group="@BehaviourGroup" Open="@IsOpen(BehaviourId)" OpenChanged="@(open => SetOpen(BehaviourId, open))" />
 
@@ -81,6 +79,7 @@ else
 	private const string SensorsId = "sensors";
 	private const string DarknessId = "darkness";
 	private const string CurveId = "curve";
+	private const string CurveExactId = "curve-exact";
 	private const string BehaviourId = "behaviour";
 	private const string IdentityId = "identity";
 	private const string LogId = "log";
