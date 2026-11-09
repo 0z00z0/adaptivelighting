@@ -226,7 +226,8 @@ public sealed class LightingOrchestrator : IDisposable
 			_lastSeen,
 			_originNames,
 			() => ownUser.UserId,
-			_commandLog);
+			_commandLog,
+			_afterSave);
 
 		HaAreaRegistry registry = new(_registry);
 		AreaEntityResolver resolver = new(

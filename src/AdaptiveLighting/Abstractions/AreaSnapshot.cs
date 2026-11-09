@@ -10,7 +10,8 @@ namespace AdaptiveLighting.Abstractions;
 ///     tests read what they set. <c>AreaId</c> is the stable join back to the document, since <c>AreaName</c> is
 ///     editable mid-session. <c>Forced</c> is carried, never re-derived: only the engine knows which entity it read.
 ///     <c>IsLeadIn</c> is carried for the whole dim light and cleared on leaving <c>PreOff</c>, unlike
-///     <see cref="Reason"/>, which only names the publish that changed something.
+///     <see cref="Reason"/>, which only names the publish that changed something. <c>AfterSave</c> is set on a
+///     rebuilt room's opening report only, never on the reports after it.
 /// </remarks>
 public sealed record AreaSnapshot(
 	string AreaName,
@@ -51,7 +52,8 @@ public sealed record AreaSnapshot(
 	IReadOnlyList<SensorBattery>? LowBatteries = null,
 	string? ActiveModeName = null,
 	string? RoomId = null,
-	string? TestingPeriodName = null)
+	string? TestingPeriodName = null,
+	bool AfterSave = false)
 {
 	/// <summary>What the room is known by: the key the document gives it, else the area id. An event from a build without <c>room_id</c> carries no <c>RoomId</c>.</summary>
 	[System.Text.Json.Serialization.JsonIgnore]

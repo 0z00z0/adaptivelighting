@@ -324,7 +324,8 @@ public sealed class AreaTestBuilder
 			LastSeen: null,
 			OriginNames: _nameOrigins ? new ChangeOriginNames(ha, NullLogger.Instance) : null,
 			OwnUserId: static () => null,
-			CommandLog: _commandLog);
+			CommandLog: _commandLog,
+			AfterSave: false);
 
 		AreaController controller = new(
 			wiring,

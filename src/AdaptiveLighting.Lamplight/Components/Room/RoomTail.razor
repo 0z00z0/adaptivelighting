@@ -45,7 +45,7 @@
 			@foreach (AdaptiveLighting.Web.Presentation.ActivityRow row in rows)
 			{
 				<li @key="row.Sequence">
-					<time datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(row.At)</time>
+					<time datetime="@row.At.ToString("o", CultureInfo.InvariantCulture)">@RoomFacts.Clock(row.At)&nbsp;</time>
 					<span>@row.Line.What</span>
 					@if (row.Line.Why is { Length: > 0 } why)
 					{
