@@ -1,0 +1,54 @@
+@using AdaptiveLighting.Lamplight.Components.Kit
+@using AdaptiveLighting.Web.Components
+
+@* The daylight curve's fold: the chart first, the five numbers beneath it in a closed fold of their own. The
+   count on that inner header is how many of them this room overrides, so a room with overrides is not hidden.
+   With no chart (no period follows the curve) the numbers are the whole fold and are drawn without the inner
+   fold. *@
+
+@if (Model.ShowsCurve)
+{
+	<Fold Id="@Id"
+		  Title="@Group.Source.Title"
+		  Summary="@Group.Source.Note"
+		  Count="@(Group.OwnCount > 0 ? Group.OwnCount : null)"
+		  CountTitle="Set for this room"
+		  Open="@Open"
+		  OpenChanged="@OpenChanged">
+		<RoomDaylightExtra Model="@Model" />
+
+		<RoomSettingsFold Id="@ExactId" Model="@Model" Group="@ExactGroup" Open="@ExactOpen" OpenChanged="@ExactOpenChanged" />
+	</Fold>
+}
+else
+{
+	<RoomSettingsFold Id="@Id" Model="@Model" Group="@Group" Open="@Open" OpenChanged="@OpenChanged" />
+}
+
+@code {
+	[Parameter, EditorRequired]
+	public string Id { get; set; } = "";
+
+	[Parameter, EditorRequired]
+	public RoomPageModel Model { get; set; } = default!;
+
+	[Parameter, EditorRequired]
+	public AllSettingsPanel.Group Group { get; set; } = default!;
+
+	[Parameter]
+	public bool Open { get; set; }
+
+	[Parameter]
+	public EventCallback<bool> OpenChanged { get; set; }
+
+	[Parameter]
+	public bool ExactOpen { get; set; }
+
+	[Parameter]
+	public EventCallback<bool> ExactOpenChanged { get; set; }
+
+	private string ExactId => $"{Id}-exact";
+
+	// The same rows under a shorter title: RoomSettingsFold names its fold after the group it draws.
+	private AllSettingsPanel.Group ExactGroup => Group with { Source = Group.Source with { Title = "Exact values", Note = "" } };
+}
