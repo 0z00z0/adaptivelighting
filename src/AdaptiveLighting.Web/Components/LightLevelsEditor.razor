@@ -148,6 +148,10 @@
 	[Parameter]
 	public EventCallback<LightTest> Test { get; set; }
 
+	/// <summary>What Test sets for a light and period now, shown before its button; <c>null</c> shows nothing.</summary>
+	[Parameter]
+	public Func<string, string, string?>? TestLevelOf { get; set; }
+
 	private bool Untestable => TestRefusal is { Length: > 0 };
 
 	private bool IsTesting(string entityId, string periodId) =>
@@ -279,6 +283,10 @@
 
 				<div class="lvl-cell lvl-act">
 					<span class="lvl-cell-label">This light</span>
+					@if (TestLevelOf?.Invoke(entityId, current.PeriodId) is { Length: > 0 } level)
+					{
+						<span class="lvl-test-level">@level</span>
+					}
 					@if (IsTesting(entityId, current.PeriodId))
 					{
 						<button type="button" class="lvl-test lvl-test-on" disabled

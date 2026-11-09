@@ -18,24 +18,12 @@ internal sealed class HaLightActuator : ILightActuator
 	private const string SceneDomain = "scene";
 	private const string TurnOnService = "turn_on";
 	private const string TurnOffService = "turn_off";
-	private const string BrightnessAttribute = LightAttributes.Brightness;
-	private const string ColorTempAttribute = LightAttributes.ColorTempKelvin;
-	private const string SupportedColorModesAttribute = "supported_color_modes";
 
 	private const string BrightnessPctKey = "brightness_pct";
 	private const string ColorTempKelvinKey = "color_temp_kelvin";
 	private const string TransitionKey = "transition";
-	private const string RgbColorKey = LightAttributes.RgbColor;
 	private const string RgbwColorKey = LightAttributes.RgbwColor;
 	private const string RgbwwColorKey = LightAttributes.RgbwwColor;
-	private const string RgbwMode = "rgbw";
-	private const string RgbwwMode = "rgbww";
-
-	// Home Assistant reports brightness on 0-255 but accepts it as a percentage. Convert before comparing.
-	private const double MaxRawBrightness = LightAttributes.MaxRawBrightness;
-
-	// Every channel at the top of its range: neutral white, with brightness_pct doing the dimming.
-	private const int EqualChannelValue = 255;
 
 	private readonly IHaContext _ha;
 	private readonly ILogger _logger;
@@ -53,25 +41,17 @@ internal sealed class HaLightActuator : ILightActuator
 
 		EntityState? state = _ha.GetState(entityId);
 
-		if (!command.On)
-		{
-			if (state?.IsOff() == true)
-				return ActuatorOutcome.AlreadyMatches;
-
-			return Call(entityId, TurnOffService, BuildOffData(command));
-		}
-
-		// The one place the channel key is chosen, off the state already read here. No extra round trip.
-		// An explicit vector names its own key by its length; EqualChannels still asks the fixture.
-		string? channelKey = command.Channels is { Count: > 0 } explicitChannels
-			? ChannelKeyForCount(explicitChannels.Count)
-			: command.EqualChannels ? ChannelKeyFor(state) : null;
-
-		if (AlreadyMatches(state, command, channelKey))
+		// The skip rule the room page's "= now" also reads.
+		if (LightMatch.AlreadyShows(state, command))
 		{
 			_logger.LogTrace("{EntityId} already matches {Command}; not calling.", entityId, command);
 			return ActuatorOutcome.AlreadyMatches;
 		}
+
+		if (!command.On)
+			return Call(entityId, TurnOffService, BuildOffData(command));
+
+		string? channelKey = LightMatch.ChannelKey(state, command);
 
 		return Call(entityId, TurnOnService, BuildOnData(command, channelKey));
 	}
@@ -85,26 +65,8 @@ internal sealed class HaLightActuator : ILightActuator
 		_ha.CallService(SceneDomain, TurnOnService, ServiceTarget.FromEntity(sceneId));
 	}
 
-	/// <summary>Which colour-channel key this fixture takes, widest first, falling back to <c>rgb_color</c>.</summary>
-	private static string ChannelKeyFor(EntityState? state)
-	{
-		IReadOnlyList<string> modes = state.AttrStringList(SupportedColorModesAttribute);
-
-		if (modes.Contains(RgbwwMode, StringComparer.OrdinalIgnoreCase))
-			return RgbwwColorKey;
-
-		return modes.Contains(RgbwMode, StringComparer.OrdinalIgnoreCase) ? RgbwColorKey : RgbColorKey;
-	}
-
-	private static bool OffersAColourChannel(EntityState state)
-	{
-		IReadOnlyList<string> modes = state.AttrStringList(SupportedColorModesAttribute);
-
-		return AreaEntityResolver.ColourChannelModes.Any(mode => modes.Contains(mode, StringComparer.OrdinalIgnoreCase));
-	}
-
 	private static int[] EqualChannels(string channelKey) =>
-		[.. Enumerable.Repeat(EqualChannelValue, ChannelCountOf(channelKey))];
+		[.. Enumerable.Repeat(LightMatch.EqualChannelValue, ChannelCountOf(channelKey))];
 
 	private static int ChannelCountOf(string channelKey) => channelKey switch
 	{
@@ -112,62 +74,6 @@ internal sealed class HaLightActuator : ILightActuator
 		RgbwColorKey => 4,
 		_ => 3
 	};
-
-	private static string ChannelKeyForCount(int count) => count switch
-	{
-		5 => RgbwwColorKey,
-		4 => RgbwColorKey,
-		_ => RgbColorKey
-	};
-
-	private bool AlreadyMatches(EntityState? state, LightCommand command, string? channelKey)
-	{
-		if (state?.IsOn() != true)
-			return false;
-
-		if (command.BrightnessPct is { } wantedBrightness)
-		{
-			double? currentRaw = state.AttrDouble(BrightnessAttribute);
-			if (currentRaw is null)
-				return false;
-
-			if (Math.Abs((currentRaw.Value / MaxRawBrightness * 100) - wantedBrightness) > LightTolerance.BrightnessPct)
-				return false;
-		}
-
-		if (command.ColorTempKelvin is { } wantedKelvin)
-		{
-			double? currentKelvin = state.AttrDouble(ColorTempAttribute);
-
-			// A light with no colour temperature cannot drift from one; only a mismatch counts.
-			if (currentKelvin is { } kelvin && Math.Abs(kelvin - wantedKelvin) > LightTolerance.ColorTempKelvin)
-				return false;
-		}
-
-		if (channelKey is not null)
-		{
-			IReadOnlyList<double> channels = state.AttrDoubleList(channelKey);
-
-			if (channels.Count > 0)
-			{
-				bool matches = command.Channels is { Count: > 0 } wantedChannels
-					? channels.Count == wantedChannels.Count && !channels.Where((channel, index) => Math.Abs(channel - wantedChannels[index]) > 0.5).Any()
-					: !channels.Any(channel => Math.Abs(channel - EqualChannelValue) > 0.5);
-
-				if (!matches)
-					return false;
-			}
-				// HA publishes rgbw_color / rgbww_color only while the fixture is in that colour mode, so one that offers
-				// a channel and reports none is in another mode and has to be commanded. A fixture with no colour at all
-				// stays a match.
-			else if (OffersAColourChannel(state))
-			{
-				return false;
-			}
-		}
-
-		return true;
-	}
 
 	// A dictionary, not an anonymous type: an absent key stays absent, where a serialized null would be rejected.
 	private static Dictionary<string, object> BuildOnData(LightCommand command, string? channelKey)

@@ -1571,6 +1571,29 @@
 	font-weight: 650;
 }
 
+/* What Test sets, read before pressing. Above the button on a phone, where the period name needs the width. */
+.lvl-act {
+	align-items: end;
+}
+
+.lvl-test-level {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	font-size: var(--t-sm);
+	color: var(--ink-2);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+@media (min-width: 780px) {
+	.lvl-act {
+		flex-direction: row;
+		align-items: center;
+		gap: 0.4rem;
+	}
+}
+
 /* Said once above the rows, in the flow, not in a tooltip: on a phone there is no hover to find a
    reason with, and a column of dimmed buttons explains nothing on its own. */
 .lvl-test-off,

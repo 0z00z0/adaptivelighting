@@ -14,6 +14,7 @@ against each other.
 
 - The Test button counts down to the end of the test on the room page.
 - A period row that follows the daylight curve shows the level the curve gives now, with a link to the curve; the chart's figure is rounded the same way.
+- Each Test button on the room page shows the level Test sets now, with "= now" when the lights already show it.
 
 ## [2026.10.7] - 2026-11-01
 
