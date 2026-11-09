@@ -373,7 +373,7 @@ public sealed class LuxBrightnessControllerTests
 		HouseWiring wiring = new(
 			ha, scheduler, global, table, actuator, new FakeStatePublisher(),
 			new BehaviorSubject<HouseState>(HouseState.Initial), NullLoggerFactory.Instance,
-			LastSeen: null, OriginNames: null, OwnUserId: static () => null, CommandLog: null);
+			LastSeen: null, OriginNames: null, OwnUserId: static () => null, CommandLog: null, AfterSave: false);
 
 		AreaController controller = new(wiring, area, circadian, "hallway", areaId: "hallway");
 

@@ -101,6 +101,8 @@ lower-case `areas:` can never win over `Zones:`.
 - **The Home Assistant event's `room_id` is the room key**: the area id, else the room's own id. The web side
   files each report under it, so every room keeps its own card. An event without the field is filed under
   `area_id`. A room without an area has no room page.
+- **The event's `after_save` is `true` on a room's opening report on settings just saved**, and `false` on
+  every other report, including lights taken over at a real start.
 
 ### Readable ids are given once, at the first start
 
@@ -247,9 +249,21 @@ disposed, each room gives its replacement (same room key: its area id, else its 
 change and who made it, and any hold made at the switch. The hold's deadline counts from when the
 hold last started, under the saved hold length, so a save neither lengthens nor restarts it; one
 already passed ends at once. A carried hold is dropped when the opening house state leaves the room
-anywhere but its resting state, or when the lights no longer match it. Countdowns, pre-off and lead-in
-start afresh. Nothing is carried across a start or a reload: after downtime nobody knows what happened
-at the switch.
+anywhere but its resting state, or when the lights no longer match it. Nothing is carried across a start
+or a reload: after downtime nobody knows what happened at the switch.
+
+A lit room's no-movement countdown is handed over the same way: the state (lit, or dimmed in the warning
+or a lead-in) and when the countdown last started. The replacement takes the lights over in that state and
+re-arms from that start under the saved length, so a save neither extends the stay-on time of a lit room
+nor lifts a dimming room back to full. The start, not the deadline, is carried so a changed timeout
+applies from the original movement, as for the hold; not the last movement, because the countdown also
+restarts with no movement edge (a take-over, a hold running out, a sensor still reading on). Lights found
+on at a real start start the countdown at the take-over.
+
+Each rebuilt room's opening report after a save carries `after_save: true` on the event, the snapshot and
+the stored activity row; the reason stays `AdoptedAtStartup`, and the activity view words that pair
+*Configuration updated* in place of *Started — lights already on*. Every later report, and every report
+from a real start, carries `false`; a stored row written before the field existed reads `false`.
 
 A running level test is handed over too, with its deadline and its return, but only to a room the saved
 document keeps enabled; any other test returns its lights as the old room is disposed. The replacement
